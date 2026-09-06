@@ -1,6 +1,6 @@
 # Public Website Cutover Runbook
 
-Status: preview deployment validated; production custom-domain cutover pending.
+Status: preview deployment validated; production custom-domain association initiated and currently initializing.
 
 Target site: `https://me.jrwroberts.co.uk`  
 Cloudflare Pages project: `engineering-portfolio`
@@ -50,6 +50,12 @@ me.jrwroberts.co.uk
 ```
 
 The existing Pages token is scoped to Pages Read/Edit and is sufficient for the Pages-domain association.
+
+## Cutover state
+
+Cloudflare custom-domain association for `me.jrwroberts.co.uk` has been initiated. Cloudflare currently reports the domain as **Initializing**.
+
+No home-hosted service should be retired while this state is pending. Wait for Cloudflare to report the custom domain as active before final production validation.
 
 ## Validation
 
