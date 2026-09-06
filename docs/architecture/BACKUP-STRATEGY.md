@@ -33,7 +33,7 @@ Reasons:
 - remote datastore synchronization for a second copy
 - strong fit with the planned Proxmox-based estate
 
-PBS should not be installed merely because a current host happens to have spare capacity. Its final host and datastore must be selected from the post-audit placement matrix.
+Working placement is now `pbs-01` as a VM on the ZenBook after that machine is rebuilt as `pve-02`. The PBS datastore must be healthy dedicated storage, separate from the ZenBook's Proxmox system disk.
 
 ## Transitional Restic access
 
@@ -152,8 +152,14 @@ The rebuilt platform must include:
 11. Retain old Restic repositories read-only until the new platform has proven recovery coverage.
 12. Retire old scripts/Restic server paths only after recovery proof.
 
-## Placement boundary
+## Placement
 
-No physical host is assigned the backup role by this document.
+Working target:
 
-The final backup-server hostname, storage attachment and host assignment remain **UNASSIGNED** until the full hardware audit is complete.
+```text
+pve-02 (ZenBook)
+└── pbs-01 VM
+    └── dedicated healthy 4-8 TB-class backup datastore
+```
+
+The datastore must not be the degraded DietPi 4 TB disk and must not exist only as a virtual disk on the `pve-02` system NVMe. The exact replacement disk is still to be selected.
