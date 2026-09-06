@@ -54,7 +54,13 @@ Network infrastructure will also be audited, but routers/switches are only repur
 - ids-01: hardware and workload audit complete. Current responsibilities include Suricata/CrowdSec, Greenbone, monitoring, secondary Pi-hole/Unbound and Restic server.
 - media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
 - DietPi (`192.168.2.48`): hardware/workload audit complete. Raspberry Pi 3 with approximately 1 GiB RAM, 100 Mb/s Ethernet and native Pi-hole/Unbound. Attached 4 TB-class backup HDD is DEGRADED: 7 current-pending sectors and 2 offline-uncorrectable sectors. Read-only inventory shows about 20 GiB in use. `monthly/` contains dated ids-01 archives (~7.5 GiB and ~12 GiB); `restic/` contains repositories for dietpi, homelab-vault, ids-01, historical k3s-node-01, and testserver. SOPS/age recovery material is also present. Reconcile these against current authoritative copies before replacement, stress testing, destructive changes or reuse; never print or commit the recovery identity.
-- BirdNET hardware identity: still to be reconciled; BirdNET-Go is currently also confirmed as a TestServer Docker workload.
+- BirdNET capture hardware is a non-compute peripheral and is removed from the host-audit list. BirdNET-Go remains a TestServer Docker workload whose future compute placement is still to be decided.
+
+## Security redesign
+
+- Greenbone target: dedicated `security-01` VM on Proxmox after sufficient RAM is available.
+- Suricata/network capture stays separate on a physical sensor attached to the switch mirror/SPAN path.
+- Do not move Greenbone until the VM is provisioned through IaC and backup/restore coverage exists.
 
 ## Backup redesign
 
