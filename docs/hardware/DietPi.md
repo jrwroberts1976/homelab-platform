@@ -80,7 +80,17 @@ SMART-style health data is not available for the microSD device through the inst
 
 This is a major estate-level storage asset and must be treated separately from the Raspberry Pi when target roles are designed.
 
-The initial SMART query could not pass through the USB bridge, so health of this HDD remains **UNVERIFIED**. A follow-up read-only SMART device-type discovery is required before the hardware audit is considered fully closed.
+A follow-up read-only SMART query using SAT passthrough succeeded. The disk reports SMART capability enabled and an overall attribute-based result of PASSED, but important media-error attributes are non-zero:
+
+- Power-on hours: 28,228.
+- Reallocated sectors: 0.
+- Current pending sectors: **7**.
+- Offline uncorrectable sectors: **2**.
+- UDMA CRC errors: 10.
+- Temperature: 24 C.
+- Last recorded short self-tests completed without error.
+
+Because pending and offline-uncorrectable sectors are present, this disk is classified **DEGRADED / REPLACEMENT CANDIDATE** despite the overall SMART "PASSED" line. It must not be treated as the sole authoritative backup target. Verify recoverability/copies before any stress test, filesystem repair, destructive migration, or repurposing.
 
 ## Network
 
@@ -163,7 +173,7 @@ At audit time:
 
 ## Role-neutral audit conclusion
 
-Hardware/workload audit: **COMPLETE EXCEPT EXTERNAL HDD HEALTH VERIFICATION**  
+Hardware/workload audit: **COMPLETE — EXTERNAL HDD DEGRADED**  
 Future hostname: **UNASSIGNED**  
 Future role: **UNASSIGNED**
 
@@ -180,6 +190,6 @@ Constraints:
 - approximately 1 GiB RAM
 - 100 Mb/s Ethernet
 - microSD boot media
-- external HDD SMART health not yet verified
+- attached 4 TB-class HDD has 7 pending sectors and 2 offline-uncorrectable sectors; replacement/migration planning required
 
-No future-role decision should be made until the remaining hosts are audited and the external HDD health gap is closed.
+No future-role decision should be made until the remaining hosts are audited. The attached HDD is now a known storage-risk item and must have recoverability verified before it is replaced, stressed, reformatted, or reused.
