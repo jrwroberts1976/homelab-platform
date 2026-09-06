@@ -9,7 +9,7 @@ This document is intentionally incomplete until discovery is performed on each h
 | PROXMOX | 192.168.2.70 | Primary x86 virtualization candidate | AUDITED — RAM/backup remediation required |
 | TestServer | 192.168.2.220 | Legacy consolidated Docker/BirdNET/CI/monitoring host | AUDITED — future role/hostname unassigned |
 | ids-01 | 192.168.2.242 | Legacy security/monitoring/DNS/backup host | AUDITED — future role/hostname unassigned |
-| k3s-node-01 | 192.168.2.195 | Raspberry Pi / k3s node | DISCOVERED — SSH open, full audit pending |
+| media-01 | 192.168.2.195 | Raspberry Pi; live role to verify, DNS still points `k3s-node-01.jameshouse` here | DISCOVERED — SSH open, full audit pending |
 | DietPi / Pi-hole | 192.168.2.48 | Primary Pi-hole / Unbound DNS appliance | DISCOVERED — SSH open, full audit pending |
 | BirdNET Pi | VERIFY | Garden-room BirdNET workload | NOT AUDITED |
 | ASUS RT-AC86U main | 192.168.2.1 | Router / DHCP / AiMesh controller | DISCOVERED — reachable, device audit pending |
@@ -47,7 +47,13 @@ Every compute/Linux host audit must record the same minimum evidence set:
 
 Network appliances must receive an equivalent device audit, including CPU, memory, storage/flash, firmware, interfaces, link state, VLANs, routing, configuration backup coverage and current role where the platform exposes that information.
 
-No target placement decision is final until the audit is complete.\n\n## Completed audits\n\n- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.\n- [TestServer](../hardware/TestServer.md) — Raspberry Pi 4, 4 cores, 3.7 GiB RAM, approximately 1 TB MMC storage; heavy consolidated Docker estate captured; future role and hostname deliberately unassigned.\n- [ids-01](../hardware/ids-01.md) — ASUS ZenBook, i5-1155G7, 4C/8T, approximately 16 GiB RAM, healthy 512 GB-class NVMe; security, monitoring, DNS and backup workloads captured; future role and hostname deliberately unassigned.
+No target placement decision is final until the audit is complete.
+
+## Completed audits
+
+- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.
+- [TestServer](../hardware/TestServer.md) — Raspberry Pi 4, 4 cores, 3.7 GiB RAM, approximately 1 TB MMC storage; heavy consolidated Docker estate captured; future role and hostname deliberately unassigned.
+- [ids-01](../hardware/ids-01.md) — ASUS ZenBook, i5-1155G7, 4C/8T, approximately 16 GiB RAM, healthy 512 GB-class NVMe; security, monitoring, DNS and backup workloads captured; future role and hostname deliberately unassigned.
 
 
 ## Fleet discovery
@@ -57,7 +63,7 @@ A TestServer jump-box discovery run on 2026-09-06 verified:
 - TestServer: `192.168.2.220`, local Debian 13 arm64 host.
 - PROXMOX: `192.168.2.70`, reachable with SSH open; hostname is not resolved by TestServer DNS.
 - ids-01: `192.168.2.242`, resolves as `ids-01.jameshouse`, SSH open.
-- k3s-node-01: `192.168.2.195`, resolves as `k3s-node-01.jameshouse`, SSH open.
+- `192.168.2.195` resolves in DNS as `k3s-node-01.jameshouse`, but a direct SSH login on 2026-09-06 proved the live hostname is `media-01`. Treat the DNS name as stale until the rebuild.
 - DietPi / Pi-hole: `192.168.2.48`, reachable with SSH open; name resolution returned the host's IPv6 name.
 - ASUS infrastructure at `192.168.2.1`, `192.168.2.181`, and `192.168.2.218` is reachable.
 - `192.168.2.16` is reachable but does not expose SSH and remains the switch audit target.
