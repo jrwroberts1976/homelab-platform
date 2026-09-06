@@ -203,7 +203,7 @@ fi
 
 section "PHYSICAL NETWORK LINKS"
 for path in /sys/class/net/*; do
-  iface="\${path##*/}"
+  iface="${path##*/}"
 
   [ "$iface" = "lo" ] && continue
   [ -e "$path/device" ] || continue
