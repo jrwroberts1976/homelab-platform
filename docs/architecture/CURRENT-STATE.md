@@ -14,7 +14,7 @@ This document is intentionally incomplete until discovery is performed on each h
 | ASUS RT-AC86U main | 192.168.2.1 | Router / DHCP / AiMesh controller | DISCOVERED — reachable, device audit pending |
 | ASUS AiMesh node | 192.168.2.181 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
 | ASUS AiMesh node | 192.168.2.218 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
-| HP ProCurve switch | 192.168.2.16 | Core managed switch | DISCOVERED — reachable, SSH closed, device audit pending |
+| HP ProCurve switch | 192.168.2.16 | Core managed switch; port 24 confirmed mirror/SPAN destination | DISCOVERED — reachable, SSH closed, device audit pending |
 
 The secondary Pi-hole currently associated with ids-01 is a workload, not a separate physical-host audit target. It will be captured during the ids-01 workload audit.
 
