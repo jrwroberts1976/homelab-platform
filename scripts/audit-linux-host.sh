@@ -170,10 +170,20 @@ else
     echo "--- $disk ---"
 
     if have smartctl; then
-      as_root smartctl -H "$disk"
-      as_root smartctl -A "$disk" |
+      SMART_HEALTH="$(as_root smartctl -H "$disk" 2>&1 || true)"
+      SMART_DEVICE_ARGS=()
+
+      if printf '%s\n' "$SMART_HEALTH" |
+        grep -qiE 'Unknown USB bridge|Please specify device type'; then
+        SMART_DEVICE_ARGS=(-d sat)
+        echo "smart_transport_retry=SAT"
+        SMART_HEALTH="$(as_root smartctl -d sat -H "$disk" 2>&1 || true)"
+      fi
+
+      printf '%s\n' "$SMART_HEALTH"
+      as_root smartctl "${SMART_DEVICE_ARGS[@]}" -A "$disk" |
         grep -E \
-          'SMART overall-health|PASSED|FAILED|Percentage Used|Media_Wearout|Wear_Leveling|Reallocated|Pending|Offline_Uncorrectable|Power_On_Hours|Temperature|Data Units Written|Media and Data Integrity Errors' \
+          'SMART overall-health|PASSED|FAILED|Percentage Used|Media_Wearout|Wear_Leveling|Reallocated|Pending|Offline_Uncorrectable|Power_On_Hours|Temperature|Data Units Written|Media and Data Integrity Errors|UDMA_CRC_Error_Count' \
         || true
     elif have nvme && [[ "$disk" == /dev/nvme* ]]; then
       as_root nvme smart-log "$disk" |
