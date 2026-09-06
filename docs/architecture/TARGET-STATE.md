@@ -23,7 +23,8 @@ Current workloads will be treated as migration inputs, not as reasons to preserv
 ## Working direction
 
 - Public portfolio website: external static hosting where possible.
-- Proxmox remains a candidate primary compute platform, subject to the completed capacity and recovery review.
+- The existing HP ProDesk Proxmox installation will be retained as `pve-01`; no bare-metal OS rebuild is planned. It will be upgraded/configured in place after capacity and recovery gates are satisfied.
+- The ASUS ZenBook is the working target for `pve-02`, providing secondary Proxmox compute with `pbs-01`, monitoring and management workloads.
 - Raspberry Pis remain candidates for edge, appliance, location-dependent, test or lightweight roles, but no Pi role is assumed in advance.
 - Komodo Core placement is undecided until all compute hosts are audited.
 - Komodo Periphery will run only on Docker hosts approved in the final placement matrix.
@@ -148,7 +149,7 @@ Factory-default and clean-OS rebuilds are now an explicit part of the target arc
 
 - HP ProCurve: planned factory-default rebuild; port 24 remains the known mirror/SPAN destination.
 - ASUS router/AiMesh: planned clean firmware/factory-reset rebuild.
-- Compute hosts: fresh OS/install permitted and preferred where roles change materially or legacy state is highly entangled.
+- Compute hosts: fresh OS/install permitted where roles change materially or legacy state is highly entangled, **except `pve-01` (HP ProDesk), whose current Proxmox installation is explicitly retained and changed in place**.
 - Preserve required data/configuration and recovery evidence first; do not preserve an old OS merely to preserve an application.
 - No wipe/reset occurs until persistent data, secrets, rollback and target IaC are accounted for.
 

@@ -18,7 +18,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
 | 4. Public website migration | IN PROGRESS | `me.jrwroberts.co.uk` externally hosted and validated |
-| 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | RAM upgrade decision and GUI-based backup/recovery proof required before new primary VMs |
+| 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | Prepare existing `pve-01` in place; RAM decision and GUI-based backup/recovery proof required before migrated production VMs |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
@@ -32,7 +32,7 @@ This tracker records the controlled migration from the existing homelab reposito
 |---|---|---|
 | Docker Compose / TestServer IaC | `docker-env` | ACTIVE SOURCE |
 | Homelab documentation | `home-lab-docs` | ACTIVE SOURCE |
-| Komodo / Renovate bootstrap | `docker-env` main | MERGED, NOT DEPLOYED |
+| Komodo / Renovate bootstrap | `docker-env` main + live TestServer | DEPLOYED ON LEGACY TESTSERVER — TARGET PLACEMENT PENDING |
 | Stage 6 / Jenkins version control | `homelab-container-version-control` | RETIREMENT CANDIDATE |
 | Proxmox documentation / IaC | `proxmox` | REVIEW REQUIRED |
 | Grafana alerting | `grafana-alerting` plus current monitoring IaC | REVIEW REQUIRED |
@@ -71,6 +71,12 @@ Network infrastructure will also be audited, but routers/switches are only repur
 - Do not reset the router until current WAN/DHCP/DNS/Wi-Fi/AiMesh/port-forward/VPN state is captured and rollback access is proven.
 
 See `docs/network/SWITCH-PORT-MAP.md` and `docs/network/ROUTER-RESET-PLAN.md`.
+
+## HP ProDesk rebuild decision
+
+The HP ProDesk will **not** be reinstalled. Its existing Proxmox VE installation is retained as `pve-01` and will be upgraded/configured in place. New guest workloads are still built fresh from IaC.
+
+The ZenBook remains the clean-rebuild candidate for `pve-02`, after its existing workloads and backup data have been migrated/protected.
 
 ## Greenfield rebuild
 

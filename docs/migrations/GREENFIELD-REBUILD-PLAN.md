@@ -75,25 +75,28 @@ Do not restore an old full router backup if the objective is to remove configura
 
 ### HP ProDesk -> `pve-01`
 
-Working direction: clean Proxmox installation/rebuild after RAM, storage and backup design are approved.
+The existing Proxmox VE installation is **retained**. There is no planned bare-metal reinstall of the HP ProDesk.
 
-Preserve first:
+Before major changes:
 
-- any VM/LXC data still required
-- Terraform/Ansible source
-- current Proxmox network/storage configuration as reference
-- recovery copies of anything not already authoritative in Git
+- preserve/review any VM/LXC data still required
+- retain Terraform/Ansible source
+- capture the current Proxmox network/storage configuration as reference
+- ensure recovery copies exist for anything not already authoritative in Git
 
-Target:
+Target changes are performed **in place**:
 
-- clean Proxmox hypervisor
-- no application Docker directly on the hypervisor
-- VM/storage/network configuration represented through IaC
-- backup configured before production workloads are considered complete
+- upgrade RAM if the approved capacity plan requires it
+- bring the installed Proxmox/kernel/packages to the approved supported state
+- add the dedicated capture NIC for `sensor-01`
+- reconcile storage/network configuration into IaC where practical
+- create new VMs from IaC rather than rebuilding the hypervisor
+- configure backup before migrated production workloads are considered complete
+- do not run general application Docker directly on the hypervisor
 
-### ASUS ZenBook -> `pbs-01`
+### ASUS ZenBook -> `pve-02`
 
-Working direction: clean rebuild for the GUI-based backup role.
+Working direction: clean rebuild as the secondary Proxmox VE host, with `pbs-01` running as a VM alongside management/monitoring workloads.
 
 This host currently carries security, monitoring, DNS and Restic responsibilities, so it must **not** be wiped until those workloads/data are migrated or protected.
 
@@ -108,9 +111,11 @@ Preserve/verify first:
 
 Target:
 
-- dedicated backup server role
-- healthy backup datastore
-- GUI-based administration
+- `pve-02` as secondary Proxmox compute
+- `pbs-01` VM with a healthy dedicated backup datastore
+- `monitoring-01` and `management-01` as the preferred steady-state workloads
+- spare capacity deliberately retained for recovery/test restores
+- wired Ethernet for hypervisor and backup traffic
 - no unrelated legacy service stack
 
 ### Raspberry Pi 3 -> `dns-01`
@@ -167,14 +172,21 @@ The exact media OS is a later implementation decision.
 
 New VMs should be created fresh rather than cloned from legacy hosts unless there is a specific recovery reason.
 
-Working VM set:
+Working VM placement:
 
+**pve-01**
 - `docker-01`
-- `monitoring-01`
-- `management-01`
 - `security-01` — Greenbone
 - `sensor-01` — Suricata with dedicated mirror NIC passthrough
 - `dns-02`
+
+**pve-02**
+- `pbs-01` — Proxmox Backup Server
+- `monitoring-01`
+- `management-01`
+- spare recovery/test capacity
+
+During migration, `monitoring-01` and `management-01` may run temporarily on `pve-01` until the ZenBook has been emptied and rebuilt as `pve-02`.
 
 Each VM must have:
 
@@ -225,15 +237,17 @@ Working order:
 4. factory-reset and document the HP ProCurve
 5. clean-reset/rebuild ASUS router and AiMesh
 6. finalize target hostnames/IP reservations/port map
-7. upgrade/rebuild `pve-01`
-8. build core VMs through IaC
-9. migrate Greenbone, monitoring, management and DNS workloads
-10. establish `pbs-01` and prove restores
-11. rebuild `dns-01`
-12. rebuild `birdnet-01`
-13. rebuild `media-01`
-14. retire Jenkins/legacy containers only after replacement proof
-15. remove old repositories/configuration only after recovery validation
+7. prepare the existing `pve-01` in place: capacity upgrade, package/kernel reconciliation and dedicated capture NIC
+8. build transitional/core VMs on `pve-01` through IaC
+9. migrate Greenbone, Suricata, monitoring, management and secondary DNS off legacy `ids-01`
+10. clean-rebuild the emptied ZenBook as `pve-02`
+11. create `pbs-01`, attach healthy dedicated backup storage and prove restores
+12. move `monitoring-01` and `management-01` to their steady-state placement on `pve-02`
+13. rebuild `dns-01`
+14. rebuild `birdnet-01`
+15. rebuild `media-01`
+16. retire Jenkins/legacy containers only after replacement proof
+17. remove old repositories/configuration only after recovery validation
 
 ## Definition of done
 
