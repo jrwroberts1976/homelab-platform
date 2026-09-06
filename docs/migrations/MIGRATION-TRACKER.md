@@ -52,7 +52,7 @@ Network infrastructure will also be audited, but routers/switches are only repur
 - PROXMOX: complete.
 - TestServer: hardware and workload audit completed. Live evidence shows Komodo is currently running on TestServer; this supersedes the earlier assumption that it had not been deployed. No migration action has been taken.
 - ids-01: hardware and workload audit complete. Current responsibilities include Suricata/CrowdSec, Greenbone, monitoring, secondary Pi-hole/Unbound and Restic server.
-- media-01 (`192.168.2.195`): pending. Live SSH identity is `media-01`; the existing DNS record `k3s-node-01.jameshouse` is stale and will be corrected as part of the hostname reset.
+- media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
 - DietPi / Pi-hole: pending.
 - BirdNET hardware identity: still to be reconciled; BirdNET-Go is currently also confirmed as a TestServer Docker workload.
 
