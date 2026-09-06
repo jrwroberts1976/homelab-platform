@@ -58,6 +58,14 @@ Current known backup state includes:
 - backup/retention reports
 - SOPS/age recovery material
 - a backup replica mount on legacy `media-01`
+  - current read-only inventory: ~12 GiB total under `/home/homelab-backup/replica`
+  - `ids-01/repository`: ~2.4 GiB
+  - `ids-01/remote-repositories`: ~9.5 GiB
+  - Restic-like repositories present for `dietpi`, historical `k3s-node-01`, `testserver`, plus the `ids-01` repository
+  - no `homelab-vault` repository was found in this replica tree
+  - no recovery identity/recipient file was found in this replica tree
+  - no dated monthly archive tree was shown in this replica tree
+  - therefore this Pi 5 copy is **not yet accepted as a complete replacement** for the degraded DietPi backup disk
 - no configured Proxmox VE guest-backup job at the time of the hardware audit
 
 The DietPi-attached 4 TB-class WD disk is **DEGRADED** and is not an acceptable long-term primary backup datastore.
@@ -140,7 +148,7 @@ The rebuilt platform must include:
 ## Migration sequence
 
 1. Complete the remaining hardware/network audits.
-2. Reconcile the existing Restic repositories and monthly archives.
+2. Reconcile the existing Restic repositories and monthly archives. Current media-01 evidence proves the Pi 5 replica is incomplete relative to the degraded DietPi disk.
 3. Confirm protected copies of SOPS/age recovery material without exposing secret contents.
 4. Select the backup-server host and healthy datastore from the final placement matrix.
 5. Replace the degraded 4 TB-class disk before relying on it for new backups.
