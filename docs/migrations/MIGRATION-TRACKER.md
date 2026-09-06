@@ -65,12 +65,20 @@ Network infrastructure will also be audited, but routers/switches are only repur
 ## Network rebuild
 
 - HP ProCurve port 24 is confirmed as the mirror/SPAN destination.
-- Build a Git-backed port map before any repatching; all other port numbers remain discovery items.
+- HP ProCurve will be factory-reset because the current lock-down is no longer a practical administration baseline. Preserve any obtainable evidence first; port 24 remains the confirmed mirror/SPAN destination.
 - Plan a clean ASUS router firmware/factory reset and rebuild.
 - Recreate DHCP reservations, DNS advertisement, AiMesh/Wi-Fi, QoS and required routing/firewall features from documented intent rather than restoring historical drift.
 - Do not reset the router until current WAN/DHCP/DNS/Wi-Fi/AiMesh/port-forward/VPN state is captured and rollback access is proven.
 
 See `docs/network/SWITCH-PORT-MAP.md` and `docs/network/ROUTER-RESET-PLAN.md`.
+
+## Greenfield rebuild
+
+- Factory-default / clean-install rebuilding is approved where it gives a cleaner reproducible platform.
+- Switch rebuild comes before router rebuild so the wired forwarding layer is known during router cutover.
+- Compute hosts may be wiped/reinstalled only after their unique data, recovery material and migration dependencies are protected.
+- Prefer fresh OS/VM + IaC deployment + data restore over carrying old operating-system state forward.
+- See `docs/migrations/GREENFIELD-REBUILD-PLAN.md`.
 
 ## Backup redesign
 
