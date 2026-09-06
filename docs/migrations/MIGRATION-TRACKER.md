@@ -59,8 +59,18 @@ Network infrastructure will also be audited, but routers/switches are only repur
 ## Security redesign
 
 - Greenbone target: dedicated `security-01` VM on Proxmox after sufficient RAM is available.
-- Suricata/network capture stays separate on a physical sensor attached to the switch mirror/SPAN path.
+- Suricata/network capture stays separate from Greenbone. Working target: `sensor-01` VM on Proxmox with a dedicated second NIC passed through from HP ProCurve mirror/SPAN destination port 24.
 - Do not move Greenbone until the VM is provisioned through IaC and backup/restore coverage exists.
+
+## Network rebuild
+
+- HP ProCurve port 24 is confirmed as the mirror/SPAN destination.
+- Build a Git-backed port map before any repatching; all other port numbers remain discovery items.
+- Plan a clean ASUS router firmware/factory reset and rebuild.
+- Recreate DHCP reservations, DNS advertisement, AiMesh/Wi-Fi, QoS and required routing/firewall features from documented intent rather than restoring historical drift.
+- Do not reset the router until current WAN/DHCP/DNS/Wi-Fi/AiMesh/port-forward/VPN state is captured and rollback access is proven.
+
+See `docs/network/SWITCH-PORT-MAP.md` and `docs/network/ROUTER-RESET-PLAN.md`.
 
 ## Backup redesign
 
