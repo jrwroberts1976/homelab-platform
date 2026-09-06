@@ -78,3 +78,17 @@ edge-01
 ```
 
 No current machine is entitled to keep its existing hostname simply because that is its present role.
+
+
+## Backup direction
+
+The rebuilt backup platform must provide a web GUI while preserving Git/IaC as the configuration authority.
+
+Working preference:
+
+- Proxmox Backup Server as the long-term estate backup platform, subject to final host/storage placement.
+- Backrest may be used as a transitional GUI for the existing Restic repositories during migration.
+- The degraded DietPi-attached 4 TB-class disk is not an acceptable long-term primary datastore.
+- No legacy backup path is retired until verification and restore testing proves replacement coverage.
+
+See [Backup Strategy](BACKUP-STRATEGY.md).
