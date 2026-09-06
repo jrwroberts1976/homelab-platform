@@ -29,6 +29,7 @@ Current workloads will be treated as migration inputs, not as reasons to preserv
 - Komodo Periphery will run only on Docker hosts approved in the final placement matrix.
 - Renovate remains a hosted GitHub App candidate with repository configuration in Git.
 - Jenkins / Stage 6 will retire after the replacement deployment path is proven.
+- BirdNET capture hardware is treated as a non-compute peripheral. Only the BirdNET-Go software workload needs compute placement.
 
 No proposed VM such as `docker-core-01` or `monitoring-01` is approved until the full hardware audit is complete.
 
@@ -42,7 +43,6 @@ hosts/
 ├── monitoring-01/
 ├── ids-01/
 ├── testserver/
-├── birdnet-01/
 └── pihole-*/
 ```
 
@@ -92,3 +92,33 @@ Working preference:
 - No legacy backup path is retired until verification and restore testing proves replacement coverage.
 
 See [Backup Strategy](BACKUP-STRATEGY.md).
+
+
+## Security workload direction
+
+Greenbone should move off the legacy `ids-01` host and become a dedicated **`security-01` VM** on the Proxmox platform, subject to the Proxmox RAM upgrade and final capacity plan.
+
+Working allocation:
+
+- 4 vCPU
+- 6–8 GiB RAM
+- 80–120 GiB virtual disk initially
+- Debian VM
+- Greenbone Community Edition deployed through Docker Compose/IaC
+
+Greenbone should **not** run directly on the Proxmox hypervisor.
+
+The network IDS/sensor role should remain separate from Greenbone. Suricata packet capture belongs on a physical sensor host connected to the switch mirror/SPAN path, while `security-01` performs vulnerability scanning over the LAN.
+
+This separation gives us:
+
+```text
+physical sensor host
+└── Suricata / capture / forwarding
+
+pve-01
+└── security-01 VM
+    └── Greenbone Community Edition
+```
+
+If the Proxmox host is not upgraded to enough RAM, Greenbone remains on its existing host until an alternative x86 placement is approved; it must not be squeezed onto an under-provisioned VM.
