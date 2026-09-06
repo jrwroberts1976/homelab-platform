@@ -2,18 +2,35 @@
 
 This is a working design, not yet approved as final.
 
+## Greenfield repurpose principle
+
+All repurposable compute hosts are being reassessed from first principles. Existing host names and current workloads do **not** determine their future role.
+
+The final role for each host will be chosen only after the estate-wide audit compares:
+
+- CPU capability and architecture
+- RAM capacity and upgrade options
+- storage capacity, health and performance
+- network interfaces and placement
+- power draw and physical location
+- workload dependencies and resilience requirements
+- backup/recovery requirements
+- image/platform compatibility
+- expected growth and maintenance burden
+
+Current workloads will be treated as migration inputs, not as reasons to preserve the present host role.
+
 ## Working direction
 
 - Public portfolio website: external static hosting where possible.
-- Proxmox: primary compute platform.
-- `docker-core-01`: proposed general persistent Docker VM.
-- `monitoring-01`: proposed monitoring VM.
-- `ids-01`: security-focused host.
-- Raspberry Pis: edge, appliance, location-dependent, test or lightweight roles.
-- Komodo Core: proposed on primary x86 Docker infrastructure, not TestServer.
-- Komodo Periphery: only on approved Docker hosts.
-- Renovate: hosted GitHub App with repository configuration in Git.
-- Jenkins / Stage 6: retire after replacement deployment path is proven.
+- Proxmox remains a candidate primary compute platform, subject to the completed capacity and recovery review.
+- Raspberry Pis remain candidates for edge, appliance, location-dependent, test or lightweight roles, but no Pi role is assumed in advance.
+- Komodo Core placement is undecided until all compute hosts are audited.
+- Komodo Periphery will run only on Docker hosts approved in the final placement matrix.
+- Renovate remains a hosted GitHub App candidate with repository configuration in Git.
+- Jenkins / Stage 6 will retire after the replacement deployment path is proven.
+
+No proposed VM such as `docker-core-01` or `monitoring-01` is approved until the full hardware audit is complete.
 
 ## Host-owned IaC direction
 
