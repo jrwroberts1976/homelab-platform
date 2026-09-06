@@ -108,13 +108,15 @@ Working allocation:
 
 Greenbone should **not** run directly on the Proxmox hypervisor.
 
-The network IDS/sensor role should remain separate from Greenbone. Suricata packet capture belongs on a physical sensor host connected to the switch mirror/SPAN path, while `security-01` performs vulnerability scanning over the LAN.
+The network IDS/sensor role should remain separate from Greenbone. The working target is a dedicated `sensor-01` VM on Proxmox receiving mirrored traffic through a dedicated second physical NIC passed directly to the VM, while `security-01` performs vulnerability scanning over the normal LAN.
 
 This separation gives us:
 
 ```text
-physical sensor host
-└── Suricata / capture / forwarding
+HP ProCurve port 24 (mirror/SPAN destination)
+└── dedicated second NIC on pve-01
+    └── direct passthrough to sensor-01 VM
+        └── Suricata
 
 pve-01
 └── security-01 VM
@@ -122,3 +124,19 @@ pve-01
 ```
 
 If the Proxmox host is not upgraded to enough RAM, Greenbone remains on its existing host until an alternative x86 placement is approved; it must not be squeezed onto an under-provisioned VM.
+
+
+## Network rebuild direction
+
+- HP ProCurve **port 24** is confirmed as the mirror/SPAN destination.
+- Port 24 is reserved for the dedicated Suricata capture path and must not carry normal management/data traffic.
+- Remaining switch ports will be labelled only after MAC-table/cabling discovery.
+- The ASUS router will receive a clean firmware/factory-reset rebuild before final DHCP and QoS policy is applied.
+- DHCP remains on the ASUS router in the working design.
+- DHCP reservations, DNS advertisement and QoS policy will be documented in Git before final cutover.
+
+See:
+
+- [Proposed Layout](PROPOSED-LAYOUT.md)
+- [HP ProCurve Port Map](../network/SWITCH-PORT-MAP.md)
+- [Router Clean-Rebuild Plan](../network/ROUTER-RESET-PLAN.md)
