@@ -52,7 +52,7 @@ Network infrastructure will also be audited, but routers/switches are only repur
 - PROXMOX: complete.
 - TestServer: hardware and workload audit completed. Live evidence shows Komodo is currently running on TestServer; this supersedes the earlier assumption that it had not been deployed. No migration action has been taken.
 - ids-01: hardware and workload audit complete. Current responsibilities include Suricata/CrowdSec, Greenbone, monitoring, secondary Pi-hole/Unbound and Restic server.
-- media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
+- media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. Backup-replica audit shows ~12 GiB under `/home/homelab-backup/replica`: `ids-01/repository` (~2.4 GiB) and `ids-01/remote-repositories` (~9.5 GiB) containing dietpi, historical k3s-node-01 and testserver Restic-like repositories. No homelab-vault repository, monthly archive tree or SOPS/age recovery files were found in this replica tree, so it is not yet a complete replacement for the degraded DietPi disk. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
 - DietPi (`192.168.2.48`): hardware/workload audit complete. Raspberry Pi 3 with approximately 1 GiB RAM, 100 Mb/s Ethernet and native Pi-hole/Unbound. Attached 4 TB-class backup HDD is DEGRADED: 7 current-pending sectors and 2 offline-uncorrectable sectors. Read-only inventory shows about 20 GiB in use. `monthly/` contains dated ids-01 archives (~7.5 GiB and ~12 GiB); `restic/` contains repositories for dietpi, homelab-vault, ids-01, historical k3s-node-01, and testserver. SOPS/age recovery material is also present. Reconcile these against current authoritative copies before replacement, stress testing, destructive changes or reuse; never print or commit the recovery identity.
 - BirdNET capture hardware is a non-compute peripheral and is removed from the host-audit list. BirdNET-Go remains a TestServer Docker workload whose future compute placement is still to be decided.
 
@@ -117,4 +117,4 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
-Wait for `me.jrwroberts.co.uk` to become active on Cloudflare Pages, then complete production validation and independence proof before any router/switch reset.
+While the Cloudflare Pages domain watch continues, reconcile the unique content still present on the degraded DietPi backup disk — especially `homelab-vault`, dated monthly archives and protected SOPS/age recovery material — and establish a second healthy protected copy before any destructive host rebuild.
