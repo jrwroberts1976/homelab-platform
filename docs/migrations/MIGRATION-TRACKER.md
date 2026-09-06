@@ -37,6 +37,10 @@ This tracker records the controlled migration from the existing homelab reposito
 | Proxmox documentation / IaC | `proxmox` | REVIEW REQUIRED |
 | Grafana alerting | `grafana-alerting` plus current monitoring IaC | REVIEW REQUIRED |
 
+## Hostname reset
+
+All repurposable hosts will receive a role-appropriate hostname where the current name does not match the approved target role. Current names remain discovery aliases only until cutover. Hostname changes will be implemented through IaC/configuration management after role assignment, with DNS/DHCP/monitoring/backup dependencies updated and validated in the same migration step.
+
 ## Repurpose decision
 
 The migration is now a greenfield reassignment exercise for all repurposable compute hardware. Current host roles are not preserved by default. Hardware capability will be audited first, workloads second, and only then will new host roles be assigned.
