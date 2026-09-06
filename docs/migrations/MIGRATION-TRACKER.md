@@ -14,9 +14,9 @@ This tracker records the controlled migration from the existing homelab reposito
 
 | Phase | Status | Exit criteria |
 |---|---|---|
-| 1. Hardware inventory | IN PROGRESS | Every host has CPU, RAM, storage, network, OS, architecture and role recorded |
+| 1. Hardware inventory | IN PROGRESS | Every repurposable host has CPU, RAM, storage, network, OS, architecture, health and upgrade capacity recorded |
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
-| 3. Target architecture | NOT STARTED | Every workload has an approved destination |
+| 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
 | 4. Public website migration | NOT STARTED | `me.jrwroberts.co.uk` externally hosted and validated |
 | 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | RAM upgrade decision and guest backup/recovery proof required before new primary VMs |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
@@ -37,6 +37,12 @@ This tracker records the controlled migration from the existing homelab reposito
 | Proxmox documentation / IaC | `proxmox` | REVIEW REQUIRED |
 | Grafana alerting | `grafana-alerting` plus current monitoring IaC | REVIEW REQUIRED |
 
+## Repurpose decision
+
+The migration is now a greenfield reassignment exercise for all repurposable compute hardware. Current host roles are not preserved by default. Hardware capability will be audited first, workloads second, and only then will new host roles be assigned.
+
+Network infrastructure will also be audited, but routers/switches are only repurposed where a viable replacement role exists.
+
 ## Next action
 
-Complete the current-state hardware and workload inventory before any further platform deployment.
+Complete the same full CPU, memory, disk, network, health and workload audit for every host before any further platform deployment or host-role decision.
