@@ -23,24 +23,29 @@ Addresses or identities marked VERIFY are deliberately not assumed; the discover
 
 ## Required evidence per host
 
-Record:
+Every compute/Linux host audit must record the same minimum evidence set:
 
-- hostname and IP
-- manufacturer/model
-- CPU and architecture
-- RAM and swap
-- disks, filesystems and free space
-- NICs and link speed
-- OS and kernel
-- virtualization/container runtime
-- running services
-- Docker containers and Compose projects
-- persistent volumes and bind mounts
+- hostname, IP and hardware manufacturer/model
+- CPU model, architecture, sockets, cores, threads and virtualization capability
+- RAM total, used, available and swap
+- physical disks, models, serials, sizes and health
+- partition/LVM/ZFS/filesystem layout, usage and free capacity
+- NICs, addresses, link speed, duplex and routes
+- OS, kernel, firmware/BIOS where available
+- virtualization and container runtimes
+- running services and failed units
+- Docker containers, Compose projects, networks, volumes and bind mounts when Docker is present
+- k3s/Kubernetes state when present
+- appliance/workload state such as Pi-hole, Unbound or BirdNET when present
 - exposed/listening ports
 - monitoring agents/exporters
-- backup coverage
+- backup and recovery coverage
+- temperatures/thermals where available
+- current CPU and memory load
 - power/location constraints
 - intended future role
+
+Network appliances must receive an equivalent device audit, including CPU, memory, storage/flash, firmware, interfaces, link state, VLANs, routing, configuration backup coverage and current role where the platform exposes that information.
 
 No target placement decision is final until the audit is complete.\n\n## Completed audits\n\n- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.
 
