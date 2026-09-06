@@ -62,8 +62,9 @@ uname -r
 
 section "HARDWARE IDENTITY"
 if have systemd-detect-virt; then
-  printf 'virtualization_environment='
-  systemd-detect-virt 2>/dev/null || echo none
+  VIRT="$(systemd-detect-virt 2>/dev/null || true)"
+  [ -n "$VIRT" ] || VIRT="none"
+  echo "virtualization_environment=$VIRT"
 fi
 
 if [ -r /sys/class/dmi/id/sys_vendor ]; then
@@ -157,7 +158,8 @@ fi
 section "DISK HEALTH"
 DISKS=""
 if have lsblk; then
-  DISKS="$(lsblk -dn -o PATH,TYPE 2>/dev/null | awk '$2 == "disk" {print $1}')"
+  DISKS="$(lsblk -dn -o PATH,TYPE 2>/dev/null |
+  awk '$2 == "disk" && $1 !~ /^\/dev\/ram/ && $1 !~ /^\/dev\/zram/ {print $1}')"
 fi
 
 if [ -z "$DISKS" ]; then
