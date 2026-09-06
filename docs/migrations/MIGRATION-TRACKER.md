@@ -92,7 +92,9 @@ Migration has started.
 - The portfolio repository now has a manual Cloudflare Pages preview deployment workflow on branch `migration/cloudflare-pages`.
 - Existing homelab hosting remains intact as rollback until external hosting and DNS cutover are proven.
 
-Immediate gate: bootstrap the Pages project with Terraform, configure Cloudflare credentials in GitHub Actions, run the preview deployment, and validate the generated `*.pages.dev` URL before touching public DNS.
+Preview gate: **PASSED**. The Cloudflare Pages project exists, the migration preview deployed successfully, and the site was manually validated. Existing homelab hosting remains the rollback path.
+
+Immediate gate: capture the current `me.jrwroberts.co.uk` DNS record, then perform the controlled Pages custom-domain association/DNS cutover using `docs/migrations/PUBLIC-WEB-CUTOVER.md`.
 
 ## Backup redesign
 
@@ -107,4 +109,4 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
-Complete the Cloudflare Pages preview deployment and validation for `me.jrwroberts.co.uk` before any router/switch reset or public DNS cutover.
+Capture the current `me.jrwroberts.co.uk` DNS record and complete the controlled Cloudflare Pages custom-domain cutover before any router/switch reset.
