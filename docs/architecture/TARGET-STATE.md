@@ -47,3 +47,34 @@ hosts/
 ```
 
 Shared roles, modules and policy may be reused, but a deployable workload must have an explicit target host.
+
+
+## Host naming
+
+This rebuild includes a deliberate hostname reset.
+
+- Existing hostnames are treated as legacy identifiers only.
+- Final hostnames must describe the approved future role of the machine.
+- Hostnames will not be changed until the hardware audit and target-role decision are complete.
+- During discovery, assets are tracked by current hostname, IP address, MAC address and hardware model so identity is not lost when names change.
+- DNS, DHCP reservations, monitoring targets, SSH known-host records, backup jobs and IaC inventories must be updated as part of each hostname cutover.
+- A hostname change is considered incomplete until the new identity is represented in Git and all dependent systems are validated.
+
+Working naming pattern:
+
+```text
+<role>-<nn>
+```
+
+Examples only, not yet approved assignments:
+
+```text
+pve-01
+docker-01
+monitoring-01
+security-01
+dns-01
+edge-01
+```
+
+No current machine is entitled to keep its existing hostname simply because that is its present role.
