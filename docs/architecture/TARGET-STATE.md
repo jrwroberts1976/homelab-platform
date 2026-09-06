@@ -140,3 +140,16 @@ See:
 - [Proposed Layout](PROPOSED-LAYOUT.md)
 - [HP ProCurve Port Map](../network/SWITCH-PORT-MAP.md)
 - [Router Clean-Rebuild Plan](../network/ROUTER-RESET-PLAN.md)
+
+
+## Greenfield rebuild policy
+
+Factory-default and clean-OS rebuilds are now an explicit part of the target architecture where they produce a simpler and more reproducible result than preserving historical state.
+
+- HP ProCurve: planned factory-default rebuild; port 24 remains the known mirror/SPAN destination.
+- ASUS router/AiMesh: planned clean firmware/factory-reset rebuild.
+- Compute hosts: fresh OS/install permitted and preferred where roles change materially or legacy state is highly entangled.
+- Preserve required data/configuration and recovery evidence first; do not preserve an old OS merely to preserve an application.
+- No wipe/reset occurs until persistent data, secrets, rollback and target IaC are accounted for.
+
+See [Greenfield Rebuild Plan](../migrations/GREENFIELD-REBUILD-PLAN.md).
