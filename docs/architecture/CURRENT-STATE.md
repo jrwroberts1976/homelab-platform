@@ -7,7 +7,7 @@ This document is intentionally incomplete until discovery is performed on each h
 | Asset | Known address | Known role | Audit state |
 |---|---|---|---|
 | PROXMOX | 192.168.2.70 | Primary x86 virtualization candidate | AUDITED — RAM/backup remediation required |
-| TestServer | 192.168.2.220 | Current main Docker host | DISCOVERED — local host, full audit next |
+| TestServer | 192.168.2.220 | Legacy consolidated Docker/BirdNET/CI/monitoring host | AUDITED — future role/hostname unassigned |
 | ids-01 | 192.168.2.242 | Security / IDS plus monitoring and secondary DNS workloads | DISCOVERED — SSH open, full audit pending |
 | k3s-node-01 | 192.168.2.195 | Raspberry Pi / k3s node | DISCOVERED — SSH open, full audit pending |
 | DietPi / Pi-hole | 192.168.2.48 | Primary Pi-hole / Unbound DNS appliance | DISCOVERED — SSH open, full audit pending |
@@ -47,7 +47,7 @@ Every compute/Linux host audit must record the same minimum evidence set:
 
 Network appliances must receive an equivalent device audit, including CPU, memory, storage/flash, firmware, interfaces, link state, VLANs, routing, configuration backup coverage and current role where the platform exposes that information.
 
-No target placement decision is final until the audit is complete.\n\n## Completed audits\n\n- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.
+No target placement decision is final until the audit is complete.\n\n## Completed audits\n\n- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.\n- [TestServer](../hardware/TestServer.md) — Raspberry Pi 4, 4 cores, 3.7 GiB RAM, approximately 1 TB MMC storage; heavy consolidated Docker estate captured; future role and hostname deliberately unassigned.
 
 
 ## Fleet discovery
