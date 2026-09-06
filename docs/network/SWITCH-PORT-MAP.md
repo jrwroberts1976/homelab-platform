@@ -89,3 +89,22 @@ Before assigning the remaining port labels:
 8. apply human-readable switch port names/descriptions where the firmware supports them
 
 No port is to be repatched based only on an assumed hostname.
+
+
+## Planned factory reset
+
+The switch is now explicitly scheduled for a factory-default rebuild because the current security lock-down prevents practical administration.
+
+The current configuration is not the target source of truth.
+
+Before reset, retain whatever evidence can still be obtained without weakening the device merely for discovery:
+
+- physical cable/port observations
+- known management identity
+- model/firmware
+- any accessible running configuration
+- link/MAC/VLAN state if console access exposes it
+
+After reset, rebuild from the documented port map and intended configuration. Port 24 remains reserved as the mirror/SPAN destination throughout the redesign.
+
+The switch rebuild is planned before the ASUS router reset.
