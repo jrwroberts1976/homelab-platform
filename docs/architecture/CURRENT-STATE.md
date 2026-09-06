@@ -6,7 +6,7 @@ This document is intentionally incomplete until discovery is performed on each h
 
 | Host | Known role | Audit state |
 |---|---|---|
-| Proxmox | Primary x86 virtualization candidate | NOT AUDITED |
+| Proxmox | Primary x86 virtualization candidate | AUDITED — RAM/backup remediation required |
 | TestServer | Current main Docker host | PARTIAL |
 | ids-01 | Security / IDS host | NOT AUDITED |
 | k3s-node-01 | Raspberry Pi / k3s node | NOT AUDITED |
@@ -35,4 +35,4 @@ Record:
 - power/location constraints
 - intended future role
 
-No target placement decision is final until the audit is complete.
+No target placement decision is final until the audit is complete.\n\n## Completed audits\n\n- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.
