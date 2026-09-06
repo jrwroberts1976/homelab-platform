@@ -47,6 +47,6 @@ The migration is now a greenfield reassignment exercise for all repurposable com
 
 Network infrastructure will also be audited, but routers/switches are only repurposed where a viable replacement role exists.
 
-## Current audit progress\n\n- PROXMOX: complete.\n- TestServer: hardware and workload audit completed. Live evidence shows Komodo is currently running on TestServer; this supersedes the earlier assumption that it had not been deployed. No migration action has been taken.\n- ids-01: next full Linux audit.\n- k3s-node-01: pending.\n- DietPi / Pi-hole: pending.\n- BirdNET hardware identity: still to be reconciled; BirdNET-Go is currently also confirmed as a TestServer Docker workload.\n\n## Next action
+## Current audit progress\n\n- PROXMOX: complete.\n- TestServer: hardware and workload audit completed. Live evidence shows Komodo is currently running on TestServer; this supersedes the earlier assumption that it had not been deployed. No migration action has been taken.\n- ids-01: hardware and workload audit complete. Current responsibilities include Suricata/CrowdSec, Greenbone, monitoring, secondary Pi-hole/Unbound and Restic server.\n- k3s-node-01: pending.\n- DietPi / Pi-hole: pending.\n- BirdNET hardware identity: still to be reconciled; BirdNET-Go is currently also confirmed as a TestServer Docker workload.\n\n## Next action
 
 Complete the same full CPU, memory, disk, network, health and workload audit for every host before any further platform deployment or host-role decision.
