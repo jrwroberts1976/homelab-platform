@@ -11,13 +11,14 @@ This document is intentionally incomplete until discovery is performed on each h
 | ids-01 | 192.168.2.242 | Legacy security/monitoring/DNS/backup host | AUDITED — future role/hostname unassigned |
 | media-01 | 192.168.2.195 | Legacy Kodi/media host; stale `k3s-node-01` DNS alias | AUDITED — future role/hostname unassigned |
 | DietPi | 192.168.2.48 | Legacy primary Pi-hole / Unbound DNS appliance with attached 4 TB-class backup disk | AUDITED — HDD DEGRADED (7 pending / 2 uncorrectable sectors); future role/hostname unassigned |
-| BirdNET Pi | VERIFY | Garden-room BirdNET workload | NOT AUDITED |
 | ASUS RT-AC86U main | 192.168.2.1 | Router / DHCP / AiMesh controller | DISCOVERED — reachable, device audit pending |
 | ASUS AiMesh node | 192.168.2.181 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
 | ASUS AiMesh node | 192.168.2.218 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
 | HP ProCurve switch | 192.168.2.16 | Core managed switch | DISCOVERED — reachable, SSH closed, device audit pending |
 
 The secondary Pi-hole currently associated with ids-01 is a workload, not a separate physical-host audit target. It will be captured during the ids-01 workload audit.
+
+BirdNET capture hardware is a non-compute peripheral, not a Linux host. BirdNET-Go itself is a software workload currently observed on TestServer and will be placed during workload design rather than audited as a separate computer.
 
 Addresses or identities marked VERIFY are deliberately not assumed; the discovery pass must reconcile them from live evidence.
 
@@ -69,7 +70,7 @@ A TestServer jump-box discovery run on 2026-09-06 verified:
 - DietPi: `192.168.2.48`, live hostname `DietPi`; Raspberry Pi 3 running native Pi-hole/Unbound with an attached 4 TB-class backup disk.
 - ASUS infrastructure at `192.168.2.1`, `192.168.2.181`, and `192.168.2.218` is reachable.
 - `192.168.2.16` is reachable but does not expose SSH and remains the switch audit target.
-- BirdNET host identity/address is still to be verified from live evidence.
+- BirdNET has no separate computer to audit; its capture hardware is a non-compute peripheral, while BirdNET-Go is currently a TestServer Docker workload.
 
 Discovery report on TestServer: `/var/tmp/homelab-fleet-discovery-20260906T071538Z.txt`
 SHA256: `04d809dea1c8a3c72532909ddb9b116dee69c7aba576fd91ad666570481edd9f`
