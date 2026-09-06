@@ -111,6 +111,61 @@ The backup disk therefore contains real backup/recovery state, not just an empty
 
 Before replacing, stress-testing, reformatting or repurposing the degraded disk, the contents of `monthly/` and `restic/` must be identified and their recoverability/duplicate copies verified.
 
+## Backup-content structure
+
+A deeper read-only inventory of the degraded backup disk established the following:
+
+### Monthly archives
+
+`/mnt/backup/monthly/` currently contains two dated archives, both for `ids-01`:
+
+- `2026-08-18/ids-01`: approximately 7.5 GiB.
+- `2026-09-01/ids-01`: approximately 12 GiB.
+
+These account for essentially all of the approximately 19 GiB under `monthly/`.
+
+### Restic repositories
+
+`/mnt/backup/restic/` contains Restic repository structures for:
+
+- `dietpi`
+- `homelab-vault`
+- `ids-01`
+- `k3s-node-01`
+- `testserver`
+
+Each has the normal Restic repository directory layout including `data/`, `index/`, `keys/`, `locks/`, `snapshots/` and a repository `config` file.
+
+The `k3s-node-01` repository name is historical evidence and must not be assumed to match the current hostname of `192.168.2.195`, which is now `media-01`.
+
+### Recovery material
+
+`/mnt/backup/recovery/sops-age/` contains SOPS/age recovery material.
+
+**Do not print or commit the contents of the recovery identity file.** Its presence on a degraded disk raises the priority of confirming a second protected copy before this disk is stressed or retired.
+
+### Reports
+
+`/mnt/backup/reports/` contains:
+
+- `monthly-archive.log`
+- `monthly-vault.log`
+- `retention.log`
+
+The contents have not yet been reviewed.
+
+### Recovery interpretation
+
+This disk is not just a destination for one host. It contains:
+
+- dated `ids-01` archive copies,
+- multi-host Restic repositories,
+- a homelab-vault Restic repository,
+- SOPS/age recovery material,
+- backup/retention reports.
+
+Before the disk is replaced, stress-tested, reformatted or disconnected permanently, these datasets must be reconciled against the current Restic server on `ids-01` and any other authoritative backup copies.
+
 ## Network
 
 | Item | Current state |
