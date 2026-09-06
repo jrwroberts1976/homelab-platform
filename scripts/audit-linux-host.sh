@@ -309,21 +309,52 @@ else
 fi
 
 section "PI-HOLE / UNBOUND"
+PIHOLE_FOUND=0
+UNBOUND_FOUND=0
+
 if have pihole; then
-  echo "pihole_detected=YES"
+  PIHOLE_FOUND=1
   run pihole -v
   run pihole status
-else
-  echo "pihole_detected=NO"
 fi
 
 if have unbound; then
+  UNBOUND_FOUND=1
   echo
-  echo "unbound_detected=YES"
   run unbound -V | head -5
   if have systemctl; then
     run systemctl status unbound --no-pager
   fi
+fi
+
+if have docker; then
+  if docker ps -a --format '{{.Names}} {{.Image}}' 2>/dev/null |
+    grep -qiE 'pihole'; then
+    PIHOLE_FOUND=1
+    echo
+    echo "--- containerized Pi-hole ---"
+    docker ps -a --format '{{.Names}} {{.Image}} {{.Status}}' 2>/dev/null |
+      grep -iE 'pihole' || true
+  fi
+
+  if docker ps -a --format '{{.Names}} {{.Image}}' 2>/dev/null |
+    grep -qiE 'unbound'; then
+    UNBOUND_FOUND=1
+    echo
+    echo "--- containerized Unbound ---"
+    docker ps -a --format '{{.Names}} {{.Image}} {{.Status}}' 2>/dev/null |
+      grep -iE 'unbound' || true
+  fi
+fi
+
+if [ "$PIHOLE_FOUND" -eq 1 ]; then
+  echo "pihole_detected=YES"
+else
+  echo "pihole_detected=NO"
+fi
+
+if [ "$UNBOUND_FOUND" -eq 1 ]; then
+  echo "unbound_detected=YES"
 else
   echo "unbound_detected=NO"
 fi
