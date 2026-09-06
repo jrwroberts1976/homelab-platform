@@ -92,6 +92,25 @@ A follow-up read-only SMART query using SAT passthrough succeeded. The disk repo
 
 Because pending and offline-uncorrectable sectors are present, this disk is classified **DEGRADED / REPLACEMENT CANDIDATE** despite the overall SMART "PASSED" line. It must not be treated as the sole authoritative backup target. Verify recoverability/copies before any stress test, filesystem repair, destructive migration, or repurposing.
 
+## Attached backup-disk content
+
+A read-only inventory of `/mnt/backup` showed approximately **20 GiB** of current data:
+
+| Top-level path | Approximate size |
+|---|---:|
+| `monthly/` | 19 GiB |
+| `restic/` | 860 MiB |
+| `recovery/` | 16 KiB |
+| `reports/` | 16 KiB |
+| `yearly/` | 4 KiB |
+| `lost+found/` | 16 KiB |
+
+The filesystem is `/dev/sda1` mounted as ext4 at `/mnt/backup` with `rw,noatime`.
+
+The backup disk therefore contains real backup/recovery state, not just an empty spare volume. The dominant data set is under `monthly/`, with a smaller Restic repository or Restic-related data set under `restic/`.
+
+Before replacing, stress-testing, reformatting or repurposing the degraded disk, the contents of `monthly/` and `restic/` must be identified and their recoverability/duplicate copies verified.
+
 ## Network
 
 | Item | Current state |
