@@ -1,0 +1,4 @@
+cloudflare_account_id = "REPLACE_WITH_ACCOUNT_ID"
+
+# Keep false until the Pages preview deployment has been tested.
+enable_custom_domain = false
