@@ -18,7 +18,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
 | 4. Public website migration | NOT STARTED | `me.jrwroberts.co.uk` externally hosted and validated |
-| 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | RAM upgrade decision and guest backup/recovery proof required before new primary VMs |
+| 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | RAM upgrade decision and GUI-based backup/recovery proof required before new primary VMs |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
@@ -55,6 +55,17 @@ Network infrastructure will also be audited, but routers/switches are only repur
 - media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
 - DietPi (`192.168.2.48`): hardware/workload audit complete. Raspberry Pi 3 with approximately 1 GiB RAM, 100 Mb/s Ethernet and native Pi-hole/Unbound. Attached 4 TB-class backup HDD is DEGRADED: 7 current-pending sectors and 2 offline-uncorrectable sectors. Read-only inventory shows about 20 GiB in use. `monthly/` contains dated ids-01 archives (~7.5 GiB and ~12 GiB); `restic/` contains repositories for dietpi, homelab-vault, ids-01, historical k3s-node-01, and testserver. SOPS/age recovery material is also present. Reconcile these against current authoritative copies before replacement, stress testing, destructive changes or reuse; never print or commit the recovery identity.
 - BirdNET hardware identity: still to be reconciled; BirdNET-Go is currently also confirmed as a TestServer Docker workload.
+
+## Backup redesign
+
+GUI-first backup redesign is now a target requirement.
+
+- Preferred long-term platform: Proxmox Backup Server, pending final host/storage placement.
+- Transitional compatibility: Backrest may be used to browse/restore existing Restic repositories.
+- Existing Restic/monthly backup data remains protected until replacement backups and restores are proven.
+- Degraded DietPi backup HDD must not become the new primary datastore.
+
+See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
