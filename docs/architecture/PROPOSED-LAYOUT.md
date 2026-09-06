@@ -16,7 +16,7 @@ flowchart LR
 
   subgraph PHYS["Physical hardware"]
     PVE["pve-01<br/>HP ProDesk<br/>Proxmox"]:::physical
-    PBS["pbs-01<br/>ZenBook<br/>Backup server"]:::physical
+    PVE2["pve-02<br/>ZenBook<br/>Secondary Proxmox"]:::physical
     DNS1["dns-01<br/>Raspberry Pi 3<br/>Pi-hole + Unbound"]:::physical
     BIRD["birdnet-01<br/>Raspberry Pi 4<br/>BirdNET-Go"]:::physical
     MEDIA["media-01<br/>Raspberry Pi 5<br/>Kodi"]:::physical
@@ -28,26 +28,33 @@ flowchart LR
   end
 
   SW ---|"normal LAN<br/>port TBD"| PVE
-  SW ---|"normal LAN<br/>port TBD"| PBS
+  SW ---|"normal LAN<br/>port TBD"| PVE2
   SW ---|"normal LAN<br/>port TBD"| DNS1
   SW ---|"normal LAN<br/>port TBD"| BIRD
   SW ---|"normal LAN<br/>port TBD"| MEDIA
 
-  subgraph VMS["Virtual services on pve-01"]
+  subgraph VMS1["Virtual services on pve-01"]
     DOCKER["docker-01<br/>containers / applications"]:::vm
-    MON["monitoring-01<br/>Prometheus / Grafana / Loki"]:::vm
-    MGMT["management-01<br/>Komodo / automation"]:::vm
     SEC["security-01<br/>Greenbone"]:::vm
     SENSOR["sensor-01<br/>Suricata"]:::vm
     DNS2["dns-02<br/>Pi-hole + Unbound"]:::vm
   end
 
+  subgraph VMS2["Virtual services on pve-02"]
+    PBS["pbs-01<br/>Proxmox Backup Server"]:::vm
+    MON["monitoring-01<br/>Prometheus / Grafana / Loki"]:::vm
+    MGMT["management-01<br/>Komodo / automation"]:::vm
+    REC["recovery/test<br/>reserved spare capacity"]:::vm
+  end
+
   PVE --> DOCKER
-  PVE --> MON
-  PVE --> MGMT
   PVE --> SEC
   PVE --> SENSOR
   PVE --> DNS2
+  PVE2 --> PBS
+  PVE2 --> MON
+  PVE2 --> MGMT
+  PVE2 --> REC
 
   SPAN["Switch port 24<br/>MIRROR / SPAN destination"]:::network
   CAP["Dedicated second NIC on pve-01<br/>no management IP"]:::network
@@ -75,10 +82,11 @@ See [Router Clean-Rebuild Plan](../network/ROUTER-RESET-PLAN.md).
 
 ## Design intent
 
-- Proxmox hosts the general virtual infrastructure.
+- The existing HP ProDesk Proxmox installation is retained as `pve-01`; it is not reinstalled.
+- The ZenBook is rebuilt as `pve-02` after its legacy workloads are migrated.
 - Greenbone runs in `security-01` and scans actively over the normal LAN.
 - Suricata runs in `sensor-01` and receives switch-mirrored packets through a dedicated passthrough NIC.
 - Kodi remains physical on the Raspberry Pi 5.
 - BirdNET-Go remains physical on the Raspberry Pi 4 with the BirdNET microphone attached.
 - Primary DNS remains physically independent on the Raspberry Pi 3.
-- Backup remains physically independent from Proxmox.
+- Backup storage remains on separate healthy physical storage attached for `pbs-01`; `pbs-01` runs as a VM on `pve-02`.
