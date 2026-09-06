@@ -18,7 +18,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every workload has an approved destination |
 | 4. Public website migration | NOT STARTED | `me.jrwroberts.co.uk` externally hosted and validated |
-| 5. Proxmox IaC | NOT STARTED | New VMs provisioned reproducibly |
+| 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | RAM upgrade decision and guest backup/recovery proof required before new primary VMs |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
