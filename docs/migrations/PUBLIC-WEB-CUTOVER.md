@@ -15,6 +15,18 @@ Cloudflare Pages project: `engineering-portfolio`
 
 ## Pre-cutover gate
 
+Current production DNS captured on 2026-09-06:
+
+```text
+Name: me.jrwroberts.co.uk
+Type: CNAME
+Target: jrwroberts.co.uk
+Proxy: Proxied
+TTL: Auto
+```
+
+This record is the rollback reference for the current home-hosted site.
+
 Before associating the custom domain:
 
 1. record the current Cloudflare DNS record for `me.jrwroberts.co.uk`
