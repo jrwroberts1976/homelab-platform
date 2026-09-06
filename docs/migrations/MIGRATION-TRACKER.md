@@ -94,7 +94,9 @@ Migration has started.
 
 Preview gate: **PASSED**. The Cloudflare Pages project exists, the migration preview deployed successfully, and the site was manually validated. Existing homelab hosting remains the rollback path.
 
-Immediate gate: capture the current `me.jrwroberts.co.uk` DNS record, then perform the controlled Pages custom-domain association/DNS cutover using `docs/migrations/PUBLIC-WEB-CUTOVER.md`.
+Current cutover state: the previous `me.jrwroberts.co.uk` CNAME rollback state is recorded and the Cloudflare Pages custom-domain association has been initiated. Cloudflare currently reports the domain as **Initializing**. Do not retire the home-hosted site yet.
+
+Immediate gate: wait for the Pages custom domain to become active, then validate production HTTPS/content and prove independence from the homelab origin.
 
 ## Backup redesign
 
@@ -109,4 +111,4 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
-Capture the current `me.jrwroberts.co.uk` DNS record and complete the controlled Cloudflare Pages custom-domain cutover before any router/switch reset.
+Wait for `me.jrwroberts.co.uk` to become active on Cloudflare Pages, then complete production validation and independence proof before any router/switch reset.
