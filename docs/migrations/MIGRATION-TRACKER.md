@@ -17,7 +17,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 1. Hardware inventory | IN PROGRESS | Every repurposable host has CPU, RAM, storage, network, OS, architecture, health and upgrade capacity recorded |
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
-| 4. Public website migration | NOT STARTED | `me.jrwroberts.co.uk` externally hosted and validated |
+| 4. Public website migration | IN PROGRESS | `me.jrwroberts.co.uk` externally hosted and validated |
 | 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | RAM upgrade decision and GUI-based backup/recovery proof required before new primary VMs |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
@@ -80,6 +80,20 @@ See `docs/network/SWITCH-PORT-MAP.md` and `docs/network/ROUTER-RESET-PLAN.md`.
 - Prefer fresh OS/VM + IaC deployment + data restore over carrying old operating-system state forward.
 - See `docs/migrations/GREENFIELD-REBUILD-PLAN.md`.
 
+## Public website migration
+
+Migration has started.
+
+- Source repository: `jrwroberts1976/engineering-portfolio`.
+- The site is already Astro static output with `npm run build` -> `dist/`.
+- Target: Cloudflare Pages project `engineering-portfolio`.
+- Cloudflare Pages project and custom-domain registration are represented in Terraform under `terraform/cloudflare/public-web/`.
+- Custom-domain registration is disabled by default until a preview deployment is validated.
+- The portfolio repository now has a manual Cloudflare Pages preview deployment workflow on branch `migration/cloudflare-pages`.
+- Existing homelab hosting remains intact as rollback until external hosting and DNS cutover are proven.
+
+Immediate gate: bootstrap the Pages project with Terraform, configure Cloudflare credentials in GitHub Actions, run the preview deployment, and validate the generated `*.pages.dev` URL before touching public DNS.
+
 ## Backup redesign
 
 GUI-first backup redesign is now a target requirement.
@@ -93,4 +107,4 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
-Complete the same full CPU, memory, disk, network, health and workload audit for every host before any further platform deployment or host-role decision.
+Complete the Cloudflare Pages preview deployment and validation for `me.jrwroberts.co.uk` before any router/switch reset or public DNS cutover.
