@@ -16,7 +16,6 @@
     fail_msg: >-
       Export PIHOLE_WEB_PASSWORD on the Ansible runner before applying this
       role. Keep it out of Git and command-line arguments.
-  no_log: true
 
 - name: Install resolver prerequisites
   ansible.builtin.apt:
@@ -41,6 +40,17 @@
   args:
     executable: /bin/bash
   register: root_dns_udp
+  changed_when: false
+
+- name: Verify direct TCP access to the root DNS system is authoritative
+  ansible.builtin.shell: |
+    output="$(dig @198.41.0.4 . NS +norec +tcp +time=3 +tries=1)"
+    printf '%s\n' "$output"
+    printf '%s\n' "$output" | grep -Eq '^;; flags: .*\baa\b'
+    ! printf '%s\n' "$output" | grep -Eq '^;; flags: .*\bra\b'
+  args:
+    executable: /bin/bash
+  register: root_dns_tcp
   changed_when: false
 
 - name: Verify a.root-servers.net identity is not transparently proxied
@@ -197,7 +207,6 @@
       - dns.upstreams
       - "{{ pihole_upstreams | to_json }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Configure Pi-hole DNSSEC delegation
   ansible.builtin.command:
@@ -207,7 +216,6 @@
       - dns.dnssec
       - "{{ 'true' if pihole_dnssec else 'false' }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Configure Pi-hole listening mode
   ansible.builtin.command:
@@ -217,7 +225,6 @@
       - dns.listeningMode
       - "{{ pihole_listening_mode }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Configure Pi-hole interface
   ansible.builtin.command:
@@ -227,7 +234,6 @@
       - dns.interface
       - "{{ dns_resolver_interface }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Configure Pi-hole reverse servers
   ansible.builtin.command:
@@ -237,7 +243,6 @@
       - dns.revServers
       - "{{ pihole_reverse_servers | to_json }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Configure Pi-hole CNAME records
   ansible.builtin.command:
@@ -247,7 +252,6 @@
       - dns.cnameRecords
       - "{{ pihole_cname_records | to_json }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Configure Pi-hole local DNS records
   ansible.builtin.command:
@@ -257,7 +261,6 @@
       - dns.hosts
       - "{{ pihole_local_hosts | to_json }}"
   changed_when: false
-  notify: Restart Pi-hole FTL
 
 - name: Set Pi-hole web/API password without exposing it in process arguments
   ansible.builtin.expect:
@@ -268,6 +271,12 @@
     timeout: 30
   no_log: true
   changed_when: true
+
+- name: Restart Pi-hole FTL after managed configuration
+  ansible.builtin.systemd_service:
+    name: pihole-FTL
+    state: restarted
+    enabled: true
 
 - name: Install managed adlist SQL
   ansible.builtin.template:
