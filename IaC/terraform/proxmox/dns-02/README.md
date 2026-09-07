@@ -1,6 +1,6 @@
 # dns-02 — Proxmox LXC
 
-Status: **Terraform provisioning complete and drift-free. CT 100 (`dns-02`) is running on `PROXMOX` at `192.168.2.50/24`; Debian 13/systemd is healthy. Pi-hole + Unbound configuration is the next phase.**
+Status: **Terraform provisioning is complete and drift-free. CT 100 (`dns-02`) is running on `PROXMOX` at `192.168.2.50/24`; Debian 13/systemd is healthy; Pi-hole + Unbound have been deployed through Ansible and direct service validation has passed. Client/router cutover remains.**
 
 ## Goal
 
@@ -112,7 +112,7 @@ The stack references that existing template directly rather than trying to downl
 
 ## Configuration phase
 
-Terraform stops at the operating-system boundary. Pi-hole + Unbound will be configured with Ansible under `IaC/ansible/` after the current DNS configuration has been captured and reconciled.
+Terraform stops at the operating-system boundary. Pi-hole + Unbound are configured with Ansible under `IaC/ansible/`; the live `dns-01` configuration was captured and reconciled before the first apply.
 
 That capture must include:
 
