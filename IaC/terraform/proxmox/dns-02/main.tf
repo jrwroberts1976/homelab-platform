@@ -4,6 +4,10 @@ resource "proxmox_virtual_environment_container" "dns02" {
   description  = "Secondary DNS (Pi-hole + Unbound) managed from homelab-platform/IaC"
   unprivileged = true
 
+  features {
+    nesting = true
+  }
+
   started       = true
   start_on_boot = true
   protection    = var.protect_after_build
@@ -43,7 +47,7 @@ resource "proxmox_virtual_environment_container" "dns02" {
   }
 
   network_interface {
-    name     = "veth0"
+    name     = "eth0"
     bridge   = var.bridge
     firewall = var.enable_pve_firewall
   }

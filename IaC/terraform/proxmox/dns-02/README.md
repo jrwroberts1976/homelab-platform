@@ -136,3 +136,10 @@ After Ansible configuration:
 8. retain the old `ids-01` secondary until the new path has been stable and rollback is proven
 
 After validation, set `protect_after_build = true` and apply again so Proxmox protects the container from accidental removal.
+
+
+## Debian 13 / systemd 257 runtime
+
+The first live boot of CT 100 on Proxmox VE 9.2 showed systemd 257 with `dev-mqueue.mount`, `run-lock.mount`, and `tmp.mount` failed, leaving the guest in a degraded state. The LXC definition therefore enables `features { nesting = true }`, which is required by modern systemd for these container mount operations.
+
+The guest network interface is named `eth0` so Debian and subsequent Ansible configuration use the conventional interface name.
