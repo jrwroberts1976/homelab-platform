@@ -18,7 +18,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
 | 4. Public website migration | COMPLETE — AUTOMATION HARDENING | `me.jrwroberts.co.uk` is externally hosted on Cloudflare Pages and manually validated; production GitHub Actions deployment still needs final merge/proof |
-| 5. Proxmox IaC | IN PROGRESS — DNS-02 BUILD PREPARED | Existing `PROXMOX` retained; rebuilt `pve2` remains standalone; `IaC/terraform/proxmox/dns-02` now defines the first new Proxmox LXC build pending live preflight |
+| 5. Proxmox IaC | IN PROGRESS — DNS-02 PROVISIONED | Existing `PROXMOX` retained; rebuilt `pve2` remains standalone; CT 100 `dns-02` is provisioned from `IaC/terraform/proxmox/dns-02`, healthy and drift-free; service configuration/cutover remains |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
@@ -150,7 +150,7 @@ The infrastructure definition now lives under:
 
 `IaC/terraform/proxmox/dns-02/`
 
-Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
+Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
 
 ## Backup redesign
 
@@ -167,5 +167,5 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 1. Complete standalone `pve2` service validation and test the incoming second NIC before any further cluster attempt.
 2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
-3. Complete the `dns-02` live preflight, reserve its address, review the Terraform plan, then build the LXC from `IaC/`. Capture the existing DNS configuration before the Ansible service migration.
+3. Capture the existing `dns-01` / `ids-01` Pi-hole, Unbound, local-DNS and sync configuration, then build the `dns-02` service layer through `IaC/ansible/` before any DHCP/DNS cutover.
 4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.
