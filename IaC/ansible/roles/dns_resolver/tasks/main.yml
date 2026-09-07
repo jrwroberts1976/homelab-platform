@@ -1,0 +1,333 @@
+---
+- name: Validate dns-02 target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.default_ipv4.address == dns_resolver_expected_ipv4
+      - ansible_facts.default_ipv4.interface == dns_resolver_interface
+    fail_msg: >-
+      Refusing to configure DNS: expected Debian on
+      {{ dns_resolver_expected_ipv4 }}/{{ dns_resolver_interface }}.
+
+- name: Require a protected Pi-hole web password
+  ansible.builtin.assert:
+    that:
+      - pihole_web_password | length >= 16
+    fail_msg: >-
+      Export PIHOLE_WEB_PASSWORD on the Ansible runner before applying this
+      role. Keep it out of Git and command-line arguments.
+  no_log: true
+
+- name: Install resolver prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - dnsutils
+      - git
+      - python3-pexpect
+      - sqlite3
+      - unbound
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Verify direct UDP access to the root DNS system is authoritative
+  ansible.builtin.shell: |
+    output="$(dig @198.41.0.4 . NS +norec +time=3 +tries=1)"
+    printf '%s\n' "$output"
+    printf '%s\n' "$output" | grep -Eq '^;; flags: .*\baa\b'
+    ! printf '%s\n' "$output" | grep -Eq '^;; flags: .*\bra\b'
+  args:
+    executable: /bin/bash
+  register: root_dns_udp
+  changed_when: false
+
+- name: Verify a.root-servers.net identity is not transparently proxied
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@198.41.0.4"
+      - version.bind
+      - CH
+      - TXT
+      - +time=3
+      - +tries=1
+  register: root_dns_identity
+  changed_when: false
+  failed_when: '"ATLAS" not in root_dns_identity.stdout'
+
+- name: Install managed Unbound policy
+  ansible.builtin.template:
+    src: unbound-pihole.conf.j2
+    dest: /etc/unbound/unbound.conf.d/pihole.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart unbound
+
+- name: Check for unbound-resolvconf compatibility service
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - list-unit-files
+      - unbound-resolvconf.service
+      - --no-legend
+  register: unbound_resolvconf_unit
+  changed_when: false
+  failed_when: false
+
+- name: Disable unbound-resolvconf compatibility service
+  ansible.builtin.systemd_service:
+    name: unbound-resolvconf.service
+    state: stopped
+    enabled: false
+  when: "'unbound-resolvconf.service' in unbound_resolvconf_unit.stdout"
+
+- name: Ensure Unbound is enabled
+  ansible.builtin.systemd_service:
+    name: unbound
+    state: started
+    enabled: true
+
+- name: Apply pending Unbound restart before validation
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify Unbound recursion
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - -p
+      - "{{ unbound_port | string }}"
+      - pi-hole.net
+      - +short
+      - +time=5
+      - +tries=2
+  register: unbound_recursion
+  changed_when: false
+  failed_when: unbound_recursion.stdout | trim | length == 0
+
+- name: Verify Unbound rejects deliberately broken DNSSEC
+  ansible.builtin.command:
+    argv:
+      - dig
+      - fail01.dnssec.works
+      - "@127.0.0.1"
+      - -p
+      - "{{ unbound_port | string }}"
+      - +time=5
+      - +tries=2
+  register: unbound_dnssec_bad
+  changed_when: false
+  failed_when: '"status: SERVFAIL" not in unbound_dnssec_bad.stdout'
+
+- name: Verify Unbound authenticates valid DNSSEC
+  ansible.builtin.command:
+    argv:
+      - dig
+      - +ad
+      - dnssec.works
+      - "@127.0.0.1"
+      - -p
+      - "{{ unbound_port | string }}"
+      - +time=5
+      - +tries=2
+  register: unbound_dnssec_good
+  changed_when: false
+  failed_when: >-
+    "status: NOERROR" not in unbound_dnssec_good.stdout
+    or " ad;" not in unbound_dnssec_good.stdout
+
+- name: Check whether Pi-hole is already installed
+  ansible.builtin.stat:
+    path: /usr/local/bin/pihole
+  register: pihole_binary
+
+- name: Bootstrap Pi-hole when absent
+  when: not pihole_binary.stat.exists
+  block:
+    - name: Create Pi-hole configuration directory
+      ansible.builtin.file:
+        path: /etc/pihole
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Preseed Pi-hole v6 configuration for unattended installation
+      ansible.builtin.template:
+        src: pihole-bootstrap.toml.j2
+        dest: /etc/pihole/pihole.toml
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Create installer staging directory
+      ansible.builtin.file:
+        path: /usr/local/src
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download official Pi-hole installer
+      ansible.builtin.get_url:
+        url: "{{ pihole_installer_url }}"
+        dest: /usr/local/src/pihole-basic-install.sh
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install Pi-hole non-interactively from the preseed
+      ansible.builtin.command:
+        argv:
+          - /bin/bash
+          - /usr/local/src/pihole-basic-install.sh
+          - --unattended
+        creates: /usr/local/bin/pihole
+      environment:
+        DEBIAN_FRONTEND: noninteractive
+
+- name: Configure Pi-hole upstream resolver
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.upstreams
+      - "{{ pihole_upstreams | to_json }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Configure Pi-hole DNSSEC delegation
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.dnssec
+      - "{{ 'true' if pihole_dnssec else 'false' }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Configure Pi-hole listening mode
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.listeningMode
+      - "{{ pihole_listening_mode }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Configure Pi-hole interface
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.interface
+      - "{{ dns_resolver_interface }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Configure Pi-hole reverse servers
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.revServers
+      - "{{ pihole_reverse_servers | to_json }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Configure Pi-hole CNAME records
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.cnameRecords
+      - "{{ pihole_cname_records | to_json }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Configure Pi-hole local DNS records
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.hosts
+      - "{{ pihole_local_hosts | to_json }}"
+  changed_when: false
+  notify: Restart Pi-hole FTL
+
+- name: Set Pi-hole web/API password without exposing it in process arguments
+  ansible.builtin.expect:
+    command: /usr/local/bin/pihole setpassword
+    responses:
+      'Enter New Password \(Blank for no password\):': "{{ pihole_web_password }}"
+      'Confirm Password:': "{{ pihole_web_password }}"
+    timeout: 30
+  no_log: true
+  changed_when: true
+
+- name: Install managed adlist SQL
+  ansible.builtin.template:
+    src: adlists.sql.j2
+    dest: /usr/local/share/homelab-pihole-adlists.sql
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reconcile required Pi-hole adlists with the Default group
+  ansible.builtin.shell: |
+    sqlite3 /etc/pihole/gravity.db < /usr/local/share/homelab-pihole-adlists.sql
+  args:
+    executable: /bin/bash
+  register: adlist_reconcile
+  changed_when: (adlist_reconcile.stdout | trim | int) > 0
+  notify: Update Pi-hole gravity
+
+- name: Apply pending Pi-hole handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Pi-hole FTL is enabled and running
+  ansible.builtin.systemd_service:
+    name: pihole-FTL
+    state: started
+    enabled: true
+
+- name: Verify Pi-hole answers through Unbound
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - example.com
+      - +short
+      - +time=5
+      - +tries=2
+  register: pihole_resolution
+  changed_when: false
+  failed_when: pihole_resolution.stdout | trim | length == 0
+
+- name: Verify Pi-hole local dns-02 record
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - dns-02.jameshouse
+      - +short
+      - +time=3
+      - +tries=1
+  register: pihole_local_record
+  changed_when: false
+  failed_when: dns_resolver_expected_ipv4 not in pihole_local_record.stdout
+
+- name: Verify resolver services have no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: failed_units
+  changed_when: false
+  failed_when: failed_units.stdout | trim | length > 0
