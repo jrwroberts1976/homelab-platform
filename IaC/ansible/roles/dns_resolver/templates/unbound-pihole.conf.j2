@@ -1,0 +1,56 @@
+# Managed by Ansible: homelab-platform/IaC
+server:
+    verbosity: 0
+    interface: 127.0.0.1
+    port: {{ unbound_port }}
+    do-ip4: yes
+    do-udp: yes
+    do-tcp: yes
+    do-ip6: {{ 'yes' if unbound_do_ip6 else 'no' }}
+    prefer-ip6: no
+
+    access-control: 0.0.0.0/0 refuse
+    access-control: 10.0.0.0/8 allow
+    access-control: 127.0.0.1/8 allow
+    access-control: 172.16.0.0/12 allow
+    access-control: 192.168.0.0/16 allow
+    access-control: ::/0 refuse
+    access-control: ::1/128 allow
+    access-control: fd00::/8 allow
+    access-control: fe80::/10 allow
+
+    private-address: 10.0.0.0/8
+    private-address: 172.16.0.0/12
+    private-address: 192.168.0.0/16
+    private-address: 169.254.0.0/16
+    private-address: fd00::/8
+    private-address: fe80::/10
+
+    ratelimit: {{ unbound_ratelimit }}
+    unwanted-reply-threshold: {{ unbound_unwanted_reply_threshold }}
+    so-rcvbuf: {{ unbound_socket_buffer }}
+    so-sndbuf: {{ unbound_socket_buffer }}
+
+    harden-glue: yes
+    harden-dnssec-stripped: yes
+    harden-algo-downgrade: yes
+    harden-large-queries: yes
+    harden-short-bufsize: yes
+    use-caps-for-id: yes
+
+    rrset-roundrobin: yes
+    qname-minimisation: yes
+    minimal-responses: yes
+
+    hide-identity: yes
+    identity: "Server"
+    hide-version: yes
+
+    cache-min-ttl: {{ unbound_cache_min_ttl }}
+    cache-max-ttl: {{ unbound_cache_max_ttl }}
+    serve-expired: yes
+    neg-cache-size: {{ unbound_neg_cache_size }}
+    prefetch: yes
+    prefetch-key: yes
+    msg-cache-size: {{ unbound_msg_cache_size }}
+    rrset-cache-size: {{ unbound_rrset_cache_size }}

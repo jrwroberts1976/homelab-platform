@@ -1,0 +1,23 @@
+BEGIN IMMEDIATE;
+{% for item in pihole_adlists %}
+INSERT OR IGNORE INTO adlist (address, enabled, comment, type)
+VALUES ('{{ item.address | replace("'", "''") }}', 1, '{{ item.comment | replace("'", "''") }}', 0);
+
+UPDATE adlist
+SET enabled = 1,
+    comment = '{{ item.comment | replace("'", "''") }}'
+WHERE address = '{{ item.address | replace("'", "''") }}'
+  AND type = 0
+  AND (
+    enabled <> 1
+    OR COALESCE(comment, '') <> '{{ item.comment | replace("'", "''") }}'
+  );
+
+INSERT OR IGNORE INTO adlist_by_group (adlist_id, group_id)
+SELECT id, 0
+FROM adlist
+WHERE address = '{{ item.address | replace("'", "''") }}'
+  AND type = 0;
+{% endfor %}
+SELECT total_changes();
+COMMIT;
