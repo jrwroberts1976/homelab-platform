@@ -36,18 +36,22 @@ No proposed VM such as `docker-core-01` or `monitoring-01` is approved until the
 
 ## Host-owned IaC direction
 
-Future repository structure should make deployment ownership explicit, for example:
+The authoritative IaC root is `IaC/` in this repository. New Terraform and Ansible must be created there.
+
+Working structure:
 
 ```text
-hosts/
-├── docker-core-01/
-├── monitoring-01/
-├── ids-01/
-├── testserver/
-└── pihole-*/
+IaC/
+├── terraform/
+│   └── proxmox/
+│       └── dns-02/
+└── ansible/
+    ├── inventories/
+    ├── playbooks/
+    └── roles/
 ```
 
-Shared roles, modules and policy may be reused, but a deployable workload must have an explicit target host.
+Shared roles, modules and policy may be reused, but every deployable workload must have an explicit target host. `dns-02` is the first Proxmox workload being built under this structure.
 
 
 ## Host naming
@@ -134,6 +138,7 @@ If the Proxmox host is not upgraded to enough RAM, Greenbone remains on its exis
 - Remaining switch ports will be labelled only after MAC-table/cabling discovery.
 - The ASUS router will receive a clean firmware/factory-reset rebuild before final DHCP and QoS policy is applied.
 - DHCP remains on the ASUS router in the working design.
+- Secondary DNS target: `dns-02`, an unprivileged Debian LXC on the primary Proxmox host, configured as Pi-hole + Unbound through `IaC/`.
 - DHCP reservations, DNS advertisement and QoS policy will be documented in Git before final cutover.
 
 See:
