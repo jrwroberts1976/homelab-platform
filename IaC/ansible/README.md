@@ -78,3 +78,16 @@ Post-apply validation from TestServer confirmed:
 - a domain selected directly from the local gravity database is blocked as `0.0.0.0`
 
 This validates the service build itself. Client resolver settings and ASUS DHCP/DNS advertisement remain unchanged pending a controlled failover test.
+
+
+## Controlled client failover proof
+
+On 7 September 2026, TestServer temporarily ignored DHCP-provided DNS and used only `192.168.2.50` through NetworkManager. Validation showed:
+
+- `/etc/resolv.conf` contained only `nameserver 192.168.2.50`
+- libc/system resolution succeeded for `example.com`
+- local DNS resolved `dns-02.jameshouse -> 192.168.2.50`
+- local DNS resolved `testserver.jameshouse -> 192.168.2.220`
+- HTTPS using normal system DNS returned HTTP 200 from `https://example.com`
+
+This is the client-level cutover proof required before changing ASUS DHCP/DNS advertisement. The temporary TestServer override must be reverted to DHCP-derived DNS before router cutover.
