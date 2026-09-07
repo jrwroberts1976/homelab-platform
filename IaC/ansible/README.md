@@ -58,3 +58,23 @@ Do not use check mode as the initial dry run on the pristine container: later va
 7. fails if any systemd unit is left failed
 
 The role intentionally preserves the current Unbound cache/security policy from `dns-01`, including the 4 MiB socket-buffer request. If the LXC kernel refuses that buffer size, validate the warning before changing host-level sysctls.
+
+
+## Live deployment evidence — 7 September 2026
+
+The first real apply from TestServer completed successfully:
+
+```text
+dns-02 : ok=37 changed=13 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+```
+
+Post-apply validation from TestServer confirmed:
+
+- public DNS resolution through `192.168.2.50` over UDP and TCP/53
+- `dns-02.jameshouse -> 192.168.2.50`
+- `testserver.jameshouse -> 192.168.2.220` on both `dns-01` and `dns-02`
+- valid DNSSEC data resolves normally through Pi-hole/Unbound
+- deliberately broken DNSSEC returns `SERVFAIL`
+- a domain selected directly from the local gravity database is blocked as `0.0.0.0`
+
+This validates the service build itself. Client resolver settings and ASUS DHCP/DNS advertisement remain unchanged pending a controlled failover test.
