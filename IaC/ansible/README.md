@@ -44,13 +44,13 @@ From `IaC/ansible/` on TestServer:
 
 ```bash
 ansible-playbook --syntax-check playbooks/dns-02.yml
-ansible-playbook playbooks/dns-02.yml --check
+ansible-playbook playbooks/dns-02.yml --list-tasks
 ```
 
-A real apply must be reviewed separately. During apply the role:
+Do not use check mode as the initial dry run on the pristine container: later validation tasks intentionally depend on Pi-hole having been installed earlier in the same real run. A real apply must be reviewed separately. During apply the role:
 
 1. verifies the target is Debian at `192.168.2.50` on `eth0`
-2. verifies direct authoritative access to `a.root-servers.net`
+2. verifies direct authoritative UDP and TCP access to `a.root-servers.net` and checks its CHAOS identity
 3. installs/configures Unbound and validates recursion + DNSSEC
 4. installs/configures Pi-hole
 5. reconciles the five captured adlists
