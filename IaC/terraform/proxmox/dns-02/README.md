@@ -1,6 +1,6 @@
 # dns-02 — Proxmox LXC
 
-Status: **IaC prepared; live infrastructure preflight complete for CT ID, storage, template and IPv4 allocation. Terraform authentication/plan validation remains before apply.**
+Status: **Terraform provisioning complete and drift-free. CT 100 (`dns-02`) is running on `PROXMOX` at `192.168.2.50/24`; Debian 13/systemd is healthy. Pi-hole + Unbound configuration is the next phase.**
 
 ## Goal
 
@@ -65,7 +65,7 @@ Never commit the token. Supply it only to the Terraform process:
 export TF_VAR_proxmox_api_token='user@realm!token=secret'
 ```
 
-The token must have the permissions required to allocate/configure the LXC and to manage the LXC template download. The provider's download resource also requires Proxmox datastore/template and system audit/modify privileges.
+The current runner reuses the scoped `iac@pve!opentofu` API token. Its ACLs cover the target node, `vmbr0`, `/vms`, and the required datastores. The existing Debian template is referenced directly; Terraform does not download or own it.
 
 ## Local values
 
@@ -76,6 +76,10 @@ cp terraform.tfvars.example terraform.tfvars
 ```
 
 Then replace the example CT ID, IP address and public SSH key with verified values.
+
+## Proven runner
+
+Terraform is executed from `TestServer` (`192.168.2.220`). The validated toolchain is Terraform 1.16.0 on `linux_arm64` with `bpg/proxmox` 0.111.1 pinned by `.terraform.lock.hcl`.
 
 ## Plan gate
 
@@ -135,11 +139,46 @@ After Ansible configuration:
 7. only then update ASUS DHCP/DNS advertisement
 8. retain the old `ids-01` secondary until the new path has been stable and rollback is proven
 
-After validation, set `protect_after_build = true` and apply again so Proxmox protects the container from accidental removal.
+After service validation and cutover proof, set `protect_after_build = true` and apply again so Proxmox protects the container from accidental removal.
 
 
 ## Debian 13 / systemd 257 runtime
 
-The first live boot of CT 100 on Proxmox VE 9.2 showed systemd 257 with `dev-mqueue.mount`, `run-lock.mount`, and `tmp.mount` failed, leaving the guest in a degraded state. The LXC definition therefore enables `features { nesting = true }`, which is required by modern systemd for these container mount operations.
+The first live boot of CT 100 on Proxmox VE 9.2 showed systemd 257 with `dev-mqueue.mount`, `run-lock.mount`, and `tmp.mount` failed, leaving the guest in a degraded state. Enabling LXC nesting resolved all three failures and returned `systemctl is-system-running` to `running`.
 
-The guest network interface is named `eth0` so Debian and subsequent Ansible configuration use the conventional interface name.
+The desired Terraform state therefore includes:
+
+```hcl
+features {
+  nesting = true
+}
+```
+
+### Proxmox API limitation observed
+
+When the scoped `iac@pve!opentofu` token attempted to add the feature block to the already-created container, the provider submitted the full feature structure (`fuse=false`, `keyctl=false`, `mknod=false`, `nesting=true`). Proxmox rejected that API update because changing feature flags other than nesting is restricted to `root@pam`.
+
+The one-time live bootstrap used on `PROXMOX` was:
+
+```bash
+pct set 100 -features nesting=1
+pct shutdown 100 --timeout 30 || pct stop 100
+pct start 100
+```
+
+After the container restarted, systemd was healthy, Terraform refreshed the manually-set nesting state, and the final `terraform plan` reported **No changes**.
+
+This root-only bootstrap requirement must be considered if CT 100 is ever recreated from scratch with the current scoped API identity. Do not widen the IaC service-account permissions to `Administrator` merely to bypass this Proxmox restriction.
+
+The guest network interface is named `eth0` and is live at `192.168.2.50/24`, so Debian and subsequent Ansible configuration use the conventional interface name.
+
+## Provisioning completion evidence
+
+Live validation on 7 September 2026 confirmed:
+
+- CT 100 exists and is running
+- `eth0` has `192.168.2.50/24`
+- SSH key bootstrap works with `proxmox-automation`
+- systemd state is `running`
+- zero failed systemd units
+- final Terraform plan: **No changes. Your infrastructure matches the configuration.**
