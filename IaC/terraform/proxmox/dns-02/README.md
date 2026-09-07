@@ -22,7 +22,7 @@ dns-02
   managed through Terraform + Ansible
 ```
 
-The existing containerized secondary DNS service on `ids-01` (`192.168.2.242`) stays in service until `dns-02` is built, validated and included in a successful failover test.
+`ids-01` is no longer present. `192.168.2.242` remains configured as a stale secondary resolver on at least TestServer, so `dns-01` (`192.168.2.48`) is currently the only proven live resolver. Do not replace the stale `.242` entry with `dns-02` until direct DNS and failover tests against `192.168.2.50` pass.
 
 ## Planned LXC resources
 
@@ -137,7 +137,7 @@ After Ansible configuration:
 5. stop `dns-02` and prove `dns-01` still serves clients
 6. start `dns-02`, temporarily stop the existing secondary path and prove resolution
 7. only then update ASUS DHCP/DNS advertisement
-8. retain the old `ids-01` secondary until the new path has been stable and rollback is proven
+8. replace stale client/router references to `192.168.2.242` only after the new path has been stable and rollback to `dns-01` is proven
 
 After service validation and cutover proof, set `protect_after_build = true` and apply again so Proxmox protects the container from accidental removal.
 
