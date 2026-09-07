@@ -1,0 +1,15 @@
+# Copy to terraform.tfvars locally. terraform.tfvars is intentionally ignored by Git.
+#
+# BOTH VALUES BELOW ARE EXAMPLES ONLY.
+# Confirm the next free Proxmox ID and a free/reserved LAN IP before apply.
+
+vm_id     = 202
+ipv4_cidr = "192.168.2.49/24"
+
+ssh_public_keys = [
+  "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY"
+]
+
+# Do not put the API token here.
+# Supply it in the shell:
+# export TF_VAR_proxmox_api_token='user@realm!token=secret'

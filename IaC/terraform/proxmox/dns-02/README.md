@@ -1,0 +1,143 @@
+# dns-02 — Proxmox LXC
+
+Status: **IaC prepared; live preflight and address allocation required before apply.**
+
+## Goal
+
+Create a small, reproducible Debian LXC on the primary Proxmox host to become the secondary Pi-hole + Unbound resolver.
+
+Target design:
+
+```text
+dns-01
+  Raspberry Pi 3
+  192.168.2.48
+  Pi-hole + Unbound
+  independent physical DNS path
+
+dns-02
+  Proxmox LXC on PROXMOX
+  static/reserved IPv4: TO BE VERIFIED
+  Pi-hole + Unbound
+  managed through Terraform + Ansible
+```
+
+The existing containerized secondary DNS service on `ids-01` (`192.168.2.242`) stays in service until `dns-02` is built, validated and included in a successful failover test.
+
+## Planned LXC resources
+
+- Target node: `PROXMOX`
+- Debian 13 official Proxmox LXC template
+- 1 vCPU
+- 512 MiB RAM
+- 256 MiB swap
+- 8 GiB root disk
+- `vm-ssd` root filesystem storage
+- `vmbr0` LAN bridge
+- unprivileged LXC
+- start on boot
+- no plaintext root password; SSH key bootstrap only
+
+Pi-hole itself documents 512 MB RAM and 4 GB recommended free space as sufficient baseline capacity, so this allocation leaves modest headroom while remaining lightweight.
+
+## Safety gates before apply
+
+Run these on `PROXMOX` and record the output:
+
+```bash
+pvesh get /cluster/nextid
+pct list
+pvesm status
+pvesm list local --content vztmpl
+```
+
+Then choose the intended `dns-02` IPv4 address and verify:
+
+- it is outside/appropriately handled by the DHCP lease pool
+- it is not already reserved for another host
+- it does not respond to ARP/ping because of another device
+- the ASUS router reservation table will reserve it for `dns-02`
+
+Do **not** advertise the new resolver to DHCP clients yet.
+
+## Authentication
+
+The Terraform provider uses a Proxmox API token.
+
+Never commit the token. Supply it only to the Terraform process:
+
+```bash
+export TF_VAR_proxmox_api_token='user@realm!token=secret'
+```
+
+The token must have the permissions required to allocate/configure the LXC and to manage the LXC template download. The provider's download resource also requires Proxmox datastore/template and system audit/modify privileges.
+
+## Local values
+
+Copy:
+
+```bash
+cp terraform.tfvars.example terraform.tfvars
+```
+
+Then replace the example CT ID, IP address and public SSH key with verified values.
+
+## Plan gate
+
+From this directory:
+
+```bash
+terraform init
+terraform fmt -check
+terraform validate
+terraform plan
+```
+
+Review the complete plan before any apply.
+
+Do not run `terraform apply` until:
+
+- the CT ID is confirmed unused
+- the IP is confirmed unused and reserved
+- the SSH key is correct
+- the target storage names are confirmed
+- the plan contains only the expected template/LXC operations
+
+## Template handling
+
+The stack pins the official Proxmox Debian 13 template:
+
+`debian-13-standard_13.1-2_amd64.tar.zst`
+
+If that template already exists on `local` but is not in Terraform state, the download resource is deliberately configured **not** to overwrite an unmanaged copy. Import/adopt it instead of deleting or replacing a known-good template without review.
+
+## Configuration phase
+
+Terraform stops at the operating-system boundary. Pi-hole + Unbound will be configured with Ansible under `IaC/ansible/` after the current DNS configuration has been captured and reconciled.
+
+That capture must include:
+
+- current Pi-hole versions
+- current block/ad lists
+- local DNS records and CNAMEs
+- important Pi-hole v6 settings
+- current Unbound configuration
+- current Nebula Sync intent
+- any monitoring/exporter integration
+
+Passwords/API tokens are not copied into plaintext Git.
+
+## Cutover
+
+After Ansible configuration:
+
+1. query `dns-02` directly over UDP and TCP/53
+2. verify Pi-hole blocking
+3. verify Unbound recursion/DNSSEC
+4. compare expected local records with `dns-01`
+5. stop `dns-02` and prove `dns-01` still serves clients
+6. start `dns-02`, temporarily stop the existing secondary path and prove resolution
+7. only then update ASUS DHCP/DNS advertisement
+8. retain the old `ids-01` secondary until the new path has been stable and rollback is proven
+
+After validation, set `protect_after_build = true` and apply again so Proxmox protects the container from accidental removal.

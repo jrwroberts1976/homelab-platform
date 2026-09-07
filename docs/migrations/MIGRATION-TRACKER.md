@@ -18,7 +18,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
 | 4. Public website migration | COMPLETE — AUTOMATION HARDENING | `me.jrwroberts.co.uk` is externally hosted on Cloudflare Pages and manually validated; production GitHub Actions deployment still needs final merge/proof |
-| 5. Proxmox IaC | IN PROGRESS — SECOND NODE STANDALONE | Existing `PROXMOX` retained; rebuilt `pve2` is standalone after a controlled cluster-join rollback; new NIC to be validated before any further cluster attempt |
+| 5. Proxmox IaC | IN PROGRESS — DNS-02 BUILD PREPARED | Existing `PROXMOX` retained; rebuilt `pve2` remains standalone; `IaC/terraform/proxmox/dns-02` now defines the first new Proxmox LXC build pending live preflight |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
@@ -135,6 +135,23 @@ Current decision:
 
 See `docs/migrations/PROXMOX-SECOND-NODE-2026-09-07.md`.
 
+## DNS resilience redesign — 7 September 2026
+
+The replacement path for the current secondary DNS service is now approved in principle.
+
+Target:
+
+- `dns-01`: existing physical Raspberry Pi 3 at `192.168.2.48`, Pi-hole + Unbound
+- `dns-02`: new unprivileged Debian LXC on `PROXMOX`, Pi-hole + Unbound
+- ASUS router remains DHCP authority and will advertise both resolvers only after validation
+- existing `pihole-secondary` / `pihole2-unbound` on `ids-01` remains available as rollback until cutover is proven
+
+The infrastructure definition now lives under:
+
+`IaC/terraform/proxmox/dns-02/`
+
+The LXC address and CT ID are deliberately not final until live checks confirm they are unused. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
+
 ## Backup redesign
 
 GUI-first backup redesign is now a target requirement.
@@ -150,5 +167,5 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 1. Complete standalone `pve2` service validation and test the incoming second NIC before any further cluster attempt.
 2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
-3. Decide the future role of the current secondary Pi-hole/Unbound workload on `ids-01` as part of the DNS resilience redesign.
+3. Complete the `dns-02` live preflight, reserve its address, review the Terraform plan, then build the LXC from `IaC/`. Capture the existing DNS configuration before the Ansible service migration.
 4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.

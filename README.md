@@ -8,6 +8,12 @@ This repository is currently **private** while the platform is being reviewed an
 
 No legacy repository is authoritative here yet. Existing repositories remain the source of truth until each workload, configuration area, or document is explicitly migrated and validated.
 
+## IaC authority
+
+All new Infrastructure-as-Code is stored under [`IaC/`](IaC/). Terraform provisions infrastructure and Ansible configures operating systems/services. Do not add new IaC outside that directory.
+
+The older top-level `terraform/` path predates this convention and will be migrated separately after its references and state handling are checked.
+
 ## Principles
 
 - Git is the source of truth.
