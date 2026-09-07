@@ -142,7 +142,7 @@ The replacement path for the current secondary DNS service is now approved in pr
 Target:
 
 - `dns-01`: existing physical Raspberry Pi 3 at `192.168.2.48`, Pi-hole + Unbound
-- `dns-02`: new unprivileged Debian LXC on `PROXMOX`, Pi-hole + Unbound
+- `dns-02`: new unprivileged Debian LXC on `PROXMOX`, Pi-hole + Unbound, approved address `192.168.2.50/24`, CT ID `100`
 - ASUS router remains DHCP authority and will advertise both resolvers only after validation
 - existing `pihole-secondary` / `pihole2-unbound` on `ids-01` remains available as rollback until cutover is proven
 
@@ -150,7 +150,7 @@ The infrastructure definition now lives under:
 
 `IaC/terraform/proxmox/dns-02/`
 
-The LXC address and CT ID are deliberately not final until live checks confirm they are unused. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
+Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
 
 ## Backup redesign
 
