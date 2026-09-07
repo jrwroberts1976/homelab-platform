@@ -1,0 +1,10 @@
+# Bootstrap-only Pi-hole v6 configuration.
+# The official installer detects an existing pihole.toml and can therefore run
+# without interactive fresh-install dialogs. Desired settings are re-applied
+# through pihole-FTL --config after installation.
+
+[dns]
+upstreams = {{ pihole_upstreams | to_json }}
+dnssec = {{ 'true' if pihole_dnssec else 'false' }}
+interface = "{{ dns_resolver_interface }}"
+listeningMode = "{{ pihole_listening_mode }}"
