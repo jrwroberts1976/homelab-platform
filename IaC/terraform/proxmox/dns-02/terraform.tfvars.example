@@ -1,9 +1,10 @@
 # Copy to terraform.tfvars locally. terraform.tfvars is intentionally ignored by Git.
 #
-# BOTH VALUES BELOW ARE EXAMPLES ONLY.
-# Confirm the next free Proxmox ID and a free/reserved LAN IP before apply.
+# Values below remain examples until copied to a local terraform.tfvars.
+# `100` was the live `pvesh get /cluster/nextid` result on 7 September 2026; re-check immediately before apply.
+# The IPv4 address is still only a candidate and must be proven unused/reserved.
 
-vm_id     = 202
+vm_id     = 100
 ipv4_cidr = "192.168.2.49/24"
 
 ssh_public_keys = [

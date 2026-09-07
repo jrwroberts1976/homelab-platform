@@ -1,15 +1,3 @@
-resource "proxmox_download_file" "debian13_lxc" {
-  content_type        = "vztmpl"
-  datastore_id        = var.template_datastore_id
-  node_name           = var.proxmox_node_name
-  url                 = var.debian_template_url
-  file_name           = var.debian_template_file_name
-  overwrite           = false
-  overwrite_unmanaged = false
-  upload_timeout      = 900
-  verify              = true
-}
-
 resource "proxmox_virtual_environment_container" "dns02" {
   node_name    = var.proxmox_node_name
   vm_id        = var.vm_id
@@ -61,7 +49,7 @@ resource "proxmox_virtual_environment_container" "dns02" {
   }
 
   operating_system {
-    template_file_id = proxmox_download_file.debian13_lxc.id
+    template_file_id = var.template_file_id
     type             = "debian"
   }
 

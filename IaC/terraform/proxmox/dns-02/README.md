@@ -1,6 +1,6 @@
 # dns-02 — Proxmox LXC
 
-Status: **IaC prepared; live preflight and address allocation required before apply.**
+Status: **IaC prepared; live preflight partly complete. CT ID 100 was the next free cluster ID on 7 September 2026; storage status and final IPv4 allocation still require validation before apply.**
 
 ## Goal
 
@@ -27,7 +27,7 @@ The existing containerized secondary DNS service on `ids-01` (`192.168.2.242`) s
 ## Planned LXC resources
 
 - Target node: `PROXMOX`
-- Debian 13 official Proxmox LXC template
+- Debian 13 official Proxmox LXC template already present on `local` (`debian-13-standard_13.6-1_amd64.tar.zst`)
 - 1 vCPU
 - 512 MiB RAM
 - 256 MiB swap
@@ -105,11 +105,11 @@ Do not run `terraform apply` until:
 
 ## Template handling
 
-The stack pins the official Proxmox Debian 13 template:
+Live preflight on 7 September 2026 confirmed the official Proxmox Debian 13 template is already present:
 
-`debian-13-standard_13.1-2_amd64.tar.zst`
+`local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst`
 
-If that template already exists on `local` but is not in Terraform state, the download resource is deliberately configured **not** to overwrite an unmanaged copy. Import/adopt it instead of deleting or replacing a known-good template without review.
+The stack references that existing template directly rather than trying to download or take ownership of an unmanaged template file. Template lifecycle can be brought under IaC separately later if desired.
 
 ## Configuration phase
 
