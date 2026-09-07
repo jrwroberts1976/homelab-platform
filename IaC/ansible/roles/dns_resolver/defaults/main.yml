@@ -1,0 +1,70 @@
+---
+dns_resolver_expected_ipv4: "192.168.2.50"
+dns_resolver_interface: "eth0"
+
+pihole_installer_url: "https://install.pi-hole.net"
+pihole_upstreams:
+  - "127.0.0.1#5335"
+pihole_dnssec: false
+pihole_listening_mode: "LOCAL"
+pihole_reverse_servers: []
+pihole_cname_records: []
+
+# Captured from dns-01 on 2026-09-07. The retired ids-01/.242 record is
+# deliberately omitted. dns-02 is added as the canonical record for this host.
+pihole_local_hosts:
+  - "192.168.2.1 rt-ac86u-ccc8.jameshouse rt-ac86u-ccc8 router"
+  - "192.168.2.6 rosie-laptop.jameshouse rosie-laptop"
+  - "192.168.2.7 myhivehub.jameshouse myhivehub"
+  - "192.168.2.16 hp-switch.jameshouse hp-switch"
+  - "192.168.2.17 google-home.jameshouse google-home"
+  - "192.168.2.29 tapo-home-hub-h100.jameshouse tapo-home-hub-h100"
+  - "192.168.2.30 patio.jameshouse patio"
+  - "192.168.2.48 dietpi.jameshouse dietpi"
+  - "192.168.2.49 garage-door-camera.jameshouse garage-door-camera"
+  - "192.168.2.50 dns-02.jameshouse dns-02"
+  - "192.168.2.74 garden-room.jameshouse garden-room"
+  - "192.168.2.78 front-door-camera.jameshouse front-door-camera"
+  - "192.168.2.90 garden-gate-camera.jameshouse garden-gate-camera"
+  - "192.168.2.91 living-room-lamp-bulb.jameshouse living-room-lamp-bulb"
+  - "192.168.2.95 acer-lights.jameshouse acer-lights"
+  - "192.168.2.123 hp-printer.jameshouse hp-printer"
+  - "192.168.2.128 front-drive-camera.jameshouse front-drive-camera"
+  - "192.168.2.149 fire-stick.jameshouse fire-stick"
+  - "192.168.2.167 kitchen-light-switch.jameshouse kitchen-light-switch"
+  - "192.168.2.181 rt-ac86u-5228.jameshouse rt-ac86u-5228"
+  - "192.168.2.183 james-lt.jameshouse james-lt"
+  - "192.168.2.195 k3s-node-01.jameshouse k3s-node-01"
+  - "192.168.2.206 james-phone.jameshouse james-phone"
+  - "192.168.2.218 rt-ac86u-6238.jameshouse rt-ac86u-6238"
+  - "192.168.2.219 work-laptop.jameshouse work-laptop"
+  - "192.168.2.220 testserver.jameshouse testserver"
+  - "192.168.2.224 rosie-phone.jameshouse rosie-phone"
+  - "192.168.2.233 lava-lamp.jameshouse lava-lamp"
+  - "192.168.2.234 main-tv.jameshouse main-tv"
+  - "192.168.2.245 main-server.jameshouse main-server"
+  - "192.168.2.249 google-home-mini.jameshouse google-home-mini"
+  - "192.168.2.252 light-bulb.jameshouse light-bulb"
+
+pihole_adlists:
+  - address: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
+    comment: "Migrated from /etc/pihole/adlists.list"
+  - address: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/nsfw.txt"
+    comment: "HaGeZi NSFW"
+  - address: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/gambling.txt"
+    comment: "HaGeZi Gambling"
+  - address: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/doh-vpn-proxy-bypass.txt"
+    comment: "HaGeZi DoH VPN Tor Proxy Bypass"
+  - address: "https://raw.githubusercontent.com/hagezi/dns-blocklists/main/adblock/tif.medium.txt"
+    comment: "HaGeZi Threat Intelligence Medium"
+
+unbound_port: 5335
+unbound_do_ip6: false
+unbound_ratelimit: 1000
+unbound_unwanted_reply_threshold: 10000
+unbound_socket_buffer: "4m"
+unbound_cache_min_ttl: 300
+unbound_cache_max_ttl: 86400
+unbound_neg_cache_size: "4m"
+unbound_msg_cache_size: "50m"
+unbound_rrset_cache_size: "100m"
