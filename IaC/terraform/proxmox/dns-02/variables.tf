@@ -84,22 +84,10 @@ variable "rootfs_datastore_id" {
   default     = "vm-ssd"
 }
 
-variable "template_datastore_id" {
-  description = "Datastore that holds LXC templates."
+variable "template_file_id" {
+  description = "Existing Proxmox LXC template volume ID."
   type        = string
-  default     = "local"
-}
-
-variable "debian_template_url" {
-  description = "Pinned official Proxmox Debian 13 LXC template URL."
-  type        = string
-  default     = "https://download.proxmox.com/images/system/debian-13-standard_13.1-2_amd64.tar.zst"
-}
-
-variable "debian_template_file_name" {
-  description = "File name used for the pinned Debian 13 LXC template."
-  type        = string
-  default     = "debian-13-standard_13.1-2_amd64.tar.zst"
+  default     = "local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
 }
 
 variable "cpu_cores" {
