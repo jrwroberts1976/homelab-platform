@@ -1,5 +1,14 @@
 # Cloudflare Pages Production Deployment Pipeline
 
+## Implementation status — 7 September 2026
+
+The production site at `https://me.jrwroberts.co.uk` is now hosted on Cloudflare Pages and has been manually validated in production.
+
+A production GitHub Actions workflow has also been implemented in `jrwroberts1976/engineering-portfolio` on branch `ci/cloudflare-pages-production` and opened as PR #16 (`Automate Cloudflare Pages production deployment`). PR #16 is still open, so manual upload remains the fallback until the workflow is merged and a normal `main` deployment is proven.
+
+The implemented workflow intentionally reuses the repository-level `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets already proven by the preview workflow. A dedicated GitHub `production` Environment remains a future hardening option rather than a current dependency.
+
+
 ## Purpose
 
 This document records the production deployment process for the public engineering portfolio and defines the pipeline that should replace manual Cloudflare Pages uploads.
@@ -55,13 +64,13 @@ Do not place the API token or account credentials in Git, workflow YAML, documen
 
 ## Recommended production workflow
 
-Create:
+Implemented file:
 
 `.github/workflows/cloudflare-pages-production.yml`
 
-in `jrwroberts1976/engineering-portfolio`.
+in `jrwroberts1976/engineering-portfolio` (currently in PR #16).
 
-Recommended workflow:
+Current implementation:
 
 ```yaml
 name: Cloudflare Pages Production
@@ -169,19 +178,9 @@ migration-preview
 
 ## GitHub Environment
 
-Create a GitHub Environment called:
+A dedicated GitHub Environment is **not required by the current implementation**. PR #16 reuses the existing repository-level `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` secrets already used successfully by the preview workflow.
 
-```text
-production
-```
-
-Recommended settings:
-
-- Store `CLOUDFLARE_API_TOKEN` and `CLOUDFLARE_ACCOUNT_ID` as environment secrets.
-- Optionally require manual approval before the production deployment job runs.
-- Restrict deployment branches to `main`.
-
-This keeps deployment credentials separate from ordinary repository configuration and provides a clear production gate.
+A future hardening change may introduce an Environment called `production` with approval and branch restrictions. If that is done, migrate the Cloudflare secrets deliberately and update the workflow in the same reviewed change.
 
 ## Intended release flow
 
