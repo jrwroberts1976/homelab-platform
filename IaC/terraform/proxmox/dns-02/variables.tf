@@ -23,8 +23,9 @@ variable "proxmox_node_name" {
 }
 
 variable "vm_id" {
-  description = "LXC container ID. Confirm it is unused before apply."
+  description = "LXC container ID reserved for dns-02."
   type        = number
+  default     = 100
 }
 
 variable "hostname" {
@@ -34,8 +35,9 @@ variable "hostname" {
 }
 
 variable "ipv4_cidr" {
-  description = "Static IPv4 address in CIDR notation. The address must be verified free and reserved before apply."
+  description = "Static IPv4 address reserved for dns-02."
   type        = string
+  default     = "192.168.2.50/24"
 }
 
 variable "ipv4_gateway" {
