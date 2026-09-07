@@ -54,7 +54,7 @@ These remain design inputs until the router audit is complete:
 
 - router/gateway: `192.168.2.1`
 - primary DNS: `dns-01` (currently legacy DietPi `192.168.2.48`)
-- secondary DNS: `dns-02` after the new VM is deployed
+- secondary DNS: `dns-02` after the new Proxmox LXC is deployed and validated from `IaC/`
 - DHCP remains on the ASUS router unless a later design decision explicitly moves it
 
 ## DHCP direction
