@@ -1,11 +1,15 @@
 # Copy to terraform.tfvars locally. terraform.tfvars is intentionally ignored by Git.
 #
-# Values below remain examples until copied to a local terraform.tfvars.
-# `100` was the live `pvesh get /cluster/nextid` result on 7 September 2026; re-check immediately before apply.
-# The IPv4 address is still only a candidate and must be proven unused/reserved.
+# dns-02 identity is now defined in variables.tf:
+#   CT ID: 100
+#   IPv4:  192.168.2.50/24
+#
+# Re-check CT ID 100 immediately before the first apply. The address
+# 192.168.2.50 has been checked and approved for dns-02.
 
-vm_id     = 100
-ipv4_cidr = "192.168.2.49/24"
+# Override only if the approved design changes:
+# vm_id     = 100
+# ipv4_cidr = "192.168.2.50/24"
 
 ssh_public_keys = [
   "ssh-ed25519 REPLACE_WITH_YOUR_PUBLIC_KEY"
