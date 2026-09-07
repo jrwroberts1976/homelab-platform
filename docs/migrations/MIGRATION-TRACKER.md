@@ -17,8 +17,8 @@ This tracker records the controlled migration from the existing homelab reposito
 | 1. Hardware inventory | IN PROGRESS | Every repurposable host has CPU, RAM, storage, network, OS, architecture, health and upgrade capacity recorded |
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
-| 4. Public website migration | IN PROGRESS | `me.jrwroberts.co.uk` externally hosted and validated |
-| 5. Proxmox IaC | BLOCKED — CAPACITY/RECOVERY | Prepare existing `pve-01` in place; RAM decision and GUI-based backup/recovery proof required before migrated production VMs |
+| 4. Public website migration | COMPLETE — AUTOMATION HARDENING | `me.jrwroberts.co.uk` is externally hosted on Cloudflare Pages and manually validated; production GitHub Actions deployment still needs final merge/proof |
+| 5. Proxmox IaC | IN PROGRESS — SECOND NODE STANDALONE | Existing `PROXMOX` retained; rebuilt `pve2` is standalone after a controlled cluster-join rollback; new NIC to be validated before any further cluster attempt |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
@@ -88,21 +88,52 @@ The ZenBook remains the clean-rebuild candidate for `pve-02`, after its existing
 
 ## Public website migration
 
-Migration has started.
+Production hosting cutover is complete.
 
 - Source repository: `jrwroberts1976/engineering-portfolio`.
-- The site is already Astro static output with `npm run build` -> `dist/`.
+- Framework: Astro static output with `npm run build` -> `dist/`.
 - Target: Cloudflare Pages project `engineering-portfolio`.
-- Cloudflare Pages project and custom-domain registration are represented in Terraform under `terraform/cloudflare/public-web/`.
-- Custom-domain registration is disabled by default until a preview deployment is validated.
-- The portfolio repository now has a manual Cloudflare Pages preview deployment workflow on branch `migration/cloudflare-pages`.
-- Existing homelab hosting remains intact as rollback until external hosting and DNS cutover are proven.
+- Production URL: `https://me.jrwroberts.co.uk`.
+- A manual production deployment was completed and validated on 7 September 2026.
+- Normal public-site hosting is now external to the homelab.
+- The prior home-hosted state is retained only as rollback reference until the automated deployment path is proven.
+- Production workflow implementation exists in `engineering-portfolio` PR #16 and still needs merge/production validation.
 
-Preview gate: **PASSED**. The Cloudflare Pages project exists, the migration preview deployed successfully, and the site was manually validated. Existing homelab hosting remains the rollback path.
+See `docs/migrations/PUBLIC-WEB-CUTOVER.md` and `production docs/CLOUDFLARE-PAGES-PRODUCTION-PIPELINE.md`.
 
-Current cutover state: the previous `me.jrwroberts.co.uk` CNAME rollback state is recorded and the Cloudflare Pages custom-domain association has been initiated. Cloudflare currently reports the domain as **Initializing**. Do not retire the home-hosted site yet.
+## Proxmox second-node work — 7 September 2026
 
-Immediate gate: wait for the Pages custom domain to become active, then validate production HTTPS/content and prove independence from the homelab origin.
+A fresh second Proxmox node was built as `pve2` at `192.168.2.71` and fully patched before a cluster trial.
+
+Validated package state included:
+
+- Proxmox VE 9.2.0
+- kernel `7.0.14-15-pve`
+- `pve-manager` 9.2.11
+- `pve-cluster` 9.1.6
+- Corosync 3.1.10-pve3
+- `qemu-server` 9.2.7
+
+The node joined the `Home-lab` cluster and reached two-node quorum, but its local `pmxcfs` configuration database did not complete synchronisation. This caused missing/incomplete `/etc/pve` state, certificate update blocking, and `pveproxy` failure on the second node.
+
+The trial was deliberately rolled back:
+
+- `pve2` was removed from `Home-lab`
+- `PROXMOX` returned to a one-node cluster at config version 5
+- `pve2` was separated locally using `pmxcfs -l`
+- `pve2` returned to a clean standalone state with only `/etc/pve/nodes/pve2`
+- no Corosync config remains on `pve2`
+
+Network troubleshooting also found RX errors/drops on the current USB management NIC. This is a concern, but it has **not** been proven to be the original cause of the `pmxcfs` failure.
+
+Current decision:
+
+- retain the existing USB NIC for management for now
+- validate the incoming second NIC independently
+- use the new NIC as the preferred dedicated Corosync / VM-migration path if testing is clean
+- do not retry the cluster join until standalone `pve2` and the new NIC are both proven healthy
+
+See `docs/migrations/PROXMOX-SECOND-NODE-2026-09-07.md`.
 
 ## Backup redesign
 
@@ -117,4 +148,7 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
-While the Cloudflare Pages domain watch continues, reconcile the unique content still present on the degraded DietPi backup disk — especially `homelab-vault`, dated monthly archives and protected SOPS/age recovery material — and establish a second healthy protected copy before any destructive host rebuild.
+1. Complete standalone `pve2` service validation and test the incoming second NIC before any further cluster attempt.
+2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
+3. Decide the future role of the current secondary Pi-hole/Unbound workload on `ids-01` as part of the DNS resilience redesign.
+4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.

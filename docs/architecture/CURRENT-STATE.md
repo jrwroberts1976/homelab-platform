@@ -6,7 +6,8 @@ This document is intentionally incomplete until discovery is performed on each h
 
 | Asset | Known address | Known role | Audit state |
 |---|---|---|---|
-| PROXMOX | 192.168.2.70 | Primary x86 virtualization candidate | AUDITED — RAM/backup remediation required |
+| PROXMOX | 192.168.2.70 | Primary x86 virtualization host; sole current member of `Home-lab` | AUDITED — RAM/backup remediation required |
+| pve2 | 192.168.2.71 | Fresh Proxmox VE 9.2 secondary node; currently standalone after cluster trial rollback | BUILD/VALIDATION IN PROGRESS — new cluster/migration NIC pending |
 | TestServer | 192.168.2.220 | Legacy consolidated Docker/BirdNET/CI/monitoring host | AUDITED — future role/hostname unassigned |
 | ids-01 | 192.168.2.242 | Legacy security/monitoring/DNS/backup host | AUDITED — future role/hostname unassigned |
 | media-01 | 192.168.2.195 | Legacy Kodi/media host; stale `k3s-node-01` DNS alias | AUDITED — future role/hostname unassigned |
@@ -16,7 +17,7 @@ This document is intentionally incomplete until discovery is performed on each h
 | ASUS AiMesh node | 192.168.2.218 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
 | HP ProCurve switch | 192.168.2.16 | Core managed switch; port 24 confirmed mirror/SPAN destination | DISCOVERED — reachable, SSH closed, device audit pending |
 
-The secondary Pi-hole currently associated with ids-01 is a workload, not a separate physical-host audit target. It will be captured during the ids-01 workload audit.
+The secondary Pi-hole/Unbound instance currently associated with ids-01 is a workload, not a separate physical-host audit target. Its future role is now an explicit design decision: retain it, move secondary DNS to another always-on host/VM, or replace it as part of the DNS resilience redesign.
 
 BirdNET capture hardware is a non-compute peripheral, not a Linux host. BirdNET-Go itself is a software workload currently observed on TestServer and will be placed during workload design rather than audited as a separate computer.
 
@@ -74,3 +75,11 @@ A TestServer jump-box discovery run on 2026-09-06 verified:
 
 Discovery report on TestServer: `/var/tmp/homelab-fleet-discovery-20260906T071538Z.txt`
 SHA256: `04d809dea1c8a3c72532909ddb9b116dee69c7aba576fd91ad666570481edd9f`
+
+## Proxmox operational update — 7 September 2026
+
+A second Proxmox node (`pve2`, `192.168.2.71`) was freshly installed, renamed correctly, fully patched and tested as a standalone host. A controlled join to the existing `Home-lab` cluster reached Corosync quorum but did not complete the local `pmxcfs` database synchronisation on `pve2`. The join was rolled back cleanly: `PROXMOX` is again the only cluster member and `pve2` is standalone.
+
+The current USB NIC on `pve2` showed RX errors/drops during troubleshooting, but this has not been proven as the root cause of the cluster sync failure. The current plan is to keep that interface for management and test a new second NIC for dedicated Corosync / VM migration traffic before any future cluster attempt.
+
+See `../migrations/PROXMOX-SECOND-NODE-2026-09-07.md`.
