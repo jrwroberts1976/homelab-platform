@@ -1,6 +1,6 @@
 # dns-02 — Proxmox LXC
 
-Status: **IaC prepared; live preflight partly complete. CT ID 100 was the next free cluster ID on 7 September 2026; storage status and final IPv4 allocation still require validation before apply.**
+Status: **IaC prepared; live infrastructure preflight complete for CT ID, storage, template and IPv4 allocation. Terraform authentication/plan validation remains before apply.**
 
 ## Goal
 
@@ -17,7 +17,7 @@ dns-01
 
 dns-02
   Proxmox LXC on PROXMOX
-  static/reserved IPv4: TO BE VERIFIED
+  static/reserved IPv4: `192.168.2.50/24`
   Pi-hole + Unbound
   managed through Terraform + Ansible
 ```
@@ -51,12 +51,7 @@ pvesm status
 pvesm list local --content vztmpl
 ```
 
-Then choose the intended `dns-02` IPv4 address and verify:
-
-- it is outside/appropriately handled by the DHCP lease pool
-- it is not already reserved for another host
-- it does not respond to ARP/ping because of another device
-- the ASUS router reservation table will reserve it for `dns-02`
+Live preflight selected and approved `192.168.2.50/24` for `dns-02`. It did not answer ICMP and no MAC resolved for it from `PROXMOX` before allocation. The address was then approved for this workload.
 
 Do **not** advertise the new resolver to DHCP clients yet.
 
@@ -97,8 +92,8 @@ Review the complete plan before any apply.
 
 Do not run `terraform apply` until:
 
-- the CT ID is confirmed unused
-- the IP is confirmed unused and reserved
+- CT ID `100` is still unused immediately before apply
+- IPv4 `192.168.2.50/24` remains reserved for `dns-02`
 - the SSH key is correct
 - the target storage names are confirmed
 - the plan contains only the expected template/LXC operations
