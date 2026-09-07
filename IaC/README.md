@@ -36,4 +36,4 @@ Provisioning and service migration are deliberately separated:
 3. Ansible expresses that configuration as code.
 4. Direct DNS tests are performed against `dns-02`.
 5. Router DNS advertisement is changed only after failover testing succeeds.
-6. The existing secondary DNS service on `ids-01` remains available until cutover is proven.
+6. `ids-01` is no longer present, so there is no live secondary rollback resolver. `dns-01` remains the working resolver while `dns-02` is built and validated; the stale `192.168.2.242` client resolver entry is removed only after `dns-02` is proven.

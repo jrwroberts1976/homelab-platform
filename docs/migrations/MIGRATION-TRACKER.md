@@ -144,13 +144,13 @@ Target:
 - `dns-01`: existing physical Raspberry Pi 3 at `192.168.2.48`, Pi-hole + Unbound
 - `dns-02`: new unprivileged Debian LXC on `PROXMOX`, Pi-hole + Unbound, approved address `192.168.2.50/24`, CT ID `100`
 - ASUS router remains DHCP authority and will advertise both resolvers only after validation
-- existing `pihole-secondary` / `pihole2-unbound` on `ids-01` remains available as rollback until cutover is proven
+- `ids-01` is no longer present; `192.168.2.242` is now a stale secondary-DNS reference rather than a rollback service
 
 The infrastructure definition now lives under:
 
 `IaC/terraform/proxmox/dns-02/`
 
-Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
+`ids-01` is no longer present, so the DNS migration no longer has a live secondary rollback service. TestServer still lists `192.168.2.242` as a secondary resolver; that stale reference must remain untouched until `dns-02` is fully configured and directly validated. Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration will be expressed through Ansible under `IaC/ansible/` after the current Pi-hole/Unbound state is captured.
 
 ## Backup redesign
 
