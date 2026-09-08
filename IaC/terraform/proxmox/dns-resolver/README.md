@@ -176,3 +176,15 @@ The resumed Ansible run completed successfully:
 It validated direct UDP/TCP root-DNS access, Unbound recursion, valid and deliberately broken DNSSEC behaviour, installed/configured Pi-hole, reconciled the managed adlists, verified local DNS, and confirmed zero failed systemd units.
 
 The one-click wrapper was also updated to reject a short Pi-hole password before Terraform creation on future runs.
+
+
+## First live resolver external validation
+
+The first live `dns-01` instance at `192.168.2.51` passed external validation from TestServer on 8 September 2026:
+
+- public A resolution returned addresses for `example.com`
+- `dns-01.jameshouse` resolved to `192.168.2.51`
+- deliberately broken DNSSEC returned `SERVFAIL`
+- a gravity database domain resolved to `0.0.0.0`
+
+At this point CT 101 remained unprotected (`protection=0`) pending the final guarded Terraform protection-only plan/apply.
