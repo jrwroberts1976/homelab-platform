@@ -158,3 +158,21 @@ No workload container was created by this bootstrap run.
 On 8 September 2026 the scoped `iac@pve!opentofu` token was created on standalone `pve2`, stored locally on TestServer in the protected `~/.config/homelab-iac/proxmox-pve2.env` file, and authenticated successfully against the Proxmox API.
 
 A protected local `~/.config/homelab-iac/pihole.env` file was also created for the resolver build. Secret values are intentionally not recorded in Git.
+
+
+## First live resolver build — Ansible recovery proof
+
+During the first live `dns-01` build on 8 September 2026, Terraform successfully created CT 101 on `pve2` and the wrapper enabled LXC nesting. The first Ansible attempt stopped at the guarded Pi-hole password length assertion. No resolver configuration beyond initial facts/identity checks was applied.
+
+After replacing the protected local Pi-hole password with a value meeting the role's minimum length, Ansible was resumed directly against the generated recovery inventory rather than rerunning Terraform.
+
+The resumed Ansible run completed successfully:
+
+- `ok=37`
+- `changed=13`
+- `unreachable=0`
+- `failed=0`
+
+It validated direct UDP/TCP root-DNS access, Unbound recursion, valid and deliberately broken DNSSEC behaviour, installed/configured Pi-hole, reconciled the managed adlists, verified local DNS, and confirmed zero failed systemd units.
+
+The one-click wrapper was also updated to reject a short Pi-hole password before Terraform creation on future runs.
