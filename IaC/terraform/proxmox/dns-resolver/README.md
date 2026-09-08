@@ -104,3 +104,28 @@ pct set <ct_id> -features nesting=1
 ```
 
 and restarts the new container before Ansible runs.
+
+
+## New Proxmox node onboarding
+
+A separate idempotent host-preparation script lives at:
+
+`IaC/scripts/bootstrap-proxmox-node.sh`
+
+This is intentionally separate from workload deployment. A new PVE node should be bootstrapped once before any one-click workload build.
+
+Inputs include:
+
+```text
+PVE_NAME
+PVE_HOST
+PVE_ROOTFS_STORAGE
+PVE_VG_NAME
+PVE_THINPOOL_NAME
+PVE_TEMPLATE_STORAGE
+PVE_TEMPLATE_NAME
+```
+
+The bootstrap validates `pve-cluster`/`/etc/pve`, verifies the existing LVM-thin pool before registering it, ensures the required LXC template is present, and reconciles the scoped Homelab IaC roles/user/ACLs.
+
+API-token secret creation remains a separate guarded step because Proxmox displays the token secret only once; the bootstrap must never print or accidentally discard that credential.
