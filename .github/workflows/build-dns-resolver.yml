@@ -18,10 +18,10 @@ on:
       pve:
         description: Proxmox host to build on
         required: true
-        default: pve2
+        default: Proxmox-2
         type: choice
         options:
-          - pve2
+          - Proxmox-2
           - PROXMOX
       ct_id:
         description: Proxmox CT ID
