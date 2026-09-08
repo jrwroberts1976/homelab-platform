@@ -129,3 +129,25 @@ PVE_TEMPLATE_NAME
 The bootstrap validates `pve-cluster`/`/etc/pve`, verifies the existing LVM-thin pool before registering it, ensures the required LXC template is present, and reconciles the scoped Homelab IaC roles/user/ACLs.
 
 API-token secret creation remains a separate guarded step because Proxmox displays the token secret only once; the bootstrap must never print or accidentally discard that credential.
+
+
+## First live node-bootstrap proof — pve2
+
+On 8 September 2026 the reusable node bootstrap was run against standalone `pve2` (`192.168.2.71`) with:
+
+- rootfs storage: `local-lvm`
+- VG: `pve`
+- thinpool: `data`
+- template storage: `local`
+- template: `debian-13-standard_13.6-1_amd64.tar.zst`
+
+The run completed successfully. It:
+
+- validated node health and the existing LVM-thin pool
+- registered `local-lvm`
+- downloaded and checksum-verified the Debian 13.6 LXC template
+- reconciled the scoped Homelab IaC roles
+- created/reconciled `iac@pve` and its ACLs
+- stopped short of creating the `iac@pve!opentofu` token secret, as designed
+
+No workload container was created by this bootstrap run.
