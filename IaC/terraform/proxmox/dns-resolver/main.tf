@@ -69,4 +69,11 @@ resource "proxmox_virtual_environment_container" "resolver" {
   wait_for_ip {
     ipv4 = true
   }
+
+  # Debian 13/systemd needs LXC nesting. The scoped API identity cannot safely
+  # manage the provider's full features structure, so the deployment wrapper
+  # applies nesting=1 through its separately preflighted bootstrap path.
+  lifecycle {
+    ignore_changes = [features]
+  }
 }
