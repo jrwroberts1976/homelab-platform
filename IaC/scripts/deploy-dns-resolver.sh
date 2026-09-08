@@ -80,6 +80,7 @@ DEFAULT_TEMPLATE_FILE_ID="local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
 
 : "${TF_VAR_proxmox_api_token:?TF_VAR_proxmox_api_token missing from PVE credential file}"
 : "${PIHOLE_WEB_PASSWORD:?PIHOLE_WEB_PASSWORD missing from Pi-hole secret file}"
+[ "${#PIHOLE_WEB_PASSWORD}" -ge 16 ] || die "Pi-hole web password must be at least 16 characters"
 
 # Values loaded from the protected local env files must be exported for
 # Terraform and Ansible child processes. Sourcing a plain VAR=value file only
