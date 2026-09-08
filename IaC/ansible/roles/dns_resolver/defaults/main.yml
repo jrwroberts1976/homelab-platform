@@ -1,5 +1,7 @@
 ---
-dns_resolver_expected_ipv4: "192.168.2.50"
+dns_resolver_expected_ipv4: "{{ ansible_host }}"
+dns_resolver_hostname: "{{ inventory_hostname }}"
+dns_resolver_search_domain: "jameshouse"
 dns_resolver_interface: "eth0"
 
 pihole_installer_url: "https://install.pi-hole.net"
@@ -11,7 +13,8 @@ pihole_reverse_servers: []
 pihole_cname_records: []
 
 # Captured from dns-01 on 2026-09-07. The previous dns-02/.242 record is
-# deliberately omitted. The replacement dns-02/.50 record is canonical.
+# deliberately omitted. The current dns-02/.50 record remains part of the
+# shared baseline; each resolver also adds its own hostname/IP dynamically.
 pihole_local_hosts:
   - "192.168.2.1 rt-ac86u-ccc8.jameshouse rt-ac86u-ccc8 router"
   - "192.168.2.6 rosie-laptop.jameshouse rosie-laptop"
@@ -45,6 +48,9 @@ pihole_local_hosts:
   - "192.168.2.245 main-server.jameshouse main-server"
   - "192.168.2.249 google-home-mini.jameshouse google-home-mini"
   - "192.168.2.252 light-bulb.jameshouse light-bulb"
+
+dns_resolver_self_record: "{{ dns_resolver_expected_ipv4 }} {{ dns_resolver_hostname }}.{{ dns_resolver_search_domain }} {{ dns_resolver_hostname }}"
+pihole_local_hosts_effective: "{{ (pihole_local_hosts + [dns_resolver_self_record]) | unique }}"
 
 pihole_adlists:
   - address: "https://raw.githubusercontent.com/StevenBlack/hosts/master/hosts"
