@@ -39,4 +39,4 @@ Provisioning and service migration are deliberately separated:
 3. Ansible expresses that configuration as code. The first `dns_resolver` role now captures the live `dns-01` Pi-hole/Unbound baseline for `dns-02`.
 4. Direct DNS tests are performed against `dns-02`.
 5. Router DNS advertisement is changed only after failover testing succeeds.
-6. `ids-01` is no longer present, so there is no live secondary rollback resolver. `dns-01` remains the working resolver while `dns-02` is built and validated; the stale `192.168.2.242` client resolver entry is removed only after `dns-02` is proven.
+6. The previous `dns-02` at `192.168.2.242` has already been removed. `dns-01` remains the working resolver while the replacement `dns-02` at `192.168.2.50` is built and validated; ASUS DHCP is still advertising the stale `.242` address until cutover.
