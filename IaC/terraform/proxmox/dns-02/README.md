@@ -22,7 +22,7 @@ dns-02
   managed through Terraform + Ansible
 ```
 
-`ids-01` is no longer present. `192.168.2.242` remains configured as a stale secondary resolver on at least TestServer, so `dns-01` (`192.168.2.48`) is currently the only proven live resolver. Do not replace the stale `.242` entry with `dns-02` until direct DNS and failover tests against `192.168.2.50` pass.
+The previous `dns-02` at `192.168.2.242` has been removed. ASUS DHCP still advertises `.242` as the secondary resolver, so `dns-01` (`192.168.2.48`) remains the only router-advertised live resolver until cutover. The replacement `dns-02` is CT 100 at `192.168.2.50`.
 
 ## Planned LXC resources
 
