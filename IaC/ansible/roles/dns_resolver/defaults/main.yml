@@ -10,8 +10,8 @@ pihole_listening_mode: "LOCAL"
 pihole_reverse_servers: []
 pihole_cname_records: []
 
-# Captured from dns-01 on 2026-09-07. The retired ids-01/.242 record is
-# deliberately omitted. dns-02 is added as the canonical record for this host.
+# Captured from dns-01 on 2026-09-07. The previous dns-02/.242 record is
+# deliberately omitted. The replacement dns-02/.50 record is canonical.
 pihole_local_hosts:
   - "192.168.2.1 rt-ac86u-ccc8.jameshouse rt-ac86u-ccc8 router"
   - "192.168.2.6 rosie-laptop.jameshouse rosie-laptop"
