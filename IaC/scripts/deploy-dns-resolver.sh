@@ -48,12 +48,14 @@ WORK_DIR="$RUNNER_TMP/dns-resolver-$HOSTNAME_INPUT-$CT_ID"
 
 case "$TARGET_PVE" in
   PROXMOX)
+    PVE_NODE_NAME="PROXMOX"
     PVE_ENDPOINT="https://192.168.2.70:8006/"
     PVE_SSH_HOST="192.168.2.70"
     PVE_ENV_FILE="$CONFIG_DIR/proxmox.env"
     DEFAULT_ROOTFS_DATASTORE="vm-ssd"
     ;;
-  pve2)
+  Proxmox-2|pve2)
+    PVE_NODE_NAME="Proxmox-2"
     PVE_ENDPOINT="https://192.168.2.71:8006/"
     PVE_SSH_HOST="192.168.2.71"
     PVE_ENV_FILE="$CONFIG_DIR/proxmox-pve2.env"
@@ -124,7 +126,7 @@ PROTECT_PLAN="$WORK_DIR/protect.tfplan"
 INVENTORY_FILE="$WORK_DIR/inventory.yml"
 
 export TF_VAR_proxmox_endpoint="$PVE_ENDPOINT"
-export TF_VAR_proxmox_node_name="$TARGET_PVE"
+export TF_VAR_proxmox_node_name="$PVE_NODE_NAME"
 export TF_VAR_vm_id="$CT_ID"
 export TF_VAR_hostname="$HOSTNAME_INPUT"
 export TF_VAR_ipv4_cidr="$IPV4_INPUT/24"
