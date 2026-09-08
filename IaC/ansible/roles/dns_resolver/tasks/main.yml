@@ -1,5 +1,5 @@
 ---
-- name: Validate dns-02 target identity
+- name: Validate DNS resolver target identity
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == "Debian"
@@ -259,7 +259,7 @@
       - /usr/bin/pihole-FTL
       - --config
       - dns.hosts
-      - "{{ pihole_local_hosts | to_json }}"
+      - "{{ pihole_local_hosts_effective | to_json }}"
   changed_when: false
 
 - name: Set Pi-hole web/API password without exposing it in process arguments
@@ -317,12 +317,12 @@
   changed_when: false
   failed_when: pihole_resolution.stdout | trim | length == 0
 
-- name: Verify Pi-hole local dns-02 record
+- name: Verify Pi-hole local resolver record
   ansible.builtin.command:
     argv:
       - dig
       - "@127.0.0.1"
-      - dns-02.jameshouse
+      - "{{ dns_resolver_hostname }}.{{ dns_resolver_search_domain }}"
       - +short
       - +time=3
       - +tries=1
