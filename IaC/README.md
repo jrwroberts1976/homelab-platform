@@ -40,3 +40,10 @@ Provisioning and service migration are deliberately separated:
 4. Direct DNS tests are performed against `dns-02`.
 5. Router DNS advertisement is changed only after failover testing succeeds.
 6. The previous `dns-02` at `192.168.2.242` has already been removed. `dns-01` remains the working resolver while the replacement `dns-02` at `192.168.2.50` is built and validated; ASUS DHCP is still advertising the stale `.242` address until cutover.
+
+
+## One-click DNS resolver builds
+
+Reusable DNS resolver creation lives under `IaC/terraform/proxmox/dns-resolver/` and is orchestrated by `.github/workflows/build-dns-resolver.yml`.
+
+The workflow form accepts hostname, IPv4 address, PVE target and CT ID. It uses isolated per-resolver Terraform state, then runs the shared Ansible role and validation. ASUS DHCP/DNS cutover remains deliberately separate.

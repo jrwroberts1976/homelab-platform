@@ -1,0 +1,10 @@
+---
+- name: Configure Pi-hole and Unbound DNS resolver
+  hosts: dns_resolvers
+  gather_facts: true
+
+  vars:
+    pihole_web_password: "{{ lookup('ansible.builtin.env', 'PIHOLE_WEB_PASSWORD') | default('', true) }}"
+
+  roles:
+    - role: dns_resolver
