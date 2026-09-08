@@ -1,0 +1,57 @@
+name: Build DNS Resolver
+
+run-name: Build ${{ inputs.hostname }} (${{ inputs.ipv4 }}) on ${{ inputs.pve }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      hostname:
+        description: Resolver hostname
+        required: true
+        default: dns-01
+        type: string
+      ipv4:
+        description: Resolver IPv4 address (no CIDR suffix)
+        required: true
+        default: 192.168.2.51
+        type: string
+      pve:
+        description: Proxmox host to build on
+        required: true
+        default: pve2
+        type: choice
+        options:
+          - pve2
+          - PROXMOX
+      ct_id:
+        description: Proxmox CT ID
+        required: true
+        default: "101"
+        type: string
+
+concurrency:
+  group: dns-resolver-${{ inputs.pve }}-${{ inputs.ct_id }}
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Terraform + Ansible + validation
+    runs-on:
+      - self-hosted
+      - Linux
+      - ARM64
+    timeout-minutes: 45
+    permissions:
+      contents: read
+
+    steps:
+      - name: Check out homelab-platform
+        uses: actions/checkout@v4
+
+      - name: Build and validate resolver
+        env:
+          DNS_HOSTNAME: ${{ inputs.hostname }}
+          DNS_IPV4: ${{ inputs.ipv4 }}
+          DNS_PVE: ${{ inputs.pve }}
+          DNS_CT_ID: ${{ inputs.ct_id }}
+        run: bash IaC/scripts/deploy-dns-resolver.sh
