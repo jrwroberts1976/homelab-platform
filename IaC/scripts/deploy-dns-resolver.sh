@@ -174,7 +174,7 @@ EOF
 
 printf '\n===== ANSIBLE CONFIGURATION =====\n'
 cd "$ANSIBLE_DIR"
-ANSIBLE_HOST_KEY_CHECKING=False ansible-playbook -i "$INVENTORY_FILE" playbooks/dns-resolver.yml
+ANSIBLE_HOST_KEY_CHECKING=False ANSIBLE_ROLES_PATH="$ANSIBLE_DIR/roles" ansible-playbook -i "$INVENTORY_FILE" playbooks/dns-resolver.yml
 
 printf '\n===== EXTERNAL VALIDATION =====\n'
 dig "@$IPV4_INPUT" example.com A +short | grep -q .
