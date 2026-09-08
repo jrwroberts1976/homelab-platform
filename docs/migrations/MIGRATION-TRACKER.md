@@ -18,7 +18,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
 | 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
 | 4. Public website migration | COMPLETE — AUTOMATION HARDENING | `me.jrwroberts.co.uk` is externally hosted on Cloudflare Pages and manually validated; production GitHub Actions deployment still needs final merge/proof |
-| 5. Proxmox IaC | IN PROGRESS — DNS-02 CLIENT FAILOVER PROVEN | Existing `PROXMOX` retained; rebuilt `pve2` remains standalone; CT 100 `dns-02` is provisioned from Terraform and configured from Ansible; direct resolver validation and a TestServer `.50`-only system-DNS/HTTPS test have passed; ASUS DHCP/DNS cutover remains |
+| 5. Proxmox IaC | IN PROGRESS — DNS-02 CUTOVER COMPLETE | Existing `PROXMOX` retained; rebuilt `pve2` remains standalone; CT 100 `dns-02` is provisioned/configured and validated; ASUS DHCP now advertises `.48 + .50`; final Terraform protection apply remains |
 | 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
 | 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
 | 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
@@ -143,14 +143,14 @@ Target:
 
 - `dns-01`: existing physical Raspberry Pi 3 at `192.168.2.48`, Pi-hole + Unbound
 - `dns-02`: new unprivileged Debian LXC on `PROXMOX`, Pi-hole + Unbound, approved address `192.168.2.50/24`, CT ID `100`
-- ASUS router remains DHCP authority and will advertise both resolvers only after validation
-- the previous `dns-02` at `192.168.2.242` has been removed; ASUS DHCP still advertises that stale address until cutover to replacement `dns-02` at `192.168.2.50`
+- ASUS router remains DHCP authority and now advertises both validated resolvers: `192.168.2.48` and `192.168.2.50`
+- the previous `dns-02` at `192.168.2.242` has been removed; ASUS DHCP no longer advertises `.242` and now uses replacement `dns-02` at `192.168.2.50`
 
 The infrastructure definition now lives under:
 
 `IaC/terraform/proxmox/dns-02/`
 
-The previous `dns-02` at `192.168.2.242` has already been removed. TestServer still lists `.242` because ASUS DHCP has not yet been changed to advertise replacement `dns-02` at `192.168.2.50`. Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration is now expressed through `IaC/ansible/`. The first live apply on 7 September 2026 completed with `ok=37 changed=13 unreachable=0 failed=0`. From TestServer, `dns-02` answered public DNS over both UDP and TCP, returned `dns-02.jameshouse -> 192.168.2.50`, matched `dns-01` for the existing `testserver.jameshouse` record, returned `SERVFAIL` for deliberately broken DNSSEC, and blocked a domain present in its gravity database as `0.0.0.0`. Router/client DNS advertisement has not yet been changed. A controlled TestServer test then temporarily overrode NetworkManager to use only `192.168.2.50`; `/etc/resolv.conf` contained only that resolver, normal libc name resolution succeeded for public and local names, and HTTPS to `https://example.com` returned HTTP 200. This proves `dns-02` works as a real client resolver rather than only via directed `dig` tests.
+The previous `dns-02` at `192.168.2.242` has already been removed. ASUS DHCP has now been changed to advertise replacement `dns-02` at `192.168.2.50` alongside `dns-01` at `.48`. Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration is now expressed through `IaC/ansible/`. The first live apply on 7 September 2026 completed with `ok=37 changed=13 unreachable=0 failed=0`. From TestServer, `dns-02` answered public DNS over both UDP and TCP, returned `dns-02.jameshouse -> 192.168.2.50`, matched `dns-01` for the existing `testserver.jameshouse` record, returned `SERVFAIL` for deliberately broken DNSSEC, and blocked a domain present in its gravity database as `0.0.0.0`. A controlled TestServer test temporarily overrode NetworkManager to use only `192.168.2.50`; `/etc/resolv.conf` contained only that resolver, normal libc name resolution succeeded for public and local names, and HTTPS to `https://example.com` returned HTTP 200. ASUS DHCP was then changed from `.48 + .242` to `.48 + .50`. A Windows Wi-Fi client received the new pair directly, and a freshly renewed TestServer Ethernet lease also received `.48 + .50`. This completes the replacement DNS client/router cutover.
 
 ## Backup redesign
 
@@ -167,5 +167,5 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 1. Complete standalone `pve2` service validation and test the incoming second NIC before any further cluster attempt.
 2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
-3. Restore TestServer to DHCP-derived DNS, then replace stale `192.168.2.242` with `192.168.2.50` in ASUS DHCP/DNS advertisement and validate renewed clients use `.48` + `.50`.
+3. Run the final reviewed Terraform plan/apply for `dns-02` so the now-enabled `protect_after_build = true` desired state protects CT 100.
 4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.
