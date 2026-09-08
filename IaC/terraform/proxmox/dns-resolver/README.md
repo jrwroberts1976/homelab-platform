@@ -188,3 +188,34 @@ The first live `dns-01` instance at `192.168.2.51` passed external validation fr
 - a gravity database domain resolved to `0.0.0.0`
 
 At this point CT 101 remained unprotected (`protection=0`) pending the final guarded Terraform protection-only plan/apply.
+
+
+## First live resolver build — final proof
+
+The first reusable resolver build was completed successfully on 8 September 2026:
+
+- hostname: `dns-01`
+- IPv4: `192.168.2.51`
+- Proxmox node: `pve2`
+- CT ID: `101`
+- rootfs: 8 GiB on `local-lvm`
+- memory: 512 MiB
+- swap: 256 MiB
+- LXC nesting: enabled
+- protection: enabled
+
+Final Terraform protection apply completed with:
+
+- 0 added
+- 1 changed
+- 0 destroyed
+
+Post-apply validation confirmed:
+
+- CT 101 is running
+- `features: nesting=1`
+- `protection: 1`
+- `dns-01.jameshouse` resolves to `192.168.2.51`
+- public DNS resolution still succeeds through the new resolver
+
+The ASUS DHCP/DNS advertisement was intentionally left unchanged during this build. Cutover remains a separate guarded operation.
