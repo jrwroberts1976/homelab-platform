@@ -117,7 +117,7 @@ variable "disk_size_gb" {
 }
 
 variable "protect_after_build" {
-  description = "Set Proxmox protection flag. Leave false during initial build/rollback testing; change to true after validation."
+  description = "Set the Proxmox protection flag after successful service validation and client/router cutover."
   type        = bool
-  default     = false
+  default     = true
 }

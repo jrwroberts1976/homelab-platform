@@ -90,4 +90,13 @@ On 7 September 2026, TestServer temporarily ignored DHCP-provided DNS and used o
 - local DNS resolved `testserver.jameshouse -> 192.168.2.220`
 - HTTPS using normal system DNS returned HTTP 200 from `https://example.com`
 
-This is the client-level cutover proof required before changing ASUS DHCP/DNS advertisement. The temporary TestServer override must be reverted to DHCP-derived DNS before router cutover.
+This client-level proof was completed before changing ASUS DHCP/DNS advertisement. TestServer was then restored to DHCP-derived DNS.
+
+
+## Router/DHCP cutover proof — 8 September 2026
+
+The ASUS DHCP resolver pair is now `192.168.2.48 + 192.168.2.50`, replacing the removed previous `dns-02` at `.242`.
+
+A Windows Wi-Fi client received the new pair directly from the ASUS DHCP server. TestServer then renewed its Ethernet DHCP lease through NetworkManager and also received exactly `.48 + .50`. Its generated `/etc/resolv.conf` and NetworkManager `IP4.DNS` values agree.
+
+This completes the planned client/router DNS cutover for replacement `dns-02`.

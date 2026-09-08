@@ -1,6 +1,6 @@
 # dns-02 — Proxmox LXC
 
-Status: **Terraform provisioning is complete and drift-free. CT 100 (`dns-02`) is running on `PROXMOX` at `192.168.2.50/24`; Debian 13/systemd is healthy; Pi-hole + Unbound have been deployed through Ansible and direct service validation has passed. Client/router cutover remains.**
+Status: **DNS cutover is complete. CT 100 (`dns-02`) is running on `PROXMOX` at `192.168.2.50/24`; Debian 13/systemd is healthy; Pi-hole + Unbound are deployed through Ansible; direct, client-only, and DHCP cutover validation have passed. Proxmox protection is now enabled in desired Terraform state and requires a final plan/apply on the runner.**
 
 ## Goal
 
@@ -22,7 +22,7 @@ dns-02
   managed through Terraform + Ansible
 ```
 
-The previous `dns-02` at `192.168.2.242` has been removed. ASUS DHCP still advertises `.242` as the secondary resolver, so `dns-01` (`192.168.2.48`) remains the only router-advertised live resolver until cutover. The replacement `dns-02` is CT 100 at `192.168.2.50`.
+The previous `dns-02` at `192.168.2.242` has been removed. ASUS DHCP now advertises `192.168.2.48` (`dns-01`) and `192.168.2.50` (replacement `dns-02`). A Windows Wi-Fi client and a freshly renewed TestServer lease both received `.48 + .50`.
 
 ## Planned LXC resources
 
@@ -139,7 +139,7 @@ After Ansible configuration:
 7. only then update ASUS DHCP/DNS advertisement
 8. replace stale client/router references to `192.168.2.242` only after the new path has been stable and rollback to `dns-01` is proven
 
-After service validation and cutover proof, set `protect_after_build = true` and apply again so Proxmox protects the container from accidental removal.
+Service validation and client/router cutover proof are complete. `protect_after_build` now defaults to `true`; run a final reviewed Terraform plan/apply so Proxmox protects CT 100 from accidental removal.
 
 
 ## Debian 13 / systemd 257 runtime
@@ -182,3 +182,17 @@ Live validation on 7 September 2026 confirmed:
 - systemd state is `running`
 - zero failed systemd units
 - final Terraform plan: **No changes. Your infrastructure matches the configuration.**
+
+
+## DHCP cutover evidence — 8 September 2026
+
+ASUS DHCP was changed from the retired resolver pair `192.168.2.48 + 192.168.2.242` to `192.168.2.48 + 192.168.2.50`.
+
+Validation confirmed:
+
+- a Windows Wi-Fi client received DNS servers `192.168.2.48` and `192.168.2.50` from `192.168.2.1`
+- TestServer renewed its NetworkManager DHCP lease
+- TestServer `/etc/resolv.conf` contains `192.168.2.48` followed by `192.168.2.50`
+- NetworkManager reports `IP4.DNS[1]=192.168.2.48` and `IP4.DNS[2]=192.168.2.50`
+
+The stale `.242` DHCP reference is therefore removed from the proven client path.
