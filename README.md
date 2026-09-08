@@ -39,3 +39,8 @@ The older top-level `terraform/` path predates this convention and will be migra
 11. Final documentation and public-readiness review.
 
 See [the migration tracker](docs/migrations/MIGRATION-TRACKER.md) for progress.
+
+
+## Production runbooks
+
+- [DNS service recovery plan](production%20docs/DNS-SERVICE-RECOVERY-PLAN.md) — prerequisites, triage, service repair, CT rebuild, alternate-PVE recovery, validation, protection, DHCP cutover and total-DNS-outage recovery.
