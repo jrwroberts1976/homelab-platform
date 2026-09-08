@@ -151,3 +151,10 @@ The run completed successfully. It:
 - stopped short of creating the `iac@pve!opentofu` token secret, as designed
 
 No workload container was created by this bootstrap run.
+
+
+## pve2 credential readiness proof
+
+On 8 September 2026 the scoped `iac@pve!opentofu` token was created on standalone `pve2`, stored locally on TestServer in the protected `~/.config/homelab-iac/proxmox-pve2.env` file, and authenticated successfully against the Proxmox API.
+
+A protected local `~/.config/homelab-iac/pihole.env` file was also created for the resolver build. Secret values are intentionally not recorded in Git.
