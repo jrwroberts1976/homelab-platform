@@ -22,7 +22,7 @@ The live source baseline was captured from `dns-01` (`192.168.2.48`) on 7 Septem
 - groups: Default only
 - five enabled subscribed blocklists
 
-The retired `ids-01` / `192.168.2.242` local-DNS record is intentionally not reproduced. A canonical `dns-02.jameshouse` record for `192.168.2.50` is added.
+The retired previous `dns-02` record at `192.168.2.242` is intentionally not reproduced. A canonical `dns-02.jameshouse` record for the replacement resolver at `192.168.2.50` is added.
 
 ## Safety model
 
