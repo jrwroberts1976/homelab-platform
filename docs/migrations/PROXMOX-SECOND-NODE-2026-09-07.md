@@ -193,3 +193,14 @@ pve2 new NIC
 ```
 
 This keeps management traffic separate from latency-sensitive Corosync and higher-volume VM migration traffic.
+
+
+## Hardware audit update — 8 September 2026
+
+A fresh read-only hardware audit confirms `pve2` is an ASUS ZenBook UX482EAR with an Intel Core i5-1155G7 (4 cores / 8 threads), approximately 16 GiB RAM, and a 476.9 GiB SK hynix NVMe. VT-x and VT-d/DMAR are active.
+
+The NVMe contains a `pve/data` LVM-thin pool of approximately 347.9 GiB, but only the directory storage `local` is currently registered in the Proxmox storage API. No Debian 13 LXC template is currently present. These are platform-preparation items for the first reusable DNS-resolver build, not hardware-capacity blockers.
+
+The standalone `pve-cluster` service and `/etc/pve` FUSE mount are healthy.
+
+See `docs/hardware/PVE2-HARDWARE-AUDIT-2026-09-08.md`.
