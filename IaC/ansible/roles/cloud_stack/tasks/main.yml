@@ -37,6 +37,17 @@
     - { path: "{{ cloud_stack_staging_data_root }}", mode: "0755" }
     - { path: "{{ cloud_stack_staging_data_root }}/data", mode: "0755" }
 
+- name: Set Nextcloud writable directory ownership
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "33"
+    group: "33"
+    mode: "0750"
+  loop:
+    - "{{ cloud_stack_state_root }}/nextcloud-html"
+    - "{{ cloud_stack_staging_data_root }}/data"
+
 - name: Install protected cloud-01 environment
   ansible.builtin.template:
     src: cloud.env.j2
@@ -109,25 +120,6 @@
   retries: 60
   delay: 5
 
-- name: Read Nextcloud background job mode
-  ansible.builtin.command:
-    argv:
-      - docker
-      - compose
-      - --project-directory
-      - "{{ cloud_stack_root }}"
-      - exec
-      - -T
-      - --user
-      - www-data
-      - app
-      - php
-      - occ
-      - background:status
-  register: cloud_nextcloud_background_status
-  changed_when: false
-  failed_when: false
-
 - name: Configure Nextcloud cron background jobs
   ansible.builtin.command:
     argv:
@@ -143,8 +135,7 @@
       - php
       - occ
       - background:cron
-  when: "'cron' not in cloud_nextcloud_background_status.stdout | lower"
-  changed_when: true
+  changed_when: false
 
 - name: Verify Nextcloud OCC status
   ansible.builtin.command:
