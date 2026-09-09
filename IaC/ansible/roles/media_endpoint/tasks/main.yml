@@ -273,10 +273,7 @@
         assert d.get('filecache.readfactor') == '{{ media_kodi_cache_readfactor }}';
         assert d.get('addons.unknownsources') == '{{ 'true' if media_kodi_allow_unknown_sources else 'false' }}';
         assert d.get('services.esenabled') == 'true';
-        assert d.get('services.esallinterfaces') == 'false';
-        assert d.get('weather.addon') == '{{ media_kodi_weather_addon }}';
-        assert d.get('subtitles.movie') == '{{ media_kodi_subtitle_addon }}';
-        assert d.get('subtitles.tv') == '{{ media_kodi_subtitle_addon }}'
+        assert d.get('services.esallinterfaces') == 'false'
   changed_when: false
 
 - name: Install managed Kodi official add-on updater
@@ -329,6 +326,21 @@
   loop: "{{ media_kodi_official_addons }}"
   changed_when: false
 
+- name: Verify Kodi default weather and subtitle services
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - >-
+        import xml.etree.ElementTree as E;
+        r=E.parse('{{ media_user_home }}/.kodi/userdata/guisettings.xml').getroot();
+        d={x.get('id'):(x.text or '').strip() for x in r.findall('setting')};
+        assert d.get('addons.unknownsources') == '{{ 'true' if media_kodi_allow_unknown_sources else 'false' }}';
+        assert d.get('weather.addon') == '{{ media_kodi_weather_addon }}';
+        assert d.get('subtitles.movie') == '{{ media_kodi_subtitle_addon }}';
+        assert d.get('subtitles.tv') == '{{ media_kodi_subtitle_addon }}'
+  changed_when: false
+
 - name: Verify one Kodi process after add-on installation
   ansible.builtin.command:
     argv:
@@ -340,6 +352,29 @@
   register: media_endpoint_kodi_post_addon_singleton
   changed_when: false
   failed_when: media_endpoint_kodi_post_addon_singleton.stdout_lines | length != 1
+
+- name: Check for legacy OpenIPMI init script
+  ansible.builtin.stat:
+    path: /etc/init.d/openipmi
+  register: media_endpoint_openipmi_init
+
+- name: Disable unsupported OpenIPMI service on Raspberry Pi
+  ansible.builtin.systemd_service:
+    name: openipmi.service
+    enabled: false
+    masked: true
+    state: stopped
+  when: media_endpoint_openipmi_init.stat.exists
+
+- name: Clear stale OpenIPMI failed state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - openipmi.service
+  changed_when: false
+  failed_when: false
+  when: media_endpoint_openipmi_init.stat.exists
 
 - name: Verify no failed systemd units
   ansible.builtin.command:
