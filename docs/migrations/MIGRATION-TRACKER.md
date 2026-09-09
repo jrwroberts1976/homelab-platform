@@ -25,6 +25,7 @@ This tracker records the controlled migration from the existing homelab reposito
 | 9. Jenkins / Stage 6 retirement | NOT STARTED | Replacement path proven and Jenkins safely retired |
 | 10. Legacy repo cleanup | NOT STARTED | Superseded repos deleted only after validation |
 | 11. Public-readiness review | NOT STARTED | Repository safe and polished for optional public visibility |
+| 12. Password manager | NOT STARTED | Self-hosted password manager selected, deployed through IaC, backed up, monitored and recovery-tested |
 
 ## Known current authorities
 
@@ -170,3 +171,20 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
 3. Run the final reviewed Terraform plan/apply for `dns-02` so the now-enabled `protect_after_build = true` desired state protects CT 100.
 4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.
+
+
+## Password manager project
+
+Add a self-hosted password manager as a future homelab service.
+
+Requirements before deployment:
+
+- choose the product and target host/VM only after the current core infrastructure build is stable;
+- deploy through Git-managed IaC rather than manual configuration;
+- keep secrets and recovery material outside Git;
+- provide HTTPS before normal use;
+- include persistent-data backup and restore testing;
+- add availability and host/service monitoring;
+- document an emergency recovery path so access is not dependent on the running homelab alone.
+
+This is a planned project, not part of the current monitoring deployment gate.
