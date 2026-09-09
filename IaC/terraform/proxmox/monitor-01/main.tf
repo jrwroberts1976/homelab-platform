@@ -77,9 +77,4 @@ resource "proxmox_virtual_environment_vm" "monitor" {
 
   serial_device {}
 
-  startup {
-    order      = 20
-    up_delay   = 10
-    down_delay = 10
-  }
 }
