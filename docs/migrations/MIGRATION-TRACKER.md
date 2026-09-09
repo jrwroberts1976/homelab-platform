@@ -153,21 +153,29 @@ The infrastructure definition now lives under:
 
 The previous `dns-02` at `192.168.2.242` has already been removed. ASUS DHCP has now been changed to advertise replacement `dns-02` at `192.168.2.50` alongside `dns-01` at `.48`. Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration is now expressed through `IaC/ansible/`. The first live apply on 7 September 2026 completed with `ok=37 changed=13 unreachable=0 failed=0`. From TestServer, `dns-02` answered public DNS over both UDP and TCP, returned `dns-02.jameshouse -> 192.168.2.50`, matched `dns-01` for the existing `testserver.jameshouse` record, returned `SERVFAIL` for deliberately broken DNSSEC, and blocked a domain present in its gravity database as `0.0.0.0`. A controlled TestServer test temporarily overrode NetworkManager to use only `192.168.2.50`; `/etc/resolv.conf` contained only that resolver, normal libc name resolution succeeded for public and local names, and HTTPS to `https://example.com` returned HTTP 200. ASUS DHCP was then changed from `.48 + .242` to `.48 + .50`. A Windows Wi-Fi client received the new pair directly, and a freshly renewed TestServer Ethernet lease also received `.48 + .50`. This completes the replacement DNS client/router cutover.
 
-## Backup redesign
+## Private cloud / data protection redesign
 
-GUI-first backup redesign is now a target requirement.
+The immediate next data platform is now an IaC-managed private cloud rather than a dedicated PBS appliance.
 
-- Preferred long-term platform: Proxmox Backup Server as `pbs-01` (`192.168.2.52`) in a VM on `PROXMOX` (`192.168.2.70`).
-- Transitional compatibility: Backrest may be used to browse/restore existing Restic repositories.
-- Existing Restic/monthly backup data remains protected until replacement backups and restores are proven.
-- PBS datastore must be separate healthy physical storage; the degraded DietPi backup HDD must not become the new primary datastore.
-- DietPi itself is now redundant and is retained only as a protected reuse/spare candidate until DNS cutover and backup-data reconciliation gates are complete.
+- `cloud-01.jameshouse` -> `192.168.2.52`
+- Debian 13 VM on `PROXMOX` (`192.168.2.70`)
+- Nextcloud + PostgreSQL + Redis
+- VM/system configuration rebuilt from Git/IaC
+- persistent user data and database state protected separately
+- Proxmox Backup Server deferred until whole-guest recovery provides enough value to justify it
+- former DietPi 4 TB USB disk moved to `PROXMOX` and is undergoing a destructive full-surface test before any production filesystem is created
+- pre-test SMART: 0 reallocated, 7 pending, 2 offline-uncorrectable sectors; even a passing drive must not become the sole copy of irreplaceable data
+- second independent copy is mandatory before the private cloud is treated as production
+- DietPi itself remains a reuse/spare candidate after all `.48` DNS dependencies are removed
 
-See `docs/architecture/BACKUP-STRATEGY.md`.
+A remaining `.48` dependency was discovered on `PROXMOX` during package installation and its resolver was manually corrected to `.51 + .50`. ASUS DHCP and representative clients still require final dependency verification before DietPi is considered fully retired.
+
+See `docs/architecture/BACKUP-STRATEGY.md` and `production docs/CLOUD-SERVICE.md`.
 
 ## Next action
 
-1. Complete standalone `pve2` service validation and test the incoming second NIC before any further cluster attempt.
-2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
-3. Run the final reviewed Terraform plan/apply for `dns-02` so the now-enabled `protect_after_build = true` desired state protects CT 100.
-4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.
+1. Let the 4 TB USB disk destructive surface test complete on `PROXMOX`; compare post-test SMART before formatting or assigning it to `cloud-01`.
+2. Continue building critical shared-network services that do not touch the disk under test.
+3. Define `cloud-01` through Terraform/OpenTofu and Ansible once the data-device decision is known.
+4. Verify ASUS DHCP and representative clients no longer depend on DietPi `192.168.2.48`.
+5. Complete standalone `Proxmox-2` NIC replacement/validation when the new adapters arrive.
