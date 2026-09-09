@@ -95,7 +95,7 @@
     argv:
       - /usr/local/sbin/homelab-kodi-settings
   register: media_endpoint_kodi_settings
-  changed_when: "'CHANGED' in media_endpoint_kodi_settings.stdout"
+  changed_when: media_endpoint_kodi_settings.stdout | trim == 'CHANGED'
   notify: Restart Kodi
 
 - name: Own Kodi configuration tree
