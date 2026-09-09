@@ -210,3 +210,15 @@ All Blackbox probes returned `probe_success=1`, covering:
 Prometheus reported no active alerts. Grafana's provisioned Prometheus datasource is present, points to `http://prometheus:9090`, and is the default datasource.
 
 A focused Ansible playbook now manages local Pi-hole DNS records separately from the full resolver role so new service records such as `monitor-01.jameshouse -> 192.168.2.52` can be reconciled without rerunning unrelated resolver configuration.
+
+
+## monitor-01 DNS publication evidence — 9 September 2026
+
+The focused Pi-hole local-DNS playbook is now clean and idempotent on both resolvers:
+
+```text
+dns-01 : ok=4 changed=0 unreachable=0 failed=0
+dns-02 : ok=4 changed=0 unreachable=0 failed=0
+```
+
+Both resolvers and the controller resolve `monitor-01.jameshouse` to `192.168.2.52`.
