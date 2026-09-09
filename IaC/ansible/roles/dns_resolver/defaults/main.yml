@@ -26,6 +26,8 @@ pihole_local_hosts:
   - "192.168.2.48 dietpi.jameshouse dietpi"
   - "192.168.2.49 garage-door-camera.jameshouse garage-door-camera"
   - "192.168.2.50 dns-02.jameshouse dns-02"
+  - "192.168.2.70 proxmox.jameshouse proxmox ntp-01.jameshouse ntp-01"
+  - "192.168.2.71 proxmox-2.jameshouse proxmox-2 ntp-02.jameshouse ntp-02"
   - "192.168.2.74 garden-room.jameshouse garden-room"
   - "192.168.2.78 front-door-camera.jameshouse front-door-camera"
   - "192.168.2.90 garden-gate-camera.jameshouse garden-gate-camera"
