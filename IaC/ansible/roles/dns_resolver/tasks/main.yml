@@ -253,14 +253,8 @@
       - "{{ pihole_cname_records | to_json }}"
   changed_when: false
 
-- name: Configure Pi-hole local DNS records
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/pihole-FTL
-      - --config
-      - dns.hosts
-      - "{{ pihole_local_hosts_effective | to_json }}"
-  changed_when: false
+- name: Reconcile managed Pi-hole local DNS records
+  ansible.builtin.import_tasks: local_dns.yml
 
 - name: Set Pi-hole web/API password without exposing it in process arguments
   ansible.builtin.expect:
