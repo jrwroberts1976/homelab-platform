@@ -142,6 +142,29 @@
     group: root
     mode: "0644"
 
+- name: Provision Grafana Alertmanager datasource
+  ansible.builtin.template:
+    src: grafana-alertmanager-datasource.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/datasources/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Prometheus alert rules
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - -v
+      - "{{ monitoring_root }}/prometheus:/etc/prometheus:ro"
+      - "{{ monitoring_prometheus_image }}"
+      - promtool
+      - check
+      - rules
+      - /etc/prometheus/alerts.yml
+  changed_when: false
+
 - name: Validate Docker Compose configuration
   ansible.builtin.command:
     argv:
@@ -235,6 +258,22 @@
   register: monitoring_prometheus_runtime_config
   changed_when: false
   failed_when: "'job_name: node-exporter' not in monitoring_prometheus_runtime_config.json.data.yaml"
+
+- name: Verify production alert rules are loaded
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/rules
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_rules
+  changed_when: false
+  failed_when: >-
+    'DNSServiceDown' not in monitoring_prometheus_rules.content
+    or 'ProxmoxHTTPSDown' not in monitoring_prometheus_rules.content
+    or 'CoreHostUnreachable' not in monitoring_prometheus_rules.content
+    or 'NodeExporterDown' not in monitoring_prometheus_rules.content
+    or 'NodeFilesystemSpaceLow' not in monitoring_prometheus_rules.content
+    or 'NodeMemoryHigh' not in monitoring_prometheus_rules.content
+    or 'NodeCPUHigh' not in monitoring_prometheus_rules.content
 
 - name: Wait for Grafana health
   ansible.builtin.uri:
