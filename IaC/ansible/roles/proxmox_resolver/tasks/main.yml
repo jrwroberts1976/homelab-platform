@@ -1,0 +1,97 @@
+---
+- name: Validate Proxmox resolver target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == proxmox_resolver_expected_hostname
+      - ansible_facts.default_ipv4.address == proxmox_resolver_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+    fail_msg: >-
+      Refusing to manage resolver configuration: expected Debian Proxmox host
+      {{ proxmox_resolver_expected_hostname }} at
+      {{ proxmox_resolver_expected_ipv4 }}/vmbr0.
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  register: proxmox_resolver_pveversion
+  changed_when: false
+
+- name: Inspect current resolver file
+  ansible.builtin.stat:
+    path: /etc/resolv.conf
+    follow: false
+  register: proxmox_resolver_file
+
+- name: Require a normal resolv.conf file
+  ansible.builtin.assert:
+    that:
+      - proxmox_resolver_file.stat.exists
+      - proxmox_resolver_file.stat.isreg
+      - not proxmox_resolver_file.stat.islnk
+    fail_msg: >-
+      Refusing to replace /etc/resolv.conf because it is missing, not a regular
+      file, or is managed through a symlink. Inspect this host manually first.
+
+- name: Read current resolver configuration
+  ansible.builtin.slurp:
+    src: /etc/resolv.conf
+  register: proxmox_resolver_before
+
+- name: Record whether retired DNS is present before reconciliation
+  ansible.builtin.set_fact:
+    proxmox_resolver_had_retired_dns: >-
+      {{
+        proxmox_resolver_retired_nameservers
+        | select('in', (proxmox_resolver_before.content | b64decode))
+        | list
+        | length > 0
+      }}
+
+- name: Install managed resolver configuration
+  ansible.builtin.template:
+    src: resolv.conf.j2
+    dest: /etc/resolv.conf
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+
+- name: Read reconciled resolver configuration
+  ansible.builtin.slurp:
+    src: /etc/resolv.conf
+  register: proxmox_resolver_after
+
+- name: Verify desired resolver pair and retired resolver removal
+  ansible.builtin.assert:
+    that:
+      - "'search ' ~ proxmox_resolver_search_domain in (proxmox_resolver_after.content | b64decode)"
+      - "'nameserver 192.168.2.51' in (proxmox_resolver_after.content | b64decode)"
+      - "'nameserver 192.168.2.50' in (proxmox_resolver_after.content | b64decode)"
+      - "'192.168.2.48' not in (proxmox_resolver_after.content | b64decode)"
+    fail_msg: Resolver reconciliation did not produce the approved .51 + .50 state.
+
+- name: Validate public DNS through system resolver
+  ansible.builtin.command:
+    argv:
+      - getent
+      - ahostsv4
+      - deb.debian.org
+  register: proxmox_resolver_public_lookup
+  changed_when: false
+  retries: 3
+  delay: 2
+  until: proxmox_resolver_public_lookup.rc == 0 and proxmox_resolver_public_lookup.stdout | length > 0
+
+- name: Validate local DNS through system resolver
+  ansible.builtin.command:
+    argv:
+      - getent
+      - ahostsv4
+      - dns-01.jameshouse
+  register: proxmox_resolver_local_lookup
+  changed_when: false
+  failed_when: >-
+    proxmox_resolver_local_lookup.rc != 0
+    or '192.168.2.51' not in proxmox_resolver_local_lookup.stdout
