@@ -2,6 +2,31 @@
 
 This directory contains operating-system and service configuration for guests provisioned from `IaC/terraform/`.
 
+
+## Proxmox time service
+
+`playbooks/proxmox-time.yml` configures the two standalone Proxmox hosts as
+redundant LAN NTP servers using the `chrony_server` role:
+
+- `ntp-01.jameshouse` -> `PROXMOX` / `192.168.2.70`
+- `ntp-02.jameshouse` -> `Proxmox-2` / `192.168.2.71`
+
+Chrony runs directly on the physical hypervisors so time service does not
+depend on a VM or LXC being available. Both servers synchronise independently
+to the UK NTP pool and serve only `192.168.2.0/24`.
+
+Deploy from TestServer with:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible
+ansible-playbook --syntax-check playbooks/proxmox-time.yml
+ansible-playbook playbooks/proxmox-time.yml --list-tasks
+ansible-playbook playbooks/proxmox-time.yml
+```
+
+See `production docs/TIME-SERVICE.md` for architecture, validation and client
+policy.
+
 ## dns-02
 
 `playbooks/dns-02.yml` configures CT 100 (`192.168.2.50`) as the secondary Pi-hole + Unbound resolver.
