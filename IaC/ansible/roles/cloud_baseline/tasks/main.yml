@@ -1,0 +1,80 @@
+---
+- name: Validate cloud-01 target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == cloud_expected_hostname
+      - cloud_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to configure private cloud: expected Debian 13 cloud-01 at
+      {{ cloud_expected_ipv4 }}.
+
+- name: Validate system DNS before package operations
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - deb.debian.org
+  register: cloud_dns_preflight
+  changed_when: false
+  failed_when: >-
+    cloud_dns_preflight.rc != 0
+    or cloud_dns_preflight.stdout | trim | length == 0
+
+- name: Set cloud-01 timezone
+  community.general.timezone:
+    name: "{{ cloud_timezone }}"
+
+- name: Install cloud-01 baseline packages
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - docker.io
+      - docker-compose
+      - qemu-guest-agent
+      - sudo
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure QEMU guest agent is enabled and running
+  ansible.builtin.systemd_service:
+    name: qemu-guest-agent
+    enabled: true
+    state: started
+
+- name: Ensure Docker is enabled and running
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Create cloud service root
+  ansible.builtin.file:
+    path: "{{ cloud_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Verify Docker engine
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+  changed_when: false
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: cloud_failed_units
+  changed_when: false
+  failed_when: cloud_failed_units.stdout | trim | length > 0
