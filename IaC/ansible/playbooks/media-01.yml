@@ -5,6 +5,7 @@
   gather_facts: true
 
   roles:
+    - role: chrony_client
     - role: media_endpoint
     - role: media_smb
     - role: node_exporter
