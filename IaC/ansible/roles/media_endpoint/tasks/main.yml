@@ -163,7 +163,7 @@
     state: stopped
   when: media_endpoint_existing_kodi.stdout_lines | length > 1
 
-- name: Remove duplicate standalone Kodi instances
+- name: Ask duplicate standalone Kodi instances to exit
   ansible.builtin.command:
     argv:
       - pkill
@@ -175,6 +175,54 @@
   register: media_endpoint_kodi_cleanup
   changed_when: media_endpoint_kodi_cleanup.rc == 0
   failed_when: media_endpoint_kodi_cleanup.rc not in [0, 1]
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Wait for duplicate Kodi instances to exit cleanly
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_cleanup_wait
+  changed_when: false
+  failed_when: false
+  retries: 10
+  delay: 1
+  until: media_endpoint_kodi_cleanup_wait.rc == 1
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Force-stop Kodi instances that ignored SIGTERM
+  ansible.builtin.command:
+    argv:
+      - pkill
+      - -KILL
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_force_cleanup
+  changed_when: media_endpoint_kodi_force_cleanup.rc == 0
+  failed_when: media_endpoint_kodi_force_cleanup.rc not in [0, 1]
+  when:
+    - media_endpoint_existing_kodi.stdout_lines | length > 1
+    - media_endpoint_kodi_cleanup_wait.rc != 1
+
+- name: Confirm no unmanaged Kodi instances remain
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_cleanup_final
+  changed_when: false
+  failed_when: media_endpoint_kodi_cleanup_final.rc not in [0, 1]
+  retries: 10
+  delay: 1
+  until: media_endpoint_kodi_cleanup_final.rc == 1
   when: media_endpoint_existing_kodi.stdout_lines | length > 1
 
 - name: Enable and start Kodi standalone service
