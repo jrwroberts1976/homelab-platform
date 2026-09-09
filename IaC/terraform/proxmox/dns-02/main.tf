@@ -58,8 +58,10 @@ resource "proxmox_virtual_environment_container" "dns02" {
   }
 
   tags = [
-    "dns",
+    "homelab",
     "iac",
+    "core",
+    "dns",
     "pihole",
     "unbound",
   ]
