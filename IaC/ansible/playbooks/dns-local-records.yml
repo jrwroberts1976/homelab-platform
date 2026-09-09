@@ -1,0 +1,10 @@
+---
+- name: Reconcile managed Pi-hole local DNS records
+  hosts: dns_resolvers
+  gather_facts: false
+
+  tasks:
+    - name: Apply managed local DNS records only
+      ansible.builtin.include_role:
+        name: dns_resolver
+        tasks_from: local_dns.yml
