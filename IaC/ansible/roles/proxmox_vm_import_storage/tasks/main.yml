@@ -1,0 +1,80 @@
+---
+- name: Validate monitoring hypervisor identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.default_ipv4.address == "192.168.2.71"
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+    fail_msg: >-
+      Refusing to change Proxmox storage capabilities: expected
+      Proxmox-2 at 192.168.2.71/vmbr0.
+
+- name: Verify target is Proxmox VE
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  register: proxmox_vm_import_pveversion
+  changed_when: false
+
+- name: Read current local storage configuration
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - config
+      - "{{ proxmox_vm_import_storage_id }}"
+  register: proxmox_vm_import_storage_before
+  changed_when: false
+
+- name: Verify local storage is the expected directory datastore
+  ansible.builtin.assert:
+    that:
+      - "'dir: ' ~ proxmox_vm_import_storage_id in proxmox_vm_import_storage_before.stdout"
+      - "'path /var/lib/vz' in proxmox_vm_import_storage_before.stdout"
+      - "'snippets' in proxmox_vm_import_storage_before.stdout"
+      - "'images' in proxmox_vm_import_storage_before.stdout"
+    fail_msg: >-
+      Refusing to alter local storage: its current type/path/content does not
+      match the preflighted Proxmox-2 local datastore.
+
+- name: Enable VM image import content on local storage
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - set
+      - "{{ proxmox_vm_import_storage_id }}"
+      - --content
+      - "{{ proxmox_vm_import_storage_content | join(',') }}"
+  when: "'import' not in proxmox_vm_import_storage_before.stdout"
+  register: proxmox_vm_import_storage_set
+  changed_when: proxmox_vm_import_storage_set.rc == 0
+
+- name: Read reconciled local storage configuration
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - config
+      - "{{ proxmox_vm_import_storage_id }}"
+  register: proxmox_vm_import_storage_after
+  changed_when: false
+
+- name: Verify required storage content types are enabled
+  ansible.builtin.assert:
+    that:
+      - "'import' in proxmox_vm_import_storage_after.stdout"
+      - "'snippets' in proxmox_vm_import_storage_after.stdout"
+      - "'images' in proxmox_vm_import_storage_after.stdout"
+      - "'iso' in proxmox_vm_import_storage_after.stdout"
+      - "'vztmpl' in proxmox_vm_import_storage_after.stdout"
+    fail_msg: Required local storage content types were not enabled.
+
+- name: Verify local storage remains active
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - status
+      - --storage
+      - "{{ proxmox_vm_import_storage_id }}"
+  register: proxmox_vm_import_storage_status
+  changed_when: false
+  failed_when: "'active' not in proxmox_vm_import_storage_status.stdout"
