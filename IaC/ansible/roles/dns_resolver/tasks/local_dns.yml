@@ -1,0 +1,35 @@
+---
+- name: Configure Pi-hole local DNS records
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - dns.hosts
+      - "{{ pihole_local_hosts_effective | to_json }}"
+  changed_when: false
+
+- name: Verify monitor-01 local DNS record
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - monitor-01.jameshouse
+      - +short
+      - +time=3
+      - +tries=1
+  register: monitor_local_record
+  changed_when: false
+  failed_when: "'192.168.2.52' not in monitor_local_record.stdout"
+
+- name: Verify resolver self local DNS record
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - "{{ dns_resolver_hostname }}.{{ dns_resolver_search_domain }}"
+      - +short
+      - +time=3
+      - +tries=1
+  register: pihole_local_record
+  changed_when: false
+  failed_when: dns_resolver_expected_ipv4 not in pihole_local_record.stdout
