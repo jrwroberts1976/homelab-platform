@@ -52,3 +52,8 @@ monitoring_node_exporter_targets:
     label: PROXMOX
   - address: 192.168.2.71:9100
     label: Proxmox-2
+
+
+monitoring_alert_email_to: "jrwroberts1976@gmail.com"
+monitoring_alert_email_from: "jrwroberts1976@gmail.com"
+monitoring_alert_smtp_smarthost: "192.168.2.54:25"
