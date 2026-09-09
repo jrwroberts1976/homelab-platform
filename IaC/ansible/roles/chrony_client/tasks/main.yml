@@ -13,7 +13,7 @@
     owner: root
     group: root
     mode: "0644"
-    validate: "chronyd -Q -f %s"
+    validate: "chronyd -p -f %s"
   notify: Restart chrony
 
 - name: Ensure Chrony is enabled and running
