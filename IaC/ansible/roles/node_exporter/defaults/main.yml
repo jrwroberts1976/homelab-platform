@@ -1,0 +1,5 @@
+---
+node_exporter_expected_ipv4: "{{ ansible_host }}"
+node_exporter_package: prometheus-node-exporter
+node_exporter_service: prometheus-node-exporter
+node_exporter_port: 9100
