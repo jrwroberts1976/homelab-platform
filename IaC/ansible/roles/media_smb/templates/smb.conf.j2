@@ -2,9 +2,9 @@
    workgroup = WORKGROUP
    server string = media-01
    security = user
-   map to guest = Bad User
-   guest account = nobody
+   map to guest = Never
    server role = standalone server
+   server signing = mandatory
    disable netbios = yes
    smb ports = 445
    interfaces = lo {{ ansible_default_ipv4.interface }}
@@ -23,8 +23,9 @@
    path = {{ media_smb_path }}
    browseable = yes
    read only = no
-   guest ok = yes
-   public = yes
+   guest ok = no
+   public = no
+   valid users = {{ media_smb_owner }}
    writable = yes
    force user = {{ media_smb_owner }}
    force group = {{ media_smb_group }}
