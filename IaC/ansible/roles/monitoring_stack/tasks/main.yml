@@ -184,6 +184,13 @@
   retries: 30
   delay: 2
 
+- name: Reload Prometheus configuration
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/-/reload
+    method: POST
+    status_code: 200
+  changed_when: false
+
 - name: Wait for Grafana health
   ansible.builtin.uri:
     url: http://127.0.0.1:3000/api/health
@@ -224,9 +231,25 @@
   register: monitoring_prometheus_targets
   until:
     - monitoring_prometheus_targets.json.status == "success"
-    - monitoring_prometheus_targets.json.data.activeTargets | length >= 14
+    - monitoring_prometheus_targets.json.data.activeTargets | length >= 17
   retries: 30
   delay: 2
+
+- name: Verify node exporter targets are healthy
+  ansible.builtin.assert:
+    that:
+      - >-
+        monitoring_prometheus_targets.json.data.activeTargets
+        | selectattr('labels.job', 'equalto', 'node-exporter')
+        | list
+        | length == 3
+      - >-
+        monitoring_prometheus_targets.json.data.activeTargets
+        | selectattr('labels.job', 'equalto', 'node-exporter')
+        | rejectattr('health', 'equalto', 'up')
+        | list
+        | length == 0
+    fail_msg: One or more core node exporter targets are missing or unhealthy.
 
 - name: Show monitoring container state
   ansible.builtin.command:
