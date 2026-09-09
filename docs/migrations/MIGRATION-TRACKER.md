@@ -188,3 +188,23 @@ Requirements before deployment:
 - document an emergency recovery path so access is not dependent on the running homelab alone.
 
 This is a planned project, not part of the current monitoring deployment gate.
+
+
+## media-01 rebuild target
+
+`media-01` is a freshly rebuilt Raspberry Pi 5 and will be treated as a greenfield dedicated media endpoint.
+
+Target requirements:
+
+- retain hostname `media-01` and address `192.168.2.195`;
+- Kodi is the primary workload;
+- Kodi must start automatically on every normal boot without interactive launch;
+- use a managed systemd/display-session startup path rather than shell-profile hacks;
+- restart Kodi automatically after an unexpected process failure;
+- order startup sensibly around network availability and any remote media mounts;
+- configure a Kodi RAM playback cache, initially targeting roughly 768 MiB on the 8 GiB Pi 5;
+- keep Kodi metadata/thumbnails/database/cache working data on the fast local NVMe where practical;
+- install node_exporter for host metrics;
+- monitor Raspberry Pi temperature/throttling and local storage health/capacity;
+- send Kodi logs through Grafana Alloy to Loki on `monitor-01` once Loki is deployed;
+- manage the media baseline through Ansible/IaC wherever practical.
