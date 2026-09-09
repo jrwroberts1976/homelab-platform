@@ -55,7 +55,7 @@ variable "search_domain" {
 variable "bootstrap_dns_servers" {
   description = "DNS servers used by the container before Pi-hole/Unbound takes over."
   type        = list(string)
-  default     = ["192.168.2.48"]
+  default     = ["192.168.2.51"]
 }
 
 variable "ssh_public_keys" {
