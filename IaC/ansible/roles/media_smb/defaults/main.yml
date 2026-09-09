@@ -3,6 +3,7 @@ media_smb_share_name: "Media"
 media_smb_path: "/srv/media"
 media_smb_owner: "james"
 media_smb_group: "james"
+media_smb_password: "{{ lookup('ansible.builtin.env', 'MEDIA_SMB_PASSWORD') }}"
 media_smb_allowed_subnet: "192.168.2.0/24"
 media_smb_directories:
   - Movies
