@@ -38,7 +38,7 @@ pihole_local_hosts:
   - "192.168.2.167 kitchen-light-switch.jameshouse kitchen-light-switch"
   - "192.168.2.181 rt-ac86u-5228.jameshouse rt-ac86u-5228"
   - "192.168.2.183 james-lt.jameshouse james-lt"
-  - "192.168.2.195 k3s-node-01.jameshouse k3s-node-01"
+  - "192.168.2.195 media-01.jameshouse media-01"
   - "192.168.2.206 james-phone.jameshouse james-phone"
   - "192.168.2.218 rt-ac86u-6238.jameshouse rt-ac86u-6238"
   - "192.168.2.219 work-laptop.jameshouse work-laptop"
