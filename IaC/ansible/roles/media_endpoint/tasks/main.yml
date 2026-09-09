@@ -145,6 +145,38 @@
     enabled: false
     state: stopped
 
+- name: Count standalone Kodi processes before service reconciliation
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_existing_kodi
+  changed_when: false
+  failed_when: media_endpoint_existing_kodi.rc not in [0, 1]
+
+- name: Stop Kodi service when duplicate standalone instances exist
+  ansible.builtin.systemd_service:
+    name: kodi.service
+    state: stopped
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Remove duplicate standalone Kodi instances
+  ansible.builtin.command:
+    argv:
+      - pkill
+      - -TERM
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_cleanup
+  changed_when: media_endpoint_kodi_cleanup.rc == 0
+  failed_when: media_endpoint_kodi_cleanup.rc not in [0, 1]
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
 - name: Enable and start Kodi standalone service
   ansible.builtin.systemd_service:
     name: kodi.service
@@ -164,6 +196,18 @@
   retries: 30
   delay: 2
   until: media_endpoint_kodi_running.rc == 0
+
+- name: Verify exactly one managed Kodi process
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_managed_kodi
+  changed_when: false
+  failed_when: media_endpoint_managed_kodi.stdout_lines | length != 1
 
 - name: Verify Kodi cache settings on disk
   ansible.builtin.command:
