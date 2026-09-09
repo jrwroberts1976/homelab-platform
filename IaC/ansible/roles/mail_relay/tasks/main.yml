@@ -1,0 +1,153 @@
+---
+- name: Validate mail relay target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - mail_relay_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to configure mail relay: expected Debian 13 host with
+      {{ mail_relay_expected_ipv4 }} assigned locally.
+
+- name: Validate system DNS before package operations
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - smtp.gmail.com
+  register: mail_relay_dns_preflight
+  changed_when: false
+  failed_when: >-
+    mail_relay_dns_preflight.rc != 0
+    or mail_relay_dns_preflight.stdout | trim | length == 0
+
+- name: Require Gmail relay configuration
+  ansible.builtin.assert:
+    that:
+      - mail_relay_gmail_username | length > 3
+      - "'@' in mail_relay_gmail_username"
+      - mail_relay_gmail_app_password | length >= 16
+    fail_msg: >-
+      GMAIL_SMTP_USERNAME and a Gmail App Password are required from the
+      protected controller environment. Do not commit either credential file.
+  no_log: true
+
+- name: Preseed Postfix package configuration
+  ansible.builtin.debconf:
+    name: postfix
+    question: postfix/main_mailer_type
+    value: "No configuration"
+    vtype: select
+
+- name: Install Postfix relay prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - libsasl2-modules
+      - postfix
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Install managed Postfix configuration
+  ansible.builtin.template:
+    src: main.cf.j2
+    dest: /etc/postfix/main.cf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart postfix
+
+- name: Install protected Gmail SASL credential
+  ansible.builtin.template:
+    src: sasl_passwd.j2
+    dest: /etc/postfix/sasl_passwd
+    owner: root
+    group: root
+    mode: "0600"
+  register: mail_relay_sasl_passwd
+  notify: Restart postfix
+  no_log: true
+
+- name: Check protected SASL database
+  ansible.builtin.stat:
+    path: /etc/postfix/sasl_passwd.db
+  register: mail_relay_sasl_db
+  no_log: true
+
+- name: Compile protected Gmail SASL credential map
+  ansible.builtin.command:
+    argv:
+      - postmap
+      - /etc/postfix/sasl_passwd
+  when: mail_relay_sasl_passwd.changed or not mail_relay_sasl_db.stat.exists
+  notify: Restart postfix
+  no_log: true
+
+- name: Protect compiled Gmail SASL credential map
+  ansible.builtin.file:
+    path: /etc/postfix/sasl_passwd.db
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install sender canonical map
+  ansible.builtin.template:
+    src: sender_canonical.j2
+    dest: /etc/postfix/sender_canonical
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart postfix
+
+- name: Apply pending Postfix restart
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Postfix is enabled and running
+  ansible.builtin.systemd_service:
+    name: postfix
+    enabled: true
+    state: started
+
+- name: Validate Postfix configuration
+  ansible.builtin.command:
+    argv:
+      - postfix
+      - check
+  changed_when: false
+
+- name: Verify SMTP listener
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -ltn
+      - "sport = :25"
+  register: mail_relay_listener
+  changed_when: false
+  failed_when: "'25' not in mail_relay_listener.stdout"
+
+- name: Verify configured relay host
+  ansible.builtin.command:
+    argv:
+      - postconf
+      - -h
+      - relayhost
+  register: mail_relay_postconf_relayhost
+  changed_when: false
+  failed_when: mail_relay_postconf_relayhost.stdout | trim != mail_relay_relayhost
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: mail_relay_failed_units
+  changed_when: false
+  failed_when: mail_relay_failed_units.stdout | trim | length > 0
