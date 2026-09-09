@@ -47,8 +47,8 @@ printf '%s\n' "$TARGETS" | jq -r '
 
 printf '%s\n' "$TARGETS" | jq -e '
   [.data.activeTargets[] | select(.labels.job == "node-exporter")] as $nodes
-  | ($nodes | length) == 3
+  | ($nodes | length) == 5
     and all($nodes[]; .health == "up")
-' >/dev/null || die "Expected three healthy node-exporter targets"
+' >/dev/null || die "Expected five healthy node-exporter targets"
 
 printf '===== RESULT: PASS =====\n'
