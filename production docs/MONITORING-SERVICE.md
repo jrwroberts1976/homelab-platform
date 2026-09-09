@@ -27,7 +27,7 @@ Loki/Alloy logging is deliberately deferred until the metrics platform is stable
 - 80 GiB system/data disk
 - static IPv4 `192.168.2.52/24`
 - gateway `192.168.2.1`
-- DNS `192.168.2.51`, `192.168.2.50`
+- DNS `192.168.2.51`, `192.168.2.50` (legacy `192.168.2.48` is forbidden)
 - search domain `jameshouse`
 - starts automatically with `Proxmox-2`
 
