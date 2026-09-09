@@ -100,8 +100,25 @@ cat /etc/resolv.conf
 
 printf '\n===== DNS DEPENDENCY =====\n'
 ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$TARGET_PVE_HOST" '
+echo "--- resolv.conf ---"
+cat /etc/resolv.conf
+echo
+if grep -q "192\\.168\\.2\\.48" /etc/resolv.conf; then
+  echo "legacy_dns_48=FAIL"
+  exit 48
+fi
+grep -q "192\\.168\\.2\\.51" /etc/resolv.conf || {
+  echo "dns_51=PRESENT_REQUIRED"
+  exit 51
+}
+grep -q "192\\.168\\.2\\.50" /etc/resolv.conf || {
+  echo "dns_50=PRESENT_REQUIRED"
+  exit 50
+}
+echo "resolver_pair=.51+.50"
 getent ahostsv4 deb.debian.org | head -3 || true
 '
+[ "$?" -eq 0 ] || die "$TARGET_PVE_NAME still has stale or incomplete DNS configuration"
 
 printf '\n===== HOST HEALTH =====\n'
 ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$TARGET_PVE_HOST" '
