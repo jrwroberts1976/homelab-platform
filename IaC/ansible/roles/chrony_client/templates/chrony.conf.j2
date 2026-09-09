@@ -1,7 +1,7 @@
 # Managed by homelab-platform/IaC. Do not edit by hand.
 
 {% for server in chrony_client_servers %}
-server {{ server }} iburst prefer
+server {{ server }} iburst{% if loop.first %} prefer{% endif %}
 {% endfor %}
 
 driftfile /var/lib/chrony/chrony.drift
