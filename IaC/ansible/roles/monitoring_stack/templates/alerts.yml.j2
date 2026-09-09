@@ -1,20 +1,121 @@
 groups:
-  - name: homelab-connectivity
+  - name: homelab-core-connectivity
     rules:
-      - alert: BlackboxProbeFailed
-        expr: probe_success == 0
-        for: 3m
+      - alert: DNSServiceDown
+        expr: probe_success{job="blackbox-dns-tcp"} == 0
+        for: 2m
         labels:
-          severity: warning
+          severity: critical
+          service: dns
         annotations:
-          summary: "Probe failed for {{ "{{" }} $labels.target_name {{ "}}" }}"
-          description: "Blackbox probe to {{ "{{" }} $labels.instance {{ "}}" }} has failed for more than 3 minutes."
+          summary: "DNS service unavailable on {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "TCP/53 on {{ "{{" }} $labels.instance {{ "}}" }} has failed continuously for more than 2 minutes."
 
-      - alert: PrometheusTargetDown
-        expr: up == 0
+      - alert: ProxmoxHTTPSDown
+        expr: probe_success{job="blackbox-pve-https"} == 0
         for: 3m
         labels:
           severity: critical
+          service: proxmox
         annotations:
-          summary: "Prometheus target down: {{ "{{" }} $labels.job {{ "}}" }}"
-          description: "Prometheus cannot scrape {{ "{{" }} $labels.instance {{ "}}" }} for more than 3 minutes."
+          summary: "Proxmox web/API unavailable on {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "HTTPS/8006 on {{ "{{" }} $labels.target_name {{ "}}" }} has failed continuously for more than 3 minutes."
+
+      - alert: CoreHostUnreachable
+        expr: probe_success{job="blackbox-icmp",target_name=~"router|dns-01|dns-02|monitor-01|PROXMOX|Proxmox-2"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: infrastructure
+        annotations:
+          summary: "Core host unreachable: {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "ICMP reachability to {{ "{{" }} $labels.instance {{ "}}" }} has failed for more than 3 minutes."
+
+      - alert: NonCoreHostUnreachable
+        expr: probe_success{job="blackbox-icmp",target_name=~"TestServer|media-01"} == 0
+        for: 5m
+        labels:
+          severity: warning
+          service: infrastructure
+        annotations:
+          summary: "Host unreachable: {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "ICMP reachability to {{ "{{" }} $labels.instance {{ "}}" }} has failed for more than 5 minutes."
+
+      - alert: NodeExporterDown
+        expr: up{job="node-exporter"} == 0
+        for: 3m
+        labels:
+          severity: critical
+          service: host-metrics
+        annotations:
+          summary: "Host metrics unavailable: {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "Prometheus cannot scrape node_exporter on {{ "{{" }} $labels.instance {{ "}}" }} for more than 3 minutes."
+
+      - alert: MonitoringTargetDown
+        expr: up{job=~"prometheus|blackbox-exporter"} == 0
+        for: 2m
+        labels:
+          severity: critical
+          service: monitoring
+        annotations:
+          summary: "Monitoring component unavailable: {{ "{{" }} $labels.job {{ "}}" }}"
+          description: "Prometheus reports {{ "{{" }} $labels.instance {{ "}}" }} in job {{ "{{" }} $labels.job {{ "}}" }} down for more than 2 minutes."
+
+  - name: homelab-host-capacity
+    rules:
+      - alert: NodeFilesystemSpaceLow
+        expr: |
+          (
+            node_filesystem_avail_bytes{
+              job="node-exporter",
+              fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|fuse.lxcfs",
+              mountpoint!~"/run($|/)|/var/lib/docker/.+"
+            }
+            /
+            node_filesystem_size_bytes{
+              job="node-exporter",
+              fstype!~"tmpfs|devtmpfs|overlay|squashfs|nsfs|fuse.lxcfs",
+              mountpoint!~"/run($|/)|/var/lib/docker/.+"
+            }
+          ) * 100 < 10
+        for: 10m
+        labels:
+          severity: warning
+          service: storage
+        annotations:
+          summary: "Low disk space on {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "Filesystem {{ "{{" }} $labels.mountpoint {{ "}}" }} on {{ "{{" }} $labels.target_name {{ "}}" }} has less than 10% space available."
+
+      - alert: NodeMemoryHigh
+        expr: |
+          100 * (
+            1 -
+            (
+              node_memory_MemAvailable_bytes{job="node-exporter"}
+              /
+              node_memory_MemTotal_bytes{job="node-exporter"}
+            )
+          ) > 90
+        for: 15m
+        labels:
+          severity: warning
+          service: memory
+        annotations:
+          summary: "High memory use on {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "Memory utilisation on {{ "{{" }} $labels.target_name {{ "}}" }} has remained above 90% for 15 minutes."
+
+      - alert: NodeCPUHigh
+        expr: |
+          100 * (
+            1 -
+            avg by (instance, target_name) (
+              rate(node_cpu_seconds_total{job="node-exporter",mode="idle"}[5m])
+            )
+          ) > 90
+        for: 15m
+        labels:
+          severity: warning
+          service: cpu
+        annotations:
+          summary: "High CPU use on {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "CPU utilisation on {{ "{{" }} $labels.target_name {{ "}}" }} has remained above 90% for 15 minutes."
