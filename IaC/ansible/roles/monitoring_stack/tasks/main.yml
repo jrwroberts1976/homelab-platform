@@ -156,10 +156,11 @@
       - docker
       - run
       - --rm
+      - --entrypoint
+      - /bin/promtool
       - -v
       - "{{ monitoring_root }}/prometheus:/etc/prometheus:ro"
       - "{{ monitoring_prometheus_image }}"
-      - promtool
       - check
       - rules
       - /etc/prometheus/alerts.yml
