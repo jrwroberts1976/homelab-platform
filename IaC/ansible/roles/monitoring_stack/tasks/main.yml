@@ -191,6 +191,15 @@
     status_code: 200
   changed_when: false
 
+- name: Verify Prometheus runtime config contains node exporter job
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/status/config
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_runtime_config
+  changed_when: false
+  failed_when: "'job_name: node-exporter' not in monitoring_prometheus_runtime_config.json.data.yaml"
+
 - name: Wait for Grafana health
   ansible.builtin.uri:
     url: http://127.0.0.1:3000/api/health
