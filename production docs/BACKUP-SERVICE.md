@@ -8,7 +8,7 @@
 
 Proxmox Backup Server is deferred.
 
-The immediate platform priority is the private-cloud service `cloud-01.jameshouse` at `192.168.2.52`, with Nextcloud, PostgreSQL and Redis deployed through IaC. The VM and software stack are reproducible; only persistent data and recovery state require backup.
+The immediate platform priority is the private-cloud service `cloud-01.jameshouse` at `192.168.2.53`, with Nextcloud, PostgreSQL and Redis deployed through IaC. The VM and software stack are reproducible; only persistent data and recovery state require backup.
 
 See:
 
