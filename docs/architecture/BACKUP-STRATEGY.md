@@ -33,7 +33,7 @@ Reasons:
 - remote datastore synchronization for a second copy
 - strong fit with the planned Proxmox-based estate
 
-Working placement is now `pbs-01` as a VM on the ZenBook after that machine is rebuilt as `pve-02`. The PBS datastore must be healthy dedicated storage, separate from the ZenBook's Proxmox system disk.
+Working placement is now `pbs-01` as a VM on `PROXMOX` (`192.168.2.70`), using service address `192.168.2.52`. The VM system disk may live on normal Proxmox VM storage, but the PBS backup datastore must be healthy dedicated physical storage presented separately to the VM. It must not exist only on the same SSD/storage pool as the guests being protected.
 
 ## Transitional Restic access
 
@@ -69,6 +69,8 @@ Current known backup state includes:
 - no configured Proxmox VE guest-backup job at the time of the hardware audit
 
 The DietPi-attached 4 TB-class WD disk is **DEGRADED** and is not an acceptable long-term primary backup datastore.
+
+`DietPi` (`192.168.2.48`) is now **redundant for the target architecture**. Its production DNS role has been replaced by the two IaC-managed virtual resolvers (`dns-01` at `.51` and `dns-02` at `.50`). Keep the Pi powered and unchanged until current DHCP/DNS advertisement is verified not to depend on `.48` and the unique backup/recovery material on its attached disk has been reconciled. After those gates pass, the Pi can be powered down and retained as a spare/reuse candidate. The degraded 4 TB disk remains recovery-only and is not part of the reuse pool.
 
 ## Target backup architecture
 
@@ -165,9 +167,21 @@ The rebuilt platform must include:
 Working target:
 
 ```text
-pve-02 (ZenBook)
-└── pbs-01 VM
-    └── dedicated healthy 4-8 TB-class backup datastore
+PROXMOX / 192.168.2.70
+└── pbs-01 VM / 192.168.2.52
+    ├── PBS system disk on normal VM storage
+    └── dedicated healthy physical backup datastore
 ```
 
-The datastore must not be the degraded DietPi 4 TB disk and must not exist only as a virtual disk on the `pve-02` system NVMe. The exact replacement disk is still to be selected.
+The datastore must not be the degraded DietPi 4 TB disk and must not exist only as a virtual disk backed by the same Proxmox storage that contains the guests being protected. The exact healthy backup disk is still to be selected.
+
+### Initial protection scope
+
+- `PROXMOX`: all IaC-managed VMs/LXCs, beginning with `dns-02`.
+- `Proxmox-2`: all IaC-managed VMs/LXCs, beginning with `dns-01`.
+- physical Linux/Pi hosts: back up selected persistent data/configuration to the backup platform using a supported file-level client/path; ARM clients must not be forced into an unsupported PBS-client workflow.
+- TestServer: protect Terraform state, selected non-Git configuration and application data.
+
+### Failure-domain rule
+
+`pbs-01` may run as a VM on `PROXMOX`, but the backup datastore must be a separate physical storage device. A second independent copy remains a target requirement because loss of the `PROXMOX` host must not be capable of destroying both production guests and their only backup copy.
