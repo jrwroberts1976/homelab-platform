@@ -14,7 +14,10 @@ StandardInput=tty
 StandardOutput=journal
 StandardError=journal
 Environment=HOME={{ media_user_home }}
+ExecStartPre=-/usr/bin/pkill -KILL -u {{ media_user }} -x kodi.bin
 ExecStart=/usr/bin/kodi-standalone
+ExecStopPost=-/usr/bin/pkill -KILL -u {{ media_user }} -x kodi.bin
+KillMode=control-group
 Restart=always
 RestartSec=5
 TimeoutStopSec=20
