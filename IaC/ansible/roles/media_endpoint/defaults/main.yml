@@ -10,6 +10,12 @@ media_kodi_session_name: "homelab-kodi"
 media_kodi_cache_buffer_mode: 4
 media_kodi_cache_memory_mb: 768
 media_kodi_cache_readfactor: 400
+media_kodi_allow_unknown_sources: true
+media_kodi_weather_addon: "weather.openmeteo"
+media_kodi_subtitle_addon: "service.subtitles.opensubtitles-com"
+media_kodi_official_addons:
+  - "weather.openmeteo"
+  - "service.subtitles.opensubtitles-com"
 
 # Approved distro-packaged Kodi add-ons can be added here through Git.
 # Keep this empty by default so the base endpoint remains minimal.
