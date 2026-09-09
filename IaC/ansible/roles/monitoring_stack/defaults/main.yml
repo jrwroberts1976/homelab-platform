@@ -56,4 +56,4 @@ monitoring_node_exporter_targets:
 
 monitoring_alert_email_to: "jrwroberts1976@gmail.com"
 monitoring_alert_email_from: "jrwroberts1976@gmail.com"
-monitoring_alert_smtp_smarthost: "192.168.2.54:25"
+monitoring_alert_smtp_smarthost: "mail-relay-01.jameshouse:25"
