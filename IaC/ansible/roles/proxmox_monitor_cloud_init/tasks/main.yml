@@ -1,0 +1,41 @@
+---
+- name: Validate monitoring hypervisor identity for cloud-init snippet
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.default_ipv4.address == "192.168.2.71"
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+      - monitor_cloud_init_public_key is match('^ssh-')
+    fail_msg: >-
+      Refusing to manage monitor-01 cloud-init: expected Proxmox-2 at
+      192.168.2.71/vmbr0 and a valid controller SSH public key.
+
+- name: Ensure Proxmox snippets directory exists
+  ansible.builtin.file:
+    path: "{{ monitor_cloud_init_snippet_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install managed monitor-01 cloud-init snippet
+  ansible.builtin.template:
+    src: monitor-01-user-data.yaml.j2
+    dest: "{{ monitor_cloud_init_snippet_dir }}/{{ monitor_cloud_init_snippet_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Verify cloud-init snippet is present
+  ansible.builtin.stat:
+    path: "{{ monitor_cloud_init_snippet_dir }}/{{ monitor_cloud_init_snippet_name }}"
+  register: monitor_cloud_init_snippet_stat
+
+- name: Require non-empty cloud-init snippet
+  ansible.builtin.assert:
+    that:
+      - monitor_cloud_init_snippet_stat.stat.exists
+      - monitor_cloud_init_snippet_stat.stat.isreg
+      - monitor_cloud_init_snippet_stat.stat.size > 0
+    fail_msg: monitor-01 cloud-init snippet was not installed correctly.
