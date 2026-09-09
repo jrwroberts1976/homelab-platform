@@ -74,7 +74,7 @@
     argv:
       - /usr/local/sbin/homelab-kodi-sources
   register: media_smb_kodi_sources
-  changed_when: "'CHANGED' in media_smb_kodi_sources.stdout"
+  changed_when: media_smb_kodi_sources.stdout | trim == 'CHANGED'
   notify: Restart Kodi after source update
 
 - name: Ensure Kodi sources remain owned by media user
