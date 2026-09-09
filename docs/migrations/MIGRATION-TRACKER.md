@@ -157,7 +157,7 @@ The previous `dns-02` at `192.168.2.242` has already been removed. ASUS DHCP has
 
 The immediate next data platform is now an IaC-managed private cloud rather than a dedicated PBS appliance.
 
-- `cloud-01.jameshouse` -> `192.168.2.52`
+- `cloud-01.jameshouse` -> `192.168.2.53`
 - Debian 13 VM on `PROXMOX` (`192.168.2.70`)
 - Nextcloud + PostgreSQL + Redis
 - VM/system configuration rebuilt from Git/IaC
