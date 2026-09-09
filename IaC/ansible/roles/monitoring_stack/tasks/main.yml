@@ -316,7 +316,7 @@
   register: monitoring_prometheus_targets
   until:
     - monitoring_prometheus_targets.json.status == "success"
-    - monitoring_prometheus_targets.json.data.activeTargets | length >= 19
+    - monitoring_prometheus_targets.json.data.activeTargets | length >= 20
   retries: 30
   delay: 2
 
@@ -333,7 +333,7 @@
       monitoring_node_exporter_targets.json.data.activeTargets
       | selectattr('labels.job', 'equalto', 'node-exporter')
       | list
-      | length == 5
+      | length == 6
     - >-
       monitoring_node_exporter_targets.json.data.activeTargets
       | selectattr('labels.job', 'equalto', 'node-exporter')
