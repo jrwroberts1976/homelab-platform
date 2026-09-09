@@ -112,3 +112,20 @@ The first monitoring phase is complete when:
 - router reachability is probed;
 - service configuration survives a redeploy without manual GUI repair;
 - a second Ansible run reports no unintended changes.
+
+
+## Proxmox DNS prerequisite evidence — 9 September 2026
+
+Before deploying `monitor-01`, the system resolver configuration on both standalone Proxmox hosts is being reconciled through the Git-managed `proxmox_resolver` Ansible role.
+
+Approved resolver state:
+
+```text
+search jameshouse
+nameserver 192.168.2.51
+nameserver 192.168.2.50
+```
+
+Live evidence now confirms `PROXMOX` (`192.168.2.70`) applied successfully with `ok=12 changed=1 unreachable=0 failed=0`. Post-apply validation resolved public DNS and `dns-01.jameshouse -> 192.168.2.51`. `Proxmox-2` had already been validated with the same managed resolver pair.
+
+A second Ansible run across both hosts is still required to prove idempotence before the monitoring VM is provisioned.
