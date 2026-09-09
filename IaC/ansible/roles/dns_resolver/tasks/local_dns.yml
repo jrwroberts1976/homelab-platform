@@ -19,7 +19,9 @@
       - +tries=1
   register: monitor_local_record
   changed_when: false
-  failed_when: "'192.168.2.52' not in monitor_local_record.stdout"
+  retries: 10
+  delay: 1
+  until: "'192.168.2.52' in monitor_local_record.stdout"
 
 - name: Verify resolver self local DNS record
   ansible.builtin.command:
