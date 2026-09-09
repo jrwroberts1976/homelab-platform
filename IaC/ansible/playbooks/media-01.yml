@@ -9,3 +9,4 @@
     - role: media_endpoint
     - role: media_smb
     - role: node_exporter
+    - role: media_firewall
