@@ -8,6 +8,20 @@
       Refusing to install node exporter: expected Debian host with
       {{ node_exporter_expected_ipv4 }} assigned locally.
 
+- name: Validate system DNS before package operations
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - deb.debian.org
+  register: node_exporter_dns_preflight
+  changed_when: false
+  failed_when: >-
+    node_exporter_dns_preflight.rc != 0
+    or node_exporter_dns_preflight.stdout | trim | length == 0
+
 - name: Install Prometheus node exporter
   ansible.builtin.apt:
     name: "{{ node_exporter_package }}"
