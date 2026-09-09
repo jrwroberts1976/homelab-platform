@@ -4,6 +4,7 @@
     - proxmox_hosts
     - monitoring_hosts
     - dns_resolvers
+    - media_hosts
   become: true
   gather_facts: true
 
