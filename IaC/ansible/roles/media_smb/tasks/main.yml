@@ -1,0 +1,111 @@
+---
+- name: Install Samba
+  ansible.builtin.apt:
+    name:
+      - samba
+      - smbclient
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create media root
+  ansible.builtin.file:
+    path: "{{ media_smb_path }}"
+    state: directory
+    owner: "{{ media_smb_owner }}"
+    group: "{{ media_smb_group }}"
+    mode: "0777"
+
+- name: Create media library directories
+  ansible.builtin.file:
+    path: "{{ media_smb_path }}/{{ item }}"
+    state: directory
+    owner: "{{ media_smb_owner }}"
+    group: "{{ media_smb_group }}"
+    mode: "0777"
+  loop: "{{ media_smb_directories }}"
+
+- name: Configure LAN-only guest-writable Samba media share
+  ansible.builtin.template:
+    src: smb.conf.j2
+    dest: /etc/samba/smb.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "testparm -s %s"
+  notify: Restart Samba
+
+- name: Ensure Samba is enabled and running
+  ansible.builtin.systemd_service:
+    name: smbd
+    enabled: true
+    state: started
+
+- name: Install Kodi source updater
+  ansible.builtin.template:
+    src: homelab-kodi-sources.py.j2
+    dest: /usr/local/sbin/homelab-kodi-sources
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Add media directories to Kodi
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-kodi-sources
+  register: media_smb_kodi_sources
+  changed_when: "'CHANGED' in media_smb_kodi_sources.stdout"
+  notify: Restart Kodi after source update
+
+- name: Ensure Kodi sources remain owned by media user
+  ansible.builtin.file:
+    path: "/home/{{ media_smb_owner }}/.kodi/userdata/sources.xml"
+    state: file
+    owner: "{{ media_smb_owner }}"
+    group: "{{ media_smb_group }}"
+    mode: "0644"
+
+- name: Apply service restarts
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify Samba configuration
+  ansible.builtin.command:
+    argv:
+      - testparm
+      - -s
+  changed_when: false
+
+- name: Verify SMB listener
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -ltn
+      - "sport = :445"
+  register: media_smb_listener
+  changed_when: false
+  failed_when: "'445' not in media_smb_listener.stdout"
+
+- name: Verify guest share locally
+  ansible.builtin.command:
+    argv:
+      - smbclient
+      - "-N"
+      - "//127.0.0.1/{{ media_smb_share_name }}"
+      - "-c"
+      - "ls"
+  changed_when: false
+
+- name: Verify Kodi media sources
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - >-
+        import xml.etree.ElementTree as E;
+        r=E.parse('/home/{{ media_smb_owner }}/.kodi/userdata/sources.xml').getroot();
+        v={s.findtext('name'):s.findtext('path') for s in r.find('video').findall('source')};
+        m={s.findtext('name'):s.findtext('path') for s in r.find('music').findall('source')};
+        assert v.get('Movies') == '{{ media_smb_path }}/Movies/';
+        assert v.get('TV Shows') == '{{ media_smb_path }}/TV/';
+        assert m.get('Music') == '{{ media_smb_path }}/Music/'
+  changed_when: false
