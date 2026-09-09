@@ -124,6 +124,14 @@
     mode: "0644"
   notify: Restart LightDM
 
+- name: Ensure LightDM override directory exists
+  ansible.builtin.file:
+    path: /etc/lightdm/lightdm.conf.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Configure LightDM for Kodi autologin
   ansible.builtin.template:
     src: lightdm-kodi.conf.j2
