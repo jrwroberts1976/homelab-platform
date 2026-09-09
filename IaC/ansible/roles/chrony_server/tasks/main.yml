@@ -67,7 +67,7 @@
 
 - name: Verify NTP is listening on UDP port 123
   ansible.builtin.shell: |
-    ss -lunH | awk '$5 ~ /:123$/ { found=1 } END { exit !found }'
+    ss -lunH | awk '$4 ~ /:123$/ { found=1 } END { exit !found }'
   args:
     executable: /bin/bash
   changed_when: false
