@@ -111,8 +111,8 @@
 
 - name: Validate SMTP relay connectivity from monitor-01
   ansible.builtin.wait_for:
-    host: "192.168.2.54"
-    port: 25
+    host: "{{ monitoring_alert_smtp_smarthost.split(':')[0] }}"
+    port: "{{ monitoring_alert_smtp_smarthost.split(':')[1] | int }}"
     timeout: 5
     state: started
   changed_when: false
