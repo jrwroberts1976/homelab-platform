@@ -8,7 +8,7 @@
 
 | Hostname | IPv4 | Platform | Purpose |
 |---|---:|---|---|
-| `cloud-01.jameshouse` | `192.168.2.52` | Debian 13 VM on `PROXMOX` / `192.168.2.70` | Household private cloud, file sync and browser access |
+| `cloud-01.jameshouse` | `192.168.2.53` | Debian 13 VM on `PROXMOX` / `192.168.2.70` | Household private cloud, file sync and browser access |
 | `PROXMOX` | `192.168.2.70` | Physical Proxmox VE | Hypervisor for `cloud-01` |
 | `dns-01.jameshouse` | `192.168.2.51` | LXC on `Proxmox-2` | Primary local DNS resolver |
 | `dns-02.jameshouse` | `192.168.2.50` | LXC on `PROXMOX` | Secondary local DNS resolver |
@@ -38,7 +38,7 @@ The target ownership model is:
 - Terraform/OpenTofu: VM identity, CPU, RAM, network, system disk and attachment declarations
 - Ansible: Debian baseline, Docker, filesystem/mount preparation, service directories and health validation
 - Compose: Nextcloud, PostgreSQL and Redis service definitions
-- managed DNS: `cloud-01.jameshouse -> 192.168.2.52`
+- managed DNS: `cloud-01.jameshouse -> 192.168.2.53`
 - SOPS/encrypted secrets: application/database credentials and recovery material
 - Git: authoritative desired state
 
