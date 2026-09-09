@@ -109,6 +109,14 @@
     group: root
     mode: "0644"
 
+- name: Validate SMTP relay connectivity from monitor-01
+  ansible.builtin.wait_for:
+    host: "192.168.2.54"
+    port: 25
+    timeout: 5
+    state: started
+  changed_when: false
+
 - name: Install Alertmanager configuration
   ansible.builtin.template:
     src: alertmanager.yml.j2
