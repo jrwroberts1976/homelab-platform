@@ -61,14 +61,22 @@ printf '\n===== SAFETY PREFLIGHT =====\n'
 ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes -o ConnectTimeout=5 "root@$PVE_HOST" true \
   || die "Root SSH to $TARGET_PVE failed"
 
-if [ ! -f "$DEPLOY_DIR/terraform.tfstate" ]; then
+STATE_HAS_VM=0
+if [ -f "$DEPLOY_DIR/terraform.tfstate" ] && jq -e '
+  .resources[]?
+  | select(.type == "proxmox_virtual_environment_vm" and .name == "monitor")
+' "$DEPLOY_DIR/terraform.tfstate" >/dev/null 2>&1; then
+  STATE_HAS_VM=1
+fi
+
+if [ "$STATE_HAS_VM" -eq 0 ]; then
   if ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_HOST" \
     "qm config '$MONITOR_VM_ID' >/dev/null 2>&1 || pct config '$MONITOR_VM_ID' >/dev/null 2>&1"; then
-    die "Guest ID $MONITOR_VM_ID already exists but no Terraform state is present"
+    die "Guest ID $MONITOR_VM_ID exists but is not managed by monitor-01 Terraform state"
   fi
 
   if ping -c 2 -W 1 "$MONITOR_IPV4" >/dev/null 2>&1; then
-    die "IP $MONITOR_IPV4 responds but no Terraform state is present"
+    die "IP $MONITOR_IPV4 responds but monitor-01 is not managed by Terraform state"
   fi
 fi
 
@@ -86,18 +94,17 @@ printf '\n===== TERRAFORM CREATE PLAN =====\n'
 rm -f "$PLAN_FILE"
 terraform -chdir="$DEPLOY_DIR" plan -input=false -out="$PLAN_FILE"
 
-if [ ! -f "$DEPLOY_DIR/terraform.tfstate" ]; then
-  terraform -chdir="$DEPLOY_DIR" show -json "$PLAN_FILE" | jq -e '
-    [.resource_changes[] | select(.change.actions != ["no-op"])] as $changes
-    | ($changes | length) == 3
-      and ([ $changes[].address ] | sort) == ([
-        "proxmox_download_file.debian_cloud_image",
-        "proxmox_virtual_environment_file.cloud_init_user_data",
-        "proxmox_virtual_environment_vm.monitor"
-      ] | sort)
-      and ([ $changes[].change.actions ] | all(. == ["create"]))
-  ' >/dev/null || die "Initial create plan contains changes outside the three approved resources"
-fi
+terraform -chdir="$DEPLOY_DIR" show -json "$PLAN_FILE" | jq -e '
+  [.resource_changes[] | select(.change.actions != ["no-op"])] as $changes
+  | all(
+      $changes[];
+      (
+        .address == "proxmox_download_file.debian_cloud_image"
+        or .address == "proxmox_virtual_environment_vm.monitor"
+      )
+      and .change.actions == ["create"]
+    )
+' >/dev/null || die "Plan contains an unapproved resource or action"
 
 printf '\n===== APPROVED PLAN SUMMARY =====\n'
 terraform -chdir="$DEPLOY_DIR" show "$PLAN_FILE" | tail -40
