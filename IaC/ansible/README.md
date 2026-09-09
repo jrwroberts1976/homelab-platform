@@ -100,3 +100,27 @@ The ASUS DHCP resolver pair is now `192.168.2.48 + 192.168.2.50`, replacing the 
 A Windows Wi-Fi client received the new pair directly from the ASUS DHCP server. TestServer then renewed its Ethernet DHCP lease through NetworkManager and also received exactly `.48 + .50`. Its generated `/etc/resolv.conf` and NetworkManager `IP4.DNS` values agree.
 
 This completes the planned client/router DNS cutover for replacement `dns-02`.
+
+
+## Proxmox system resolver management
+
+`playbooks/proxmox-resolver.yml` manages the host resolver configuration on both standalone Proxmox nodes.
+
+Approved state:
+
+- search domain: `jameshouse`
+- primary DNS: `192.168.2.51` (`dns-01`)
+- secondary DNS: `192.168.2.50` (`dns-02`)
+- retired resolver `192.168.2.48` is forbidden
+
+The role validates the Proxmox hostname, management IPv4 and `vmbr0` identity before changing `/etc/resolv.conf`, keeps an Ansible backup of a changed file, and validates both public and local DNS after reconciliation.
+
+From TestServer:
+
+```bash
+cd IaC/ansible
+ansible-playbook --syntax-check playbooks/proxmox-resolver.yml
+ansible-playbook playbooks/proxmox-resolver.yml
+```
+
+A second run should be idempotent.
