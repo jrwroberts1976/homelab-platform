@@ -54,7 +54,7 @@ Network infrastructure will also be audited, but routers/switches are only repur
 - TestServer: hardware and workload audit completed. Live evidence shows Komodo is currently running on TestServer; this supersedes the earlier assumption that it had not been deployed. No migration action has been taken.
 - ids-01: retired / no longer present. Historical audit data remains useful for migration archaeology, but it is not a current workload authority and must not be treated as a live rollback host.
 - media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. Backup-replica audit shows ~12 GiB under `/home/homelab-backup/replica`: `ids-01/repository` (~2.4 GiB) and `ids-01/remote-repositories` (~9.5 GiB) containing dietpi, historical k3s-node-01 and testserver Restic-like repositories. No homelab-vault repository, monthly archive tree or SOPS/age recovery files were found in this replica tree, so it is not yet a complete replacement for the degraded DietPi disk. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
-- DietPi (`192.168.2.48`): hardware/workload audit complete. Raspberry Pi 3 with approximately 1 GiB RAM, 100 Mb/s Ethernet and native Pi-hole/Unbound. Attached 4 TB-class backup HDD is DEGRADED: 7 current-pending sectors and 2 offline-uncorrectable sectors. Read-only inventory shows about 20 GiB in use. `monthly/` contains dated ids-01 archives (~7.5 GiB and ~12 GiB); `restic/` contains repositories for dietpi, homelab-vault, ids-01, historical k3s-node-01, and testserver. SOPS/age recovery material is also present. Reconcile these against current authoritative copies before replacement, stress testing, destructive changes or reuse; never print or commit the recovery identity.
+- DietPi (`192.168.2.48`): **REDUNDANT / REUSE CANDIDATE**. Raspberry Pi 3 with approximately 1 GiB RAM and 100 Mb/s Ethernet. Its target-architecture DNS role has been replaced by IaC-managed `dns-01` (`192.168.2.51`) and `dns-02` (`192.168.2.50`). Do not wipe or repurpose it yet: first prove DHCP/DNS no longer depends on `.48`, reconcile the unique Restic/monthly/SOPS-age recovery material on its attached disk, and preserve any required data elsewhere. After those gates pass, power it down and retain the Pi as spare hardware for a future lightweight role if required. Its attached 4 TB-class HDD is DEGRADED (7 current-pending sectors, 2 offline-uncorrectable sectors) and is recovery-only; it must not be reused as production storage.
 - BirdNET capture hardware is a non-compute peripheral and is removed from the host-audit list. BirdNET-Go remains a TestServer Docker workload whose future compute placement is still to be decided.
 
 ## Security redesign
@@ -157,10 +157,11 @@ The previous `dns-02` at `192.168.2.242` has already been removed. ASUS DHCP has
 
 GUI-first backup redesign is now a target requirement.
 
-- Preferred long-term platform: Proxmox Backup Server, pending final host/storage placement.
+- Preferred long-term platform: Proxmox Backup Server as `pbs-01` (`192.168.2.52`) in a VM on `PROXMOX` (`192.168.2.70`).
 - Transitional compatibility: Backrest may be used to browse/restore existing Restic repositories.
 - Existing Restic/monthly backup data remains protected until replacement backups and restores are proven.
-- Degraded DietPi backup HDD must not become the new primary datastore.
+- PBS datastore must be separate healthy physical storage; the degraded DietPi backup HDD must not become the new primary datastore.
+- DietPi itself is now redundant and is retained only as a protected reuse/spare candidate until DNS cutover and backup-data reconciliation gates are complete.
 
 See `docs/architecture/BACKUP-STRATEGY.md`.
 
