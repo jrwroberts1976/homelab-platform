@@ -129,3 +129,22 @@ nameserver 192.168.2.50
 Live evidence now confirms `PROXMOX` (`192.168.2.70`) applied successfully with `ok=12 changed=1 unreachable=0 failed=0`. Post-apply validation resolved public DNS and `dns-01.jameshouse -> 192.168.2.51`. `Proxmox-2` had already been validated with the same managed resolver pair.
 
 A second Ansible run across both hosts is still required to prove idempotence before the monitoring VM is provisioned.
+
+
+## Proxmox-2 storage import prerequisite evidence — 9 September 2026
+
+The `local` datastore on `Proxmox-2` was reconciled through the Git-managed `proxmox_vm_import_storage` Ansible role so Terraform can import the pinned Debian cloud image.
+
+First apply:
+
+```text
+Proxmox-2 : ok=9 changed=1 unreachable=0 failed=0 skipped=0
+```
+
+Second apply proved idempotence:
+
+```text
+Proxmox-2 : ok=8 changed=0 unreachable=0 failed=0 skipped=1
+```
+
+The role preserved the existing datastore definition and added only the required VM image `import` content capability. Final storage-stanza verification and a regenerated Terraform plan remain the next gates before VM creation.
