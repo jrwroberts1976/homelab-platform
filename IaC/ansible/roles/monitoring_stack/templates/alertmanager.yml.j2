@@ -1,5 +1,10 @@
+global:
+  smtp_smarthost: "{{ monitoring_alert_smtp_smarthost }}"
+  smtp_from: "{{ monitoring_alert_email_from }}"
+  smtp_require_tls: false
+
 route:
-  receiver: null-receiver
+  receiver: gmail-email
   group_by:
     - alertname
     - target_name
@@ -8,4 +13,9 @@ route:
   repeat_interval: 4h
 
 receivers:
-  - name: null-receiver
+  - name: gmail-email
+    email_configs:
+      - to: "{{ monitoring_alert_email_to }}"
+        send_resolved: true
+        headers:
+          subject: "[homelab] {{ '{{' }} .Status | toUpper {{ '}}' }}: {{ '{{' }} .CommonAnnotations.summary {{ '}}' }}"
