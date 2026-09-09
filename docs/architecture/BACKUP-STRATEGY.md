@@ -39,7 +39,7 @@ Protect persistent, non-reconstructable state, including:
 
 ## Private-cloud data platform
 
-The next data service is `cloud-01.jameshouse` at `192.168.2.52`, implemented as an IaC-managed Debian VM on `PROXMOX`.
+The next data service is `cloud-01.jameshouse` at `192.168.2.53`, implemented as an IaC-managed Debian VM on `PROXMOX`.
 
 It will run:
 
