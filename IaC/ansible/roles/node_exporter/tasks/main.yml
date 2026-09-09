@@ -41,7 +41,7 @@
       - "sport = :{{ node_exporter_port }}"
   register: node_exporter_listener
   changed_when: false
-  failed_when: "':{{ node_exporter_port }}' not in node_exporter_listener.stdout"
+  failed_when: (node_exporter_port | string) not in node_exporter_listener.stdout
 
 - name: Verify no failed systemd units
   ansible.builtin.command:
