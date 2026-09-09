@@ -88,6 +88,32 @@
 - name: Apply service restarts
   ansible.builtin.meta: flush_handlers
 
+- name: Wait for Kodi after media source restart
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_smb_owner }}"
+      - -x
+      - kodi.bin
+  register: media_smb_kodi_running
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: media_smb_kodi_running.rc == 0
+
+- name: Verify one Kodi process after media source restart
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_smb_owner }}"
+      - -x
+      - kodi.bin
+  register: media_smb_kodi_singleton
+  changed_when: false
+  failed_when: media_smb_kodi_singleton.stdout_lines | length != 1
+
 - name: Verify Samba configuration
   ansible.builtin.command:
     argv:
