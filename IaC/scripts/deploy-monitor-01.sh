@@ -45,8 +45,6 @@ require_cmd curl
 . "$PVE_ENV_FILE"
 : "${TF_VAR_proxmox_api_token:?TF_VAR_proxmox_api_token missing from Proxmox credential file}"
 export TF_VAR_proxmox_api_token
-export TF_VAR_ssh_public_key
-TF_VAR_ssh_public_key="$(cat "$MONITOR_SSH_KEY.pub")"
 
 printf '===== MONITOR-01 DEPLOYMENT =====\n'
 printf 'hostname=%s\n' "$MONITOR_HOSTNAME"
@@ -105,7 +103,9 @@ printf '\n===== APPROVED PLAN SUMMARY =====\n'
 terraform -chdir="$DEPLOY_DIR" show "$PLAN_FILE" | tail -40
 
 printf '\n===== TERRAFORM APPLY =====\n'
-terraform -chdir="$DEPLOY_DIR" apply -input=false "$PLAN_FILE"
+if ! terraform -chdir="$DEPLOY_DIR" apply -input=false "$PLAN_FILE"; then
+  die "Terraform apply failed; SSH wait was not started"
+fi
 
 printf '\n===== WAIT FOR SSH =====\n'
 ssh-keygen -R "$MONITOR_IPV4" >/dev/null 2>&1 || true
@@ -129,8 +129,10 @@ test -e /var/lib/cloud/monitor-01-bootstrap-complete
 ip -br addr
 ip route
 cat /etc/resolv.conf
-sudo systemctl is-active qemu-guest-agent
-sudo systemctl --failed --no-legend --plain
+sudo systemctl is-active qemu-guest-agent || exit 13
+FAILED_UNITS="$(sudo systemctl --failed --no-legend --plain)"
+printf "%s\n" "$FAILED_UNITS"
+test -z "$FAILED_UNITS" || exit 14
 '
 
 printf '\n===== TERRAFORM DRIFT CHECK =====\n'
