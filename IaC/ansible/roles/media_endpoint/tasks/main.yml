@@ -176,7 +176,8 @@
         d={x.get('id'):(x.text or '').strip() for x in r.findall('setting')};
         assert d.get('filecache.buffermode') == '{{ media_kodi_cache_buffer_mode }}';
         assert d.get('filecache.memorysize') == '{{ media_kodi_cache_memory_mb }}';
-        assert d.get('filecache.readfactor') == '{{ media_kodi_cache_readfactor }}'
+        assert d.get('filecache.readfactor') == '{{ media_kodi_cache_readfactor }}';
+        assert d.get('addons.unknownsources') == 'true'
   changed_when: false
 
 - name: Verify no failed systemd units
