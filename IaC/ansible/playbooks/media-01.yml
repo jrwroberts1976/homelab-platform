@@ -1,0 +1,9 @@
+---
+- name: Build Raspberry Pi 5 Kodi media endpoint
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: media_endpoint
+    - role: node_exporter
