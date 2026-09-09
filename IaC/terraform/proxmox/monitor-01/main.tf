@@ -15,6 +15,13 @@ resource "proxmox_virtual_environment_vm" "monitor" {
   node_name   = var.proxmox_node_name
   vm_id       = var.vm_id
 
+  tags = [
+    "homelab",
+    "iac",
+    "core",
+    "monitoring",
+  ]
+
   started         = true
   on_boot         = true
   protection      = var.protect_after_build
