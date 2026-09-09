@@ -7,5 +7,5 @@
     pihole_web_password: "{{ lookup('ansible.builtin.env', 'PIHOLE_WEB_PASSWORD') | default('', true) }}"
 
   roles:
-    - role: chrony_client
+    - role: lxc_inherited_time
     - role: dns_resolver
