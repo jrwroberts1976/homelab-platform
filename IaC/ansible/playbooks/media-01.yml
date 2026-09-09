@@ -6,4 +6,5 @@
 
   roles:
     - role: media_endpoint
+    - role: media_smb
     - role: node_exporter
