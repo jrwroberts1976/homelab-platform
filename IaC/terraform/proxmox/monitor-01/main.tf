@@ -9,46 +9,6 @@ resource "proxmox_download_file" "debian_cloud_image" {
   overwrite          = false
 }
 
-resource "proxmox_virtual_environment_file" "cloud_init_user_data" {
-  content_type = "snippets"
-  datastore_id = var.image_datastore_id
-  node_name    = var.proxmox_node_name
-
-  source_raw {
-    file_name = "${var.hostname}-user-data.yaml"
-
-    data = <<-EOF
-    #cloud-config
-    hostname: ${var.hostname}
-    fqdn: ${var.hostname}.${var.domain}
-    manage_etc_hosts: true
-    timezone: Europe/London
-    ssh_pwauth: false
-
-    users:
-      - default
-      - name: james
-        groups:
-          - sudo
-        shell: /bin/bash
-        ssh_authorized_keys:
-          - ${trimspace(var.ssh_public_key)}
-        sudo: ALL=(ALL) NOPASSWD:ALL
-
-    package_update: true
-    packages:
-      - qemu-guest-agent
-      - python3
-      - sudo
-
-    runcmd:
-      - systemctl enable qemu-guest-agent
-      - systemctl start qemu-guest-agent
-      - touch /var/lib/cloud/monitor-01-bootstrap-complete
-    EOF
-  }
-}
-
 resource "proxmox_virtual_environment_vm" "monitor" {
   name        = var.hostname
   description = "Homelab monitoring platform managed by homelab-platform/IaC"
@@ -109,7 +69,7 @@ resource "proxmox_virtual_environment_vm" "monitor" {
       }
     }
 
-    user_data_file_id = proxmox_virtual_environment_file.cloud_init_user_data.id
+    user_data_file_id = "local:snippets/monitor-01-user-data.yaml"
   }
 
   network_device {
