@@ -1,0 +1,20 @@
+groups:
+  - name: homelab-connectivity
+    rules:
+      - alert: BlackboxProbeFailed
+        expr: probe_success == 0
+        for: 3m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Probe failed for {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "Blackbox probe to {{ "{{" }} $labels.instance {{ "}}" }} has failed for more than 3 minutes."
+
+      - alert: PrometheusTargetDown
+        expr: up == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Prometheus target down: {{ "{{" }} $labels.job {{ "}}" }}"
+          description: "Prometheus cannot scrape {{ "{{" }} $labels.instance {{ "}}" }} for more than 3 minutes."
