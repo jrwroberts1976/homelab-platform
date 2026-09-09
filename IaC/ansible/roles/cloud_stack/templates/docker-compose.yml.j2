@@ -1,0 +1,86 @@
+services:
+  db:
+    image: {{ cloud_postgres_image }}
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - {{ cloud_stack_state_root }}/postgres:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U {{ cloud_postgres_user }} -d {{ cloud_postgres_db }}"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+    networks:
+      - cloud_backend
+
+  redis:
+    image: {{ cloud_redis_image }}
+    restart: unless-stopped
+    env_file:
+      - .env
+    command:
+      - redis-server
+      - --requirepass
+      - "$${REDIS_PASSWORD}"
+      - --appendonly
+      - "yes"
+    volumes:
+      - {{ cloud_stack_state_root }}/redis:/data
+    healthcheck:
+      test: ["CMD-SHELL", "redis-cli -a \"$${REDIS_PASSWORD}\" ping 2>/dev/null | grep -q PONG"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 10s
+    networks:
+      - cloud_backend
+
+  app:
+    image: {{ cloud_nextcloud_image }}
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    environment:
+      POSTGRES_HOST: db
+      REDIS_HOST: redis
+      REDIS_HOST_PASSWORD: "$${REDIS_PASSWORD}"
+      NEXTCLOUD_DATA_DIR: /var/www/html/data
+      NEXTCLOUD_TRUSTED_DOMAINS: "{{ cloud_nextcloud_trusted_domains | join(' ') }}"
+      NEXTCLOUD_INIT_HTACCESS: "true"
+      SMTP_HOST: "{{ cloud_mail_relay_host }}"
+      SMTP_PORT: "{{ cloud_mail_relay_port }}"
+      MAIL_FROM_ADDRESS: "nextcloud"
+      MAIL_DOMAIN: "jameshouse"
+    ports:
+      - "{{ cloud_nextcloud_http_bind }}:{{ cloud_nextcloud_http_port }}:80"
+    volumes:
+      - {{ cloud_stack_state_root }}/nextcloud-html:/var/www/html
+      - {{ cloud_stack_staging_data_root }}/data:/var/www/html/data
+    networks:
+      - cloud_backend
+
+  cron:
+    image: {{ cloud_nextcloud_image }}
+    restart: unless-stopped
+    depends_on:
+      app:
+        condition: service_started
+    entrypoint: /cron.sh
+    env_file:
+      - .env
+    volumes:
+      - {{ cloud_stack_state_root }}/nextcloud-html:/var/www/html
+      - {{ cloud_stack_staging_data_root }}/data:/var/www/html/data
+    networks:
+      - cloud_backend
+
+networks:
+  cloud_backend:
+    driver: bridge
