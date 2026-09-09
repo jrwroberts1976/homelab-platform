@@ -1,0 +1,228 @@
+---
+- name: Validate monitor-01 identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == monitoring_expected_hostname
+      - ansible_facts.default_ipv4.address == monitoring_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "eth0"
+    fail_msg: >-
+      Refusing to deploy monitoring: expected Debian 13 monitor-01 at
+      192.168.2.52 on eth0.
+
+- name: Require protected Grafana admin password
+  ansible.builtin.assert:
+    that:
+      - monitoring_grafana_admin_password | length >= 24
+    fail_msg: >-
+      Export GRAFANA_ADMIN_PASSWORD on the Ansible controller before applying
+      the monitoring stack. Keep it outside Git.
+  no_log: true
+
+- name: Install Docker and monitoring prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - docker.io
+      - docker-compose
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker is enabled and running
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Create monitoring configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ monitoring_root }}"
+    - "{{ monitoring_root }}/prometheus"
+    - "{{ monitoring_root }}/alertmanager"
+    - "{{ monitoring_root }}/blackbox"
+    - "{{ monitoring_root }}/grafana"
+    - "{{ monitoring_root }}/grafana/provisioning"
+    - "{{ monitoring_root }}/grafana/provisioning/datasources"
+
+- name: Install protected monitoring environment
+  ansible.builtin.template:
+    src: monitoring.env.j2
+    dest: "{{ monitoring_root }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install Docker Compose definition
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ monitoring_root }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_root }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Prometheus alert rules
+  ansible.builtin.template:
+    src: alerts.yml.j2
+    dest: "{{ monitoring_root }}/prometheus/alerts.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Alertmanager configuration
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ monitoring_root }}/alertmanager/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Blackbox Exporter configuration
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ monitoring_root }}/blackbox/blackbox.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Provision Grafana Prometheus datasource
+  ansible.builtin.template:
+    src: grafana-prometheus-datasource.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/datasources/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Docker Compose configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - config
+      - --quiet
+  changed_when: false
+
+- name: Pull pinned monitoring images
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - pull
+  register: monitoring_compose_pull
+  changed_when: false
+
+- name: Reconcile monitoring containers
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - up
+      - -d
+      - --remove-orphans
+  register: monitoring_compose_up
+  changed_when: >-
+    'Creating' in monitoring_compose_up.stderr
+    or 'Created' in monitoring_compose_up.stderr
+    or 'Recreating' in monitoring_compose_up.stderr
+    or 'Recreated' in monitoring_compose_up.stderr
+    or 'Starting' in monitoring_compose_up.stderr
+    or 'Started' in monitoring_compose_up.stderr
+
+- name: Wait for Prometheus readiness
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/-/ready
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_ready
+  until: monitoring_prometheus_ready.status == 200
+  retries: 30
+  delay: 2
+
+- name: Wait for Grafana health
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/api/health
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_health
+  until:
+    - monitoring_grafana_health.status == 200
+    - monitoring_grafana_health.json.database == "ok"
+  retries: 30
+  delay: 2
+
+- name: Wait for Alertmanager readiness
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9093/-/ready
+    status_code: 200
+    return_content: true
+  register: monitoring_alertmanager_ready
+  until: monitoring_alertmanager_ready.status == 200
+  retries: 30
+  delay: 2
+
+- name: Wait for Blackbox Exporter
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9115/
+    status_code: 200
+    return_content: true
+  register: monitoring_blackbox_ready
+  until: monitoring_blackbox_ready.status == 200
+  retries: 30
+  delay: 2
+
+- name: Wait for Prometheus target discovery
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/targets
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_targets
+  until:
+    - monitoring_prometheus_targets.json.status == "success"
+    - monitoring_prometheus_targets.json.data.activeTargets | length >= 14
+  retries: 30
+  delay: 2
+
+- name: Show monitoring container state
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - ps
+  register: monitoring_compose_ps
+  changed_when: false
+
+- name: Verify monitor-01 has no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: monitoring_failed_units
+  changed_when: false
+  failed_when: monitoring_failed_units.stdout | trim | length > 0
