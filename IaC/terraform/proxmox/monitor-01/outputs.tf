@@ -15,5 +15,5 @@ output "monitor_node" {
 }
 
 output "debian_cloud_image_id" {
-  value = proxmox_virtual_environment_download_file.debian_cloud_image.id
+  value = proxmox_download_file.debian_cloud_image.id
 }
