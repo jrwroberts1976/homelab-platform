@@ -18,4 +18,4 @@ receivers:
       - to: "{{ monitoring_alert_email_to }}"
         send_resolved: true
         headers:
-          subject: "[homelab] {{ '{{' }} .Status | toUpper {{ '}}' }}: {{ '{{' }} .CommonAnnotations.summary {{ '}}' }}"
+          subject: "[homelab] {{ '{{' }} .Status {{ '}}' }}: {{ '{{' }} .CommonAnnotations.summary {{ '}}' }}"
