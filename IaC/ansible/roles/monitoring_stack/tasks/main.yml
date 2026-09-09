@@ -11,6 +11,29 @@
       Refusing to deploy monitoring: expected Debian 13 monitor-01 at
       192.168.2.52 on eth0.
 
+- name: Read monitor-01 systemd-resolved uplink DNS
+  ansible.builtin.command:
+    argv:
+      - resolvectl
+      - dns
+      - eth0
+  register: monitoring_resolvectl_dns
+  changed_when: false
+  failed_when: >-
+    '192.168.2.51' not in monitoring_resolvectl_dns.stdout
+    or '192.168.2.50' not in monitoring_resolvectl_dns.stdout
+    or '192.168.2.48' in monitoring_resolvectl_dns.stdout
+
+- name: Validate local DNS resolution
+  ansible.builtin.command:
+    argv:
+      - getent
+      - ahostsv4
+      - dns-01.jameshouse
+  register: monitoring_local_dns
+  changed_when: false
+  failed_when: "'192.168.2.51' not in monitoring_local_dns.stdout"
+
 - name: Require protected Grafana admin password
   ansible.builtin.assert:
     that:
