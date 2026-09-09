@@ -174,3 +174,25 @@ Durable Terraform state is held at:
 ```
 
 The application layer is defined separately through the `monitoring_stack` Ansible role. Initial pinned application versions are Prometheus v3.14.0, Grafana v13.2.1, Alertmanager v0.34.0, and Blackbox Exporter v0.28.0. Loki and Alloy remain deferred until the metrics platform is stable.
+
+
+## Core monitoring application deployment evidence — 9 September 2026
+
+The core monitoring application layer deployed successfully on `monitor-01`.
+
+Controller-side health checks passed for all four initial services:
+
+```text
+prometheus=PASS
+grafana=PASS
+alertmanager=PASS
+blackbox=PASS
+```
+
+The protected Grafana admin credential is stored outside Git at:
+
+```text
+~/.config/homelab-iac/monitoring.env
+```
+
+The deployment wrapper completed both the first Ansible apply and the idempotence run before performing the controller health checks. Loki and Alloy remain intentionally deferred until metrics/probe validation is complete.
