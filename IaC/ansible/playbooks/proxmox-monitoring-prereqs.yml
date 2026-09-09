@@ -6,3 +6,4 @@
 
   roles:
     - role: proxmox_vm_import_storage
+    - role: proxmox_monitor_cloud_init
