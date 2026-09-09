@@ -58,12 +58,6 @@ variable "dns_servers" {
   default     = ["192.168.2.51", "192.168.2.50"]
 }
 
-variable "ssh_public_key" {
-  description = "SSH public key installed for the james automation/admin account."
-  type        = string
-  sensitive   = true
-}
-
 variable "bridge" {
   description = "Proxmox bridge used by monitor-01."
   type        = string
