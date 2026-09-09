@@ -1,7 +1,7 @@
 # Homelab Cloud Data Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** approved target design; deployment pending completion of 4 TB disk validation  
+**Status:** read-only deployment preflight passed; VM build preparation active; 4 TB production-data placement remains blocked pending completion of destructive disk validation  
 **Primary service:** Nextcloud
 
 ## Production identity
@@ -159,3 +159,30 @@ The private-cloud layer is production-ready when:
 - the data disk has passed the agreed health gate;
 - important data has a second independent copy;
 - no critical dependency remains on DietPi `192.168.2.48`.
+
+
+## Preflight evidence — 9 September 2026
+
+The first live read-only preflight passed without changing resources.
+
+Validated:
+
+- `cloud-01` address `192.168.2.53` did not respond and had no resolved neighbour;
+- target hypervisor is `PROXMOX` at `192.168.2.70`, Proxmox VE 9.2.11;
+- `pve-cluster` is active and `/etc/pve` is mounted;
+- candidate VM ID `200` is free;
+- `vm-ssd` has approximately 420 GiB free;
+- `local-lvm` has approximately 141 GiB free;
+- Debian 13 genericcloud media is present at `/var/lib/vz/template/iso/debian-13-genericcloud-amd64.qcow2`;
+- the 4 TB WDC data-device identity resolves correctly to the current `/dev/sdb`.
+
+The destructive `badblocks` test was still running at the time of preflight and therefore the disk is not approved for cloud data use.
+
+Interim SMART during the destructive test:
+
+- Reallocated sectors: 0
+- Current pending sectors: 0
+- Offline uncorrectable sectors: 2
+- UDMA CRC errors: 10
+
+The fall in pending sectors is useful evidence but does not override the completion gate. Do not format, mount as production data, pass through to `cloud-01`, or treat this disk as a sole copy until the destructive test has completed and final SMART/badblocks evidence has been reviewed.
