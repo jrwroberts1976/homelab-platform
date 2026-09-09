@@ -1,4 +1,13 @@
 ---
+- name: Validate SMB credential input
+  ansible.builtin.assert:
+    that:
+      - media_smb_password | length >= 8
+    fail_msg: >-
+      MEDIA_SMB_PASSWORD must be supplied from the controller environment
+      and be at least 8 characters long.
+  no_log: true
+
 - name: Install Samba
   ansible.builtin.apt:
     name:
@@ -25,7 +34,18 @@
     mode: "0777"
   loop: "{{ media_smb_directories }}"
 
-- name: Configure LAN-only guest-writable Samba media share
+- name: Set Samba password for media user
+  ansible.builtin.command:
+    argv:
+      - smbpasswd
+      - -s
+      - -a
+      - "{{ media_smb_owner }}"
+    stdin: "{{ media_smb_password }}\n{{ media_smb_password }}\n"
+  changed_when: false
+  no_log: true
+
+- name: Configure signed authenticated LAN Samba media share
   ansible.builtin.template:
     src: smb.conf.j2
     dest: /etc/samba/smb.conf
@@ -85,15 +105,19 @@
   changed_when: false
   failed_when: "'445' not in media_smb_listener.stdout"
 
-- name: Verify guest share locally
+- name: Verify authenticated share locally
   ansible.builtin.command:
     argv:
       - smbclient
-      - "-N"
       - "//127.0.0.1/{{ media_smb_share_name }}"
+      - "-U"
+      - "{{ media_smb_owner }}"
       - "-c"
       - "ls"
+  environment:
+    PASSWD: "{{ media_smb_password }}"
   changed_when: false
+  no_log: true
 
 - name: Verify Kodi media sources
   ansible.builtin.command:
