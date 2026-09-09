@@ -16,6 +16,7 @@ media_kodi_subtitle_addon: "service.subtitles.opensubtitles-com"
 media_kodi_official_addons:
   - "weather.openmeteo"
   - "service.subtitles.opensubtitles-com"
+  - "plugin.program.autocompletion"
 
 # Approved distro-packaged Kodi add-ons can be added here through Git.
 # Keep this empty by default so the base endpoint remains minimal.
