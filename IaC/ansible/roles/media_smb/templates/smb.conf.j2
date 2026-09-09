@@ -1,0 +1,35 @@
+[global]
+   workgroup = WORKGROUP
+   server string = media-01
+   security = user
+   map to guest = Bad User
+   guest account = nobody
+   server role = standalone server
+   disable netbios = yes
+   smb ports = 445
+   interfaces = lo {{ ansible_default_ipv4.interface }}
+   bind interfaces only = yes
+   hosts allow = 127.0.0.1 {{ media_smb_allowed_subnet }}
+   hosts deny = 0.0.0.0/0
+   log file = /var/log/samba/log.%m
+   max log size = 1000
+   logging = file
+   load printers = no
+   printing = bsd
+   printcap name = /dev/null
+   disable spoolss = yes
+
+[{{ media_smb_share_name }}]
+   path = {{ media_smb_path }}
+   browseable = yes
+   read only = no
+   guest ok = yes
+   public = yes
+   writable = yes
+   force user = {{ media_smb_owner }}
+   force group = {{ media_smb_group }}
+   create mask = 0666
+   force create mode = 0666
+   directory mask = 0777
+   force directory mode = 0777
+   inherit permissions = yes
