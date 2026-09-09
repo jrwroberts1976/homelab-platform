@@ -20,12 +20,6 @@ resource "proxmox_virtual_environment_vm" "monitor" {
   protection      = var.protect_after_build
   stop_on_destroy = true
 
-  tags = [
-    "grafana",
-    "iac",
-    "monitoring",
-    "prometheus",
-  ]
 
   agent {
     enabled = true
