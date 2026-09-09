@@ -148,3 +148,29 @@ Proxmox-2 : ok=8 changed=0 unreachable=0 failed=0 skipped=1
 ```
 
 The role preserved the existing datastore definition and added only the required VM image `import` content capability. Final storage-stanza verification and a regenerated Terraform plan remain the next gates before VM creation.
+
+
+## monitor-01 VM provisioning evidence — 9 September 2026
+
+The first infrastructure phase is live and validated:
+
+```text
+monitor-01.jameshouse
+192.168.2.52
+VM ID 200
+Proxmox-2
+4 vCPU
+6144 MiB RAM
+80 GiB local-lvm disk
+Debian 13
+```
+
+Terraform completed the VM creation with one approved resource added and no changes or destroys. Cloud-init validation confirmed the expected short hostname and FQDN, static `.52/24` address, gateway `.1`, active QEMU guest agent, and zero failed systemd units. A post-create Terraform plan reported no drift.
+
+Durable Terraform state is held at:
+
+```text
+~/.local/state/homelab-iac/monitor-01/terraform
+```
+
+The application layer is defined separately through the `monitoring_stack` Ansible role. Initial pinned application versions are Prometheus v3.14.0, Grafana v13.2.1, Alertmanager v0.34.0, and Blackbox Exporter v0.28.0. Loki and Alloy remain deferred until the metrics platform is stable.
