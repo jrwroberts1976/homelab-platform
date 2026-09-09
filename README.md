@@ -44,3 +44,4 @@ See [the migration tracker](docs/migrations/MIGRATION-TRACKER.md) for progress.
 ## Production runbooks
 
 - [DNS service recovery plan](production%20docs/DNS-SERVICE-RECOVERY-PLAN.md) — prerequisites, triage, service repair, CT rebuild, alternate-PVE recovery, validation, protection, DHCP cutover and total-DNS-outage recovery.
+- [media-01 production service](production%20docs/MEDIA-SERVICE.md) — Kodi, SMB, Chrony, monitoring, firewall intent, deployment validation and recovery.
