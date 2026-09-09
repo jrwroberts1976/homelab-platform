@@ -10,8 +10,7 @@ services:
     ports:
       - "9090:9090"
     volumes:
-      - ./prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
-      - ./prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - ./prometheus:/etc/prometheus:ro
       - prometheus-data:/prometheus
     depends_on:
       - alertmanager
@@ -44,7 +43,7 @@ services:
     ports:
       - "9093:9093"
     volumes:
-      - ./alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+      - ./alertmanager:/etc/alertmanager:ro
       - alertmanager-data:/alertmanager
 
   blackbox:
@@ -57,7 +56,7 @@ services:
     ports:
       - "9115:9115"
     volumes:
-      - ./blackbox/blackbox.yml:/etc/blackbox_exporter/blackbox.yml:ro
+      - ./blackbox:/etc/blackbox_exporter:ro
 
 volumes:
   prometheus-data:
