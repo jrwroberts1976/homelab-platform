@@ -24,9 +24,24 @@
     cloud_dns_preflight.rc != 0
     or cloud_dns_preflight.stdout | trim | length == 0
 
+- name: Read cloud-01 timezone
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - --property=Timezone
+      - --value
+  register: cloud_timezone_before
+  changed_when: false
+
 - name: Set cloud-01 timezone
-  community.general.timezone:
-    name: "{{ cloud_timezone }}"
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - set-timezone
+      - "{{ cloud_timezone }}"
+  when: cloud_timezone_before.stdout | trim != cloud_timezone
+  changed_when: true
 
 - name: Install cloud-01 baseline packages
   ansible.builtin.apt:
