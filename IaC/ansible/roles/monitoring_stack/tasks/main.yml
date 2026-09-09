@@ -113,7 +113,7 @@
   ansible.builtin.wait_for:
     host: "{{ monitoring_alert_smtp_smarthost.split(':')[0] }}"
     port: "{{ monitoring_alert_smtp_smarthost.split(':')[1] | int }}"
-    timeout: 5
+    timeout: 30
     state: started
   changed_when: false
 
