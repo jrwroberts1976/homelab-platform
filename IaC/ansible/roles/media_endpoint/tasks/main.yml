@@ -96,7 +96,7 @@
       - /usr/local/sbin/homelab-kodi-settings
   register: media_endpoint_kodi_settings
   changed_when: "'CHANGED' in media_endpoint_kodi_settings.stdout"
-  notify: Restart LightDM
+  notify: Restart Kodi
 
 - name: Own Kodi configuration tree
   ansible.builtin.file:
@@ -106,40 +106,29 @@
     group: "{{ media_user }}"
     recurse: true
 
-- name: Install resilient Kodi session wrapper
-  ansible.builtin.template:
-    src: homelab-kodi-session.sh.j2
-    dest: /usr/local/bin/homelab-kodi-session
-    owner: root
-    group: root
-    mode: "0755"
-  notify: Restart LightDM
-
-- name: Install dedicated Kodi X session
-  ansible.builtin.template:
-    src: homelab-kodi.desktop.j2
-    dest: "/usr/share/xsessions/{{ media_kodi_session_name }}.desktop"
-    owner: root
-    group: root
-    mode: "0644"
-  notify: Restart LightDM
-
-- name: Ensure LightDM override directory exists
+- name: Remove previous LightDM Kodi override
   ansible.builtin.file:
-    path: /etc/lightdm/lightdm.conf.d
-    state: directory
-    owner: root
-    group: root
-    mode: "0755"
+    path: /etc/lightdm/lightdm.conf.d/90-homelab-kodi.conf
+    state: absent
 
-- name: Configure LightDM for Kodi autologin
+- name: Remove previous Kodi X session
+  ansible.builtin.file:
+    path: "/usr/share/xsessions/{{ media_kodi_session_name }}.desktop"
+    state: absent
+
+- name: Remove previous Kodi session wrapper
+  ansible.builtin.file:
+    path: /usr/local/bin/homelab-kodi-session
+    state: absent
+
+- name: Install Kodi standalone systemd service
   ansible.builtin.template:
-    src: lightdm-kodi.conf.j2
-    dest: /etc/lightdm/lightdm.conf.d/90-homelab-kodi.conf
+    src: kodi.service.j2
+    dest: /etc/systemd/system/kodi.service
     owner: root
     group: root
     mode: "0644"
-  notify: Restart LightDM
+  notify: Restart Kodi
 
 - name: Ensure graphical boot is the default
   ansible.builtin.command:
@@ -150,12 +139,20 @@
   register: media_endpoint_default_target
   changed_when: "'Created symlink' in media_endpoint_default_target.stdout or 'Created symlink' in media_endpoint_default_target.stderr"
 
-- name: Ensure LightDM is enabled
+- name: Disable the desktop display manager
   ansible.builtin.systemd_service:
     name: lightdm
-    enabled: true
+    enabled: false
+    state: stopped
 
-- name: Apply pending Kodi session restart
+- name: Enable and start Kodi standalone service
+  ansible.builtin.systemd_service:
+    name: kodi.service
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Apply pending Kodi restart
   ansible.builtin.meta: flush_handlers
 
 - name: Wait for Kodi to start
