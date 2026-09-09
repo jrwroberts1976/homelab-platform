@@ -1,0 +1,42 @@
+---
+monitoring_expected_hostname: monitor-01
+monitoring_expected_ipv4: 192.168.2.52
+monitoring_root: /opt/monitoring
+
+monitoring_prometheus_image: prom/prometheus:v3.14.0
+monitoring_grafana_image: grafana/grafana:13.2.1
+monitoring_alertmanager_image: prom/alertmanager:v0.34.0
+monitoring_blackbox_image: prom/blackbox-exporter:v0.28.0
+
+monitoring_prometheus_retention: 30d
+monitoring_grafana_admin_user: admin
+
+monitoring_icmp_targets:
+  - address: 192.168.2.1
+    label: router
+  - address: 192.168.2.50
+    label: dns-02
+  - address: 192.168.2.51
+    label: dns-01
+  - address: 192.168.2.52
+    label: monitor-01
+  - address: 192.168.2.70
+    label: PROXMOX
+  - address: 192.168.2.71
+    label: Proxmox-2
+  - address: 192.168.2.195
+    label: media-01
+  - address: 192.168.2.220
+    label: TestServer
+
+monitoring_pve_https_targets:
+  - address: https://192.168.2.70:8006/
+    label: PROXMOX
+  - address: https://192.168.2.71:8006/
+    label: Proxmox-2
+
+monitoring_dns_tcp_targets:
+  - address: 192.168.2.50:53
+    label: dns-02
+  - address: 192.168.2.51:53
+    label: dns-01
