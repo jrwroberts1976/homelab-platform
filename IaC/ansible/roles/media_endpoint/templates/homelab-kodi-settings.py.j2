@@ -1,0 +1,51 @@
+#!/usr/bin/python3
+"""Upsert the Kodi v21+ GUI cache settings without replacing other user settings."""
+
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+path = Path("{{ media_user_home }}/.kodi/userdata/guisettings.xml")
+path.parent.mkdir(parents=True, exist_ok=True)
+
+desired = {
+    "filecache.buffermode": "{{ media_kodi_cache_buffer_mode }}",
+    "filecache.memorysize": "{{ media_kodi_cache_memory_mb }}",
+    "filecache.readfactor": "{{ media_kodi_cache_readfactor }}",
+}
+
+changed = False
+
+if path.exists():
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+    except ET.ParseError as exc:
+        raise SystemExit(f"Refusing to replace malformed {path}: {exc}")
+else:
+    root = ET.Element("settings", {"version": "2"})
+    tree = ET.ElementTree(root)
+    changed = True
+
+if root.tag != "settings":
+    raise SystemExit(f"Refusing unexpected Kodi settings root element: {root.tag}")
+
+if root.get("version") != "2":
+    root.set("version", "2")
+    changed = True
+
+for setting_id, value in desired.items():
+    node = root.find(f"./setting[@id='{setting_id}']")
+    if node is None:
+        node = ET.SubElement(root, "setting", {"id": setting_id})
+        node.text = value
+        changed = True
+    elif (node.text or "").strip() != value:
+        node.text = value
+        changed = True
+
+if changed:
+    ET.indent(tree, space="  ")
+    tree.write(path, encoding="utf-8", xml_declaration=True)
+    print("CHANGED")
+else:
+    print("UNCHANGED")
