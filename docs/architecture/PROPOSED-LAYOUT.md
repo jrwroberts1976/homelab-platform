@@ -22,8 +22,8 @@ flowchart TB
   classDef physical fill:#f2ecff,stroke:#6e55b3,stroke-width:2px,color:#2e2351
 
   WAN["Internet / WAN"]:::network
-  ROUTER["COMPLETE<br/>ASUS Router<br/>192.168.2.1<br/>Gateway / NAT / DHCP"]:::complete
-  SWITCH["COMPLETE<br/>HP ProCurve 2510G-24<br/>192.168.2.16<br/>Core switch<br/>Port 24 = SPAN destination"]:::complete
+  ROUTER["LIVE / EXISTING<br/>ASUS Router<br/>192.168.2.1<br/>Gateway / NAT / DHCP<br/>clean rebuild still planned"]:::network
+  SWITCH["LIVE / EXISTING<br/>HP ProCurve 2510G-24<br/>192.168.2.16<br/>Core switch<br/>Port 24 = SPAN destination<br/>clean rebuild still planned"]:::network
 
   WAN --> ROUTER
   ROUTER --> SWITCH
@@ -88,8 +88,8 @@ flowchart TB
 
 | Service / asset | Placement | Address | State |
 |---|---|---:|---|
-| ASUS router | Physical | `192.168.2.1` | **COMPLETE** — gateway, NAT and DHCP remain here |
-| HP ProCurve 2510G-24 | Physical | `192.168.2.16` | **COMPLETE** — core switch; port 24 reserved for SPAN |
+| ASUS router | Physical | `192.168.2.1` | **LIVE / EXISTING** — gateway, NAT and DHCP remain here; clean rebuild still planned |
+| HP ProCurve 2510G-24 | Physical | `192.168.2.16` | **LIVE / EXISTING** — core switch; port 24 reserved for SPAN; clean rebuild still planned |
 | PROXMOX | Physical | `192.168.2.70` | **COMPLETE** — standalone Proxmox host, NTP server, node exporter |
 | Proxmox-2 | Physical | `192.168.2.71` | **COMPLETE** — standalone Proxmox host, NTP server, node exporter |
 | dns-01 | CT101 on Proxmox-2 | `192.168.2.51` | **COMPLETE** — Pi-hole + Unbound; node exporter |
@@ -111,9 +111,9 @@ flowchart TB
 
 ## Current monitoring coverage
 
-The monitoring platform currently has external service probes and host metrics for the core estate.
+The monitoring platform currently has external service probes for the core estate. Node exporter is installed on the five core Linux/Proxmox targets; the final five-target Prometheus scrape/idempotence validation is still pending.
 
-**Host metrics (node_exporter):**
+**Node exporter installed (final five-target Prometheus validation pending):**
 
 - `dns-01` — `192.168.2.51:9100`
 - `dns-02` — `192.168.2.50:9100`
