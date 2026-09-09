@@ -45,6 +45,8 @@
   ansible.builtin.apt:
     name:
       - "{{ media_kodi_package }}"
+      - kodi-eventclients-kodi-send
+      - kodi-repository-kodi
       - lightdm
       - nvme-cli
       - smartmontools
@@ -269,8 +271,75 @@
         assert d.get('filecache.buffermode') == '{{ media_kodi_cache_buffer_mode }}';
         assert d.get('filecache.memorysize') == '{{ media_kodi_cache_memory_mb }}';
         assert d.get('filecache.readfactor') == '{{ media_kodi_cache_readfactor }}';
-        assert d.get('addons.unknownsources') == 'true'
+        assert d.get('addons.unknownsources') == '{{ 'true' if media_kodi_allow_unknown_sources else 'false' }}';
+        assert d.get('services.esenabled') == 'true';
+        assert d.get('services.esallinterfaces') == 'false';
+        assert d.get('weather.addon') == '{{ media_kodi_weather_addon }}';
+        assert d.get('subtitles.movie') == '{{ media_kodi_subtitle_addon }}';
+        assert d.get('subtitles.tv') == '{{ media_kodi_subtitle_addon }}'
   changed_when: false
+
+- name: Install managed Kodi official add-on updater
+  ansible.builtin.template:
+    src: homelab-kodi-addons.py.j2
+    dest: /usr/local/sbin/homelab-kodi-addons
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install approved official Kodi add-ons
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-kodi-addons
+  register: media_endpoint_kodi_addons
+  changed_when: media_endpoint_kodi_addons.stdout | trim == 'CHANGED'
+  notify: Restart Kodi
+
+- name: Re-apply Kodi managed settings after add-on installation
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-kodi-settings
+  register: media_endpoint_kodi_post_addon_settings
+  changed_when: media_endpoint_kodi_post_addon_settings.stdout | trim == 'CHANGED'
+  notify: Restart Kodi
+
+- name: Apply Kodi add-on and default-service changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Kodi after add-on installation
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -x
+      - kodi.bin
+  register: media_endpoint_kodi_post_addon_running
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: media_endpoint_kodi_post_addon_running.rc == 0
+
+- name: Verify approved official Kodi add-ons are installed
+  ansible.builtin.command:
+    argv:
+      - test
+      - -f
+      - "{{ media_user_home }}/.kodi/addons/{{ item }}/addon.xml"
+  loop: "{{ media_kodi_official_addons }}"
+  changed_when: false
+
+- name: Verify one Kodi process after add-on installation
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -x
+      - kodi.bin
+  register: media_endpoint_kodi_post_addon_singleton
+  changed_when: false
+  failed_when: media_endpoint_kodi_post_addon_singleton.stdout_lines | length != 1
 
 - name: Verify no failed systemd units
   ansible.builtin.command:
