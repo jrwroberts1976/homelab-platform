@@ -196,3 +196,17 @@ The protected Grafana admin credential is stored outside Git at:
 ```
 
 The deployment wrapper completed both the first Ansible apply and the idempotence run before performing the controller health checks. Loki and Alloy remain intentionally deferred until metrics/probe validation is complete.
+
+
+## Core monitoring target validation — 9 September 2026
+
+Prometheus target discovery returned all 14 expected active targets and every target reported `health=up`.
+
+All Blackbox probes returned `probe_success=1`, covering:
+- DNS TCP on `.50` and `.51`
+- ICMP to router, both DNS resolvers, monitor-01, both Proxmox hosts, media-01, and TestServer
+- HTTPS probes to both Proxmox management endpoints
+
+Prometheus reported no active alerts. Grafana's provisioned Prometheus datasource is present, points to `http://prometheus:9090`, and is the default datasource.
+
+A focused Ansible playbook now manages local Pi-hole DNS records separately from the full resolver role so new service records such as `monitor-01.jameshouse -> 192.168.2.52` can be reconciled without rerunning unrelated resolver configuration.
