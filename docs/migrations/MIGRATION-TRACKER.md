@@ -167,10 +167,10 @@ See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## Next action
 
-1. Complete standalone `pve2` service validation and test the incoming second NIC before any further cluster attempt.
-2. Merge/prove the Cloudflare Pages production workflow in `engineering-portfolio` so the manual upload path becomes fallback-only.
-3. Run the final reviewed Terraform plan/apply for `dns-02` so the now-enabled `protect_after_build = true` desired state protects CT 100.
-4. Continue reconciling unique content on the degraded DietPi backup disk before any destructive host rebuild.
+1. Complete the final `media-01` nftables apply and remote reachability proof, then repeat the idempotence gate.
+2. Start the next service build as `cloud-01.jameshouse` at `192.168.2.53` using the approved Nextcloud/PostgreSQL/Redis design, while keeping the 4 TB data-device health decision as a hard gate for production data placement.
+3. Deploy the live Prometheus target update for `media-01` and add Pi/NVMe health metrics.
+4. Continue validating that no remaining production clients depend on retired DietPi DNS address `192.168.2.48`.
 
 
 ## Password manager project
@@ -190,21 +190,35 @@ Requirements before deployment:
 This is a planned project, not part of the current monitoring deployment gate.
 
 
-## media-01 rebuild target
+## media-01 rebuild status
 
-`media-01` is a freshly rebuilt Raspberry Pi 5 and will be treated as a greenfield dedicated media endpoint.
+`media-01` at `192.168.2.195` is now operational as a greenfield Raspberry Pi 5 Kodi endpoint.
 
-Target requirements:
+Completed through Ansible/IaC:
 
-- retain hostname `media-01` and address `192.168.2.195`;
-- Kodi is the primary workload;
-- Kodi must start automatically on every normal boot without interactive launch;
-- use a managed systemd/display-session startup path rather than shell-profile hacks;
-- restart Kodi automatically after an unexpected process failure;
-- order startup sensibly around network availability and any remote media mounts;
-- configure a Kodi RAM playback cache, initially targeting roughly 768 MiB on the 8 GiB Pi 5;
-- keep Kodi metadata/thumbnails/database/cache working data on the fast local NVMe where practical;
-- install node_exporter for host metrics;
-- monitor Raspberry Pi temperature/throttling and local storage health/capacity;
-- send Kodi logs through Grafana Alloy to Loki on `monitor-01` once Loki is deployed;
-- manage the media baseline through Ansible/IaC wherever practical.
+- Debian 13 / Raspberry Pi 5 target validation;
+- canonical hostname `media-01`;
+- Kodi 21 launched as a dedicated `kodi.service`, with LightDM disabled;
+- single-process reconciliation across normal service restarts;
+- 768 MiB playback cache and managed read/buffer settings;
+- Unknown Sources enabled;
+- official Open-Meteo weather add-on installed and selected;
+- official OpenSubtitles.com service installed and selected for movies/TV;
+- official autocompletion add-on installed for predictive text;
+- local media sources for Movies, TV and Music;
+- authenticated/signed SMB share `\\media-01\Media` with `Movies`, `TV`, `Music` and `plugins`;
+- Chrony client using `.70` as preferred and `.71` as secondary homelab NTP source;
+- node_exporter installed and healthy;
+- unsupported OpenIPMI service disabled/masked;
+- repeated Ansible idempotence proof with `changed=0 failed=0` before the final add-on/firewall additions.
+
+Remaining gates:
+
+- apply and remotely validate the new nftables default-deny policy;
+- deploy the Prometheus target change for `media-01`;
+- add Raspberry Pi temperature/throttling and NVMe SMART metrics;
+- set final Kodi weather location and configure the user's OpenSubtitles.com account;
+- add Alloy -> Loki Kodi logging when Loki is deployed;
+- repeat final idempotence/reboot proof after firewall activation.
+
+See `production docs/MEDIA-SERVICE.md`.
