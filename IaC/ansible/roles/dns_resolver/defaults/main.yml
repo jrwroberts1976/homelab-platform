@@ -12,9 +12,9 @@ pihole_listening_mode: "LOCAL"
 pihole_reverse_servers: []
 pihole_cname_records: []
 
-# Captured from dns-01 on 2026-09-07. The previous dns-02/.242 record is
-# deliberately omitted. The current dns-02/.50 record remains part of the
-# shared baseline; each resolver also adds its own hostname/IP dynamically.
+# Captured from dns-01 on 2026-09-07 and reconciled to the current estate.
+# Retired resolver/host addresses such as .48 and the previous dns-02/.242 are
+# deliberately omitted. Each resolver also adds its own hostname/IP dynamically.
 pihole_local_hosts:
   - "192.168.2.1 rt-ac86u-ccc8.jameshouse rt-ac86u-ccc8 router"
   - "192.168.2.6 rosie-laptop.jameshouse rosie-laptop"
@@ -23,7 +23,6 @@ pihole_local_hosts:
   - "192.168.2.17 google-home.jameshouse google-home"
   - "192.168.2.29 tapo-home-hub-h100.jameshouse tapo-home-hub-h100"
   - "192.168.2.30 patio.jameshouse patio"
-  - "192.168.2.48 dietpi.jameshouse dietpi"
   - "192.168.2.49 garage-door-camera.jameshouse garage-door-camera"
   - "192.168.2.50 dns-02.jameshouse dns-02"
   - "192.168.2.52 monitor-01.jameshouse monitor-01"
