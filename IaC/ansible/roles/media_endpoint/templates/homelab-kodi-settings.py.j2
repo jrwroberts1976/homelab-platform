@@ -11,7 +11,12 @@ desired = {
     "filecache.buffermode": "{{ media_kodi_cache_buffer_mode }}",
     "filecache.memorysize": "{{ media_kodi_cache_memory_mb }}",
     "filecache.readfactor": "{{ media_kodi_cache_readfactor }}",
-    "addons.unknownsources": "true",
+    "addons.unknownsources": "{{ 'true' if media_kodi_allow_unknown_sources else 'false' }}",
+    "services.esenabled": "true",
+    "services.esallinterfaces": "false",
+    "weather.addon": "{{ media_kodi_weather_addon }}",
+    "subtitles.movie": "{{ media_kodi_subtitle_addon }}",
+    "subtitles.tv": "{{ media_kodi_subtitle_addon }}",
 }
 
 changed = False
