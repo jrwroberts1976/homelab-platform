@@ -1,0 +1,8 @@
+---
+- name: Standardize homelab NTP clients
+  hosts: "dns_resolvers:monitoring_hosts:mail_relay:media_hosts"
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: chrony_client
