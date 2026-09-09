@@ -21,6 +21,19 @@ the hypervisor would need a guest to obtain correct time.
 | `ntp-01.jameshouse` | `192.168.2.70` | `PROXMOX` | Primary local NTP endpoint |
 | `ntp-02.jameshouse` | `192.168.2.71` | `Proxmox-2` | Secondary local NTP endpoint |
 
+## Core infrastructure host inventory
+
+This table records the currently rebuilt core infrastructure from physical host
+through service guest. Physical-NIC MAC addresses identify the Proxmox hosts;
+the DNS rows record the LXC virtual Ethernet MAC addresses assigned by Proxmox.
+
+| Hostname | IPv4 | Type | Interface / MAC | Services provided |
+|---|---:|---|---|---|
+| `PROXMOX` | `192.168.2.70` | Physical Proxmox VE host | `nic0` / `80:E8:2C:1C:55:D2` | Proxmox VE hypervisor; `ntp-01.jameshouse` Chrony/NTP; hosts `dns-02` CT 100 |
+| `Proxmox-2` | `192.168.2.71` | Physical Proxmox VE host | `nic0` / `00:1A:9F:0C:30:3B` | Proxmox VE hypervisor; `ntp-02.jameshouse` Chrony/NTP; hosts `dns-01` CT 101 |
+| `dns-01` | `192.168.2.51` | Debian LXC, CT 101 on `Proxmox-2` | `eth0` / `BC:24:11:C3:75:BA` | Pi-hole DNS filtering; Unbound recursive DNS; DNSSEC validation; local `jameshouse` records |
+| `dns-02` | `192.168.2.50` | Debian LXC, CT 100 on `PROXMOX` | `eth0` / `BC:24:11:35:3B:11` | Pi-hole DNS filtering; Unbound recursive DNS; DNSSEC validation; local `jameshouse` records |
+
 Both hosts:
 
 - run Chrony directly on the Proxmox/Debian host;
