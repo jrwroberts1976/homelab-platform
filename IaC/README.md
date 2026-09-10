@@ -1,16 +1,55 @@
 # Infrastructure as Code
 
-This directory is the **authoritative location for new homelab Infrastructure-as-Code** in `jrwroberts1976/homelab-platform`.
+This directory is the authoritative location for new homelab Infrastructure-as-Code in `jrwroberts1976/homelab-platform`.
+
+## Normal controller
+
+Run day-to-day IaC from:
+
+```text
+admin-01.jameshouse
+192.168.2.48
+~/projects/homelab-platform
+```
+
+`TestServer` is now a legacy migration source and should not be used as the default controller for new work.
 
 ## Rules
 
-- New Terraform, Ansible and related deployment code belongs under `IaC/`.
-- Terraform provisions infrastructure; Ansible configures operating systems and services.
+- New Terraform/OpenTofu, Ansible and related deployment code belongs under `IaC/`.
+- Terraform/OpenTofu provisions infrastructure; Ansible configures operating systems and services.
 - Git contains desired state, not plaintext secrets.
 - Terraform state and local `.tfvars` files must not be committed.
-- Secret values are supplied through protected environment variables/SOPS or another approved secret mechanism.
-- Production changes require a reviewed plan and a validation/rollback path.
+- Secret values are supplied through SOPS/age, protected environment files or another approved secret mechanism.
+- Production changes require read-only discovery, a reviewed plan, validation and rollback/recovery consideration.
 - Host/workload ownership must remain explicit.
+- Hypervisors stay free of application Docker workloads; services belong in guests or approved physical hosts.
+
+## Current infrastructure placement
+
+### PROXMOX — 192.168.2.70
+
+- CT100 `dns-02` — `192.168.2.50`
+- CT102 `mail-relay-01` — `192.168.2.54`
+- VM200 `cloud-01` — `192.168.2.53`
+- VM201 `sensor-01` — `192.168.2.55`
+
+### Proxmox-2 — 192.168.2.71
+
+- CT101 `dns-01` — `192.168.2.51`
+- CT103 `edge-01` — `192.168.2.56`
+- VM200 `monitor-01` — `192.168.2.52`
+
+The Proxmox hosts are standalone; no active two-node cluster is assumed by IaC.
+
+## Current service state
+
+- DNS: dual Pi-hole + Unbound resolvers operational at `.51` and `.50`.
+- Monitoring: Prometheus/Grafana/Alertmanager/Blackbox operational on `monitor-01`.
+- Central logging: fresh Loki/Alloy implementation pending on `monitor-01`.
+- Edge: `edge-01` base LXC operational; `cloudflared`, tunnel and Access/MFA pending.
+- Media: physical Raspberry Pi 5 `media-01` remains outside Proxmox and is managed through Ansible.
+- TestServer: retirement source only; final target is a clean Raspberry Pi 4 BirdNET-Go build.
 
 ## Layout
 
@@ -18,32 +57,36 @@ This directory is the **authoritative location for new homelab Infrastructure-as
 IaC/
 ├── terraform/
 │   └── proxmox/
-│       └── dns-02/
 └── ansible/
     ├── inventory/
     ├── playbooks/
     └── roles/
-        └── dns_resolver/
 ```
 
-The existing top-level `terraform/` directory predates this convention. Do not add new IaC there. It can be migrated into `IaC/` later as a separate non-functional cleanup once references and state handling are checked.
+The older top-level `terraform/` directory predates this convention. Do not add new IaC there; migrate references/state only as a separate reviewed cleanup.
 
-## Current build
+## DNS management
 
-The first workload being built under this structure is `dns-02`: a small Debian LXC on the primary Proxmox host for secondary Pi-hole + Unbound service.
+The active DNS pair is:
 
-Provisioning and service migration are deliberately separated:
+```text
+dns-01  192.168.2.51  CT101 on Proxmox-2
+dns-02  192.168.2.50  CT100 on PROXMOX
+```
 
-1. Terraform creates and validates the LXC.
-2. Current Pi-hole/Unbound configuration is captured from the existing DNS estate.
-3. Ansible expresses that configuration as code. The first `dns_resolver` role now captures the live `dns-01` Pi-hole/Unbound baseline for `dns-02`.
-4. Direct DNS tests are performed against `dns-02`.
-5. Router DNS advertisement is changed only after failover testing succeeds.
-6. The previous `dns-02` at `192.168.2.242` has already been removed. `dns-01` remains the working resolver while the replacement `dns-02` at `192.168.2.50` is built and validated; ASUS DHCP is still advertising the stale `.242` address until cutover.
+`IaC/ansible/playbooks/dns-local-records.yml` reconciles managed local records without re-running the whole resolver build. `192.168.2.48` is `admin-01`; it is not a DNS resolver.
 
+## Change flow
 
-## One-click DNS resolver builds
+A normal change should follow this pattern:
 
-Reusable DNS resolver creation lives under `IaC/terraform/proxmox/dns-resolver/` and is orchestrated by `.github/workflows/build-dns-resolver.yml`.
+1. discover current state read-only;
+2. update IaC/documentation on a feature branch;
+3. syntax/check/plan validation;
+4. controlled live apply with backups where configuration files are changed;
+5. post-change health validation;
+6. prove idempotence/no drift where applicable;
+7. update service/runbook evidence;
+8. review/merge and clean the feature branch.
 
-The workflow form accepts hostname, IPv4 address, PVE target and CT ID. It uses isolated per-resolver Terraform state, then runs the shared Ansible role and validation. ASUS DHCP/DNS cutover remains deliberately separate.
+See `../runbooks/README.md` and `../docs/architecture/OUTSTANDING-WORK.md` for operational priorities.
