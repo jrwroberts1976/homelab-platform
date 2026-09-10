@@ -218,13 +218,28 @@ Loki/Alloy integration is also deferred. Structured logs remain local and rotati
 - Git: all desired configuration except secrets and generated runtime data.
 - Proxmox GUI/manual guest edits: not authoritative.
 
+## Resource sizing
+
+Live preflight on 10 September 2026 showed PROXMOX has 7.6 GiB total RAM with
+about 4.0 GiB available before sensor creation. The original 6 GiB sensor
+proposal was therefore rejected.
+
+Phase 1 uses **3 GiB RAM** and an **80 GiB disk on `vm-ssd`**. Suricata and
+Zeek remain disabled, so this phase is for installation, configuration
+validation and monitoring only.
+
+Before both packet engines are activated, rerun CPU/RAM/storage capacity
+checks. The final sensor memory allocation is evidence-driven; the current
+8 GiB hypervisor is not assumed to have enough physical headroom for both
+engines under mirrored production traffic.
+
 ## Phase gates
 
 ### Phase 1 — toolchain
 
 Can be completed before the USB adapter arrives:
 
-- build `sensor-01`;
+- build `sensor-01` with the phase-1 3 GiB allocation;
 - install the complete toolchain;
 - prove exact Suricata/Zeek versions;
 - validate binaries/configuration;
@@ -245,6 +260,7 @@ After the USB adapter arrives:
 
 ### Phase 3 — engines
 
+- pass the final PROXMOX capacity gate and adjust VM RAM through Terraform if required;
 - activate Suricata;
 - update/validate rules;
 - activate Zeek;
