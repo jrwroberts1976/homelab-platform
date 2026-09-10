@@ -1,0 +1,9 @@
+---
+- name: Prepare Proxmox-2 for IaC-managed monitoring VM imports
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: proxmox_vm_import_storage
+    - role: proxmox_monitor_cloud_init

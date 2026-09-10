@@ -1,0 +1,13 @@
+---
+- name: Configure internal SMTP relay
+  hosts: mail_relay
+  become: true
+  gather_facts: true
+
+  vars:
+    mail_relay_gmail_username: "{{ lookup('ansible.builtin.env', 'GMAIL_SMTP_USERNAME') | default('', true) }}"
+    mail_relay_gmail_app_password: "{{ lookup('ansible.builtin.env', 'GMAIL_APP_PASSWORD') | default('', true) }}"
+
+  roles:
+    - role: lxc_inherited_time
+    - role: mail_relay

@@ -1,0 +1,10 @@
+---
+- name: Build cloud-01 Debian service baseline
+  hosts: cloud_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: chrony_client
+    - role: cloud_baseline
+    - role: node_exporter

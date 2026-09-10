@@ -1,0 +1,63 @@
+---
+- name: Validate media firewall target
+  ansible.builtin.assert:
+    that:
+      - media_firewall_expected_ipv4 in ansible_facts.all_ipv4_addresses
+      - media_firewall_lan_subnet | length > 0
+      - media_firewall_monitor_ipv4 | length > 0
+    fail_msg: >-
+      Refusing to configure media firewall on an unexpected host.
+
+- name: Install nftables
+  ansible.builtin.apt:
+    name: nftables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install media-01 nftables ruleset
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/nft -c -f %s"
+  notify: Reload nftables
+
+- name: Ensure nftables is enabled and running
+  ansible.builtin.systemd_service:
+    name: nftables.service
+    enabled: true
+    state: started
+
+- name: Apply pending nftables changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Verify nftables service is active
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - nftables.service
+  changed_when: false
+
+- name: Read active nftables ruleset
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/nft
+      - list
+      - ruleset
+  register: media_firewall_ruleset
+  changed_when: false
+
+- name: Validate active media firewall policy
+  ansible.builtin.assert:
+    that:
+      - "'policy drop' in media_firewall_ruleset.stdout"
+      - "'tcp dport 22' in media_firewall_ruleset.stdout"
+      - "'tcp dport 445' in media_firewall_ruleset.stdout"
+      - "'tcp dport 9100' in media_firewall_ruleset.stdout"
+      - media_firewall_lan_subnet in media_firewall_ruleset.stdout
+      - media_firewall_monitor_ipv4 in media_firewall_ruleset.stdout
+    fail_msg: "Active nftables ruleset does not match the media-01 security policy."

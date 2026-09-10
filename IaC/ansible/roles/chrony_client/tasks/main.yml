@@ -1,0 +1,66 @@
+---
+- name: Install Chrony NTP client
+  ansible.builtin.apt:
+    name: chrony
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Stage homelab Chrony client configuration
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf.homelab
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate staged homelab Chrony client configuration
+  ansible.builtin.command:
+    argv:
+      - chronyd
+      - -p
+      - -f
+      - /etc/chrony/chrony.conf.homelab
+  changed_when: false
+
+- name: Install validated homelab Chrony client configuration
+  ansible.builtin.copy:
+    src: /etc/chrony/chrony.conf.homelab
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+    remote_src: true
+  notify: Restart chrony
+
+- name: Ensure Chrony is enabled and running
+  ansible.builtin.systemd_service:
+    name: chrony
+    enabled: true
+    state: started
+
+- name: Apply Chrony restart
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Chrony to select a homelab source
+  ansible.builtin.command:
+    argv:
+      - chronyc
+      - -n
+      - sources
+  register: chrony_client_sources
+  changed_when: false
+  retries: 15
+  delay: 2
+  until:
+    - "'192.168.2.70' in chrony_client_sources.stdout or '192.168.2.71' in chrony_client_sources.stdout"
+    - "'^*' in chrony_client_sources.stdout"
+
+- name: Verify Chrony tracking
+  ansible.builtin.command:
+    argv:
+      - chronyc
+      - tracking
+  register: chrony_client_tracking
+  changed_when: false
+  failed_when: "'Leap status     : Normal' not in chrony_client_tracking.stdout"

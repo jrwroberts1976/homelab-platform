@@ -1,0 +1,98 @@
+global:
+  scrape_interval: 30s
+  evaluation_interval: 30s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets:
+            - alertmanager:9093
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: prometheus
+    static_configs:
+      - targets:
+          - prometheus:9090
+
+  - job_name: blackbox-exporter
+    static_configs:
+      - targets:
+          - blackbox:9115
+
+  - job_name: node-exporter
+    static_configs:
+{% for target in monitoring_node_exporter_targets %}
+      - targets:
+          - {{ target.address | to_json }}
+        labels:
+          target_name: {{ target.label | to_json }}
+{% endfor %}
+
+  - job_name: blackbox-icmp
+    metrics_path: /probe
+    params:
+      module:
+        - icmp
+    static_configs:
+{% for target in monitoring_icmp_targets %}
+      - targets:
+          - {{ target.address | to_json }}
+        labels:
+          target_name: {{ target.label | to_json }}
+{% endfor %}
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: blackbox-pve-https
+    metrics_path: /probe
+    params:
+      module:
+        - http_2xx_insecure
+    static_configs:
+{% for target in monitoring_pve_https_targets %}
+      - targets:
+          - {{ target.address | to_json }}
+        labels:
+          target_name: {{ target.label | to_json }}
+{% endfor %}
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
+
+  - job_name: blackbox-dns-tcp
+    metrics_path: /probe
+    params:
+      module:
+        - tcp_connect
+    static_configs:
+{% for target in monitoring_dns_tcp_targets %}
+      - targets:
+          - {{ target.address | to_json }}
+        labels:
+          target_name: {{ target.label | to_json }}
+{% endfor %}
+    relabel_configs:
+      - source_labels:
+          - __address__
+        target_label: __param_target
+      - source_labels:
+          - __param_target
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115

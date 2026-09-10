@@ -1,0 +1,10 @@
+---
+proxmox_vm_import_storage_id: local
+proxmox_vm_import_storage_content:
+  - backup
+  - images
+  - import
+  - iso
+  - rootdir
+  - snippets
+  - vztmpl

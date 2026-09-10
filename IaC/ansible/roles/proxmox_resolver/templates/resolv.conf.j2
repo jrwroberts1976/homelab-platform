@@ -1,0 +1,5 @@
+# Managed by homelab-platform/IaC. Manual edits will be overwritten.
+search {{ proxmox_resolver_search_domain }}
+{% for nameserver in proxmox_resolver_nameservers %}
+nameserver {{ nameserver }}
+{% endfor %}

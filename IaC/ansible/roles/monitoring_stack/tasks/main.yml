@@ -1,0 +1,366 @@
+---
+- name: Validate monitor-01 identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == monitoring_expected_hostname
+      - ansible_facts.default_ipv4.address == monitoring_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "eth0"
+    fail_msg: >-
+      Refusing to deploy monitoring: expected Debian 13 monitor-01 at
+      192.168.2.52 on eth0.
+
+- name: Read monitor-01 systemd-resolved uplink DNS
+  ansible.builtin.command:
+    argv:
+      - resolvectl
+      - dns
+      - eth0
+  register: monitoring_resolvectl_dns
+  changed_when: false
+  failed_when: >-
+    '192.168.2.51' not in monitoring_resolvectl_dns.stdout
+    or '192.168.2.50' not in monitoring_resolvectl_dns.stdout
+    or '192.168.2.48' in monitoring_resolvectl_dns.stdout
+
+- name: Validate local DNS resolution
+  ansible.builtin.command:
+    argv:
+      - getent
+      - ahostsv4
+      - dns-01.jameshouse
+  register: monitoring_local_dns
+  changed_when: false
+  failed_when: "'192.168.2.51' not in monitoring_local_dns.stdout"
+
+- name: Require protected Grafana admin password
+  ansible.builtin.assert:
+    that:
+      - monitoring_grafana_admin_password | length >= 24
+    fail_msg: >-
+      Export GRAFANA_ADMIN_PASSWORD on the Ansible controller before applying
+      the monitoring stack. Keep it outside Git.
+  no_log: true
+
+- name: Install Docker and monitoring prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - docker.io
+      - docker-compose
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker is enabled and running
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Create monitoring configuration directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ monitoring_root }}"
+    - "{{ monitoring_root }}/prometheus"
+    - "{{ monitoring_root }}/alertmanager"
+    - "{{ monitoring_root }}/blackbox"
+    - "{{ monitoring_root }}/grafana"
+    - "{{ monitoring_root }}/grafana/provisioning"
+    - "{{ monitoring_root }}/grafana/provisioning/datasources"
+
+- name: Install protected monitoring environment
+  ansible.builtin.template:
+    src: monitoring.env.j2
+    dest: "{{ monitoring_root }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install Docker Compose definition
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ monitoring_root }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Prometheus configuration
+  ansible.builtin.template:
+    src: prometheus.yml.j2
+    dest: "{{ monitoring_root }}/prometheus/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Prometheus alert rules
+  ansible.builtin.template:
+    src: alerts.yml.j2
+    dest: "{{ monitoring_root }}/prometheus/alerts.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate SMTP relay connectivity from monitor-01
+  ansible.builtin.wait_for:
+    host: "{{ monitoring_alert_smtp_smarthost.split(':')[0] }}"
+    port: "{{ monitoring_alert_smtp_smarthost.split(':')[1] | int }}"
+    timeout: 30
+    state: started
+  changed_when: false
+
+- name: Install Alertmanager configuration
+  ansible.builtin.template:
+    src: alertmanager.yml.j2
+    dest: "{{ monitoring_root }}/alertmanager/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: monitoring_alertmanager_config
+
+- name: Install Blackbox Exporter configuration
+  ansible.builtin.template:
+    src: blackbox.yml.j2
+    dest: "{{ monitoring_root }}/blackbox/blackbox.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Provision Grafana Prometheus datasource
+  ansible.builtin.template:
+    src: grafana-prometheus-datasource.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/datasources/prometheus.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Provision Grafana Alertmanager datasource
+  ansible.builtin.template:
+    src: grafana-alertmanager-datasource.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/datasources/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Prometheus alert rules
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --entrypoint
+      - /bin/promtool
+      - -v
+      - "{{ monitoring_root }}/prometheus:/etc/prometheus:ro"
+      - "{{ monitoring_prometheus_image }}"
+      - check
+      - rules
+      - /etc/prometheus/alerts.yml
+  changed_when: false
+
+- name: Validate Docker Compose configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - config
+      - --quiet
+  changed_when: false
+
+- name: Pull pinned monitoring images
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - pull
+  register: monitoring_compose_pull
+  changed_when: false
+
+- name: Reconcile monitoring containers
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - up
+      - -d
+      - --remove-orphans
+  register: monitoring_compose_up
+  changed_when: >-
+    'Creating' in monitoring_compose_up.stderr
+    or 'Created' in monitoring_compose_up.stderr
+    or 'Recreating' in monitoring_compose_up.stderr
+    or 'Recreated' in monitoring_compose_up.stderr
+    or 'Starting' in monitoring_compose_up.stderr
+    or 'Started' in monitoring_compose_up.stderr
+
+- name: Validate Alertmanager configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - exec
+      - -T
+      - alertmanager
+      - amtool
+      - check-config
+      - /etc/alertmanager/alertmanager.yml
+  changed_when: false
+
+- name: Restart Alertmanager after configuration change
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - restart
+      - alertmanager
+  when: monitoring_alertmanager_config.changed
+  changed_when: true
+
+- name: Wait for Prometheus readiness
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/-/ready
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_ready
+  until: monitoring_prometheus_ready.status == 200
+  retries: 30
+  delay: 2
+
+- name: Reload Prometheus configuration
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/-/reload
+    method: POST
+    status_code: 200
+  changed_when: false
+
+- name: Verify Prometheus runtime config contains node exporter job
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/status/config
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_runtime_config
+  changed_when: false
+  failed_when: "'job_name: node-exporter' not in monitoring_prometheus_runtime_config.json.data.yaml"
+
+- name: Verify production alert rules are loaded
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/rules
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_rules
+  changed_when: false
+  failed_when: >-
+    'DNSServiceDown' not in monitoring_prometheus_rules.content
+    or 'ProxmoxHTTPSDown' not in monitoring_prometheus_rules.content
+    or 'CoreHostUnreachable' not in monitoring_prometheus_rules.content
+    or 'NodeExporterDown' not in monitoring_prometheus_rules.content
+    or 'NodeFilesystemSpaceLow' not in monitoring_prometheus_rules.content
+    or 'NodeMemoryHigh' not in monitoring_prometheus_rules.content
+    or 'NodeCPUHigh' not in monitoring_prometheus_rules.content
+
+- name: Wait for Grafana health
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/api/health
+    status_code: 200
+    return_content: true
+  register: monitoring_grafana_health
+  until:
+    - monitoring_grafana_health.status == 200
+    - monitoring_grafana_health.json.database == "ok"
+  retries: 30
+  delay: 2
+
+- name: Wait for Alertmanager readiness
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9093/-/ready
+    status_code: 200
+    return_content: true
+  register: monitoring_alertmanager_ready
+  until: monitoring_alertmanager_ready.status == 200
+  retries: 30
+  delay: 2
+
+- name: Wait for Blackbox Exporter
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9115/
+    status_code: 200
+    return_content: true
+  register: monitoring_blackbox_ready
+  until: monitoring_blackbox_ready.status == 200
+  retries: 30
+  delay: 2
+
+- name: Wait for Prometheus target discovery
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/targets
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_targets
+  until:
+    - monitoring_prometheus_targets.json.status == "success"
+    - monitoring_prometheus_targets.json.data.activeTargets | length >= 20
+  retries: 30
+  delay: 2
+
+- name: Wait for node exporter targets to become healthy
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/targets
+    status_code: 200
+    return_content: true
+  register: monitoring_node_exporter_targets
+  changed_when: false
+  until:
+    - monitoring_node_exporter_targets.json.status == "success"
+    - >-
+      monitoring_node_exporter_targets.json.data.activeTargets
+      | selectattr('labels.job', 'equalto', 'node-exporter')
+      | list
+      | length == 6
+    - >-
+      monitoring_node_exporter_targets.json.data.activeTargets
+      | selectattr('labels.job', 'equalto', 'node-exporter')
+      | rejectattr('health', 'equalto', 'up')
+      | list
+      | length == 0
+  retries: 30
+  delay: 2
+
+- name: Show monitoring container state
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - ps
+  register: monitoring_compose_ps
+  changed_when: false
+
+- name: Verify monitor-01 has no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: monitoring_failed_units
+  changed_when: false
+  failed_when: monitoring_failed_units.stdout | trim | length > 0

@@ -1,0 +1,27 @@
+#cloud-config
+hostname: {{ monitor_cloud_init_hostname }}
+fqdn: {{ monitor_cloud_init_hostname }}.{{ monitor_cloud_init_domain }}
+manage_etc_hosts: true
+timezone: Europe/London
+ssh_pwauth: false
+
+users:
+  - default
+  - name: james
+    groups:
+      - sudo
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - {{ monitor_cloud_init_public_key }}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+package_update: true
+packages:
+  - qemu-guest-agent
+  - python3
+  - sudo
+
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - touch /var/lib/cloud/monitor-01-bootstrap-complete

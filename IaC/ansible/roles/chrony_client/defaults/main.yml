@@ -1,0 +1,6 @@
+---
+chrony_client_servers:
+  - "192.168.2.70"
+  - "192.168.2.71"
+chrony_client_makestep_threshold: 1.0
+chrony_client_makestep_updates: 3

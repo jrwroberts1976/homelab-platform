@@ -60,7 +60,7 @@ variable "search_domain" {
 variable "bootstrap_dns_servers" {
   description = "Existing DNS servers used before Pi-hole/Unbound is configured."
   type        = list(string)
-  default     = ["192.168.2.48", "192.168.2.50"]
+  default     = ["192.168.2.51", "192.168.2.50"]
 }
 
 variable "ssh_public_keys" {

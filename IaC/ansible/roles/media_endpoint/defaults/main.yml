@@ -1,0 +1,23 @@
+---
+media_expected_ipv4: "192.168.2.195"
+media_expected_model: "Raspberry Pi 5"
+media_hostname: "media-01"
+media_user: "james"
+media_user_home: "/home/james"
+
+media_kodi_package: "kodi"
+media_kodi_session_name: "homelab-kodi"
+media_kodi_cache_buffer_mode: 4
+media_kodi_cache_memory_mb: 768
+media_kodi_cache_readfactor: 400
+media_kodi_allow_unknown_sources: true
+media_kodi_weather_addon: "weather.openmeteo"
+media_kodi_subtitle_addon: "service.subtitles.opensubtitles-com"
+media_kodi_official_addons:
+  - "weather.openmeteo"
+  - "service.subtitles.opensubtitles-com"
+  - "plugin.program.autocompletion"
+
+# Approved distro-packaged Kodi add-ons can be added here through Git.
+# Keep this empty by default so the base endpoint remains minimal.
+media_kodi_addon_packages: []

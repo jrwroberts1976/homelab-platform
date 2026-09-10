@@ -1,0 +1,46 @@
+---
+- name: Detect container virtualization
+  ansible.builtin.command:
+    argv:
+      - systemd-detect-virt
+      - --container
+  register: lxc_inherited_time_virtualization
+  changed_when: false
+
+- name: Require Proxmox LXC time inheritance
+  ansible.builtin.assert:
+    that:
+      - lxc_inherited_time_virtualization.stdout | trim == lxc_inherited_time_expected_virtualization
+    fail_msg: >-
+      Refusing LXC time cleanup: this role is only for Proxmox LXC guests,
+      which inherit the hypervisor clock and must not run their own NTP daemon.
+
+- name: Remove Chrony from LXC guests
+  ansible.builtin.apt:
+    name: chrony
+    state: absent
+    purge: true
+
+- name: Clear stale Chrony failed state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - chrony.service
+  changed_when: false
+  failed_when: false
+
+- name: Verify LXC guest has no active local NTP daemon
+  ansible.builtin.shell: |
+    if systemctl list-unit-files --no-legend | grep -Eq '^(chrony|systemd-timesyncd)\.service'; then
+      for unit in chrony.service systemd-timesyncd.service; do
+        if systemctl is-active --quiet "$unit"; then
+          echo "$unit is unexpectedly active"
+          exit 1
+        fi
+      done
+    fi
+    echo "time_source=PROXMOX_LXC_HOST"
+  args:
+    executable: /bin/bash
+  changed_when: false

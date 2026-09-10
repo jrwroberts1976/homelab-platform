@@ -1,0 +1,14 @@
+# Managed by homelab-platform/IaC. Do not edit by hand.
+
+{% for server in chrony_client_servers %}
+server {{ server }} iburst{{ ' prefer' if loop.first else '' }}
+{% endfor %}
+
+driftfile /var/lib/chrony/chrony.drift
+makestep {{ chrony_client_makestep_threshold }} {{ chrony_client_makestep_updates }}
+rtcsync
+
+keyfile /etc/chrony/chrony.keys
+ntsdumpdir /var/lib/chrony
+leapsectz right/UTC
+logdir /var/log/chrony

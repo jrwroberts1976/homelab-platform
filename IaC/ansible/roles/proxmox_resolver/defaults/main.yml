@@ -1,0 +1,9 @@
+---
+proxmox_resolver_expected_hostname: "{{ inventory_hostname }}"
+proxmox_resolver_expected_ipv4: "{{ ansible_host }}"
+proxmox_resolver_search_domain: jameshouse
+proxmox_resolver_nameservers:
+  - 192.168.2.51
+  - 192.168.2.50
+proxmox_resolver_retired_nameservers:
+  - 192.168.2.48

@@ -1,0 +1,17 @@
+# cloud-01 desired state is intentionally defined in variables.tf:
+#   VM ID:       200
+#   Template:    9001 (Debian 13 genericcloud + QGA)
+#   IPv4:        192.168.2.53/24
+#   Node:        PROXMOX
+#   System disk: vm-ssd, 32 GiB
+#   CPU:         2 vCPU
+#   RAM:         4096 MiB
+#
+# The 4 TB USB disk is deliberately NOT part of this Terraform definition.
+# It must not be attached or formatted until destructive testing and final
+# SMART evidence have passed the production-data gate.
+#
+# Supply secrets/identity through the environment, never this file:
+#
+# export TF_VAR_proxmox_api_token='iac@pve!opentofu=...'
+# export TF_VAR_ssh_public_key="$(cat ~/.ssh/proxmox-automation.pub)"

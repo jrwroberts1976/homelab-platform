@@ -1,0 +1,101 @@
+---
+- name: Inspect fresh Raspberry Pi 5 media host
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Read Raspberry Pi model
+      ansible.builtin.slurp:
+        src: /proc/device-tree/model
+      register: media_pi_model
+
+    - name: Read default systemd target
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - get-default
+      register: media_default_target
+      changed_when: false
+
+    - name: Read block devices
+      ansible.builtin.command:
+        argv:
+          - lsblk
+          - -o
+          - NAME,MODEL,SERIAL,SIZE,FSTYPE,MOUNTPOINTS
+      register: media_lsblk
+      changed_when: false
+
+    - name: Read filesystem usage
+      ansible.builtin.command:
+        argv:
+          - df
+          - -hT
+      register: media_df
+      changed_when: false
+
+    - name: Check Kodi package candidate
+      ansible.builtin.command:
+        argv:
+          - apt-cache
+          - policy
+          - kodi
+      register: media_kodi_policy
+      changed_when: false
+
+    - name: Check current display manager
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - status
+          - display-manager
+          - --no-pager
+      register: media_display_manager
+      changed_when: false
+      failed_when: false
+
+    - name: Check current Kodi processes
+      ansible.builtin.command:
+        argv:
+          - pgrep
+          - -a
+          - kodi
+      register: media_kodi_process
+      changed_when: false
+      failed_when: false
+
+    - name: Read failed units
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - --failed
+          - --no-legend
+          - --plain
+      register: media_failed_units
+      changed_when: false
+
+    - name: Show media-01 preflight
+      ansible.builtin.debug:
+        msg:
+          - "hostname={{ ansible_facts.hostname }}"
+          - "distribution={{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+          - "architecture={{ ansible_facts.architecture }}"
+          - "model={{ media_pi_model.content | b64decode | replace('\u0000', '') }}"
+          - "ipv4={{ ansible_facts.default_ipv4.address | default('none') }}"
+          - "default_target={{ media_default_target.stdout }}"
+          - "kodi_policy={{ media_kodi_policy.stdout_lines }}"
+          - "display_manager_rc={{ media_display_manager.rc }}"
+          - "display_manager={{ media_display_manager.stdout_lines }}"
+          - "kodi_process={{ media_kodi_process.stdout_lines }}"
+          - "lsblk={{ media_lsblk.stdout_lines }}"
+          - "df={{ media_df.stdout_lines }}"
+          - "failed_units={{ media_failed_units.stdout_lines }}"
+
+    - name: Validate greenfield media host identity
+      ansible.builtin.assert:
+        that:
+          - "'Raspberry Pi 5' in (media_pi_model.content | b64decode)"
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+          - ansible_facts.default_ipv4.address == '192.168.2.195'
+        fail_msg: "Refusing media build: target is not the expected Raspberry Pi 5 at 192.168.2.195."

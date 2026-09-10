@@ -1,0 +1,10 @@
+# Terraform runtime data and local secrets
+**/.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+**/terraform.tfvars
+**/*.auto.tfvars
+
+# Keep documented examples and provider lock files in Git
+!**/*.tfvars.example

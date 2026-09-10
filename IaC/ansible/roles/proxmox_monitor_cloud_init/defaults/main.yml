@@ -1,0 +1,6 @@
+---
+monitor_cloud_init_hostname: monitor-01
+monitor_cloud_init_domain: jameshouse
+monitor_cloud_init_snippet_dir: /var/lib/vz/snippets
+monitor_cloud_init_snippet_name: monitor-01-user-data.yaml
+monitor_cloud_init_public_key: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/proxmox-automation.pub') | trim }}"

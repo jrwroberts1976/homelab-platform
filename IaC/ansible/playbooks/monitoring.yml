@@ -1,0 +1,12 @@
+---
+- name: Deploy core monitoring platform
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    monitoring_grafana_admin_password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | default('', true) }}"
+
+  roles:
+    - role: chrony_client
+    - role: monitoring_stack

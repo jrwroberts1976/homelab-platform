@@ -1,0 +1,69 @@
+---
+- name: Validate node exporter target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - node_exporter_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to install node exporter: expected Debian host with
+      {{ node_exporter_expected_ipv4 }} assigned locally.
+
+- name: Validate system DNS before package operations
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - deb.debian.org
+  register: node_exporter_dns_preflight
+  changed_when: false
+  failed_when: >-
+    node_exporter_dns_preflight.rc != 0
+    or node_exporter_dns_preflight.stdout | trim | length == 0
+
+- name: Install Prometheus node exporter
+  ansible.builtin.apt:
+    name: "{{ node_exporter_package }}"
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Prometheus node exporter is enabled and running
+  ansible.builtin.systemd_service:
+    name: "{{ node_exporter_service }}"
+    enabled: true
+    state: started
+
+- name: Wait for node exporter metrics endpoint
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ node_exporter_port }}/metrics"
+    status_code: 200
+    return_content: true
+  register: node_exporter_metrics
+  until:
+    - node_exporter_metrics.status == 200
+    - "'node_uname_info' in node_exporter_metrics.content"
+  retries: 15
+  delay: 2
+
+- name: Verify node exporter listener
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -ltn
+      - "sport = :{{ node_exporter_port }}"
+  register: node_exporter_listener
+  changed_when: false
+  failed_when: (node_exporter_port | string) not in node_exporter_listener.stdout
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: node_exporter_failed_units
+  changed_when: false
+  failed_when: node_exporter_failed_units.stdout | trim | length > 0

@@ -1,0 +1,16 @@
+# monitor-01 desired state is intentionally defined in variables.tf:
+#   VM ID: 200
+#   IPv4:  192.168.2.52/24
+#   Node:  Proxmox-2
+#   Disk:  local-lvm, 80 GiB
+#   CPU:   4 vCPU
+#   RAM:   6144 MiB
+#
+# Supply secrets/identity through the environment, never this file:
+#
+# export TF_VAR_proxmox_api_token='iac@pve!opentofu=...'
+#
+# The monitor SSH public key is consumed by the Ansible hypervisor prerequisite
+# that manages the Proxmox cloud-init snippet, not by Terraform.
+#
+# Override values here only after an approved architecture change.
