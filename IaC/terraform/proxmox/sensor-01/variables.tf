@@ -22,6 +22,12 @@ variable "proxmox_node_name" {
   default     = "PROXMOX"
 }
 
+variable "clone_source_vm_id" {
+  description = "Validated Debian 13 QGA-enabled template used as the full-clone source."
+  type        = number
+  default     = 9001
+}
+
 variable "vm_id" {
   description = "Proxmox VM ID proposed for sensor-01; deployment preflight must prove it is unused."
   type        = number
@@ -64,12 +70,6 @@ variable "bridge" {
   default     = "vmbr0"
 }
 
-variable "image_datastore_id" {
-  description = "Datastore used to hold the imported Debian cloud image and cloud-init snippet."
-  type        = string
-  default     = "local"
-}
-
 variable "vm_datastore_id" {
   description = "Datastore used for sensor-01 system/log disk and cloud-init disk."
   type        = string
@@ -98,16 +98,4 @@ variable "protect_after_build" {
   description = "Enable Proxmox VM protection only after deployment and validation pass."
   type        = bool
   default     = false
-}
-
-variable "debian_cloud_image_url" {
-  description = "Pinned Debian 13 genericcloud QCOW2 image."
-  type        = string
-  default     = "https://cloud.debian.org/cdimage/cloud/trixie/20260712-2537/debian-13-genericcloud-amd64-20260712-2537.qcow2"
-}
-
-variable "debian_cloud_image_sha512" {
-  description = "SHA-512 checksum for the pinned Debian 13 genericcloud QCOW2 image."
-  type        = string
-  default     = "7ae53e9dbee282bfc16f289dec483dde3a8598769c38a267948310f7a2a52c662620198603bc52c142627efba379863d16079698a10b34102d55bcedd40e8d32"
 }
