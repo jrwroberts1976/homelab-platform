@@ -1,161 +1,150 @@
 # Target-State Architecture
 
-This is a working design, not yet approved as final.
+**Updated:** 10 September 2026  
+**Status:** approved working target; implementation continues incrementally
 
-## Greenfield repurpose principle
+The homelab has moved beyond the original greenfield discovery phase. Core host roles are now established and the remaining work is focused on access, logging, recovery and retiring the last legacy consolidation host.
 
-All repurposable compute hosts are being reassessed from first principles. Existing host names and current workloads do **not** determine their future role.
+## Core principles
 
-The final role for each host will be chosen only after the estate-wide audit compares:
+- `admin-01` is the dedicated administration and IaC controller.
+- The two Proxmox hosts remain standalone unless a future cluster design is separately justified and validated.
+- Infrastructure services run in explicit VMs/LXCs rather than directly on the hypervisors.
+- Physical Raspberry Pis are reserved for roles that benefit from location, media hardware, low power or direct peripheral access.
+- Public ingress to selected internal services uses Cloudflare Tunnel + Access rather than direct router port-forwards.
+- Monitoring and central logging are separate concerns but converge on `monitor-01`/Grafana for operations.
+- Git/IaC and documented recovery paths are authoritative; manual GUI-only state is not.
+- Legacy systems are removed only after persistent data, secrets and recovery dependencies are accounted for.
 
-- CPU capability and architecture
-- RAM capacity and upgrade options
-- storage capacity, health and performance
-- network interfaces and placement
-- power draw and physical location
-- workload dependencies and resilience requirements
-- backup/recovery requirements
-- image/platform compatibility
-- expected growth and maintenance burden
+## Target host roles
 
-Current workloads will be treated as migration inputs, not as reasons to preserve the present host role.
+| Asset | Target role |
+|---|---|
+| `admin-01` / Pi 3 / `.48` | Dedicated administration, SSH jump host, Git/Ansible/SOPS controller |
+| `PROXMOX` / `.70` | Primary standalone Proxmox compute/storage host and `ntp-01` |
+| `Proxmox-2` / `.71` | Secondary standalone Proxmox compute host and `ntp-02` |
+| `monitor-01` / `.52` | Metrics, alerting, dashboards and central logging platform |
+| `dns-01` / `.51` | Primary Pi-hole + Unbound resolver |
+| `dns-02` / `.50` | Secondary Pi-hole + Unbound resolver |
+| `mail-relay-01` / `.54` | Internal SMTP relay for homelab notifications |
+| `sensor-01` / `.55` | Passive network/security sensor platform |
+| `cloud-01` / `.53` | Private cloud/data service platform |
+| `edge-01` / `.56` | Dedicated Cloudflare Tunnel connector / edge ingress host |
+| `media-01` / Pi 5 / `.195` | Dedicated Kodi/media endpoint |
+| current Pi 4 `TestServer` / `.220` | Rebuild as dedicated garden BirdNET-Go host after legacy retirement |
+| `ids-01` | Retired; no active target role |
 
-## Working direction
+## Cloudflare access target
 
-- Public portfolio website: external static hosting where possible.
-- The existing HP ProDesk Proxmox installation will be retained as `pve-01`; no bare-metal OS rebuild is planned. It will be upgraded/configured in place after capacity and recovery gates are satisfied.
-- The ASUS ZenBook is the working target for `pve-02`, providing secondary Proxmox compute with `pbs-01`, monitoring and management workloads.
-- Raspberry Pis remain candidates for edge, appliance, location-dependent, test or lightweight roles, but no Pi role is assumed in advance.
-- Komodo Core placement is undecided until all compute hosts are audited.
-- Komodo Periphery will run only on Docker hosts approved in the final placement matrix.
-- Renovate remains a hosted GitHub App candidate with repository configuration in Git.
-- Jenkins / Stage 6 will retire after the replacement deployment path is proven.
-- BirdNET capture hardware is treated as a non-compute peripheral. Only the BirdNET-Go software workload needs compute placement.
-
-No proposed VM such as `docker-core-01` or `monitoring-01` is approved until the full hardware audit is complete.
-
-## Host-owned IaC direction
-
-The authoritative IaC root is `IaC/` in this repository. New Terraform and Ansible must be created there.
-
-Working structure:
+The approved remote-access architecture is:
 
 ```text
-IaC/
-├── terraform/
-│   └── proxmox/
-│       └── dns-02/
-└── ansible/
-    ├── inventories/
-    ├── playbooks/
-    └── roles/
+Internet
+   |
+   v
+Cloudflare Zero Trust / Access
+   |
+   v
+Cloudflare Tunnel
+   |
+   v
+edge-01 (CT103 on Proxmox-2)
+   |
+   +--> only explicitly published internal services
 ```
 
-Shared roles, modules and policy may be reused, but every deployable workload must have an explicit target host. `dns-02` is the first Proxmox workload being built under this structure.
+Design rules:
 
+- no inbound router port-forward is required for the tunnel;
+- Cloudflare Access protects administrative web applications;
+- prefer passkeys/security keys/strong MFA where supported, with TOTP fallback;
+- machine/API integrations use service authentication rather than interactive MFA;
+- tunnel credentials remain outside Git;
+- adding a public hostname is a reviewed configuration change, not an implicit wildcard exposure.
 
-## Host naming
+## Monitoring and central logging target
 
-This rebuild includes a deliberate hostname reset.
+`monitor-01` is the operations platform.
 
-- Existing hostnames are treated as legacy identifiers only.
-- Final hostnames must describe the approved future role of the machine.
-- Hostnames will not be changed until the hardware audit and target-role decision are complete.
-- During discovery, assets are tracked by current hostname, IP address, MAC address and hardware model so identity is not lost when names change.
-- DNS, DHCP reservations, monitoring targets, SSH known-host records, backup jobs and IaC inventories must be updated as part of each hostname cutover.
-- A hostname change is considered incomplete until the new identity is represented in Git and all dependent systems are validated.
+Current metrics stack:
 
-Working naming pattern:
+- Prometheus
+- Grafana
+- Alertmanager
+- Blackbox Exporter
+
+Target logging stack:
+
+- Loki on `monitor-01` or its directly managed monitoring stack;
+- Alloy collectors on approved hosts/sources;
+- low-cardinality labels;
+- Git-managed scrape/collection policy;
+- Grafana queries/dashboards for logs;
+- health alerts for ingestion failures and storage pressure.
+
+The existing ASUS router syslog receiver on `monitor-01` is the first validated central-log source. The old TestServer logging configuration is reference material only and is not migrated wholesale.
+
+## DNS resilience target
+
+The DNS architecture is complete in principle:
 
 ```text
-<role>-<nn>
+dns-01  192.168.2.51  CT101 on Proxmox-2  primary
+dns-02  192.168.2.50  CT100 on PROXMOX    secondary
 ```
 
-Examples only, not yet approved assignments:
+Both run Pi-hole + Unbound. DHCP remains on the ASUS router and advertises the two resolver addresses. `192.168.2.48` is now `admin-01` and must never be treated as a DNS resolver merely because historical documents once used that address for DietPi.
 
-```text
-pve-01
-docker-01
-monitoring-01
-security-01
-dns-01
-edge-01
-```
+## Security target
 
-No current machine is entitled to keep its existing hostname simply because that is its present role.
+Passive monitoring and active vulnerability scanning remain separate roles.
 
+`sensor-01` is the passive sensor platform on `PROXMOX`. The HP ProCurve port 24 mirror/SPAN path remains reserved for network capture. Suricata and Zeek deployment/validation should be documented and reproducible.
 
-## Backup direction
+Greenbone/vulnerability-scanning placement must remain independent of the capture sensor and should not run directly on a Proxmox hypervisor.
 
-The rebuilt backup platform must provide a web GUI while preserving Git/IaC as the configuration authority.
+## Backup and recovery target
 
-Working preference:
+Every infrastructure service needs both configuration reproducibility and a tested data-recovery path where data matters.
 
-- Proxmox Backup Server as the long-term estate backup platform, subject to final host/storage placement.
-- Backrest may be used as a transitional GUI for the existing Restic repositories during migration.
-- The degraded DietPi-attached 4 TB-class disk is not an acceptable long-term primary datastore.
-- No legacy backup path is retired until verification and restore testing proves replacement coverage.
+Priorities:
 
-See [Backup Strategy](BACKUP-STRATEGY.md).
+- define/test Proxmox guest backup and restore;
+- keep Git/IaC outside any single homelab host;
+- verify recovery of DNS, monitoring, mail relay, edge and cloud services;
+- protect BirdNET data/configuration separately from the old TestServer image;
+- complete the WD 4 TB SMART investigation before assigning it a dependable backup role;
+- never use a disk with unresolved historical media errors as the sole copy of irreplaceable data.
 
+## Raspberry Pi target roles
 
-## Security workload direction
+Physical Pi roles are now explicit:
 
-Greenbone should move off the legacy `ids-01` host and become a dedicated **`security-01` VM** on the Proxmox platform, subject to the Proxmox RAM upgrade and final capacity plan.
+- Pi 3 `admin-01`: administration only;
+- Pi 5 `media-01`: Kodi/media only;
+- Pi 4 currently named `TestServer`: clean rebuild for garden BirdNET-Go after migration cleanup.
 
-Working allocation:
+The Pi 4 rebuild should not carry forward the historical general-purpose Docker estate.
 
-- 4 vCPU
-- 6–8 GiB RAM
-- 80–120 GiB virtual disk initially
-- Debian VM
-- Greenbone Community Edition deployed through Docker Compose/IaC
+## Network target
 
-Greenbone should **not** run directly on the Proxmox hypervisor.
+- ASUS RT-AC86U remains router/DHCP authority.
+- HP ProCurve 2510G-24 remains the core wired switch.
+- Port 24 remains the known mirror/SPAN destination.
+- Local DNS uses `.51` + `.50`.
+- Proxmox management remains `.70` + `.71`.
+- Administrative access originates from `admin-01` wherever practical.
+- A future router/switch clean rebuild remains separate maintenance work and must preserve recovery access and documented network intent first.
 
-The network IDS/sensor role should remain separate from Greenbone. The working target is a dedicated `sensor-01` VM on Proxmox receiving mirrored traffic through a dedicated second physical NIC passed directly to the VM, while `security-01` performs vulnerability scanning over the normal LAN.
+## Completion criteria for the current rebuild programme
 
-This separation gives us:
+The current programme is considered substantially complete when:
 
-```text
-HP ProCurve port 24 (mirror/SPAN destination)
-└── dedicated second NIC on pve-01
-    └── direct passthrough to sensor-01 VM
-        └── Suricata
+1. Cloudflare Tunnel/Access is operational through `edge-01` and selected services no longer depend on NPM/Authelia for external access;
+2. Loki/Alloy central logging is operational on `monitor-01` with end-to-end validation;
+3. TestServer legacy responsibilities are retired with backup/recovery gates satisfied;
+4. the Pi 4 is rebuilt as the dedicated garden BirdNET-Go host;
+5. Proxmox node/storage and mail-relay recovery runbooks exist and have been tested where practical;
+6. diagrams, inventory, runbook registry and service documents agree with live placement.
 
-pve-01
-└── security-01 VM
-    └── Greenbone Community Edition
-```
-
-If the Proxmox host is not upgraded to enough RAM, Greenbone remains on its existing host until an alternative x86 placement is approved; it must not be squeezed onto an under-provisioned VM.
-
-
-## Network rebuild direction
-
-- HP ProCurve **port 24** is confirmed as the mirror/SPAN destination.
-- Port 24 is reserved for the dedicated Suricata capture path and must not carry normal management/data traffic.
-- Remaining switch ports will be labelled only after MAC-table/cabling discovery.
-- The ASUS router will receive a clean firmware/factory-reset rebuild before final DHCP and QoS policy is applied.
-- DHCP remains on the ASUS router in the working design.
-- Secondary DNS target: `dns-02`, an unprivileged Debian LXC on the primary Proxmox host, configured as Pi-hole + Unbound through `IaC/`.
-- DHCP reservations, DNS advertisement and QoS policy will be documented in Git before final cutover.
-
-See:
-
-- [Proposed Layout](PROPOSED-LAYOUT.md)
-- [HP ProCurve Port Map](../network/SWITCH-PORT-MAP.md)
-- [Router Clean-Rebuild Plan](../network/ROUTER-RESET-PLAN.md)
-
-
-## Greenfield rebuild policy
-
-Factory-default and clean-OS rebuilds are now an explicit part of the target architecture where they produce a simpler and more reproducible result than preserving historical state.
-
-- HP ProCurve: planned factory-default rebuild; port 24 remains the known mirror/SPAN destination.
-- ASUS router/AiMesh: planned clean firmware/factory-reset rebuild.
-- Compute hosts: fresh OS/install permitted where roles change materially or legacy state is highly entangled, **except `pve-01` (HP ProDesk), whose current Proxmox installation is explicitly retained and changed in place**.
-- Preserve required data/configuration and recovery evidence first; do not preserve an old OS merely to preserve an application.
-- No wipe/reset occurs until persistent data, secrets, rollback and target IaC are accounted for.
-
-See [Greenfield Rebuild Plan](../migrations/GREENFIELD-REBUILD-PLAN.md).
+See [OUTSTANDING-WORK.md](OUTSTANDING-WORK.md) for the current queue and [CURRENT-STATE.md](CURRENT-STATE.md) for the live estate.
