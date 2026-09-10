@@ -1,0 +1,30 @@
+# Managed by homelab-platform / Ansible.
+# Dedicated remote syslog receiver for RT-AC86U (192.168.2.1).
+
+module(load="imudp")
+
+ruleset(name="asus_router_remote") {
+  if ($fromhost-ip == "{{ router_syslog_receiver_allowed_source }}") then {
+    action(
+      type="omfile"
+      file="{{ router_syslog_receiver_log_file }}"
+      createDirs="on"
+      dirCreateMode="0750"
+      fileCreateMode="0640"
+      fileOwner="syslog"
+      fileGroup="adm"
+      template="RSYSLOG_TraditionalFileFormat"
+    )
+    stop
+  }
+
+  # Anything reaching this dedicated listener from another source is discarded.
+  stop
+}
+
+input(
+  type="imudp"
+  address="{{ router_syslog_receiver_bind_address }}"
+  port="{{ router_syslog_receiver_port }}"
+  ruleset="asus_router_remote"
+)
