@@ -1,0 +1,26 @@
+---
+network_sensor_config_expected_hostname: sensor-01
+network_sensor_config_expected_ipv4: 192.168.2.55
+network_sensor_config_home_net: "192.168.2.0/24"
+network_sensor_config_community_id_seed: 0
+
+# Phase 1 deliberately has no capture interface. Both engines are configured
+# with a nonexistent sentinel so accidental starts cannot capture eth0.
+network_sensor_config_capture_interface: ""
+network_sensor_config_capture_sentinel: sensor-capture-disabled
+
+network_sensor_config_gate_dir: /etc/homelab-network-sensor
+network_sensor_config_capture_gate_file: /etc/homelab-network-sensor/capture-enabled
+
+network_sensor_config_suricata_file: /etc/suricata/suricata.yaml
+network_sensor_config_suricata_backup: /etc/suricata/suricata.yaml.before-homelab-phase1
+network_sensor_config_suricata_rules_file: /var/lib/suricata/rules/suricata.rules
+network_sensor_config_suricata_dropin_dir: /etc/systemd/system/suricata.service.d
+network_sensor_config_suricata_dropin: /etc/systemd/system/suricata.service.d/10-homelab-capture-gate.conf
+
+network_sensor_config_zeek_prefix: /opt/zeek
+network_sensor_config_zeek_node_file: /opt/zeek/etc/node.cfg
+network_sensor_config_zeek_networks_file: /opt/zeek/etc/networks.cfg
+network_sensor_config_zeek_local_file: /opt/zeek/share/zeek/site/local.zeek
+network_sensor_config_zeek_policy_file: /opt/zeek/share/zeek/site/homelab.zeek
+network_sensor_config_zeek_digest_salt_file: /opt/zeek/etc/homelab-digest-salt
