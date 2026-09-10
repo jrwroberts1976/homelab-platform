@@ -3,6 +3,7 @@
   hosts:
     - proxmox_hosts
     - monitoring_hosts
+    - sensor_hosts
     - dns_resolvers
   become: true
   gather_facts: true
