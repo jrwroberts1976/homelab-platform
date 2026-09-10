@@ -80,3 +80,20 @@ Terraform plan.
 
 This workflow creates/configures only the VM foundation. Suricata, Zeek and the
 rest of the network-sensor toolchain are a separate Ansible deployment gate.
+
+
+## Post-create validation
+
+If VM creation completes but a later validation step fails, **do not rerun the
+create workflow**. VM ID 201 is already managed by Terraform.
+
+Use:
+
+```bash
+./IaC/scripts/validate-sensor-01-vm.sh
+```
+
+This workflow is validation-only with respect to infrastructure. It proves
+Terraform ownership, the live Proxmox VM specification, absence of premature USB
+passthrough, QEMU Guest Agent, SSH/cloud-init/identity/network health, toolchain
+absence, and a zero-drift Terraform plan.
