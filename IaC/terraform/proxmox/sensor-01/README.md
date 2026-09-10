@@ -37,3 +37,23 @@ sensor-01 defaults to Proxmox-2 unless a later architecture review explicitly
 changes the placement policy.
 
 Persistent Terraform state belongs outside Git under the normal homelab IaC state directory convention.
+
+
+## Plan-only workflow
+
+From a current checkout of this branch on TestServer:
+
+```bash
+./IaC/scripts/plan-sensor-01.sh
+```
+
+The workflow performs live identity/resource gates, reconciles only the required
+Proxmox import/cloud-init prerequisites through Ansible, creates/uses durable
+Terraform working state under `~/.local/state/homelab-iac/sensor-01/terraform`,
+and generates a saved plan.
+
+It rejects any Terraform action other than creation of
+`proxmox_virtual_environment_vm.sensor` and, when required,
+`proxmox_download_file.debian_cloud_image`.
+
+The script deliberately does **not** run `terraform apply`.
