@@ -1,4 +1,8 @@
 ---
+proxmox_vm_import_expected_hostname: "{{ inventory_hostname }}"
+proxmox_vm_import_expected_ipv4: "{{ ansible_host }}"
+proxmox_vm_import_expected_interface: vmbr0
+
 proxmox_vm_import_storage_id: local
 proxmox_vm_import_storage_content:
   - backup
