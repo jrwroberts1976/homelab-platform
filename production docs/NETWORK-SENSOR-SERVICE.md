@@ -262,6 +262,17 @@ unless a later capacity/design review explicitly changes that policy.
 
 ### Phase 1 — toolchain
 
+IaC entrypoint:
+
+```bash
+./IaC/scripts/deploy-network-sensor-toolchain.sh
+```
+
+The wrapper enforces a management-NIC-only preflight, repository reachability,
+Ansible syntax validation, post-install version/runtime checks, Node Exporter
+reachability and a zero-change second Ansible pass. It must refuse phase 1 if a
+capture interface is already present or either packet engine is running.
+
 Can be completed before the USB adapter arrives:
 
 - build `sensor-01` with the phase-1 3 GiB allocation;
