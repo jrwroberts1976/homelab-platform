@@ -1,0 +1,20 @@
+# Proposed sensor-01 desired state:
+#   VM ID: 201
+#   IPv4:  192.168.2.55/24
+#   Node:  PROXMOX
+#   Disk:  local-lvm, 80 GiB
+#   CPU:   4 vCPU
+#   RAM:   6144 MiB
+#
+# Both VM ID and IPv4 must pass a live unused-resource preflight before apply.
+#
+# Supply secrets through the environment, never this file:
+#
+# export TF_VAR_proxmox_api_token='iac@pve!opentofu=...'
+#
+# The controller SSH public key is consumed by the Ansible hypervisor
+# prerequisite which installs the sensor-01 cloud-init snippet.
+#
+# The future USB capture NIC is intentionally absent from initial Terraform.
+# Add its stable passthrough identity only after the hardware arrives and is
+# positively identified on PROXMOX.
