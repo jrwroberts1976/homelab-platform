@@ -1,8 +1,8 @@
 # HP ProCurve Port Map
 
-**Status:** current discovery / target-design working document  
-**Switch:** HP ProCurve 2510G-24  
-**Management address:** `192.168.2.16`  
+**Status:** current discovery / target-design working document
+**Switch:** HP ProCurve 2510G-24
+**Management address:** `192.168.2.16`
 **Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 ## Known switch state

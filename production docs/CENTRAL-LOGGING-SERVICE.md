@@ -1,7 +1,7 @@
 # Central Logging Service
 
-**Authority:** `jrwroberts1976/homelab-platform`  
-**Primary platform:** `monitor-01.jameshouse` / `192.168.2.52`  
+**Authority:** `jrwroberts1976/homelab-platform`
+**Primary platform:** `monitor-01.jameshouse` / `192.168.2.52`
 **Status:** planned; router local syslog collection is already operational
 
 ## Purpose

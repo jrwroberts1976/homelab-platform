@@ -1,9 +1,9 @@
 # Homelab Network Sensor Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** VM deployed; sensor/capture implementation in progress  
-**Host:** `sensor-01.jameshouse` / `192.168.2.55`  
-**Placement:** VM201 on `PROXMOX` / `192.168.2.70`  
+**Status:** VM deployed; sensor/capture implementation in progress
+**Host:** `sensor-01.jameshouse` / `192.168.2.55`
+**Placement:** VM201 on `PROXMOX` / `192.168.2.70`
 **Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 ## Purpose

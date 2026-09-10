@@ -1,9 +1,9 @@
 # ids-01 Historical Audit
 
-**Original audit:** 6 September 2026  
-**Decommission status updated:** 10 September 2026  
-**Former hostname:** `ids-01`  
-**Former address:** `192.168.2.242`  
+**Original audit:** 6 September 2026
+**Decommission status updated:** 10 September 2026
+**Former hostname:** `ids-01`
+**Former address:** `192.168.2.242`
 **Lifecycle:** **DECOMMISSIONED / RETIRED**
 
 `ids-01` is no longer an active homelab host. This document is retained only as historical evidence and migration archaeology. It must not be treated as a deployment, monitoring, DNS, backup, security or rollback target unless a task explicitly concerns historical cleanup/recovery evidence.
@@ -73,6 +73,6 @@ SHA256:
 9c68b98add0a354a3dbfe7765e3cf0256a42e20405f5e6a842fa6ef2b0ae6981
 ```
 
-Historical audit: **COMPLETE**  
-Active host status: **RETIRED**  
+Historical audit: **COMPLETE**
+Active host status: **RETIRED**
 Current hardware identity: **Proxmox-2 / 192.168.2.71**

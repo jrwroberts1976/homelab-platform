@@ -1,9 +1,9 @@
 # Proxmox-2 Current-State Audit
 
-**Updated:** 10 September 2026  
-**Hostname:** `Proxmox-2`  
-**Address:** `192.168.2.71`  
-**Role:** secondary standalone Proxmox VE host / `ntp-02`  
+**Updated:** 10 September 2026
+**Hostname:** `Proxmox-2`
+**Address:** `192.168.2.71`
+**Role:** secondary standalone Proxmox VE host / `ntp-02`
 **Status:** operational
 
 ## Identity

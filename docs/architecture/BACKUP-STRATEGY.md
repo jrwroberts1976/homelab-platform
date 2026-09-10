@@ -1,7 +1,7 @@
 # Backup Strategy
 
-**Updated:** 10 September 2026  
-**Status:** active design; implementation and restore proof incomplete  
+**Updated:** 10 September 2026
+**Status:** active design; implementation and restore proof incomplete
 **Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 ## Requirement

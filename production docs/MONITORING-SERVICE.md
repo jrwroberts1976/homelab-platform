@@ -1,9 +1,9 @@
 # Homelab Monitoring Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Primary host:** `monitor-01.jameshouse` / `192.168.2.52`  
-**Placement:** VM200 on `Proxmox-2` / `192.168.2.71`  
-**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Primary host:** `monitor-01.jameshouse` / `192.168.2.52`
+**Placement:** VM200 on `Proxmox-2` / `192.168.2.71`
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 **Status:** core metrics/alerting operational; central logging implementation pending
 
 ## Purpose

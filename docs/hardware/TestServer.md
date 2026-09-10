@@ -1,11 +1,11 @@
 # TestServer Current-State Audit
 
-**Original audit:** 6 September 2026  
-**Current disposition updated:** 10 September 2026  
-**Hostname:** `TestServer`  
-**Address:** `192.168.2.220`  
-**Hardware:** Raspberry Pi 4 Model B Rev 1.5  
-**Current role:** legacy migration source  
+**Original audit:** 6 September 2026
+**Current disposition updated:** 10 September 2026
+**Hostname:** `TestServer`
+**Address:** `192.168.2.220`
+**Hardware:** Raspberry Pi 4 Model B Rev 1.5
+**Current role:** legacy migration source
 **Target role:** clean garden `birdnet-01` / BirdNET-Go host after retirement
 
 The original audit proved that TestServer was a highly consolidated Docker/BirdNET/CI/monitoring host. It is no longer the preferred administration or monitoring authority. This document now treats that old runtime as migration evidence rather than the target architecture.
@@ -141,6 +141,6 @@ SHA256:
 d6330f81585b919fe746a947f3013c82f00d329d76c979d2b2b9a0e25d801391
 ```
 
-Historical audit status: **COMPLETE**  
-Current retirement status: **IN PROGRESS**  
+Historical audit status: **COMPLETE**
+Current retirement status: **IN PROGRESS**
 Reimage permission: **BLOCKED pending backup/recovery and remaining-dependency gates**

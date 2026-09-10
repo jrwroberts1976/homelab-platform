@@ -1,6 +1,6 @@
 # Target-State Architecture
 
-**Updated:** 10 September 2026  
+**Updated:** 10 September 2026
 **Status:** approved working target; implementation continues incrementally
 
 The homelab has moved beyond the original greenfield discovery phase. Core host roles are now established and the remaining work is focused on access, logging, recovery and retiring the last legacy consolidation host.

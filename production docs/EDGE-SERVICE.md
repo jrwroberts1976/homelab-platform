@@ -1,8 +1,8 @@
 # Cloudflare Edge Service
 
-**Authority:** `jrwroberts1976/homelab-platform`  
-**Host:** `edge-01.jameshouse` / `192.168.2.56`  
-**Placement:** LXC CT103 on `Proxmox-2` (`192.168.2.71`)  
+**Authority:** `jrwroberts1976/homelab-platform`
+**Host:** `edge-01.jameshouse` / `192.168.2.56`
+**Placement:** LXC CT103 on `Proxmox-2` (`192.168.2.71`)
 **Status:** base host operational; `cloudflared`, tunnel and Access policies pending
 
 ## Purpose

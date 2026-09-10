@@ -1,10 +1,10 @@
 # admin-01 Administration Host
 
-**Updated:** 10 September 2026  
-**Hostname:** `admin-01`  
-**Address:** `192.168.2.48`  
-**Hardware:** Raspberry Pi 3  
-**Role:** dedicated homelab administration / SSH jump / IaC controller  
+**Updated:** 10 September 2026
+**Hostname:** `admin-01`
+**Address:** `192.168.2.48`
+**Hardware:** Raspberry Pi 3
+**Role:** dedicated homelab administration / SSH jump / IaC controller
 **Status:** operational
 
 ## Purpose

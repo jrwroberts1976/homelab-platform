@@ -4,7 +4,7 @@
 **Receiver:** `monitor-01.jameshouse` / `192.168.2.52`  
 **Source:** ASUS `RT-AC86U` / `192.168.2.1`  
 **Transport:** UDP/5514  
-**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 **Status:** operational; receiver and router forwarding validated 10 September 2026; Alloy/Loki ingestion pending
 
 ## Purpose

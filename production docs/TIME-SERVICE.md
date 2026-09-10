@@ -2,7 +2,7 @@
 
 **Authority:** `jrwroberts1976/homelab-platform`  
 **Implementation:** Ansible / Chrony  
-**Scope:** `192.168.2.0/24`  
+**Scope:** `192.168.2.0/24`
 **Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 ## Purpose

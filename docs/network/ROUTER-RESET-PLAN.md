@@ -1,8 +1,8 @@
 # Router Clean-Rebuild Plan
 
-**Status:** planned maintenance; not yet executed  
-**Router:** ASUS RT-AC86U / `192.168.2.1`  
-**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Status:** planned maintenance; not yet executed
+**Router:** ASUS RT-AC86U / `192.168.2.1`
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 **Known AiMesh nodes:** `192.168.2.181`, `192.168.2.218`
 
 ## Goal

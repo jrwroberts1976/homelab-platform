@@ -1,7 +1,7 @@
 # PROXMOX Current-State Audit
 
-**Current-state refresh:** 10 September 2026  
-**Address:** `192.168.2.70`  
+**Current-state refresh:** 10 September 2026
+**Address:** `192.168.2.70`
 **Role:** primary standalone Proxmox VE host / `ntp-01`
 
 This document began as the 6 September hardware audit. The current-state sections below supersede the original workload-placement conclusions while retaining the useful hardware evidence.
@@ -138,8 +138,8 @@ Constraints:
 
 ## Status
 
-Hardware audit: **COMPLETE**  
-Current workload placement: **ACTIVE / DOCUMENTED**  
+Hardware audit: **COMPLETE**
+Current workload placement: **ACTIVE / DOCUMENTED**
 Storage/recovery follow-up: **IN PROGRESS**
 
 Historical audit source: TestServer read-only audit of `192.168.2.70` on 6 September 2026. Historical report SHA256: `a4cac78c251e804edbb92d824b9558db46535e0c5f205862a911ef0008654a02`.

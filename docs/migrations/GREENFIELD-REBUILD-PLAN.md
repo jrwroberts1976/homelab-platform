@@ -1,6 +1,6 @@
 # Greenfield Rebuild Plan
 
-**Updated:** 10 September 2026  
+**Updated:** 10 September 2026
 **Status:** operating principle remains active; several major rebuilds are now complete
 
 ## Principle

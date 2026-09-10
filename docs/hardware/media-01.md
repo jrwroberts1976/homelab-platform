@@ -1,11 +1,11 @@
 # media-01 Current-State Audit
 
-**Original audit:** 6 September 2026  
-**Current-state refresh:** 10 September 2026  
-**Hostname:** `media-01`  
-**Address:** `192.168.2.195`  
-**Hardware:** Raspberry Pi 5 Model B Rev 1.0  
-**Current role:** dedicated Kodi/media endpoint  
+**Original audit:** 6 September 2026
+**Current-state refresh:** 10 September 2026
+**Hostname:** `media-01`
+**Address:** `192.168.2.195`
+**Hardware:** Raspberry Pi 5 Model B Rev 1.0
+**Current role:** dedicated Kodi/media endpoint
 **Lifecycle:** operational
 
 The earlier role-neutral audit is now superseded by an approved production role. `media-01` is a **physical Raspberry Pi 5**, not a Proxmox guest and not a k3s node.
@@ -106,5 +106,5 @@ SHA256:
 a8e00978294a31b1aeb066a654f2880ae96234ecbfe0663eff7a6e8f311a82d8
 ```
 
-Historical hardware audit: **COMPLETE**  
+Historical hardware audit: **COMPLETE**
 Current production role: **OPERATIONAL**

@@ -1,6 +1,6 @@
 # Homelab Network and Service Layout
 
-**Status:** current estate plus approved next work  
+**Status:** current estate plus approved next work
 **Updated:** 10 September 2026
 
 This document is the text/mermaid counterpart to the network overview image. It deliberately distinguishes **live**, **in progress**, **planned** and **retired** state.

@@ -1,11 +1,11 @@
 # DietPi Historical Audit
 
-**Original audit:** 6 September 2026  
-**Lifecycle updated:** 10 September 2026  
-**Former hostname:** `DietPi`  
-**Former address:** `192.168.2.48`  
-**Hardware:** Raspberry Pi 3 Model B Rev 1.2  
-**Current identity of the Pi:** rebuilt as `admin-01` / `192.168.2.48`  
+**Original audit:** 6 September 2026
+**Lifecycle updated:** 10 September 2026
+**Former hostname:** `DietPi`
+**Former address:** `192.168.2.48`
+**Hardware:** Raspberry Pi 3 Model B Rev 1.2
+**Current identity of the Pi:** rebuilt as `admin-01` / `192.168.2.48`
 **Lifecycle:** historical / retired operating-system role
 
 This file records the pre-rebuild DietPi/Pi-hole state for historical evidence. The DietPi operating-system role and physical DNS service are no longer active.
@@ -98,6 +98,6 @@ SHA256:
 d2252d3613d55359fdfa83616eb5f6fed3594fa9b9e73d08ff285b128a170619
 ```
 
-Historical hardware/workload audit: **COMPLETE**  
-DietPi service role: **RETIRED**  
+Historical hardware/workload audit: **COMPLETE**
+DietPi service role: **RETIRED**
 Current hardware role: **admin-01 administration host**

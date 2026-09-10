@@ -1,9 +1,9 @@
 # DNS Service Recovery Plan
 
 **Repository:** `jrwroberts1976/homelab-platform`  
-**Authority:** reviewed `main` branch  
-**Runbook:** `production docs/DNS-SERVICE-RECOVERY-PLAN.md`  
-**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Authority:** reviewed `main` branch
+**Runbook:** `production docs/DNS-SERVICE-RECOVERY-PLAN.md`
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 **Current resolver pair validated:** 10 September 2026
 
 ## Purpose

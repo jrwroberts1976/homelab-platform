@@ -1,6 +1,6 @@
 # Migration Tracker
 
-**Updated:** 10 September 2026  
+**Updated:** 10 September 2026
 **Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 This tracker records the controlled migration from the legacy multi-purpose homelab into the current role-based platform.

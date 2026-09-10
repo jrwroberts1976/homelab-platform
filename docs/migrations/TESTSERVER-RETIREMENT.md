@@ -1,8 +1,8 @@
 # TestServer Retirement Plan
 
-**Host:** `TestServer` / `192.168.2.220`  
-**Hardware:** Raspberry Pi 4 Model B Rev 1.5  
-**Target reuse:** clean garden `birdnet-01` / BirdNET-Go host  
+**Host:** `TestServer` / `192.168.2.220`
+**Hardware:** Raspberry Pi 4 Model B Rev 1.5
+**Target reuse:** clean garden `birdnet-01` / BirdNET-Go host
 **Status:** retirement in progress; destructive cleanup blocked by backup/recovery gate
 
 ## Goal

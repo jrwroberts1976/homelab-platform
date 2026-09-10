@@ -1,10 +1,10 @@
 # Homelab Cloud Data Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Primary service:** Nextcloud  
-**Host:** `cloud-01.jameshouse` / `192.168.2.53`  
-**Placement:** VM200 on `PROXMOX` / `192.168.2.70`  
-**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Primary service:** Nextcloud
+**Host:** `cloud-01.jameshouse` / `192.168.2.53`
+**Placement:** VM200 on `PROXMOX` / `192.168.2.70`
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 **Status:** VM deployed/running; production data placement remains blocked pending final WD 4 TB disk acceptance and independent backup
 
 ## Production identity

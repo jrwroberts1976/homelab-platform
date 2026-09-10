@@ -1,6 +1,6 @@
 # Outstanding Work
 
-**Updated:** 10 September 2026  
+**Updated:** 10 September 2026
 **Controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 This register records approved or known next work for the current homelab. It is intentionally separate from historical migration notes so completed work is not confused with the active queue.

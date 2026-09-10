@@ -1,6 +1,6 @@
 # Current-State Architecture
 
-**Updated:** 10 September 2026  
+**Updated:** 10 September 2026
 **Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 This document records the live estate after the September 2026 rebuild work. Historical audit documents remain useful evidence, but this file is the current architecture summary.

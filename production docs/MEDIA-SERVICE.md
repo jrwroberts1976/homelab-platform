@@ -3,9 +3,9 @@
 **Authority:** `jrwroberts1976/homelab-platform`  
 **Host:** `media-01.jameshouse`  
 **IPv4:** `192.168.2.195`  
-**Platform:** physical Raspberry Pi 5, Debian 13, 512 GB-class NVMe  
+**Platform:** physical Raspberry Pi 5, Debian 13, 512 GB-class NVMe
 **Primary workload:** Kodi 21 media endpoint  
-**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 **Status:** operational; extended Pi/NVMe monitoring and central logging remain follow-up work
 
 ## Service role
