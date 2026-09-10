@@ -1,19 +1,15 @@
-resource "proxmox_download_file" "debian_cloud_image" {
-  content_type       = "import"
-  datastore_id       = var.image_datastore_id
-  node_name          = var.proxmox_node_name
-  url                = var.debian_cloud_image_url
-  file_name          = "debian-13-genericcloud-amd64-20260712-2537.qcow2"
-  checksum           = var.debian_cloud_image_sha512
-  checksum_algorithm = "sha512"
-  overwrite          = false
-}
-
 resource "proxmox_virtual_environment_vm" "sensor" {
   name        = var.hostname
   description = "Homelab passive network/security sensor managed by homelab-platform/IaC"
   node_name   = var.proxmox_node_name
   vm_id       = var.vm_id
+
+  clone {
+    vm_id        = var.clone_source_vm_id
+    node_name    = var.proxmox_node_name
+    datastore_id = var.vm_datastore_id
+    full         = true
+  }
 
   tags = [
     "homelab",
@@ -45,12 +41,17 @@ resource "proxmox_virtual_environment_vm" "sensor" {
 
   scsi_hardware = "virtio-scsi-single"
 
+  # Match the inherited template disk attributes explicitly while resizing it.
+  # Provider clone semantics require inherited non-default disk attributes to
+  # be restated when a cloned disk is modified.
   disk {
     datastore_id = var.vm_datastore_id
-    import_from  = proxmox_download_file.debian_cloud_image.id
     interface    = "scsi0"
-    iothread     = true
+    aio          = "io_uring"
+    backup       = true
+    cache        = "none"
     discard      = "on"
+    iothread     = true
     ssd          = true
     size         = var.disk_size_gb
   }
