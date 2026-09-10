@@ -18,7 +18,7 @@
   ansible.builtin.file:
     path: "{{ router_syslog_receiver_log_dir }}"
     state: directory
-    owner: syslog
+    owner: root
     group: adm
     mode: "0750"
 
