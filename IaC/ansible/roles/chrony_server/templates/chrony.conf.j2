@@ -1,0 +1,19 @@
+# Managed by homelab-platform/IaC. Do not edit by hand.
+
+{% for pool in chrony_upstream_pools %}
+pool {{ pool }} iburst maxsources 4
+{% endfor %}
+
+driftfile /var/lib/chrony/chrony.drift
+makestep {{ chrony_makestep_threshold }} {{ chrony_makestep_updates }}
+rtcsync
+
+# Serve NTP only to approved LAN clients.
+{% for network in chrony_allow_networks %}
+allow {{ network }}
+{% endfor %}
+
+keyfile /etc/chrony/chrony.keys
+ntsdumpdir /var/lib/chrony
+leapsectz right/UTC
+logdir /var/log/chrony
