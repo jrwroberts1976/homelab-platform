@@ -3,13 +3,14 @@
 **Authority:** `jrwroberts1976/homelab-platform`  
 **Host:** `media-01.jameshouse`  
 **IPv4:** `192.168.2.195`  
-**Platform:** Raspberry Pi 5, Debian 13, 512 GB-class NVMe  
+**Platform:** physical Raspberry Pi 5, Debian 13, 512 GB-class NVMe  
 **Primary workload:** Kodi 21 media endpoint  
-**Status:** operational; final nftables deployment and extended Pi/NVMe monitoring remain follow-up gates
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Status:** operational; extended Pi/NVMe monitoring and central logging remain follow-up work
 
 ## Service role
 
-`media-01` is a dedicated living-room/media endpoint built and maintained from Git-managed Ansible.
+`media-01` is a dedicated Raspberry Pi 5 living-room/media endpoint built and maintained from Git-managed Ansible. It is not a Proxmox guest and is not a k3s node.
 
 The operating-system service layer is reproducible. Media content under `/srv/media` is user data and is not recreated by the role.
 
@@ -22,28 +23,13 @@ Kodi runs as a dedicated systemd service:
 - unit: `kodi.service`
 - user: `james`
 - launcher: `/usr/bin/kodi-standalone`
-- LightDM is disabled
-- service restarts automatically after failure
-- service start/stop enforces a single `kodi.bin` instance
-- boot target remains `graphical.target`
+- LightDM disabled
+- automatic restart after failure
+- single `kodi.bin` process enforced across normal service restarts
 
-Managed Kodi settings include:
+Managed settings include playback cache tuning, Unknown Sources, loopback EventServer control, Open-Meteo weather, OpenSubtitles.com and autocompletion.
 
-- playback cache mode: all network filesystems
-- playback cache size: 768 MiB
-- read factor: 4x
-- Unknown Sources: enabled
-- local EventServer control: enabled on loopback only
-- weather service: Open-Meteo
-- movie/TV subtitle service: OpenSubtitles.com
-
-Managed official Kodi add-ons:
-
-- `weather.openmeteo`
-- `service.subtitles.opensubtitles-com`
-- `plugin.program.autocompletion`
-
-OpenSubtitles.com requires a user account to download subtitles. Credentials are not stored in Git.
+Credentials for third-party services are not stored in Git.
 
 ### Media storage and SMB
 
@@ -70,82 +56,57 @@ Authenticated SMB share:
 
 Samba policy:
 
-- user authentication required
-- user: `james`
-- SMB signing required
-- guest access disabled
-- share writable on the household LAN
-- Samba credentials are supplied from protected controller environment state, not Git
-- writes are forced to the `james` account so Kodi and SMB see consistent ownership
+- authenticated access only;
+- SMB signing required;
+- guest access disabled;
+- household-LAN writable share;
+- credentials supplied outside Git;
+- writes mapped consistently to the `james` account.
 
 Kodi uses local filesystem paths rather than looping back through SMB.
 
 ### Time
 
-`media-01` uses Chrony as an NTP client.
+`media-01` uses the homelab Chrony pair:
 
-Preferred homelab sources:
-
-1. `192.168.2.70` — primary/preferred
-2. `192.168.2.71` — secondary
-
-The Ansible role refuses to complete unless a homelab source is selected and Chrony reports a normal leap state.
+1. `192.168.2.70` — preferred `ntp-01`
+2. `192.168.2.71` — secondary `ntp-02`
 
 ### Monitoring
 
-Prometheus node_exporter is installed and enabled on TCP/9100.
+Prometheus node exporter is expected on TCP/9100 and `monitor-01` (`192.168.2.52`) is the monitoring platform.
 
-Target monitoring host:
+Additional useful coverage:
 
-```text
-monitor-01.jameshouse
-192.168.2.52
-```
-
-Still to add:
-
-- Raspberry Pi temperature/throttling metrics
-- NVMe SMART/health metrics
-- Kodi service availability alerting
-- Kodi log forwarding through Alloy to Loki once Loki is deployed
+- Raspberry Pi temperature/throttling;
+- NVMe SMART/health;
+- Kodi service availability where actionable;
+- Alloy/Loki log forwarding after the fresh central logging platform is deployed.
 
 ### Host firewall
 
-An nftables role is defined in the media branch and is the intended host policy.
+The intended nftables policy is:
 
-Target inbound policy:
+- default-deny inbound;
+- SSH TCP/22 from the LAN;
+- SMB TCP/445 from the LAN;
+- node exporter TCP/9100 from `monitor-01` only;
+- ICMP/ICMPv6 allowed;
+- DHCP renewal from `192.168.2.1` allowed;
+- loopback and established/related traffic allowed.
 
-- default deny
-- SSH 22/tcp from `192.168.2.0/24`
-- SMB 445/tcp from `192.168.2.0/24`
-- node_exporter 9100/tcp from `192.168.2.52` only
-- ICMP/ICMPv6 allowed
-- DHCP renewal allowed from `192.168.2.1`
-- loopback and established/related traffic allowed
-
-The live host audit before this role was applied showed no UFW, firewalld, nftables or iptables firewall. Do not mark the firewall production gate complete until a live apply and remote port test prove the nftables policy.
+Do not mark firewall work complete unless the live rules and remote reachability tests prove the expected policy.
 
 ## IaC paths
 
-Primary deployment:
-
 ```text
+IaC/ansible/playbooks/media-01-preflight.yml
 IaC/ansible/playbooks/media-01.yml
-```
-
-Roles:
-
-```text
 IaC/ansible/roles/chrony_client/
 IaC/ansible/roles/media_endpoint/
 IaC/ansible/roles/media_smb/
 IaC/ansible/roles/node_exporter/
 IaC/ansible/roles/media_firewall/
-```
-
-Inventory:
-
-```text
 IaC/ansible/inventory/hosts.yml
 ```
 
@@ -154,71 +115,52 @@ IaC/ansible/inventory/hosts.yml
 Preferred controller:
 
 ```text
-TestServer
-192.168.2.220
+admin-01.jameshouse
+192.168.2.48
 ```
 
-Normal apply:
+Normal pattern:
 
 ```bash
-cd /var/tmp/media-01
-git fetch origin --prune
-git checkout --detach origin/feature/media-01
-
-source "$HOME/.config/homelab-iac/media-01.env"
-
-cd IaC/ansible
+cd ~/projects/homelab-platform/IaC/ansible
+ansible-playbook --syntax-check playbooks/media-01.yml
 ansible-playbook playbooks/media-01.yml
 ```
 
-Do not print the contents of `media-01.env`.
+If protected environment state is required, source it without printing its contents.
 
 ## Validation standard
 
-A normal deployment is considered converged when a second run reports:
+A normal deployment is considered converged when a second run reports no unintended changes and zero failures.
 
-```text
-changed=0
-failed=0
-```
+Validate at least:
 
-Validated service gates include:
-
-- exactly one Kodi process
-- Kodi managed settings persisted
-- approved official add-ons installed
-- Samba configuration valid
-- authenticated SMB access works
-- Kodi media sources point to local media directories
-- Chrony selects a homelab time source
-- node_exporter is active
-- zero failed systemd units
-
-Two consecutive idempotent Ansible runs were proven before the final add-on/firewall additions. Re-run the idempotence gate after the final firewall deployment.
+- exactly one Kodi process;
+- managed Kodi settings persisted;
+- Samba configuration valid;
+- authenticated SMB access works;
+- Chrony selects a homelab time source;
+- node exporter is active/reachable according to policy;
+- zero failed systemd units;
+- firewall behaviour matches the documented allowlist.
 
 ## Recovery
 
-The service is intentionally rebuilt from Git rather than restored as an opaque OS image.
-
 Recovery order:
 
-1. install/boot supported Debian 13 on the Raspberry Pi 5;
-2. restore SSH/controller access;
-3. check out the reviewed media branch;
-4. restore protected SMB credential environment state;
-5. run `playbooks/media-01.yml`;
-6. restore/copy media content into `/srv/media` if required;
-7. validate Kodi, SMB, Chrony, monitoring and firewall policy;
-8. run a second Ansible pass and require zero drift.
+1. install/boot a supported Debian/Raspberry Pi OS base on the Pi 5;
+2. restore SSH access from `admin-01`;
+3. restore protected credential material outside Git;
+4. run the authoritative Ansible playbook;
+5. restore media content under `/srv/media` if required;
+6. validate Kodi, SMB, Chrony, monitoring and firewall policy;
+7. repeat the Ansible run and require no unintended drift.
 
-Kodi configuration that is explicitly managed by the role is reproducible. User media files are not.
+The intended recovery identity is always `media-01`, not the historical `k3s-node-01` alias.
 
-## Remaining completion gates
+## Remaining follow-up
 
-- apply and remotely validate nftables
-- verify node_exporter 9100 is reachable from `monitor-01` and blocked from ordinary LAN clients
-- deploy the `media-01` target change to the live Prometheus configuration
-- add Pi temperature/throttling and NVMe health metrics
-- set the final Open-Meteo location in Kodi
-- configure the user's OpenSubtitles.com account
-- add Alloy/Loki logging when the central Loki service exists
+- confirm final firewall behaviour after any later network change;
+- keep Prometheus target state aligned with the current inventory;
+- add Pi temperature/throttling and NVMe health metrics;
+- add Alloy/Loki logging when `CENTRAL-LOGGING-SERVICE.md` is implemented.
