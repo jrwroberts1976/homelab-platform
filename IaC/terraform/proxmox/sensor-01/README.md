@@ -2,11 +2,16 @@
 
 This stack defines the initial management-side VM for `sensor-01` on `PROXMOX`.
 
+The VM is built as a **full clone of validated Debian 13 template VM 9001**
+(`debian-13-cloud-template-qga`). This avoids a second cloud-image lifecycle
+inside the sensor stack and reuses the existing QGA/cloud-init-ready base.
+
 It intentionally creates only the VM system disk, cloud-init and normal management NIC. The future mirrored-port capture adapter is not represented until the physical USB NIC arrives and its stable passthrough identity is known.
 
 ## Proposed resources
 
 - node: `PROXMOX`
+- clone source: VM `9001` (`debian-13-cloud-template-qga`), full clone
 - VM ID: `201` (must be proved unused)
 - management IPv4: `192.168.2.55/24` (must be proved unused)
 - 4 vCPU
@@ -17,13 +22,13 @@ It intentionally creates only the VM system disk, cloud-init and normal manageme
 
 ## Safety
 
-Run `IaC/ansible/playbooks/proxmox-sensor-prereqs.yml` first so the cloud-init snippet and import storage capability exist.
+Run `IaC/ansible/playbooks/proxmox-sensor-prereqs.yml` first so the managed cloud-init snippet exists.
 
 Before apply, prove:
 
 - VM/CT ID 201 is unused on PROXMOX;
 - 192.168.2.55 does not answer ARP/ICMP and is not reserved elsewhere;
-- the Terraform plan contains only the Debian image resource and sensor VM;
+- the Terraform plan contains only creation of the sensor VM from template 9001;
 - no USB/capture device is attached yet;
 - PROXMOX retains safe memory headroom after the phase-1 VM starts.
 
@@ -52,8 +57,6 @@ Proxmox import/cloud-init prerequisites through Ansible, creates/uses durable
 Terraform working state under `~/.local/state/homelab-iac/sensor-01/terraform`,
 and generates a saved plan.
 
-It rejects any Terraform action other than creation of
-`proxmox_virtual_environment_vm.sensor` and, when required,
-`proxmox_download_file.debian_cloud_image`.
+It validates the live template identity and rejects any Terraform action other than creation of `proxmox_virtual_environment_vm.sensor` as a full clone of VM 9001.
 
 The script deliberately does **not** run `terraform apply`.
