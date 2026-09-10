@@ -1,165 +1,150 @@
 # Homelab Network and Service Layout
 
-**Status:** live build + target-state diagram  
-**Updated:** 9 September 2026
+**Status:** current estate plus approved next work  
+**Updated:** 10 September 2026
 
-This diagram shows both what is **already built** and what is **planned next**.
-
-Legend:
-
-- **COMPLETE** = built, live and validated
-- **IN PROGRESS** = deployed but still being extended/validated
-- **PLANNED** = approved future service, not yet deployed
-- **RETIRED** = no longer part of the active design
+This document is the text/mermaid counterpart to the network overview image. It deliberately distinguishes **live**, **in progress**, **planned** and **retired** state.
 
 ```mermaid
 flowchart TB
-  classDef complete fill:#e8f7ec,stroke:#2f8f46,stroke-width:2px,color:#17351e
+  classDef live fill:#e8f7ec,stroke:#2f8f46,stroke-width:2px,color:#17351e
   classDef progress fill:#fff7db,stroke:#c89518,stroke-width:2px,color:#4c3a05
   classDef planned fill:#eef2f7,stroke:#7b8794,stroke-width:1.5px,color:#26323d,stroke-dasharray: 5 5
   classDef network fill:#e7f3ff,stroke:#3277b3,stroke-width:2px,color:#15324a
   classDef retired fill:#f8e8e8,stroke:#a84c4c,stroke-width:1.5px,color:#4c1f1f,stroke-dasharray: 3 3
   classDef physical fill:#f2ecff,stroke:#6e55b3,stroke-width:2px,color:#2e2351
 
-  WAN["Internet / WAN"]:::network
-  ROUTER["LIVE / EXISTING<br/>ASUS Router<br/>192.168.2.1<br/>Gateway / NAT / DHCP<br/>clean rebuild still planned"]:::network
-  SWITCH["LIVE / EXISTING<br/>HP ProCurve 2510G-24<br/>192.168.2.16<br/>Core switch<br/>Port 24 = SPAN destination<br/>clean rebuild still planned"]:::network
+  WAN["Internet"]:::network
+  CF["Cloudflare<br/>Pages + Zero Trust / Access"]:::network
+  ROUTER["ASUS RT-AC86U<br/>192.168.2.1<br/>Gateway / NAT / DHCP"]:::network
+  SWITCH["HP ProCurve 2510G-24<br/>192.168.2.16<br/>Core switch<br/>Port 24 = SPAN"]:::network
 
+  WAN --> CF
   WAN --> ROUTER
   ROUTER --> SWITCH
 
+  ADMIN["LIVE<br/>admin-01<br/>192.168.2.48<br/>Raspberry Pi 3<br/>Admin / SSH / IaC"]:::physical
+  MEDIA["LIVE<br/>media-01<br/>192.168.2.195<br/>Raspberry Pi 5<br/>Kodi / media"]:::physical
+  TEST["RETIRING<br/>TestServer<br/>192.168.2.220<br/>Raspberry Pi 4<br/>Legacy Docker / BirdNET"]:::progress
+  IDS["RETIRED<br/>ids-01<br/>former 192.168.2.242"]:::retired
+
+  SWITCH --> ADMIN
+  SWITCH --> MEDIA
+  SWITCH --> TEST
+
   subgraph PVE1["PROXMOX — 192.168.2.70 — standalone"]
     direction TB
-    PVE1HOST["COMPLETE<br/>PROXMOX<br/>Proxmox VE<br/>NTP: ntp-01<br/>node_exporter"]:::complete
-    DNS02["COMPLETE<br/>CT100 dns-02<br/>192.168.2.50<br/>Pi-hole + Unbound<br/>node_exporter"]:::complete
-    CLOUD["PLANNED<br/>cloud-01<br/>192.168.2.53<br/>Nextcloud + PostgreSQL + Redis"]:::planned
-    MAIL["PLANNED NEXT<br/>mail-relay-01<br/>Postfix SMTP relay<br/>Gmail smart-host"]:::planned
-    SECURITY["PLANNED<br/>security-01<br/>Greenbone"]:::planned
-    SENSOR["PLANNED<br/>sensor-01<br/>Suricata"]:::planned
-
+    PVE1HOST["LIVE<br/>PROXMOX<br/>NTP ntp-01"]:::live
+    DNS02["LIVE<br/>CT100 dns-02<br/>192.168.2.50<br/>Pi-hole + Unbound"]:::live
+    MAIL["LIVE<br/>CT102 mail-relay-01<br/>192.168.2.54<br/>SMTP relay"]:::live
+    CLOUD["IN PROGRESS<br/>VM200 cloud-01<br/>192.168.2.53"]:::progress
+    SENSOR["IN PROGRESS<br/>VM201 sensor-01<br/>192.168.2.55"]:::progress
     PVE1HOST --> DNS02
-    PVE1HOST --> CLOUD
     PVE1HOST --> MAIL
-    PVE1HOST --> SECURITY
+    PVE1HOST --> CLOUD
     PVE1HOST --> SENSOR
   end
 
   subgraph PVE2["Proxmox-2 — 192.168.2.71 — standalone"]
     direction TB
-    PVE2HOST["COMPLETE<br/>Proxmox-2<br/>Proxmox VE<br/>NTP: ntp-02<br/>node_exporter"]:::complete
-    DNS01["COMPLETE<br/>CT101 dns-01<br/>192.168.2.51<br/>Pi-hole + Unbound<br/>node_exporter"]:::complete
-    MON["IN PROGRESS<br/>VM200 monitor-01<br/>192.168.2.52<br/>Prometheus + Grafana<br/>Alertmanager + Blackbox<br/>node_exporter"]:::progress
-
+    PVE2HOST["LIVE<br/>Proxmox-2<br/>NTP ntp-02"]:::live
+    DNS01["LIVE<br/>CT101 dns-01<br/>192.168.2.51<br/>Pi-hole + Unbound"]:::live
+    MON["LIVE<br/>VM200 monitor-01<br/>192.168.2.52<br/>Prometheus / Grafana<br/>Alertmanager / Blackbox"]:::live
+    EDGE["BASE READY<br/>CT103 edge-01<br/>192.168.2.56<br/>Cloudflare connector host"]:::progress
     PVE2HOST --> DNS01
     PVE2HOST --> MON
+    PVE2HOST --> EDGE
   end
-
-  TEST["EXISTING / MIGRATION SOURCE<br/>TestServer<br/>192.168.2.220<br/>Controller + legacy Docker workloads"]:::physical
-  MEDIA["COMPLETE EXISTING<br/>media-01<br/>192.168.2.195<br/>Raspberry Pi 5 / Kodi"]:::physical
-  RET48["RETIRED<br/>192.168.2.48<br/>Former DNS host"]:::retired
 
   SWITCH --> PVE1HOST
   SWITCH --> PVE2HOST
-  SWITCH --> TEST
-  SWITCH --> MEDIA
 
-  DNS01 -. "primary/secondary DNS pair" .- DNS02
+  DNS01 -. "resolver pair" .- DNS02
+  ADMIN -. "SSH / Ansible / IaC" .-> PVE1HOST
+  ADMIN -. "SSH / Ansible / IaC" .-> PVE2HOST
+  ADMIN -. "SSH / Ansible / IaC" .-> DNS01
+  ADMIN -. "SSH / Ansible / IaC" .-> DNS02
+  ADMIN -. "SSH / Ansible / IaC" .-> MON
+  ADMIN -. "SSH / Ansible / IaC" .-> EDGE
 
-  MON -. "ICMP / DNS / HTTPS / node metrics" .-> DNS01
-  MON -. "ICMP / DNS / HTTPS / node metrics" .-> DNS02
-  MON -. "node metrics + HTTPS" .-> PVE1HOST
-  MON -. "node metrics + HTTPS" .-> PVE2HOST
-  MON -. "ICMP" .-> ROUTER
-  MON -. "ICMP" .-> TEST
-  MON -. "ICMP" .-> MEDIA
+  CF -. "planned outbound tunnel" .-> EDGE
+  EDGE -. "selected internal services only" .-> MON
 
-  SPAN["COMPLETE RESERVED<br/>Switch port 24<br/>SPAN / mirror destination"]:::network
-  CAPNIC["PLANNED<br/>Dedicated capture NIC<br/>No management IP"]:::planned
+  ROUTER -. "UDP/5514 syslog" .-> MON
+  LOKI["PLANNED<br/>Fresh Loki + Alloy<br/>central logging on monitor-01"]:::planned
+  MON --> LOKI
 
+  SPAN["Port 24<br/>SPAN / mirror destination"]:::network
   SWITCH -. "mirrored traffic" .-> SPAN
-  SPAN --> CAPNIC
-  CAPNIC --> SENSOR
+  SPAN -. "capture path" .-> SENSOR
 
-  MAIL -. "future SMTP" .-> GMAIL["PLANNED EXTERNAL RELAY<br/>smtp.gmail.com:587<br/>one App Password secret"]:::planned
-  MON -. "future alert email" .-> MAIL
+  BIRD["PLANNED<br/>birdnet-01<br/>garden Raspberry Pi 4<br/>clean BirdNET-Go build"]:::planned
+  TEST -. "after retirement / clean rebuild" .-> BIRD
 ```
 
-## Completed today
+## Current hosting
 
-| Service / asset | Placement | Address | State |
-|---|---|---:|---|
-| ASUS router | Physical | `192.168.2.1` | **LIVE / EXISTING** — gateway, NAT and DHCP remain here; clean rebuild still planned |
-| HP ProCurve 2510G-24 | Physical | `192.168.2.16` | **LIVE / EXISTING** — core switch; port 24 reserved for SPAN; clean rebuild still planned |
-| PROXMOX | Physical | `192.168.2.70` | **COMPLETE** — standalone Proxmox host, NTP server, node exporter |
-| Proxmox-2 | Physical | `192.168.2.71` | **COMPLETE** — standalone Proxmox host, NTP server, node exporter |
-| dns-01 | CT101 on Proxmox-2 | `192.168.2.51` | **COMPLETE** — Pi-hole + Unbound; node exporter |
-| dns-02 | CT100 on PROXMOX | `192.168.2.50` | **COMPLETE** — Pi-hole + Unbound; node exporter |
-| monitor-01 | VM200 on Proxmox-2 | `192.168.2.52` | **IN PROGRESS** — Prometheus, Grafana, Alertmanager and Blackbox are live; alerting/dashboard work still being added |
-| TestServer | Physical | `192.168.2.220` | **EXISTING** — IaC/controller and legacy workloads during migration |
-| media-01 | Physical Raspberry Pi 5 | `192.168.2.195` | **EXISTING / LIVE** — Kodi/media |
-| Former DNS host | Retired | `192.168.2.48` | **RETIRED** — must not be used as a resolver |
+### PROXMOX (`192.168.2.70`)
 
-## Planned services
+| ID | Type | Workload | Address | State |
+|---:|---|---|---:|---|
+| 100 | LXC | `dns-02` | `192.168.2.50` | Operational |
+| 102 | LXC | `mail-relay-01` | `192.168.2.54` | Operational |
+| 200 | VM | `cloud-01` | `192.168.2.53` | Running / service work continues |
+| 201 | VM | `sensor-01` | `192.168.2.55` | Running / sensor work continues |
+| 9000 | VM template | Debian 13 cloud template | — | Stopped |
+| 9001 | VM template | Debian 13 cloud template + QGA | — | Stopped |
 
-| Service | Planned placement | Address | Purpose |
-|---|---|---:|---|
-| mail-relay-01 | PROXMOX | **TBD by preflight** | Internal Postfix SMTP relay; only host holding Gmail App Password |
-| cloud-01 | PROXMOX | `192.168.2.53` | Nextcloud + PostgreSQL + Redis |
-| security-01 | PROXMOX | TBD | Greenbone vulnerability scanning |
-| sensor-01 | PROXMOX | TBD | Suricata IDS fed by switch SPAN port 24 |
-| Loki / Alloy | monitor-01 | existing `.52` | Central logging after metrics/alerting is stable |
+### Proxmox-2 (`192.168.2.71`)
 
-## Current monitoring coverage
+| ID | Type | Workload | Address | State |
+|---:|---|---|---:|---|
+| 101 | LXC | `dns-01` | `192.168.2.51` | Operational |
+| 103 | LXC | `edge-01` | `192.168.2.56` | Base host operational; cloudflared pending |
+| 200 | VM | `monitor-01` | `192.168.2.52` | Operational metrics/alerting; logging pending |
 
-The monitoring platform currently has external service probes for the core estate. Node exporter is installed on the five core Linux/Proxmox targets; the final five-target Prometheus scrape/idempotence validation is still pending.
+## Physical Raspberry Pi roles
 
-**Node exporter installed (final five-target Prometheus validation pending):**
+| Host | Address | Hardware | Role |
+|---|---:|---|---|
+| `admin-01` | `192.168.2.48` | Raspberry Pi 3 | Administration / SSH / Ansible / Git |
+| `media-01` | `192.168.2.195` | Raspberry Pi 5 | Kodi/media endpoint |
+| `TestServer` | `192.168.2.220` | Raspberry Pi 4 | Legacy migration source; future garden BirdNET-Go rebuild |
 
-- `dns-01` — `192.168.2.51:9100`
-- `dns-02` — `192.168.2.50:9100`
-- `monitor-01` — `192.168.2.52:9100`
-- `PROXMOX` — `192.168.2.70:9100`
-- `Proxmox-2` — `192.168.2.71:9100`
+## Central logging
 
-**Blackbox probes:**
-
-- router ICMP
-- both DNS resolvers ICMP + TCP/53
-- both Proxmox hosts ICMP + HTTPS/8006
-- monitor-01 ICMP
-- TestServer ICMP
-- media-01 ICMP
-
-Service-specific Pi-hole/Unbound metrics and Chrony/NTP synchronisation metrics are still to be added.
-
-## Mail flow target
-
-The planned alerting/mail path is:
+Current:
 
 ```text
-Prometheus
-   |
-   v
-Alertmanager
-   |
-   v
-mail-relay-01
-Postfix
-   |
-   v
-smtp.gmail.com:587
-   |
-   v
-Gmail / notification inbox
+RT-AC86U
+  -> UDP/5514
+  -> monitor-01 / rsyslog
+  -> /var/log/homelab/router/rt-ac86u.log
 ```
 
-Only `mail-relay-01` will hold the Gmail App Password. Other homelab services will submit mail to the internal relay without needing Gmail credentials.
+Target:
 
-## Network design notes
+```text
+approved hosts / dedicated logs
+  -> Alloy
+  -> Loki on monitor-01
+  -> Grafana
+```
 
-- DHCP remains on the ASUS router.
-- The active DNS pair is `.51 + .50`.
-- `.48` is retired and must not appear in active resolver configuration.
-- The two Proxmox hosts remain standalone; there is no active Proxmox cluster.
-- Port 24 on the HP ProCurve remains reserved as the Suricata SPAN destination.
-- New workloads are built through Git-managed Terraform/OpenTofu + Ansible wherever practical.
+The old TestServer Alloy/Loki configuration is not the desired-state source.
+
+## Cloudflare edge
+
+`edge-01` is ready as an unprivileged Debian 13 LXC on `Proxmox-2`. The remaining work is to install/configure `cloudflared`, create the tunnel, define public hostnames and put Cloudflare Access/MFA in front of selected administrative applications.
+
+No inbound router port-forward is part of this design.
+
+## Outstanding work
+
+See [OUTSTANDING-WORK.md](OUTSTANDING-WORK.md). The current order is:
+
+1. Cloudflare Tunnel + Access on `edge-01`;
+2. fresh Loki/Alloy central logging on `monitor-01`;
+3. finish TestServer retirement with backup gates satisfied;
+4. clean-build the Pi 4 as the garden BirdNET-Go host;
+5. finish Proxmox storage/SMART and recovery documentation.
