@@ -23,6 +23,17 @@ BirdNET capture hardware is a non-compute peripheral, not a Linux host. BirdNET-
 
 Addresses or identities marked VERIFY are deliberately not assumed; the discovery pass must reconcile them from live evidence.
 
+## Workload placement policy — 10 September 2026
+
+- `sensor-01` is reserved for `PROXMOX` (`192.168.2.70`).
+- PROXMOX will receive an additional 8 GiB RAM before the full Suricata + Zeek
+  mirrored-traffic workload is activated.
+- After `sensor-01`, new infrastructure defaults to `Proxmox-2`
+  (`192.168.2.71`) unless an explicit capacity/design review approves another
+  placement.
+- Existing workloads are not moved merely to satisfy this default; migrations
+  remain separately validated changes.
+
 ## Required evidence per host
 
 Every compute/Linux host audit must record the same minimum evidence set:
