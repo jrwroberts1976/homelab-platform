@@ -19,6 +19,7 @@
       - +tries=1
   register: monitor_local_record
   changed_when: false
+  check_mode: false
   retries: 10
   delay: 1
   until: "'192.168.2.52' in monitor_local_record.stdout"
@@ -34,4 +35,5 @@
       - +tries=1
   register: pihole_local_record
   changed_when: false
+  check_mode: false
   failed_when: dns_resolver_expected_ipv4 not in pihole_local_record.stdout
