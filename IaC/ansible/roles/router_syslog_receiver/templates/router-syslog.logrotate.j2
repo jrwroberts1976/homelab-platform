@@ -1,0 +1,13 @@
+{{ router_syslog_receiver_log_file }} {
+    daily
+    rotate {{ router_syslog_receiver_retention_days }}
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 syslog adm
+    sharedscripts
+    postrotate
+        /usr/bin/systemctl kill -s HUP rsyslog.service >/dev/null 2>&1 || true
+    endscript
+}
