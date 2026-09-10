@@ -1,173 +1,184 @@
 # Backup Strategy
 
-Status: working target design, pending completion of the estate-wide hardware audit.
+**Updated:** 10 September 2026  
+**Status:** active design; implementation and restore proof incomplete  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`
 
 ## Requirement
 
-The rebuilt backup platform must have a usable web GUI.
+Backups must provide more than successful job messages. The rebuilt estate requires:
 
-The GUI is for:
+- visible backup/job status;
+- browsable backup sets where practical;
+- scheduled verification;
+- documented restore procedures;
+- periodic test restores;
+- at least two independently useful copies of important data/recovery material;
+- Git/IaC authority for policy and deployment wherever practical.
 
-- backup status and job visibility
-- browsing backup sets and snapshots
-- restore operations
-- verification/health visibility
-- retention and datastore visibility
+A GUI is desirable for backup status, browsing, verification, retention and restores, but GUI-only configuration drift is not authoritative.
 
-Git/IaC remains the source of truth for deployment, host enrollment, credentials references, schedules where practical, and backup policy. GUI-only drift is not accepted as authoritative configuration.
+## Current estate context
 
-## Preferred long-term platform
+The old backup architecture was spread across DietPi, ids-01, TestServer and a partial replica on media-01. Those historical copies remain evidence/recovery material until reconciled, but none of those legacy layouts is automatically the new backup authority.
 
-### Proxmox Backup Server
+Current platform roles:
 
-The preferred long-term target is **Proxmox Backup Server (PBS)**, subject to final host-placement and storage decisions after the hardware audit.
+- `admin-01 .48`: administration/IaC; must have independent recovery of SSH/SOPS/age material;
+- `PROXMOX .70`: hosts `dns-02`, `mail-relay-01`, `cloud-01`, `sensor-01`;
+- `Proxmox-2 .71`: hosts `dns-01`, `monitor-01`, `edge-01`;
+- `media-01 .195`: physical Raspberry Pi 5 media endpoint; historical replica data may still exist on its NVMe;
+- `TestServer .220`: legacy migration source, pending clean rebuild as garden BirdNET-Go host;
+- `ids-01`: decommissioned; not an active backup server.
 
-Reasons:
+## Existing historical backup material
 
-- native Proxmox VE VM/LXC backup integration
-- integrated web GUI
-- Linux host backup capability through `proxmox-backup-client`
-- incremental backups and datastore deduplication
-- client-side encryption support
-- verification, pruning/retention and datastore management
-- remote datastore synchronization for a second copy
-- strong fit with the planned Proxmox-based estate
+Known historical material includes:
 
-Working placement is now `pbs-01` as a VM on the ZenBook after that machine is rebuilt as `pve-02`. The PBS datastore must be healthy dedicated storage, separate from the ZenBook's Proxmox system disk.
+- Restic repositories originating from the former DietPi-attached WD 4 TB disk;
+- repositories/archives for DietPi, homelab-vault, ids-01, historical k3s-node-01 and TestServer;
+- dated ids-01 monthly archives;
+- protected SOPS/age recovery material;
+- a partial backup-replica tree on media-01;
+- old backup scripts/services including the currently unresolved TestServer backup-service failure history.
 
-## Transitional Restic access
+Do not delete these solely because the source host has been repurposed or decommissioned. First identify whether each data set has a current authoritative replacement and whether recovery has been proven.
 
-The existing Restic repositories are not to be discarded.
+## WD 4 TB disk
 
-**Backrest** is the preferred transitional GUI for Restic if a graphical browser/restore path is needed during migration because it can import existing Restic repositories, browse snapshots, restore files, schedule operations and perform repository health tasks.
+The former DietPi backup disk is now attached to `PROXMOX`:
 
-Backrest is a migration/compatibility tool, not currently the proposed final estate-wide backup authority.
+```text
+model: WDC WD40EZRX-00SPEB0
+serial: WD-WCC4E0670079
+capacity: approximately 4 TB
+current device: /dev/sdb
+```
 
-## Existing backup state
+Historical SMART evidence:
 
-Current known backup state includes:
+- Reallocated sectors: 0
+- Current pending sectors: previously 7, later 0
+- Offline uncorrectable sectors: 2
+- UDMA CRC errors: 10
 
-- a Restic REST server on legacy `ids-01`
-- Restic repositories on the DietPi-attached backup disk for:
-  - dietpi
-  - homelab-vault
-  - ids-01
-  - historical k3s-node-01
-  - testserver
-- dated monthly `ids-01` archives on the DietPi backup disk
-- backup/retention reports
-- SOPS/age recovery material
-- a backup replica mount on legacy `media-01`
-  - current read-only inventory: ~12 GiB total under `/home/homelab-backup/replica`
-  - `ids-01/repository`: ~2.4 GiB
-  - `ids-01/remote-repositories`: ~9.5 GiB
-  - Restic-like repositories present for `dietpi`, historical `k3s-node-01`, `testserver`, plus the `ids-01` repository
-  - no `homelab-vault` repository was found in this replica tree
-  - no recovery identity/recipient file was found in this replica tree
-  - no dated monthly archive tree was shown in this replica tree
-  - therefore this Pi 5 copy is **not yet accepted as a complete replacement** for the degraded DietPi backup disk
-- no configured Proxmox VE guest-backup job at the time of the hardware audit
+The overall SMART health line currently reports PASSED, but the historical uncorrectable evidence remains relevant. An extended/long SMART self-test is still in progress as of 10 September 2026 and must not be interrupted or restarted.
 
-The DietPi-attached 4 TB-class WD disk is **DEGRADED** and is not an acceptable long-term primary backup datastore.
+Until the long test completes and the final self-test log/attributes are reviewed, this disk is not approved as the sole storage location for irreplaceable data.
 
-## Target backup architecture
+## Long-term platform direction
 
-The final design should provide at least two independently useful backup copies:
+Proxmox Backup Server remains a strong candidate because the rebuilt estate now contains multiple Proxmox VMs/LXCs and benefits from native guest backup, verification, retention and restore tooling.
 
-1. **Primary backup datastore**
-   - healthy replacement storage
-   - managed through the chosen GUI
-   - local high-speed connectivity
-   - verification and retention enabled
+However, **PBS host/datastore placement is not considered final in this document**. Do not assume a new PBS VM or reuse the WD disk until capacity, storage health, failure-domain and recovery design are explicitly approved.
 
-2. **Secondary copy**
-   - separate physical storage or separate host/failure domain
-   - synchronized automatically
-   - not dependent on the primary datastore remaining healthy
+Backrest/Restic can remain useful for browsing/restoring historical Restic repositories during migration, but that does not make the old Restic server architecture the new estate-wide authority.
 
-An off-site copy should be added where practical for the most important data and recovery material.
+## Target architecture
 
-The degraded DietPi disk remains read-only/recovery-oriented until its important content has been reconciled and copied elsewhere.
+Important data should have at least:
+
+1. a primary backup copy on healthy storage managed by the approved backup platform; and
+2. a second independent copy on a separate physical disk/host/failure domain.
+
+For the most important household data and recovery secrets, add an off-site or otherwise physically separate copy where practical.
+
+A backup stored only on the same hypervisor/storage that hosts the production workload does not satisfy the independent-copy requirement.
 
 ## Backup scope
 
-### Proxmox
+### Proxmox guests
 
-Back up:
+Protect VMs/LXCs that contain persistent or operationally expensive state. Configuration-only guests should still have a documented rebuild path even when image-level backup is not the primary recovery mechanism.
 
-- VMs
-- LXCs
-- critical VM/LXC configuration
-- application-consistent data where required
+Current guest estate includes:
 
-### Linux/Docker hosts
+```text
+PROXMOX .70:
+  CT100 dns-02
+  CT102 mail-relay-01
+  VM200 cloud-01
+  VM201 sensor-01
 
-Back up persistent state, not replaceable runtime artifacts.
+Proxmox-2 .71:
+  CT101 dns-01
+  CT103 edge-01
+  VM200 monitor-01
+```
 
-Typical scope:
+### cloud-01
 
-- application data
-- databases using application-aware dump/quiesce hooks where required
-- Docker bind-mounted persistent data
-- configuration that is not already reconstructable from Git
-- selected host state needed for rapid recovery
+The VM is rebuildable infrastructure; user files, PostgreSQL data and application state required for a consistent restore are not. Production cloud data must not depend solely on the WD 4 TB disk.
 
-Do not treat Docker images, build caches or other reproducible artifacts as primary backup data.
+### monitoring / logging
+
+Prometheus/Grafana/Loki state is useful operational data, but configuration should remain reproducible from Git. Decide retention/backup by operational value rather than blindly backing up all time-series/log data.
+
+### DNS, mail relay and edge
+
+These should be rebuildable from Git/IaC plus protected secrets. Restore testing should prove the required secret/configuration material is available independently of the running guest.
+
+### media-01
+
+Protect only user media/configuration that is not reproducible from Git. Historical replica data on its NVMe must be reconciled before deletion or repurpose.
+
+### future birdnet-01
+
+Protect intentionally retained BirdNET configuration/history/recordings separately from the clean OS build. Do not make the old TestServer image the backup strategy.
 
 ### IaC and secrets
 
-Git remains the authoritative source for IaC.
+Git remains authoritative for IaC/documentation. Private SSH identities, SOPS/age identities, application credentials and other recovery secrets require protected recovery copies outside Git and outside a single failing disk.
 
-Secrets and recovery identities must remain encrypted/protected. Plaintext recovery identities must never be committed to Git or printed into audit logs.
+Never print or commit plaintext recovery identities.
 
-## Initial retention target
+## TestServer hard gate
 
-Working policy, to be validated against real datastore usage:
+`homelab-backup-testserver.service` has a failure history that must be understood before destructive TestServer cleanup.
+
+Before reimage:
+
+1. identify what the job was intended to protect;
+2. locate current copies of that data;
+3. test restore/recovery where important;
+4. document what can be discarded;
+5. only then remove legacy backup state.
+
+## Retention starting point
+
+A reasonable initial policy, subject to datastore capacity and workload RPO/RTO, is:
 
 - daily: 7
 - weekly: 4
 - monthly: 12
 - yearly: 3
 
-Critical databases or frequently changing state may require shorter RPO intervals than one day.
-
-Retention is not considered valid until restore tests prove the retained backups are usable.
+Critical databases or frequently changing household data may require shorter backup intervals. Retention is not considered proven until restore tests show retained backups are usable.
 
 ## Verification and restore policy
 
-A backup job succeeding is not enough.
+A successful backup job is necessary but insufficient. The backup platform must include:
 
-The rebuilt platform must include:
+- scheduled verification/integrity checks;
+- alerting for failed or stale backups;
+- restore tests for representative guest/data types;
+- written recovery steps;
+- recovery validation after infrastructure changes;
+- evidence that protected secrets can be recovered without relying on the failed host itself.
 
-- scheduled repository/datastore verification
-- alerting for failed or stale backups
-- periodic test restores
-- documented recovery procedures
-- at least one proven restore for each major workload class before legacy backup paths are retired
+## Implementation sequence
 
-## Migration sequence
+1. finish the current WD 4 TB extended SMART review;
+2. reconcile historical Restic/monthly/recovery material and media-01 replicas;
+3. resolve the TestServer backup-service hard gate;
+4. choose the target backup platform and healthy datastore/failure domain;
+5. deploy through reviewed IaC where practical;
+6. enroll current Proxmox guests and relevant physical hosts;
+7. establish independent second-copy policy;
+8. run verification and representative restores;
+9. document recovery for DNS, monitoring/logging, mail, edge, cloud, media and BirdNET;
+10. retire legacy Restic/scripts only after replacement recovery coverage is proven.
 
-1. Complete the remaining hardware/network audits.
-2. Reconcile the existing Restic repositories and monthly archives. Current media-01 evidence proves the Pi 5 replica is incomplete relative to the degraded DietPi disk.
-3. Confirm protected copies of SOPS/age recovery material without exposing secret contents.
-4. Select the backup-server host and healthy datastore from the final placement matrix.
-5. Replace the degraded 4 TB-class disk before relying on it for new backups.
-6. Deploy the target backup platform through IaC.
-7. Enroll hosts through Ansible/IaC.
-8. Establish new backups alongside the old system.
-9. Run verification and test restores.
-10. Migrate Proxmox VM/LXC backup jobs.
-11. Retain old Restic repositories read-only until the new platform has proven recovery coverage.
-12. Retire old scripts/Restic server paths only after recovery proof.
+## Definition of done
 
-## Placement
-
-Working target:
-
-```text
-pve-02 (ZenBook)
-└── pbs-01 VM
-    └── dedicated healthy 4-8 TB-class backup datastore
-```
-
-The datastore must not be the degraded DietPi 4 TB disk and must not exist only as a virtual disk on the `pve-02` system NVMe. The exact replacement disk is still to be selected.
+The backup redesign is complete when the current estate has documented scope, schedules and retention; important data has two independent copies; guest/data restores have been proven; recovery secrets are protected independently; the WD disk has an explicit accepted/rejected role; and no critical recovery path depends on decommissioned ids-01 or the unrebuildable legacy TestServer state.
