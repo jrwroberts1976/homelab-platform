@@ -1,112 +1,115 @@
 # Homelab Cloud Data Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** read-only deployment preflight passed; VM build preparation active; 4 TB production-data placement remains blocked pending completion of destructive disk validation  
-**Primary service:** Nextcloud
+**Primary service:** Nextcloud  
+**Host:** `cloud-01.jameshouse` / `192.168.2.53`  
+**Placement:** VM200 on `PROXMOX` / `192.168.2.70`  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Status:** VM deployed/running; production data placement remains blocked pending final WD 4 TB disk acceptance and independent backup
 
 ## Production identity
 
 | Hostname | IPv4 | Platform | Purpose |
 |---|---:|---|---|
-| `cloud-01.jameshouse` | `192.168.2.53` | Debian 13 VM on `PROXMOX` / `192.168.2.70` | Household private cloud, file sync and browser access |
+| `cloud-01.jameshouse` | `192.168.2.53` | Debian 13 VM200 on `PROXMOX` | Household private cloud/data service |
 | `PROXMOX` | `192.168.2.70` | Physical Proxmox VE | Hypervisor for `cloud-01` |
-| `dns-01.jameshouse` | `192.168.2.51` | LXC on `Proxmox-2` | Primary local DNS resolver |
-| `dns-02.jameshouse` | `192.168.2.50` | LXC on `PROXMOX` | Secondary local DNS resolver |
+| `dns-01.jameshouse` | `192.168.2.51` | LXC CT101 on `Proxmox-2` | Primary local resolver |
+| `dns-02.jameshouse` | `192.168.2.50` | LXC CT100 on `PROXMOX` | Secondary local resolver |
 
 ## Service design
 
-`cloud-01` is intentionally disposable infrastructure around persistent user data.
+`cloud-01` is disposable infrastructure around persistent user data.
 
-Initial VM target:
+Current VM design:
 
-- 2 vCPU
-- 4 GiB RAM
-- 32 GiB OS disk on normal Proxmox VM storage
-- Debian 13
-- Docker Engine / Compose
-- Nextcloud
-- PostgreSQL
-- Redis
-- separate persistent data device for Nextcloud user files
+- 2 vCPU class workload target;
+- 4 GiB RAM class workload target;
+- 32 GiB system disk;
+- Debian 13;
+- Docker/Compose application layer;
+- Nextcloud;
+- PostgreSQL;
+- Redis;
+- separate persistent data storage for user files when approved.
 
-The operating system, packages, VM definition and service configuration are rebuilt from Git/IaC. User-created data is not treated as reproducible and must be protected separately.
+The operating system, VM definition and service configuration are rebuilt from Git/IaC. User-created data and application/database state are protected separately.
 
 ## IaC ownership
 
-The target ownership model is:
-
-- Terraform/OpenTofu: VM identity, CPU, RAM, network, system disk and attachment declarations
-- Ansible: Debian baseline, Docker, filesystem/mount preparation, service directories and health validation
-- Compose: Nextcloud, PostgreSQL and Redis service definitions
-- managed DNS: `cloud-01.jameshouse -> 192.168.2.53`
-- SOPS/encrypted secrets: application/database credentials and recovery material
-- Git: authoritative desired state
+- Terraform/OpenTofu: VM identity, compute, network, system disk and attachment declarations;
+- Ansible: Debian baseline, Docker, filesystem/mount preparation, directories and validation;
+- Compose: Nextcloud, PostgreSQL and Redis;
+- managed DNS: `cloud-01.jameshouse -> 192.168.2.53`;
+- SOPS/encrypted/protected secret sources: application/database credentials and recovery material;
+- Git: authoritative desired state.
 
 GUI-only configuration drift is not authoritative.
 
-## Data storage
+## WD 4 TB candidate data disk
 
-The candidate data device is the former DietPi-attached 4 TB USB disk:
+The candidate device attached to `PROXMOX` is:
 
-- model: `WDC WD40EZRX-00SPEB0`
-- drive serial: `WD-WCC4E0670079`
-- USB bridge: UGREEN / Realtek `0bda:9201`
-- capacity: 4.00 TB / 3.64 TiB
-- stable current USB identity: `usb-WDC_WD40_EZRX-00SPEB0_133309270ED2-0:0`
+```text
+WDC WD40EZRX-00SPEB0
+serial WD-WCC4E0670079
+current device /dev/sdb
+capacity approximately 4 TB
+```
 
-The disk is currently undergoing a full destructive surface test before any production filesystem is created.
+Historical SMART evidence included:
 
-SMART baseline before testing:
+- reallocated sectors: 0;
+- current pending sectors: previously 7, later 0;
+- offline uncorrectable sectors: 2;
+- UDMA CRC errors: 10.
 
-- `Reallocated_Sector_Ct = 0`
-- `Current_Pending_Sector = 7`
-- `Offline_Uncorrectable = 2`
-- `UDMA_CRC_Error_Count = 10`
-- `Power_On_Hours = 28300`
+The latest SMART overall-health result is PASSED, but an extended/long self-test is still running as of 10 September 2026 and the historical uncorrectable count remains relevant.
 
-Because the drive has recorded pending and uncorrectable sectors, a successful surface test does not make it an acceptable sole copy of irreplaceable data. Production acceptance requires a second independent copy of important Nextcloud data.
+Do not interrupt or start another long test while the current one is running.
 
-The device must be referenced by stable `/dev/disk/by-id/` identity, never by a transient `/dev/sdX` name.
+The disk is not approved as the sole copy of irreplaceable data. Final acceptance requires:
+
+1. long self-test completion and log review;
+2. stable/reviewed post-test SMART attributes;
+3. a deliberate decision on whether the historical uncorrectable-sector evidence is acceptable for the intended role;
+4. an independent second copy of important cloud data.
+
+Use stable `/dev/disk/by-id/` identity for any production attachment/mount rather than relying on `/dev/sdX` naming.
 
 ## Rebuild versus backup policy
 
-The platform follows this rule:
-
 > Rebuild infrastructure. Back up data.
 
-Rebuild from code rather than backing up:
+Rebuild from code:
 
-- Debian operating system
-- Docker packages
-- Nextcloud container image
-- PostgreSQL/Redis container images
-- VM definition
-- DNS/service configuration already held in Git
+- Debian OS;
+- Docker packages/images;
+- VM definition;
+- Nextcloud/PostgreSQL/Redis service definitions;
+- DNS/service configuration held in Git.
 
 Protect because it is not reconstructable:
 
-- Nextcloud user files
-- PostgreSQL application database
-- Nextcloud application state required for a consistent restore
-- Terraform state
-- protected secrets/recovery material not reconstructable elsewhere
-- other user-created documents, photos and application data
+- Nextcloud user files;
+- PostgreSQL application database;
+- application state required for a consistent restore;
+- Terraform/OpenTofu state where required for infrastructure management;
+- protected secrets/recovery material;
+- user-created household data.
 
 ## Recovery model
-
-A full recovery should be possible as:
 
 ```text
 Git / homelab-platform
         |
         v
-Terraform creates cloud-01
+Terraform/OpenTofu creates cloud-01
         |
         v
 Ansible configures Debian + Docker
         |
         v
-Compose starts Nextcloud + PostgreSQL + Redis
+Compose starts application stack
         |
         v
 Restore database + persistent data
@@ -115,36 +118,40 @@ Restore database + persistent data
 Validate Nextcloud and client sync
 ```
 
-The VM itself is therefore replaceable; the persistent data and database are the protected assets.
+## Production-data activation sequence
 
-## Initial deployment sequence
-
-1. complete the destructive 4 TB disk surface test;
-2. compare post-test SMART values with the recorded baseline;
-3. accept or reject the disk for service use;
-4. partition and format only after the disk passes the agreed health gate;
-5. define `cloud-01` in Terraform/OpenTofu;
-6. configure Debian and Docker through Ansible;
-7. deploy Nextcloud, PostgreSQL and Redis through Compose;
-8. add managed DNS for `cloud-01.jameshouse`;
-9. validate LAN-only web access and file sync;
-10. create test data and prove a complete application restore;
-11. establish a second independent copy of important data;
-12. only then consider external Internet access.
+1. allow the current WD extended SMART test to finish;
+2. review the self-test log and attributes;
+3. accept or reject the disk for this service;
+4. define stable disk identity/mount/passthrough in IaC if accepted;
+5. deploy/validate Nextcloud, PostgreSQL and Redis on LAN-only access;
+6. create representative test data;
+7. prove database + file-data restore;
+8. establish an independent second copy of important data;
+9. add monitoring for service and storage health;
+10. only then consider remote/public access.
 
 ## External access
 
-Initial deployment is LAN-only.
+Initial/normal validation is LAN-only.
 
-Public access must not be enabled until:
+If remote access is approved, use the new edge architecture:
 
-- the LAN deployment is stable;
-- HTTPS/reverse-proxy design is approved;
-- authentication and rate-limit controls are in place;
-- backup/restore has been proven;
-- monitoring is active.
+```text
+Internet
+  -> Cloudflare Access
+  -> Cloudflare Tunnel
+  -> edge-01 192.168.2.56
+  -> cloud-01 192.168.2.53
+```
 
-The eventual public name may be `cloud.jrwroberts.co.uk`, but external exposure is a later controlled change rather than part of the first deployment.
+Do not expose Nextcloud by adding an ad-hoc router port-forward. Cloudflare Access/Tunnel is a separate controlled change after backup/restore and local service stability are proven.
+
+## Monitoring and logging
+
+`monitor-01` is the monitoring authority. Add application/storage health only after the underlying service is stable enough that alerts are actionable.
+
+Central logs should use the fresh Alloy/Loki platform on `monitor-01` when available, not the old TestServer logging configuration.
 
 ## Definition of done
 
@@ -156,33 +163,7 @@ The private-cloud layer is production-ready when:
 - client upload/download/sync tests pass;
 - persistent data survives a controlled application rebuild;
 - database + data restore is proven;
-- the data disk has passed the agreed health gate;
-- important data has a second independent copy;
-- no critical dependency remains on DietPi `192.168.2.48`.
-
-
-## Preflight evidence — 9 September 2026
-
-The first live read-only preflight passed without changing resources.
-
-Validated:
-
-- `cloud-01` address `192.168.2.53` did not respond and had no resolved neighbour;
-- target hypervisor is `PROXMOX` at `192.168.2.70`, Proxmox VE 9.2.11;
-- `pve-cluster` is active and `/etc/pve` is mounted;
-- candidate VM ID `200` is free;
-- `vm-ssd` has approximately 420 GiB free;
-- `local-lvm` has approximately 141 GiB free;
-- Debian 13 genericcloud media is present at `/var/lib/vz/template/iso/debian-13-genericcloud-amd64.qcow2`;
-- the 4 TB WDC data-device identity resolves correctly to the current `/dev/sdb`.
-
-The destructive `badblocks` test was still running at the time of preflight and therefore the disk is not approved for cloud data use.
-
-Interim SMART during the destructive test:
-
-- Reallocated sectors: 0
-- Current pending sectors: 0
-- Offline uncorrectable sectors: 2
-- UDMA CRC errors: 10
-
-The fall in pending sectors is useful evidence but does not override the completion gate. Do not format, mount as production data, pass through to `cloud-01`, or treat this disk as a sole copy until the destructive test has completed and final SMART/badblocks evidence has been reviewed.
+- the chosen data disk/storage has passed its acceptance gate;
+- important data has an independent second copy;
+- monitoring/recovery are documented;
+- no critical dependency remains on TestServer or a decommissioned host.
