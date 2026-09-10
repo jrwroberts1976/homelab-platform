@@ -14,6 +14,7 @@ require_cmd() {
 SENSOR_HOSTNAME="sensor-01"
 SENSOR_IPV4="192.168.2.55"
 SENSOR_VM_ID="201"
+SOURCE_VM_ID="9001"
 TARGET_PVE="PROXMOX"
 PVE_HOST="192.168.2.70"
 PVE_ENV_FILE="$HOME/.config/homelab-iac/proxmox.env"
@@ -28,7 +29,7 @@ RUNNER_TMP="${RUNNER_TEMP:-/var/tmp}"
 PLAN_FILE="$RUNNER_TMP/sensor-01-create.tfplan"
 PLAN_JSON="$RUNNER_TMP/sensor-01-create.tfplan.json"
 
-for cmd in terraform ansible-playbook jq ssh ping; do
+for cmd in terraform ansible-playbook jq ssh; do
   require_cmd "$cmd"
 done
 
@@ -44,6 +45,7 @@ printf '===== SENSOR-01 PLAN-ONLY WORKFLOW =====\n'
 printf 'hostname=%s\n' "$SENSOR_HOSTNAME"
 printf 'ipv4=%s\n' "$SENSOR_IPV4"
 printf 'vm_id=%s\n' "$SENSOR_VM_ID"
+printf 'clone_source_vm_id=%s\n' "$SOURCE_VM_ID"
 printf 'pve=%s\n' "$TARGET_PVE"
 printf 'terraform_state=%s\n' "$DEPLOY_DIR"
 printf 'NOTE: this workflow does not apply the Terraform VM plan.\n'
@@ -64,15 +66,27 @@ ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_HOST"   "pvesm status --s
 HOST_AVAILABLE_KIB="$(
   ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_HOST"     "awk '/MemAvailable:/ {print \$2}' /proc/meminfo"
 )"
-[ "$HOST_AVAILABLE_KIB" -ge 3670016 ]   || die "PROXMOX has less than 3.5 GiB MemAvailable; refusing even phase-1 sensor planning"
+[ "$HOST_AVAILABLE_KIB" -ge 3670016 ]   || die "PROXMOX has less than 3.5 GiB MemAvailable; refusing phase-1 sensor planning"
+
+SOURCE_CONFIG="$(
+  ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_HOST"     "qm config '$SOURCE_VM_ID'"
+)" || die "Clone source VM $SOURCE_VM_ID is not readable"
+
+printf '%s\n' "$SOURCE_CONFIG" | grep -Fxq 'template: 1'   || die "Clone source $SOURCE_VM_ID is not a Proxmox template"
+printf '%s\n' "$SOURCE_CONFIG" | grep -Fxq 'name: debian-13-cloud-template-qga'   || die "Clone source $SOURCE_VM_ID has the wrong template identity"
+printf '%s\n' "$SOURCE_CONFIG" | grep -Eq '^agent: .*enabled=1'   || die "Clone source $SOURCE_VM_ID does not have QEMU Guest Agent enabled"
+printf '%s\n' "$SOURCE_CONFIG" | grep -Eq '^scsi0: vm-ssd:base-9001-disk-0,'   || die "Clone source $SOURCE_VM_ID system disk is not the expected vm-ssd base disk"
+printf '%s\n' "$SOURCE_CONFIG" | grep -Eq '^ide2: vm-ssd:vm-9001-cloudinit,'   || die "Clone source $SOURCE_VM_ID cloud-init disk is not on vm-ssd"
+printf '%s\n' "$SOURCE_CONFIG" | grep -Eq '^net0: .*bridge=vmbr0'   || die "Clone source $SOURCE_VM_ID management NIC is not on vmbr0"
 
 printf 'vmid_%s=AVAILABLE\n' "$SENSOR_VM_ID"
 printf 'ipv4_%s=NO_ACTIVE_HOST\n' "$SENSOR_IPV4"
 printf 'vm_ssd=ACTIVE\n'
 printf 'host_mem_available_kib=%s\n' "$HOST_AVAILABLE_KIB"
+printf 'clone_source_%s=VALID\n' "$SOURCE_VM_ID"
 
 printf '\n===== HYPERVISOR PREREQUISITES =====\n'
-printf 'This Ansible phase may only reconcile local import capability and the managed sensor cloud-init snippet.\n'
+printf 'This Ansible phase may only reconcile the managed sensor cloud-init snippet.\n'
 cd "$ANSIBLE_DIR"
 ANSIBLE_ROLES_PATH="$ANSIBLE_DIR/roles"   ansible-playbook playbooks/proxmox-sensor-prereqs.yml
 
@@ -95,22 +109,23 @@ terraform -chdir="$DEPLOY_DIR" show -json "$PLAN_FILE" >"$PLAN_JSON"
 
 jq -e '
   [.resource_changes[] | select(.change.actions != ["no-op"])] as $changes
-  | ($changes | length) >= 1
-  and ($changes | length) <= 2
-  and any(
-        $changes[];
-        .address == "proxmox_virtual_environment_vm.sensor"
-        and .change.actions == ["create"]
-      )
-  and all(
-        $changes[];
-        (
-          .address == "proxmox_virtual_environment_vm.sensor"
-          or .address == "proxmox_download_file.debian_cloud_image"
-        )
-        and .change.actions == ["create"]
-      )
-' "$PLAN_JSON" >/dev/null   || die "Plan contains an action outside the approved sensor VM/image creates"
+  | ($changes | length) == 1
+  and $changes[0].address == "proxmox_virtual_environment_vm.sensor"
+  and $changes[0].change.actions == ["create"]
+  and $changes[0].change.after.name == "sensor-01"
+  and $changes[0].change.after.node_name == "PROXMOX"
+  and $changes[0].change.after.vm_id == 201
+  and $changes[0].change.after.clone[0].vm_id == 9001
+  and $changes[0].change.after.clone[0].full == true
+  and $changes[0].change.after.clone[0].datastore_id == "vm-ssd"
+  and $changes[0].change.after.cpu[0].cores == 4
+  and $changes[0].change.after.memory[0].dedicated == 3072
+  and $changes[0].change.after.disk[0].datastore_id == "vm-ssd"
+  and $changes[0].change.after.disk[0].size == 80
+  and $changes[0].change.after.initialization[0].ip_config[0].ipv4[0].address == "192.168.2.55/24"
+  and $changes[0].change.after.initialization[0].ip_config[0].ipv4[0].gateway == "192.168.2.1"
+  and $changes[0].change.after.network_device[0].bridge == "vmbr0"
+' "$PLAN_JSON" >/dev/null   || die "Plan differs from the approved sensor-01 clone specification"
 
 printf '\n===== APPROVED CHANGE SET =====\n'
 jq -r '
@@ -120,8 +135,18 @@ jq -r '
   | @tsv
 ' "$PLAN_JSON"
 
+printf '\n===== APPROVED SENSOR SPEC =====\n'
+printf 'source_template=9001\n'
+printf 'full_clone=true\n'
+printf 'sensor_vm_id=201\n'
+printf 'sensor_ipv4=192.168.2.55/24\n'
+printf 'cpu_cores=4\n'
+printf 'memory_mb=3072\n'
+printf 'disk=vm-ssd:80GiB\n'
+printf 'management_bridge=vmbr0\n'
+
 printf '\n===== PLAN SUMMARY =====\n'
-terraform -chdir="$DEPLOY_DIR" show "$PLAN_FILE" | tail -60
+terraform -chdir="$DEPLOY_DIR" show "$PLAN_FILE" | tail -80
 
 printf '\n===== RESULT =====\n'
 printf 'SENSOR-01 TERRAFORM PLAN=PASS\n'
