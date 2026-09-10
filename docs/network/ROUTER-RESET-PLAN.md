@@ -1,117 +1,147 @@
 # Router Clean-Rebuild Plan
 
-Status: planned maintenance; not yet executed.
-
-Router: ASUS RT-AC86U main router  
-Legacy address: `192.168.2.1`  
-AiMesh nodes currently known: `192.168.2.181`, `192.168.2.218`
+**Status:** planned maintenance; not yet executed  
+**Router:** ASUS RT-AC86U / `192.168.2.1`  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Known AiMesh nodes:** `192.168.2.181`, `192.168.2.218`
 
 ## Goal
 
-Perform a clean firmware/factory-reset rebuild of the router rather than carrying historical configuration forward.
+Perform a controlled clean firmware/factory-reset rebuild only when the current configuration, recovery access and post-reset intent are fully documented.
 
-The rebuild will deliberately recreate:
+The rebuild should recreate required behaviour from documented intent instead of restoring historical drift wholesale.
 
-- WAN configuration
-- LAN addressing
-- DHCP scope
-- DHCP reservations
-- DNS advertisement
-- Wi-Fi / AiMesh
-- QoS
-- required firewall/port-forward rules
-- DDNS/VPN settings where still required
-- monitoring/syslog integration
+## Current critical network facts
 
-The old configuration is evidence/recovery material only. If the purpose of the reset is to remove historical drift, do **not** blindly restore the old full configuration backup after the reset.
+```text
+LAN:        192.168.2.0/24
+Gateway:    192.168.2.1
+DNS 1:      192.168.2.51  dns-01
+DNS 2:      192.168.2.50  dns-02
+Admin:      192.168.2.48  admin-01
+PVE:        192.168.2.70, 192.168.2.71
+Monitoring: 192.168.2.52  monitor-01
+Edge:       192.168.2.56  edge-01
+```
+
+`192.168.2.48` is **not** a DNS server. The old DietPi DNS role at `.48` is retired.
+
+## Cloudflare ingress rule
+
+The approved future ingress for selected internal web services is Cloudflare Tunnel through `edge-01` with Cloudflare Access/MFA.
+
+Do not recreate obsolete inbound router port-forwards merely because Nginx Proxy Manager/Authelia once used them. During the pre-reset audit, classify each port-forward as still required, temporary legacy, or removable after Cloudflare cutover.
 
 ## Pre-reset evidence gate
 
 Before any reset:
 
-- export the current router configuration as rollback evidence
-- record firmware version
-- record WAN connection type and any ISP-specific requirements
-- record LAN subnet/gateway
-- export or document DHCP reservations
-- record current DHCP lease range
-- record DNS server advertisement
-- record Wi-Fi SSIDs/security mode without committing passwords
-- record AiMesh topology/nodes
-- record port forwards
-- record VPN server/client configuration
-- record DDNS settings
-- record MAC filtering/access-control rules
-- record QoS state/rules
-- record router syslog/monitoring destination
-- ensure console/local access and a recovery route are available
+- export the current router configuration as rollback evidence;
+- record firmware version and WAN/ISP requirements;
+- record LAN subnet/gateway and DHCP lease range;
+- export/document DHCP reservations;
+- record the current DNS advertisement and verify it is `.51 + .50`;
+- record Wi-Fi SSIDs/security mode without exposing passwords;
+- record AiMesh topology/nodes;
+- record all port forwards and their business/service purpose;
+- record VPN/DDNS state still in use;
+- record QoS state/rules;
+- record access-control/MAC-filtering state where used;
+- record router syslog destination `192.168.2.52:5514/udp`;
+- prove local wired administration/recovery access;
+- keep a tested rollback path available.
 
-Secrets, Wi-Fi keys, ISP credentials and private keys must stay in SOPS or another protected secret store and must never be committed in plaintext.
+Secrets, Wi-Fi keys, ISP credentials and private keys must remain outside Git in protected recovery storage.
 
-## Working target LAN services
+## DHCP / reservation direction
 
-These remain design inputs until the router audit is complete:
+DHCP remains on the ASUS router unless a future design change explicitly moves it.
 
-- router/gateway: `192.168.2.1`
-- primary DNS: `dns-01` (currently legacy DietPi `192.168.2.48`)
-- secondary DNS: `dns-02` after the new Proxmox LXC is deployed and validated from `IaC/`
-- DHCP remains on the ASUS router unless a later design decision explicitly moves it
+Infrastructure reservations should document:
 
-## DHCP direction
+- hostname;
+- MAC address;
+- reserved IPv4 address;
+- physical/virtual role;
+- authoritative Git/IaC/documentation reference.
 
-The clean rebuild should use a documented reservation plan rather than ad-hoc static addressing.
+Preserve current approved fixed identities, including `admin-01 .48` and the core service addresses `.50-.56`, unless a separate migration changes them first.
 
-Every infrastructure reservation should record:
+## DNS advertisement
 
-- target hostname
-- MAC address
-- reserved IPv4 address
-- device/role
-- source-of-truth entry in Git
+Post-reset DHCP must advertise exactly the current dual resolver design unless a later reviewed change says otherwise:
 
-The final reservation table will be built after target hostnames and switch-port identities are approved.
+```text
+192.168.2.51  dns-01
+192.168.2.50  dns-02
+```
+
+Never restore the historical `.48` or `.242` resolver values.
+
+Before advertising DNS after reset, validate each resolver directly over UDP/TCP and confirm expected `jameshouse` records.
+
+## Router syslog
+
+Restore remote syslog to:
+
+```text
+monitor-01 192.168.2.52
+UDP port 5514
+```
+
+After reset, prove real packets/messages arrive in:
+
+```text
+/var/log/homelab/router/rt-ac86u.log
+```
+
+Do not modify ASUS SSH `authorized_keys`/`sshd_authkeys` as an incidental part of the router rebuild unless a separate, tested key-migration plan exists.
 
 ## QoS direction
 
-QoS will be rebuilt from first principles after the clean reset.
+Rebuild QoS from measured WAN capacity and actual priority needs rather than preserving old rules by habit.
 
-Before defining classes, measure the actual WAN upload/download rates and identify traffic that genuinely needs priority. Avoid preserving old rules without evidence.
+Evaluate:
 
-Likely priority categories to evaluate:
+1. interactive voice/video;
+2. DNS/core infrastructure control traffic;
+3. normal client/web traffic;
+4. backup/synchronisation;
+5. bulk/non-urgent traffic.
 
-1. interactive voice/video
-2. DNS and essential infrastructure control traffic
-3. normal client/web traffic
-4. backup/synchronization
-5. bulk downloads and non-urgent jobs
+## Cutover order
 
-The exact ASUS QoS mode and bandwidth values must be decided from the post-reset firmware capabilities and measured WAN performance.
+1. ensure the HP ProCurve forwarding layer is stable and locally manageable;
+2. capture the router pre-reset evidence;
+3. confirm both DNS resolvers and admin-01 are healthy;
+4. ensure wired local access to the router is available;
+5. reset/reinstall firmware according to ASUS recovery procedure;
+6. restore LAN/gateway/DHCP first;
+7. restore reservations and `.51 + .50` DNS advertisement;
+8. restore Wi-Fi/AiMesh;
+9. restore only required VPN/DDNS/port-forward features;
+10. restore syslog/monitoring;
+11. validate wired and wireless clients before ending the maintenance window.
 
-## Cutover safety
-
-A router reset can remove DHCP, DNS advertisement, Wi-Fi and internet access simultaneously.
-
-The reset window must therefore have:
-
-- current config backup available
-- local wired admin access
-- known router recovery procedure
-- Pi-hole/Unbound services confirmed healthy before DNS is advertised
-- AiMesh rejoin procedure available
-- a written validation checklist
-
-## Validation after rebuild
+## Post-reset validation
 
 Prove:
 
-- router reachable at intended management address
-- WAN/internet works
-- DHCP leases are issued correctly
-- reservations resolve to intended devices
-- clients receive the intended DNS servers
-- both DNS paths resolve successfully
-- Wi-Fi and AiMesh operate
-- QoS is active with measured bandwidth values
-- required port forwards/VPN/DDNS work
-- monitoring/syslog is restored
-- no legacy configuration was silently reintroduced
+- router reachable at `192.168.2.1`;
+- WAN/internet access works;
+- DHCP leases are issued correctly;
+- infrastructure reservations map to intended devices;
+- renewed clients receive `.51 + .50` DNS only;
+- both resolvers answer public/local DNS;
+- `admin-01 .48` remains administration, not DNS;
+- Wi-Fi/AiMesh works;
+- required VPN/DDNS functions work;
+- required port-forwards only are present;
+- no obsolete NPM/Authelia exposure was recreated after Cloudflare cutover;
+- router syslog reaches `monitor-01 .52:5514/udp`;
+- management SSH access still works using the known authorized path;
+- monitoring reports router reachability.
+
+## Definition of done
+
+The clean rebuild is complete only when the documented current network design is restored, clients renew successfully, dual DNS works, Cloudflare-related port-forward decisions are respected, syslog/monitoring are healthy, recovery evidence is stored safely and no obsolete historical configuration has been silently reintroduced.
