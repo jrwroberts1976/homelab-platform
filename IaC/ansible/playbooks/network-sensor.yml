@@ -1,0 +1,9 @@
+---
+- name: Build network sensor toolchain
+  hosts: sensor_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: node_exporter
+    - role: network_sensor
