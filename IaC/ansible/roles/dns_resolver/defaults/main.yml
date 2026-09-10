@@ -26,6 +26,7 @@ pihole_local_hosts:
   - "192.168.2.49 garage-door-camera.jameshouse garage-door-camera"
   - "192.168.2.50 dns-02.jameshouse dns-02"
   - "192.168.2.52 monitor-01.jameshouse monitor-01"
+  - "192.168.2.55 sensor-01.jameshouse sensor-01"
   - "192.168.2.74 garden-room.jameshouse garden-room"
   - "192.168.2.78 front-door-camera.jameshouse front-door-camera"
   - "192.168.2.90 garden-gate-camera.jameshouse garden-gate-camera"
