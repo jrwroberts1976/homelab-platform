@@ -4,12 +4,15 @@ network_sensor_expected_ipv4: 192.168.2.55
 
 network_sensor_suricata_backports_suite: trixie-backports
 network_sensor_zeek_repository: "https://download.opensuse.org/repositories/security:/zeek/Debian_13/"
-network_sensor_zeek_package: zeek-8.0
+network_sensor_zeek_package: zeek-lts
 
 # Packet engines stay disabled until the dedicated capture NIC is attached.
 network_sensor_capture_interface: ""
 network_sensor_home_net: "192.168.2.0/24"
 network_sensor_community_id_seed: 0
+
+network_sensor_expected_suricata_major_minor: "8.0"
+network_sensor_expected_zeek_major_minor: "8.0"
 
 network_sensor_base_packages:
   - ca-certificates
