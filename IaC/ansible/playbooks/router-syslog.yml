@@ -1,0 +1,7 @@
+---
+- name: Configure central router syslog receiver
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  roles:
+    - router_syslog_receiver
