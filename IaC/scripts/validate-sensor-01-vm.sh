@@ -60,7 +60,11 @@ printf '%s\n' "$VM_CONFIG" | grep -Eq '^cores: 4$'   || die "VM 201 CPU mismatch
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^memory: 3072$'   || die "VM 201 RAM mismatch"
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^net0: .*bridge=vmbr0'   || die "VM 201 management bridge mismatch"
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^scsi0: vm-ssd:.*size=80G'   || die "VM 201 disk mismatch"
-printf '%s\n' "$VM_CONFIG" | grep -Eq '^ipconfig0: ip=192\.168\.2\.55/24,gw=192\.168\.2\.1$'   || die "VM 201 cloud-init IPv4 mismatch"
+IPCONFIG0="$(printf '%s\n' "$VM_CONFIG" | sed -n 's/^ipconfig0: //p')"
+printf '%s\n' "$IPCONFIG0" | grep -Fq 'ip=192.168.2.55/24' \
+  || die "VM 201 cloud-init IPv4 address mismatch"
+printf '%s\n' "$IPCONFIG0" | grep -Fq 'gw=192.168.2.1' \
+  || die "VM 201 cloud-init gateway mismatch"
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^cicustom: user=local:snippets/sensor-01-user-data\.yaml$'   || die "VM 201 cloud-init user-data mismatch"
 
 if printf '%s\n' "$VM_CONFIG" | grep -Eq '^usb[0-9]+:'; then
