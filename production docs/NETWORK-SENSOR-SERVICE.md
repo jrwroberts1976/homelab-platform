@@ -228,10 +228,18 @@ Phase 1 uses **3 GiB RAM** and an **80 GiB disk on `vm-ssd`**. Suricata and
 Zeek remain disabled, so this phase is for installation, configuration
 validation and monitoring only.
 
+PROXMOX will receive an additional 8 GiB RAM before the full Suricata + Zeek
+capture workload is enabled. The target post-upgrade host capacity is therefore
+approximately 16 GiB RAM.
+
 Before both packet engines are activated, rerun CPU/RAM/storage capacity
-checks. The final sensor memory allocation is evidence-driven; the current
-8 GiB hypervisor is not assumed to have enough physical headroom for both
-engines under mirrored production traffic.
+checks and raise the sensor VM memory allocation through Terraform if justified.
+The placement decision remains PROXMOX because its six physical i5-8500T cores,
+large vm-ssd datastore and separation from monitor-01 make it the preferred
+sensor host once the RAM upgrade is complete.
+
+New infrastructure after sensor-01 should default to Proxmox-2 (192.168.2.71)
+unless a later capacity/design review explicitly changes that policy.
 
 ## Phase gates
 
