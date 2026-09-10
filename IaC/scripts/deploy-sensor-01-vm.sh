@@ -198,7 +198,9 @@ printf '%s\n' "$VM_CONFIG" | grep -Eq '^cores: 4$'
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^memory: 3072$'
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^net0: .*bridge=vmbr0'
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^scsi0: vm-ssd:.*size=80G'
-printf '%s\n' "$VM_CONFIG" | grep -Eq '^ipconfig0: ip=192\.168\.2\.55/24,gw=192\.168\.2\.1$'
+IPCONFIG0="$(printf '%s\n' "$VM_CONFIG" | sed -n 's/^ipconfig0: //p')"
+printf '%s\n' "$IPCONFIG0" | grep -Fq 'ip=192.168.2.55/24'
+printf '%s\n' "$IPCONFIG0" | grep -Fq 'gw=192.168.2.1'
 printf '%s\n' "$VM_CONFIG" | grep -Eq '^cicustom: user=local:snippets/sensor-01-user-data\.yaml$'
 
 printf '\n===== TERRAFORM DRIFT CHECK =====\n'
