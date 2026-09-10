@@ -14,6 +14,6 @@ output "sensor_node" {
   value = var.proxmox_node_name
 }
 
-output "debian_cloud_image_id" {
-  value = proxmox_download_file.debian_cloud_image.id
+output "sensor_clone_source_vm_id" {
+  value = var.clone_source_vm_id
 }
