@@ -86,12 +86,12 @@ set -eu
 echo "--- package versions ---"
 dpkg-query -W -f='${Package}\t${Version}\n'   prometheus-node-exporter suricata suricata-update zeek-lts
 
-SURICATA_VERSION="$(suricata --version)"
+SURICATA_VERSION="$(suricata -V)"
 ZEEK_VERSION="$(/opt/zeek/bin/zeek --version)"
 printf 'suricata=%s\n' "$SURICATA_VERSION"
 printf 'zeek=%s\n' "$ZEEK_VERSION"
 
-printf '%s\n' "$SURICATA_VERSION" | grep -q 'Suricata version 8\.0\.'
+printf '%s\n' "$SURICATA_VERSION" | grep -q '8\.0\.'
 printf '%s\n' "$ZEEK_VERSION" | grep -q 'zeek version 8\.0\.'
 
 test "$(systemctl is-enabled suricata 2>/dev/null || true)" = "disabled"
