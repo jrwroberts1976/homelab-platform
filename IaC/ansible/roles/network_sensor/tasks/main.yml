@@ -10,6 +10,15 @@
       Refusing to configure network sensor: expected Debian 13
       {{ network_sensor_expected_hostname }} with {{ network_sensor_expected_ipv4 }}.
 
+- name: Enforce phase-1 no-capture policy
+  ansible.builtin.assert:
+    that:
+      - network_sensor_capture_interface | length == 0
+    fail_msg: >-
+      Phase-1 toolchain deployment requires an empty capture interface.
+      The packet engines must remain disabled until the dedicated USB SPAN NIC
+      is attached and validated.
+
 - name: Validate system DNS before repository operations
   ansible.builtin.command:
     argv:
@@ -106,10 +115,12 @@
   ansible.builtin.command:
     argv:
       - suricata
-      - --build-info
+      - --version
   register: network_sensor_suricata_build
   changed_when: false
-  failed_when: network_sensor_suricata_build.rc != 0
+  failed_when: >-
+    network_sensor_suricata_build.rc != 0
+    or ('Suricata version ' ~ network_sensor_expected_suricata_major_minor ~ '.') not in network_sensor_suricata_build.stdout
 
 - name: Verify suricata-update binary
   ansible.builtin.command:
@@ -119,13 +130,16 @@
   register: network_sensor_suricata_update_version
   changed_when: false
 
-- name: Verify Zeek binary
+- name: Verify Zeek LTS binary
   ansible.builtin.command:
     argv:
       - /opt/zeek/bin/zeek
       - --version
   register: network_sensor_zeek_version
   changed_when: false
+  failed_when: >-
+    network_sensor_zeek_version.rc != 0
+    or ('zeek version ' ~ network_sensor_expected_zeek_major_minor ~ '.') not in network_sensor_zeek_version.stdout
 
 - name: Verify packet troubleshooting tools
   ansible.builtin.command:
@@ -139,7 +153,17 @@
   changed_when: false
   failed_when: false
 
-- name: Verify packet engines are not listening on management interface
+- name: Verify Suricata remains disabled
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-enabled
+      - suricata
+  register: network_sensor_suricata_enabled
+  changed_when: false
+  failed_when: network_sensor_suricata_enabled.stdout | trim != 'disabled'
+
+- name: Verify packet engines are not running
   ansible.builtin.shell: |
     set -euo pipefail
     ! pgrep -x suricata >/dev/null
