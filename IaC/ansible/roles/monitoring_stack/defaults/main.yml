@@ -20,6 +20,8 @@ monitoring_icmp_targets:
     label: dns-01
   - address: 192.168.2.52
     label: monitor-01
+  - address: 192.168.2.55
+    label: sensor-01
   - address: 192.168.2.70
     label: PROXMOX
   - address: 192.168.2.71
@@ -48,6 +50,8 @@ monitoring_node_exporter_targets:
     label: dns-01
   - address: 192.168.2.52:9100
     label: monitor-01
+  - address: 192.168.2.55:9100
+    label: sensor-01
   - address: 192.168.2.70:9100
     label: PROXMOX
   - address: 192.168.2.71:9100
