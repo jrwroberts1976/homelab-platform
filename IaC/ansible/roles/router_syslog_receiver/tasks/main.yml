@@ -1,0 +1,95 @@
+---
+- name: Validate router syslog receiver host identity
+  ansible.builtin.assert:
+    that:
+      - ansible_hostname == router_syslog_receiver_expected_hostname
+      - ansible_default_ipv4.address == router_syslog_receiver_bind_address
+    fail_msg: >-
+      Router syslog receiver must run only on
+      {{ router_syslog_receiver_expected_hostname }} / {{ router_syslog_receiver_bind_address }}.
+
+- name: Install rsyslog
+  ansible.builtin.apt:
+    name: rsyslog
+    state: present
+    update_cache: true
+
+- name: Create router log directory
+  ansible.builtin.file:
+    path: "{{ router_syslog_receiver_log_dir }}"
+    state: directory
+    owner: syslog
+    group: adm
+    mode: "0750"
+
+- name: Install ASUS router remote syslog configuration
+  ansible.builtin.template:
+    src: 30-asus-router-remote.conf.j2
+    dest: /etc/rsyslog.d/30-asus-router-remote.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart rsyslog
+
+- name: Install router log rotation policy
+  ansible.builtin.template:
+    src: router-syslog.logrotate.j2
+    dest: /etc/logrotate.d/homelab-router-syslog
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate rsyslog configuration
+  ansible.builtin.command:
+    argv:
+      - rsyslogd
+      - -N1
+  register: router_syslog_receiver_config_check
+  changed_when: false
+
+- name: Apply pending rsyslog configuration changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure rsyslog is enabled and running
+  ansible.builtin.systemd_service:
+    name: rsyslog
+    enabled: true
+    state: started
+
+- name: Read UDP listeners
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -H
+      - -lunp
+  register: router_syslog_receiver_udp_listeners
+  changed_when: false
+
+- name: Verify dedicated router syslog listener
+  ansible.builtin.assert:
+    that:
+      - (router_syslog_receiver_bind_address ~ ':' ~ (router_syslog_receiver_port | string)) in router_syslog_receiver_udp_listeners.stdout
+      - "'rsyslogd' in router_syslog_receiver_udp_listeners.stdout"
+    fail_msg: >-
+      rsyslog is not listening on the expected dedicated endpoint
+      {{ router_syslog_receiver_bind_address }}:{{ router_syslog_receiver_port }}/udp.
+
+- name: Verify router source restriction is present
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -F
+      - "{{ router_syslog_receiver_allowed_source }}"
+      - /etc/rsyslog.d/30-asus-router-remote.conf
+  changed_when: false
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: router_syslog_receiver_failed_units
+  changed_when: false
+  failed_when: router_syslog_receiver_failed_units.stdout | trim | length > 0
