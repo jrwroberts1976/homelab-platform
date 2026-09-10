@@ -44,7 +44,7 @@ The sensor stack does not manage a separate QCOW2 download/import resource.
 |---|---|---|
 | Suricata 8.0.x | IDS/NSM detection engine | Debian 13 backports; installed now, capture service disabled until dedicated NIC exists |
 | suricata-update | Managed Suricata rules | Debian 13 backports; ET Open baseline initially |
-| Zeek 8.0.x LTS | Passive network metadata and protocol telemetry | Official Zeek Debian 13 repository; installed now, runtime disabled until dedicated NIC exists |
+| Zeek 8.0.x LTS | Passive network metadata and protocol telemetry | Official Zeek Debian 13 repository via `zeek-lts`; installed now, runtime disabled until dedicated NIC exists |
 | Prometheus Node Exporter | VM OS/resource health | Debian package, managed by existing `node_exporter` role |
 | tcpdump | Packet-arrival and SPAN validation | Debian package |
 | ethtool | Capture-NIC features/statistics/offload control | Debian package |
