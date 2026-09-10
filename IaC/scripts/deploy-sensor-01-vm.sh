@@ -150,35 +150,42 @@ done
 [ "$READY" -eq 1 ] || die "sensor-01 SSH did not become ready"
 
 printf '\n===== GUEST IDENTITY / CLOUD-INIT VALIDATION =====\n'
-ssh -i "$SENSOR_SSH_KEY" -o BatchMode=yes "james@$SENSOR_IPV4" "
+ssh -i "$SENSOR_SSH_KEY" -o BatchMode=yes "james@$SENSOR_IPV4" \
+  bash -s -- "$SENSOR_HOSTNAME" "$SENSOR_FQDN" "$SENSOR_IPV4" <<'REMOTE'
 set -eu
 
-echo hostname=\$(hostname -s)
-echo fqdn=\$(hostname -f)
+EXPECTED_HOSTNAME="$1"
+EXPECTED_FQDN="$2"
+EXPECTED_IPV4="$3"
 
-test "\$(hostname -s)" = "$SENSOR_HOSTNAME"
-test "\$(hostname -f)" = "$SENSOR_FQDN"
+sudo cloud-init status --wait
+
+echo "hostname=$(hostname -s)"
+echo "fqdn=$(hostname -f)"
+
+test "$(hostname -s)" = "$EXPECTED_HOSTNAME"
+test "$(hostname -f)" = "$EXPECTED_FQDN"
 test -e /var/lib/cloud/sensor-01-bootstrap-complete
 
 ip -4 -o addr show scope global
 ip route
 
-ip -4 -o addr show scope global | grep -q '192.168.2.55/24'
-ip route | grep -q '^default via 192.168.2.1 '
+ip -4 -o addr show scope global | grep -q "$EXPECTED_IPV4/24"
+ip route | grep -q '^default via 192\.168\.2\.1 '
 
 sudo systemctl is-active --quiet qemu-guest-agent
 
-MEM_KIB=\$(awk '/MemTotal:/ {print \$2}' /proc/meminfo)
-echo guest_mem_total_kib=\$MEM_KIB
-[ "\$MEM_KIB" -ge 2800000 ]
+MEM_KIB="$(awk '/MemTotal:/ {print $2}' /proc/meminfo)"
+echo "guest_mem_total_kib=$MEM_KIB"
+[ "$MEM_KIB" -ge 2800000 ]
 
-ROOT_SIZE=\$(df -B1 --output=size / | tail -1 | tr -d ' ')
-echo root_filesystem_bytes=\$ROOT_SIZE
+ROOT_SIZE="$(df -B1 --output=size / | tail -1 | tr -d ' ')"
+echo "root_filesystem_bytes=$ROOT_SIZE"
 
-FAILED_UNITS=\$(sudo systemctl --failed --no-legend --plain)
-printf 'failed_units=%s\n' "\$FAILED_UNITS"
-test -z "\$FAILED_UNITS"
-"
+FAILED_UNITS="$(sudo systemctl --failed --no-legend --plain)"
+printf 'failed_units=%s\n' "$FAILED_UNITS"
+test -z "$FAILED_UNITS"
+REMOTE
 
 printf '\n===== PROXMOX VM VALIDATION =====\n'
 VM_CONFIG="$(
