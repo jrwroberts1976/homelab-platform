@@ -1,0 +1,14 @@
+# Managed by homelab-platform IaC.
+
+# Emit all Zeek logs as JSON for later Loki ingestion.
+@load policy/tuning/json-logs
+
+# Add Community ID to conn.log so Zeek and Suricata records can be correlated.
+@load policy/protocols/conn/community-id-logging
+redef CommunityID::seed = {{ network_sensor_config_community_id_seed }};
+
+# Add layer-2 endpoint addresses to conn.log when Ethernet metadata is present.
+@load policy/protocols/conn/mac-logging
+
+# Replace the unsafe package default digest salt with a stable sensor-local value.
+redef digest_salt = "{{ network_sensor_config_zeek_digest_salt }}";
