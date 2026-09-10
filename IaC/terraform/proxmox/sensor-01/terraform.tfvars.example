@@ -17,6 +17,10 @@
 # The controller SSH public key is consumed by the Ansible hypervisor
 # prerequisite which installs the sensor-01 cloud-init snippet.
 #
+# The VM is created as a full clone of validated Debian 13 template VM 9001
+# (debian-13-cloud-template-qga) on PROXMOX. No standalone QCOW2 import resource
+# is used by the sensor stack.
+#
 # The future USB capture NIC is intentionally absent from initial Terraform.
 # Add its stable passthrough identity only after the hardware arrives and is
 # positively identified on PROXMOX.
