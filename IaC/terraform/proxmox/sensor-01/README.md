@@ -27,9 +27,13 @@ Before apply, prove:
 - no USB/capture device is attached yet;
 - PROXMOX retains safe memory headroom after the phase-1 VM starts.
 
-Before Suricata and Zeek are enabled together, perform a second capacity gate.
-The current 8 GiB PROXMOX host is not assumed to have enough RAM for the final
-dual-engine sensor workload; increase the VM allocation only after host
-capacity is addressed and measured.
+Before Suricata and Zeek are enabled together, PROXMOX is planned to receive an
+additional 8 GiB RAM, taking the host to approximately 16 GiB. Perform a second
+capacity gate after that upgrade and increase the sensor VM allocation through
+Terraform only after measuring the resulting headroom.
+
+sensor-01 remains intentionally placed on PROXMOX. New infrastructure after
+sensor-01 defaults to Proxmox-2 unless a later architecture review explicitly
+changes the placement policy.
 
 Persistent Terraform state belongs outside Git under the normal homelab IaC state directory convention.
