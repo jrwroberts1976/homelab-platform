@@ -4,13 +4,14 @@
 **Receiver:** `monitor-01.jameshouse` / `192.168.2.52`  
 **Source:** ASUS `RT-AC86U` / `192.168.2.1`  
 **Transport:** UDP/5514  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
 **Status:** operational; receiver and router forwarding validated 10 September 2026; Alloy/Loki ingestion pending
 
 ## Purpose
 
-The ASUS RT-AC86U exposes limited monitoring telemetry. Its built-in remote log capability provides an additional source of operational and network context without introducing another VM or logging platform.
+The ASUS RT-AC86U exposes limited monitoring telemetry. Its built-in remote log capability provides an additional source of operational and network context without introducing another VM.
 
-The current implementation stores router logs locally on `monitor-01`. Real router forwarding has been proven end-to-end. Alloy/Loki ingestion is the next logging phase.
+The current implementation stores router logs locally on `monitor-01`. Real router forwarding has been proven end-to-end. Fresh Alloy/Loki ingestion on `monitor-01` is the next logging phase.
 
 ## Data path
 
@@ -58,72 +59,72 @@ Initial rotation policy:
 - empty logs are not rotated;
 - rotated files remain local to `monitor-01`.
 
-Retention can be revisited after real log volume is measured.
+Retention can be revisited after Loki storage/retention is measured and validated.
 
 ## Deployment
 
-From TestServer:
+From `admin-01`:
 
 ```bash
 cd ~/projects/homelab-platform
 bash IaC/scripts/deploy-router-syslog-receiver.sh
 ```
 
-The wrapper performs:
+The wrapper is expected to perform:
 
-1. monitor-01 identity validation;
+1. `monitor-01` identity validation;
 2. UDP/5514 collision detection;
 3. Ansible syntax validation;
 4. rsyslog installation and configuration;
 5. `rsyslogd -N1` configuration validation;
 6. exact listener/source-filter validation;
 7. logrotate policy validation;
-8. a second Ansible apply that must report `changed=0`.
+8. a second Ansible apply that reports no unintended changes.
+
+If an older wrapper still assumes TestServer as its execution host, reconcile that script before treating the old invocation path as authoritative.
 
 ## Router forwarding validation
 
-The RT-AC86U remote-log destination is configured as:
+The RT-AC86U remote-log destination is:
 
 ```text
 server: 192.168.2.52
 port:   5514
 ```
 
-End-to-end forwarding was validated on 10 September 2026 from TestServer by capturing the receiver traffic on `monitor-01` while generating a benign router SSH event.
+End-to-end forwarding was validated on 10 September 2026 by capturing receiver traffic on `monitor-01` while generating a benign router SSH event.
 
 Observed packet path:
 
 ```text
-192.168.2.1:50100 -> 192.168.2.52:5514/udp
+192.168.2.1:<ephemeral> -> 192.168.2.52:5514/udp
 ```
 
-The validation capture received three matching packets with zero packets dropped by the receiver kernel. The dedicated log simultaneously recorded real RT-AC86U events including Dropbear connection, public-key authentication success and disconnect messages.
+The dedicated log simultaneously recorded real RT-AC86U events, proving the router-to-rsyslog path.
 
-The dedicated log path was confirmed as:
+Repeat the packet/log validation after router firmware changes, receiver rebuilds or syslog configuration changes.
 
-```text
-/var/log/homelab/router/rt-ac86u.log
-```
+## Router SSH note
 
-This proves the router-to-rsyslog local collection path. Repeat the same packet/log test after router firmware changes, receiver rebuilds, or syslog configuration changes.
+Do not modify ASUS `authorized_keys`/`sshd_authkeys` merely to create a new management identity. The already-authorized administration key path should be used from `admin-01`. A previous attempt to rewrite ASUS SSH key persistence temporarily removed the collector key before the original state was restored.
 
 ## Alerting
 
-`monitor-01` receives the normal **standard alerting** coverage for host reachability, Node Exporter availability, CPU, memory and filesystem capacity as those monitoring stages are enabled.
+`monitor-01` provides normal host/service monitoring. No content-based router-log alerts are enabled initially.
 
-No content-based router-log alerts are enabled initially. Alert rules should only be introduced after representative RT-AC86U messages have been observed and classified, to avoid noisy or low-value alerts.
+Add content alerts only after representative RT-AC86U messages are classified and the alert has an actionable operational response.
 
-## Future logging integration
+## Central logging integration
 
-When Alloy/Loki is deployed:
+When Alloy/Loki is deployed fresh on `monitor-01`:
 
 - ingest the dedicated router log rather than broad host syslog;
-- add only stable labels such as `job=router_syslog`, `device=rt-ac86u`, `device_type=router`, `vendor=asus` and `site=home`;
+- use stable labels such as `job=router_syslog`, `device=rt-ac86u`, `device_type=router`, `vendor=asus` and `site=home`;
 - preserve the raw message;
 - do not promote source IPs, usernames, process IDs, destination addresses or message text to Loki labels;
 - parse event fields at query time unless a field proves stable and low-cardinality;
-- keep local rotation as a short-term resilience layer unless central retention makes it unnecessary;
-- validate the full path from new router event to Loki query before declaring central ingestion operational.
+- keep local rotation as a short-term resilience layer until central retention is proven;
+- validate a newly generated router event all the way through Alloy, Loki and Grafana before declaring central ingestion operational.
 
 Suggested initial Loki selector:
 
@@ -131,17 +132,17 @@ Suggested initial Loki selector:
 {job="router_syslog", device="rt-ac86u"}
 ```
 
+See `CENTRAL-LOGGING-SERVICE.md`.
+
 ## Definition of done
 
 The local receiver phase is complete because:
 
-- rsyslog is IaC-managed on monitor-01;
+- rsyslog is IaC-managed on `monitor-01`;
 - UDP/5514 listens on the dedicated receiver;
 - the listener filters to the RT-AC86U source;
 - log rotation is configured;
-- the deployment is designed to be idempotent;
 - router forwarding is configured;
-- real RT-AC86U packets have been captured at the receiver;
-- real RT-AC86U messages have been proven in the dedicated log.
+- real RT-AC86U packets/messages have been proven at the receiver.
 
-The next phase is complete only when Alloy tails this dedicated file, Loki receives the entries, and a Grafana/Loki query proves the end-to-end central logging path.
+The central phase is complete only when Alloy tails this file, Loki receives entries and a Grafana/Loki query proves the end-to-end path.
