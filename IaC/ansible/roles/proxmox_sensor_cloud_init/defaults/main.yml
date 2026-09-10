@@ -1,0 +1,8 @@
+---
+sensor_cloud_init_hostname: sensor-01
+sensor_cloud_init_domain: jameshouse
+sensor_cloud_init_expected_hypervisor_hostname: PROXMOX
+sensor_cloud_init_expected_hypervisor_ipv4: 192.168.2.70
+sensor_cloud_init_snippet_dir: /var/lib/vz/snippets
+sensor_cloud_init_snippet_name: sensor-01-user-data.yaml
+sensor_cloud_init_public_key: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/proxmox-automation.pub') | trim }}"
