@@ -1,0 +1,8 @@
+---
+router_syslog_receiver_expected_hostname: monitor-01
+router_syslog_receiver_bind_address: 192.168.2.52
+router_syslog_receiver_port: 5514
+router_syslog_receiver_allowed_source: 192.168.2.1
+router_syslog_receiver_log_dir: /var/log/homelab/router
+router_syslog_receiver_log_file: /var/log/homelab/router/rt-ac86u.log
+router_syslog_receiver_retention_days: 30
