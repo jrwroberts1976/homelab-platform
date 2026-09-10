@@ -4,11 +4,10 @@ proxmox_vm_import_expected_ipv4: "{{ ansible_host }}"
 proxmox_vm_import_expected_interface: vmbr0
 
 proxmox_vm_import_storage_id: local
-proxmox_vm_import_storage_content:
-  - backup
-  - images
+proxmox_vm_import_storage_path: /var/lib/vz
+
+# These are the only capabilities this reusable prerequisite owns.
+# Existing datastore content types are preserved exactly.
+proxmox_vm_import_required_content:
   - import
-  - iso
-  - rootdir
   - snippets
-  - vztmpl
