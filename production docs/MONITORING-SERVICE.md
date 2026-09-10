@@ -1,158 +1,25 @@
 # Homelab Monitoring Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** approved target design; IaC implementation starting  
-**Primary host:** `monitor-01.jameshouse`  
-**IPv4:** `192.168.2.52`  
-**Placement:** VM on `Proxmox-2` / `192.168.2.71`
+**Primary host:** `monitor-01.jameshouse` / `192.168.2.52`  
+**Placement:** VM200 on `Proxmox-2` / `192.168.2.71`  
+**Normal controller:** `admin-01.jameshouse` / `192.168.2.48`  
+**Status:** core metrics/alerting operational; central logging implementation pending
 
 ## Purpose
 
-`monitor-01` becomes the authoritative monitoring platform for the rebuilt homelab.
+`monitor-01` is the authoritative monitoring platform for the rebuilt homelab.
 
-The design replaces Zabbix as the target monitoring authority and standardizes on:
+Current core stack:
 
 - Prometheus
 - Grafana
 - Alertmanager
 - Blackbox Exporter
 
-Loki/Alloy logging is deliberately deferred until the metrics platform is stable and real storage requirements are known.
+The old TestServer monitoring/logging stack is no longer the desired-state authority.
 
-## Initial VM target
-
-- Debian 13
-- 4 vCPU
-- 6 GiB RAM
-- 80 GiB system/data disk
-- static IPv4 `192.168.2.52/24`
-- gateway `192.168.2.1`
-- DNS `192.168.2.51`, `192.168.2.50` (legacy `192.168.2.48` is forbidden)
-- search domain `jameshouse`
-- starts automatically with `Proxmox-2`
-
-The VM is reproducible infrastructure. Persistent Prometheus/Grafana state is useful but is not treated as irreplaceable; configuration and dashboards should be provisioned from Git wherever practical.
-
-## Failure-domain placement
-
-Monitoring runs on `Proxmox-2` so loss of the primary `PROXMOX` host does not also remove the monitoring system.
-
-This allows `monitor-01` to detect loss of:
-
-- `PROXMOX`
-- `dns-02`
-- future `cloud-01`
-- other workloads hosted on `PROXMOX`
-
-The current USB management NIC on `Proxmox-2` remains a known hardware concern. Replacement adapters will be tested separately; monitoring deployment does not change the host bridge/NIC design.
-
-## Initial monitored estate
-
-| Target | IPv4 | Initial probe |
-|---|---:|---|
-| ASUS router | `192.168.2.1` | ICMP |
-| `dns-02` | `192.168.2.50` | ICMP, DNS |
-| `dns-01` | `192.168.2.51` | ICMP, DNS |
-| `monitor-01` | `192.168.2.52` | local metrics |
-| `PROXMOX` | `192.168.2.70` | ICMP, HTTPS, node metrics later |
-| `Proxmox-2` | `192.168.2.71` | ICMP, HTTPS, node metrics later |
-| `media-01` | `192.168.2.195` | ICMP |
-| TestServer | `192.168.2.220` | ICMP, node/container metrics later |
-
-Future `cloud-01` is reserved for `192.168.2.53`.
-
-## IaC ownership
-
-- Terraform/OpenTofu: VM definition, compute, storage, network and cloud-init
-- Ansible: Debian baseline, Docker/Compose, service files, persistent directories and health checks
-- Compose: Prometheus, Grafana, Alertmanager and Blackbox Exporter
-- Prometheus configuration: Git-managed scrape/probe targets
-- Grafana provisioning: Git-managed data source and dashboards where practical
-- Alertmanager configuration: Git-managed routing with secrets supplied outside Git
-- managed DNS: `monitor-01.jameshouse -> 192.168.2.52`
-
-Manual GUI edits are not authoritative unless reconciled back into Git.
-
-## Deployment stages
-
-1. validate `192.168.2.52` is unused;
-2. validate a free VM ID on `Proxmox-2`;
-3. validate VM storage and Debian cloud-image/bootstrap path;
-4. Terraform plan must contain only the expected monitoring VM/image changes;
-5. create `monitor-01`;
-6. wait for SSH;
-7. apply Ansible monitoring role;
-8. validate Prometheus, Grafana, Alertmanager and Blackbox health;
-9. add managed local DNS;
-10. prove ICMP/HTTPS/DNS probes against the current critical estate;
-11. run the configuration a second time and require idempotence;
-12. add node exporters and alert routing in later controlled changes.
-
-## Initial ports
-
-LAN-only management:
-
-- Grafana: TCP/3000
-- Prometheus: TCP/9090
-- Alertmanager: TCP/9093
-- Blackbox Exporter: TCP/9115
-
-No monitoring management port is exposed directly to the Internet.
-
-## Definition of done
-
-The first monitoring phase is complete when:
-
-- `monitor-01` is reproducibly provisioned through IaC;
-- all four monitoring services are healthy;
-- Grafana is reachable from the LAN;
-- Prometheus successfully evaluates configured targets;
-- both DNS resolvers are probed;
-- both Proxmox hosts are probed;
-- router reachability is probed;
-- service configuration survives a redeploy without manual GUI repair;
-- a second Ansible run reports no unintended changes.
-
-
-## Proxmox DNS prerequisite evidence — 9 September 2026
-
-Before deploying `monitor-01`, the system resolver configuration on both standalone Proxmox hosts is being reconciled through the Git-managed `proxmox_resolver` Ansible role.
-
-Approved resolver state:
-
-```text
-search jameshouse
-nameserver 192.168.2.51
-nameserver 192.168.2.50
-```
-
-Live evidence now confirms `PROXMOX` (`192.168.2.70`) applied successfully with `ok=12 changed=1 unreachable=0 failed=0`. Post-apply validation resolved public DNS and `dns-01.jameshouse -> 192.168.2.51`. `Proxmox-2` had already been validated with the same managed resolver pair.
-
-A second Ansible run across both hosts is still required to prove idempotence before the monitoring VM is provisioned.
-
-
-## Proxmox-2 storage import prerequisite evidence — 9 September 2026
-
-The `local` datastore on `Proxmox-2` was reconciled through the Git-managed `proxmox_vm_import_storage` Ansible role so Terraform can import the pinned Debian cloud image.
-
-First apply:
-
-```text
-Proxmox-2 : ok=9 changed=1 unreachable=0 failed=0 skipped=0
-```
-
-Second apply proved idempotence:
-
-```text
-Proxmox-2 : ok=8 changed=0 unreachable=0 failed=0 skipped=1
-```
-
-The role preserved the existing datastore definition and added only the required VM image `import` content capability. Final storage-stanza verification and a regenerated Terraform plan remain the next gates before VM creation.
-
-
-## monitor-01 VM provisioning evidence — 9 September 2026
-
-The first infrastructure phase is live and validated:
+## VM baseline
 
 ```text
 monitor-01.jameshouse
@@ -165,60 +32,156 @@ Proxmox-2
 Debian 13
 ```
 
-Terraform completed the VM creation with one approved resource added and no changes or destroys. Cloud-init validation confirmed the expected short hostname and FQDN, static `.52/24` address, gateway `.1`, active QEMU guest agent, and zero failed systemd units. A post-create Terraform plan reported no drift.
-
-Durable Terraform state is held at:
+DNS:
 
 ```text
-~/.local/state/homelab-iac/monitor-01/terraform
+192.168.2.51  dns-01
+192.168.2.50  dns-02
 ```
 
-The application layer is defined separately through the `monitoring_stack` Ansible role. Initial pinned application versions are Prometheus v3.14.0, Grafana v13.2.1, Alertmanager v0.34.0, and Blackbox Exporter v0.28.0. Loki and Alloy remain deferred until the metrics platform is stable.
+`192.168.2.48` is `admin-01`; it must not be used as a legacy resolver.
 
+## Failure-domain placement
 
-## Core monitoring application deployment evidence — 9 September 2026
+Monitoring runs on `Proxmox-2` so failure of primary `PROXMOX` does not also remove monitoring for workloads hosted there.
 
-The core monitoring application layer deployed successfully on `monitor-01`.
+The two hypervisors remain standalone; monitoring must not assume cluster/HA behaviour.
 
-Controller-side health checks passed for all four initial services:
+## Current monitored estate
+
+Core/approved targets include:
+
+| Target | IPv4 | Placement / purpose |
+|---|---:|---|
+| ASUS RT-AC86U | `192.168.2.1` | Router/gateway |
+| `dns-02` | `192.168.2.50` | CT100 on PROXMOX |
+| `dns-01` | `192.168.2.51` | CT101 on Proxmox-2 |
+| `monitor-01` | `192.168.2.52` | Local monitoring VM |
+| `cloud-01` | `192.168.2.53` | VM200 on PROXMOX |
+| `mail-relay-01` | `192.168.2.54` | CT102 on PROXMOX |
+| `sensor-01` | `192.168.2.55` | VM201 on PROXMOX |
+| `edge-01` | `192.168.2.56` | CT103 on Proxmox-2; monitoring to be added with cloudflared deployment |
+| `PROXMOX` | `192.168.2.70` | Primary PVE host |
+| `Proxmox-2` | `192.168.2.71` | Secondary PVE host |
+| `media-01` | `192.168.2.195` | Physical Raspberry Pi 5 |
+| `TestServer` | `192.168.2.220` | Legacy retirement target; monitoring should be removed when no longer needed |
+
+`ids-01` is decommissioned and must not be an active monitoring target.
+
+## Current validation state
+
+The monitoring application layer has been deployed and validated on `monitor-01`. Previous validation established:
+
+- Prometheus healthy;
+- Grafana healthy;
+- Alertmanager healthy;
+- Blackbox Exporter healthy;
+- configured Prometheus targets reporting healthy at the time of validation;
+- Blackbox DNS/ICMP/HTTPS probes succeeding for the then-approved core targets;
+- Grafana Prometheus datasource provisioned and pointing at Prometheus;
+- local DNS `monitor-01.jameshouse -> 192.168.2.52` published on both resolvers.
+
+Changes to the estate, such as `edge-01`, must be added through Git-managed monitoring configuration rather than assumed covered by the earlier target count.
+
+## Router syslog receiver
+
+`monitor-01` already receives ASUS router syslog over UDP/5514 and writes:
 
 ```text
-prometheus=PASS
-grafana=PASS
-alertmanager=PASS
-blackbox=PASS
+/var/log/homelab/router/rt-ac86u.log
 ```
 
-The protected Grafana admin credential is stored outside Git at:
+This local collection path is operational and is the first approved source for the central logging rollout.
+
+See `ROUTER-SYSLOG-SERVICE.md`.
+
+## Central logging — next phase
+
+The approved target is a **fresh** Loki/Alloy implementation associated with `monitor-01`:
 
 ```text
-~/.config/homelab-iac/monitoring.env
+approved log sources
+      |
+      v
+     Alloy
+      |
+      v
+     Loki
+      |
+      v
+    Grafana
 ```
 
-The deployment wrapper completed both the first Ansible apply and the idempotence run before performing the controller health checks. Loki and Alloy remain intentionally deferred until metrics/probe validation is complete.
+Do not migrate the old TestServer Alloy/Loki configuration wholesale.
 
+Initial logging sequence:
 
-## Core monitoring target validation — 9 September 2026
+1. define Loki storage/retention/resource limits;
+2. deploy Loki through Git/IaC;
+3. configure Alloy for the dedicated router syslog file;
+4. prove a new router event arrives in Loki and is queryable in Grafana;
+5. add Loki/Alloy health monitoring;
+6. add `edge-01` / cloudflared logs after the edge service is live;
+7. add other sources only through explicit collection policy.
 
-Prometheus target discovery returned all 14 expected active targets and every target reported `health=up`.
+See `CENTRAL-LOGGING-SERVICE.md`.
 
-All Blackbox probes returned `probe_success=1`, covering:
-- DNS TCP on `.50` and `.51`
-- ICMP to router, both DNS resolvers, monitor-01, both Proxmox hosts, media-01, and TestServer
-- HTTPS probes to both Proxmox management endpoints
+## IaC ownership
 
-Prometheus reported no active alerts. Grafana's provisioned Prometheus datasource is present, points to `http://prometheus:9090`, and is the default datasource.
+- Terraform/OpenTofu: VM infrastructure where defined;
+- Ansible: operating-system/application configuration;
+- Prometheus configuration: Git-managed targets;
+- Grafana provisioning: Git-managed datasources/dashboards where practical;
+- Alertmanager: Git-managed routing with secrets outside Git;
+- Loki/Alloy: must be added to the same Git/IaC authority rather than built as unmanaged local state.
 
-A focused Ansible playbook now manages local Pi-hole DNS records separately from the full resolver role so new service records such as `monitor-01.jameshouse -> 192.168.2.52` can be reconciled without rerunning unrelated resolver configuration.
+Manual GUI edits are not authoritative unless reconciled back into Git.
 
+## Network ports
 
-## monitor-01 DNS publication evidence — 9 September 2026
+LAN-only management/service ports currently include:
 
-The focused Pi-hole local-DNS playbook is now clean and idempotent on both resolvers:
+- Grafana TCP/3000
+- Prometheus TCP/9090
+- Alertmanager TCP/9093
+- Blackbox Exporter TCP/9115
+- router syslog UDP/5514
 
-```text
-dns-01 : ok=4 changed=0 unreachable=0 failed=0
-dns-02 : ok=4 changed=0 unreachable=0 failed=0
-```
+No monitoring management port should be directly exposed to the Internet.
 
-Both resolvers and the controller resolve `monitor-01.jameshouse` to `192.168.2.52`.
+If remote Grafana access is approved, publish it through `edge-01` + Cloudflare Tunnel + Cloudflare Access rather than a router port-forward.
+
+## Alerting policy
+
+Alerts should be actionable and tied to service/host outcomes. Avoid high-cardinality labels and noisy log-content alerting.
+
+Normal priorities include:
+
+- target/service unavailable;
+- CPU/memory/filesystem pressure where thresholds are meaningful;
+- DNS failure;
+- Proxmox host/service failure;
+- future Loki/Alloy ingestion/storage failure;
+- future cloudflared/tunnel failure.
+
+## Recovery
+
+If the monitoring platform fails:
+
+1. administer from `admin-01`;
+2. verify `Proxmox-2` and VM200 status;
+3. verify `monitor-01` DNS, network and systemd state;
+4. validate application services independently;
+5. restore/redeploy from Git/IaC before introducing manual drift;
+6. preserve or restore persistent Grafana/Prometheus/Loki data only according to the documented backup policy.
+
+## Definition of done for the current programme
+
+The monitoring programme is complete when:
+
+- core metrics/alerting remains reproducible and healthy;
+- `edge-01` and other newly approved targets are represented;
+- fresh Loki/Alloy central logging is operational;
+- router logs are queryable end-to-end in Grafana;
+- logging health/retention/recovery are documented;
+- TestServer monitoring/logging dependencies are removed before its reimage.
