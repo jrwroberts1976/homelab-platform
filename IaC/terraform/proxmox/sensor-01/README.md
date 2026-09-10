@@ -60,3 +60,23 @@ and generates a saved plan.
 It validates the live template identity and rejects any Terraform action other than creation of `proxmox_virtual_environment_vm.sensor` as a full clone of VM 9001.
 
 The script deliberately does **not** run `terraform apply`.
+
+
+## VM build workflow
+
+After the plan-only gate is reviewed and approved:
+
+```bash
+./IaC/scripts/deploy-sensor-01-vm.sh
+```
+
+The VM build workflow repeats all live safety and template gates, regenerates
+the Terraform plan, requires exactly one create for
+`proxmox_virtual_environment_vm.sensor`, and only then applies that saved plan.
+
+After creation it validates SSH, hostname/FQDN, cloud-init completion, management
+IPv4/default route, QEMU Guest Agent, Proxmox VM settings and a zero-drift
+Terraform plan.
+
+This workflow creates/configures only the VM foundation. Suricata, Zeek and the
+rest of the network-sensor toolchain are a separate Ansible deployment gate.
