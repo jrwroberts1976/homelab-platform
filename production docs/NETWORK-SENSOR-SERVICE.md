@@ -19,6 +19,23 @@ The sensor has two distinct network roles:
 
 The capture NIC must never have a normal IP address, gateway, DHCP client, DNS role or bridge membership.
 
+## VM build source
+
+`sensor-01` is created as a **full clone of PROXMOX template VM 9001**
+(`debian-13-cloud-template-qga`).
+
+The source template is required to remain:
+
+- a Proxmox template;
+- QEMU Guest Agent enabled;
+- Debian 13 genericcloud/QGA base;
+- system disk on `vm-ssd`;
+- cloud-init disk on `vm-ssd`;
+- management NIC on `vmbr0`.
+
+The guarded plan workflow validates those properties before Terraform planning.
+The sensor stack does not manage a separate QCOW2 download/import resource.
+
 ## Toolchain
 
 ### Required baseline
@@ -213,7 +230,7 @@ Loki/Alloy integration is also deferred. Structured logs remain local and rotati
 
 ## IaC ownership
 
-- Terraform: `sensor-01` VM compute/storage/management network and, later, USB passthrough.
+- Terraform: `sensor-01` VM full clone from validated Debian template VM 9001, compute/storage/management network and, later, USB passthrough.
 - Ansible: OS baseline, sensor toolchain, repositories, Suricata/Zeek configuration, capture NIC policy, services, rules and validation.
 - Git: all desired configuration except secrets and generated runtime data.
 - Proxmox GUI/manual guest edits: not authoritative.
