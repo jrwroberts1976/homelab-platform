@@ -30,6 +30,7 @@ pihole_local_hosts:
   - "192.168.2.53 cloud-01.jameshouse cloud-01"
   - "192.168.2.54 mail-relay-01.jameshouse mail-relay-01"
   - "192.168.2.55 sensor-01.jameshouse sensor-01"
+  - "192.168.2.56 edge-01.jameshouse edge-01"
   - "192.168.2.70 proxmox.jameshouse proxmox ntp-01.jameshouse ntp-01"
   - "192.168.2.71 proxmox-2.jameshouse proxmox-2 ntp-02.jameshouse ntp-02"
   - "192.168.2.74 garden-room.jameshouse garden-room"
