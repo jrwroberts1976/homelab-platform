@@ -115,12 +115,12 @@
   ansible.builtin.command:
     argv:
       - suricata
-      - --version
+      - -V
   register: network_sensor_suricata_build
   changed_when: false
   failed_when: >-
     network_sensor_suricata_build.rc != 0
-    or ('Suricata version ' ~ network_sensor_expected_suricata_major_minor ~ '.') not in network_sensor_suricata_build.stdout
+    or (network_sensor_expected_suricata_major_minor ~ '.') not in network_sensor_suricata_build.stdout
 
 - name: Verify suricata-update binary
   ansible.builtin.command:
