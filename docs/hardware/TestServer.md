@@ -1,124 +1,47 @@
 # TestServer Current-State Audit
 
-Audit date: 2026-09-06  
-Legacy hostname: `TestServer`  
-Address: `192.168.2.220`  
-Audit method: repository-controlled `scripts/audit-linux-host.sh`, executed locally as root in read-only mode.
+**Original audit:** 6 September 2026  
+**Current disposition updated:** 10 September 2026  
+**Hostname:** `TestServer`  
+**Address:** `192.168.2.220`  
+**Hardware:** Raspberry Pi 4 Model B Rev 1.5  
+**Current role:** legacy migration source  
+**Target role:** clean garden `birdnet-01` / BirdNET-Go host after retirement
 
-Audit artifact on TestServer:
+The original audit proved that TestServer was a highly consolidated Docker/BirdNET/CI/monitoring host. It is no longer the preferred administration or monitoring authority. This document now treats that old runtime as migration evidence rather than the target architecture.
 
-`/var/tmp/TestServer-audit-20260906T072451Z.txt`
+## Identity and hardware
 
-SHA256:
-
-`d6330f81585b919fe746a947f3013c82f00d329d76c979d2b2b9a0e25d801391`
-
-## Identity
-
-| Item | Current state |
+| Item | Current / audited state |
 |---|---|
 | Hardware | Raspberry Pi 4 Model B Rev 1.5 |
 | OS | Debian GNU/Linux 13 (trixie) |
-| Kernel | 6.18.39+rpt-rpi-v8 |
 | Architecture | arm64 / aarch64 |
-| Virtualization environment | Bare metal |
-| Legacy hostname | `TestServer` |
-
-The current hostname is a discovery identifier only. It does not imply the machine's future role.
-
-## CPU
-
-| Item | Current state |
-|---|---|
-| CPU | ARM Cortex-A72 |
-| Cores | 4 |
-| Threads per core | 1 |
-| Online CPUs | 0-3 |
-| L2 cache | 1 MiB |
-
-## Memory
-
-| Item | Current state |
-|---|---|
-| RAM | 3.7 GiB |
-| Used during audit | 2.3 GiB |
-| Available during audit | 1.4 GiB |
-| Swap | 2.0 GiB zram |
-| Swap used during audit | approximately 780 MiB |
-
-The host is already using compressed swap under its present workload.
-
-## Storage
-
-| Item | Current state |
-|---|---|
-| Primary device | `/dev/mmcblk0` |
-| Capacity | 953.7 GiB |
-| Root partition | 953.2 GiB ext4 |
-| Root filesystem usable size | approximately 939 GiB |
-| Used | approximately 266 GiB |
-| Available | approximately 635 GiB |
-| Root usage | 30% |
-| LVM | Not installed |
-| ZFS | Not installed |
-
-The device is presented by Linux as MMC storage. The installed audit utilities could not provide SMART-style health data for it, so storage health is currently **UNKNOWN**, not failed.
-
-## Raspberry Pi health
-
-- Firmware throttle state during audit: `0x0`.
-- CPU temperature during the initial hardware check: approximately 41.3 C.
-- Thermal-zone CPU temperature later in the audit: approximately 43.3 C.
-- No active thermal/throttling problem was observed.
-
-## Network
-
-| Item | Current state |
-|---|---|
-| Primary interface | `eth0` |
+| CPU | ARM Cortex-A72, 4 cores |
+| RAM | approximately 3.7 GiB |
+| Swap | approximately 2 GiB zram |
+| Primary storage | approximately 1 TB MMC-presented device |
+| Ethernet | 1 Gb/s |
 | Address | `192.168.2.220/24` |
-| MAC | `d8:3a:dd:5a:51:44` |
-| Link | 1000 Mb/s, full duplex |
-| Gateway | `192.168.2.1` |
-| DNS | `192.168.2.48`, `192.168.2.242` |
-| Wi-Fi | Present but down |
 
-The large number of Docker bridges and veth interfaces is a consequence of the present container estate and must not be mistaken for physical networking.
+The original audit did not have SMART-style health visibility for the MMC-presented storage, so storage media health remains unknown rather than proven good.
 
-## Current platform services
+## Current architectural status
 
-System-level services observed include:
+Responsibilities already moved away from TestServer include:
 
-- Docker and containerd
-- local Docker registry
-- GitHub Actions self-hosted runner for `docker-env`
-- CrowdSec firewall bouncer
-- Redis
-- rsyslog
-- Zabbix Agent 2
-- SSH
-- unattended upgrades
+- normal administration / IaC control -> `admin-01` (`192.168.2.48`);
+- authoritative DNS -> `dns-01` (`.51`) + `dns-02` (`.50`);
+- central metrics/alerting -> `monitor-01` (`.52`);
+- public engineering portfolio -> Cloudflare Pages;
+- router syslog receiver -> `monitor-01`;
+- future selected internal ingress -> Cloudflare Tunnel through `edge-01` (`.56`).
 
-One failed unit was present:
+The old TestServer Prometheus/Alloy/Loki configuration is not the desired-state source for the rebuilt monitoring/logging platform.
 
-- `logrotate.service`
+## Legacy Docker estate
 
-This should be investigated before destructive repurposing because it may affect retention of current logs needed during migration.
-
-## Docker estate
-
-Docker 26.1.5 was present.
-
-At audit time:
-
-- 34 containers existed.
-- 33 were running.
-- 1 was stopped.
-- 312 images were stored.
-- storage driver: overlay2.
-- cgroup driver: systemd.
-
-Detected Compose projects included:
+The 6 September audit recorded Docker 26.1.5 with 34 containers, 33 running and one stopped. Compose/project ownership included:
 
 - alloy
 - availability
@@ -132,93 +55,92 @@ Detected Compose projects included:
 - management
 - monitoring
 - projects
-- projects-jrwroberts-co-uk
 - proxy-auth
 - wud
 
-The audit also captured per-container Compose ownership labels, bind mounts, named volumes and Docker networks without dumping environment variables or secret contents.
+Notable workloads included BirdNET-Go, Prometheus, Alloy/Loki, Uptime Kuma, SmokePing, LibreSpeed, Nginx Proxy Manager, Authelia, Portainer, Jenkins/Docker-in-Docker, Dashy/Homepage, CrowdSec, WUD, File Browser, local registry and dynamic-DNS components.
 
-## Important runtime correction: Komodo
+Some of these have since been stopped or made non-authoritative. **Do not use this historical list as proof that a service is still running.** Re-check live state before retirement actions.
 
-The live audit proves that Komodo **was running on TestServer** at audit time:
+## Important runtime correction retained from the audit
 
-- `komodo-core`
-- `komodo-periphery`
-- `komodo-ferretdb`
-- `komodo-postgres`
+Komodo was live on TestServer at the original audit, including Core, Periphery, FerretDB and PostgreSQL components. Container update/version operations are now intended to use Komodo, but ownership and final placement must be confirmed before TestServer is wiped.
 
-All four had been up for approximately 26 minutes when the audit ran.
+## Persistence
 
-This live evidence supersedes the earlier migration assumption that the Komodo bootstrap had not been deployed. No action is taken here; the running stack is now treated as current-state migration input.
-
-## Other notable current workloads
-
-Observed workloads include:
-
-- BirdNET-Go plus BirdNET exporter
-- Prometheus
-- Alloy
-- Loki, stopped at audit time
-- node-exporter
-- blackbox-exporter
-- cAdvisor
-- CrowdSec plus exporter
-- Uptime Kuma / AutoKuma
-- SmokePing
-- LibreSpeed
-- Nginx Proxy Manager
-- Authelia
-- Portainer plus agent
-- Jenkins plus Docker-in-Docker
-- Homepage and Dashy
-- engineering portfolio site
-- projects.jrwroberts.co.uk site
-- dynamic DNS services
-- WUD
-- File Browser
-- maintenance page
-
-This confirms that the legacy TestServer is currently a highly consolidated multi-purpose host.
-
-## Persistence observations
-
-Persistent application data is primarily under:
+Historically important persistent locations include:
 
 - `/home/james/docker/data/`
 - `/home/james/docker/stacks/`
 - selected Docker named volumes
-- legacy paths such as `/home/james/homelab/portainer/data`
+- legacy application-specific paths such as Portainer state
+- BirdNET configuration/history/output that is intentionally retained
 
-The audit captured the mount relationship for every current container. These paths will form part of the workload-by-workload migration and backup review.
+Every remaining persistent path must be classified as migrate, archive, rebuild-from-Git, or discard before reimage.
 
-## Workload detectors
+## Backup/recovery hard gate
 
-| Detector | Result |
-|---|---|
-| Docker | YES |
-| k3s | NO |
-| Pi-hole | NO |
-| Unbound | NO |
-| BirdNET | YES |
-| Zabbix Agent 2 | YES |
+A failed `homelab-backup-testserver.service` history remains unresolved. This is a hard gate against destructive cleanup of data, Compose definitions, named volumes or images solely for retirement.
 
-## Current load snapshot
+Before reimage:
 
-At audit time:
+1. establish whether the failed job left any required data unprotected;
+2. prove authoritative copies/repositories exist elsewhere;
+3. test restore/recovery where the data is important;
+4. record what can be safely discarded.
 
-- load average: approximately `3.39 / 2.07 / 2.25`.
-- BirdNET-Go was the highest CPU consumer at approximately 69%.
-- Docker daemon was using approximately 28% CPU in the snapshot.
-- Jenkins Java was the largest resident-memory process at roughly 532 MiB.
-- Alloy was using roughly 263 MiB RSS.
+## Monitoring transition
 
-This is a point-in-time snapshot, not a capacity benchmark, but it shows that the Pi is actively loaded by its existing consolidated role.
+TestServer may still expose legacy node/container/BirdNET metrics while retirement continues. A temporary firewall exception was previously introduced for `monitor-01` scraping of ports 9100/9105; remove such exceptions when the corresponding monitoring dependency is gone.
 
-## Role-neutral audit conclusion
+Fresh central logging will be built on `monitor-01`; old TestServer Alloy/Loki configuration should be retired after the new path is proven.
 
-Hardware audit: **COMPLETE**  
-Workload inventory: **CAPTURED FOR MIGRATION ANALYSIS**  
-Future hostname: **UNASSIGNED**  
-Future role: **UNASSIGNED**
+## External access transition
 
-No decision about this Raspberry Pi's future role should be made until the remaining physical hosts have been audited to the same standard.
+Nginx Proxy Manager and Authelia can be retired once Cloudflare Tunnel + Access is proven for every service that still needs remote access.
+
+Target path:
+
+```text
+Internet -> Cloudflare Access -> Cloudflare Tunnel -> edge-01 -> selected service
+```
+
+Do not replace the old proxy/auth stack with ad-hoc router port-forwards.
+
+## CI / runner transition
+
+The repository-specific GitHub Actions runner has been stopped/disabled with registration retained as rollback/reference. Jenkins and Docker-in-Docker remain retirement candidates. Confirm no production workflow depends on them before final removal.
+
+## Target rebuild
+
+The Raspberry Pi 4 is intended to become a clean garden BirdNET-Go appliance after all legacy dependencies are closed.
+
+Target characteristics:
+
+- clean supported OS install;
+- hostname `birdnet-01`;
+- BirdNET-Go plus only required supporting/monitoring components;
+- administered from `admin-01`;
+- Git/IaC-managed configuration where practical;
+- explicit backup/recovery for retained BirdNET state;
+- no carry-forward of the general-purpose legacy Docker estate.
+
+See `../migrations/TESTSERVER-RETIREMENT.md` for the controlled retirement sequence.
+
+## Historical audit evidence
+
+Original audit artifact:
+
+```text
+/var/tmp/TestServer-audit-20260906T072451Z.txt
+```
+
+SHA256:
+
+```text
+d6330f81585b919fe746a947f3013c82f00d329d76c979d2b2b9a0e25d801391
+```
+
+Historical audit status: **COMPLETE**  
+Current retirement status: **IN PROGRESS**  
+Reimage permission: **BLOCKED pending backup/recovery and remaining-dependency gates**
