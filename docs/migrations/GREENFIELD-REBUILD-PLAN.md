@@ -1,262 +1,203 @@
 # Greenfield Rebuild Plan
 
-Status: approved operating direction; execution remains gated by backup/recovery proof and the remaining network audit.
+**Updated:** 10 September 2026  
+**Status:** operating principle remains active; several major rebuilds are now complete
 
 ## Principle
 
-The fresh-start programme is allowed to rebuild infrastructure from bare metal / factory defaults where that produces a cleaner, reproducible result than preserving historical state.
+The homelab may be rebuilt from clean operating systems, fresh guests or factory defaults where doing so produces a simpler and more reproducible platform than preserving historical drift.
 
-This applies to:
-
-- switch configuration
-- router configuration
-- host operating systems
-- Proxmox / backup platform installation
-- application stacks
-
-The purpose is not to erase evidence. Existing state is captured first, then the replacement is rebuilt from documented intent and IaC.
+The purpose is not to erase evidence. Existing state is captured first; persistent data and recovery material are protected; then the replacement is rebuilt from documented intent and Git/IaC.
 
 ## Rebuild rule
 
-A device or host may be factory-reset or reinstalled only when all of the following are true:
+A host/device may be reset or reinstalled only when:
 
-1. hardware identity and current role are recorded
-2. required persistent data is identified
-3. secrets/recovery material are protected
-4. a rollback or recovery path exists
-5. the target role and hostname are approved
-6. the target configuration exists in Git/IaC where practical
-7. the rebuild validation checklist is written
+1. hardware identity and current role are recorded;
+2. required persistent data is identified;
+3. secrets/recovery material are protected independently;
+4. rollback/recovery exists;
+5. the target role/hostname is approved;
+6. target configuration exists in Git/IaC where practical;
+7. validation gates are written before destructive work.
 
-Do not perform an in-place clean-up when a fresh installation is safer and easier to reproduce.
+## Rebuilds / role changes already completed
 
-## Network rebuild order
+### Raspberry Pi 3: DietPi -> admin-01
 
-### 1. HP ProCurve switch
+The old physical `.48` DietPi/Pi-hole role is retired. The Pi 3 was clean-rebuilt as:
 
-The switch is intentionally planned for a factory-default rebuild because the existing configuration is too tightly locked down to remain a practical administration baseline.
+```text
+admin-01.jameshouse
+192.168.2.48
+Debian 13
+administration / SSH jump / IaC controller
+```
 
-Before reset, capture whatever evidence remains obtainable:
+DNS responsibility moved to the virtualized pair `.51 + .50` before `.48` became the administration host.
 
-- physical cabling labels
-- known mirror/SPAN destination: **port 24**
-- management address: legacy `192.168.2.16`
-- firmware/model information
-- any accessible configuration/export
-- link LEDs / connected-port observations
-- MAC/VLAN/mirror information if console access makes it available
+### ASUS ZenBook: ids-01 -> Proxmox-2
 
-After reset:
+The former `ids-01` hardware has been repurposed as:
 
-- establish management access locally
-- set management identity/address
-- update firmware only through a separately reviewed change
-- label ports from physical/MAC evidence
-- reserve port 24 as the mirror/SPAN destination
-- rebuild VLAN/mirror settings from Git-backed intent
-- validate every connected endpoint before moving on
+```text
+Proxmox-2
+192.168.2.71
+standalone Proxmox VE
+```
 
-The switch should be rebuilt **before** the router so the wired LAN has a known, documented forwarding layer during the router cutover.
+Historical ids-01 workloads are not to be restored as a general-purpose Docker stack. Current guests are `dns-01`, `monitor-01` and `edge-01`.
 
-### 2. ASUS router / AiMesh
+### Raspberry Pi 5: media-01
 
-After the switch is stable and documented:
+`media-01` is now an approved dedicated Raspberry Pi 5 Kodi/media endpoint at `192.168.2.195`, managed through Ansible.
 
-- capture current WAN/DHCP/DNS/Wi-Fi/AiMesh/VPN/DDNS/port-forward evidence
-- perform the planned clean firmware/factory reset
-- rebuild DHCP, reservations, DNS advertisement and QoS from documented intent
-- rejoin AiMesh nodes deliberately
-- restore monitoring/syslog
-- validate wired and wireless clients
+### Monitoring
 
-Do not restore an old full router backup if the objective is to remove configuration drift.
+The old consolidated monitoring role has been replaced by `monitor-01` VM200 on `Proxmox-2`. Prometheus, Grafana, Alertmanager and Blackbox are live. Loki/Alloy central logging remains a fresh-build next phase.
 
-## Compute-host rebuild direction
+### DNS
 
-### HP ProDesk -> `pve-01`
+DNS is now split across Proxmox failure domains:
 
-The existing Proxmox VE installation is **retained**. There is no planned bare-metal reinstall of the HP ProDesk.
+```text
+dns-01 .51  CT101 on Proxmox-2
+dns-02 .50  CT100 on PROXMOX
+```
 
-Before major changes:
+The old `.48` and `.242` resolver model is retired.
 
-- preserve/review any VM/LXC data still required
-- retain Terraform/Ansible source
-- capture the current Proxmox network/storage configuration as reference
-- ensure recovery copies exist for anything not already authoritative in Git
+## Current physical-host direction
 
-Target changes are performed **in place**:
+### PROXMOX / HP ProDesk
 
-- upgrade RAM if the approved capacity plan requires it
-- bring the installed Proxmox/kernel/packages to the approved supported state
-- add the dedicated capture NIC for `sensor-01`
-- reconcile storage/network configuration into IaC where practical
-- create new VMs from IaC rather than rebuilding the hypervisor
-- configure backup before migrated production workloads are considered complete
-- do not run general application Docker directly on the hypervisor
+Retain the existing Proxmox installation. Do not reinstall the hypervisor merely for neatness.
 
-### ASUS ZenBook -> `pve-02`
+Current guests:
 
-Working direction: clean rebuild as the secondary Proxmox VE host, with `pbs-01` running as a VM alongside management/monitoring workloads.
+- CT100 `dns-02`
+- CT102 `mail-relay-01`
+- VM200 `cloud-01`
+- VM201 `sensor-01`
 
-This host currently carries security, monitoring, DNS and Restic responsibilities, so it must **not** be wiped until those workloads/data are migrated or protected.
+Priorities are guest backup/restore, storage-health documentation and capacity management rather than host reinstallation.
 
-Preserve/verify first:
+### Proxmox-2 / ASUS ZenBook
 
-- Restic server repositories
-- Greenbone persistent data/configuration required for migration
-- monitoring data where retention matters
-- secondary Pi-hole/Unbound configuration as reference
-- Suricata/CrowdSec evidence/configuration that must migrate
-- SOPS/age recovery coverage
+Keep as the secondary standalone Proxmox host.
 
-Target:
+Current guests:
 
-- `pve-02` as secondary Proxmox compute
-- `pbs-01` VM with a healthy dedicated backup datastore
-- `monitoring-01` and `management-01` as the preferred steady-state workloads
-- spare capacity deliberately retained for recovery/test restores
-- wired Ethernet for hypervisor and backup traffic
-- no unrelated legacy service stack
+- CT101 `dns-01`
+- CT103 `edge-01`
+- VM200 `monitor-01`
 
-### Raspberry Pi 3 -> `dns-01`
+Do not assume PBS or additional workloads are automatically placed here; future guest placement still requires capacity/failure-domain review.
 
-A clean OS rebuild is permitted and likely desirable once `dns-02` is available so DNS resilience is maintained during the rebuild.
+### Raspberry Pi 4 / TestServer
 
-Target workload:
+This is the next major clean rebuild.
 
-- Pi-hole
-- Unbound
-- required monitoring agents only
+Current:
 
-The degraded 4 TB-class HDD is not part of the rebuilt DNS appliance.
-
-### Raspberry Pi 4 / legacy TestServer -> `birdnet-01`
-
-A clean OS rebuild is preferred because the current host is heavily consolidated and carries substantial legacy Docker state.
-
-Before wiping, migrate/protect:
-
-- BirdNET-Go configuration/data required for continuity
-- any unique Docker persistent data
-- Komodo state if still authoritative
-- Jenkins backup/reference material until retirement gates are met
-- CrowdSec local drift until deliberately reconciled into Git
-- any remaining application data not already migrated
+```text
+TestServer
+192.168.2.220
+legacy Docker / BirdNET migration source
+```
 
 Target:
 
-- BirdNET-Go
-- microphone/audio device support
-- minimal monitoring/management agents
-- no general-purpose legacy Docker estate unless explicitly approved
+```text
+birdnet-01
+Raspberry Pi 4
+garden placement
+BirdNET-Go + required management/monitoring only
+```
 
-### Raspberry Pi 5 / legacy media-01 -> `media-01`
+Before reimage:
 
-A clean media-focused OS rebuild is permitted once the media requirements are confirmed.
+- close the TestServer backup/recovery hard gate;
+- protect BirdNET configuration/data that should survive;
+- remove/relocate remaining NPM/Authelia, Komodo, CI/runner, monitoring/exporter and other Docker dependencies;
+- verify no production workflow/service still depends on the old host;
+- update DNS/monitoring/inventory as part of the hostname cutover.
 
-Preserve first:
+See `TESTSERVER-RETIREMENT.md`.
 
-- Kodi settings/library state that is actually worth retaining
-- backup-replica data on NVMe
-- historical `old-k3s-root` evidence until confirmed unnecessary
+## Cloudflare edge build
 
-Target:
+`edge-01` is already clean-built as CT103 on `Proxmox-2` at `.56`. The base operating system is complete; `cloudflared`, tunnel registration and Access/MFA are next.
 
-- dedicated Kodi/media endpoint
-- local HDMI output
-- minimal supporting services
+This is a service configuration phase, not another host rebuild.
 
-The exact media OS is a later implementation decision.
+## Central logging build
 
-## Virtual workloads
+Build Loki/Alloy fresh on the monitoring platform. Do not preserve the TestServer or old ids-01 logging OS/container state merely to preserve historical configuration.
 
-New VMs should be created fresh rather than cloned from legacy hosts unless there is a specific recovery reason.
+Initial source: validated ASUS router syslog file on `monitor-01`.
 
-Working VM placement:
+See `production docs/CENTRAL-LOGGING-SERVICE.md`.
 
-**pve-01**
-- `docker-01`
-- `security-01` — Greenbone
-- `sensor-01` — Suricata with dedicated mirror NIC passthrough
-- `dns-02`
+## Network rebuild direction
 
-**pve-02**
-- `pbs-01` — Proxmox Backup Server
-- `monitoring-01`
-- `management-01`
-- spare recovery/test capacity
+### HP ProCurve
 
-During migration, `monitoring-01` and `management-01` may run temporarily on `pve-01` until the ZenBook has been emptied and rebuilt as `pve-02`.
+A future factory-default rebuild remains permitted if it still provides a cleaner manageable baseline.
 
-Each VM must have:
+Preserve before reset:
 
-- an IaC definition
-- configuration-management ownership
-- backup policy
-- monitoring
-- documented rollback/rebuild path
+- management identity/address `.16`;
+- cabling/port evidence;
+- firmware/model details;
+- VLAN/MAC information obtainable at the time;
+- **port 24 as the known mirror/SPAN destination**.
+
+Do not reset the switch merely because it is old; perform the change only when recovery/local access and required configuration intent are documented.
+
+### ASUS router / AiMesh
+
+A clean firmware/factory-reset rebuild remains separate planned maintenance.
+
+Before any reset, capture WAN, DHCP, DNS, reservations, Wi-Fi/AiMesh, VPN, DDNS, port-forward and syslog state. Rebuild from documented intent rather than restoring historical drift.
+
+Current DNS advertisement is `.51 + .50`; preserve that design after any router rebuild.
 
 ## Data migration rule
 
-Applications are migrated by preserving **data and required configuration**, not by preserving an old operating system.
-
-Preferred pattern:
+Preserve **required data and configuration**, not old operating-system state.
 
 ```text
-audit old host
-    |
-    v
-identify authoritative data/config
-    |
-    v
-backup + verify
-    |
-    v
-fresh OS / fresh VM
-    |
-    v
-deploy from IaC
-    |
-    v
-restore/import data
-    |
-    v
-validate
-    |
-    v
-retire old state
+audit current state
+    -> identify authoritative data/config
+    -> create/verify recovery copies
+    -> build fresh target
+    -> deploy from IaC
+    -> restore/import required data
+    -> validate
+    -> retire old state
 ```
 
-## Rebuild sequence
+## Current remaining rebuild order
 
-Working order:
-
-1. finish remaining non-destructive evidence capture
-2. reconcile degraded DietPi backup disk contents
-3. establish replacement/healthy backup storage
-4. factory-reset and document the HP ProCurve
-5. clean-reset/rebuild ASUS router and AiMesh
-6. finalize target hostnames/IP reservations/port map
-7. prepare the existing `pve-01` in place: capacity upgrade, package/kernel reconciliation and dedicated capture NIC
-8. build transitional/core VMs on `pve-01` through IaC
-9. migrate Greenbone, Suricata, monitoring, management and secondary DNS off legacy `ids-01`
-10. clean-rebuild the emptied ZenBook as `pve-02`
-11. create `pbs-01`, attach healthy dedicated backup storage and prove restores
-12. move `monitoring-01` and `management-01` to their steady-state placement on `pve-02`
-13. rebuild `dns-01`
-14. rebuild `birdnet-01`
-15. rebuild `media-01`
-16. retire Jenkins/legacy containers only after replacement proof
-17. remove old repositories/configuration only after recovery validation
+1. complete Cloudflare edge service configuration on already-built `edge-01`;
+2. build fresh central Loki/Alloy logging on `monitor-01`;
+3. finish WD 4 TB SMART review and backup/recovery design;
+4. close TestServer backup/remaining-service dependencies;
+5. clean-rebuild Pi 4 as `birdnet-01`;
+6. complete `sensor-01` capture/Suricata/Zeek phases;
+7. perform router/switch clean rebuilds only when their own recovery gates are ready;
+8. continue pruning legacy repositories/branches after content equivalence is proven.
 
 ## Definition of done
 
 A rebuilt component is complete only when:
 
-- intended firmware/OS is installed
-- target hostname/address is correct
-- configuration is represented in Git/IaC
-- monitoring is healthy
-- backup/recovery is configured where applicable
-- functional validation passes
-- old state is retained only as long as required for rollback/recovery
+- intended firmware/OS is installed;
+- hostname/address/role match the approved architecture;
+- desired configuration is represented in Git/IaC where practical;
+- monitoring/central logging are appropriate for the role;
+- backup/recovery exists for non-reproducible data;
+- functional validation passes;
+- obsolete state is retained only as long as needed for recovery/evidence;
+- current architecture and runbook registry agree with the live system.
