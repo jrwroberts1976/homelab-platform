@@ -2,11 +2,13 @@
 #   VM ID: 201
 #   IPv4:  192.168.2.55/24
 #   Node:  PROXMOX
-#   Disk:  local-lvm, 80 GiB
+#   Disk:  vm-ssd, 80 GiB
 #   CPU:   4 vCPU
-#   RAM:   6144 MiB
+#   RAM:   3072 MiB (phase 1; packet engines remain disabled)
 #
 # Both VM ID and IPv4 must pass a live unused-resource preflight before apply.
+# Before Suricata + Zeek are enabled together, rerun host capacity checks and
+# increase sensor RAM only if PROXMOX has safe physical-memory headroom.
 #
 # Supply secrets through the environment, never this file:
 #
