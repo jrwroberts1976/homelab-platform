@@ -1,14 +1,15 @@
 ---
-- name: Validate monitoring hypervisor identity
+- name: Validate Proxmox hypervisor identity
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == "Debian"
-      - ansible_facts.hostname == "Proxmox-2"
-      - ansible_facts.default_ipv4.address == "192.168.2.71"
-      - ansible_facts.default_ipv4.interface == "vmbr0"
+      - ansible_facts.hostname == proxmox_vm_import_expected_hostname
+      - ansible_facts.default_ipv4.address == proxmox_vm_import_expected_ipv4
+      - ansible_facts.default_ipv4.interface == proxmox_vm_import_expected_interface
     fail_msg: >-
       Refusing to change Proxmox storage capabilities: expected
-      Proxmox-2 at 192.168.2.71/vmbr0.
+      {{ proxmox_vm_import_expected_hostname }} at
+      {{ proxmox_vm_import_expected_ipv4 }}/{{ proxmox_vm_import_expected_interface }}.
 
 - name: Verify target is Proxmox VE
   ansible.builtin.command:
@@ -38,7 +39,7 @@
       - "'images' in proxmox_vm_import_storage_before.stdout"
     fail_msg: >-
       Refusing to alter local storage: its current type/path/content does not
-      match the preflighted Proxmox-2 local datastore.
+      match the preflighted {{ proxmox_vm_import_expected_hostname }} local datastore.
 
 - name: Enable VM image import content on local storage
   ansible.builtin.command:
