@@ -34,7 +34,7 @@ Only ports confirmed from live/user evidence are labelled as authoritative. Unkn
 | 21 | TBD | TBD | DISCOVER |
 | 22 | TBD | TBD | DISCOVER |
 | 23 | TBD | TBD | DISCOVER |
-| **24** | **Mirror/SPAN destination** | **SPAN-DEST -> pve-01 dedicated sensor NIC** | **CONFIRMED** |
+| **24** | **Mirror/SPAN destination** | **SPAN-DEST -> PROXMOX USB capture NIC -> sensor-01** | **CONFIRMED** |
 
 ## Target physical endpoints requiring switch ports
 
@@ -64,16 +64,17 @@ HP ProCurve mirror session
 Port 24  [SPAN-DEST]
               |
               v
-pve-01 dedicated second NIC
+dedicated USB Ethernet adapter on PROXMOX .70
               |
               v
-PCI/USB passthrough to sensor-01 VM
+USB passthrough to sensor-01 VM
               |
-              v
-Suricata
+              +--> Suricata
+              |
+              +--> Zeek
 ```
 
-The dedicated capture NIC must have no Proxmox management IP and must not be bridged into the normal LAN.
+The dedicated capture adapter is not a Proxmox management interface and must not be added to a Linux bridge. The physical USB device is passed directly to `sensor-01`. Inside the guest, the capture interface must have no IP address, DHCP client, default route or DNS role.
 
 ## Discovery method
 
@@ -89,7 +90,6 @@ Before assigning the remaining port labels:
 8. apply human-readable switch port names/descriptions where the firmware supports them
 
 No port is to be repatched based only on an assumed hostname.
-
 
 ## Planned factory reset
 

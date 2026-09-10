@@ -1,0 +1,43 @@
+---
+- name: Validate sensor hypervisor identity for cloud-init snippet
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == sensor_cloud_init_expected_hypervisor_hostname
+      - ansible_facts.default_ipv4.address == sensor_cloud_init_expected_hypervisor_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+      - sensor_cloud_init_public_key is match('^ssh-')
+    fail_msg: >-
+      Refusing to manage sensor-01 cloud-init: expected
+      {{ sensor_cloud_init_expected_hypervisor_hostname }} at
+      {{ sensor_cloud_init_expected_hypervisor_ipv4 }}/vmbr0 and a valid
+      controller SSH public key.
+
+- name: Ensure Proxmox snippets directory exists
+  ansible.builtin.file:
+    path: "{{ sensor_cloud_init_snippet_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install managed sensor-01 cloud-init snippet
+  ansible.builtin.template:
+    src: sensor-01-user-data.yaml.j2
+    dest: "{{ sensor_cloud_init_snippet_dir }}/{{ sensor_cloud_init_snippet_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Verify sensor cloud-init snippet is present
+  ansible.builtin.stat:
+    path: "{{ sensor_cloud_init_snippet_dir }}/{{ sensor_cloud_init_snippet_name }}"
+  register: sensor_cloud_init_snippet_stat
+
+- name: Require non-empty sensor cloud-init snippet
+  ansible.builtin.assert:
+    that:
+      - sensor_cloud_init_snippet_stat.stat.exists
+      - sensor_cloud_init_snippet_stat.stat.isreg
+      - sensor_cloud_init_snippet_stat.stat.size > 0
+    fail_msg: sensor-01 cloud-init snippet was not installed correctly.

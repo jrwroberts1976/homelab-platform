@@ -1,0 +1,27 @@
+#cloud-config
+hostname: {{ sensor_cloud_init_hostname }}
+fqdn: {{ sensor_cloud_init_hostname }}.{{ sensor_cloud_init_domain }}
+manage_etc_hosts: true
+timezone: Europe/London
+ssh_pwauth: false
+
+users:
+  - default
+  - name: james
+    groups:
+      - sudo
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - {{ sensor_cloud_init_public_key }}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+package_update: true
+packages:
+  - qemu-guest-agent
+  - python3
+  - sudo
+
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - touch /var/lib/cloud/sensor-01-bootstrap-complete

@@ -1,14 +1,15 @@
 ---
-- name: Validate monitoring hypervisor identity
+- name: Validate Proxmox hypervisor identity
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == "Debian"
-      - ansible_facts.hostname == "Proxmox-2"
-      - ansible_facts.default_ipv4.address == "192.168.2.71"
-      - ansible_facts.default_ipv4.interface == "vmbr0"
+      - ansible_facts.hostname == proxmox_vm_import_expected_hostname
+      - ansible_facts.default_ipv4.address == proxmox_vm_import_expected_ipv4
+      - ansible_facts.default_ipv4.interface == proxmox_vm_import_expected_interface
     fail_msg: >-
       Refusing to change Proxmox storage capabilities: expected
-      Proxmox-2 at 192.168.2.71/vmbr0.
+      {{ proxmox_vm_import_expected_hostname }} at
+      {{ proxmox_vm_import_expected_ipv4 }}/{{ proxmox_vm_import_expected_interface }}.
 
 - name: Verify target is Proxmox VE
   ansible.builtin.command:
@@ -17,62 +18,94 @@
   register: proxmox_vm_import_pveversion
   changed_when: false
 
-- name: Read current local storage stanza
-  ansible.builtin.shell: |
-    awk '
-      /^dir: local$/ { in_local=1; print; next }
-      /^[^[:space:]].*: / && in_local { exit }
-      in_local { print }
-    ' /etc/pve/storage.cfg
-  args:
-    executable: /bin/bash
-  register: proxmox_vm_import_storage_before
+- name: Read local datastore from Proxmox API
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - "/storage/{{ proxmox_vm_import_storage_id }}"
+      - --output-format
+      - json
+  register: proxmox_vm_import_storage_before_raw
+  changed_when: false
+
+- name: Parse local datastore state
+  ansible.builtin.set_fact:
+    proxmox_vm_import_storage_before: "{{ proxmox_vm_import_storage_before_raw.stdout | from_json }}"
+    proxmox_vm_import_existing_content: >-
+      {{
+        ((proxmox_vm_import_storage_before_raw.stdout | from_json).content | default(''))
+        .split(',')
+        | reject('equalto', '')
+        | list
+      }}
   changed_when: false
 
 - name: Verify local storage is the expected directory datastore
   ansible.builtin.assert:
     that:
-      - "'dir: local' in proxmox_vm_import_storage_before.stdout"
-      - "'path /var/lib/vz' in proxmox_vm_import_storage_before.stdout"
-      - "'snippets' in proxmox_vm_import_storage_before.stdout"
-      - "'images' in proxmox_vm_import_storage_before.stdout"
+      - proxmox_vm_import_storage_before.type == "dir"
+      - proxmox_vm_import_storage_before.path == proxmox_vm_import_storage_path
     fail_msg: >-
-      Refusing to alter local storage: its current type/path/content does not
-      match the preflighted Proxmox-2 local datastore.
+      Refusing to alter {{ proxmox_vm_import_storage_id }}: expected a directory
+      datastore at {{ proxmox_vm_import_storage_path }}.
 
-- name: Enable VM image import content on local storage
+- name: Build preserved datastore content list
+  ansible.builtin.set_fact:
+    proxmox_vm_import_reconciled_content: >-
+      {{
+        (proxmox_vm_import_existing_content + proxmox_vm_import_required_content)
+        | unique
+        | sort
+      }}
+  changed_when: false
+
+- name: Add only missing import/snippet capabilities
   ansible.builtin.command:
     argv:
       - pvesm
       - set
       - "{{ proxmox_vm_import_storage_id }}"
       - --content
-      - "{{ proxmox_vm_import_storage_content | join(',') }}"
-  when: "'import' not in proxmox_vm_import_storage_before.stdout"
+      - "{{ proxmox_vm_import_reconciled_content | join(',') }}"
+  when: >-
+    proxmox_vm_import_required_content
+    | difference(proxmox_vm_import_existing_content)
+    | length > 0
   register: proxmox_vm_import_storage_set
   changed_when: proxmox_vm_import_storage_set.rc == 0
 
-- name: Read reconciled local storage stanza
-  ansible.builtin.shell: |
-    awk '
-      /^dir: local$/ { in_local=1; print; next }
-      /^[^[:space:]].*: / && in_local { exit }
-      in_local { print }
-    ' /etc/pve/storage.cfg
-  args:
-    executable: /bin/bash
-  register: proxmox_vm_import_storage_after
+- name: Read reconciled local datastore from Proxmox API
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - "/storage/{{ proxmox_vm_import_storage_id }}"
+      - --output-format
+      - json
+  register: proxmox_vm_import_storage_after_raw
+  changed_when: false
+
+- name: Parse reconciled datastore content
+  ansible.builtin.set_fact:
+    proxmox_vm_import_storage_after: "{{ proxmox_vm_import_storage_after_raw.stdout | from_json }}"
+    proxmox_vm_import_after_content: >-
+      {{
+        ((proxmox_vm_import_storage_after_raw.stdout | from_json).content | default(''))
+        .split(',')
+        | reject('equalto', '')
+        | list
+      }}
   changed_when: false
 
 - name: Verify required storage content types are enabled
   ansible.builtin.assert:
     that:
-      - "'import' in proxmox_vm_import_storage_after.stdout"
-      - "'snippets' in proxmox_vm_import_storage_after.stdout"
-      - "'images' in proxmox_vm_import_storage_after.stdout"
-      - "'iso' in proxmox_vm_import_storage_after.stdout"
-      - "'vztmpl' in proxmox_vm_import_storage_after.stdout"
-    fail_msg: Required local storage content types were not enabled.
+      - proxmox_vm_import_required_content | difference(proxmox_vm_import_after_content) | length == 0
+      - proxmox_vm_import_existing_content | difference(proxmox_vm_import_after_content) | length == 0
+    fail_msg: >-
+      Required import/snippet capabilities were not enabled cleanly or an
+      existing datastore content type was lost.
 
 - name: Verify local storage remains active
   ansible.builtin.command:

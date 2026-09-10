@@ -1,0 +1,8 @@
+---
+- name: Prepare PROXMOX for IaC-managed sensor VM
+  hosts: PROXMOX
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: proxmox_sensor_cloud_init

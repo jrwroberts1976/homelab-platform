@@ -316,7 +316,15 @@
   register: monitoring_prometheus_targets
   until:
     - monitoring_prometheus_targets.json.status == "success"
-    - monitoring_prometheus_targets.json.data.activeTargets | length >= 20
+    - >-
+      monitoring_prometheus_targets.json.data.activeTargets | length
+      >= (
+        2
+        + (monitoring_node_exporter_targets | length)
+        + (monitoring_icmp_targets | length)
+        + (monitoring_pve_https_targets | length)
+        + (monitoring_dns_tcp_targets | length)
+      )
   retries: 30
   delay: 2
 
@@ -325,17 +333,17 @@
     url: http://127.0.0.1:9090/api/v1/targets
     status_code: 200
     return_content: true
-  register: monitoring_node_exporter_targets
+  register: monitoring_node_exporter_target_status
   changed_when: false
   until:
-    - monitoring_node_exporter_targets.json.status == "success"
+    - monitoring_node_exporter_target_status.json.status == "success"
     - >-
-      monitoring_node_exporter_targets.json.data.activeTargets
+      monitoring_node_exporter_target_status.json.data.activeTargets
       | selectattr('labels.job', 'equalto', 'node-exporter')
       | list
-      | length == 6
+      | length == (monitoring_node_exporter_targets | length)
     - >-
-      monitoring_node_exporter_targets.json.data.activeTargets
+      monitoring_node_exporter_target_status.json.data.activeTargets
       | selectattr('labels.job', 'equalto', 'node-exporter')
       | rejectattr('health', 'equalto', 'up')
       | list
