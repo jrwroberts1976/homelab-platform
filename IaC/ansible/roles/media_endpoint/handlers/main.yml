@@ -1,0 +1,6 @@
+---
+- name: Restart Kodi
+  ansible.builtin.systemd_service:
+    name: kodi.service
+    daemon_reload: true
+    state: restarted

@@ -1,0 +1,37 @@
+#!/usr/sbin/nft -f
+# Managed by homelab-platform/IaC. Do not edit by hand.
+
+flush ruleset
+
+table inet media_filter {
+  chain input {
+    type filter hook input priority filter; policy drop;
+
+    ct state invalid drop
+    ct state established,related accept
+
+    iifname "lo" accept
+
+    # Preserve IPv4/IPv6 network diagnostics and IPv6 neighbour discovery.
+    ip protocol icmp accept
+    meta l4proto ipv6-icmp accept
+
+    # DHCP renewal if media-01 is using the router reservation.
+    ip saddr {{ media_firewall_dhcp_server_ipv4 }} udp sport 67 udp dport 68 accept
+
+    # Administration and media upload are LAN-only.
+    ip saddr {{ media_firewall_lan_subnet }} tcp dport 22 accept comment "LAN SSH"
+    ip saddr {{ media_firewall_lan_subnet }} tcp dport 445 accept comment "LAN SMB"
+
+    # Prometheus node_exporter is readable only by monitor-01.
+    ip saddr {{ media_firewall_monitor_ipv4 }} tcp dport 9100 accept comment "monitor-01 node_exporter"
+  }
+
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+  }
+
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}

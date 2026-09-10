@@ -1,0 +1,5 @@
+---
+cloud_expected_hostname: "cloud-01"
+cloud_expected_ipv4: "192.168.2.53"
+cloud_timezone: "Europe/London"
+cloud_root: "/opt/cloud-01"

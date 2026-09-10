@@ -1,0 +1,8 @@
+---
+- name: Configure redundant Proxmox NTP servers
+  hosts: proxmox_time_servers
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: chrony_server

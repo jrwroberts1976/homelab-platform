@@ -1,0 +1,83 @@
+#!/usr/bin/python3
+"""Ensure homelab media directories are visible as Kodi sources without replacing user sources."""
+
+from pathlib import Path
+import xml.etree.ElementTree as ET
+
+path = Path("/home/{{ media_smb_owner }}/.kodi/userdata/sources.xml")
+path.parent.mkdir(parents=True, exist_ok=True)
+
+desired = {
+    "video": {
+        "Movies": "{{ media_smb_path }}/Movies/",
+        "TV Shows": "{{ media_smb_path }}/TV/",
+    },
+    "music": {
+        "Music": "{{ media_smb_path }}/Music/",
+    },
+    "files": {
+        "Media": "{{ media_smb_path }}/",
+    },
+}
+
+changed = False
+
+if path.exists():
+    try:
+        tree = ET.parse(path)
+        root = tree.getroot()
+    except ET.ParseError as exc:
+        raise SystemExit(f"Refusing to replace malformed {path}: {exc}")
+else:
+    root = ET.Element("sources")
+    tree = ET.ElementTree(root)
+    changed = True
+
+if root.tag != "sources":
+    raise SystemExit(f"Refusing unexpected Kodi sources root element: {root.tag}")
+
+for section_name, sources in desired.items():
+    section = root.find(section_name)
+    if section is None:
+        section = ET.SubElement(root, section_name)
+        ET.SubElement(section, "default", {"pathversion": "1"})
+        changed = True
+
+    for source_name, source_path in sources.items():
+        match = None
+        for source in section.findall("source"):
+            name = source.find("name")
+            if name is not None and (name.text or "").strip() == source_name:
+                match = source
+                break
+
+        if match is None:
+            match = ET.SubElement(section, "source")
+            ET.SubElement(match, "name").text = source_name
+            ET.SubElement(match, "path", {"pathversion": "1"}).text = source_path
+            ET.SubElement(match, "allowsharing").text = "true"
+            changed = True
+        else:
+            path_node = match.find("path")
+            if path_node is None:
+                path_node = ET.SubElement(match, "path", {"pathversion": "1"})
+                changed = True
+            if (path_node.text or "").strip() != source_path:
+                path_node.text = source_path
+                path_node.set("pathversion", "1")
+                changed = True
+
+            share_node = match.find("allowsharing")
+            if share_node is None:
+                share_node = ET.SubElement(match, "allowsharing")
+                changed = True
+            if (share_node.text or "").strip().lower() != "true":
+                share_node.text = "true"
+                changed = True
+
+if changed:
+    ET.indent(tree, space="  ")
+    tree.write(path, encoding="utf-8", xml_declaration=True)
+    print("CHANGED")
+else:
+    print("UNCHANGED")

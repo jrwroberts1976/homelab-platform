@@ -1,0 +1,74 @@
+#!/usr/bin/python3
+"""Install approved Kodi add-ons from the official Kodi repository."""
+
+from pathlib import Path
+import subprocess
+import sys
+import time
+
+kodi_home = Path("{{ media_user_home }}") / ".kodi"
+addons_dir = kodi_home / "addons"
+desired_addons = [
+{% for addon_id in media_kodi_official_addons %}
+    "{{ addon_id }}",
+{% endfor %}
+]
+
+
+def installed(addon_id: str) -> bool:
+    return (addons_dir / addon_id / "addon.xml").is_file()
+
+
+def kodi_send(action: str) -> None:
+    completed = subprocess.run(
+        [
+            "/usr/bin/kodi-send",
+            "--host=127.0.0.1",
+            "--port=9777",
+            f"--action={action}",
+        ],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.STDOUT,
+        timeout=15,
+    )
+    if completed.returncode != 0:
+        raise SystemExit(
+            f"kodi-send failed for {action!r}: {completed.stdout.strip()}"
+        )
+
+
+missing = [addon_id for addon_id in desired_addons if not installed(addon_id)]
+
+if not missing:
+    print("UNCHANGED")
+    sys.exit(0)
+
+kodi_send("UpdateAddonRepos")
+time.sleep(8)
+
+for addon_id in missing:
+    for attempt in range(1, 4):
+        if installed(addon_id):
+            break
+
+        kodi_send(f'InstallAddon("{addon_id}")')
+        time.sleep(2)
+        kodi_send("SendClick(11)")
+
+        for _ in range(90):
+            if installed(addon_id):
+                break
+            time.sleep(1)
+
+        if installed(addon_id):
+            break
+
+        kodi_send("UpdateAddonRepos")
+        time.sleep(8)
+    else:
+        raise SystemExit(
+            f"Timed out installing official Kodi add-on {addon_id}"
+        )
+
+print("CHANGED")

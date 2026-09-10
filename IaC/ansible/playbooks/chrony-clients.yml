@@ -1,0 +1,16 @@
+---
+- name: Reconcile Proxmox LXC time inheritance
+  hosts: "dns_resolvers:mail_relay"
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: lxc_inherited_time
+
+- name: Standardize homelab NTP clients
+  hosts: "monitoring_hosts:media_hosts"
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: chrony_client

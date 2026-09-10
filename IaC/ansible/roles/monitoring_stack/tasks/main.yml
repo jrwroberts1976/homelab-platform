@@ -109,6 +109,14 @@
     group: root
     mode: "0644"
 
+- name: Validate SMTP relay connectivity from monitor-01
+  ansible.builtin.wait_for:
+    host: "{{ monitoring_alert_smtp_smarthost.split(':')[0] }}"
+    port: "{{ monitoring_alert_smtp_smarthost.split(':')[1] | int }}"
+    timeout: 30
+    state: started
+  changed_when: false
+
 - name: Install Alertmanager configuration
   ansible.builtin.template:
     src: alertmanager.yml.j2
@@ -116,6 +124,7 @@
     owner: root
     group: root
     mode: "0644"
+  register: monitoring_alertmanager_config
 
 - name: Install Blackbox Exporter configuration
   ansible.builtin.template:
@@ -132,6 +141,30 @@
     owner: root
     group: root
     mode: "0644"
+
+- name: Provision Grafana Alertmanager datasource
+  ansible.builtin.template:
+    src: grafana-alertmanager-datasource.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/datasources/alertmanager.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Prometheus alert rules
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - --entrypoint
+      - /bin/promtool
+      - -v
+      - "{{ monitoring_root }}/prometheus:/etc/prometheus:ro"
+      - "{{ monitoring_prometheus_image }}"
+      - check
+      - rules
+      - /etc/prometheus/alerts.yml
+  changed_when: false
 
 - name: Validate Docker Compose configuration
   ansible.builtin.command:
@@ -174,6 +207,33 @@
     or 'Starting' in monitoring_compose_up.stderr
     or 'Started' in monitoring_compose_up.stderr
 
+- name: Validate Alertmanager configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - exec
+      - -T
+      - alertmanager
+      - amtool
+      - check-config
+      - /etc/alertmanager/alertmanager.yml
+  changed_when: false
+
+- name: Restart Alertmanager after configuration change
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - restart
+      - alertmanager
+  when: monitoring_alertmanager_config.changed
+  changed_when: true
+
 - name: Wait for Prometheus readiness
   ansible.builtin.uri:
     url: http://127.0.0.1:9090/-/ready
@@ -199,6 +259,22 @@
   register: monitoring_prometheus_runtime_config
   changed_when: false
   failed_when: "'job_name: node-exporter' not in monitoring_prometheus_runtime_config.json.data.yaml"
+
+- name: Verify production alert rules are loaded
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/rules
+    status_code: 200
+    return_content: true
+  register: monitoring_prometheus_rules
+  changed_when: false
+  failed_when: >-
+    'DNSServiceDown' not in monitoring_prometheus_rules.content
+    or 'ProxmoxHTTPSDown' not in monitoring_prometheus_rules.content
+    or 'CoreHostUnreachable' not in monitoring_prometheus_rules.content
+    or 'NodeExporterDown' not in monitoring_prometheus_rules.content
+    or 'NodeFilesystemSpaceLow' not in monitoring_prometheus_rules.content
+    or 'NodeMemoryHigh' not in monitoring_prometheus_rules.content
+    or 'NodeCPUHigh' not in monitoring_prometheus_rules.content
 
 - name: Wait for Grafana health
   ansible.builtin.uri:

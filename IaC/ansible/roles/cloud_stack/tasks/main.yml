@@ -1,0 +1,216 @@
+---
+- name: Validate protected cloud-01 application secrets
+  ansible.builtin.assert:
+    that:
+      - cloud_nextcloud_admin_user | length >= 3
+      - cloud_nextcloud_admin_password | length >= 16
+      - cloud_postgres_password | length >= 32
+      - cloud_redis_password | length >= 32
+    fail_msg: >-
+      Export NEXTCLOUD_ADMIN_USER, NEXTCLOUD_ADMIN_PASSWORD,
+      CLOUD_POSTGRES_PASSWORD and CLOUD_REDIS_PASSWORD from the protected
+      controller environment before deploying cloud-01.
+  no_log: true
+
+- name: Validate cloud-01 application target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == "cloud-01"
+      - "'192.168.2.53' in ansible_facts.all_ipv4_addresses"
+    fail_msg: "Refusing to deploy Nextcloud to an unexpected host."
+
+- name: Ensure cloud-01 application directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - { path: "{{ cloud_stack_root }}", mode: "0755" }
+    - { path: "{{ cloud_stack_state_root }}", mode: "0755" }
+    - { path: "{{ cloud_stack_state_root }}/postgres", mode: "0755" }
+    - { path: "{{ cloud_stack_state_root }}/redis", mode: "0755" }
+    - { path: "{{ cloud_stack_state_root }}/nextcloud-html", mode: "0755" }
+    - { path: "{{ cloud_stack_staging_data_root }}", mode: "0755" }
+    - { path: "{{ cloud_stack_staging_data_root }}/data", mode: "0755" }
+
+- name: Set Nextcloud writable directory ownership
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "33"
+    group: "33"
+    mode: "0750"
+  loop:
+    - "{{ cloud_stack_state_root }}/nextcloud-html"
+    - "{{ cloud_stack_staging_data_root }}/data"
+
+- name: Install protected cloud-01 environment
+  ansible.builtin.template:
+    src: cloud.env.j2
+    dest: "{{ cloud_stack_root }}/.env"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install cloud-01 Docker Compose definition
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ cloud_stack_root }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate cloud-01 Docker Compose definition
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - config
+      - --quiet
+  changed_when: false
+  no_log: true
+
+- name: Pull pinned cloud-01 images
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - pull
+  changed_when: false
+  no_log: true
+
+- name: Reconcile cloud-01 containers
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - up
+      - -d
+      - --remove-orphans
+  register: cloud_stack_compose_up
+  changed_when: >-
+    'Creating' in cloud_stack_compose_up.stderr
+    or 'Created' in cloud_stack_compose_up.stderr
+    or 'Recreating' in cloud_stack_compose_up.stderr
+    or 'Recreated' in cloud_stack_compose_up.stderr
+    or 'Starting' in cloud_stack_compose_up.stderr
+    or 'Started' in cloud_stack_compose_up.stderr
+  no_log: true
+
+- name: Wait for Nextcloud status endpoint
+  ansible.builtin.uri:
+    url: "http://{{ cloud_nextcloud_http_bind }}:{{ cloud_nextcloud_http_port }}/status.php"
+    status_code: 200
+    return_content: true
+  register: cloud_nextcloud_status
+  until:
+    - cloud_nextcloud_status.status == 200
+    - cloud_nextcloud_status.json.installed | default(false) | bool
+  retries: 60
+  delay: 5
+
+- name: Configure Nextcloud cron background jobs
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - exec
+      - -T
+      - --user
+      - www-data
+      - app
+      - php
+      - occ
+      - background:cron
+  changed_when: false
+
+- name: Verify Nextcloud OCC status
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - exec
+      - -T
+      - --user
+      - www-data
+      - app
+      - php
+      - occ
+      - status
+  register: cloud_nextcloud_occ_status
+  changed_when: false
+  failed_when: >-
+    'installed: true' not in cloud_nextcloud_occ_status.stdout
+    or 'maintenance: false' not in cloud_nextcloud_occ_status.stdout
+
+- name: Verify PostgreSQL health
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - exec
+      - -T
+      - db
+      - pg_isready
+      - -U
+      - "{{ cloud_postgres_user }}"
+      - -d
+      - "{{ cloud_postgres_db }}"
+  changed_when: false
+
+- name: Verify Redis health
+  ansible.builtin.shell: |
+    docker compose --project-directory {{ cloud_stack_root | quote }} exec -T redis       sh -c 'redis-cli -a "$REDIS_PASSWORD" ping 2>/dev/null' | grep -qx PONG
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+
+- name: Verify LAN HTTP listener
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -ltn
+      - "sport = :{{ cloud_nextcloud_http_port }}"
+  register: cloud_nextcloud_listener
+  changed_when: false
+  failed_when: cloud_nextcloud_http_bind not in cloud_nextcloud_listener.stdout
+
+- name: Show cloud-01 container state
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ cloud_stack_root }}"
+      - ps
+  register: cloud_stack_ps
+  changed_when: false
+
+- name: Verify no failed cloud-01 systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: cloud_stack_failed_units
+  changed_when: false
+  failed_when: cloud_stack_failed_units.stdout | trim | length > 0

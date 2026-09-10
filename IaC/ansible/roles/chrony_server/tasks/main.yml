@@ -1,0 +1,73 @@
+---
+- name: Validate Proxmox time-server target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == chrony_expected_hostname
+      - ansible_facts.default_ipv4.address == chrony_expected_ipv4
+      - ansible_facts.default_ipv4.interface == chrony_expected_interface
+    fail_msg: >-
+      Refusing to configure NTP: expected Debian host
+      {{ chrony_expected_hostname }} at
+      {{ chrony_expected_ipv4 }}/{{ chrony_expected_interface }}.
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  register: pve_version
+  changed_when: false
+
+- name: Install Chrony
+  ansible.builtin.apt:
+    name:
+      - chrony
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install managed Chrony configuration
+  ansible.builtin.template:
+    src: chrony.conf.j2
+    dest: /etc/chrony/chrony.conf
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart chrony
+
+- name: Ensure Chrony is enabled and running
+  ansible.builtin.systemd_service:
+    name: chrony
+    state: started
+    enabled: true
+
+- name: Apply pending Chrony restart before validation
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Chrony to report normal synchronisation
+  ansible.builtin.command:
+    argv:
+      - chronyc
+      - tracking
+  register: chrony_tracking
+  changed_when: false
+  retries: 12
+  delay: 5
+  until: chrony_tracking.stdout is search('Leap status\\s*:\\s*Normal')
+
+- name: Verify Chrony selected an upstream source
+  ansible.builtin.command:
+    argv:
+      - chronyc
+      - -n
+      - sources
+  register: chrony_sources
+  changed_when: false
+  failed_when: chrony_sources.stdout is not search('(?m)^\\^\\*')
+
+- name: Verify NTP is listening on UDP port 123
+  ansible.builtin.shell: |
+    ss -lunH | awk '$4 ~ /:123$/ { found=1 } END { exit !found }'
+  args:
+    executable: /bin/bash
+  changed_when: false

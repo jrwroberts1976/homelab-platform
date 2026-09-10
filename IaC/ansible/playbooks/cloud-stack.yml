@@ -1,0 +1,8 @@
+---
+- name: Deploy cloud-01 private cloud application stack
+  hosts: cloud_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: cloud_stack

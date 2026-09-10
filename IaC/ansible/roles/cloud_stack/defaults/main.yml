@@ -1,0 +1,27 @@
+---
+cloud_stack_root: "/opt/cloud-01"
+cloud_stack_state_root: "/var/lib/cloud-01"
+cloud_stack_staging_data_root: "/srv/cloud-01-staging"
+
+cloud_nextcloud_image: "nextcloud:34.0.3-apache"
+cloud_postgres_image: "postgres:18.6-alpine"
+cloud_redis_image: "redis:8.2.9-alpine"
+
+cloud_nextcloud_http_bind: "192.168.2.53"
+cloud_nextcloud_http_port: 8080
+
+cloud_nextcloud_admin_user: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_USER') | default('', true) }}"
+cloud_nextcloud_admin_password: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_PASSWORD') | default('', true) }}"
+cloud_postgres_password: "{{ lookup('ansible.builtin.env', 'CLOUD_POSTGRES_PASSWORD') | default('', true) }}"
+cloud_redis_password: "{{ lookup('ansible.builtin.env', 'CLOUD_REDIS_PASSWORD') | default('', true) }}"
+
+cloud_postgres_db: "nextcloud"
+cloud_postgres_user: "nextcloud"
+
+cloud_nextcloud_trusted_domains:
+  - "cloud-01"
+  - "cloud-01.jameshouse"
+  - "192.168.2.53"
+
+cloud_mail_relay_host: "192.168.2.54"
+cloud_mail_relay_port: 25

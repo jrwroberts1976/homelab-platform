@@ -1,0 +1,388 @@
+---
+- name: Read Raspberry Pi model
+  ansible.builtin.slurp:
+    src: /proc/device-tree/model
+  register: media_endpoint_pi_model
+
+- name: Validate media-01 target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.architecture in ['aarch64', 'arm64']
+      - media_expected_model in (media_endpoint_pi_model.content | b64decode)
+      - media_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to configure media endpoint: expected Debian 13 Raspberry Pi 5
+      at {{ media_expected_ipv4 }}.
+
+- name: Validate system DNS before package operations
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - deb.debian.org
+  register: media_endpoint_dns_preflight
+  changed_when: false
+  failed_when: >-
+    media_endpoint_dns_preflight.rc != 0
+    or media_endpoint_dns_preflight.stdout | trim | length == 0
+
+- name: Set canonical media hostname
+  ansible.builtin.hostname:
+    name: "{{ media_hostname }}"
+
+- name: Set canonical local hostname mapping
+  ansible.builtin.lineinfile:
+    path: /etc/hosts
+    regexp: '^127\.0\.1\.1\s+'
+    line: "127.0.1.1 {{ media_hostname }}"
+    create: false
+
+- name: Install Kodi media endpoint packages
+  ansible.builtin.apt:
+    name:
+      - "{{ media_kodi_package }}"
+      - kodi-eventclients-kodi-send
+      - kodi-repository-kodi
+      - lightdm
+      - nvme-cli
+      - smartmontools
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install approved distro-packaged Kodi add-ons
+  ansible.builtin.apt:
+    name: "{{ media_kodi_addon_packages }}"
+    state: present
+  when: media_kodi_addon_packages | length > 0
+
+- name: Verify Kodi standalone launcher exists
+  ansible.builtin.stat:
+    path: /usr/bin/kodi-standalone
+  register: media_endpoint_kodi_standalone
+  failed_when: not media_endpoint_kodi_standalone.stat.exists
+
+- name: Ensure media user has hardware-access groups
+  ansible.builtin.user:
+    name: "{{ media_user }}"
+    groups:
+      - audio
+      - video
+      - render
+      - input
+    append: true
+
+- name: Create Kodi userdata directory
+  ansible.builtin.file:
+    path: "{{ media_user_home }}/.kodi/userdata"
+    state: directory
+    owner: "{{ media_user }}"
+    group: "{{ media_user }}"
+    mode: "0755"
+
+- name: Install managed Kodi settings updater
+  ansible.builtin.template:
+    src: homelab-kodi-settings.py.j2
+    dest: /usr/local/sbin/homelab-kodi-settings
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Apply Kodi v21 cache settings
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-kodi-settings
+  register: media_endpoint_kodi_settings
+  changed_when: media_endpoint_kodi_settings.stdout | trim == 'CHANGED'
+  notify: Restart Kodi
+
+- name: Own Kodi configuration tree
+  ansible.builtin.file:
+    path: "{{ media_user_home }}/.kodi"
+    state: directory
+    owner: "{{ media_user }}"
+    group: "{{ media_user }}"
+    recurse: true
+
+- name: Remove previous LightDM Kodi override
+  ansible.builtin.file:
+    path: /etc/lightdm/lightdm.conf.d/90-homelab-kodi.conf
+    state: absent
+
+- name: Remove previous Kodi X session
+  ansible.builtin.file:
+    path: "/usr/share/xsessions/{{ media_kodi_session_name }}.desktop"
+    state: absent
+
+- name: Remove previous Kodi session wrapper
+  ansible.builtin.file:
+    path: /usr/local/bin/homelab-kodi-session
+    state: absent
+
+- name: Install Kodi standalone systemd service
+  ansible.builtin.template:
+    src: kodi.service.j2
+    dest: /etc/systemd/system/kodi.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart Kodi
+
+- name: Ensure graphical boot is the default
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - set-default
+      - graphical.target
+  register: media_endpoint_default_target
+  changed_when: "'Created symlink' in media_endpoint_default_target.stdout or 'Created symlink' in media_endpoint_default_target.stderr"
+
+- name: Disable the desktop display manager
+  ansible.builtin.systemd_service:
+    name: lightdm
+    enabled: false
+    state: stopped
+
+- name: Count standalone Kodi processes before service reconciliation
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_existing_kodi
+  changed_when: false
+  failed_when: media_endpoint_existing_kodi.rc not in [0, 1]
+
+- name: Stop Kodi service when duplicate standalone instances exist
+  ansible.builtin.systemd_service:
+    name: kodi.service
+    state: stopped
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Ask duplicate standalone Kodi instances to exit
+  ansible.builtin.command:
+    argv:
+      - pkill
+      - -TERM
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_cleanup
+  changed_when: media_endpoint_kodi_cleanup.rc == 0
+  failed_when: media_endpoint_kodi_cleanup.rc not in [0, 1]
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Wait for duplicate Kodi instances to exit cleanly
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_cleanup_wait
+  changed_when: false
+  failed_when: false
+  retries: 10
+  delay: 1
+  until: media_endpoint_kodi_cleanup_wait.rc == 1
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Force-stop Kodi instances that ignored SIGTERM
+  ansible.builtin.command:
+    argv:
+      - pkill
+      - -KILL
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_force_cleanup
+  changed_when: media_endpoint_kodi_force_cleanup.rc == 0
+  failed_when: media_endpoint_kodi_force_cleanup.rc not in [0, 1]
+  when:
+    - media_endpoint_existing_kodi.stdout_lines | length > 1
+    - media_endpoint_kodi_cleanup_wait.rc != 1
+
+- name: Confirm no unmanaged Kodi instances remain
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_kodi_cleanup_final
+  changed_when: false
+  failed_when: media_endpoint_kodi_cleanup_final.rc not in [0, 1]
+  retries: 10
+  delay: 1
+  until: media_endpoint_kodi_cleanup_final.rc == 1
+  when: media_endpoint_existing_kodi.stdout_lines | length > 1
+
+- name: Enable and start Kodi standalone service
+  ansible.builtin.systemd_service:
+    name: kodi.service
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Apply pending Kodi restart
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Kodi to start
+  ansible.builtin.shell: pgrep -x kodi.bin >/dev/null
+  args:
+    executable: /bin/bash
+  register: media_endpoint_kodi_running
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: media_endpoint_kodi_running.rc == 0
+
+- name: Verify exactly one managed Kodi process
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -f
+      - "/usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone"
+  register: media_endpoint_managed_kodi
+  changed_when: false
+  failed_when: media_endpoint_managed_kodi.stdout_lines | length != 1
+
+- name: Verify Kodi cache settings on disk
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - >-
+        import xml.etree.ElementTree as E;
+        r=E.parse('{{ media_user_home }}/.kodi/userdata/guisettings.xml').getroot();
+        d={x.get('id'):(x.text or '').strip() for x in r.findall('setting')};
+        assert d.get('filecache.buffermode') == '{{ media_kodi_cache_buffer_mode }}';
+        assert d.get('filecache.memorysize') == '{{ media_kodi_cache_memory_mb }}';
+        assert d.get('filecache.readfactor') == '{{ media_kodi_cache_readfactor }}';
+        assert d.get('addons.unknownsources') == '{{ 'true' if media_kodi_allow_unknown_sources else 'false' }}';
+        assert d.get('services.esenabled') == 'true';
+        assert d.get('services.esallinterfaces') == 'false'
+  changed_when: false
+
+- name: Install managed Kodi official add-on updater
+  ansible.builtin.template:
+    src: homelab-kodi-addons.py.j2
+    dest: /usr/local/sbin/homelab-kodi-addons
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install approved official Kodi add-ons
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-kodi-addons
+  register: media_endpoint_kodi_addons
+  changed_when: media_endpoint_kodi_addons.stdout | trim == 'CHANGED'
+  notify: Restart Kodi
+
+- name: Re-apply Kodi managed settings after add-on installation
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-kodi-settings
+  register: media_endpoint_kodi_post_addon_settings
+  changed_when: media_endpoint_kodi_post_addon_settings.stdout | trim == 'CHANGED'
+  notify: Restart Kodi
+
+- name: Apply Kodi add-on and default-service changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Wait for Kodi after add-on installation
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -x
+      - kodi.bin
+  register: media_endpoint_kodi_post_addon_running
+  changed_when: false
+  retries: 30
+  delay: 2
+  until: media_endpoint_kodi_post_addon_running.rc == 0
+
+- name: Verify approved official Kodi add-ons are installed
+  ansible.builtin.command:
+    argv:
+      - test
+      - -f
+      - "{{ media_user_home }}/.kodi/addons/{{ item }}/addon.xml"
+  loop: "{{ media_kodi_official_addons }}"
+  changed_when: false
+
+- name: Verify Kodi default weather and subtitle services
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - -c
+      - >-
+        import xml.etree.ElementTree as E;
+        r=E.parse('{{ media_user_home }}/.kodi/userdata/guisettings.xml').getroot();
+        d={x.get('id'):(x.text or '').strip() for x in r.findall('setting')};
+        assert d.get('addons.unknownsources') == '{{ 'true' if media_kodi_allow_unknown_sources else 'false' }}';
+        assert d.get('weather.addon') == '{{ media_kodi_weather_addon }}';
+        assert d.get('subtitles.movie') == '{{ media_kodi_subtitle_addon }}';
+        assert d.get('subtitles.tv') == '{{ media_kodi_subtitle_addon }}'
+  changed_when: false
+
+- name: Verify one Kodi process after add-on installation
+  ansible.builtin.command:
+    argv:
+      - pgrep
+      - -u
+      - "{{ media_user }}"
+      - -x
+      - kodi.bin
+  register: media_endpoint_kodi_post_addon_singleton
+  changed_when: false
+  failed_when: media_endpoint_kodi_post_addon_singleton.stdout_lines | length != 1
+
+- name: Check for legacy OpenIPMI init script
+  ansible.builtin.stat:
+    path: /etc/init.d/openipmi
+  register: media_endpoint_openipmi_init
+
+- name: Disable unsupported OpenIPMI service on Raspberry Pi
+  ansible.builtin.systemd_service:
+    name: openipmi.service
+    enabled: false
+    masked: true
+    state: stopped
+  when: media_endpoint_openipmi_init.stat.exists
+
+- name: Clear stale OpenIPMI failed state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - openipmi.service
+  changed_when: false
+  failed_when: false
+  when: media_endpoint_openipmi_init.stat.exists
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: media_endpoint_failed_units
+  changed_when: false
+  failed_when: media_endpoint_failed_units.stdout | trim | length > 0
