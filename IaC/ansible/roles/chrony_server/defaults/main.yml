@@ -1,0 +1,13 @@
+---
+chrony_expected_hostname: "{{ inventory_hostname }}"
+chrony_expected_ipv4: "{{ ansible_host }}"
+chrony_expected_interface: "vmbr0"
+
+chrony_upstream_pools:
+  - "uk.pool.ntp.org"
+
+chrony_allow_networks:
+  - "192.168.2.0/24"
+
+chrony_makestep_threshold: 1.0
+chrony_makestep_updates: 3
