@@ -1,0 +1,280 @@
+---
+- name: Validate phase-1 sensor target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == network_sensor_config_expected_hostname
+      - network_sensor_config_expected_ipv4 in ansible_facts.all_ipv4_addresses
+      - network_sensor_config_capture_interface | length == 0
+    fail_msg: >-
+      Refusing phase-1 sensor configuration: expected Debian 13 sensor-01 at
+      192.168.2.55 with no capture interface configured.
+
+- name: Verify sensor binaries exist
+  ansible.builtin.command:
+    argv:
+      - "{{ item }}"
+      - --help
+  loop:
+    - /usr/bin/suricata-update
+    - /opt/zeek/bin/zeek
+  register: network_sensor_config_binary_checks
+  changed_when: false
+  failed_when: false
+
+- name: Keep Suricata disabled and stopped during phase 1
+  ansible.builtin.systemd_service:
+    name: suricata
+    enabled: false
+    state: stopped
+
+- name: Verify Zeek is not running before configuration
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ! pgrep -x zeek >/dev/null
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Install phase-1 configuration prerequisites
+  ansible.builtin.apt:
+    name: openssl
+    state: present
+
+- name: Create sensor capture gate directory
+  ansible.builtin.file:
+    path: "{{ network_sensor_config_gate_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure capture enable marker is absent during phase 1
+  ansible.builtin.file:
+    path: "{{ network_sensor_config_capture_gate_file }}"
+    state: absent
+
+- name: Create Suricata systemd drop-in directory
+  ansible.builtin.file:
+    path: "{{ network_sensor_config_suricata_dropin_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Suricata capture safety gate
+  ansible.builtin.copy:
+    dest: "{{ network_sensor_config_suricata_dropin }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by homelab-platform IaC.
+      [Unit]
+      ConditionPathExists={{ network_sensor_config_capture_gate_file }}
+  register: network_sensor_config_suricata_dropin_result
+
+- name: Reload systemd after Suricata gate change
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: network_sensor_config_suricata_dropin_result.changed
+
+- name: Back up packaged Suricata configuration once
+  ansible.builtin.copy:
+    src: "{{ network_sensor_config_suricata_file }}"
+    dest: "{{ network_sensor_config_suricata_backup }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Select safe phase-1 capture interface sentinel
+  ansible.builtin.set_fact:
+    network_sensor_config_effective_capture_interface: >-
+      {{ network_sensor_config_capture_interface
+         if network_sensor_config_capture_interface | length > 0
+         else network_sensor_config_capture_sentinel }}
+
+- name: Set Suricata HOME_NET to homelab LAN
+  ansible.builtin.replace:
+    path: "{{ network_sensor_config_suricata_file }}"
+    regexp: '^    HOME_NET:.*$'
+    replace: '    HOME_NET: "[{{ network_sensor_config_home_net }}]"'
+
+- name: Enable Suricata Community ID
+  ansible.builtin.replace:
+    path: "{{ network_sensor_config_suricata_file }}"
+    regexp: '^      community-id:.*$'
+    replace: '      community-id: true'
+
+- name: Set Suricata Community ID seed
+  ansible.builtin.replace:
+    path: "{{ network_sensor_config_suricata_file }}"
+    regexp: '^      community-id-seed:.*$'
+    replace: '      community-id-seed: {{ network_sensor_config_community_id_seed }}'
+
+- name: Replace Suricata AF_PACKET management interface with safe sentinel
+  ansible.builtin.replace:
+    path: "{{ network_sensor_config_suricata_file }}"
+    regexp: '(^af-packet:\n[ \t]+- interface:[ \t]+)[^\n]+$'
+    replace: '\1{{ network_sensor_config_effective_capture_interface }}'
+
+- name: Verify managed Suricata settings are present
+  ansible.builtin.shell: |
+    set -euo pipefail
+    grep -Fq 'HOME_NET: "[{{ network_sensor_config_home_net }}]"' '{{ network_sensor_config_suricata_file }}'
+    grep -Fq 'community-id: true' '{{ network_sensor_config_suricata_file }}'
+    grep -Fq 'community-id-seed: {{ network_sensor_config_community_id_seed }}' '{{ network_sensor_config_suricata_file }}'
+    grep -Fq -- '- interface: {{ network_sensor_config_effective_capture_interface }}' '{{ network_sensor_config_suricata_file }}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Install Emerging Threats Open rules once
+  ansible.builtin.command:
+    argv:
+      - suricata-update
+  args:
+    creates: "{{ network_sensor_config_suricata_rules_file }}"
+  register: network_sensor_config_suricata_update
+
+- name: Validate Suricata configuration offline
+  ansible.builtin.command:
+    argv:
+      - suricata
+      - -T
+      - -c
+      - "{{ network_sensor_config_suricata_file }}"
+  register: network_sensor_config_suricata_test
+  changed_when: false
+  failed_when: network_sensor_config_suricata_test.rc != 0
+
+- name: Back up packaged ZeekControl configuration once
+  ansible.builtin.copy:
+    src: "{{ network_sensor_config_zeek_node_file }}"
+    dest: "{{ network_sensor_config_zeek_node_file }}.before-homelab-phase1"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Back up packaged Zeek local policy once
+  ansible.builtin.copy:
+    src: "{{ network_sensor_config_zeek_local_file }}"
+    dest: "{{ network_sensor_config_zeek_local_file }}.before-homelab-phase1"
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0644"
+    force: false
+
+- name: Generate stable Zeek digest salt once
+  ansible.builtin.shell: |
+    set -euo pipefail
+    umask 077
+    openssl rand -hex 32 > '{{ network_sensor_config_zeek_digest_salt_file }}'
+  args:
+    executable: /bin/bash
+    creates: "{{ network_sensor_config_zeek_digest_salt_file }}"
+
+- name: Read Zeek digest salt
+  ansible.builtin.slurp:
+    src: "{{ network_sensor_config_zeek_digest_salt_file }}"
+  register: network_sensor_config_zeek_digest_salt_raw
+  no_log: true
+
+- name: Hold Zeek digest salt for policy rendering
+  ansible.builtin.set_fact:
+    network_sensor_config_zeek_digest_salt: >-
+      {{ network_sensor_config_zeek_digest_salt_raw.content | b64decode | trim }}
+  no_log: true
+
+- name: Install safe ZeekControl node configuration
+  ansible.builtin.template:
+    src: node.cfg.j2
+    dest: "{{ network_sensor_config_zeek_node_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Define Zeek local networks
+  ansible.builtin.template:
+    src: networks.cfg.j2
+    dest: "{{ network_sensor_config_zeek_networks_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install homelab Zeek policy
+  ansible.builtin.template:
+    src: homelab.zeek.j2
+    dest: "{{ network_sensor_config_zeek_policy_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  no_log: true
+
+- name: Load managed homelab policy from local.zeek
+  ansible.builtin.blockinfile:
+    path: "{{ network_sensor_config_zeek_local_file }}"
+    marker: '# {mark} HOMELAB MANAGED NETWORK SENSOR POLICY'
+    block: |
+      @load ./homelab
+
+- name: Validate Zeek configuration without deployment
+  ansible.builtin.command:
+    argv:
+      - /opt/zeek/bin/zeekctl
+      - check
+  register: network_sensor_config_zeek_check
+  changed_when: false
+  failed_when: network_sensor_config_zeek_check.rc != 0
+
+- name: Verify Zeek phase-1 interface sentinel
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -F
+      - "interface={{ network_sensor_config_effective_capture_interface }}"
+      - "{{ network_sensor_config_zeek_node_file }}"
+  changed_when: false
+
+- name: Verify Zeek JSON and Community ID policies
+  ansible.builtin.shell: |
+    set -euo pipefail
+    grep -Fq '@load policy/tuning/json-logs' '{{ network_sensor_config_zeek_policy_file }}'
+    grep -Fq '@load policy/protocols/conn/community-id-logging' '{{ network_sensor_config_zeek_policy_file }}'
+    grep -Fq 'redef CommunityID::seed = {{ network_sensor_config_community_id_seed }};' '{{ network_sensor_config_zeek_policy_file }}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  no_log: true
+
+- name: Reassert Suricata disabled and stopped after validation
+  ansible.builtin.systemd_service:
+    name: suricata
+    enabled: false
+    state: stopped
+
+- name: Verify both packet engines remain stopped
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ! pgrep -x suricata >/dev/null
+    ! pgrep -x zeek >/dev/null
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: network_sensor_config_failed_units
+  changed_when: false
+  failed_when: network_sensor_config_failed_units.stdout | trim | length > 0
