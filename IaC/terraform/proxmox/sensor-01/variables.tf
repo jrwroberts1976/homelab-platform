@@ -73,7 +73,7 @@ variable "image_datastore_id" {
 variable "vm_datastore_id" {
   description = "Datastore used for sensor-01 system/log disk and cloud-init disk."
   type        = string
-  default     = "local-lvm"
+  default     = "vm-ssd"
 }
 
 variable "cpu_cores" {
@@ -83,9 +83,9 @@ variable "cpu_cores" {
 }
 
 variable "memory_mb" {
-  description = "Initial dedicated RAM in MiB."
+  description = "Phase-1 RAM in MiB. Reassess capacity before enabling Suricata and Zeek together."
   type        = number
-  default     = 6144
+  default     = 3072
 }
 
 variable "disk_size_gb" {
