@@ -1,181 +1,110 @@
 # media-01 Current-State Audit
 
-Audit date: 2026-09-06  
-Legacy hostname: `media-01`  
-Address: `192.168.2.195`  
-Audit method: repository-controlled `scripts/audit-linux-host.sh`, copied from TestServer and executed locally as root in read-only mode.
+**Original audit:** 6 September 2026  
+**Current-state refresh:** 10 September 2026  
+**Hostname:** `media-01`  
+**Address:** `192.168.2.195`  
+**Hardware:** Raspberry Pi 5 Model B Rev 1.0  
+**Current role:** dedicated Kodi/media endpoint  
+**Lifecycle:** operational
 
-Audit artifact on media-01:
-
-`/var/tmp/media-01-audit-20260906T073637Z.txt`
-
-SHA256:
-
-`a8e00978294a31b1aeb066a654f2880ae96234ecbfe0663eff7a6e8f311a82d8`
+The earlier role-neutral audit is now superseded by an approved production role. `media-01` is a **physical Raspberry Pi 5**, not a Proxmox guest and not a k3s node.
 
 ## Identity
 
-| Item | Current state |
+| Item | Current / audited state |
 |---|---|
 | Hardware | Raspberry Pi 5 Model B Rev 1.0 |
 | OS | Debian GNU/Linux 13 (trixie) |
-| Kernel | 6.18.34+rpt-rpi-2712 |
 | Architecture | arm64 / aarch64 |
-| Virtualization environment | Bare metal |
-| Legacy hostname | `media-01` |
-
-The previous DNS alias `k3s-node-01.jameshouse` pointing to this address is stale. Live evidence proves the host is currently named `media-01`.
-
-## CPU
-
-| Item | Current state |
-|---|---|
-| CPU | ARM Cortex-A76 |
-| Cores | 4 |
-| Threads per core | 1 |
-| L2 cache | 2 MiB per core |
-| L3 cache | 2 MiB |
-
-## Memory
-
-| Item | Current state |
-|---|---|
+| CPU | ARM Cortex-A76, 4 cores |
 | RAM | approximately 7.9 GiB |
-| Used during audit | approximately 949 MiB |
-| Available during audit | approximately 6.9 GiB |
-| Swap | 2.0 GiB zram |
-| Swap used | 0 |
+| Address | `192.168.2.195/24` |
+| Ethernet | 1 Gb/s |
+| Normal controller | `admin-01` / `192.168.2.48` |
 
-This host currently has substantial free memory.
+The historical `k3s-node-01.jameshouse` identity was stale. Current documentation and management must use `media-01`.
 
 ## Storage
 
-### System disk
+### Boot/system device
 
-| Item | Current state |
-|---|---|
-| Device | `/dev/sda` |
-| Media | SanDisk USB 3.2 Gen1 |
-| Capacity | 28.7 GiB |
-| Root partition | 28.1 GiB ext4 |
-| Root filesystem usable size | approximately 28 GiB |
-| Used | approximately 9.8 GiB |
-| Available | approximately 17 GiB |
-| Root usage | 37% |
-
-SMART could not interrogate the SanDisk device through its USB bridge, so health of this boot device is currently **UNKNOWN**.
+- SanDisk USB 3.2 Gen1, approximately 28.7 GiB.
+- Root filesystem approximately 28 GiB.
+- SMART-style health could not be read through the USB bridge during the original audit; treat device health as unknown unless separately validated.
 
 ### NVMe
 
-| Item | Current state |
-|---|---|
-| Device | `/dev/nvme0n1` |
-| Model | WD PC SN740 512 GB class NVMe |
-| Capacity | 476.9 GiB |
-| Data partition | 476.4 GiB ext4 |
-| Mounted at | `/home/homelab-backup/replica` and `/mnt/old-k3s-root` |
-| Filesystem used | approximately 240 GiB |
-| Filesystem available | approximately 206 GiB |
-| Filesystem usage | 54% |
+- WD PC SN740 512 GB class NVMe.
+- Approximately 476.9 GiB usable device capacity.
+- Original SMART audit: PASSED, 1% used, zero media/data-integrity errors, approximately 41 C.
 
-NVMe SMART health passed.
+The NVMe historically also contained backup-replica/old-k3s data. Historical data should be classified before any future storage repurpose, but it does not change the current media role.
 
-- Percentage used: 1%.
-- Data written: approximately 11.9 TB.
-- Media/data integrity errors: 0.
-- Temperature: approximately 41 C.
+## Production media role
 
-The `/mnt/old-k3s-root` mount is direct evidence of previous k3s-related state on this machine and should be reviewed before any destructive rebuild.
+`media-01` is retained as the dedicated Raspberry Pi 5 Kodi endpoint.
 
-## Network
+Current IaC/service intent includes:
 
-| Item | Current state |
-|---|---|
-| Primary interface | `eth0` |
-| Address | `192.168.2.195/24` |
-| MAC | `2c:cf:67:30:be:1f` |
-| Link | 1000 Mb/s, full duplex |
-| Gateway | `192.168.2.1` |
-| DNS | `192.168.2.48`, `192.168.2.242` |
-| Wi-Fi | Present but down |
+- Kodi as the primary application;
+- SMB media access;
+- Chrony using the homelab time servers;
+- node exporter / standard host monitoring;
+- firewall configuration appropriate to the media endpoint;
+- configuration through Ansible rather than preserving ad-hoc desktop state.
 
-## Current platform services
+Relevant IaC:
 
-System-level services observed include:
+```text
+IaC/ansible/playbooks/media-01-preflight.yml
+IaC/ansible/playbooks/media-01.yml
+IaC/ansible/roles/media_endpoint/
+IaC/ansible/roles/media_smb/
+IaC/ansible/roles/media_firewall/
+```
 
-- Alloy
-- Prometheus node exporter
-- Zabbix Agent 2
-- Kodi / desktop session
-- LightDM
-- NetworkManager
-- smartmontools
-- SSH
-- unattended upgrades
-- RPC/NFS support services
+## Network and dependencies
 
-One failed unit was present:
+```text
+media-01          192.168.2.195
+Gateway           192.168.2.1
+DNS               192.168.2.51, 192.168.2.50
+NTP preferred     192.168.2.70
+NTP secondary     192.168.2.71
+Admin controller  192.168.2.48 (admin-01)
+```
 
-- `openipmi.service`
+`media-01` should not become a general-purpose Docker or k3s host merely because historical storage contains old k3s data.
 
-This is likely irrelevant to a Raspberry Pi but should be intentionally removed or disabled during rebuild rather than silently carried forward.
+## Monitoring
 
-## Workload detectors
+The expected baseline is host reachability and node metrics from `monitor-01`. Add media-specific alerts only when actionable; do not create noisy playback/content alerts by default.
 
-| Detector | Result |
-|---|---|
-| Docker | NO |
-| k3s | NO |
-| Pi-hole | NO |
-| Unbound | NO |
-| BirdNET | NO |
+## Recovery direction
 
-This confirms the machine is **not currently a k3s node**, despite the stale DNS alias.
+A rebuild should be possible from:
 
-## Media workload
+1. clean supported Raspberry Pi OS/Debian base;
+2. authoritative Ansible inventory/playbooks/roles;
+3. media/share credentials supplied outside Git;
+4. required local media configuration/data restored separately where it is not reproducible.
 
-Kodi is the dominant current workload.
+The Pi 5 hardware role is approved; a future rebuild should restore `media-01`, not recreate the stale `k3s-node-01` identity.
 
-Observed listeners included ports associated with Kodi, and the process snapshot showed `kodi.bin` consuming approximately 109% CPU and around 518 MiB RSS at audit time.
+## Historical audit evidence
 
-The current media role is treated only as migration input. It does not determine this host's future assignment.
+Original audit artifact:
 
-## Raspberry Pi health
+```text
+/var/tmp/media-01-audit-20260906T073637Z.txt
+```
 
-- Firmware throttle state: `0x0`.
-- Initial firmware temperature: approximately 51.6 C.
-- Thermal-zone CPU temperature later in the audit: approximately 53.5 C.
-- No active throttling was reported.
+SHA256:
 
-## Current load snapshot
+```text
+a8e00978294a31b1aeb066a654f2880ae96234ecbfe0663eff7a6e8f311a82d8
+```
 
-At audit time:
-
-- load average: approximately `1.53 / 1.56 / 1.54`.
-- Kodi was the dominant CPU consumer.
-- Alloy used approximately 278 MiB RSS.
-- Zabbix Agent 2 and node exporter were lightweight.
-
-## Role-neutral audit conclusion
-
-Hardware audit: **COMPLETE**  
-Workload inventory: **CAPTURED FOR MIGRATION ANALYSIS**  
-Future hostname: **UNASSIGNED**  
-Future role: **UNASSIGNED**
-
-Strengths:
-
-- Raspberry Pi 5 class CPU
-- approximately 8 GiB RAM
-- healthy 512 GB-class NVMe
-- gigabit Ethernet
-- substantial free RAM and NVMe capacity
-- no Docker or k3s dependency currently active
-
-Constraints:
-
-- system currently boots from a small USB flash device whose health could not be assessed
-- NVMe holds backup-replica data and an old k3s-root mount
-- current media workload must be migrated or deliberately retained before rebuild
-
-No future-role decision should be made until the remaining physical hosts have been audited to the same standard.
+Historical hardware audit: **COMPLETE**  
+Current production role: **OPERATIONAL**
