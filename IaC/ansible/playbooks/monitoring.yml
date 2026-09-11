@@ -5,7 +5,31 @@
   gather_facts: true
 
   vars:
-    monitoring_grafana_admin_password: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | default('', true) }}"
+    monitoring_grafana_admin_password_from_env: "{{ lookup('ansible.builtin.env', 'GRAFANA_ADMIN_PASSWORD') | default('', true) }}"
+
+  pre_tasks:
+    - name: Read existing Grafana admin password when controller secret is absent
+      ansible.builtin.shell: |
+        if [ -f /opt/monitoring/.env ]; then
+          sed -n 's/^GF_SECURITY_ADMIN_PASSWORD=//p' /opt/monitoring/.env |
+            head -n 1
+        fi
+      args:
+        executable: /bin/bash
+      register: monitoring_existing_grafana_password
+      changed_when: false
+      no_log: true
+      when: monitoring_grafana_admin_password_from_env | length < 24
+
+    - name: Resolve protected Grafana admin password
+      ansible.builtin.set_fact:
+        monitoring_grafana_admin_password: >-
+          {{
+            monitoring_grafana_admin_password_from_env
+            if (monitoring_grafana_admin_password_from_env | length >= 24)
+            else (monitoring_existing_grafana_password.stdout | default(''))
+          }}
+      no_log: true
 
   roles:
     - role: chrony_client

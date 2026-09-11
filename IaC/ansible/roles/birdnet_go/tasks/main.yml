@@ -1,0 +1,328 @@
+---
+- name: Validate BirdNET-Go deployment target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == birdnet_go_expected_hostname
+      - birdnet_go_expected_ipv4 in ansible_facts.all_ipv4_addresses
+      - ansible_facts.architecture in ['aarch64', 'arm64']
+    fail_msg: >-
+      Refusing BirdNET-Go deployment: expected Debian 13 ARM64
+      docker-01 at {{ birdnet_go_expected_ipv4 }}.
+
+- name: Read BirdNET service user UID
+  ansible.builtin.command:
+    argv:
+      - id
+      - -u
+      - "{{ birdnet_go_user }}"
+  register: birdnet_go_uid
+  changed_when: false
+
+- name: Read BirdNET service user GID
+  ansible.builtin.command:
+    argv:
+      - id
+      - -g
+      - "{{ birdnet_go_user }}"
+  register: birdnet_go_gid
+  changed_when: false
+
+- name: Verify configured USB microphone exists
+  ansible.builtin.command:
+    argv:
+      - arecord
+      - -L
+  register: birdnet_go_arecord_devices
+  changed_when: false
+  failed_when: >-
+    birdnet_go_arecord_devices.rc != 0
+    or 'CARD=Device' not in birdnet_go_arecord_devices.stdout
+
+- name: Check whether BirdNET-Go is already running
+  ansible.builtin.shell: |
+    if command -v docker >/dev/null 2>&1; then
+      docker ps         --filter "name=birdnet-go"         --filter "status=running"         --quiet
+    fi
+  args:
+    executable: /bin/bash
+  register: birdnet_go_existing_container
+  changed_when: false
+
+- name: Prove microphone can capture 48 kHz mono audio before BirdNET-Go owns it
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 8s
+      - arecord
+      - -D
+      - "{{ birdnet_go_host_audio_device }}"
+      - -d
+      - "1"
+      - -f
+      - S16_LE
+      - -r
+      - "48000"
+      - -c
+      - "1"
+      - -t
+      - raw
+      - /dev/null
+  changed_when: false
+  when: birdnet_go_existing_container.stdout | trim | length == 0
+
+- name: Install Docker and Docker Compose
+  ansible.builtin.apt:
+    name:
+      - docker.io
+      - docker-compose
+      - python3-yaml
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Docker is enabled and running
+  ansible.builtin.systemd_service:
+    name: docker
+    enabled: true
+    state: started
+
+- name: Verify Docker Compose v2 command
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - version
+  changed_when: false
+
+- name: Create BirdNET-Go persistent directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ birdnet_go_user }}"
+    group: "{{ birdnet_go_user }}"
+    mode: "0755"
+  loop:
+    - "{{ birdnet_go_root }}"
+    - "{{ birdnet_go_config_dir }}"
+    - "{{ birdnet_go_data_dir }}"
+    - "{{ birdnet_go_data_dir }}/clips"
+
+- name: Render IaC-owned BirdNET-Go configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ birdnet_go_config_dir }}/.iac-desired.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: birdnet_go_desired_config
+
+- name: Reconcile IaC-owned settings into BirdNET-Go runtime configuration
+  ansible.builtin.shell: |
+    python3 - <<'PY'
+    import os
+    from pathlib import Path
+    import yaml
+
+    desired_path = Path(os.environ["BIRDNET_DESIRED_CONFIG"])
+    runtime_path = Path(os.environ["BIRDNET_RUNTIME_CONFIG"])
+
+    desired = yaml.safe_load(desired_path.read_text()) or {}
+
+    if runtime_path.exists():
+        current = yaml.safe_load(runtime_path.read_text()) or {}
+    else:
+        current = {}
+
+    def merge(dst, src):
+        for key, value in src.items():
+            if isinstance(value, dict) and isinstance(dst.get(key), dict):
+                merge(dst[key], value)
+            else:
+                dst[key] = value
+
+    before = yaml.safe_dump(
+        current,
+        sort_keys=False,
+        allow_unicode=True,
+    )
+
+    merge(current, desired)
+
+    after = yaml.safe_dump(
+        current,
+        sort_keys=False,
+        allow_unicode=True,
+    )
+
+    if after != before:
+        runtime_path.write_text(after)
+        print("changed=true")
+    else:
+        print("changed=false")
+    PY
+  args:
+    executable: /bin/bash
+  environment:
+    BIRDNET_DESIRED_CONFIG: "{{ birdnet_go_config_dir }}/.iac-desired.yaml"
+    BIRDNET_RUNTIME_CONFIG: "{{ birdnet_go_config_dir }}/config.yaml"
+  register: birdnet_go_config_merge
+  changed_when: "'changed=true' in birdnet_go_config_merge.stdout"
+
+- name: Ensure BirdNET-Go runtime configuration ownership
+  ansible.builtin.file:
+    path: "{{ birdnet_go_config_dir }}/config.yaml"
+    owner: "{{ birdnet_go_user }}"
+    group: "{{ birdnet_go_user }}"
+    mode: "0644"
+
+- name: Install managed BirdNET-Go Compose definition
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ birdnet_go_compose_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: birdnet_go_compose
+
+- name: Validate Docker Compose definition
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ birdnet_go_compose_file }}"
+      - config
+      - --quiet
+  changed_when: false
+
+- name: Check for pinned BirdNET-Go image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - image
+      - inspect
+      - "{{ birdnet_go_image }}"
+  register: birdnet_go_image_present
+  changed_when: false
+  failed_when: false
+
+- name: Pull pinned BirdNET-Go image when absent
+  ansible.builtin.command:
+    argv:
+      - docker
+      - pull
+      - "{{ birdnet_go_image }}"
+  when: birdnet_go_image_present.rc != 0
+  changed_when: true
+
+- name: Reconcile BirdNET-Go Compose service
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ birdnet_go_compose_file }}"
+      - up
+      - -d
+      - --remove-orphans
+  register: birdnet_go_compose_up
+  changed_when: >-
+    birdnet_go_config_merge.changed
+    or birdnet_go_compose.changed
+    or 'Created' in birdnet_go_compose_up.stderr
+    or 'Recreated' in birdnet_go_compose_up.stderr
+    or 'Started' in birdnet_go_compose_up.stderr
+
+- name: Restart BirdNET-Go after managed configuration change
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ birdnet_go_compose_file }}"
+      - restart
+      - birdnet-go
+  when: birdnet_go_config_merge.changed
+  changed_when: true
+
+- name: Wait for BirdNET-Go web interface
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ birdnet_go_web_port }}/"
+    status_code:
+      - 200
+      - 302
+      - 307
+    return_content: false
+  register: birdnet_go_web
+  retries: 30
+  delay: 2
+  until: birdnet_go_web.status in [200, 302, 307]
+
+- name: Verify BirdNET-Go container is running
+  ansible.builtin.command:
+    argv:
+      - docker
+      - inspect
+      - -f
+      - "{{ '{{' }}.State.Running{{ '}}' }}"
+      - birdnet-go
+  register: birdnet_go_running
+  changed_when: false
+  failed_when: birdnet_go_running.stdout | trim != "true"
+
+- name: Query BirdNET-Go audio devices
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ birdnet_go_web_port }}/api/v2/system/audio/devices"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: birdnet_go_audio_devices
+
+- name: Verify BirdNET-Go enumerates the configured stable USB microphone
+  ansible.builtin.assert:
+    that:
+      - >-
+        birdnet_go_audio_device in
+        (
+          birdnet_go_audio_devices.json
+          | selectattr('stableId', 'defined')
+          | map(attribute='stableId')
+          | list
+        )
+    fail_msg: >-
+      BirdNET-Go did not enumerate configured stable audio device
+      {{ birdnet_go_audio_device }}:
+      {{ birdnet_go_audio_devices.content }}
+
+- name: Verify BirdNET-Go is receiving live audio samples
+  ansible.builtin.shell: |
+    sample="$(
+      timeout 5         curl -Ns         "http://127.0.0.1:{{ birdnet_go_web_port }}/api/v2/streams/audio-level"         2>/dev/null || true
+    )"
+
+    matches="$(
+      printf '%s\n' "$sample" |
+        grep -F -c '"name":"{{ birdnet_go_audio_name }}"' || true
+    )"
+
+    printf '%s\n' "$sample" | head -20
+    echo "matching_audio_events=$matches"
+
+    test "$matches" -ge 2
+  args:
+    executable: /bin/bash
+  register: birdnet_go_live_audio
+  changed_when: false
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: birdnet_go_failed_units
+  changed_when: false
+  failed_when: birdnet_go_failed_units.stdout | trim | length > 0

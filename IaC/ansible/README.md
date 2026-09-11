@@ -97,7 +97,7 @@ Post-apply validation from TestServer confirmed:
 
 - public DNS resolution through `192.168.2.50` over UDP and TCP/53
 - `dns-02.jameshouse -> 192.168.2.50`
-- `testserver.jameshouse -> 192.168.2.220` on both `dns-01` and `dns-02`
+- `docker-01.jameshouse -> 192.168.2.220` on both `dns-01` and `dns-02`
 - valid DNSSEC data resolves normally through Pi-hole/Unbound
 - deliberately broken DNSSEC returns `SERVFAIL`
 - a domain selected directly from the local gravity database is blocked as `0.0.0.0`
@@ -112,7 +112,7 @@ On 7 September 2026, TestServer temporarily ignored DHCP-provided DNS and used o
 - `/etc/resolv.conf` contained only `nameserver 192.168.2.50`
 - libc/system resolution succeeded for `example.com`
 - local DNS resolved `dns-02.jameshouse -> 192.168.2.50`
-- local DNS resolved `testserver.jameshouse -> 192.168.2.220`
+- local DNS resolved `docker-01.jameshouse -> 192.168.2.220`
 - HTTPS using normal system DNS returned HTTP 200 from `https://example.com`
 
 This client-level proof was completed before changing ASUS DHCP/DNS advertisement. TestServer was then restored to DHCP-derived DNS.

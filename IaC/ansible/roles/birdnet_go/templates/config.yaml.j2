@@ -1,0 +1,76 @@
+# Managed by Ansible from homelab-platform.
+#
+# UI changes are not authoritative. Any wanted persistent change must
+# be reconciled back into this template.
+
+debug: false
+
+logging:
+  timezone: Local
+  default_level: info
+  console:
+    enabled: true
+    level: info
+
+main:
+  name: docker-01
+  timeas24h: true
+
+lowmemory:
+  mode: auto
+
+birdnet:
+  version: "2.4"
+  sensitivity: {{ birdnet_go_sensitivity }}
+  threshold: {{ birdnet_go_threshold }}
+  overlap: {{ birdnet_go_overlap }}
+  threads: 0
+  locale: "{{ birdnet_go_locale }}"
+  latitude: {{ birdnet_go_latitude }}
+  longitude: {{ birdnet_go_longitude }}
+  locationconfigured: {{ birdnet_go_location_configured | bool | lower }}
+  modelregion: auto
+  usexnnpack: true
+
+  rangefilter:
+    threshold: 0.01
+
+models:
+  enabled:
+    - birdnet
+
+realtime:
+  interval: 15
+  processingtime: false
+
+  audio:
+    sources:
+      - name: "{{ birdnet_go_audio_name }}"
+        device: "{{ birdnet_go_audio_device }}"
+        samplerate: 48000
+        gain: 0
+        models:
+          - birdnet
+
+    export:
+      enabled: true
+      path: clips/
+      type: wav
+
+      retention:
+        policy: usage
+        maxage: 30d
+        maxusage: "80%"
+        minclips: 10
+        keepspectrograms: true
+        checkinterval: 15
+
+  dashboard:
+    locale: en
+    temperatureunit: celsius
+
+  dynamicthreshold:
+    enabled: true
+    trigger: 0.90
+    min: 0.20
+    validhours: 24

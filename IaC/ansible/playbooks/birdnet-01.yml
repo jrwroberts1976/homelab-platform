@@ -1,0 +1,11 @@
+---
+- name: Build BirdNET-Go Raspberry Pi host
+  hosts: birdnet_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: birdnet_baseline
+    - role: chrony_client
+    - role: node_exporter
+    - role: birdnet_go

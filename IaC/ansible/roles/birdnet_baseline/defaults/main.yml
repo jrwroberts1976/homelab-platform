@@ -1,0 +1,17 @@
+---
+birdnet_expected_hostname: docker-01
+birdnet_expected_ipv4: 192.168.2.220
+birdnet_timezone: Europe/London
+birdnet_expected_usb_audio_id: "0c76:161e"
+birdnet_service_user: james
+
+birdnet_baseline_packages:
+  - alsa-utils
+  - ca-certificates
+  - curl
+  - git
+  - jq
+  - usbutils
+
+# IaC automation access
+birdnet_baseline_automation_public_key: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/proxmox-automation.pub') | trim }}"
