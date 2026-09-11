@@ -4,6 +4,7 @@
 #   IPv4:        192.168.2.53/24
 #   Node:        PROXMOX
 #   System disk: vm-ssd, 32 GiB
+#   Data disk:   vm-ssd, 200 GiB, dedicated to Nextcloud user data
 #   CPU:         2 vCPU
 #   RAM:         4096 MiB
 #

@@ -1,0 +1,8 @@
+---
+- name: Provision cloud-01 dedicated data storage
+  hosts: cloud_hosts
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: cloud_data_storage
