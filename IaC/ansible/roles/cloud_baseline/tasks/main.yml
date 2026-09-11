@@ -24,6 +24,31 @@
     cloud_dns_preflight.rc != 0
     or cloud_dns_preflight.stdout | trim | length == 0
 
+- name: Remove OpenIPMI from virtual cloud host
+  ansible.builtin.apt:
+    name: openipmi
+    state: absent
+    purge: true
+  register: cloud_openipmi_removed
+  when:
+    - ansible_facts.virtualization_role == "guest"
+    - ansible_facts.virtualization_type in ["kvm", "qemu"]
+
+- name: Reload systemd after OpenIPMI removal
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: cloud_openipmi_removed is changed
+
+- name: Clear stale OpenIPMI failed state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - openipmi.service
+  changed_when: false
+  failed_when: false
+  when: cloud_openipmi_removed is changed
+
 - name: Read cloud-01 timezone
   ansible.builtin.command:
     argv:

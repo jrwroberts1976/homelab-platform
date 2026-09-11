@@ -50,6 +50,7 @@
       - sources
   register: chrony_client_sources
   changed_when: false
+  check_mode: false
   retries: 15
   delay: 2
   until:
@@ -63,4 +64,5 @@
       - tracking
   register: chrony_client_tracking
   changed_when: false
+  check_mode: false
   failed_when: "'Leap status     : Normal' not in chrony_client_tracking.stdout"
