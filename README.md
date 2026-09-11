@@ -38,7 +38,26 @@ The older top-level `terraform/` path predates this convention and will be migra
 10. Legacy repository cleanup.
 11. Final documentation and public-readiness review.
 
-See [the migration tracker](docs/migrations/MIGRATION-TRACKER.md) for progress.
+## Delivery backlog
+
+Percentages are planning estimates based on validated live state and merged IaC. They are updated when a workstream reaches a verified milestone.
+
+| Workstream | Tasks / next milestones | Complete | Status |
+|---|---|---:|---|
+| `docker-01` / BirdNET-Go | Host build, automation access, DNS, BirdNET-Go, USB audio validation, Prometheus monitoring, SMTP trust cleanup, idempotence and merge | **100%** | Complete |
+| `cloud-01` baseline | Make Chrony validation check-mode safe; remove unsupported OpenIPMI through IaC; apply baseline; verify zero failed units; prove second-run `changed=0` | **45%** | In progress |
+| Nextcloud private cloud | Finalise protected secret handling; confirm storage layout; deploy PostgreSQL, Redis, Nextcloud and cron; configure SMTP/DNS; add backups, restore test, monitoring and idempotence proof | **20%** | Foundation ready |
+| Observability standardisation | Standardise Prometheus targets, Alloy agents, Loki labels/retention, host/service log collection, Grafana dashboards, alerting and dashboard-to-runbook links | **55%** | In progress |
+| Network Hosts platform | Build richer network-host collector; track identity, IP/MAC/vendor, latency, ports/services, banners, TLS, first/last seen and status changes; recreate Grafana Network Hosts dashboard | **20%** | Planned / design started |
+| Web Platform / Analytics | Combine Cloudflare edge/security data, Umami analytics and origin/application health into a dedicated Grafana dashboard | **20%** | Planned / design started |
+| Password manager | Select Vaultwarden vs official Bitwarden; choose dedicated host/VM; HTTPS; protected secrets; MFA/recovery; SMTP; backups and restore test; Alloy/Loki; Grafana dashboard and runbook | **5%** | Planned |
+| Home automation | Choose dedicated host/VM and Home Assistant OS vs container model; plan Zigbee/Z-Wave/Bluetooth passthrough; backups; MQTT/Zigbee2MQTT/ESPHome as needed; monitoring, logs and dashboard | **0%** | Planned |
+| FreeSWITCH / SIP | Choose dedicated `voice-01`/`pbx-01` host and SIP trunk provider; protected credentials; inbound/outbound dial plans; DID/caller ID; RTP/NAT/firewall; brute-force protection; logs, metrics and Grafana dashboard | **0%** | Planned |
+| Backup / recovery redesign | Finalise Proxmox Backup Server placement; protect current Restic data; define service backup standards; test restores; document disaster-recovery paths | **25%** | In progress |
+| Runbook catalogue | Create a central dictionary of production runbooks, owners, applicable hosts/services, recovery steps and dashboard links | **30%** | In progress |
+| Komodo / Renovate migration | Move Docker lifecycle/version management to the approved Komodo model; validate canary deployment and retire superseded update workflows | **40%** | Paused / migration pending |
+
+See [the migration tracker](docs/migrations/MIGRATION-TRACKER.md) for detailed progress and migration evidence.
 
 
 ## Production runbooks
