@@ -94,6 +94,13 @@ variable "disk_size_gb" {
   default     = 32
 }
 
+
+variable "data_disk_size_gb" {
+  description = "Dedicated Nextcloud user-data disk size in GiB."
+  type        = number
+  default     = 200
+}
+
 variable "ssh_public_key" {
   description = "SSH public key for the james cloud-init account."
   type        = string

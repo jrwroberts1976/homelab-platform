@@ -1,0 +1,16 @@
+---
+cloud_data_storage_expected_hostname: "cloud-01"
+
+cloud_data_storage_device: >-
+  /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
+
+cloud_data_storage_expected_size_bytes: 214748364800
+cloud_data_storage_expected_serial: "drive-scsi1"
+
+cloud_data_storage_mountpoint: "/srv/cloud-01-data"
+cloud_data_storage_fs_type: "ext4"
+cloud_data_storage_label: "cloud-01-data"
+cloud_data_storage_mount_options: "defaults,noatime"
+
+# First filesystem creation requires explicit approval.
+cloud_data_storage_allow_format: false

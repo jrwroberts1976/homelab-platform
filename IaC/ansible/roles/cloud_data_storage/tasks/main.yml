@@ -1,0 +1,349 @@
+---
+- name: Read host identity
+  ansible.builtin.command:
+    argv:
+      - hostname
+      - -s
+  register: cloud_data_hostname
+  changed_when: false
+  check_mode: false
+
+- name: Enforce cloud storage host gate
+  ansible.builtin.assert:
+    that:
+      - cloud_data_hostname.stdout | trim == cloud_data_storage_expected_hostname
+    fail_msg: >-
+      Refusing storage operation: expected
+      {{ cloud_data_storage_expected_hostname }} but found
+      {{ cloud_data_hostname.stdout | trim }}.
+
+- name: Inspect stable data disk link
+  ansible.builtin.stat:
+    path: "{{ cloud_data_storage_device }}"
+    follow: false
+  register: cloud_data_device_link
+
+- name: Require stable by-id symlink
+  ansible.builtin.assert:
+    that:
+      - cloud_data_device_link.stat.exists
+      - cloud_data_device_link.stat.islnk | default(false)
+    fail_msg: >-
+      Expected data disk {{ cloud_data_storage_device }}
+      does not exist or is not a symlink.
+
+- name: Resolve stable data disk
+  ansible.builtin.command:
+    argv:
+      - readlink
+      - -f
+      - "{{ cloud_data_storage_device }}"
+  register: cloud_data_real_device
+  changed_when: false
+  check_mode: false
+
+- name: Read exact data disk size
+  ansible.builtin.command:
+    argv:
+      - blockdev
+      - --getsize64
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_size
+  changed_when: false
+  check_mode: false
+
+- name: Read block device type
+  ansible.builtin.command:
+    argv:
+      - lsblk
+      - -dn
+      - -o
+      - TYPE
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_type
+  changed_when: false
+  check_mode: false
+
+- name: Read block device serial
+  ansible.builtin.command:
+    argv:
+      - lsblk
+      - -dn
+      - -o
+      - SERIAL
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_serial
+  changed_when: false
+  check_mode: false
+
+- name: Read current filesystem type
+  ansible.builtin.command:
+    argv:
+      - lsblk
+      - -dn
+      - -o
+      - FSTYPE
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_initial_fstype
+  changed_when: false
+  check_mode: false
+
+- name: Read current filesystem label
+  ansible.builtin.command:
+    argv:
+      - lsblk
+      - -dn
+      - -o
+      - LABEL
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_initial_label
+  changed_when: false
+  check_mode: false
+
+- name: Inspect disk child types
+  ansible.builtin.command:
+    argv:
+      - lsblk
+      - -nr
+      - -o
+      - TYPE
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_child_types
+  changed_when: false
+  check_mode: false
+
+- name: Inspect existing disk signatures
+  ansible.builtin.command:
+    argv:
+      - wipefs
+      - -n
+      - --noheadings
+      - -O
+      - TYPE
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_signatures
+  changed_when: false
+  check_mode: false
+
+- name: Check whether data disk is already mounted
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - -rn
+      - -S
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_existing_mount
+  changed_when: false
+  failed_when: false
+  check_mode: false
+
+- name: Enforce destructive device identity gates
+  ansible.builtin.assert:
+    that:
+      - cloud_data_real_device.stdout | trim | length > 0
+      - cloud_data_size.stdout | trim | int == cloud_data_storage_expected_size_bytes
+      - cloud_data_type.stdout | trim == "disk"
+      - cloud_data_serial.stdout | trim == cloud_data_storage_expected_serial
+      - "'part' not in cloud_data_child_types.stdout_lines"
+      - >-
+        (cloud_data_initial_fstype.stdout | trim == "")
+        or
+        (cloud_data_initial_fstype.stdout | trim == cloud_data_storage_fs_type)
+      - >-
+        (cloud_data_initial_fstype.stdout | trim != "")
+        or
+        (cloud_data_signatures.stdout | trim == "")
+      - >-
+        (cloud_data_initial_fstype.stdout | trim != "")
+        or
+        (cloud_data_existing_mount.rc != 0)
+      - >-
+        (cloud_data_initial_fstype.stdout | trim == "")
+        or
+        (cloud_data_initial_label.stdout | trim == cloud_data_storage_label)
+    fail_msg: >-
+      Disk identity/state does not match the approved cloud-01
+      200 GiB drive-scsi1 disk. Refusing to continue.
+
+- name: Report approved data disk
+  ansible.builtin.debug:
+    msg:
+      - "device={{ cloud_data_storage_device }}"
+      - "resolved={{ cloud_data_real_device.stdout | trim }}"
+      - "serial={{ cloud_data_serial.stdout | trim }}"
+      - "bytes={{ cloud_data_size.stdout | trim }}"
+      - "filesystem={{ cloud_data_initial_fstype.stdout | trim | default('NONE', true) }}"
+      - "mountpoint={{ cloud_data_storage_mountpoint }}"
+
+- name: Require explicit approval for initial filesystem creation
+  ansible.builtin.assert:
+    that:
+      - cloud_data_storage_allow_format | bool
+    fail_msg: >-
+      Disk identity checks passed but filesystem creation is not approved.
+      Re-run the real play with
+      -e cloud_data_storage_allow_format=true.
+  when:
+    - cloud_data_initial_fstype.stdout | trim == ""
+    - not ansible_check_mode
+
+- name: Report proposed filesystem creation in check mode
+  ansible.builtin.debug:
+    msg: >-
+      CHECK MODE: {{ cloud_data_storage_device }} would be formatted
+      as {{ cloud_data_storage_fs_type }} with label
+      {{ cloud_data_storage_label }}.
+  when:
+    - cloud_data_initial_fstype.stdout | trim == ""
+    - ansible_check_mode
+
+- name: Ensure ext4 tooling is installed
+  ansible.builtin.apt:
+    name: e2fsprogs
+    state: present
+  when: not ansible_check_mode
+
+- name: Create ext4 filesystem on approved data disk
+  ansible.builtin.command:
+    argv:
+      - mkfs.ext4
+      - -L
+      - "{{ cloud_data_storage_label }}"
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  when:
+    - cloud_data_initial_fstype.stdout | trim == ""
+    - cloud_data_storage_allow_format | bool
+    - not ansible_check_mode
+
+- name: Read filesystem UUID after provisioning
+  ansible.builtin.command:
+    argv:
+      - blkid
+      - -s
+      - UUID
+      - -o
+      - value
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_uuid
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Read filesystem type after provisioning
+  ansible.builtin.command:
+    argv:
+      - blkid
+      - -s
+      - TYPE
+      - -o
+      - value
+      - "{{ cloud_data_real_device.stdout | trim }}"
+  register: cloud_data_final_fstype
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Validate resulting filesystem
+  ansible.builtin.assert:
+    that:
+      - cloud_data_uuid.stdout | trim | length > 0
+      - cloud_data_final_fstype.stdout | trim == cloud_data_storage_fs_type
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Create production data mountpoint
+  ansible.builtin.file:
+    path: "{{ cloud_data_storage_mountpoint }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Check mountpoint is empty before first mount
+  ansible.builtin.command:
+    argv:
+      - find
+      - "{{ cloud_data_storage_mountpoint }}"
+      - -mindepth
+      - "1"
+      - -maxdepth
+      - "1"
+      - -print
+      - -quit
+  register: cloud_data_mountpoint_contents
+  changed_when: false
+  check_mode: false
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Require empty mountpoint when filesystem is not mounted
+  ansible.builtin.assert:
+    that:
+      - >-
+        (cloud_data_existing_mount.rc == 0)
+        or
+        (cloud_data_mountpoint_contents.stdout | trim == "")
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Configure UUID based data mount
+  ansible.builtin.lineinfile:
+    path: /etc/fstab
+    regexp: >-
+      ^[^#].*[ \t]+{{ cloud_data_storage_mountpoint | regex_escape }}[ \t]+
+    line: >-
+      UUID={{ cloud_data_uuid.stdout | trim }}
+      {{ cloud_data_storage_mountpoint }}
+      {{ cloud_data_storage_fs_type }}
+      {{ cloud_data_storage_mount_options }} 0 2
+    state: present
+    backup: true
+  when: not (ansible_check_mode and cloud_data_initial_fstype.stdout | trim == "")
+
+- name: Verify fstab syntax
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - --verify
+      - --tab-file
+      - /etc/fstab
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Check production data mount
+  ansible.builtin.command:
+    argv:
+      - mountpoint
+      - -q
+      - "{{ cloud_data_storage_mountpoint }}"
+  register: cloud_data_mount_check
+  changed_when: false
+  failed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Mount production data filesystem
+  ansible.builtin.command:
+    argv:
+      - mount
+      - "{{ cloud_data_storage_mountpoint }}"
+  when:
+    - not ansible_check_mode
+    - cloud_data_mount_check.rc != 0
+
+- name: Validate production data mount
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - -rn
+      - -T
+      - "{{ cloud_data_storage_mountpoint }}"
+      - -o
+      - TARGET,FSTYPE,SOURCE
+  register: cloud_data_final_mount
+  changed_when: false
+  check_mode: false
+  when: not ansible_check_mode
+
+- name: Show production data mount
+  ansible.builtin.debug:
+    var: cloud_data_final_mount.stdout
+  when: not ansible_check_mode
