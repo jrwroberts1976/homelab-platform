@@ -1,0 +1,27 @@
+---
+services:
+  birdnet-go:
+    image: "{{ birdnet_go_image }}"
+    container_name: birdnet-go
+    restart: unless-stopped
+
+    ports:
+      - "{{ birdnet_go_web_port }}:8080"
+
+    environment:
+      TZ: "{{ birdnet_go_timezone }}"
+      BIRDNET_UID: "{{ birdnet_go_uid.stdout | trim }}"
+      BIRDNET_GID: "{{ birdnet_go_gid.stdout | trim }}"
+
+    volumes:
+      - "{{ birdnet_go_config_dir }}:/config"
+      - "{{ birdnet_go_data_dir }}:/data"
+
+    tmpfs:
+      - "/config/hls:exec,size=50M,uid={{ birdnet_go_uid.stdout | trim }},gid={{ birdnet_go_gid.stdout | trim }},mode=0755"
+
+    devices:
+      - /dev/snd:/dev/snd
+
+    extra_hosts:
+      - "host.docker.internal:host-gateway"

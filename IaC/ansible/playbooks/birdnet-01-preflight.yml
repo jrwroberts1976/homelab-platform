@@ -1,0 +1,102 @@
+---
+- name: Inspect fresh Raspberry Pi 4 BirdNET-Go host
+  hosts: birdnet_hosts
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Read Raspberry Pi model
+      ansible.builtin.slurp:
+        src: /proc/device-tree/model
+      register: birdnet_pi_model
+
+    - name: Read block devices
+      ansible.builtin.command:
+        argv:
+          - lsblk
+          - -o
+          - NAME,MODEL,SERIAL,SIZE,FSTYPE,MOUNTPOINTS
+      register: birdnet_lsblk
+      changed_when: false
+
+    - name: Read filesystem usage
+      ansible.builtin.command:
+        argv:
+          - df
+          - -hT
+      register: birdnet_df
+      changed_when: false
+
+    - name: Read USB devices
+      ansible.builtin.command:
+        argv:
+          - lsusb
+      register: birdnet_lsusb
+      changed_when: false
+
+    - name: Enumerate ALSA capture devices
+      ansible.builtin.command:
+        argv:
+          - arecord
+          - -l
+      register: birdnet_arecord
+      changed_when: false
+      failed_when: false
+
+    - name: Read Raspberry Pi throttle state
+      ansible.builtin.command:
+        argv:
+          - vcgencmd
+          - get_throttled
+      register: birdnet_throttled
+      changed_when: false
+      failed_when: false
+
+    - name: Read Raspberry Pi temperature
+      ansible.builtin.command:
+        argv:
+          - vcgencmd
+          - measure_temp
+      register: birdnet_temperature
+      changed_when: false
+      failed_when: false
+
+    - name: Read failed systemd units
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - --failed
+          - --no-legend
+          - --plain
+      register: birdnet_failed_units
+      changed_when: false
+
+    - name: Show docker-01 preflight
+      ansible.builtin.debug:
+        msg:
+          - "hostname={{ ansible_facts.hostname }}"
+          - "distribution={{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }}"
+          - "architecture={{ ansible_facts.architecture }}"
+          - "model={{ birdnet_pi_model.content | b64decode | replace('\u0000', '') }}"
+          - "ipv4={{ ansible_facts.default_ipv4.address | default('none') }}"
+          - "memory_mb={{ ansible_facts.memtotal_mb }}"
+          - "lsblk={{ birdnet_lsblk.stdout_lines }}"
+          - "df={{ birdnet_df.stdout_lines }}"
+          - "usb={{ birdnet_lsusb.stdout_lines }}"
+          - "capture_devices={{ birdnet_arecord.stdout_lines }}"
+          - "throttle={{ birdnet_throttled.stdout | default('unknown') }}"
+          - "temperature={{ birdnet_temperature.stdout | default('unknown') }}"
+          - "failed_units={{ birdnet_failed_units.stdout_lines }}"
+
+    - name: Validate greenfield BirdNET host identity
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'docker-01'
+          - "'Raspberry Pi 4' in (birdnet_pi_model.content | b64decode)"
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+          - ansible_facts.default_ipv4.address == '192.168.2.220'
+          - "'0c76:161e' in birdnet_lsusb.stdout"
+        fail_msg: >-
+          Refusing BirdNET build: target must be docker-01,
+          Raspberry Pi 4, 192.168.2.220, with the expected
+          JMTek USB audio device attached.

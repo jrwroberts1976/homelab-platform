@@ -1,0 +1,36 @@
+---
+birdnet_go_expected_hostname: docker-01
+birdnet_go_expected_ipv4: "192.168.2.220"
+
+birdnet_go_user: james
+
+# Pin to a stable BirdNET-Go release.
+birdnet_go_image: "ghcr.io/tphakala/birdnet-go:20260823"
+
+birdnet_go_root: /opt/birdnet-go
+birdnet_go_config_dir: /opt/birdnet-go/config
+birdnet_go_data_dir: /opt/birdnet-go/data
+birdnet_go_compose_file: /opt/birdnet-go/compose.yml
+
+birdnet_go_web_port: 8080
+birdnet_go_timezone: Europe/London
+
+birdnet_go_audio_name: "Garden Room USB Microphone"
+
+# Host-side ALSA identifier used only by the arecord preflight.
+birdnet_go_host_audio_device: "plughw:CARD=Device,DEV=0"
+
+# BirdNET-Go native stable USB identifier.
+# Discovered by BirdNET-Go 20260823 device enumeration.
+birdnet_go_audio_device: "usb-id:0c76:161e:"
+
+birdnet_go_locale: en-uk
+
+# Postcode-level location (BH22 8QL), not a house-level coordinate.
+birdnet_go_location_configured: true
+birdnet_go_latitude: 50.79039
+birdnet_go_longitude: -1.890218
+
+birdnet_go_threshold: 0.8
+birdnet_go_sensitivity: 1.0
+birdnet_go_overlap: 0.0

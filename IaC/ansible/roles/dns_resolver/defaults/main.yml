@@ -48,7 +48,7 @@ pihole_local_hosts:
   - "192.168.2.206 james-phone.jameshouse james-phone"
   - "192.168.2.218 rt-ac86u-6238.jameshouse rt-ac86u-6238"
   - "192.168.2.219 work-laptop.jameshouse work-laptop"
-  - "192.168.2.220 testserver.jameshouse testserver"
+  - "192.168.2.220 docker-01.jameshouse docker-01"
   - "192.168.2.224 rosie-phone.jameshouse rosie-phone"
   - "192.168.2.233 lava-lamp.jameshouse lava-lamp"
   - "192.168.2.234 main-tv.jameshouse main-tv"

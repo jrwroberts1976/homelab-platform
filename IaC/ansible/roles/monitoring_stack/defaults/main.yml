@@ -29,7 +29,7 @@ monitoring_icmp_targets:
   - address: 192.168.2.195
     label: media-01
   - address: 192.168.2.220
-    label: TestServer
+    label: docker-01
 
 monitoring_pve_https_targets:
   - address: https://192.168.2.70:8006/
@@ -58,6 +58,8 @@ monitoring_node_exporter_targets:
     label: Proxmox-2
   - address: 192.168.2.195:9100
     label: media-01
+  - address: 192.168.2.220:9100
+    label: docker-01
 
 
 monitoring_alert_email_to: "jrwroberts1976@gmail.com"

@@ -1,0 +1,167 @@
+---
+- name: Read Raspberry Pi model
+  ansible.builtin.slurp:
+    src: /proc/device-tree/model
+  register: birdnet_baseline_pi_model
+
+- name: Validate docker-01 target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == birdnet_expected_hostname
+      - birdnet_expected_ipv4 in ansible_facts.all_ipv4_addresses
+      - "'Raspberry Pi 4' in (birdnet_baseline_pi_model.content | b64decode)"
+    fail_msg: >-
+      Refusing BirdNET baseline build: expected Debian 13 docker-01,
+      Raspberry Pi 4, with {{ birdnet_expected_ipv4 }} assigned locally.
+
+- name: Validate DNS before package operations
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - deb.debian.org
+  register: birdnet_dns_preflight
+  changed_when: false
+  failed_when: >-
+    birdnet_dns_preflight.rc != 0
+    or birdnet_dns_preflight.stdout | trim | length == 0
+
+- name: Read current timezone
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - show
+      - --property=Timezone
+      - --value
+  register: birdnet_timezone_before
+  changed_when: false
+
+- name: Set BirdNET timezone
+  ansible.builtin.command:
+    argv:
+      - timedatectl
+      - set-timezone
+      - "{{ birdnet_timezone }}"
+  when: birdnet_timezone_before.stdout | trim != birdnet_timezone
+  changed_when: true
+
+- name: Update package cache and fully upgrade base OS
+  ansible.builtin.apt:
+    update_cache: true
+    cache_valid_time: 3600
+    upgrade: dist
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Install BirdNET baseline packages
+  ansible.builtin.apt:
+    name: "{{ birdnet_baseline_packages }}"
+    state: present
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Read available services
+  ansible.builtin.service_facts:
+
+- name: Disable SMART daemon on microSD-only BirdNET host
+  ansible.builtin.systemd_service:
+    name: smartmontools
+    enabled: false
+    state: stopped
+  when: "'smartmontools.service' in ansible_facts.services"
+
+- name: Clear previous SMART daemon failure
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - smartmontools.service
+  changed_when: false
+  failed_when: false
+
+- name: Ensure BirdNET service user has audio access
+  ansible.builtin.user:
+    name: "{{ birdnet_service_user }}"
+    groups:
+      - audio
+    append: true
+
+- name: Read USB devices
+  ansible.builtin.command:
+    argv:
+      - lsusb
+  register: birdnet_baseline_lsusb
+  changed_when: false
+
+- name: Validate expected USB microphone
+  ansible.builtin.assert:
+    that:
+      - birdnet_expected_usb_audio_id in birdnet_baseline_lsusb.stdout
+    fail_msg: >-
+      Expected USB audio device {{ birdnet_expected_usb_audio_id }}
+      was not detected.
+
+- name: Enumerate ALSA capture devices
+  ansible.builtin.command:
+    argv:
+      - arecord
+      - -l
+  register: birdnet_baseline_arecord
+  changed_when: false
+
+- name: Validate ALSA capture device
+  ansible.builtin.assert:
+    that:
+      - "'USB PnP Audio Device' in birdnet_baseline_arecord.stdout"
+    fail_msg: "Expected BirdNET USB microphone is not available through ALSA."
+
+- name: Check whether reboot is required
+  ansible.builtin.stat:
+    path: /var/run/reboot-required
+  register: birdnet_reboot_required
+
+- name: Report reboot requirement
+  ansible.builtin.debug:
+    msg: "reboot_required={{ birdnet_reboot_required.stat.exists | bool }}"
+
+- name: Ensure James SSH directory exists
+  ansible.builtin.file:
+    path: /home/james/.ssh
+    state: directory
+    owner: james
+    group: james
+    mode: "0700"
+
+- name: Authorize homelab IaC automation SSH key
+  ansible.builtin.lineinfile:
+    path: /home/james/.ssh/authorized_keys
+    line: "{{ birdnet_baseline_automation_public_key }}"
+    create: true
+    owner: james
+    group: james
+    mode: "0600"
+    state: present
+
+- name: Install passwordless sudo rule for homelab IaC
+  ansible.builtin.copy:
+    dest: /etc/sudoers.d/90-james-iac
+    content: "james ALL=(ALL) NOPASSWD:ALL\n"
+    owner: root
+    group: root
+    mode: "0440"
+    validate: /usr/sbin/visudo -cf %s
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: birdnet_failed_units
+  changed_when: false
+  failed_when: birdnet_failed_units.stdout | trim | length > 0

@@ -39,8 +39,9 @@
     that:
       - monitoring_grafana_admin_password | length >= 24
     fail_msg: >-
-      Export GRAFANA_ADMIN_PASSWORD on the Ansible controller before applying
-      the monitoring stack. Keep it outside Git.
+      No valid Grafana admin password is available. On a first deployment,
+      export GRAFANA_ADMIN_PASSWORD on the Ansible controller. Existing
+      deployments may reuse the protected /opt/monitoring/.env value.
   no_log: true
 
 - name: Install Docker and monitoring prerequisites

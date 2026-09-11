@@ -32,7 +32,7 @@ groups:
           description: "ICMP reachability to {{ "{{" }} $labels.instance {{ "}}" }} has failed for more than 3 minutes."
 
       - alert: NonCoreHostUnreachable
-        expr: probe_success{job="blackbox-icmp",target_name=~"TestServer|media-01"} == 0
+        expr: probe_success{job="blackbox-icmp",target_name=~"docker-01|media-01"} == 0
         for: 5m
         labels:
           severity: warning

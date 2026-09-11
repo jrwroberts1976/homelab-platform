@@ -13,7 +13,6 @@ mail_relay_allowed_clients:
   - "192.168.2.52/32"
   - "192.168.2.70/32"
   - "192.168.2.71/32"
-  - "192.168.2.220/32"
 
 mail_relay_gmail_username: ""
 mail_relay_gmail_app_password: ""
