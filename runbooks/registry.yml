@@ -8,8 +8,8 @@ registry:
     they apply to, where they are normally executed from, and the IaC used to
     implement or recover them.
   default_controller:
-    name: TestServer
-    address: 192.168.2.220
+    name: admin-01
+    address: 192.168.2.48
     user: james
     repository_path: ~/projects/homelab-platform
   lifecycle_values:
@@ -27,6 +27,10 @@ registry:
   excluded_active_hosts:
     - name: ids-01
       reason: decommissioned
+    - name: TestServer
+      reason: retired identity; physical Raspberry Pi 4 is now docker-01
+    - name: DietPi
+      reason: retired identity; physical Raspberry Pi 3 is now admin-01
 
 runbooks:
   dns_service_recovery:
@@ -38,38 +42,22 @@ runbooks:
     service_state: operational
     applies_to:
       hosts:
-        - name: dns-01
-          address: 192.168.2.51
-          role: primary_dns_resolver
-        - name: dns-02
-          address: 192.168.2.50
-          role: secondary_dns_resolver
-        - name: PROXMOX
-          address: 192.168.2.70
-          role: dns-02_hypervisor
-        - name: Proxmox-2
-          address: 192.168.2.71
-          role: dns-01_hypervisor
-        - name: RT-AC86U
-          address: 192.168.2.1
-          role: dhcp_dns_advertisement
-        - name: DietPi
-          address: 192.168.2.48
-          role: legacy_physical_dns_fallback
-      services:
-        - pihole
-        - unbound
-        - dns
-        - dhcp_dns_advertisement
+        - {name: dns-01, address: 192.168.2.51, role: primary_dns_resolver}
+        - {name: dns-02, address: 192.168.2.50, role: secondary_dns_resolver}
+        - {name: PROXMOX, address: 192.168.2.70, role: dns-02_hypervisor}
+        - {name: Proxmox-2, address: 192.168.2.71, role: dns-01_hypervisor}
+        - {name: RT-AC86U, address: 192.168.2.1, role: dhcp_dns_advertisement}
+      services: [pihole, unbound, dns, dhcp_dns_advertisement]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     iac:
       scripts:
         - IaC/scripts/deploy-dns-resolver.sh
         - IaC/scripts/bootstrap-proxmox-node.sh
       playbooks:
         - IaC/ansible/playbooks/dns-resolver.yml
+        - IaC/ansible/playbooks/dns-local-records.yml
       roles:
         - IaC/ansible/roles/dns_resolver/
       terraform:
@@ -81,6 +69,11 @@ runbooks:
       - dns_lxc_loss
       - proxmox_node_loss_affecting_dns
       - iac_controller_recovery
+    notes:
+      - 192.168.2.48 is admin-01 and is not a DNS fallback
+      - total DNS outage recovery may require a temporary known-good upstream resolver on admin-01
+      - local-record parity between dns-01 and dns-02 was corrected and validated on 2026-09-12
+      - full destructive DNS recovery validation was last completed on 2026-09-08
     last_validated: 2026-09-08
 
   router_syslog_service:
@@ -92,18 +85,12 @@ runbooks:
     service_state: operational
     applies_to:
       hosts:
-        - name: RT-AC86U
-          address: 192.168.2.1
-          role: syslog_source
-        - name: monitor-01
-          address: 192.168.2.52
-          role: syslog_receiver
-      services:
-        - rsyslog
-        - logrotate
+        - {name: RT-AC86U, address: 192.168.2.1, role: syslog_source}
+        - {name: monitor-01, address: 192.168.2.52, role: syslog_receiver}
+      services: [rsyslog, logrotate]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     network:
       protocol: udp
       port: 5514
@@ -121,15 +108,6 @@ runbooks:
     monitoring:
       future_loki_selector: '{job="router_syslog",device="rt-ac86u"}'
       logging_pipeline_state: pending_alloy_loki_integration
-    triggers:
-      - router_logs_missing
-      - udp_5514_not_listening
-      - router_packets_not_arriving
-      - router_log_file_not_updating
-    validation:
-      - packet_capture_confirms_router_udp_5514
-      - dedicated_log_receives_real_router_events
-      - zero_packet_loss_at_receiver_during_validation_capture
     last_validated: 2026-09-10
 
   monitoring_service:
@@ -138,48 +116,45 @@ runbooks:
     document_type: service_runbook
     document: "production docs/MONITORING-SERVICE.md"
     status: active
-    service_state: implementation_in_progress
+    service_state: operational
     applies_to:
       hosts:
-        - name: monitor-01
-          address: 192.168.2.52
-          role: monitoring_platform
-        - name: Proxmox-2
-          address: 192.168.2.71
-          role: monitoring_hypervisor
+        - {name: monitor-01, address: 192.168.2.52, role: monitoring_platform}
+        - {name: Proxmox-2, address: 192.168.2.71, role: monitoring_hypervisor}
       monitored_targets:
         - {name: RT-AC86U, address: 192.168.2.1}
         - {name: dns-02, address: 192.168.2.50}
         - {name: dns-01, address: 192.168.2.51}
         - {name: monitor-01, address: 192.168.2.52}
+        - {name: mail-relay-01, address: 192.168.2.54}
+        - {name: sensor-01, address: 192.168.2.55}
         - {name: PROXMOX, address: 192.168.2.70}
         - {name: Proxmox-2, address: 192.168.2.71}
         - {name: media-01, address: 192.168.2.195}
-        - {name: TestServer, address: 192.168.2.220}
-      services:
-        - prometheus
-        - grafana
-        - alertmanager
-        - blackbox_exporter
+        - {name: docker-01, address: 192.168.2.220}
+      services: [prometheus, grafana, alertmanager, blackbox_exporter]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     iac:
       scripts:
         - IaC/scripts/deploy-monitoring-platform.sh
         - IaC/scripts/preflight-monitoring.sh
       playbooks:
         - IaC/ansible/playbooks/monitoring.yml
+        - IaC/ansible/playbooks/node-exporters.yml
       roles:
         - IaC/ansible/roles/monitoring_stack/
+        - IaC/ansible/roles/node_exporter/
       terraform:
         - IaC/terraform/proxmox/monitor-01/
-    triggers:
-      - monitoring_platform_failure
-      - prometheus_unavailable
-      - grafana_unavailable
-      - alertmanager_unavailable
-      - blackbox_probe_failure
+    monitoring:
+      active_targets_last_observed: 25
+      healthy_targets_last_observed: 25
+      active_alerts_last_observed: 0
+      loki_state: not_deployed
+      alloy_state: not_deployed_on_monitor_01
+    last_validated: 2026-09-12
 
   network_sensor_service:
     title: Homelab Network Sensor Service
@@ -187,25 +162,17 @@ runbooks:
     document_type: service_runbook
     document: "production docs/NETWORK-SENSOR-SERVICE.md"
     status: active
-    service_state: planned
+    service_state: implementation_in_progress
     applies_to:
       hosts:
-        - name: sensor-01
-          address: 192.168.2.55
-          role: passive_network_sensor
-        - name: PROXMOX
-          address: 192.168.2.70
-          role: sensor_hypervisor
+        - {name: sensor-01, address: 192.168.2.55, role: passive_network_sensor}
+        - {name: PROXMOX, address: 192.168.2.70, role: sensor_hypervisor}
       infrastructure:
-        - name: HP ProCurve mirror port 24
-          role: span_destination
-      services:
-        - suricata
-        - zeek
-        - node_exporter
+        - {name: HP ProCurve port 24, role: planned_future_span_destination}
+      services: [suricata, zeek, node_exporter]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     iac:
       scripts:
         - IaC/scripts/deploy-sensor-01-vm.sh
@@ -221,12 +188,11 @@ runbooks:
         - IaC/ansible/roles/network_sensor_config/
       terraform:
         - IaC/terraform/proxmox/sensor-01/
-    triggers:
-      - sensor_build_or_rebuild
-      - capture_interface_validation
-      - suricata_failure
-      - zeek_failure
-      - span_capture_failure
+    phase_state:
+      phase_1_management_and_toolchain: complete_validated
+      phase_2_capture_activation: pending_usb_capture_nic
+      switch_mirroring: disabled_until_repatch
+    last_validated: 2026-09-12
 
   time_service:
     title: Homelab Time Service
@@ -237,19 +203,13 @@ runbooks:
     service_state: operational
     applies_to:
       hosts:
-        - name: PROXMOX
-          address: 192.168.2.70
-          role: ntp-01
-        - name: Proxmox-2
-          address: 192.168.2.71
-          role: ntp-02
+        - {name: PROXMOX, address: 192.168.2.70, role: ntp-01}
+        - {name: Proxmox-2, address: 192.168.2.71, role: ntp-02}
       network_scope: 192.168.2.0/24
-      services:
-        - chrony
-        - ntp
+      services: [chrony, ntp]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     network:
       protocol: udp
       port: 123
@@ -258,11 +218,7 @@ runbooks:
         - IaC/ansible/playbooks/proxmox-time.yml
       roles:
         - IaC/ansible/roles/chrony_server/
-    triggers:
-      - clock_drift
-      - chrony_failure
-      - ntp_unreachable
-      - time_dependent_service_failure
+    last_validated: 2026-09-12
 
   media_service:
     title: media-01 Production Service
@@ -273,15 +229,11 @@ runbooks:
     service_state: operational
     applies_to:
       hosts:
-        - name: media-01
-          address: 192.168.2.195
-          role: kodi_media_endpoint
-      services:
-        - kodi
-        - samba
+        - {name: media-01, address: 192.168.2.195, role: kodi_media_endpoint}
+      services: [kodi, samba, chrony, node_exporter]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     iac:
       playbooks:
         - IaC/ansible/playbooks/media-01.yml
@@ -290,10 +242,10 @@ runbooks:
         - IaC/ansible/roles/media_endpoint/
         - IaC/ansible/roles/media_smb/
         - IaC/ansible/roles/media_firewall/
-    triggers:
-      - kodi_failure
-      - media_share_failure
-      - media_host_rebuild
+    notes:
+      - nftables policy remains a follow-up gate and is not deployed
+      - Prometheus ICMP and Node Exporter targets are live
+    last_validated: 2026-09-12
 
   cloud_service:
     title: Homelab Cloud Data Service
@@ -301,22 +253,15 @@ runbooks:
     document_type: service_runbook
     document: "production docs/CLOUD-SERVICE.md"
     status: active
-    service_state: blocked
+    service_state: operational
     applies_to:
       hosts:
-        - name: cloud-01
-          address: 192.168.2.53
-          role: nextcloud_service
-        - name: PROXMOX
-          address: 192.168.2.70
-          role: cloud_hypervisor
-      services:
-        - nextcloud
-        - postgresql
-        - redis
+        - {name: cloud-01, address: 192.168.2.53, role: nextcloud_service}
+        - {name: PROXMOX, address: 192.168.2.70, role: cloud_hypervisor}
+      services: [nextcloud, postgresql, redis, cron]
     run_from:
-      name: TestServer
-      address: 192.168.2.220
+      name: admin-01
+      address: 192.168.2.48
     iac:
       scripts:
         - IaC/scripts/deploy-cloud-01.sh
@@ -324,20 +269,77 @@ runbooks:
         - IaC/scripts/deploy-cloud-stack.sh
       playbooks:
         - IaC/ansible/playbooks/cloud-01.yml
+        - IaC/ansible/playbooks/cloud-01-storage.yml
         - IaC/ansible/playbooks/cloud-stack.yml
       roles:
         - IaC/ansible/roles/cloud_baseline/
         - IaC/ansible/roles/cloud_stack/
       terraform:
         - IaC/terraform/proxmox/cloud-01/
-    blockers:
-      - production_data_disk_validation
-      - independent_backup_required_for_important_data
-    triggers:
-      - cloud_build_or_rebuild
-      - nextcloud_failure
-      - database_failure
-      - persistent_data_recovery
+    current_state:
+      data_disk: 200_GiB_dedicated_VM_disk
+      data_mount: /srv/cloud-01-data
+      application_port: 8080
+      external_cloudflare_access: not_deployed
+      backup_restore_proof: not_proven
+    last_validated: 2026-09-12
+
+  mail_relay_service:
+    title: Homelab Mail Relay Service
+    category: core_infrastructure
+    document_type: service_runbook
+    document: "production docs/MAIL-RELAY-SERVICE.md"
+    status: active
+    service_state: operational
+    applies_to:
+      hosts:
+        - {name: mail-relay-01, address: 192.168.2.54, role: smtp_relay}
+        - {name: PROXMOX, address: 192.168.2.70, role: relay_hypervisor}
+      services: [postfix, smtp, node_exporter]
+    run_from:
+      name: admin-01
+      address: 192.168.2.48
+    network:
+      internal_smtp_port: 25
+      upstream_relay: smtp.gmail.com:587
+      upstream_tls: required
+    iac:
+      playbooks:
+        - IaC/ansible/playbooks/mail-relay.yml
+        - IaC/ansible/playbooks/node-exporters.yml
+      terraform:
+        - IaC/terraform/proxmox/mail-relay/
+    monitoring:
+      icmp: active
+      node_exporter: active
+      prometheus_target: active
+      service_specific_mail_metrics: future
+    last_validated: 2026-09-12
+
+  birdnet_service:
+    title: BirdNET-Go Production Service
+    category: application
+    document_type: service_runbook
+    document: "production docs/BIRDNET-SERVICE.md"
+    status: active
+    service_state: operational
+    applies_to:
+      hosts:
+        - {name: docker-01, address: 192.168.2.220, role: birdnet_docker_host}
+      services: [docker, birdnet-go, node_exporter]
+    run_from:
+      name: admin-01
+      address: 192.168.2.48
+    paths:
+      - /opt/birdnet-go/compose.yml
+    iac:
+      playbooks:
+        - IaC/ansible/playbooks/birdnet-01.yml
+    monitoring:
+      icmp: active
+      node_exporter: active
+      application_specific_monitoring: future
+    last_validated: 2026-09-12
 
   cloudflare_pages_production:
     title: Cloudflare Pages Production Deployment Pipeline
@@ -356,11 +358,6 @@ runbooks:
         - me.jrwroberts.co.uk
     run_from:
       type: github_actions_or_admin_workstation
-    triggers:
-      - production_site_deployment
-      - cloudflare_pages_failure
-      - deployment_pipeline_failure
-      - manual_production_fallback
 
   router_clean_rebuild:
     title: Router Clean-Rebuild Plan
@@ -371,32 +368,23 @@ runbooks:
     service_state: maintenance_planned
     applies_to:
       hosts:
-        - name: RT-AC86U
-          address: 192.168.2.1
-          role: primary_router
-        - name: AiMesh-node-1
-          address: 192.168.2.181
-          role: aimesh_node
-        - name: AiMesh-node-2
-          address: 192.168.2.218
-          role: aimesh_node
-      services:
-        - wan
-        - lan
-        - dhcp
-        - wifi
-        - aimesh
-        - qos
-        - firewall
-        - syslog_forwarding
+        - {name: RT-AC86U, address: 192.168.2.1, role: primary_router}
+        - {name: AiMesh-node-1, address: 192.168.2.181, role: aimesh_node}
+        - {name: AiMesh-node-2, address: 192.168.2.218, role: aimesh_node}
+      services: [wan, lan, dhcp, wifi, aimesh, qos, firewall, syslog_forwarding]
     run_from:
       type: local_wired_admin_session
-    triggers:
-      - planned_factory_reset
-      - clean_router_rebuild
-      - router_configuration_drift_removal
 
 coverage_gaps:
+  backup_recovery:
+    priority: high
+    category: backup
+    applies_to:
+      - {name: PROXMOX, address: 192.168.2.70}
+      - {name: Proxmox-2, address: 192.168.2.71}
+      - {name: cloud-01, address: 192.168.2.53}
+    reason: no active PBS or Restic backup platform and no proven estate-wide restore path currently exists
+
   proxmox_node_health:
     priority: high
     category: proxmox
@@ -411,18 +399,25 @@ coverage_gaps:
     applies_to:
       - {name: PROXMOX, address: 192.168.2.70}
       - {name: Proxmox-2, address: 192.168.2.71}
-    reason: no dedicated SMART, disk, and Proxmox storage recovery runbook exists yet
+    reason: no dedicated SMART, disk and Proxmox storage recovery runbook exists yet
 
   alloy_loki_pipeline:
     priority: high
     category: monitoring
     applies_to:
       - {name: monitor-01, address: 192.168.2.52}
-    reason: router local syslog is validated but the Alloy to Loki operating runbook is not yet defined
+    reason: router local syslog is validated but Alloy and Loki are not deployed on monitor-01
 
-  mail_relay_recovery:
+  edge_cloudflare_tunnel:
+    priority: medium
+    category: edge
+    applies_to:
+      - {name: edge-01, address: 192.168.2.56}
+    reason: LXC host is provisioned but cloudflared and the Cloudflare Tunnel workload are not deployed
+
+  mail_relay_recovery_testing:
     priority: medium
     category: core_infrastructure
     applies_to:
       - {name: mail-relay-01, address: 192.168.2.54}
-    reason: mail relay exists in IaC inventory but has no dedicated production recovery runbook
+    reason: service is documented and operational but an end-to-end rebuild/recovery test has not been proven

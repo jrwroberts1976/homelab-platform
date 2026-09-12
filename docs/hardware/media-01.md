@@ -8,7 +8,8 @@
 | Item | Current state |
 |---|---|
 | Hostname | `media-01` |
-| FQDN | `media-01.jameshouse` |
+| Local DNS name | `media-01.jameshouse` |
+| Host-reported `hostname -f` | `media-01` |
 | Address | `192.168.2.195/24` |
 | Hardware | Raspberry Pi 5 Model B Rev 1.0 |
 | OS | Debian GNU/Linux 13 (trixie), rebuilt installation |
@@ -16,6 +17,8 @@
 | Virtualization | Bare metal |
 | Primary role | Dedicated Kodi media endpoint |
 | Service status | Operational |
+
+The local DNS name and the host's own FQDN configuration are deliberately distinguished: the 12 September audit showed `hostname -f` returning the short hostname only. Do not claim a host-configured FQDN unless it is separately reconciled and validated.
 
 The former `k3s-node-01` identity is historical and must not be used for this host.
 
@@ -58,6 +61,9 @@ The pre-rebuild audit recorded a SanDisk USB device as the system disk. Because 
 | Link | 1 GbE full duplex |
 | Gateway | `192.168.2.1` |
 | Wi-Fi | Present but not the intended production path |
+| Current switch port | HP ProCurve port 3 |
+
+The 12 September switch/ARP correlation matched `media-01` MAC `2C:CF:67:30:BE:1F` to port 3.
 
 ## Current service role
 
@@ -65,11 +71,11 @@ The pre-rebuild audit recorded a SanDisk USB device as the system disk. Because 
 
 Primary workload:
 
-- Kodi 21 via `kodi.service`
-- local media under `/srv/media`
-- authenticated SMB share `\\media-01\Media`
-- Chrony using the homelab time sources
-- Prometheus node_exporter on TCP/9100
+- Kodi via `kodi.service`;
+- local media under `/srv/media`;
+- authenticated SMB share `\\media-01\Media`;
+- Chrony using the homelab time sources;
+- Prometheus Node Exporter on TCP/9100.
 
 Docker and k3s are not part of the intended media host design.
 
@@ -99,23 +105,29 @@ production docs/MEDIA-SERVICE.md
 
 ## Monitoring and remaining gates
 
-Current and planned monitoring includes:
+Current monitoring:
 
-- node_exporter
-- Raspberry Pi temperature/throttling metrics
-- NVMe SMART/health metrics
-- Kodi service availability
-- Alloy/Loki logging once the central Loki service is deployed
+- ICMP probe — healthy at latest audit;
+- Node Exporter — healthy at latest audit.
 
-The nftables policy and final monitoring gates remain follow-up work documented in the production service page.
+Planned/incomplete monitoring includes:
+
+- Raspberry Pi temperature/throttling metrics;
+- NVMe SMART/health metrics;
+- Kodi service availability if actionable;
+- Alloy/Loki logging only after the central logging platform is deployed.
+
+The nftables policy remains a follow-up work item and was not active during the 12 September audit.
 
 ## Rebuild decision
 
-The previous multi-purpose / legacy state has been replaced by a dedicated, reproducible Debian 13 media build. This hardware page now represents the rebuilt host rather than the 2026-09-06 pre-rebuild workload audit.
+The previous multi-purpose / legacy state has been replaced by a dedicated, reproducible Debian 13 media build. This hardware page represents the rebuilt host rather than the 6 September pre-rebuild workload audit.
 
 ## Status
 
 Hardware role: **ACTIVE**  
 OS rebuild: **COMPLETE — Debian 13**  
 Primary service: **Kodi media endpoint**  
-IaC ownership: **ACTIVE**
+IaC ownership: **ACTIVE**  
+Prometheus host monitoring: **ACTIVE**  
+Host firewall: **NOT YET DEPLOYED**

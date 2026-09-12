@@ -49,28 +49,42 @@ The Ansible inventory is the machine-readable authority for host addresses and s
 | `monitor-01` | `192.168.2.52` | Monitoring VM on `Proxmox-2` |
 | `cloud-01` | `192.168.2.53` | Nextcloud VM on `PROXMOX` |
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix relay LXC on `PROXMOX` |
-| `sensor-01` | `192.168.2.55` | Network/security sensor VM on `PROXMOX` |
-| `edge-01` | `192.168.2.56` | Cloudflare Tunnel edge connector LXC on `Proxmox-2` |
+| `sensor-01` | `192.168.2.55` | Network/security sensor VM on `PROXMOX`; Phase 1 complete |
+| `edge-01` | `192.168.2.56` | Reserved edge LXC on `Proxmox-2`; Cloudflare Tunnel workload not deployed |
 | `PROXMOX` | `192.168.2.70` | Primary standalone Proxmox VE host / NTP server |
 | `Proxmox-2` | `192.168.2.71` | Secondary standalone Proxmox VE host / NTP server |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi media endpoint |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 Docker / BirdNET-Go host |
 
-`ids-01` and the former DietPi role are not active platform targets. Historical references should remain historical rather than being reused as current-state authority.
+`ids-01`, `TestServer`, `DietPi` and the former `k3s-node-01` identity are not active platform targets. Historical references should remain historical rather than being reused as current-state authority.
+
+## Important current-state distinctions
+
+### `edge-01`
+
+The LXC host exists and is healthy, but no `cloudflared` package/binary/service/process is currently deployed. Do not treat membership in the `edge_hosts` inventory group as proof that the Cloudflare Tunnel application layer is operational.
+
+### `sensor-01`
+
+The VM/toolchain are live and validated. The dedicated capture NIC and SPAN path are not present yet, so Suricata/Zeek remain deliberately stopped.
+
+### `cloud-01`
+
+`cloud-01` is production, not staging. It uses a dedicated 200 GiB VM data disk mounted at `/srv/cloud-01-data`. The former 4 TB WD USB disk is not its production data disk.
 
 ## Production cloud state
 
-`cloud-01` is no longer a staging build. The production design is represented in Terraform and Ansible:
+Current production design:
 
-- Debian 13 VM, VMID 200, on `PROXMOX`
-- dedicated 200 GiB `scsi1` data disk
-- ext4 filesystem labelled `cloud-01-data`, mounted at `/srv/cloud-01-data`
-- Nextcloud + PostgreSQL + Redis + cron
-- Nextcloud data at `/srv/cloud-01-data/data`
-- HTTP bound to `192.168.2.53:8080`
-- SMTP through `mail-relay-01` at `192.168.2.54:25`
-- explicit storage-identity and deployment-approval gates
-- protected application secrets supplied from `~/.config/homelab-iac/cloud-01.env`
+- Debian 13 VM, VMID 200, on `PROXMOX`;
+- dedicated 200 GiB `scsi1` data disk;
+- ext4 filesystem mounted at `/srv/cloud-01-data`;
+- Nextcloud + PostgreSQL + Redis + cron;
+- Nextcloud data at `/srv/cloud-01-data/data`;
+- HTTP bound to `192.168.2.53:8080`;
+- SMTP through `mail-relay-01` at `192.168.2.54:25`;
+- explicit storage-identity and deployment-approval gates;
+- protected application secrets supplied outside Git.
 
 Backups, restore testing and full observability integration remain separate delivery workstreams; they are not reasons to treat the live Nextcloud deployment as staging.
 
@@ -96,7 +110,7 @@ ansible-playbook --syntax-check playbooks/<playbook>.yml
 
 Use check mode when the playbook supports it, review the result, then perform the explicitly approved real reconciliation. Validate service health and run the playbook again to prove idempotence before merging the change.
 
-See [`ansible/README.md`](ansible/README.md) for the current inventory groups, playbooks, protected configuration paths and service-specific notes.
+See [`ansible/README.md`](ansible/README.md) for current inventory groups, playbooks, protected configuration paths and service-specific notes.
 
 ## Bootstrap versus reconciliation scripts
 
