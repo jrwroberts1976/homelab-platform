@@ -1,96 +1,220 @@
 # Current-State Architecture
 
-This document is intentionally incomplete until discovery is performed on each host.
+This document records the validated current homelab estate as of 12 September 2026.
 
-## Hosts and infrastructure to audit
+It describes what is live now. Historical host identities and earlier migration assumptions remain useful for migration archaeology, but they are not current deployment authority.
 
-| Asset | Known address | Known role | Audit state |
-|---|---|---|---|
-| PROXMOX | 192.168.2.70 | Primary x86 virtualization host; sole current member of `Home-lab` | AUDITED — RAM/backup remediation required |
-| pve2 | 192.168.2.71 | Fresh Proxmox VE 9.2 secondary node; currently standalone after cluster trial rollback | BUILD/VALIDATION IN PROGRESS — new cluster/migration NIC pending |
-| TestServer | 192.168.2.220 | Legacy consolidated Docker/BirdNET/CI/monitoring host | AUDITED — future role/hostname unassigned |
-| ids-01 | 192.168.2.242 | Legacy security/monitoring/DNS/backup host | AUDITED — future role/hostname unassigned |
-| media-01 | 192.168.2.195 | Legacy Kodi/media host; stale `k3s-node-01` DNS alias | AUDITED — future role/hostname unassigned |
-| DietPi | 192.168.2.48 | Legacy primary Pi-hole / Unbound DNS appliance with attached 4 TB-class backup disk | AUDITED — HDD DEGRADED (7 pending / 2 uncorrectable sectors); future role/hostname unassigned |
-| ASUS RT-AC86U main | 192.168.2.1 | Router / DHCP / AiMesh controller | DISCOVERED — reachable, device audit pending |
-| ASUS AiMesh node | 192.168.2.181 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
-| ASUS AiMesh node | 192.168.2.218 | Wireless mesh node | DISCOVERED — reachable, device audit pending |
-| HP ProCurve switch | 192.168.2.16 | Core managed switch; port 24 confirmed mirror/SPAN destination | DISCOVERED — reachable, SSH closed, device audit pending |
+## Authority model
 
-The secondary Pi-hole/Unbound instance currently associated with ids-01 is a workload, not a separate physical-host audit target. Its future role is now an explicit design decision: retain it, move secondary DNS to another always-on host/VM, or replace it as part of the DNS resilience redesign.
+`homelab-platform/IaC/` is the authoritative location for infrastructure and service configuration that has been migrated and validated there.
 
-BirdNET capture hardware is a non-compute peripheral, not a Linux host. BirdNET-Go itself is a software workload currently observed on TestServer and will be placed during workload design rather than audited as a separate computer.
+Legacy repositories may remain authoritative for areas not yet migrated. They must not be treated as current authority after their workload or configuration has been explicitly migrated and validated in `homelab-platform`.
 
-Addresses or identities marked VERIFY are deliberately not assumed; the discovery pass must reconcile them from live evidence.
+## Active estate
 
-## Workload placement policy — 10 September 2026
+| Asset | Address | Current role | State |
+|---|---:|---|---|
+| `admin-01` | `192.168.2.48` | Raspberry Pi 3 administration / SSH jump / IaC controller | ACTIVE |
+| `dns-02` | `192.168.2.50` | Pi-hole + Unbound, CT 100 on `PROXMOX` | ACTIVE |
+| `dns-01` | `192.168.2.51` | Pi-hole + Unbound, CT 101 on `Proxmox-2` | ACTIVE |
+| `monitor-01` | `192.168.2.52` | Prometheus, Grafana, Alertmanager and Blackbox, VM 200 on `Proxmox-2` | ACTIVE |
+| `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis, VM 200 on `PROXMOX` | ACTIVE |
+| `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT 102 on `PROXMOX` | ACTIVE |
+| `sensor-01` | `192.168.2.55` | Suricata/Zeek network-sensor platform, VM 201 on `PROXMOX` | ACTIVE — CAPTURE PHASE PENDING |
+| `edge-01` | `192.168.2.56` | Cloudflare Tunnel edge connector, CT 103 on `Proxmox-2` | ACTIVE — DIRECT APP VALIDATION REMAINS |
+| `PROXMOX` | `192.168.2.70` | Primary standalone Proxmox VE node | ACTIVE |
+| `Proxmox-2` | `192.168.2.71` | Secondary standalone Proxmox VE node | ACTIVE |
+| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi media endpoint | ACTIVE |
+| `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host | ACTIVE |
+| ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller | ACTIVE |
+| ASUS AiMesh node | `192.168.2.181` | Wireless mesh node | ACTIVE |
+| ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
+| HP ProCurve 2510G-24 | `192.168.2.16` | Core managed switch; port 24 mirror/SPAN destination | ACTIVE |
 
-- `sensor-01` is reserved for `PROXMOX` (`192.168.2.70`).
-- PROXMOX will receive an additional 8 GiB RAM before the full Suricata + Zeek
-  mirrored-traffic workload is activated.
-- After `sensor-01`, new infrastructure defaults to `Proxmox-2`
-  (`192.168.2.71`) unless an explicit capacity/design review approves another
-  placement.
-- Existing workloads are not moved merely to satisfy this default; migrations
-  remain separately validated changes.
+## Retired identities
 
-## Required evidence per host
+The following names must not be treated as active production hosts:
 
-Every compute/Linux host audit must record the same minimum evidence set:
+- `TestServer` — retired identity for the Raspberry Pi 4 now operating as `docker-01`.
+- `DietPi` — retired identity for the Raspberry Pi 3 now operating as `admin-01`.
+- `ids-01` — decommissioned.
+- historical `k3s-node-01` identity associated with `192.168.2.195` — retired; the host is `media-01`.
+- former `dns-02` at `192.168.2.242` — retired.
 
-- hostname, IP and hardware manufacturer/model
-- CPU model, architecture, sockets, cores, threads and virtualization capability
-- RAM total, used, available and swap
-- physical disks, models, serials, sizes and health
-- partition/LVM/ZFS/filesystem layout, usage and free capacity
-- NICs, addresses, link speed, duplex and routes
-- OS, kernel, firmware/BIOS where available
-- virtualization and container runtimes
-- running services and failed units
-- Docker containers, Compose projects, networks, volumes and bind mounts when Docker is present
-- k3s/Kubernetes state when present
-- appliance/workload state such as Pi-hole, Unbound or BirdNET when present
-- exposed/listening ports
-- monitoring agents/exporters
-- backup and recovery coverage
-- temperatures/thermals where available
-- current CPU and memory load
-- power/location constraints
-- intended future role
+Historical hardware and audit documents remain useful evidence but are not live configuration authority.
 
-Network appliances must receive an equivalent device audit, including CPU, memory, storage/flash, firmware, interfaces, link state, VLANs, routing, configuration backup coverage and current role where the platform exposes that information.
+## Proxmox platform
 
-No target placement decision is final until the audit is complete.
+The two Proxmox nodes are intentionally standalone. The earlier cluster experiment was deliberately rolled back and no production design currently depends on Corosync or shared cluster membership.
 
-## Completed audits
+### `PROXMOX` — `192.168.2.70`
 
-- [PROXMOX](../hardware/PROXMOX.md) — CPU and storage capacity are strong; RAM and guest-backup posture must be addressed before it becomes the primary compute platform.
-- [TestServer](../hardware/TestServer.md) — Raspberry Pi 4, 4 cores, 3.7 GiB RAM, approximately 1 TB MMC storage; heavy consolidated Docker estate captured; future role and hostname deliberately unassigned.
-- [ids-01](../hardware/ids-01.md) — ASUS ZenBook, i5-1155G7, 4C/8T, approximately 16 GiB RAM, healthy 512 GB-class NVMe; security, monitoring, DNS and backup workloads captured; future role and hostname deliberately unassigned.
-- [media-01](../hardware/media-01.md) — Raspberry Pi 5, 4 Cortex-A76 cores, approximately 8 GiB RAM, healthy 512 GB-class NVMe plus 32 GB-class USB boot media; current Kodi role captured; future role and hostname deliberately unassigned.
-- [DietPi](../hardware/DietPi.md) — Raspberry Pi 3, approximately 1 GiB RAM, 100 Mb/s Ethernet, native Pi-hole/Unbound and attached 4 TB-class backup disk; HDD is DEGRADED with pending/uncorrectable sectors and requires recoverability verification plus replacement planning.
+Validated live workload placement:
 
+| Type | ID | Name | State |
+|---|---:|---|---|
+| LXC | 100 | `dns-02` | running |
+| LXC | 102 | `mail-relay-01` | running |
+| VM | 200 | `cloud-01` | running |
+| VM | 201 | `sensor-01` | running |
+| VM | 9000 | template | stopped |
+| VM | 9001 | template | stopped |
 
-## Fleet discovery
+### `Proxmox-2` — `192.168.2.71`
 
-A TestServer jump-box discovery run on 2026-09-06 verified:
+Validated directly from the node on 12 September 2026:
 
-- TestServer: `192.168.2.220`, local Debian 13 arm64 host.
-- PROXMOX: `192.168.2.70`, reachable with SSH open; hostname is not resolved by TestServer DNS.
-- ids-01: `192.168.2.242`, resolves as `ids-01.jameshouse`, SSH open.
-- `192.168.2.195` resolves in DNS as `k3s-node-01.jameshouse`, but a direct SSH login on 2026-09-06 proved the live hostname is `media-01`. Treat the DNS name as stale until the rebuild.
-- DietPi: `192.168.2.48`, live hostname `DietPi`; Raspberry Pi 3 running native Pi-hole/Unbound with an attached 4 TB-class backup disk.
-- ASUS infrastructure at `192.168.2.1`, `192.168.2.181`, and `192.168.2.218` is reachable.
-- `192.168.2.16` is reachable but does not expose SSH and remains the switch audit target.
-- BirdNET has no separate computer to audit; its capture hardware is a non-compute peripheral, while BirdNET-Go is currently a TestServer Docker workload.
+| Type | ID | Name | State |
+|---|---:|---|---|
+| VM | 200 | `monitor-01` | running |
+| LXC | 101 | `dns-01` | running |
+| LXC | 103 | `edge-01` | running |
 
-Discovery report on TestServer: `/var/tmp/homelab-fleet-discovery-20260906T071538Z.txt`
-SHA256: `04d809dea1c8a3c72532909ddb9b116dee69c7aba576fd91ad666570481edd9f`
+## DNS
 
-## Proxmox operational update — 7 September 2026
+The current resolver pair is:
 
-A second Proxmox node (`pve2`, `192.168.2.71`) was freshly installed, renamed correctly, fully patched and tested as a standalone host. A controlled join to the existing `Home-lab` cluster reached Corosync quorum but did not complete the local `pmxcfs` database synchronisation on `pve2`. The join was rolled back cleanly: `PROXMOX` is again the only cluster member and `pve2` is standalone.
+```text
+dns-01  192.168.2.51
+dns-02  192.168.2.50
+```
 
-The current USB NIC on `pve2` showed RX errors/drops during troubleshooting, but this has not been proven as the root cause of the cluster sync failure. The current plan is to keep that interface for management and test a new second NIC for dedicated Corosync / VM migration traffic before any future cluster attempt.
+Both resolver workloads use Pi-hole + Unbound.
 
-See `../migrations/PROXMOX-SECOND-NODE-2026-09-07.md`.
+`192.168.2.48` is now `admin-01` and must not be treated as a DNS resolver. The retired `.242` resolver identity must not reappear in DHCP, DNS, monitoring or deployment configuration.
+
+## Monitoring
+
+`monitor-01` provides the central monitoring services.
+
+Production wrapper validation on 12 September 2026 confirmed:
+
+- Prometheus: PASS
+- Grafana: PASS
+- Alertmanager: PASS
+- Blackbox Exporter: PASS
+
+Prometheus currently has eight validated Node Exporter targets, all `up`:
+
+```text
+dns-01       192.168.2.51:9100
+dns-02       192.168.2.50:9100
+monitor-01   192.168.2.52:9100
+sensor-01    192.168.2.55:9100
+PROXMOX      192.168.2.70:9100
+Proxmox-2    192.168.2.71:9100
+media-01     192.168.2.195:9100
+docker-01    192.168.2.220:9100
+```
+
+## Production cloud service
+
+`cloud-01` is a production Nextcloud platform.
+
+Validated state:
+
+- Debian 13 VM on `PROXMOX`
+- Nextcloud 34.0.3
+- PostgreSQL healthy
+- Redis healthy
+- cron container running
+- application endpoint on `192.168.2.53:8080`
+- dedicated 200 GiB ext4 data filesystem at `/srv/cloud-01-data`
+- user data at `/srv/cloud-01-data/data`
+- zero failed systemd units
+
+Redis runs as UID 999 / GID 1000. A persistence fault discovered during the estate audit was traced to the bind-mounted `/data` parent directory being owned by root. The live ownership was corrected and the Ansible role now reconciles the Redis state directory with the correct numeric ownership. `BGSAVE`, authenticated `PING`, RDB status, AOF status and Docker health were validated after the repair.
+
+The production cloud deployment wrapper has subsequently completed its storage, application, container-health and idempotence gates successfully.
+
+## Network sensor
+
+`sensor-01` exists and is deliberately in Phase 1.
+
+The management interface is live at `192.168.2.55`, but the dedicated capture interface has not yet been attached.
+
+Until the dedicated USB/SPAN capture NIC is present and validated:
+
+- Suricata remains stopped/disabled.
+- Zeek remains stopped.
+- the empty capture-interface setting is intentional.
+- Ansible must not activate packet engines.
+
+HP ProCurve port 24 remains the reserved mirror/SPAN destination for the future capture path.
+
+## Mail relay
+
+`mail-relay-01` is CT 102 on `PROXMOX`.
+
+Validated state:
+
+- Debian 13
+- Postfix active
+- SMTP listening on TCP/25
+- zero failed systemd units
+
+## Media
+
+`media-01` at `192.168.2.195` is the Raspberry Pi 5 Kodi endpoint. Its historical `k3s-node-01` identity is retired.
+
+The current media role includes Kodi, SMB media access, Chrony and Node Exporter. Remaining media hardening and observability work is incremental work rather than a host-role decision.
+
+## Administration host
+
+`admin-01` at `192.168.2.48` is the normal controller for homelab administration and IaC.
+
+Production Ansible should normally be run from the checked-out `homelab-platform` repository on this host. It replaces the former use of TestServer as the normal administration/jump point.
+
+## Docker / BirdNET host
+
+The former TestServer Raspberry Pi 4 has been rebuilt as `docker-01` at `192.168.2.220`.
+
+Its current dedicated workload is BirdNET-Go. The `TestServer` name remains historical and must not be used as an active deployment target.
+
+## OpenIPMI on virtual guests
+
+Debian's Prometheus Node Exporter package chain can install `prometheus-node-exporter-collectors`, `ipmitool` and `openipmi`.
+
+On guests without an IPMI device this previously left an irrelevant failed `openipmi.service`. The Node Exporter Ansible role now:
+
+- checks for `/dev/ipmi0` and `/dev/ipmi/0`;
+- disables OpenIPMI when no IPMI hardware exists;
+- clears the irrelevant failed state;
+- retains the collector/tool packages;
+- verifies zero failed units.
+
+This was live-validated and proved idempotent on `dns-02` and `sensor-01`.
+
+## Network infrastructure
+
+### HP ProCurve
+
+Known state:
+
+- HP ProCurve 2510G-24
+- management address `192.168.2.16`
+- firmware Y.11.52
+- VLAN 1 untagged across ports 1–24 in the audited state
+- port 24 is the known mirror/SPAN destination
+- Telnet administration is available
+- SSH is not available
+
+A wider network configuration clean-up remains a separate controlled change.
+
+### ASUS
+
+The ASUS RT-AC86U remains the router, DHCP authority and AiMesh controller.
+
+Any future reset/rebuild must preserve WAN, DHCP, DNS, Wi-Fi, AiMesh, routing and rollback evidence before change.
+
+## Remaining current-state validation gaps
+
+The major compute and workload placements are now proven. Remaining validation work includes:
+
+- direct application/process validation of `edge-01` / cloudflared;
+- final `sensor-01` capture-NIC installation and packet-engine activation;
+- backup/restore architecture and recovery testing;
+- remaining router/switch device-level audit and rebuild work;
+- continued observability expansion where useful.
+
+These are outstanding work items, not reasons to treat already validated hosts as undiscovered.
