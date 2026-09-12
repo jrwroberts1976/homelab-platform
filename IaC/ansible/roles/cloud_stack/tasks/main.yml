@@ -116,14 +116,17 @@
   ansible.builtin.file:
     path: "{{ item.path }}"
     state: directory
-    owner: root
-    group: root
+    owner: "{{ item.owner | default('root') }}"
+    group: "{{ item.group | default('root') }}"
     mode: "{{ item.mode }}"
   loop:
     - { path: "{{ cloud_stack_root }}", mode: "0755" }
     - { path: "{{ cloud_stack_state_root }}", mode: "0755" }
     - { path: "{{ cloud_stack_state_root }}/postgres", mode: "0755" }
-    - { path: "{{ cloud_stack_state_root }}/redis", mode: "0755" }
+    - path: "{{ cloud_stack_state_root }}/redis"
+      owner: "{{ cloud_redis_uid }}"
+      group: "{{ cloud_redis_gid }}"
+      mode: "0755"
 
 - name: Set Nextcloud writable directory ownership
   ansible.builtin.file:

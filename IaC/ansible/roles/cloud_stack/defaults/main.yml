@@ -13,6 +13,12 @@ cloud_nextcloud_image: "nextcloud:34.0.3-apache"
 cloud_postgres_image: "postgres:18.6-alpine"
 cloud_redis_image: "redis:8.2.9-alpine"
 
+# redis:8.2.9-alpine runs the Redis worker as UID 999 / GID 1000.
+# The bind-mounted state directory must permit that account to create
+# temporary RDB files as well as the persistent AOF/RDB files.
+cloud_redis_uid: "999"
+cloud_redis_gid: "1000"
+
 cloud_nextcloud_http_bind: "192.168.2.53"
 cloud_nextcloud_http_port: 8080
 

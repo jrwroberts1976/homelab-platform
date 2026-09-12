@@ -29,6 +29,48 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Check for local IPMI device nodes
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - /dev/ipmi0
+    - /dev/ipmi/0
+  register: node_exporter_ipmi_devices
+
+- name: Check whether OpenIPMI service exists
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - list-unit-files
+      - openipmi.service
+      - --no-legend
+  register: node_exporter_openipmi_unit
+  changed_when: false
+  failed_when: false
+
+- name: Disable OpenIPMI where no IPMI device exists
+  ansible.builtin.systemd_service:
+    name: openipmi.service
+    enabled: false
+    state: stopped
+  when:
+    - node_exporter_disable_openipmi_without_device | bool
+    - (node_exporter_ipmi_devices.results | selectattr('stat.exists') | list | length) == 0
+    - "'openipmi.service' in node_exporter_openipmi_unit.stdout"
+
+- name: Clear irrelevant OpenIPMI failed state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - openipmi.service
+  changed_when: false
+  failed_when: false
+  when:
+    - node_exporter_disable_openipmi_without_device | bool
+    - (node_exporter_ipmi_devices.results | selectattr('stat.exists') | list | length) == 0
+    - "'openipmi.service' in node_exporter_openipmi_unit.stdout"
+
 - name: Ensure Prometheus node exporter is enabled and running
   ansible.builtin.systemd_service:
     name: "{{ node_exporter_service }}"
