@@ -61,15 +61,15 @@ Retired identities include `TestServer`, `DietPi`, `ids-01`, the former `k3s-nod
 
 The core metrics platform on `monitor-01` is operational.
 
-Latest audited state:
+Latest validated state:
 
 ```text
-Prometheus active targets: 23
-Healthy targets:           23
+Prometheus active targets: 25
+Healthy targets:           25
 Active alerts:             0
 ```
 
-Prometheus, Grafana, Alertmanager and Blackbox Exporter are live. Loki and Alloy are **not deployed on `monitor-01`**; central logging remains future work.
+Prometheus, Grafana, Alertmanager and Blackbox Exporter are live. `mail-relay-01` now has both ICMP and Node Exporter coverage. Loki and Alloy are **not deployed on `monitor-01`**; central logging remains future work.
 
 ### Cloud
 
@@ -122,7 +122,7 @@ Percentages are planning estimates, not health scores. “Operational” means t
 | `docker-01` / BirdNET-Go | Dedicated host operational; Docker/BirdNET-Go and Node Exporter healthy | Protect persistent BirdNET state and prove recovery | 100% host/service build |
 | `cloud-01` baseline | VM/storage/OS baseline operational | Maintain IaC/idempotence and integrate recovery | 100% |
 | Nextcloud private cloud | Nextcloud/PostgreSQL/Redis/cron operational on 200 GiB data disk | Backup + representative restore + broader observability | 80% |
-| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox operational, 23/23 targets up | Add useful service telemetry; logging remains separate | 70% |
+| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox operational, 25/25 targets up | Add useful service telemetry; logging remains separate | 70% |
 | Central logging | Router syslog local receiver works; no central Loki/Alloy on monitor-01 | Design/deploy Alloy + Loki if still required | 20% |
 | Network Hosts platform | Enriched collector/dashboard design defined | Build collector and dashboard | 20% |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard | 20% |
