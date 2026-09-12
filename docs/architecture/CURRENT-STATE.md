@@ -93,12 +93,14 @@ dns-02  192.168.2.50
 
 Both workloads run Pi-hole + Unbound and passed direct public-resolution and DNSSEC checks during the 12 September audit.
 
-Known parity defect:
+The local-record parity defect found during the documentation review was corrected through managed IaC on 12 September 2026. Both resolvers now return:
 
-- `dns-01` resolves both resolver local names;
-- `dns-02` currently does not resolve `dns-01.jameshouse`.
+```text
+dns-01.jameshouse -> 192.168.2.51
+dns-02.jameshouse -> 192.168.2.50
+```
 
-The defect matches the current IaC local-host defaults and should be corrected separately through reviewed IaC. It is not a reason to treat `dns-02` as generally unhealthy.
+The focused reconciliation and final two-resolver run both completed successfully and the resulting managed state was idempotent.
 
 `192.168.2.48` is now `admin-01` and must not be treated as a DNS resolver.
 
@@ -106,17 +108,17 @@ The defect matches the current IaC local-host defaults and should be corrected s
 
 `monitor-01` provides the central monitoring services.
 
-Validated 12 September 2026:
+Validated 12 September 2026 after adding `mail-relay-01` host monitoring:
 
 - Prometheus healthy
 - Grafana healthy, version 13.2.1
 - Alertmanager healthy
 - Blackbox Exporter healthy
-- 23 active Prometheus targets
-- 23 targets `up`
+- 25 active Prometheus targets
+- 25 targets `up`
 - 0 active Prometheus alerts
 
-Observed target coverage includes DNS TCP probes, ICMP probes, Proxmox HTTPS probes and Node Exporter targets across the core estate.
+Observed target coverage includes DNS TCP probes, ICMP probes, Proxmox HTTPS probes and Node Exporter targets across the core estate. `mail-relay-01 .54` now has both ICMP and Node Exporter coverage.
 
 Loki and Alloy are **not deployed on `monitor-01`**. Router syslog is collected locally through rsyslog pending a later central logging phase.
 
@@ -188,10 +190,13 @@ Validated state:
 - relayhost `[smtp.gmail.com]:587`
 - TLS encryption required for upstream relay
 - SASL enabled
-- queue empty at audit time
+- queue empty at validation time
+- Node Exporter active on TCP/9100
+- Prometheus ICMP target `up`
+- Prometheus Node Exporter target `up`
 - zero failed systemd units
 
-The internal relay ACL is intentionally restricted to the currently configured infrastructure addresses. Node Exporter is not deployed on this guest and the relay is not currently a Prometheus target.
+The internal relay ACL is intentionally restricted to the currently configured infrastructure addresses. Adding monitoring did not alter the relay service or its ACL.
 
 ## Media
 
@@ -302,7 +307,6 @@ Major outstanding work includes:
 - design and deploy the `edge-01` Cloudflare Tunnel connector when approved;
 - install/validate the dedicated `sensor-01` capture NIC and future SPAN path;
 - build a real backup platform and prove restores;
-- correct the `dns-02` local-record parity defect through reviewed IaC;
 - complete remaining router/switch redesign and hardening decisions;
 - deploy central Loki/Alloy logging if still desired;
 - finish service-specific observability and recovery documentation.
