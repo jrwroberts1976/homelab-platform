@@ -1,0 +1,5 @@
+---
+# Dedicated passive capture NIC attached to sensor-01 via Proxmox USB passthrough.
+network_sensor_config_capture_enabled: true
+network_sensor_config_capture_interface: enx00249b63b38a
+network_sensor_config_capture_mac: "00:24:9b:63:b3:8a"
