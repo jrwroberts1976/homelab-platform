@@ -1,5 +1,5 @@
 ---
-- name: Configure network sensor phase 1 safely
+- name: Configure network sensor safely
   hosts: sensor_hosts
   become: true
   gather_facts: true
