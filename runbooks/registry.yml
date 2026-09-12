@@ -124,7 +124,6 @@ runbooks:
         - {name: dns-02, address: 192.168.2.50}
         - {name: dns-01, address: 192.168.2.51}
         - {name: monitor-01, address: 192.168.2.52}
-        - {name: cloud-01, address: 192.168.2.53}
         - {name: sensor-01, address: 192.168.2.55}
         - {name: PROXMOX, address: 192.168.2.70}
         - {name: Proxmox-2, address: 192.168.2.71}
