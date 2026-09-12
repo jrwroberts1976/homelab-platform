@@ -1,151 +1,149 @@
 # Ansible service configuration
 
-This directory contains operating-system and service configuration for guests provisioned from `IaC/terraform/`.
+This directory is the configuration authority for the homelab hosts and services represented in `inventory/hosts.yml`.
 
+The normal controller is `admin-01` (`192.168.2.48`). Run production Ansible from the checked-out `homelab-platform` repository on that host unless a recovery runbook explicitly specifies another controller.
 
-## Proxmox time service
+## Controller setup
 
-`playbooks/proxmox-time.yml` configures the two standalone Proxmox hosts as
-redundant LAN NTP servers using the `chrony_server` role:
+```bash
+cd ~/projects/homelab-platform/IaC/ansible
+ansible-inventory --graph
+ansible all --list-hosts
+```
+
+`ansible.cfg` enables host-key checking and uses `inventory/hosts.yml` plus the local `roles/` directory. Unknown or changed SSH host keys must be validated rather than bypassed during normal operation.
+
+## Current inventory groups
+
+The inventory currently represents these service groups:
+
+| Group | Current members | Purpose |
+|---|---|---|
+| `admin_hosts` | `admin-01` | Administration / IaC controller |
+| `dns_resolvers` | `dns-01`, `dns-02` | Pi-hole + Unbound recursive DNS |
+| `proxmox_hosts` | `PROXMOX`, `Proxmox-2` | Standalone Proxmox VE hosts |
+| `proxmox_time_servers` | `PROXMOX`, `Proxmox-2` | Redundant LAN Chrony/NTP service |
+| `monitoring_hosts` | `monitor-01` | Prometheus, Grafana, Alertmanager and Blackbox |
+| `cloud_hosts` | `cloud-01` | Nextcloud private-cloud stack |
+| `mail_relay` | `mail-relay-01` | Internal Postfix notification relay |
+| `edge_hosts` | `edge-01` | Cloudflare Tunnel edge connector |
+| `sensor_hosts` | `sensor-01` | Suricata/Zeek security sensor platform |
+| `media_hosts` | `media-01` | Raspberry Pi 5 Kodi endpoint |
+| `birdnet_hosts` | `docker-01` | Raspberry Pi 4 BirdNET-Go Docker host |
+
+Current DNS service addresses are `dns-01` at `192.168.2.51` and `dns-02` at `192.168.2.50`. The former DNS role at `192.168.2.48` has been retired; `.48` is now `admin-01` and must not be documented or configured as a resolver.
+
+## Main playbooks
+
+| Playbook | Purpose |
+|---|---|
+| `proxmox-time.yml` | Configure both Proxmox hosts as Chrony/NTP servers |
+| `proxmox-resolver.yml` | Reconcile resolver configuration on both Proxmox hosts |
+| `dns-resolver.yml` | Configure a reusable Pi-hole + Unbound resolver |
+| `dns-02.yml` | Legacy/specific entry point for the `dns-02` resolver build |
+| `dns-local-records.yml` | Reconcile managed Pi-hole local DNS records |
+| `monitoring.yml` | Reconcile the central Prometheus/Grafana/Alertmanager/Blackbox stack |
+| `node-exporters.yml` | Reconcile Node Exporter on the groups covered by that playbook |
+| `router-syslog.yml` | Reconcile the ASUS remote syslog receiver on `monitor-01` |
+| `cloud-01.yml` | Reconcile the `cloud-01` operating-system baseline |
+| `cloud-01-storage.yml` | Reconcile the dedicated `cloud-01` data filesystem |
+| `cloud-stack.yml` | Reconcile Nextcloud, PostgreSQL, Redis and cron |
+| `mail-relay.yml` | Reconcile the Postfix relay service |
+| `media-01.yml` | Reconcile the Kodi media endpoint |
+| `birdnet-01.yml` | Reconcile the BirdNET-Go Docker host |
+| `network-sensor.yml` | Reconcile the sensor toolchain |
+| `network-sensor-config.yml` | Reconcile guarded Suricata/Zeek configuration |
+
+Preflight playbooks and scripts should be used where supplied before an initial build or a potentially disruptive infrastructure change.
+
+## Standard validation sequence
+
+For an ordinary existing-service change:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible
+
+ansible-playbook --syntax-check playbooks/<playbook>.yml
+ansible-playbook --check playbooks/<playbook>.yml
+ansible-playbook playbooks/<playbook>.yml
+ansible-playbook playbooks/<playbook>.yml
+```
+
+Check mode is not a substitute for understanding the playbook. Some initial-build workflows intentionally cannot complete meaningfully in check mode because later validation depends on packages/services created earlier in the same real run. Follow the service-specific preflight or wrapper in those cases.
+
+A stable second real reconciliation should normally report `changed=0`, with `unreachable=0` and `failed=0`.
+
+## Production Nextcloud
+
+`cloud-01` is a production deployment, not a staging instance. Its application role has two deliberate safety controls:
+
+1. it verifies `/srv/cloud-01-data` is the approved dedicated ext4 `drive-scsi1` filesystem mounted read-write;
+2. a real application reconciliation is refused unless `cloud_stack_allow_deploy=true` is explicitly supplied.
+
+The preferred controller entry point is:
+
+```bash
+cd ~/projects/homelab-platform
+bash IaC/scripts/deploy-cloud-stack.sh
+```
+
+The wrapper loads protected secrets, validates the dedicated data filesystem, performs syntax/check-mode validation, runs the explicitly approved reconciliation, proves idempotence and checks the live Nextcloud status endpoint.
+
+For direct Ansible use, first load the protected `cloud-01.env`, then the real apply requires:
+
+```bash
+ansible-playbook playbooks/cloud-stack.yml -e cloud_stack_allow_deploy=true
+```
+
+Do not remove or bypass either the storage gate or the explicit deployment gate.
+
+## DNS model
+
+Both resolvers are Proxmox LXCs and use Pi-hole + Unbound:
+
+- `dns-01.jameshouse` -> `192.168.2.51`
+- `dns-02.jameshouse` -> `192.168.2.50`
+
+Unbound performs recursive resolution and DNSSEC validation; Pi-hole provides policy/blocking and local DNS. Resolver builds must be validated directly before any DHCP/client cutover. The approved resolver pair is `.51` and `.50`; the old `.48`/`.242` resolver identities are historical only.
+
+`playbooks/proxmox-resolver.yml` also keeps the physical Proxmox hosts on the current `.51` / `.50` resolver pair.
+
+## Time service
+
+`playbooks/proxmox-time.yml` configures:
 
 - `ntp-01.jameshouse` -> `PROXMOX` / `192.168.2.70`
 - `ntp-02.jameshouse` -> `Proxmox-2` / `192.168.2.71`
 
-Chrony runs directly on the physical hypervisors so time service does not
-depend on a VM or LXC being available. Both servers synchronise independently
-to the UK NTP pool and serve only `192.168.2.0/24`.
+Chrony runs on the physical hypervisors so LAN time does not depend on a guest. Proxmox LXCs inherit host time; supported VM/physical clients use the `chrony_client` role where applicable.
 
-Deploy from TestServer with:
+## Protected configuration
 
-```bash
-cd ~/projects/homelab-platform/IaC/ansible
-ansible-playbook --syntax-check playbooks/proxmox-time.yml
-ansible-playbook playbooks/proxmox-time.yml --list-tasks
-ansible-playbook playbooks/proxmox-time.yml
-```
-
-See `production docs/TIME-SERVICE.md` for architecture, validation and client
-policy.
-
-## dns-02
-
-`playbooks/dns-02.yml` configures CT 100 (`192.168.2.50`) as the secondary Pi-hole + Unbound resolver.
-
-The live source baseline was captured from `dns-01` (`192.168.2.48`) on 7 September 2026:
-
-- Pi-hole Core v6.4.3
-- Pi-hole Web v6.6
-- Pi-hole FTL v6.7
-- Unbound 1.26.0
-- Pi-hole upstream: `127.0.0.1#5335`
-- Pi-hole DNSSEC: disabled because Unbound performs validation
-- listening mode: `LOCAL`
-- reverse servers: none
-- CNAME records: none
-- domain allow/deny rules: none
-- client-specific group mappings: none
-- groups: Default only
-- five enabled subscribed blocklists
-
-The retired previous `dns-02` record at `192.168.2.242` is intentionally not reproduced. A canonical `dns-02.jameshouse` record for the replacement resolver at `192.168.2.50` is added.
-
-## Safety model
-
-The role deliberately does not alter router DHCP/DNS advertisement or TestServer's current resolver list. `dns-01` remains the live dependency until direct validation and failover testing of `dns-02` succeeds.
-
-Before applying, supply the Pi-hole web/API password only through the runner environment:
-
-```bash
-export PIHOLE_WEB_PASSWORD='...'
-```
-
-Do not commit that value. The role sends the password to Pi-hole's interactive `setpassword` command over stdin and marks the Ansible task `no_log`.
-
-The official Pi-hole installer currently requires an existing configuration file for a true non-interactive first installation. The role seeds a minimal Pi-hole v6 `pihole.toml`, runs the official installer with `--unattended`, and then re-applies the captured desired values using `pihole-FTL --config`.
-
-## Validation gates
-
-From `IaC/ansible/` on TestServer:
-
-```bash
-ansible-playbook --syntax-check playbooks/dns-02.yml
-ansible-playbook playbooks/dns-02.yml --list-tasks
-```
-
-Do not use check mode as the initial dry run on the pristine container: later validation tasks intentionally depend on Pi-hole having been installed earlier in the same real run. A real apply must be reviewed separately. During apply the role:
-
-1. verifies the target is Debian at `192.168.2.50` on `eth0`
-2. verifies direct authoritative UDP and TCP access to `a.root-servers.net` and checks its CHAOS identity
-3. installs/configures Unbound and validates recursion + DNSSEC
-4. installs/configures Pi-hole
-5. reconciles the five captured adlists
-6. validates public and local DNS responses
-7. fails if any systemd unit is left failed
-
-The role intentionally preserves the current Unbound cache/security policy from `dns-01`, including the 4 MiB socket-buffer request. If the LXC kernel refuses that buffer size, validate the warning before changing host-level sysctls.
-
-
-## Live deployment evidence — 7 September 2026
-
-The first real apply from TestServer completed successfully:
+Production secret values are not stored in Git. Controller-side protected files currently include, as applicable:
 
 ```text
-dns-02 : ok=37 changed=13 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+~/.config/homelab-iac/proxmox.env
+~/.config/homelab-iac/mail-relay.env
+~/.config/homelab-iac/cloud-01.env
+~/.config/homelab-iac/monitoring.env
 ```
 
-Post-apply validation from TestServer confirmed:
+Pi-hole credentials are supplied through the approved runner environment/workflow secret path. SSH automation keys live under `~/.ssh/` and are referenced by inventory; private keys must never be committed.
 
-- public DNS resolution through `192.168.2.50` over UDP and TCP/53
-- `dns-02.jameshouse -> 192.168.2.50`
-- `docker-01.jameshouse -> 192.168.2.220` on both `dns-01` and `dns-02`
-- valid DNSSEC data resolves normally through Pi-hole/Unbound
-- deliberately broken DNSSEC returns `SERVFAIL`
-- a domain selected directly from the local gravity database is blocked as `0.0.0.0`
+Do not print secret values into chat, CI logs, shell history or validation reports.
 
-This validates the service build itself. Client resolver settings and ASUS DHCP/DNS advertisement remain unchanged pending a controlled failover test.
+## Monitoring coverage
 
+The central monitoring stack is live on `monitor-01`, but observability standardisation is still an active workstream. The current Prometheus target lists do not yet imply complete coverage of every host in the Ansible inventory. Expand monitoring through reviewed IaC and validate new targets before treating missing telemetry as a host/service failure.
 
-## Controlled client failover proof
+`IaC/scripts/deploy-node-exporters.sh` derives its expected Prometheus Node Exporter target count from the monitoring role defaults so its validation cannot silently drift from the configured target list.
 
-On 7 September 2026, TestServer temporarily ignored DHCP-provided DNS and used only `192.168.2.50` through NetworkManager. Validation showed:
+## Safety notes
 
-- `/etc/resolv.conf` contained only `nameserver 192.168.2.50`
-- libc/system resolution succeeded for `example.com`
-- local DNS resolved `dns-02.jameshouse -> 192.168.2.50`
-- local DNS resolved `docker-01.jameshouse -> 192.168.2.220`
-- HTTPS using normal system DNS returned HTTP 200 from `https://example.com`
-
-This client-level proof was completed before changing ASUS DHCP/DNS advertisement. TestServer was then restored to DHCP-derived DNS.
-
-
-## Router/DHCP cutover proof — 8 September 2026
-
-The ASUS DHCP resolver pair is now `192.168.2.48 + 192.168.2.50`, replacing the removed previous `dns-02` at `.242`.
-
-A Windows Wi-Fi client received the new pair directly from the ASUS DHCP server. TestServer then renewed its Ethernet DHCP lease through NetworkManager and also received exactly `.48 + .50`. Its generated `/etc/resolv.conf` and NetworkManager `IP4.DNS` values agree.
-
-This completes the planned client/router DNS cutover for replacement `dns-02`.
-
-
-## Proxmox system resolver management
-
-`playbooks/proxmox-resolver.yml` manages the host resolver configuration on both standalone Proxmox nodes.
-
-Approved state:
-
-- search domain: `jameshouse`
-- primary DNS: `192.168.2.51` (`dns-01`)
-- secondary DNS: `192.168.2.50` (`dns-02`)
-- retired resolver `192.168.2.48` is forbidden
-
-The role validates the Proxmox hostname, management IPv4 and `vmbr0` identity before changing `/etc/resolv.conf`, keeps an Ansible backup of a changed file, and validates both public and local DNS after reconciliation.
-
-From TestServer:
-
-```bash
-cd IaC/ansible
-ansible-playbook --syntax-check playbooks/proxmox-resolver.yml
-ansible-playbook playbooks/proxmox-resolver.yml
-```
-
-A second run should be idempotent.
+- Keep host-key checking enabled for normal runs.
+- Do not use `ANSIBLE_HOST_KEY_CHECKING=False` as a routine workaround; it is reserved for tightly controlled first-boot/bootstrap flows that independently verify identity.
+- Do not convert current production guests into “fresh builds” just because a bootstrap script exists.
+- Keep destructive storage operations behind device identity, size and explicit-approval gates.
+- Preserve accepted production data when reconciling Terraform state.
+- Validate failed systemd units, application health and service reachability after a real change.

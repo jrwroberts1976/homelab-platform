@@ -10,24 +10,66 @@ die() {
 REPO_ROOT="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/../.." && pwd)}"
 ANSIBLE_DIR="$REPO_ROOT/IaC/ansible"
 MONITOR_IPV4="192.168.2.52"
+MONITORING_DEFAULTS="$ANSIBLE_DIR/roles/monitoring_stack/defaults/main.yml"
 
-command -v ansible-playbook >/dev/null 2>&1 || die "ansible-playbook is required"
-command -v curl >/dev/null 2>&1 || die "curl is required"
-command -v jq >/dev/null 2>&1 || die "jq is required"
+for cmd in ansible-playbook curl jq awk mktemp; do
+  command -v "$cmd" >/dev/null 2>&1 || die "Required command not found: $cmd"
+done
 
-cd "$ANSIBLE_DIR"
+[ -r "$MONITORING_DEFAULTS" ] || die "Missing monitoring defaults: $MONITORING_DEFAULTS"
+
+EXPECTED_NODE_TARGETS="$(awk '
+  /^monitoring_node_exporter_targets:/ {
+    in_targets = 1
+    next
+  }
+  in_targets && /^[^[:space:]]/ {
+    in_targets = 0
+  }
+  in_targets && /^[[:space:]]+- address:/ {
+    count++
+  }
+  END {
+    print count + 0
+  }
+' "$MONITORING_DEFAULTS")"
+
+case "$EXPECTED_NODE_TARGETS" in
+  ''|0|*[!0-9]*)
+    die "Could not derive a valid Node Exporter target count from monitoring defaults"
+    ;;
+esac
+
+printf 'expected_node_exporter_targets=%s\n' "$EXPECTED_NODE_TARGETS"
+
+cd "$ANSIBLE_DIR" || die "Cannot enter Ansible directory"
 
 printf '===== NODE EXPORTER SYNTAX =====\n'
-ansible-playbook --syntax-check playbooks/node-exporters.yml || die "Node exporter syntax check failed"
+ansible-playbook --syntax-check playbooks/node-exporters.yml || die "Node Exporter syntax check failed"
 
 printf '\n===== NODE EXPORTER FIRST APPLY =====\n'
-ansible-playbook playbooks/node-exporters.yml || die "Node exporter first apply failed"
+ansible-playbook playbooks/node-exporters.yml || die "Node Exporter first apply failed"
 
 printf '\n===== NODE EXPORTER IDEMPOTENCE =====\n'
-ansible-playbook playbooks/node-exporters.yml || die "Node exporter idempotence run failed"
+IDEMPOTENCE_OUT="$(mktemp)" || die "Cannot create idempotence output file"
+ANSIBLE_NOCOLOR=1 ansible-playbook playbooks/node-exporters.yml >"$IDEMPOTENCE_OUT" 2>&1
+IDEMPOTENCE_RC=$?
+cat "$IDEMPOTENCE_OUT"
+
+if [ "$IDEMPOTENCE_RC" -ne 0 ]; then
+  rm -f "$IDEMPOTENCE_OUT"
+  die "Node Exporter idempotence run failed"
+fi
+
+if grep -Eq 'changed=[1-9][0-9]*' "$IDEMPOTENCE_OUT"; then
+  rm -f "$IDEMPOTENCE_OUT"
+  die "Node Exporter second run reported changes"
+fi
+rm -f "$IDEMPOTENCE_OUT"
+printf 'ansible_idempotence=PASS\n'
 
 printf '\n===== RECONCILE PROMETHEUS SCRAPE CONFIG =====\n'
-cd "$REPO_ROOT"
+cd "$REPO_ROOT" || die "Cannot enter repository root"
 bash IaC/scripts/deploy-monitoring-platform.sh || die "Monitoring configuration reconciliation failed"
 
 printf '\n===== NODE EXPORTER PROMETHEUS VALIDATION =====\n'
@@ -45,10 +87,12 @@ printf '%s\n' "$TARGETS" | jq -r '
   | @tsv
 '
 
-printf '%s\n' "$TARGETS" | jq -e '
+printf '%s\n' "$TARGETS" | jq -e --argjson expected "$EXPECTED_NODE_TARGETS" '
   [.data.activeTargets[] | select(.labels.job == "node-exporter")] as $nodes
-  | ($nodes | length) == 5
+  | ($nodes | length) == $expected
     and all($nodes[]; .health == "up")
-' >/dev/null || die "Expected five healthy node-exporter targets"
+' >/dev/null || die "Prometheus Node Exporter target count/health does not match monitoring desired state"
 
+printf 'node_exporter_target_count=%s\n' "$EXPECTED_NODE_TARGETS"
+printf 'node_exporter_health=PASS\n'
 printf '===== RESULT: PASS =====\n'
