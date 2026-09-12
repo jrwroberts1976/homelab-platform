@@ -1,7 +1,13 @@
 ---
 cloud_stack_root: "/opt/cloud-01"
 cloud_stack_state_root: "/var/lib/cloud-01"
-cloud_stack_staging_data_root: "/srv/cloud-01-staging"
+cloud_stack_allow_deploy: false
+cloud_nextcloud_data_root: "/srv/cloud-01-data"
+cloud_nextcloud_data_dir: "{{ cloud_nextcloud_data_root }}/data"
+cloud_nextcloud_data_fs_type: "ext4"
+cloud_nextcloud_data_label: "cloud-01-data"
+cloud_nextcloud_data_device: >-
+  /dev/disk/by-id/scsi-0QEMU_QEMU_HARDDISK_drive-scsi1
 
 cloud_nextcloud_image: "nextcloud:34.0.3-apache"
 cloud_postgres_image: "postgres:18.6-alpine"

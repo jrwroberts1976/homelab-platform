@@ -21,6 +21,97 @@
       - "'192.168.2.53' in ansible_facts.all_ipv4_addresses"
     fail_msg: "Refusing to deploy Nextcloud to an unexpected host."
 
+- name: Resolve approved Nextcloud data device
+  ansible.builtin.command:
+    argv:
+      - readlink
+      - -f
+      - "{{ cloud_nextcloud_data_device }}"
+  register: cloud_nextcloud_data_real_device
+  changed_when: false
+  check_mode: false
+
+- name: Read Nextcloud data mount target
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - -rn
+      - -T
+      - "{{ cloud_nextcloud_data_root }}"
+      - -o
+      - TARGET
+  register: cloud_nextcloud_data_mount_target
+  changed_when: false
+  check_mode: false
+
+- name: Read Nextcloud data mount source
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - -rn
+      - -T
+      - "{{ cloud_nextcloud_data_root }}"
+      - -o
+      - SOURCE
+  register: cloud_nextcloud_data_mount_source
+  changed_when: false
+  check_mode: false
+
+- name: Read Nextcloud data filesystem type
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - -rn
+      - -T
+      - "{{ cloud_nextcloud_data_root }}"
+      - -o
+      - FSTYPE
+  register: cloud_nextcloud_data_mount_fstype
+  changed_when: false
+  check_mode: false
+
+- name: Read Nextcloud data filesystem options
+  ansible.builtin.command:
+    argv:
+      - findmnt
+      - -rn
+      - -T
+      - "{{ cloud_nextcloud_data_root }}"
+      - -o
+      - OPTIONS
+  register: cloud_nextcloud_data_mount_options
+  changed_when: false
+  check_mode: false
+
+- name: Read Nextcloud data filesystem label
+  ansible.builtin.command:
+    argv:
+      - blkid
+      - -s
+      - LABEL
+      - -o
+      - value
+      - "{{ cloud_nextcloud_data_real_device.stdout | trim }}"
+  register: cloud_nextcloud_data_mount_label
+  changed_when: false
+  check_mode: false
+
+- name: Enforce dedicated Nextcloud data filesystem gate
+  ansible.builtin.assert:
+    that:
+      - cloud_nextcloud_data_real_device.stdout | trim | length > 0
+      - cloud_nextcloud_data_mount_target.stdout | trim == cloud_nextcloud_data_root
+      - >-
+        cloud_nextcloud_data_mount_source.stdout | trim
+        == cloud_nextcloud_data_real_device.stdout | trim
+      - cloud_nextcloud_data_mount_fstype.stdout | trim == cloud_nextcloud_data_fs_type
+      - cloud_nextcloud_data_mount_label.stdout | trim == cloud_nextcloud_data_label
+      - "'rw' in (cloud_nextcloud_data_mount_options.stdout | trim).split(',')"
+    fail_msg: >-
+      Refusing to deploy Nextcloud because /srv/cloud-01-data is not the
+      approved dedicated ext4 drive-scsi1 filesystem mounted read-write.
+
+
 - name: Ensure cloud-01 application directories exist
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -33,9 +124,6 @@
     - { path: "{{ cloud_stack_state_root }}", mode: "0755" }
     - { path: "{{ cloud_stack_state_root }}/postgres", mode: "0755" }
     - { path: "{{ cloud_stack_state_root }}/redis", mode: "0755" }
-    - { path: "{{ cloud_stack_state_root }}/nextcloud-html", mode: "0755" }
-    - { path: "{{ cloud_stack_staging_data_root }}", mode: "0755" }
-    - { path: "{{ cloud_stack_staging_data_root }}/data", mode: "0755" }
 
 - name: Set Nextcloud writable directory ownership
   ansible.builtin.file:
@@ -46,7 +134,7 @@
     mode: "0750"
   loop:
     - "{{ cloud_stack_state_root }}/nextcloud-html"
-    - "{{ cloud_stack_staging_data_root }}/data"
+    - "{{ cloud_nextcloud_data_dir }}"
 
 - name: Install protected cloud-01 environment
   ansible.builtin.template:
@@ -76,6 +164,14 @@
       - --quiet
   changed_when: false
   no_log: true
+
+- name: Require explicit approval before cloud-01 deployment
+  ansible.builtin.assert:
+    that:
+      - cloud_stack_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to pull images or start the cloud-01 application stack.
+      Re-run with -e cloud_stack_allow_deploy=true after validation.
 
 - name: Pull pinned cloud-01 images
   ansible.builtin.command:
