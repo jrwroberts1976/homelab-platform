@@ -21,12 +21,15 @@ Validated 12 September 2026:
 - Postfix active/enabled;
 - SMTP listening on `192.168.2.54:25` over IPv4;
 - `postfix check` clean;
-- mail queue empty at audit time;
+- mail queue empty at validation time;
 - local DNS for `.54` resolves correctly;
 - SMTP connect/banner/QUIT from `admin-01` succeeds;
+- Node Exporter active/enabled on TCP/9100;
+- Prometheus ICMP target `up`;
+- Prometheus Node Exporter target `up`;
 - zero failed systemd units.
 
-No test email was sent as part of that read-only audit.
+No test email was sent as part of the original read-only audit. The later monitoring deployment did not alter Postfix relay configuration or send mail.
 
 ## Upstream relay
 
@@ -100,7 +103,9 @@ Current relevant paths include:
 
 ```text
 IaC/ansible/playbooks/mail-relay.yml
+IaC/ansible/playbooks/node-exporters.yml
 IaC/ansible/roles/
+IaC/ansible/roles/monitoring_stack/
 IaC/terraform/proxmox/mail-relay/
 ```
 
@@ -131,28 +136,35 @@ Non-secret local checks on the relay include:
 ```bash
 postfix check
 systemctl is-active postfix
+systemctl is-active prometheus-node-exporter
 systemctl --failed --no-pager
 postqueue -p
 ss -ltnp | grep ':25'
+ss -ltnp | grep ':9100'
 ```
 
 A basic network-level SMTP check from an approved client can prove listener/banner behaviour without sending mail.
 
 Actual relay-delivery testing should be deliberate because it sends an external message and exercises protected upstream credentials.
 
-## Monitoring gap
+## Monitoring
 
-Current audit state:
+Host-level monitoring is operational.
 
-- Node Exporter is not active on `mail-relay-01`;
-- TCP/9100 is not listening;
-- the relay is not currently represented as a Prometheus target.
+Validated 12 September 2026:
 
-This is a documented observability gap, not evidence the relay service is down.
+- Node Exporter installed through the shared `node_exporter` role;
+- second focused Ansible apply reported `changed=0`, `failed=0`;
+- TCP/9100 reachable from `admin-01`;
+- remote metrics retrieval returned `node_uname_info`;
+- Prometheus ICMP target for `.54` is `up`;
+- Prometheus Node Exporter target for `.54:9100` is `up`;
+- overall Prometheus target state after deployment was 25 active / 25 healthy / 0 unhealthy;
+- active Prometheus alerts remained 0;
+- Postfix remained active and the queue remained empty.
 
-Future monitoring should consider:
+Future service-specific monitoring may consider:
 
-- host/CT health;
 - Postfix service state;
 - queue depth/age;
 - smart-host delivery failures;
@@ -173,7 +185,8 @@ Recovery order:
 5. prove listener reachability from an approved internal client;
 6. inspect the queue;
 7. perform one deliberate end-to-end delivery test if required;
-8. revalidate application mail clients.
+8. revalidate application mail clients;
+9. restore Node Exporter/Prometheus host monitoring.
 
 Do not publish Gmail credentials into application configuration merely to bypass a relay incident.
 
@@ -186,11 +199,13 @@ The service is operational because:
 - SMTP listener is available on TCP/25;
 - upstream smart-host/TLS/SASL configuration is present;
 - Postfix configuration validation succeeds;
-- queue was empty during the audit;
+- queue was empty during validation;
+- Node Exporter is active and scraped successfully;
+- ICMP and Node Exporter Prometheus targets are `up`;
 - zero failed units were observed.
 
 Outstanding work:
 
-- dedicated monitoring/alerting;
+- service-specific mail metrics/alerting where useful;
 - dedicated recovery runbook testing;
 - backup/recovery integration where useful.
