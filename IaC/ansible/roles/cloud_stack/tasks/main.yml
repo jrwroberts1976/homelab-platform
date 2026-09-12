@@ -124,8 +124,6 @@
     - { path: "{{ cloud_stack_state_root }}", mode: "0755" }
     - { path: "{{ cloud_stack_state_root }}/postgres", mode: "0755" }
     - { path: "{{ cloud_stack_state_root }}/redis", mode: "0755" }
-    - { path: "{{ cloud_stack_state_root }}/nextcloud-html", mode: "0755" }
-    - { path: "{{ cloud_nextcloud_data_dir }}", mode: "0750" }
 
 - name: Set Nextcloud writable directory ownership
   ansible.builtin.file:
