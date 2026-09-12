@@ -1,6 +1,7 @@
 # Managed by homelab-platform IaC.
-# Phase 1 deliberately points ZeekControl at a nonexistent capture interface.
+# Uses the active capture NIC only when inventory explicitly enables capture;
+# otherwise the sentinel interface preserves the phase-1 safety posture.
 [zeek]
 type=standalone
 host=localhost
-interface={{ network_sensor_config_capture_interface if network_sensor_config_capture_interface | length > 0 else network_sensor_config_capture_sentinel }}
+interface={{ network_sensor_config_capture_interface if network_sensor_config_capture_enabled else network_sensor_config_capture_sentinel }}

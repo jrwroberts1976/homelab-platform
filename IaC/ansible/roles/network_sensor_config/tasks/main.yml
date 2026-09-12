@@ -1,15 +1,18 @@
 ---
-- name: Validate phase-1 sensor target
+- name: Validate network sensor target and capture intent
   ansible.builtin.assert:
     that:
       - ansible_facts.distribution == "Debian"
       - ansible_facts.distribution_major_version == "13"
       - ansible_facts.hostname == network_sensor_config_expected_hostname
       - network_sensor_config_expected_ipv4 in ansible_facts.all_ipv4_addresses
-      - network_sensor_config_capture_interface | length == 0
+      - not network_sensor_config_capture_enabled or network_sensor_config_capture_interface | length > 0
+      - not network_sensor_config_capture_enabled or network_sensor_config_capture_mac is match('^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+      - network_sensor_config_capture_enabled or network_sensor_config_capture_interface | length == 0
     fail_msg: >-
-      Refusing phase-1 sensor configuration: expected Debian 13 sensor-01 at
-      192.168.2.55 with no capture interface configured.
+      Refusing network sensor configuration: expected Debian 13 sensor-01 at
+      {{ network_sensor_config_expected_ipv4 }} and an explicit, valid capture
+      interface/MAC pair when active capture is enabled.
 
 - name: Verify sensor binaries exist
   ansible.builtin.command:
@@ -23,11 +26,12 @@
   changed_when: false
   failed_when: false
 
-- name: Keep Suricata disabled and stopped during phase 1
+- name: Keep Suricata disabled when active capture is not enabled
   ansible.builtin.systemd_service:
     name: suricata
     enabled: false
     state: stopped
+  when: not network_sensor_config_capture_enabled
 
 - name: Verify Zeek is not running before configuration
   ansible.builtin.shell: |
@@ -37,10 +41,66 @@
     executable: /bin/bash
   changed_when: false
 
-- name: Install phase-1 configuration prerequisites
+- name: Install network sensor configuration prerequisites
   ansible.builtin.apt:
-    name: openssl
+    name:
+      - openssl
+      - ethtool
     state: present
+
+- name: Install full Debian kernel for USB capture support
+  ansible.builtin.apt:
+    name: "{{ network_sensor_config_kernel_package }}"
+    state: present
+  when: network_sensor_config_capture_enabled
+
+- name: Find newest installed generic Debian kernel
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ls -1 /boot/vmlinuz-*+deb13-amd64 2>/dev/null \
+      | grep -v -- '-cloud-' \
+      | sed 's#^/boot/vmlinuz-##' \
+      | sort -V \
+      | tail -1
+  args:
+    executable: /bin/bash
+  register: network_sensor_config_generic_kernel
+  changed_when: false
+  failed_when: >-
+    network_sensor_config_capture_enabled
+    and network_sensor_config_generic_kernel.stdout | trim | length == 0
+  when: network_sensor_config_capture_enabled
+
+- name: Select generic Debian kernel as GRUB default
+  ansible.builtin.lineinfile:
+    path: /etc/default/grub
+    regexp: '^GRUB_DEFAULT='
+    line: >-
+      GRUB_DEFAULT="Advanced options for Debian GNU/Linux>Debian GNU/Linux, with Linux {{ network_sensor_config_generic_kernel.stdout | trim }}"
+    backup: true
+  register: network_sensor_config_grub_default
+  when: network_sensor_config_capture_enabled
+
+- name: Regenerate GRUB after default-kernel change
+  ansible.builtin.command:
+    argv:
+      - update-grub
+  when:
+    - network_sensor_config_capture_enabled
+    - network_sensor_config_grub_default.changed
+  register: network_sensor_config_update_grub
+  changed_when: network_sensor_config_update_grub.rc == 0
+
+- name: Require running generic kernel before activating capture
+  ansible.builtin.assert:
+    that:
+      - "'cloud' not in ansible_facts.kernel"
+      - ansible_facts.kernel is search('\\+deb13-amd64$')
+    fail_msg: >-
+      The generic Debian kernel has been installed and selected, but sensor-01
+      is still running {{ ansible_facts.kernel }}. Reboot sensor-01 and rerun
+      this playbook before enabling packet capture.
+  when: network_sensor_config_capture_enabled
 
 - name: Create sensor capture gate directory
   ansible.builtin.file:
@@ -50,10 +110,31 @@
     group: root
     mode: "0755"
 
-- name: Ensure capture enable marker is absent during phase 1
+- name: Remove capture enable marker when capture is disabled
   ansible.builtin.file:
     path: "{{ network_sensor_config_capture_gate_file }}"
     state: absent
+  when: not network_sensor_config_capture_enabled
+
+- name: Install passive capture NIC configurator
+  ansible.builtin.template:
+    src: configure-sensor-capture-nic.j2
+    dest: "{{ network_sensor_config_capture_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: network_sensor_config_capture_script_result
+  when: network_sensor_config_capture_enabled
+
+- name: Install passive capture NIC systemd unit
+  ansible.builtin.template:
+    src: sensor-capture-nic.service.j2
+    dest: "{{ network_sensor_config_capture_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_config_capture_service_result
+  when: network_sensor_config_capture_enabled
 
 - name: Create Suricata systemd drop-in directory
   ansible.builtin.file:
@@ -73,12 +154,85 @@
       # Managed by homelab-platform IaC.
       [Unit]
       ConditionPathExists={{ network_sensor_config_capture_gate_file }}
-  register: network_sensor_config_suricata_dropin_result
+  register: network_sensor_config_suricata_gate_result
 
-- name: Reload systemd after Suricata gate change
+- name: Install Suricata capture-interface ordering
+  ansible.builtin.template:
+    src: suricata-capture-interface.conf.j2
+    dest: "{{ network_sensor_config_suricata_capture_dropin }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_config_suricata_capture_dropin_result
+  when: network_sensor_config_capture_enabled
+
+- name: Remove Suricata capture-interface ordering when capture is disabled
+  ansible.builtin.file:
+    path: "{{ network_sensor_config_suricata_capture_dropin }}"
+    state: absent
+  register: network_sensor_config_suricata_capture_dropin_absent
+  when: not network_sensor_config_capture_enabled
+
+- name: Reload systemd after capture unit changes
   ansible.builtin.systemd_service:
     daemon_reload: true
-  when: network_sensor_config_suricata_dropin_result.changed
+  when: >-
+    network_sensor_config_suricata_gate_result.changed
+    or (network_sensor_config_capture_enabled and
+        (network_sensor_config_capture_service_result.changed
+         or network_sensor_config_suricata_capture_dropin_result.changed))
+    or (not network_sensor_config_capture_enabled and
+        network_sensor_config_suricata_capture_dropin_absent.changed)
+
+- name: Restart capture NIC service after managed-file change
+  ansible.builtin.systemd_service:
+    name: sensor-capture-nic.service
+    enabled: true
+    state: restarted
+  when:
+    - network_sensor_config_capture_enabled
+    - network_sensor_config_capture_script_result.changed or network_sensor_config_capture_service_result.changed
+
+- name: Ensure capture NIC service is enabled and started
+  ansible.builtin.systemd_service:
+    name: sensor-capture-nic.service
+    enabled: true
+    state: started
+  when:
+    - network_sensor_config_capture_enabled
+    - not (network_sensor_config_capture_script_result.changed or network_sensor_config_capture_service_result.changed)
+
+- name: Verify passive capture NIC state
+  ansible.builtin.shell: |
+    set -euo pipefail
+    IFACE='{{ network_sensor_config_capture_interface }}'
+    EXPECTED_MAC='{{ network_sensor_config_capture_mac | lower }}'
+
+    test -d "/sys/class/net/${IFACE}"
+    test "$(cat "/sys/class/net/${IFACE}/address")" = "$EXPECTED_MAC"
+    ! ip -4 -o addr show dev "$IFACE" | grep -q ' inet '
+    ! ip -6 -o addr show dev "$IFACE" | grep -q ' inet6 '
+    ip link show dev "$IFACE" | grep -q 'PROMISC'
+    ethtool -k "$IFACE" | grep -Fq 'tcp-segmentation-offload: off'
+    ethtool -k "$IFACE" | grep -Fq 'generic-segmentation-offload: off'
+    ethtool -k "$IFACE" | grep -Fq 'generic-receive-offload: off'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: network_sensor_config_capture_enabled
+
+- name: Create capture enable marker after NIC validation
+  ansible.builtin.copy:
+    dest: "{{ network_sensor_config_capture_gate_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      managed_by=homelab-platform
+      interface={{ network_sensor_config_capture_interface }}
+      mac={{ network_sensor_config_capture_mac | lower }}
+  register: network_sensor_config_capture_gate_result
+  when: network_sensor_config_capture_enabled
 
 - name: Back up packaged Suricata configuration once
   ansible.builtin.copy:
@@ -90,11 +244,11 @@
     mode: "0644"
     force: false
 
-- name: Select safe phase-1 capture interface sentinel
+- name: Select effective capture interface
   ansible.builtin.set_fact:
     network_sensor_config_effective_capture_interface: >-
       {{ network_sensor_config_capture_interface
-         if network_sensor_config_capture_interface | length > 0
+         if network_sensor_config_capture_enabled
          else network_sensor_config_capture_sentinel }}
 
 - name: Set Suricata HOME_NET to homelab LAN
@@ -102,24 +256,28 @@
     path: "{{ network_sensor_config_suricata_file }}"
     regexp: '^    HOME_NET:.*$'
     replace: '    HOME_NET: "[{{ network_sensor_config_home_net }}]"'
+  register: network_sensor_config_suricata_home_net_result
 
 - name: Enable Suricata Community ID
   ansible.builtin.replace:
     path: "{{ network_sensor_config_suricata_file }}"
     regexp: '^      community-id:.*$'
     replace: '      community-id: true'
+  register: network_sensor_config_suricata_community_result
 
 - name: Set Suricata Community ID seed
   ansible.builtin.replace:
     path: "{{ network_sensor_config_suricata_file }}"
     regexp: '^      community-id-seed:.*$'
     replace: '      community-id-seed: {{ network_sensor_config_community_id_seed }}'
+  register: network_sensor_config_suricata_seed_result
 
-- name: Replace Suricata AF_PACKET management interface with safe sentinel
+- name: Set Suricata AF_PACKET capture interface
   ansible.builtin.replace:
     path: "{{ network_sensor_config_suricata_file }}"
     regexp: '(^af-packet:\n[ \t]+- interface:[ \t]+)[^\n]+$'
     replace: '\1{{ network_sensor_config_effective_capture_interface }}'
+  register: network_sensor_config_suricata_interface_result
 
 - name: Verify managed Suricata settings are present
   ansible.builtin.shell: |
@@ -192,7 +350,7 @@
       {{ network_sensor_config_zeek_digest_salt_raw.content | b64decode | trim }}
   no_log: true
 
-- name: Install safe ZeekControl node configuration
+- name: Install ZeekControl node configuration
   ansible.builtin.template:
     src: node.cfg.j2
     dest: "{{ network_sensor_config_zeek_node_file }}"
@@ -233,7 +391,7 @@
   changed_when: false
   failed_when: network_sensor_config_zeek_check.rc != 0
 
-- name: Verify Zeek phase-1 interface sentinel
+- name: Verify Zeek capture interface configuration
   ansible.builtin.command:
     argv:
       - grep
@@ -253,20 +411,57 @@
   changed_when: false
   no_log: true
 
-- name: Reassert Suricata disabled and stopped after validation
+- name: Restart Suricata when managed configuration changed
+  ansible.builtin.systemd_service:
+    name: suricata
+    enabled: true
+    state: restarted
+  when:
+    - network_sensor_config_capture_enabled
+    - >-
+      network_sensor_config_suricata_home_net_result.changed
+      or network_sensor_config_suricata_community_result.changed
+      or network_sensor_config_suricata_seed_result.changed
+      or network_sensor_config_suricata_interface_result.changed
+      or network_sensor_config_suricata_gate_result.changed
+      or network_sensor_config_suricata_capture_dropin_result.changed
+      or network_sensor_config_capture_gate_result.changed
+
+- name: Ensure Suricata is enabled and running for active capture
+  ansible.builtin.systemd_service:
+    name: suricata
+    enabled: true
+    state: started
+  when: network_sensor_config_capture_enabled
+
+- name: Keep Suricata disabled and stopped in safe mode
   ansible.builtin.systemd_service:
     name: suricata
     enabled: false
     state: stopped
+  when: not network_sensor_config_capture_enabled
 
-- name: Verify both packet engines remain stopped
+- name: Keep Zeek stopped pending separate activation
   ansible.builtin.shell: |
     set -euo pipefail
-    ! pgrep -x suricata >/dev/null
     ! pgrep -x zeek >/dev/null
   args:
     executable: /bin/bash
   changed_when: false
+
+- name: Verify Suricata active-capture state
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled suricata | grep -Fxq enabled
+    systemctl is-active suricata | grep -Fxq active
+    MAINPID="$(systemctl show --property=MainPID --value suricata)"
+    test "${MAINPID:-0}" -gt 0
+    test -d "/proc/${MAINPID}"
+    grep -Fq -- '- interface: {{ network_sensor_config_capture_interface }}' '{{ network_sensor_config_suricata_file }}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: network_sensor_config_capture_enabled
 
 - name: Verify no failed systemd units
   ansible.builtin.command:

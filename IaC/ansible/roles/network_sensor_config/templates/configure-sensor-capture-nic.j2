@@ -1,0 +1,60 @@
+#!/bin/bash
+set -euo pipefail
+
+CAPTURE_MAC="{{ network_sensor_config_capture_mac | lower }}"
+EXPECTED_IFACE="{{ network_sensor_config_capture_interface }}"
+IFACE=""
+
+for _ in $(seq 1 30); do
+    for DEV in /sys/class/net/*; do
+        [ -r "$DEV/address" ] || continue
+
+        if [ "$(cat "$DEV/address")" = "$CAPTURE_MAC" ]; then
+            IFACE="$(basename "$DEV")"
+            break 2
+        fi
+    done
+
+    sleep 1
+done
+
+if [ -z "$IFACE" ]; then
+    echo "ERROR: capture NIC $CAPTURE_MAC not found"
+    exit 1
+fi
+
+if [ -n "$EXPECTED_IFACE" ] && [ "$IFACE" != "$EXPECTED_IFACE" ]; then
+    echo "ERROR: capture NIC $CAPTURE_MAC resolved to $IFACE, expected $EXPECTED_IFACE"
+    exit 1
+fi
+
+echo "capture_interface=$IFACE"
+
+# Passive capture interface: no Layer-3 addressing.
+ip -4 addr flush dev "$IFACE" || true
+ip -6 addr flush dev "$IFACE" || true
+sysctl -w "net.ipv6.conf.${IFACE}.disable_ipv6=1"
+
+# IDS-friendly capture settings.
+ethtool -K "$IFACE" gro off 2>/dev/null || true
+ethtool -K "$IFACE" gso off 2>/dev/null || true
+ethtool -K "$IFACE" tso off 2>/dev/null || true
+ethtool -K "$IFACE" lro off 2>/dev/null || true
+ethtool -K "$IFACE" rxvlan off 2>/dev/null || true
+
+ip link set dev "$IFACE" up
+ip link set dev "$IFACE" promisc on
+ip link set dev "$IFACE" alias "Passive IDS capture"
+
+# Give autonegotiation a short opportunity to settle, but do not fail the
+# service solely because the monitored switch port is temporarily down.
+for _ in $(seq 1 15); do
+    if [ "$(cat "/sys/class/net/${IFACE}/carrier" 2>/dev/null || echo 0)" = "1" ]; then
+        break
+    fi
+    sleep 1
+done
+
+ip -br addr show "$IFACE"
+ip link show "$IFACE"
+ethtool "$IFACE" 2>/dev/null | grep -E 'Speed:|Duplex:|Auto-negotiation:|Link detected:' || true
