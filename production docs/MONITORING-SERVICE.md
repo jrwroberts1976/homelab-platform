@@ -56,20 +56,20 @@ Compose path:
 
 ## Current health
 
-The 12 September 2026 direct audit found:
+The latest 12 September 2026 validation found:
 
 ```text
 Prometheus:       healthy
 Grafana:          healthy
 Alertmanager:     healthy
 Blackbox Exporter healthy
-active targets:   23
-healthy targets:  23
+active targets:   25
+healthy targets:  25
 active alerts:    0
 failed systemd:   0
 ```
 
-Grafana's database/health endpoint was healthy during the audit.
+Grafana's database/health endpoint was healthy during the validation.
 
 ## Current target coverage
 
@@ -89,6 +89,7 @@ Observed ICMP probe targets include:
 - `dns-02 .50`
 - `dns-01 .51`
 - `monitor-01 .52`
+- `mail-relay-01 .54`
 - `sensor-01 .55`
 - `PROXMOX .70`
 - `Proxmox-2 .71`
@@ -105,17 +106,18 @@ Observed ICMP probe targets include:
 Current validated Node Exporter targets include:
 
 ```text
-dns-01       192.168.2.51:9100
-dns-02       192.168.2.50:9100
-monitor-01   192.168.2.52:9100
-sensor-01    192.168.2.55:9100
-PROXMOX      192.168.2.70:9100
-Proxmox-2    192.168.2.71:9100
-media-01     192.168.2.195:9100
-docker-01    192.168.2.220:9100
+dns-01          192.168.2.51:9100
+dns-02          192.168.2.50:9100
+monitor-01      192.168.2.52:9100
+mail-relay-01   192.168.2.54:9100
+sensor-01       192.168.2.55:9100
+PROXMOX         192.168.2.70:9100
+Proxmox-2       192.168.2.71:9100
+media-01        192.168.2.195:9100
+docker-01       192.168.2.220:9100
 ```
 
-`mail-relay-01` does not currently run Node Exporter and is not a Prometheus target.
+`mail-relay-01` host monitoring was added and validated on 12 September 2026. Its ICMP and Node Exporter targets are both `up`.
 
 ## Failure-domain placement
 
@@ -192,7 +194,7 @@ This is **not** evidence that Loki/Alloy central logging exists.
 
 Alerting should remain actionable rather than comprehensive for its own sake.
 
-Current audit state:
+Current validation state:
 
 ```text
 active Prometheus alerts: 0
@@ -239,10 +241,10 @@ The core monitoring platform is operational because:
 - `monitor-01` exists at the intended address/placement;
 - all four core services are healthy;
 - current target discovery works;
-- 23/23 active targets were healthy during the latest audit;
-- Node Exporter covers the current core host set;
+- 25/25 active targets were healthy during the latest validation;
+- Node Exporter covers the current core host set including `mail-relay-01`;
 - DNS/ICMP/Proxmox HTTPS probes are live;
 - Grafana is connected to Prometheus;
-- no active Prometheus alerts were present during the audit.
+- no active Prometheus alerts were present during the validation.
 
 Loki/Alloy deployment remains a future workstream, not a condition for calling the current metrics platform operational.
