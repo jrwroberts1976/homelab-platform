@@ -1,0 +1,8 @@
+---
+sensor_capture_usb_expected_hypervisor_hostname: PROXMOX
+sensor_capture_usb_expected_hypervisor_ipv4: 192.168.2.70
+sensor_capture_usb_vmid: 201
+sensor_capture_usb_vm_name: sensor-01
+sensor_capture_usb_slot: usb0
+sensor_capture_usb_id: "0b95:1790"
+sensor_capture_usb_usb3: true
