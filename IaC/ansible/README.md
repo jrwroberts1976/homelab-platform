@@ -16,8 +16,6 @@ ansible all --list-hosts
 
 ## Current inventory groups
 
-The inventory currently represents these service groups:
-
 | Group | Current members | Purpose |
 |---|---|---|
 | `admin_hosts` | `admin-01` | Administration / IaC controller |
@@ -27,12 +25,21 @@ The inventory currently represents these service groups:
 | `monitoring_hosts` | `monitor-01` | Prometheus, Grafana, Alertmanager and Blackbox |
 | `cloud_hosts` | `cloud-01` | Nextcloud private-cloud stack |
 | `mail_relay` | `mail-relay-01` | Internal Postfix notification relay |
-| `edge_hosts` | `edge-01` | Cloudflare Tunnel edge connector |
-| `sensor_hosts` | `sensor-01` | Suricata/Zeek security sensor platform |
+| `edge_hosts` | `edge-01` | Reserved edge host; Cloudflare Tunnel application not deployed |
+| `sensor_hosts` | `sensor-01` | Suricata/Zeek platform; capture phase pending |
 | `media_hosts` | `media-01` | Raspberry Pi 5 Kodi endpoint |
 | `birdnet_hosts` | `docker-01` | Raspberry Pi 4 BirdNET-Go Docker host |
 
-Current DNS service addresses are `dns-01` at `192.168.2.51` and `dns-02` at `192.168.2.50`. The former DNS role at `192.168.2.48` has been retired; `.48` is now `admin-01` and must not be documented or configured as a resolver.
+Inventory group membership describes intended management scope. It does not by itself prove an application is deployed. In particular, `edge-01` is a healthy LXC but `cloudflared` is not currently installed/running.
+
+Current DNS addresses:
+
+```text
+dns-01 -> 192.168.2.51
+dns-02 -> 192.168.2.50
+```
+
+The former DNS role at `192.168.2.48` has been retired; `.48` is `admin-01` and must not be configured as a resolver.
 
 ## Main playbooks
 
@@ -43,19 +50,19 @@ Current DNS service addresses are `dns-01` at `192.168.2.51` and `dns-02` at `19
 | `dns-resolver.yml` | Configure a reusable Pi-hole + Unbound resolver |
 | `dns-02.yml` | Legacy/specific entry point for the `dns-02` resolver build |
 | `dns-local-records.yml` | Reconcile managed Pi-hole local DNS records |
-| `monitoring.yml` | Reconcile the central Prometheus/Grafana/Alertmanager/Blackbox stack |
-| `node-exporters.yml` | Reconcile Node Exporter on the groups covered by that playbook |
-| `router-syslog.yml` | Reconcile the ASUS remote syslog receiver on `monitor-01` |
-| `cloud-01.yml` | Reconcile the `cloud-01` operating-system baseline |
+| `monitoring.yml` | Reconcile Prometheus/Grafana/Alertmanager/Blackbox |
+| `node-exporters.yml` | Reconcile Node Exporter on covered groups |
+| `router-syslog.yml` | Reconcile ASUS remote syslog receiver on `monitor-01` |
+| `cloud-01.yml` | Reconcile the `cloud-01` OS baseline |
 | `cloud-01-storage.yml` | Reconcile the dedicated `cloud-01` data filesystem |
 | `cloud-stack.yml` | Reconcile Nextcloud, PostgreSQL, Redis and cron |
 | `mail-relay.yml` | Reconcile the Postfix relay service |
 | `media-01.yml` | Reconcile the Kodi media endpoint |
-| `birdnet-01.yml` | Reconcile the BirdNET-Go Docker host |
+| `birdnet-01.yml` | Reconcile BirdNET-Go on target host `docker-01` |
 | `network-sensor.yml` | Reconcile the sensor toolchain |
 | `network-sensor-config.yml` | Reconcile guarded Suricata/Zeek configuration |
 
-Preflight playbooks and scripts should be used where supplied before an initial build or a potentially disruptive infrastructure change.
+The `birdnet-01.yml` filename is retained as an implementation interface; its current inventory target is `docker-01`.
 
 ## Standard validation sequence
 
@@ -70,80 +77,82 @@ ansible-playbook playbooks/<playbook>.yml
 ansible-playbook playbooks/<playbook>.yml
 ```
 
-Check mode is not a substitute for understanding the playbook. Some initial-build workflows intentionally cannot complete meaningfully in check mode because later validation depends on packages/services created earlier in the same real run. Follow the service-specific preflight or wrapper in those cases.
+Check mode is not a substitute for understanding the playbook. Some bootstrap workflows intentionally cannot complete meaningfully in check mode because later validation depends on resources created earlier in the same run.
 
-A stable second real reconciliation should normally report `changed=0`, with `unreachable=0` and `failed=0`.
+A stable second real reconciliation should normally report `changed=0`, `unreachable=0` and `failed=0`.
 
 ## Production Nextcloud
 
-`cloud-01` is a production deployment, not a staging instance. Its application role has two deliberate safety controls:
+`cloud-01` is production, not staging.
 
-1. it verifies `/srv/cloud-01-data` is the approved dedicated ext4 `drive-scsi1` filesystem mounted read-write;
-2. a real application reconciliation is refused unless `cloud_stack_allow_deploy=true` is explicitly supplied.
+The application role has deliberate safety controls:
 
-The preferred controller entry point is:
+1. verify `/srv/cloud-01-data` is the approved dedicated ext4 data filesystem;
+2. refuse a real application reconciliation unless the explicit deployment gate is supplied.
+
+Preferred entry point:
 
 ```bash
 cd ~/projects/homelab-platform
 bash IaC/scripts/deploy-cloud-stack.sh
 ```
 
-The wrapper loads protected secrets, validates the dedicated data filesystem, performs syntax/check-mode validation, runs the explicitly approved reconciliation, proves idempotence and checks the live Nextcloud status endpoint.
-
-For direct Ansible use, first load the protected `cloud-01.env`, then the real apply requires:
-
-```bash
-ansible-playbook playbooks/cloud-stack.yml -e cloud_stack_allow_deploy=true
-```
-
-Do not remove or bypass either the storage gate or the explicit deployment gate.
+Do not bypass the storage or explicit-deployment gates.
 
 ## DNS model
 
-Both resolvers are Proxmox LXCs and use Pi-hole + Unbound:
+Both resolvers are Proxmox LXCs using Pi-hole + Unbound.
 
-- `dns-01.jameshouse` -> `192.168.2.51`
-- `dns-02.jameshouse` -> `192.168.2.50`
+Unbound performs recursion/DNSSEC validation; Pi-hole provides policy/blocking and local DNS. Resolver builds must be validated directly before any DHCP/client cutover.
 
-Unbound performs recursive resolution and DNSSEC validation; Pi-hole provides policy/blocking and local DNS. Resolver builds must be validated directly before any DHCP/client cutover. The approved resolver pair is `.51` and `.50`; the old `.48`/`.242` resolver identities are historical only.
-
-`playbooks/proxmox-resolver.yml` also keeps the physical Proxmox hosts on the current `.51` / `.50` resolver pair.
+Known current parity defect: `dns-02` does not currently return the `dns-01.jameshouse` local record because the base managed host list includes `dns-02` but not the cross-record for `dns-01`. Correct that in a separate reviewed IaC change rather than through manual GUI drift.
 
 ## Time service
 
 `playbooks/proxmox-time.yml` configures:
 
-- `ntp-01.jameshouse` -> `PROXMOX` / `192.168.2.70`
-- `ntp-02.jameshouse` -> `Proxmox-2` / `192.168.2.71`
+```text
+ntp-01.jameshouse -> PROXMOX / 192.168.2.70
+ntp-02.jameshouse -> Proxmox-2 / 192.168.2.71
+```
 
-Chrony runs on the physical hypervisors so LAN time does not depend on a guest. Proxmox LXCs inherit host time; supported VM/physical clients use the `chrony_client` role where applicable.
+Chrony runs on the physical hypervisors so LAN time does not depend on a guest.
+
+## Sensor state
+
+`sensor-01` Phase 1 is deployed and validated. Suricata/Zeek are installed but deliberately stopped because the dedicated capture NIC/SPAN path does not yet exist.
+
+Do not alter the guarded capture-interface configuration simply to make services run before the physical capture path is ready.
 
 ## Protected configuration
 
-Production secret values are not stored in Git. Controller-side protected files currently include, as applicable:
+Production secret values are not stored in Git. Controller-side protected files include, as applicable:
 
 ```text
 ~/.config/homelab-iac/proxmox.env
+~/.config/homelab-iac/proxmox-pve2.env
+~/.config/homelab-iac/pihole.env
 ~/.config/homelab-iac/mail-relay.env
 ~/.config/homelab-iac/cloud-01.env
 ~/.config/homelab-iac/monitoring.env
 ```
 
-Pi-hole credentials are supplied through the approved runner environment/workflow secret path. SSH automation keys live under `~/.ssh/` and are referenced by inventory; private keys must never be committed.
-
-Do not print secret values into chat, CI logs, shell history or validation reports.
+SSH automation/recovery keys live under `~/.ssh/` and are referenced by the approved workflows. Private keys and secret values must never be committed or printed into chat, CI logs, shell history or validation reports.
 
 ## Monitoring coverage
 
-The central monitoring stack is live on `monitor-01`, but observability standardisation is still an active workstream. The current Prometheus target lists do not yet imply complete coverage of every host in the Ansible inventory. Expand monitoring through reviewed IaC and validate new targets before treating missing telemetry as a host/service failure.
+The central monitoring stack is operational on `monitor-01`.
 
-`IaC/scripts/deploy-node-exporters.sh` derives its expected Prometheus Node Exporter target count from the monitoring role defaults so its validation cannot silently drift from the configured target list.
+The 12 September audit found 23 active Prometheus targets, all healthy, and zero active alerts. Current target lists still do not imply complete service-level observability for every inventory host.
+
+`IaC/scripts/deploy-node-exporters.sh` derives its expected Node Exporter target count from the monitoring role defaults to reduce silent drift.
 
 ## Safety notes
 
 - Keep host-key checking enabled for normal runs.
-- Do not use `ANSIBLE_HOST_KEY_CHECKING=False` as a routine workaround; it is reserved for tightly controlled first-boot/bootstrap flows that independently verify identity.
-- Do not convert current production guests into “fresh builds” just because a bootstrap script exists.
+- Do not use `ANSIBLE_HOST_KEY_CHECKING=False` as a routine workaround.
+- Do not convert current production guests into “fresh builds” merely because a bootstrap script exists.
 - Keep destructive storage operations behind device identity, size and explicit-approval gates.
 - Preserve accepted production data when reconciling Terraform state.
 - Validate failed systemd units, application health and service reachability after a real change.
+- Documentation reconciliation alone does not authorise infrastructure changes.
