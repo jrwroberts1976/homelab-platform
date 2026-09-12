@@ -3,3 +3,8 @@ node_exporter_expected_ipv4: "{{ ansible_host }}"
 node_exporter_package: prometheus-node-exporter
 node_exporter_service: prometheus-node-exporter
 node_exporter_port: 9100
+
+# prometheus-node-exporter may install its collectors package through Debian
+# Recommends. The collectors package pulls in ipmitool/openipmi. Virtual guests
+# without /dev/ipmi0 must not be left with a permanently failed openipmi unit.
+node_exporter_disable_openipmi_without_device: true
