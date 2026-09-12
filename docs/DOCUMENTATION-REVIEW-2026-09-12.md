@@ -34,7 +34,8 @@ A documentation edit does not equal a live configuration change or a recovery te
 - `dns-01 .51` and `dns-02 .50` are the current Pi-hole + Unbound pair.
 - `.48` is not a resolver or fallback resolver.
 - both resolvers passed public/DNSSEC checks.
-- `dns-02` currently lacks the `dns-01.jameshouse` local record because of a known IaC parity defect.
+- the review found that `dns-02` lacked the `dns-01.jameshouse` local record because the shared IaC list contained `.50` but not `.51`.
+- follow-on infrastructure work on 12 September added the missing `.51` managed record, reconciled both resolvers, and proved both `.51` and `.50` resolve `dns-01.jameshouse -> 192.168.2.51` and `dns-02.jameshouse -> 192.168.2.50`; the IaC change is tracked in PR #64.
 
 ### Monitoring
 
@@ -217,6 +218,26 @@ The review explicitly inventoried:
 
 This means the pass was not limited to files found by the original stale-term grep.
 
+## Follow-on infrastructure changes after the review
+
+### DNS local-record parity — resolved 12 September 2026
+
+The documentation review identified a real parity defect: `dns-02 .50` did not resolve `dns-01.jameshouse` because the shared `pihole_local_hosts` list contained only the `dns-02 .50` resolver record and relied on a per-host self-record for the other entry.
+
+Follow-on work:
+
+- added `192.168.2.51 dns-01.jameshouse dns-01` to the shared managed host list;
+- reconciled `dns-02` first using `playbooks/dns-local-records.yml --limit dns-02`;
+- proved `dns-01.jameshouse -> 192.168.2.51` through `dns-02`;
+- confirmed public recursion through `dns-02` remained healthy;
+- reconciled both resolvers;
+- proved both resolvers return `.51` for `dns-01` and `.50` for `dns-02`;
+- second/final reconciliation reported `changed=0`, `failed=0`;
+- committed the one-line IaC correction as `96850fc` on `fix/dns-local-record-parity-20260912`;
+- opened homelab-platform PR #64.
+
+The defect is therefore no longer an active operational gap. The full destructive DNS recovery workflow was not repeated, so its earlier recovery-validation date remains valid.
+
 ## Known remaining documentation / operational gaps
 
 ### High priority
@@ -252,23 +273,19 @@ This means the pass was not limited to files found by the original stale-term gr
    - current service is documented and operational;
    - full rebuild/credential restoration/end-to-end relay recovery is not proven.
 
-7. **DNS local-record parity**
-   - fix `dns-02` missing `dns-01.jameshouse` through reviewed IaC;
-   - do not paper over it with manual Pi-hole GUI drift.
-
-8. **Sensor Phase 2 / physical repatching**
+7. **Sensor Phase 2 / physical repatching**
    - wait for dedicated USB capture adapter;
    - design final switch patch layout;
    - repurpose port 24 as SPAN destination;
    - prove packet arrival before enabling engines.
 
-9. **Network hardening/rebuild decisions**
+8. **Network hardening/rebuild decisions**
    - unrestricted SNMP `public` community;
    - Telnet-only switch management;
    - STP/VLAN/rebuild decisions;
    - router clean-reset decision.
 
-10. **media-01 firewall**
+9. **media-01 firewall**
     - nftables remains designed but not deployed.
 
 ## Validation-date rule
