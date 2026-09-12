@@ -18,6 +18,8 @@ Documents were classified as one of:
 - **missing documentation** — create a current page where sufficient live evidence exists;
 - **recovery/runbook risk** — stale operational instructions corrected before lower-risk descriptive drift.
 
+A documentation edit does not equal a live configuration change or a recovery test.
+
 ## Key live-state findings used by the review
 
 ### Administration / retired identities
@@ -41,6 +43,7 @@ Documents were classified as one of:
 - 23 active Prometheus targets were observed; all 23 were healthy.
 - zero active Prometheus alerts were observed.
 - Loki and Alloy are not deployed on `monitor-01`.
+- the observed 23-target set did not include a `cloud-01` probe/exporter target.
 
 ### Cloud
 
@@ -74,6 +77,13 @@ Documents were classified as one of:
 - one BirdNET-Go Compose project/container is running and healthy.
 - Node Exporter is active.
 
+### Media
+
+- `media-01 .195` is operational as the Raspberry Pi 5 Kodi endpoint.
+- Kodi, Samba, Chrony and Node Exporter are live.
+- nftables is not deployed.
+- `hostname -f` returned the short hostname `media-01`; the local DNS name `media-01.jameshouse` is therefore documented separately from host FQDN state.
+
 ### Backup
 
 - zero scheduled Proxmox guest backup jobs were found on either node.
@@ -99,6 +109,13 @@ Physical patching is expected to change when the dedicated sensor USB capture NI
 
 ## Documents reconciled
 
+### Repository overview / authority
+
+- `README.md`
+- `docs/migrations/LEGACY-REPOSITORIES.md`
+
+The root README now reflects the current migrated authority model rather than describing `homelab-platform` only as a future authority. Legacy repository disposition is now explicitly per-workload/per-area rather than assuming whole-repository authority.
+
 ### Runbooks / recovery
 
 - `runbooks/README.md`
@@ -106,6 +123,8 @@ Physical patching is expected to change when the dedicated sensor USB capture NI
 - `production docs/DNS-SERVICE-RECOVERY-PLAN.md`
 
 Major correction: normal controller is `admin-01`, and `.48` is no longer a DNS fallback.
+
+The runbook registry now distinguishes current operational services from incomplete recovery coverage and records backup/Proxmox/logging/edge gaps explicitly.
 
 ### Architecture / migration
 
@@ -120,6 +139,8 @@ Major correction: normal controller is `admin-01`, and `.48` is no longer a DNS 
 
 ### Production services
 
+Reconciled:
+
 - `production docs/CLOUD-SERVICE.md`
 - `production docs/MONITORING-SERVICE.md`
 - `production docs/NETWORK-SENSOR-SERVICE.md`
@@ -132,28 +153,69 @@ New current service pages:
 - `production docs/MAIL-RELAY-SERVICE.md`
 - `production docs/BIRDNET-SERVICE.md`
 
+Reviewed/left materially unchanged:
+
+- `production docs/CLOUDFLARE-PAGES-PRODUCTION-PIPELINE.md`
+
+The Cloudflare Pages pipeline document states that `engineering-portfolio` PR #16 is still open. That was checked against GitHub during this review and remained true on 12 September 2026, so the dated automation status was not rewritten.
+
+### Public web migration
+
+Reviewed/left materially unchanged:
+
+- `docs/migrations/PUBLIC-WEB-CUTOVER.md`
+
+Its production-cutover conclusion remains compatible with the current architecture: the public portfolio is served from Cloudflare Pages rather than depending on the normal homelab origin. Its PR #16 automation note remains current as of the review date.
+
 ### Network
 
 - `docs/network/SWITCH-PORT-MAP.md`
 - `docs/network/ROUTER-RESET-PLAN.md`
 
+The switch port map now records current evidence separately from future repatching intent. Port 24 is not described as an active SPAN destination.
+
 ### Hardware
 
+Reconciled:
+
 - `docs/hardware/PROXMOX.md`
+- `docs/hardware/media-01.md`
 
 New current hardware pages:
 
 - `docs/hardware/Proxmox-2.md`
 - `docs/hardware/docker-01.md`
 
-Historical hardware/audit pages such as `TestServer.md`, `ids-01.md` and `PVE2-HARDWARE-AUDIT-2026-09-08.md` were intentionally retained as historical evidence rather than rewritten.
+Reviewed/retained as historical evidence rather than rewritten:
+
+- `docs/hardware/TestServer.md`
+- `docs/hardware/ids-01.md`
+- `docs/hardware/PVE2-HARDWARE-AUDIT-2026-09-08.md`
+- `docs/migrations/PROXMOX-SECOND-NODE-2026-09-07.md`
+
+`docs/hardware/admin-01.md` was already substantially current and did not require a broad rewrite.
 
 ### IaC documentation
 
 - `IaC/README.md`
 - `IaC/ansible/README.md`
 
-Inventory-group wording now distinguishes a provisioned host from a deployed application, notably for `edge-01`.
+Inventory-group wording now distinguishes a provisioned host from a deployed application, notably for `edge-01`. Protected Pi-hole configuration and the retained `birdnet-01.yml` filename/current `docker-01` target distinction are documented.
+
+## Repository documentation inventory outcome
+
+The review explicitly inventoried:
+
+- root `README.md`;
+- all files under `docs/architecture/`;
+- all files under `docs/hardware/`;
+- all files under `docs/migrations/`;
+- all files under `docs/network/`;
+- all files under `production docs/`;
+- `runbooks/README.md` and `runbooks/registry.yml`;
+- IaC README surfaces relevant to current host/service ownership.
+
+This means the pass was not limited to files found by the original stale-term grep.
 
 ## Known remaining documentation / operational gaps
 
@@ -215,11 +277,14 @@ A documentation edit does not equal a recovery test.
 
 For example, DNS service health was rechecked on 12 September, but the destructive DNS rebuild/recovery workflow was not repeated. The DNS recovery runbook therefore retains its earlier full recovery-validation date while also recording the current-state review date.
 
+Likewise, creating a current mail-relay service page does not mean a full mail-relay disaster-recovery exercise was performed.
+
 ## Current authority links
 
 Use these first:
 
 ```text
+README.md
 docs/architecture/CURRENT-STATE.md
 docs/architecture/TARGET-STATE.md
 docs/migrations/MIGRATION-TRACKER.md
