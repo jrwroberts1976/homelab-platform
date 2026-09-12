@@ -1,188 +1,216 @@
 # Homelab Cloud Data Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** read-only deployment preflight passed; VM build preparation active; 4 TB production-data placement remains blocked pending completion of destructive disk validation  
-**Primary service:** Nextcloud
+**Status:** operational on LAN; backup/restore proof and external access remain outstanding  
+**Primary service:** Nextcloud  
+**Last current-state review:** 12 September 2026
 
 ## Production identity
 
 | Hostname | IPv4 | Platform | Purpose |
 |---|---:|---|---|
-| `cloud-01.jameshouse` | `192.168.2.53` | Debian 13 VM on `PROXMOX` / `192.168.2.70` | Household private cloud, file sync and browser access |
-| `PROXMOX` | `192.168.2.70` | Physical Proxmox VE | Hypervisor for `cloud-01` |
-| `dns-01.jameshouse` | `192.168.2.51` | LXC on `Proxmox-2` | Primary local DNS resolver |
-| `dns-02.jameshouse` | `192.168.2.50` | LXC on `PROXMOX` | Secondary local DNS resolver |
+| `cloud-01.jameshouse` | `192.168.2.53` | Debian 13 VM 200 on `PROXMOX .70` | Household private cloud |
+| `PROXMOX` | `192.168.2.70` | Physical Proxmox VE | Hypervisor |
+| `dns-01` | `192.168.2.51` | CT 101 on `Proxmox-2` | Primary local resolver |
+| `dns-02` | `192.168.2.50` | CT 100 on `PROXMOX` | Secondary local resolver |
+| `mail-relay-01` | `192.168.2.54` | CT 102 on `PROXMOX` | Internal SMTP relay |
 
-## Service design
+## Current architecture
 
-`cloud-01` is intentionally disposable infrastructure around persistent user data.
+`cloud-01` is reproducible infrastructure around persistent application/user data.
 
-Initial VM target:
+Validated live layout:
 
-- 2 vCPU
-- 4 GiB RAM
-- 32 GiB OS disk on normal Proxmox VM storage
-- Debian 13
-- Docker Engine / Compose
-- Nextcloud
-- PostgreSQL
-- Redis
-- separate persistent data device for Nextcloud user files
+- Debian 13 VM;
+- 2 vCPU / 4 GiB-class application VM design;
+- 32 GiB OS disk;
+- dedicated **200 GiB** application-data disk;
+- ext4 filesystem mounted at `/srv/cloud-01-data`;
+- Nextcloud data under `/srv/cloud-01-data/data`;
+- Docker/Compose application stack;
+- application endpoint `192.168.2.53:8080`;
+- local DNS record managed through homelab DNS.
 
-The operating system, packages, VM definition and service configuration are rebuilt from Git/IaC. User-created data is not treated as reproducible and must be protected separately.
+The former 4 TB WD USB disk attached to `PROXMOX` is **not** part of the current cloud production storage design.
+
+## Application stack
+
+Current Compose stack:
+
+| Component | Current state |
+|---|---|
+| Nextcloud | `34.0.3-apache`, operational |
+| PostgreSQL | `18.6-alpine`, healthy |
+| Redis | `8.2.9-alpine`, healthy |
+| Nextcloud cron | running |
+
+Compose location:
+
+```text
+/opt/cloud-01/docker-compose.yml
+```
+
+The 12 September audit confirmed:
+
+- four expected containers running;
+- PostgreSQL accepting connections;
+- Redis authenticated health checks passing;
+- Nextcloud installed/current;
+- no maintenance mode;
+- no database upgrade pending;
+- HTTP response on `.53:8080`;
+- zero failed systemd units.
+
+A raw unauthenticated `redis-cli ping` returning `NOAUTH` is expected because Redis authentication is enabled.
+
+## Redis persistence repair
+
+During the estate audit, Redis persistence had failed because the host bind directory was owned by `root:root` while the container writes as numeric UID/GID `999:1000`.
+
+The live directory ownership was corrected and the Ansible role was updated in the earlier production fix so IaC now reconciles the required numeric ownership.
+
+After repair, validation confirmed:
+
+- authenticated `PING` succeeds;
+- `BGSAVE` succeeds;
+- persistence status is healthy;
+- container health is healthy.
+
+Do not disable Redis `stop-writes-on-bgsave-error` as a workaround for storage/permission faults.
 
 ## IaC ownership
 
-The target ownership model is:
+Current ownership model:
 
-- Terraform/OpenTofu: VM identity, CPU, RAM, network, system disk and attachment declarations
-- Ansible: Debian baseline, Docker, filesystem/mount preparation, service directories and health validation
-- Compose: Nextcloud, PostgreSQL and Redis service definitions
-- managed DNS: `cloud-01.jameshouse -> 192.168.2.53`
-- SOPS/encrypted secrets: application/database credentials and recovery material
-- Git: authoritative desired state
+- Terraform/OpenTofu: VM identity, compute, networking and disk attachment;
+- Ansible: Debian baseline, Docker, filesystem/mount preparation and application reconciliation;
+- Compose: Nextcloud, PostgreSQL, Redis and cron;
+- managed DNS: `cloud-01.jameshouse -> 192.168.2.53`;
+- protected controller-side environment: application/database/recovery secrets;
+- Git: desired state.
 
-GUI-only configuration drift is not authoritative.
+Primary paths include:
 
-## Data storage
+```text
+IaC/terraform/proxmox/cloud-01/
+IaC/ansible/playbooks/cloud-01.yml
+IaC/ansible/playbooks/cloud-01-storage.yml
+IaC/ansible/playbooks/cloud-stack.yml
+IaC/ansible/roles/cloud_baseline/
+IaC/ansible/roles/cloud_stack/
+IaC/scripts/deploy-cloud-stack.sh
+```
 
-The candidate data device is the former DietPi-attached 4 TB USB disk:
+Manual GUI/container changes are not authoritative unless reconciled into IaC.
 
-- model: `WDC WD40EZRX-00SPEB0`
-- drive serial: `WD-WCC4E0670079`
-- USB bridge: UGREEN / Realtek `0bda:9201`
-- capacity: 4.00 TB / 3.64 TiB
-- stable current USB identity: `usb-WDC_WD40_EZRX-00SPEB0_133309270ED2-0:0`
+## Storage identity gate
 
-The disk is currently undergoing a full destructive surface test before any production filesystem is created.
+The application role must only operate against the approved dedicated cloud data filesystem at:
 
-SMART baseline before testing:
+```text
+/srv/cloud-01-data
+```
 
-- `Reallocated_Sector_Ct = 0`
-- `Current_Pending_Sector = 7`
-- `Offline_Uncorrectable = 2`
-- `UDMA_CRC_Error_Count = 10`
-- `Power_On_Hours = 28300`
+The deployment wrapper includes storage-identity and explicit-deployment approval gates. Do not bypass those controls merely because the service is already live.
 
-Because the drive has recorded pending and uncorrectable sectors, a successful surface test does not make it an acceptable sole copy of irreplaceable data. Production acceptance requires a second independent copy of important Nextcloud data.
+## SMTP
 
-The device must be referenced by stable `/dev/disk/by-id/` identity, never by a transient `/dev/sdX` name.
+The current IaC design routes Nextcloud SMTP through the internal relay:
+
+```text
+mail-relay-01
+192.168.2.54:25
+```
+
+Gmail smart-host credentials belong on the relay, not in every application workload.
 
 ## Rebuild versus backup policy
 
-The platform follows this rule:
+The service follows:
 
 > Rebuild infrastructure. Back up data.
 
-Rebuild from code rather than backing up:
+Reproducible from code:
 
-- Debian operating system
-- Docker packages
-- Nextcloud container image
-- PostgreSQL/Redis container images
-- VM definition
-- DNS/service configuration already held in Git
+- Debian operating system;
+- VM definition;
+- Docker packages/runtime;
+- container images;
+- managed Compose/service configuration;
+- managed DNS/configuration.
 
-Protect because it is not reconstructable:
+Must be protected separately because it is not reconstructable from Git alone:
 
-- Nextcloud user files
-- PostgreSQL application database
-- Nextcloud application state required for a consistent restore
-- Terraform state
-- protected secrets/recovery material not reconstructable elsewhere
-- other user-created documents, photos and application data
+- Nextcloud user files;
+- PostgreSQL database;
+- application state required for a consistent restore;
+- protected secrets/recovery material;
+- Terraform state.
 
-## Recovery model
+The live 200 GiB data disk is production storage, **not a backup**.
 
-A full recovery should be possible as:
+## Backup/recovery gap
 
-```text
-Git / homelab-platform
-        |
-        v
-Terraform creates cloud-01
-        |
-        v
-Ansible configures Debian + Docker
-        |
-        v
-Compose starts Nextcloud + PostgreSQL + Redis
-        |
-        v
-Restore database + persistent data
-        |
-        v
-Validate Nextcloud and client sync
-```
+As of 12 September 2026, cloud backup/restore proof is **not complete**.
 
-The VM itself is therefore replaceable; the persistent data and database are the protected assets.
+The estate audit found no active PBS/Restic production backup platform and no proven end-to-end Nextcloud restore.
 
-## Initial deployment sequence
+Do not describe the cloud service as fully recovery-ready until:
 
-1. complete the destructive 4 TB disk surface test;
-2. compare post-test SMART values with the recorded baseline;
-3. accept or reject the disk for service use;
-4. partition and format only after the disk passes the agreed health gate;
-5. define `cloud-01` in Terraform/OpenTofu;
-6. configure Debian and Docker through Ansible;
-7. deploy Nextcloud, PostgreSQL and Redis through Compose;
-8. add managed DNS for `cloud-01.jameshouse`;
-9. validate LAN-only web access and file sync;
-10. create test data and prove a complete application restore;
-11. establish a second independent copy of important data;
-12. only then consider external Internet access.
+- important user data has an independent backup;
+- PostgreSQL has an application-consistent protection/restore path;
+- protected secrets/state are recoverable;
+- a representative restore has been tested.
+
+See `docs/architecture/BACKUP-STRATEGY.md`.
 
 ## External access
 
-Initial deployment is LAN-only.
+Current production access is LAN-only at `.53:8080`.
 
-Public access must not be enabled until:
+There is no deployed `cloudflared` connector in `edge-01` and external Cloudflare access is not part of the validated current state.
 
-- the LAN deployment is stable;
-- HTTPS/reverse-proxy design is approved;
-- authentication and rate-limit controls are in place;
-- backup/restore has been proven;
-- monitoring is active.
+Any future public access must be a separately reviewed change covering:
 
-The eventual public name may be `cloud.jrwroberts.co.uk`, but external exposure is a later controlled change rather than part of the first deployment.
+- HTTPS/origin policy;
+- authentication controls;
+- tunnel/reverse-proxy design;
+- credential storage/rotation;
+- rate limiting where appropriate;
+- backup/recovery readiness;
+- monitoring/logging;
+- rollback.
 
-## Definition of done
+## Validation
 
-The private-cloud layer is production-ready when:
+Useful non-destructive service checks include:
 
-- `cloud-01` is reproducibly built from IaC;
-- Nextcloud, PostgreSQL and Redis are healthy;
-- local DNS resolves the service correctly;
-- client upload/download/sync tests pass;
-- persistent data survives a controlled application rebuild;
-- database + data restore is proven;
-- the data disk has passed the agreed health gate;
-- important data has a second independent copy;
-- no critical dependency remains on DietPi `192.168.2.48`.
+```bash
+ssh cloud-01 'hostname; systemctl --failed --no-pager'
+ssh cloud-01 'docker ps'
+ssh cloud-01 'findmnt /srv/cloud-01-data'
+curl -I http://192.168.2.53:8080/
+```
 
+Application-specific checks should use the approved wrapper/IaC validation rather than exposing protected credentials in shell history.
 
-## Preflight evidence — 9 September 2026
+## Definition of current operational state
 
-The first live read-only preflight passed without changing resources.
+The LAN cloud service is operational because:
 
-Validated:
+- VM identity/placement are proven;
+- dedicated 200 GiB data storage is mounted;
+- Nextcloud is running;
+- PostgreSQL is healthy;
+- Redis is healthy and persistence works;
+- cron is running;
+- LAN HTTP access works;
+- DNS works;
+- zero failed systemd units were observed.
 
-- `cloud-01` address `192.168.2.53` did not respond and had no resolved neighbour;
-- target hypervisor is `PROXMOX` at `192.168.2.70`, Proxmox VE 9.2.11;
-- `pve-cluster` is active and `/etc/pve` is mounted;
-- candidate VM ID `200` is free;
-- `vm-ssd` has approximately 420 GiB free;
-- `local-lvm` has approximately 141 GiB free;
-- Debian 13 genericcloud media is present at `/var/lib/vz/template/iso/debian-13-genericcloud-amd64.qcow2`;
-- the 4 TB WDC data-device identity resolves correctly to the current `/dev/sdb`.
+Outstanding completion work:
 
-The destructive `badblocks` test was still running at the time of preflight and therefore the disk is not approved for cloud data use.
-
-Interim SMART during the destructive test:
-
-- Reallocated sectors: 0
-- Current pending sectors: 0
-- Offline uncorrectable sectors: 2
-- UDMA CRC errors: 10
-
-The fall in pending sectors is useful evidence but does not override the completion gate. Do not format, mount as production data, pass through to `cloud-01`, or treat this disk as a sole copy until the destructive test has completed and final SMART/badblocks evidence has been reviewed.
+- production backup implementation;
+- restore testing;
+- broader observability/logging where useful;
+- external access only if later approved.
