@@ -1,0 +1,75 @@
+---
+- name: Validate Proxmox host for sensor USB passthrough
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == sensor_capture_usb_expected_hypervisor_hostname
+      - ansible_facts.default_ipv4.address == sensor_capture_usb_expected_hypervisor_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+    fail_msg: >-
+      Refusing sensor USB passthrough management: expected
+      {{ sensor_capture_usb_expected_hypervisor_hostname }} at
+      {{ sensor_capture_usb_expected_hypervisor_ipv4 }}/vmbr0.
+
+- name: Read sensor VM configuration
+  ansible.builtin.command:
+    argv:
+      - qm
+      - config
+      - "{{ sensor_capture_usb_vmid | string }}"
+  register: sensor_capture_usb_vm_config
+  changed_when: false
+
+- name: Validate sensor VM identity and USB slot safety
+  ansible.builtin.assert:
+    that:
+      - "('name: ' ~ sensor_capture_usb_vm_name) in sensor_capture_usb_vm_config.stdout"
+      - >-
+        (sensor_capture_usb_slot ~ ':') not in sensor_capture_usb_vm_config.stdout
+        or (sensor_capture_usb_slot ~ ': host=' ~ sensor_capture_usb_id ~ ',usb3=' ~ (1 if sensor_capture_usb_usb3 else 0) | string) in sensor_capture_usb_vm_config.stdout
+    fail_msg: >-
+      Refusing to replace {{ sensor_capture_usb_slot }} on VM {{ sensor_capture_usb_vmid }}.
+      The VM name or existing USB assignment does not match the declared sensor capture device.
+
+- name: Verify AX88179 exists on the Proxmox host
+  ansible.builtin.command:
+    argv:
+      - lsusb
+      - -d
+      - "{{ sensor_capture_usb_id }}"
+  register: sensor_capture_usb_lsusb
+  changed_when: false
+  failed_when: sensor_capture_usb_lsusb.rc != 0
+
+- name: Attach declared capture USB device to sensor VM
+  ansible.builtin.command:
+    argv:
+      - qm
+      - set
+      - "{{ sensor_capture_usb_vmid | string }}"
+      - "-{{ sensor_capture_usb_slot }}"
+      - "host={{ sensor_capture_usb_id }},usb3={{ 1 if sensor_capture_usb_usb3 else 0 }}"
+  register: sensor_capture_usb_set
+  changed_when: true
+  when: >-
+    (sensor_capture_usb_slot ~ ': host=' ~ sensor_capture_usb_id ~ ',usb3=' ~ (1 if sensor_capture_usb_usb3 else 0) | string)
+    not in sensor_capture_usb_vm_config.stdout
+
+- name: Read sensor VM configuration after passthrough reconciliation
+  ansible.builtin.command:
+    argv:
+      - qm
+      - config
+      - "{{ sensor_capture_usb_vmid | string }}"
+  register: sensor_capture_usb_vm_config_after
+  changed_when: false
+
+- name: Verify capture USB passthrough declaration
+  ansible.builtin.assert:
+    that:
+      - >-
+        (sensor_capture_usb_slot ~ ': host=' ~ sensor_capture_usb_id ~ ',usb3=' ~ (1 if sensor_capture_usb_usb3 else 0) | string)
+        in sensor_capture_usb_vm_config_after.stdout
+    fail_msg: >-
+      VM {{ sensor_capture_usb_vmid }} does not contain the expected
+      {{ sensor_capture_usb_slot }}={{ sensor_capture_usb_id }} USB 3 passthrough declaration.
