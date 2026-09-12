@@ -1,161 +1,215 @@
 # Target-State Architecture
 
-This is a working design, not yet approved as final.
+This document describes the remaining target direction for the homelab.
 
-## Greenfield repurpose principle
+Many decisions that were previously listed here as proposals have now been implemented. Implemented state belongs in `CURRENT-STATE.md`; this document focuses on what remains to reach the intended operating model.
 
-All repurposable compute hosts are being reassessed from first principles. Existing host names and current workloads do **not** determine their future role.
+## Design principles
 
-The final role for each host will be chosen only after the estate-wide audit compares:
+- Git-managed desired state wherever practical.
+- `IaC/` is the home for new Terraform, Ansible and deployment automation.
+- Existing production resources are reconciled rather than recreated merely to satisfy code.
+- Production changes require identity, validation and rollback/recovery gates.
+- Stable Ansible reconciliation should be idempotent.
+- Secrets, Terraform state and recovery identities remain outside Git.
+- Workloads should have explicit owners and target hosts.
+- Monitoring, backup and recovery are part of service completion, not optional extras.
 
-- CPU capability and architecture
-- RAM capacity and upgrade options
-- storage capacity, health and performance
-- network interfaces and placement
-- power draw and physical location
-- workload dependencies and resilience requirements
-- backup/recovery requirements
-- image/platform compatibility
-- expected growth and maintenance burden
+## Implemented platform baseline
 
-Current workloads will be treated as migration inputs, not as reasons to preserve the present host role.
+The following target decisions are already implemented:
 
-## Working direction
+- `admin-01` is the normal administration/IaC controller.
+- `PROXMOX` and `Proxmox-2` are standalone Proxmox nodes.
+- `dns-01` and `dns-02` provide the resolver pair at `.51` and `.50`.
+- `monitor-01` provides the central monitoring stack.
+- `cloud-01` provides production Nextcloud/PostgreSQL/Redis.
+- `mail-relay-01` provides internal SMTP relay.
+- `sensor-01` exists as the dedicated network-sensor VM.
+- `media-01` is the Raspberry Pi 5 Kodi endpoint.
+- `docker-01` is the Raspberry Pi 4 BirdNET-Go Docker host.
+- `edge-01` exists as the Cloudflare Tunnel edge workload.
+- legacy `TestServer`, `DietPi`, `ids-01` and `k3s-node-01` identities are retired.
 
-- Public portfolio website: external static hosting where possible.
-- The existing HP ProDesk Proxmox installation will be retained as `pve-01`; no bare-metal OS rebuild is planned. It will be upgraded/configured in place after capacity and recovery gates are satisfied.
-- The ASUS ZenBook is the working target for `pve-02`, providing secondary Proxmox compute with `pbs-01`, monitoring and management workloads.
-- Raspberry Pis remain candidates for edge, appliance, location-dependent, test or lightweight roles, but no Pi role is assumed in advance.
-- Komodo Core placement is undecided until all compute hosts are audited.
-- Komodo Periphery will run only on Docker hosts approved in the final placement matrix.
-- Renovate remains a hosted GitHub App candidate with repository configuration in Git.
-- Jenkins / Stage 6 will retire after the replacement deployment path is proven.
-- BirdNET capture hardware is treated as a non-compute peripheral. Only the BirdNET-Go software workload needs compute placement.
+These should no longer be presented as speculative future placements.
 
-No proposed VM such as `docker-core-01` or `monitoring-01` is approved until the full hardware audit is complete.
+## Proxmox direction
 
-## Host-owned IaC direction
+The current design deliberately uses two standalone Proxmox nodes.
 
-The authoritative IaC root is `IaC/` in this repository. New Terraform and Ansible must be created there.
+A future cluster is optional, not a current requirement. Do not retry clustering merely to make the nodes look symmetrical.
 
-Working structure:
+Any future cluster proposal requires:
 
-```text
-IaC/
-├── terraform/
-│   └── proxmox/
-│       └── dns-02/
-└── ansible/
-    ├── inventories/
-    ├── playbooks/
-    └── roles/
-```
+- clean dedicated network-path validation;
+- healthy NICs;
+- proven Corosync/pmxcfs behaviour;
+- backup/recovery coverage;
+- a clear operational benefit.
 
-Shared roles, modules and policy may be reused, but every deployable workload must have an explicit target host. `dns-02` is the first Proxmox workload being built under this structure.
+Existing workloads do not need to move simply to balance guest counts between nodes.
 
+## Security platform
 
-## Host naming
+### Network sensor
 
-This rebuild includes a deliberate hostname reset.
+`sensor-01` is already built.
 
-- Existing hostnames are treated as legacy identifiers only.
-- Final hostnames must describe the approved future role of the machine.
-- Hostnames will not be changed until the hardware audit and target-role decision are complete.
-- During discovery, assets are tracked by current hostname, IP address, MAC address and hardware model so identity is not lost when names change.
-- DNS, DHCP reservations, monitoring targets, SSH known-host records, backup jobs and IaC inventories must be updated as part of each hostname cutover.
-- A hostname change is considered incomplete until the new identity is represented in Git and all dependent systems are validated.
-
-Working naming pattern:
+The remaining target is Phase 2 capture activation:
 
 ```text
-<role>-<nn>
+HP ProCurve port 24
+└── mirror/SPAN traffic
+    └── dedicated capture NIC
+        └── sensor-01
+            ├── Suricata
+            └── Zeek
 ```
 
-Examples only, not yet approved assignments:
+Required gates before activation:
 
-```text
-pve-01
-docker-01
-monitoring-01
-security-01
-dns-01
-edge-01
-```
+- dedicated NIC installed;
+- interface identity proven;
+- no management dependency on the capture interface;
+- SPAN traffic validated;
+- Suricata and Zeek configuration validated;
+- storage/log-volume impact understood;
+- monitoring and log forwarding validated.
 
-No current machine is entitled to keep its existing hostname simply because that is its present role.
+Until then, packet engines remain intentionally disabled.
 
+### Vulnerability management
 
-## Backup direction
+Greenbone should remain separate from the passive sensor role.
 
-The rebuilt backup platform must provide a web GUI while preserving Git/IaC as the configuration authority.
+The working long-term target remains a dedicated `security-01` workload on suitable x86 capacity, subject to:
 
-Working preference:
+- resource review;
+- persistent-storage design;
+- backup/restore coverage;
+- IaC deployment;
+- monitoring integration.
 
-- Proxmox Backup Server as the long-term estate backup platform, subject to final host/storage placement.
-- Backrest may be used as a transitional GUI for the existing Restic repositories during migration.
-- The degraded DietPi-attached 4 TB-class disk is not an acceptable long-term primary datastore.
-- No legacy backup path is retired until verification and restore testing proves replacement coverage.
+Greenbone must not run directly on a Proxmox hypervisor.
+
+## Backup and recovery
+
+The long-term platform must provide reliable backup plus restore testing.
+
+Working direction:
+
+- Proxmox Backup Server remains the preferred estate backup platform if suitable host/storage placement is approved.
+- Existing Restic-compatible repositories are preserved until replacement coverage and restore tests exist.
+- legacy or degraded storage must not be promoted into a new primary backup role merely because it contains historical data.
+- recovery material must be protected independently of the running homelab.
+
+A service is not considered fully production-ready until important persistent data has a documented restore path.
 
 See [Backup Strategy](BACKUP-STRATEGY.md).
 
+## Monitoring and observability
 
-## Security workload direction
+The core monitoring platform is live on `monitor-01`.
 
-Greenbone should move off the legacy `ids-01` host and become a dedicated **`security-01` VM** on the Proxmox platform, subject to the Proxmox RAM upgrade and final capacity plan.
+Remaining direction:
 
-Working allocation:
+- expand host/service telemetry where it provides operational value;
+- keep Node Exporter targets aligned with Ansible/IaC desired state;
+- add service-specific metrics instead of relying only on host-up status;
+- continue Loki/log standardisation where appropriate;
+- build the planned Network Hosts dashboard using the enriched host gatherer;
+- build the Web Platform / Analytics dashboard combining Cloudflare, Umami and origin/application health;
+- retain alerting only where it produces actionable signals.
 
-- 4 vCPU
-- 6–8 GiB RAM
-- 80–120 GiB virtual disk initially
-- Debian VM
-- Greenbone Community Edition deployed through Docker Compose/IaC
+Monitoring configuration should continue to be reconciled through Git-managed IaC.
 
-Greenbone should **not** run directly on the Proxmox hypervisor.
+## Container operations
 
-The network IDS/sensor role should remain separate from Greenbone. The working target is a dedicated `sensor-01` VM on Proxmox receiving mirrored traffic through a dedicated second physical NIC passed directly to the VM, while `security-01` performs vulnerability scanning over the normal LAN.
+Komodo is the preferred direction for routine Docker application/version operations where appropriate.
 
-This separation gives us:
+Before any old Docker-management path is retired:
+
+- its current responsibilities must be identified;
+- equivalent Komodo control must be demonstrated;
+- secrets and persistent configuration must be protected;
+- rollback must remain possible.
+
+Jenkins and older Stage 6 delivery paths can be retired only after the replacement path is proven.
+
+## Network direction
+
+### Switch
+
+HP ProCurve port 24 remains reserved for the sensor mirror/SPAN path.
+
+A switch configuration reset/rebuild remains permissible, but only after current forwarding, VLAN and management requirements are captured.
+
+### Router
+
+The ASUS router remains DHCP authority.
+
+A future clean firmware/factory-reset rebuild remains an option, but only after:
+
+- WAN settings are recorded;
+- DHCP reservations are represented in documentation/Git;
+- DNS advertisement is captured;
+- Wi-Fi/AiMesh state is captured;
+- port forwards, VPN and routing policy are recorded;
+- rollback access is proven.
+
+The approved DNS pair is:
 
 ```text
-HP ProCurve port 24 (mirror/SPAN destination)
-└── dedicated second NIC on pve-01
-    └── direct passthrough to sensor-01 VM
-        └── Suricata
-
-pve-01
-└── security-01 VM
-    └── Greenbone Community Edition
+192.168.2.51
+192.168.2.50
 ```
 
-If the Proxmox host is not upgraded to enough RAM, Greenbone remains on its existing host until an alternative x86 placement is approved; it must not be squeezed onto an under-provisioned VM.
+`192.168.2.48` must not return as a resolver address.
 
+## Naming policy
 
-## Network rebuild direction
+Current validated role names should be retained unless there is a real operational reason to change them.
 
-- HP ProCurve **port 24** is confirmed as the mirror/SPAN destination.
-- Port 24 is reserved for the dedicated Suricata capture path and must not carry normal management/data traffic.
-- Remaining switch ports will be labelled only after MAC-table/cabling discovery.
-- The ASUS router will receive a clean firmware/factory-reset rebuild before final DHCP and QoS policy is applied.
-- DHCP remains on the ASUS router in the working design.
-- Secondary DNS target: `dns-02`, an unprivileged Debian LXC on the primary Proxmox host, configured as Pi-hole + Unbound through `IaC/`.
-- DHCP reservations, DNS advertisement and QoS policy will be documented in Git before final cutover.
+Do not rename hosts merely to enforce an abstract naming pattern.
 
-See:
+Any future hostname change must update, in the same controlled change:
 
-- [Proposed Layout](PROPOSED-LAYOUT.md)
-- [HP ProCurve Port Map](../network/SWITCH-PORT-MAP.md)
-- [Router Clean-Rebuild Plan](../network/ROUTER-RESET-PLAN.md)
+- DNS;
+- DHCP/reservations;
+- monitoring;
+- SSH identity/known-host handling;
+- backup jobs;
+- IaC inventory;
+- documentation.
 
+## Public services
 
-## Greenfield rebuild policy
+Public/static workloads should continue to use external hosting where that reduces homelab dependency.
 
-Factory-default and clean-OS rebuilds are now an explicit part of the target architecture where they produce a simpler and more reproducible result than preserving historical state.
+The personal portfolio site is an example of a workload that does not need to depend on home infrastructure for normal public availability.
 
-- HP ProCurve: planned factory-default rebuild; port 24 remains the known mirror/SPAN destination.
-- ASUS router/AiMesh: planned clean firmware/factory-reset rebuild.
-- Compute hosts: fresh OS/install permitted where roles change materially or legacy state is highly entangled, **except `pve-01` (HP ProDesk), whose current Proxmox installation is explicitly retained and changed in place**.
-- Preserve required data/configuration and recovery evidence first; do not preserve an old OS merely to preserve an application.
-- No wipe/reset occurs until persistent data, secrets, rollback and target IaC are accounted for.
+## Password manager
 
-See [Greenfield Rebuild Plan](../migrations/GREENFIELD-REBUILD-PLAN.md).
+A self-hosted password manager remains a future project.
+
+Before deployment:
+
+- choose the product and host intentionally;
+- deploy through Git-managed IaC;
+- keep recovery material outside Git;
+- provide HTTPS;
+- back up and restore-test its persistent data;
+- monitor availability;
+- document an emergency recovery path independent of the running homelab.
+
+## Completion criteria
+
+The current architecture can be considered mature when:
+
+- backup and restore coverage is proven;
+- sensor capture is live and validated;
+- remaining legacy operational dependencies are retired;
+- network rebuild decisions are complete;
+- monitoring/logging gaps are addressed;
+- service ownership and IaC authority are unambiguous;
+- key recovery procedures are tested rather than merely documented.
