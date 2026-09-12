@@ -1,0 +1,14 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Configure passive IDS capture interface
+Wants=systemd-udev-settle.service
+After=systemd-udev-settle.service
+Before=suricata.service zeek.service
+
+[Service]
+Type=oneshot
+ExecStart={{ network_sensor_config_capture_script }}
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
