@@ -10,14 +10,14 @@
       Refusing to configure network sensor: expected Debian 13
       {{ network_sensor_expected_hostname }} with {{ network_sensor_expected_ipv4 }}.
 
-- name: Enforce phase-1 no-capture policy
+- name: Validate capture intent for sensor toolchain
   ansible.builtin.assert:
     that:
-      - network_sensor_capture_interface | length == 0
+      - not network_sensor_capture_enabled or network_sensor_capture_interface | length > 0
+      - network_sensor_capture_enabled or network_sensor_capture_interface | length == 0
     fail_msg: >-
-      Phase-1 toolchain deployment requires an empty capture interface.
-      The packet engines must remain disabled until the dedicated USB SPAN NIC
-      is attached and validated.
+      Active capture requires an explicit capture interface; safe mode requires
+      the capture interface to remain empty.
 
 - name: Validate system DNS before repository operations
   ansible.builtin.command:
@@ -105,11 +105,12 @@
     state: present
     policy_rc_d: 101
 
-- name: Keep Suricata disabled until capture interface exists
+- name: Keep Suricata disabled in safe mode
   ansible.builtin.systemd_service:
     name: suricata
     enabled: false
     state: stopped
+  when: not network_sensor_capture_enabled
 
 - name: Verify Suricata binary
   ansible.builtin.command:
@@ -153,7 +154,7 @@
   changed_when: false
   failed_when: false
 
-- name: Verify Suricata remains disabled
+- name: Verify Suricata remains disabled in safe mode
   ansible.builtin.command:
     argv:
       - systemctl
@@ -162,8 +163,9 @@
   register: network_sensor_suricata_enabled
   changed_when: false
   failed_when: network_sensor_suricata_enabled.stdout | trim != 'disabled'
+  when: not network_sensor_capture_enabled
 
-- name: Verify packet engines are not running
+- name: Verify packet engines are not running in safe mode
   ansible.builtin.shell: |
     set -euo pipefail
     ! pgrep -x suricata >/dev/null
@@ -171,6 +173,16 @@
   args:
     executable: /bin/bash
   changed_when: false
+  when: not network_sensor_capture_enabled
+
+- name: Verify Zeek remains stopped while active capture is Suricata-only
+  ansible.builtin.shell: |
+    set -euo pipefail
+    ! pgrep -x zeek >/dev/null
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: network_sensor_capture_enabled
 
 - name: Verify no failed systemd units
   ansible.builtin.command:
