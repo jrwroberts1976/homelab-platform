@@ -1,0 +1,22 @@
+[Unit]
+Description=Homelab conditional encrypted controller recovery backup
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User={{ controller_recovery_user }}
+Group={{ controller_recovery_group }}
+Environment=HOME={{ controller_recovery_home }}
+
+ExecStart={{ controller_recovery_runner_script }}
+
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7
+
+NoNewPrivileges=true
+PrivateTmp=true
+
+[Install]
+WantedBy=multi-user.target

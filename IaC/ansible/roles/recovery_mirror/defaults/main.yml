@@ -1,0 +1,6 @@
+---
+recovery_mirror_user: james
+recovery_mirror_group: james
+
+recovery_primary_root: /home/james/.local/share/homelab-recovery
+recovery_replica_root: /home/james/.local/share/homelab-recovery/admin-01

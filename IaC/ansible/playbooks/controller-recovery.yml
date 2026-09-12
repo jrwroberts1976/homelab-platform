@@ -1,0 +1,23 @@
+---
+- name: Prepare recovery storage on all Raspberry Pi recovery hosts
+  hosts: recovery_mirrors
+  gather_facts: false
+  roles:
+    - recovery_mirror
+
+- name: Prepare additional recovery mirror on Proxmox-2
+  hosts: Proxmox-2
+  gather_facts: false
+  vars:
+    recovery_mirror_user: root
+    recovery_mirror_group: root
+    recovery_primary_root: /var/lib/homelab-recovery/admin-01
+    recovery_replica_root: /var/lib/homelab-recovery/admin-01
+  roles:
+    - recovery_mirror
+
+- name: Configure automated controller recovery on admin-01
+  hosts: admin-01
+  gather_facts: false
+  roles:
+    - controller_recovery

@@ -1,0 +1,10 @@
+[Unit]
+Description=Trigger controller recovery after managed secret changes
+
+[Path]
+PathChanged={{ controller_recovery_home }}/.config/homelab-iac
+PathModified={{ controller_recovery_home }}/.config/homelab-iac
+Unit={{ controller_recovery_service_name }}.service
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily homelab controller recovery backup
+
+[Timer]
+OnCalendar={{ controller_recovery_schedule }}
+Persistent=true
+RandomizedDelaySec={{ controller_recovery_random_delay_seconds }}
+Unit={{ controller_recovery_service_name }}.service
+
+[Install]
+WantedBy=timers.target
