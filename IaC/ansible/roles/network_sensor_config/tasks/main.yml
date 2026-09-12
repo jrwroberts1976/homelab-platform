@@ -454,7 +454,9 @@
     set -euo pipefail
     systemctl is-enabled suricata | grep -Fxq enabled
     systemctl is-active suricata | grep -Fxq active
-    pgrep -x suricata >/dev/null
+    MAINPID="$(systemctl show --property=MainPID --value suricata)"
+    test "${MAINPID:-0}" -gt 0
+    test -d "/proc/${MAINPID}"
     grep -Fq -- '- interface: {{ network_sensor_config_capture_interface }}' '{{ network_sensor_config_suricata_file }}'
   args:
     executable: /bin/bash
