@@ -1,0 +1,100 @@
+---
+- name: Ensure recovery source directory exists
+  ansible.builtin.file:
+    path: "{{ controller_recovery_source_root }}"
+    state: directory
+    owner: "{{ controller_recovery_user }}"
+    group: "{{ controller_recovery_group }}"
+    mode: "0700"
+
+- name: Ensure local bin directory exists
+  ansible.builtin.file:
+    path: "{{ controller_recovery_home }}/.local/bin"
+    state: directory
+    owner: "{{ controller_recovery_user }}"
+    group: "{{ controller_recovery_group }}"
+    mode: "0750"
+
+- name: Ensure recovery runtime packages are installed
+  ansible.builtin.apt:
+    name:
+      - age
+      - openssh-client
+      - coreutils
+      - tar
+    state: present
+    update_cache: false
+  become: true
+
+- name: Install controller recovery bundle script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/create-controller-recovery-bundle.sh"
+    dest: "{{ controller_recovery_create_script }}"
+    owner: "{{ controller_recovery_user }}"
+    group: "{{ controller_recovery_group }}"
+    mode: "0750"
+
+- name: Install controller recovery replication script
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/replicate-controller-recovery.sh"
+    dest: "{{ controller_recovery_replicate_script }}"
+    owner: "{{ controller_recovery_user }}"
+    group: "{{ controller_recovery_group }}"
+    mode: "0750"
+
+- name: Install conditional controller recovery runner
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../scripts/run-controller-recovery-if-changed.sh"
+    dest: "{{ controller_recovery_runner_script }}"
+    owner: "{{ controller_recovery_user }}"
+    group: "{{ controller_recovery_group }}"
+    mode: "0750"
+
+- name: Install controller recovery systemd service
+  ansible.builtin.template:
+    src: homelab-controller-recovery.service.j2
+    dest: "/etc/systemd/system/{{ controller_recovery_service_name }}.service"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Install controller recovery systemd timer
+  ansible.builtin.template:
+    src: homelab-controller-recovery.timer.j2
+    dest: "/etc/systemd/system/{{ controller_recovery_service_name }}.timer"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Install controller recovery secret-change path unit
+  ansible.builtin.template:
+    src: homelab-controller-recovery.path.j2
+    dest: "/etc/systemd/system/{{ controller_recovery_service_name }}.path"
+    owner: root
+    group: root
+    mode: "0644"
+  become: true
+  notify: Reload systemd
+
+- name: Flush systemd handlers
+  ansible.builtin.meta: flush_handlers
+
+- name: Enable controller recovery timer
+  ansible.builtin.systemd:
+    name: "{{ controller_recovery_service_name }}.timer"
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true
+
+- name: Enable controller recovery secret-change watcher
+  ansible.builtin.systemd:
+    name: "{{ controller_recovery_service_name }}.path"
+    enabled: true
+    state: started
+    daemon_reload: true
+  become: true

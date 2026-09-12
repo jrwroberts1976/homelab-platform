@@ -1,0 +1,17 @@
+---
+- name: Select recovery directory for this host
+  ansible.builtin.set_fact:
+    recovery_mirror_effective_path: >-
+      {{
+        recovery_primary_root
+        if inventory_hostname == 'admin-01'
+        else recovery_replica_root
+      }}
+
+- name: Ensure recovery directory exists
+  ansible.builtin.file:
+    path: "{{ recovery_mirror_effective_path }}"
+    state: directory
+    owner: "{{ recovery_mirror_user }}"
+    group: "{{ recovery_mirror_group }}"
+    mode: "0700"

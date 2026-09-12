@@ -1,0 +1,18 @@
+---
+controller_recovery_user: james
+controller_recovery_group: james
+controller_recovery_home: /home/james
+
+controller_recovery_source_root: /home/james/.local/share/homelab-recovery
+controller_recovery_remote_root: /home/james/.local/share/homelab-recovery/admin-01
+
+controller_recovery_create_script: /home/james/.local/bin/create-controller-recovery-bundle.sh
+controller_recovery_replicate_script: /home/james/.local/bin/replicate-controller-recovery.sh
+controller_recovery_runner_script: /home/james/.local/bin/run-controller-recovery-if-changed.sh
+
+controller_recovery_service_name: homelab-controller-recovery
+controller_recovery_schedule: "*-*-* 03:15:00"
+controller_recovery_random_delay_seconds: 300
+
+# Do not prune recovery generations until restore testing is complete.
+controller_recovery_retention_enabled: false
