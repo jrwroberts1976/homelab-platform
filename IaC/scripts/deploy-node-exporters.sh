@@ -12,7 +12,7 @@ ANSIBLE_DIR="$REPO_ROOT/IaC/ansible"
 MONITOR_IPV4="192.168.2.52"
 MONITORING_DEFAULTS="$ANSIBLE_DIR/roles/monitoring_stack/defaults/main.yml"
 
-for cmd in ansible-playbook curl jq awk; do
+for cmd in ansible-playbook curl jq awk mktemp; do
   command -v "$cmd" >/dev/null 2>&1 || die "Required command not found: $cmd"
 done
 
