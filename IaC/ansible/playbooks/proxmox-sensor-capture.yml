@@ -1,0 +1,8 @@
+---
+- name: Manage sensor-01 capture USB passthrough
+  hosts: PROXMOX
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: proxmox_sensor_capture_usb
