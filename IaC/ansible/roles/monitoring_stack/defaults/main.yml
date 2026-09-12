@@ -20,6 +20,8 @@ monitoring_icmp_targets:
     label: dns-01
   - address: 192.168.2.52
     label: monitor-01
+  - address: 192.168.2.54
+    label: mail-relay-01
   - address: 192.168.2.55
     label: sensor-01
   - address: 192.168.2.70
@@ -50,6 +52,8 @@ monitoring_node_exporter_targets:
     label: dns-01
   - address: 192.168.2.52:9100
     label: monitor-01
+  - address: 192.168.2.54:9100
+    label: mail-relay-01
   - address: 192.168.2.55:9100
     label: sensor-01
   - address: 192.168.2.70:9100

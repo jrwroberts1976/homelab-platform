@@ -6,6 +6,7 @@
     - sensor_hosts
     - dns_resolvers
     - media_hosts
+    - mail_relay
   become: true
   gather_facts: true
 
