@@ -6,7 +6,7 @@ This register records the estate/documentation reconciliation performed on 12 Se
 
 The review compared repository documentation with direct read-only evidence from the active homelab. It is a **documentation review**, not an infrastructure deployment/change record.
 
-No router reset, switch repatching, SPAN configuration, Cloudflare Tunnel deployment, DNS IaC correction, firewall deployment or backup-platform installation is authorised by this document.
+No router reset, switch repatching, SPAN configuration, Cloudflare Tunnel deployment, DNS IaC correction, firewall deployment or backup-platform installation is authorised by this document. Follow-on infrastructure changes recorded below were approved and validated separately after the review identified them.
 
 ## Review principles
 
@@ -41,10 +41,10 @@ A documentation edit does not equal a live configuration change or a recovery te
 
 - `monitor-01 .52` is operational.
 - Prometheus, Grafana, Alertmanager and Blackbox are healthy.
-- 23 active Prometheus targets were observed; all 23 were healthy.
-- zero active Prometheus alerts were observed.
+- the original audit observed 23 active Prometheus targets and all 23 healthy.
+- follow-on monitoring work added `mail-relay-01` ICMP and Node Exporter targets; the latest validated state is 25 active / 25 healthy / 0 unhealthy with zero active alerts.
 - Loki and Alloy are not deployed on `monitor-01`.
-- the observed 23-target set did not include a `cloud-01` probe/exporter target.
+- the current 25-target set still does not include a `cloud-01` probe/exporter target.
 
 ### Cloud
 
@@ -70,7 +70,8 @@ A documentation edit does not equal a live configuration change or a recovery te
 
 - `mail-relay-01 .54` is operational Postfix.
 - upstream relay is Gmail smart-host on TCP/587 with TLS/SASL.
-- Node Exporter/Prometheus monitoring is not currently deployed for this CT.
+- follow-on work installed Node Exporter through shared IaC and added Prometheus ICMP and Node Exporter targets; both are `up`.
+- Postfix remained active, `postfix check` remained clean, the queue remained empty and zero failed systemd units were observed after monitoring deployment.
 
 ### Docker / BirdNET
 
@@ -238,6 +239,26 @@ Follow-on work:
 
 The defect is therefore no longer an active operational gap. The full destructive DNS recovery workflow was not repeated, so its earlier recovery-validation date remains valid.
 
+### Mail relay host monitoring — completed 12 September 2026
+
+The review identified that `mail-relay-01 .54` had no Node Exporter or Prometheus target.
+
+Follow-on work:
+
+- added the `mail_relay` inventory group to the shared Node Exporter playbook;
+- installed Node Exporter on `mail-relay-01` using the existing role;
+- second focused Ansible apply reported `changed=0`, `failed=0`;
+- proved TCP/9100 reachable and retrieved `node_uname_info` remotely;
+- added `mail-relay-01` ICMP and Node Exporter targets to the managed Prometheus configuration;
+- monitoring deployment and second idempotence pass completed successfully;
+- Prometheus moved from 23/23 to 25/25 healthy targets with 0 unhealthy targets and 0 active alerts;
+- both new `mail-relay-01` targets were `up`;
+- Postfix remained active, `postfix check` succeeded, the queue remained empty and failed units remained zero;
+- committed the IaC change as `5c38a4d` on `feat/mail-relay-monitoring-20260912`;
+- opened homelab-platform PR #65.
+
+Host-level monitoring for the relay is therefore no longer an operational gap. Service-specific Postfix/queue/delivery telemetry remains optional future work.
+
 ## Known remaining documentation / operational gaps
 
 ### High priority
@@ -270,7 +291,7 @@ The defect is therefore no longer an active operational gap. The full destructiv
    - design/deployment/recovery docs should be completed when implementation is approved.
 
 6. **Mail relay recovery testing**
-   - current service is documented and operational;
+   - current service and host monitoring are operational;
    - full rebuild/credential restoration/end-to-end relay recovery is not proven.
 
 7. **Sensor Phase 2 / physical repatching**
@@ -294,7 +315,7 @@ A documentation edit does not equal a recovery test.
 
 For example, DNS service health was rechecked on 12 September, but the destructive DNS rebuild/recovery workflow was not repeated. The DNS recovery runbook therefore retains its earlier full recovery-validation date while also recording the current-state review date.
 
-Likewise, creating a current mail-relay service page does not mean a full mail-relay disaster-recovery exercise was performed.
+Likewise, adding host monitoring to the mail relay does not mean a full mail-relay disaster-recovery exercise was performed.
 
 ## Current authority links
 
