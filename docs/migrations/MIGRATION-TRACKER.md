@@ -1,224 +1,260 @@
 # Migration Tracker
 
-This tracker records the controlled migration from the existing homelab repositories and runtime layout into `homelab-platform`.
+This tracker records the controlled migration from the former consolidated/legacy homelab layout into the current `homelab-platform` operating model.
 
 ## Safety boundary
 
-- Do not delete a legacy repository until its unique useful content has been identified, migrated, and validated.
-- Do not move a workload until its current runtime, dependencies, persistence, ports, secrets, monitoring, and rollback path are documented.
-- Do not deploy Komodo on TestServer while the host-role review is in progress.
-- Preserve the existing CrowdSec local drift until it is deliberately reconciled into Git.
-- Jenkins remains available as rollback/reference until the replacement deployment path is proven.
+- Do not delete a historical repository until its unique useful content has been identified and migrated or deliberately archived.
+- Do not retire a workload until persistence, secrets, monitoring and rollback/recovery requirements are understood.
+- Do not treat a retired hostname as a live target.
+- Do not activate `sensor-01` packet capture until the dedicated capture NIC and SPAN path are validated.
+- Do not retire backup data until replacement coverage and restore testing are proven.
+- Preserve accepted production data when reconciling Terraform or Ansible state.
 
 ## Current programme
 
-| Phase | Status | Exit criteria |
+| Phase | Status | Current position / exit criteria |
 |---|---|---|
-| 1. Hardware inventory | IN PROGRESS | Every repurposable host has CPU, RAM, storage, network, OS, architecture, health and upgrade capacity recorded |
-| 2. Workload inventory | NOT STARTED | Every service/container has an owner, dependency map and persistence classification |
-| 3. Target architecture | NOT STARTED | Every repurposable host has an approved new role and every workload has an approved destination |
-| 4. Public website migration | COMPLETE — AUTOMATION HARDENING | `me.jrwroberts.co.uk` is externally hosted on Cloudflare Pages and manually validated; production GitHub Actions deployment still needs final merge/proof |
-| 5. Proxmox IaC | IN PROGRESS — DNS-02 CUTOVER COMPLETE | Existing `PROXMOX` retained; rebuilt `pve2` remains standalone; CT 100 `dns-02` is provisioned/configured and validated; ASUS DHCP now advertises `.48 + .50`; final Terraform protection apply remains |
-| 6. Komodo / Renovate | PAUSED | Control plane placed on approved host and canary proven |
-| 7. Workload migration | NOT STARTED | Approved services moved with rollback proof |
-| 8. Monitoring/security separation | NOT STARTED | Monitoring and security roles validated |
-| 9. Jenkins / Stage 6 retirement | NOT STARTED | Replacement path proven and Jenkins safely retired |
-| 10. Legacy repo cleanup | NOT STARTED | Superseded repos deleted only after validation |
+| 1. Hardware inventory | SUBSTANTIALLY COMPLETE | Active compute estate identified; remaining router/switch/device-depth work continues separately |
+| 2. Workload inventory | IN PROGRESS — CORE ESTATE MAPPED | Core DNS, cloud, monitoring, mail, sensor, edge, media and BirdNET placements are explicit |
+| 3. Target architecture | IN PROGRESS — CORE PLACEMENT IMPLEMENTED | Remaining decisions concentrate on backup, Greenbone/security, sensor capture and legacy retirement |
+| 4. Public website migration | COMPLETE / FOLLOW-UP AUTOMATION AS REQUIRED | Public site no longer depends on normal homelab hosting |
+| 5. Proxmox IaC | IN PROGRESS — CORE GUESTS DEPLOYED | Both nodes standalone by design; current core guests represented and validated |
+| 6. Komodo / container operations | IN PROGRESS / REVIEW | Move routine Docker operations to the approved Komodo workflow and retire redundant paths only after proof |
+| 7. Workload migration | IN PROGRESS | Major consolidated TestServer/ids-01 roles redistributed; remaining legacy dependencies to identify and close |
+| 8. Monitoring/security separation | IN PROGRESS | `monitor-01` live; `sensor-01` built; capture NIC/packet engines still pending |
+| 9. Jenkins / Stage 6 retirement | REVIEW REQUIRED | Retire only after replacement delivery workflow is proven |
+| 10. Legacy repo cleanup | IN PROGRESS | Remove/archive only after authority and unique-content review |
 | 11. Public-readiness review | NOT STARTED | Repository safe and polished for optional public visibility |
-| 12. Password manager | NOT STARTED | Self-hosted password manager selected, deployed through IaC, backed up, monitored and recovery-tested |
+| 12. Password manager | NOT STARTED | Product selected, IaC deployed, backed up, monitored and recovery-tested |
 
-## Known current authorities
+## Current core estate
 
-| Area | Current source | Migration state |
-|---|---|---|
-| Docker Compose / TestServer IaC | `docker-env` | ACTIVE SOURCE |
-| Homelab documentation | `home-lab-docs` | ACTIVE SOURCE |
-| Komodo / Renovate bootstrap | `docker-env` main + live TestServer | DEPLOYED ON LEGACY TESTSERVER — TARGET PLACEMENT PENDING |
-| Stage 6 / Jenkins version control | `homelab-container-version-control` | RETIREMENT CANDIDATE |
-| Proxmox documentation / IaC | `proxmox` | REVIEW REQUIRED |
-| Grafana alerting | `grafana-alerting` plus current monitoring IaC | REVIEW REQUIRED |
+| Host | Address | Current role |
+|---|---:|---|
+| `admin-01` | `192.168.2.48` | Administration / IaC controller |
+| `dns-02` | `192.168.2.50` | Pi-hole + Unbound, CT 100 on `PROXMOX` |
+| `dns-01` | `192.168.2.51` | Pi-hole + Unbound, CT 101 on `Proxmox-2` |
+| `monitor-01` | `192.168.2.52` | Monitoring VM on `Proxmox-2` |
+| `cloud-01` | `192.168.2.53` | Production Nextcloud VM on `PROXMOX` |
+| `mail-relay-01` | `192.168.2.54` | Postfix relay, CT 102 on `PROXMOX` |
+| `sensor-01` | `192.168.2.55` | Network sensor VM on `PROXMOX` |
+| `edge-01` | `192.168.2.56` | Cloudflare Tunnel connector, CT 103 on `Proxmox-2` |
+| `PROXMOX` | `192.168.2.70` | Primary standalone Proxmox node |
+| `Proxmox-2` | `192.168.2.71` | Secondary standalone Proxmox node |
+| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint |
+| `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
 
-## Hostname reset
+## Retired identities
 
-All repurposable hosts will receive a role-appropriate hostname where the current name does not match the approved target role. Current names remain discovery aliases only until cutover. Hostname changes will be implemented through IaC/configuration management after role assignment, with DNS/DHCP/monitoring/backup dependencies updated and validated in the same migration step.
+- `TestServer` — retired; its Pi 4 hardware is now `docker-01`.
+- `DietPi` — retired; its Pi 3 hardware is now `admin-01`.
+- `ids-01` — decommissioned.
+- `k3s-node-01` identity at `.195` — retired; host is `media-01`.
+- old `dns-02` at `.242` — retired.
 
-## Repurpose decision
+Historical repositories and audit documents may still contain these names. Their presence in history must not be interpreted as current placement.
 
-The migration is now a greenfield reassignment exercise for all repurposable compute hardware. Current host roles are not preserved by default. Hardware capability will be audited first, workloads second, and only then will new host roles be assigned.
+## Authority migration
 
-Network infrastructure will also be audited, but routers/switches are only repurposed where a viable replacement role exists.
+For migrated areas, `homelab-platform/IaC/` is the current desired-state authority.
 
-## Current audit progress
+Legacy repositories such as historical Docker, Proxmox, monitoring and documentation repositories remain migration/reference sources until their unique content is deliberately reconciled or retired.
 
-- PROXMOX: complete.
-- pve2 (`192.168.2.71`): fresh hardware audit complete on 8 September 2026. ASUS ZenBook UX482EAR, Intel Core i5-1155G7 (4C/8T), ~16 GiB RAM, 476.9 GiB SK hynix NVMe, VT-x + VT-d/DMAR active. The `pve/data` ~347.9 GiB LVM-thin pool exists but is not yet registered as Proxmox storage; only `local` is currently registered and no Debian 13 LXC template is present. See `docs/hardware/PVE2-HARDWARE-AUDIT-2026-09-08.md`.
-- TestServer: hardware and workload audit completed. Live evidence shows Komodo is currently running on TestServer; this supersedes the earlier assumption that it had not been deployed. No migration action has been taken.
-- ids-01: retired / no longer present. Historical audit data remains useful for migration archaeology, but it is not a current workload authority and must not be treated as a live rollback host.
-- media-01 (`192.168.2.195`): hardware and workload audit complete. Raspberry Pi 5 with approximately 8 GiB RAM and healthy 512 GB-class NVMe; current role is Kodi/media, not k3s. Backup-replica audit shows ~12 GiB under `/home/homelab-backup/replica`: `ids-01/repository` (~2.4 GiB) and `ids-01/remote-repositories` (~9.5 GiB) containing dietpi, historical k3s-node-01 and testserver Restic-like repositories. No homelab-vault repository, monthly archive tree or SOPS/age recovery files were found in this replica tree, so it is not yet a complete replacement for the degraded DietPi disk. The stale `k3s-node-01.jameshouse` DNS alias remains to be corrected during hostname reset.
-- DietPi (`192.168.2.48`): hardware/workload audit complete. Raspberry Pi 3 with approximately 1 GiB RAM, 100 Mb/s Ethernet and native Pi-hole/Unbound. Attached 4 TB-class backup HDD is DEGRADED: 7 current-pending sectors and 2 offline-uncorrectable sectors. Read-only inventory shows about 20 GiB in use. `monthly/` contains dated ids-01 archives (~7.5 GiB and ~12 GiB); `restic/` contains repositories for dietpi, homelab-vault, ids-01, historical k3s-node-01, and testserver. SOPS/age recovery material is also present. Reconcile these against current authoritative copies before replacement, stress testing, destructive changes or reuse; never print or commit the recovery identity.
-- BirdNET capture hardware is a non-compute peripheral and is removed from the host-audit list. BirdNET-Go remains a TestServer Docker workload whose future compute placement is still to be decided.
+Do not delete a legacy source merely because an equivalent-looking file now exists here.
+
+## Proxmox state
+
+### `PROXMOX`
+
+Validated live guests:
+
+```text
+CT 100  dns-02
+CT 102  mail-relay-01
+VM 200  cloud-01
+VM 201  sensor-01
+```
+
+### `Proxmox-2`
+
+Validated live guests:
+
+```text
+CT 101  dns-01
+CT 103  edge-01
+VM 200  monitor-01
+```
+
+The prior cluster experiment is closed. Both nodes are currently standalone by intent. Any future cluster work requires a new explicit design and validation change.
+
+## DNS migration
+
+DNS replacement and cutover are complete for the current design.
+
+Current resolver pair:
+
+```text
+dns-01  192.168.2.51
+dns-02  192.168.2.50
+```
+
+`192.168.2.48` is now `admin-01`, not a resolver. The old `.242` secondary resolver has been removed.
+
+Current IaC represents resolver configuration and local DNS management. Remaining DNS work should focus on drift detection, resilience testing and ensuring no stale `.48` or `.242` resolver dependencies remain.
+
+## `cloud-01`
+
+The original staging concept is complete and superseded by the live production service.
+
+Current validated state:
+
+- VM 200 on `PROXMOX`;
+- Nextcloud 34.0.3;
+- PostgreSQL healthy;
+- Redis healthy;
+- cron running;
+- dedicated 200 GiB ext4 data filesystem;
+- data at `/srv/cloud-01-data/data`;
+- production deployment wrapper validated;
+- second Ansible run idempotent;
+- zero failed units.
+
+A Redis persistence fault discovered during the estate audit was corrected both live and in IaC by reconciling the bind-directory numeric ownership to UID 999 / GID 1000.
+
+## Node Exporter / monitoring
+
+The Node Exporter role now handles irrelevant OpenIPMI failures on virtual guests without removing the collector tooling.
+
+Live validation on `dns-02` and `sensor-01` proved:
+
+- OpenIPMI disabled/inactive where no IPMI device exists;
+- zero failed systemd units;
+- Node Exporter healthy;
+- second run `changed=0`.
+
+The production Node Exporter wrapper currently validates eight healthy Prometheus targets:
+
+```text
+dns-01
+dns-02
+monitor-01
+sensor-01
+PROXMOX
+Proxmox-2
+media-01
+docker-01
+```
+
+Prometheus, Grafana, Alertmanager and Blackbox also pass controller health checks.
+
+## `sensor-01`
+
+The VM is built and its management plane is live.
+
+Phase 1 is intentionally incomplete:
+
+- no dedicated capture NIC is attached yet;
+- Suricata is disabled/stopped;
+- Zeek is stopped;
+- capture-interface configuration remains empty.
+
+Next sensor migration gate:
+
+1. attach the dedicated capture NIC;
+2. identify and validate it;
+3. confirm HP ProCurve port 24 SPAN traffic;
+4. enable packet engines through IaC;
+5. validate logging, metrics and resource impact.
+
+## `media-01`
+
+`media-01` is operational as the Raspberry Pi 5 Kodi endpoint. The earlier `k3s-node-01` role is retired.
+
+Future work is incremental hardening and observability rather than a greenfield host-role decision.
+
+## `docker-01`
+
+The former TestServer Pi 4 is now `docker-01` at `192.168.2.220`.
+
+Its active role is the BirdNET-Go Docker host. Do not use the retired `TestServer` identity as an administration, monitoring or deployment target.
+
+## `admin-01`
+
+The former DietPi Pi 3 is now the dedicated administration and IaC controller at `192.168.2.48`.
+
+This is deliberately no longer a Pi-hole/DNS role.
+
+## `edge-01`
+
+`edge-01` is CT 103 on `Proxmox-2` at `192.168.2.56`.
+
+Its host placement is proven. Direct cloudflared service/process validation remains an outstanding current-state check because the connector is outbound and does not need an inbound listener on TCP/7844.
 
 ## Security redesign
 
-- Greenbone target: dedicated `security-01` VM on Proxmox after sufficient RAM is available.
-- Suricata/network capture stays separate from Greenbone. Working target: `sensor-01` VM on Proxmox with a dedicated second NIC passed through from HP ProCurve mirror/SPAN destination port 24.
-- Do not move Greenbone until the VM is provisioned through IaC and backup/restore coverage exists.
+Greenbone remains separate from the passive network sensor.
 
-## Network rebuild
+Working target:
 
-- HP ProCurve port 24 is confirmed as the mirror/SPAN destination.
-- HP ProCurve will be factory-reset because the current lock-down is no longer a practical administration baseline. Preserve any obtainable evidence first; port 24 remains the confirmed mirror/SPAN destination.
-- Plan a clean ASUS router firmware/factory reset and rebuild.
-- Recreate DHCP reservations, DNS advertisement, AiMesh/Wi-Fi, QoS and required routing/firewall features from documented intent rather than restoring historical drift.
-- Do not reset the router until current WAN/DHCP/DNS/Wi-Fi/AiMesh/port-forward/VPN state is captured and rollback access is proven.
+- dedicated `security-01`;
+- suitable x86 resources;
+- IaC deployment;
+- backup/restore coverage;
+- monitoring integration.
 
-See `docs/network/SWITCH-PORT-MAP.md` and `docs/network/ROUTER-RESET-PLAN.md`.
+Do not combine Greenbone with the passive capture VM merely for convenience.
 
-## HP ProDesk rebuild decision
+## Network work
 
-The HP ProDesk will **not** be reinstalled. Its existing Proxmox VE installation is retained as `pve-01` and will be upgraded/configured in place. New guest workloads are still built fresh from IaC.
+Known current facts:
 
-The ZenBook remains the clean-rebuild candidate for `pve-02`, after its existing workloads and backup data have been migrated/protected.
+- HP ProCurve port 24 is the mirror/SPAN destination;
+- router remains DHCP authority;
+- current resolver pair is `.51 + .50`;
+- switch/router clean-rebuild work remains separately controlled.
 
-## Greenfield rebuild
-
-- Factory-default / clean-install rebuilding is approved where it gives a cleaner reproducible platform.
-- Switch rebuild comes before router rebuild so the wired forwarding layer is known during router cutover.
-- Compute hosts may be wiped/reinstalled only after their unique data, recovery material and migration dependencies are protected.
-- Prefer fresh OS/VM + IaC deployment + data restore over carrying old operating-system state forward.
-- See `docs/migrations/GREENFIELD-REBUILD-PLAN.md`.
-
-## Public website migration
-
-Production hosting cutover is complete.
-
-- Source repository: `jrwroberts1976/engineering-portfolio`.
-- Framework: Astro static output with `npm run build` -> `dist/`.
-- Target: Cloudflare Pages project `engineering-portfolio`.
-- Production URL: `https://me.jrwroberts.co.uk`.
-- A manual production deployment was completed and validated on 7 September 2026.
-- Normal public-site hosting is now external to the homelab.
-- The prior home-hosted state is retained only as rollback reference until the automated deployment path is proven.
-- Production workflow implementation exists in `engineering-portfolio` PR #16 and still needs merge/production validation.
-
-See `docs/migrations/PUBLIC-WEB-CUTOVER.md` and `production docs/CLOUDFLARE-PAGES-PRODUCTION-PIPELINE.md`.
-
-## Proxmox second-node work — 7 September 2026
-
-A fresh second Proxmox node was built as `pve2` at `192.168.2.71` and fully patched before a cluster trial.
-
-Validated package state included:
-
-- Proxmox VE 9.2.0
-- kernel `7.0.14-15-pve`
-- `pve-manager` 9.2.11
-- `pve-cluster` 9.1.6
-- Corosync 3.1.10-pve3
-- `qemu-server` 9.2.7
-
-The node joined the `Home-lab` cluster and reached two-node quorum, but its local `pmxcfs` configuration database did not complete synchronisation. This caused missing/incomplete `/etc/pve` state, certificate update blocking, and `pveproxy` failure on the second node.
-
-The trial was deliberately rolled back:
-
-- `pve2` was removed from `Home-lab`
-- `PROXMOX` returned to a one-node cluster at config version 5
-- `pve2` was separated locally using `pmxcfs -l`
-- `pve2` returned to a clean standalone state with only `/etc/pve/nodes/pve2`
-- no Corosync config remains on `pve2`
-
-Network troubleshooting also found RX errors/drops on the current USB management NIC. This is a concern, but it has **not** been proven to be the original cause of the `pmxcfs` failure.
-
-Current decision:
-
-- retain the existing USB NIC for management for now
-- validate the incoming second NIC independently
-- use the new NIC as the preferred dedicated Corosync / VM-migration path if testing is clean
-- do not retry the cluster join until standalone `pve2` and the new NIC are both proven healthy
-
-See `docs/migrations/PROXMOX-SECOND-NODE-2026-09-07.md`.
-
-## DNS resilience redesign — 7 September 2026
-
-The replacement path for the current secondary DNS service is now approved in principle.
-
-Target:
-
-- `dns-01`: existing physical Raspberry Pi 3 at `192.168.2.48`, Pi-hole + Unbound
-- `dns-02`: new unprivileged Debian LXC on `PROXMOX`, Pi-hole + Unbound, approved address `192.168.2.50/24`, CT ID `100`
-- ASUS router remains DHCP authority and now advertises both validated resolvers: `192.168.2.48` and `192.168.2.50`
-- the previous `dns-02` at `192.168.2.242` has been removed; ASUS DHCP no longer advertises `.242` and now uses replacement `dns-02` at `192.168.2.50`
-
-The infrastructure definition now lives under:
-
-`IaC/terraform/proxmox/dns-02/`
-
-The previous `dns-02` at `192.168.2.242` has already been removed. ASUS DHCP has now been changed to advertise replacement `dns-02` at `192.168.2.50` alongside `dns-01` at `.48`. Live preflight selected CT ID `100`, confirmed `vm-ssd` capacity, confirmed the existing Debian 13.6 LXC template, and approved `192.168.2.50/24` for `dns-02`. Terraform then created CT 100 successfully. First-boot validation exposed Debian 13/systemd 257 mount failures; enabling LXC nesting resolved them. The interface was standardized to `eth0`, SSH key bootstrap was proven, systemd reports `running` with zero failed units, and the final Terraform plan reports no drift. The scoped `iac@pve!opentofu` token cannot independently submit the provider's full LXC feature structure, so the initial nesting enablement required a one-time `root@pam` `pct set` operation. Service configuration is now expressed through `IaC/ansible/`. The first live apply on 7 September 2026 completed with `ok=37 changed=13 unreachable=0 failed=0`. From TestServer, `dns-02` answered public DNS over both UDP and TCP, returned `dns-02.jameshouse -> 192.168.2.50`, matched `dns-01` for the existing `testserver.jameshouse` record, returned `SERVFAIL` for deliberately broken DNSSEC, and blocked a domain present in its gravity database as `0.0.0.0`. A controlled TestServer test temporarily overrode NetworkManager to use only `192.168.2.50`; `/etc/resolv.conf` contained only that resolver, normal libc name resolution succeeded for public and local names, and HTTPS to `https://example.com` returned HTTP 200. ASUS DHCP was then changed from `.48 + .242` to `.48 + .50`. A Windows Wi-Fi client received the new pair directly, and a freshly renewed TestServer Ethernet lease also received `.48 + .50`. This completes the replacement DNS client/router cutover.
+Do not reset either network device until configuration intent and rollback access are recorded.
 
 ## Backup redesign
 
-GUI-first backup redesign is now a target requirement.
+Backup and recovery remain one of the largest incomplete programme areas.
 
-- Preferred long-term platform: Proxmox Backup Server, pending final host/storage placement.
-- Transitional compatibility: Backrest may be used to browse/restore existing Restic repositories.
-- Existing Restic/monthly backup data remains protected until replacement backups and restores are proven.
-- Degraded DietPi backup HDD must not become the new primary datastore.
+Direction:
+
+- evaluate and implement Proxmox Backup Server where appropriate;
+- preserve useful historical Restic repositories until migrated or intentionally archived;
+- perform actual restore testing;
+- keep recovery identities outside Git;
+- avoid treating historically degraded storage as the new primary backup platform.
 
 See `docs/architecture/BACKUP-STRATEGY.md`.
 
-## Next action
+## Public website migration
 
-1. Complete the final `media-01` nftables apply and remote reachability proof, then repeat the idempotence gate.
-2. Start the next service build as `cloud-01.jameshouse` at `192.168.2.53` using the approved Nextcloud/PostgreSQL/Redis design, while keeping the 4 TB data-device health decision as a hard gate for production data placement.
-3. Deploy the live Prometheus target update for `media-01` and add Pi/NVMe health metrics.
-4. Continue validating that no remaining production clients depend on retired DietPi DNS address `192.168.2.48`.
+Production hosting cutover is complete. The public portfolio no longer depends on normal homelab availability.
 
+Retain the relevant migration documentation as historical and recovery evidence, but do not describe home hosting as the current production path.
 
 ## Password manager project
 
-Add a self-hosted password manager as a future homelab service.
+A self-hosted password manager remains a future project.
 
 Requirements before deployment:
 
-- choose the product and target host/VM only after the current core infrastructure build is stable;
-- deploy through Git-managed IaC rather than manual configuration;
+- choose the product and target host intentionally;
+- deploy through Git-managed IaC;
 - keep secrets and recovery material outside Git;
-- provide HTTPS before normal use;
+- provide HTTPS;
 - include persistent-data backup and restore testing;
-- add availability and host/service monitoring;
-- document an emergency recovery path so access is not dependent on the running homelab alone.
+- add availability and service monitoring;
+- document an emergency recovery path independent of the running homelab.
 
-This is a planned project, not part of the current monitoring deployment gate.
+## Current next actions
 
-
-## media-01 rebuild status
-
-`media-01` at `192.168.2.195` is now operational as a greenfield Raspberry Pi 5 Kodi endpoint.
-
-Completed through Ansible/IaC:
-
-- Debian 13 / Raspberry Pi 5 target validation;
-- canonical hostname `media-01`;
-- Kodi 21 launched as a dedicated `kodi.service`, with LightDM disabled;
-- single-process reconciliation across normal service restarts;
-- 768 MiB playback cache and managed read/buffer settings;
-- Unknown Sources enabled;
-- official Open-Meteo weather add-on installed and selected;
-- official OpenSubtitles.com service installed and selected for movies/TV;
-- official autocompletion add-on installed for predictive text;
-- local media sources for Movies, TV and Music;
-- authenticated/signed SMB share `\\media-01\Media` with `Movies`, `TV`, `Music` and `plugins`;
-- Chrony client using `.70` as preferred and `.71` as secondary homelab NTP source;
-- node_exporter installed and healthy;
-- unsupported OpenIPMI service disabled/masked;
-- repeated Ansible idempotence proof with `changed=0 failed=0` before the final add-on/firewall additions.
-
-Remaining gates:
-
-- apply and remotely validate the new nftables default-deny policy;
-- deploy the Prometheus target change for `media-01`;
-- add Raspberry Pi temperature/throttling and NVMe SMART metrics;
-- set final Kodi weather location and configure the user's OpenSubtitles.com account;
-- add Alloy -> Loki Kodi logging when Loki is deployed;
-- repeat final idempotence/reboot proof after firewall activation.
-
-See `production docs/MEDIA-SERVICE.md`.
+1. Complete repository and documentation authority reconciliation.
+2. Install and validate the dedicated `sensor-01` capture NIC.
+3. Validate `edge-01` cloudflared directly.
+4. Continue backup-platform and recovery design with restore testing.
+5. Finish remaining network-device audit/rebuild decisions.
+6. Retire remaining legacy deployment and management paths only after their replacements are proven.
