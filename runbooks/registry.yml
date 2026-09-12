@@ -57,6 +57,7 @@ runbooks:
         - IaC/scripts/bootstrap-proxmox-node.sh
       playbooks:
         - IaC/ansible/playbooks/dns-resolver.yml
+        - IaC/ansible/playbooks/dns-local-records.yml
       roles:
         - IaC/ansible/roles/dns_resolver/
       terraform:
@@ -71,7 +72,8 @@ runbooks:
     notes:
       - 192.168.2.48 is admin-01 and is not a DNS fallback
       - total DNS outage recovery may require a temporary known-good upstream resolver on admin-01
-      - dns-02 currently lacks the dns-01.jameshouse local record because of a known IaC parity defect
+      - local-record parity between dns-01 and dns-02 was corrected and validated on 2026-09-12
+      - full destructive DNS recovery validation was last completed on 2026-09-08
     last_validated: 2026-09-08
 
   router_syslog_service:
@@ -124,6 +126,7 @@ runbooks:
         - {name: dns-02, address: 192.168.2.50}
         - {name: dns-01, address: 192.168.2.51}
         - {name: monitor-01, address: 192.168.2.52}
+        - {name: mail-relay-01, address: 192.168.2.54}
         - {name: sensor-01, address: 192.168.2.55}
         - {name: PROXMOX, address: 192.168.2.70}
         - {name: Proxmox-2, address: 192.168.2.71}
@@ -139,13 +142,15 @@ runbooks:
         - IaC/scripts/preflight-monitoring.sh
       playbooks:
         - IaC/ansible/playbooks/monitoring.yml
+        - IaC/ansible/playbooks/node-exporters.yml
       roles:
         - IaC/ansible/roles/monitoring_stack/
+        - IaC/ansible/roles/node_exporter/
       terraform:
         - IaC/terraform/proxmox/monitor-01/
     monitoring:
-      active_targets_last_observed: 23
-      healthy_targets_last_observed: 23
+      active_targets_last_observed: 25
+      healthy_targets_last_observed: 25
       active_alerts_last_observed: 0
       loki_state: not_deployed
       alloy_state: not_deployed_on_monitor_01
@@ -290,7 +295,7 @@ runbooks:
       hosts:
         - {name: mail-relay-01, address: 192.168.2.54, role: smtp_relay}
         - {name: PROXMOX, address: 192.168.2.70, role: relay_hypervisor}
-      services: [postfix, smtp]
+      services: [postfix, smtp, node_exporter]
     run_from:
       name: admin-01
       address: 192.168.2.48
@@ -301,11 +306,14 @@ runbooks:
     iac:
       playbooks:
         - IaC/ansible/playbooks/mail-relay.yml
+        - IaC/ansible/playbooks/node-exporters.yml
       terraform:
         - IaC/terraform/proxmox/mail-relay/
     monitoring:
-      node_exporter: not_deployed
-      prometheus_target: not_configured
+      icmp: active
+      node_exporter: active
+      prometheus_target: active
+      service_specific_mail_metrics: future
     last_validated: 2026-09-12
 
   birdnet_service:
