@@ -36,6 +36,8 @@ The retired identities `TestServer` and `DietPi`, and the decommissioned host `i
 | `time_service` | [Homelab Time Service](../production%20docs/TIME-SERVICE.md) | Core infrastructure | `PROXMOX .70`, `Proxmox-2 .71`, LAN clients | `admin-01 .48` | Active | Operational | 2026-09-12 |
 | `media_service` | [media-01 Production Service](../production%20docs/MEDIA-SERVICE.md) | Media | `media-01 .195` | `admin-01 .48` | Active | Operational | 2026-09-12 |
 | `cloud_service` | [Homelab Cloud Data Service](../production%20docs/CLOUD-SERVICE.md) | Cloud | `cloud-01 .53` on `PROXMOX .70` | `admin-01 .48` | Active | Operational | 2026-09-12 |
+| `mail_relay_service` | [Homelab Mail Relay Service](../production%20docs/MAIL-RELAY-SERVICE.md) | Core infrastructure | `mail-relay-01 .54` | `admin-01 .48` | Active | Operational | 2026-09-12 |
+| `birdnet_service` | [BirdNET-Go Production Service](../production%20docs/BIRDNET-SERVICE.md) | Application | `docker-01 .220` | `admin-01 .48` | Active | Operational | 2026-09-12 |
 | `cloudflare_pages_production` | [Cloudflare Pages Production Pipeline](../production%20docs/CLOUDFLARE-PAGES-PRODUCTION-PIPELINE.md) | Public web | `engineering-portfolio`, Cloudflare Pages | GitHub Actions/admin workstation | Active | Operational | 2026-09-07 |
 | `router_clean_rebuild` | [Router Clean-Rebuild Plan](../docs/network/ROUTER-RESET-PLAN.md) | Network | `RT-AC86U .1`, AiMesh nodes | Local wired admin session | Planned | Maintenance planned | — |
 
@@ -48,20 +50,21 @@ The retired identities `TestServer` and `DietPi`, and the decommissioned host `i
 - HP ProCurve port 24 is the **planned future SPAN destination**. Port mirroring is currently disabled and port 24 currently carries the primary ASUS router link.
 - `cloud-01` is live and operational on its dedicated 200 GiB VM data disk. Backup/restore proof remains outstanding.
 - `monitor-01` is operational. The latest audit found 23 active Prometheus targets, all 23 healthy, with zero active alerts. Loki and Alloy are not deployed on `monitor-01`.
+- `mail-relay-01` is operational, but Node Exporter/Prometheus coverage and end-to-end recovery testing remain gaps.
+- `docker-01` is deliberately single-purpose for BirdNET-Go; do not recreate the old TestServer container estate on it.
 
 ## Current coverage gaps
 
-These are intentionally recorded in `registry.yml` so missing documentation is visible rather than silently assumed to exist.
+These are intentionally recorded in `registry.yml` so missing documentation or recovery proof is visible rather than silently assumed to exist.
 
-| Gap | Priority | Applies to | Needed runbook |
+| Gap | Priority | Applies to | Needed work |
 |---|---|---|---|
 | `backup_recovery` | High | Proxmox estate, `cloud-01`, persistent data | Active backup architecture plus tested restore procedures |
 | `proxmox_node_health` | High | `PROXMOX .70`, `Proxmox-2 .71` | Node health, Proxmox service checks and recovery |
 | `proxmox_storage_health` | High | `PROXMOX .70`, `Proxmox-2 .71` | SMART, disk and Proxmox storage diagnosis/recovery |
 | `alloy_loki_pipeline` | High | `monitor-01 .52` | Alloy ingestion, Loki delivery and query validation after deployment |
 | `edge_cloudflare_tunnel` | Medium | `edge-01 .56` | Cloudflare Tunnel deployment/recovery once approved and deployed |
-| `mail_relay_recovery` | Medium | `mail-relay-01 .54` | SMTP relay diagnosis and rebuild/recovery |
-| `birdnet_service` | Medium | `docker-01 .220` | BirdNET-Go operation and recovery |
+| `mail_relay_recovery_testing` | Medium | `mail-relay-01 .54` | Prove rebuild/credential restoration/end-to-end relay recovery |
 
 ## Registry conventions
 
