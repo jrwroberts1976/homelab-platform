@@ -4,15 +4,16 @@
 **Receiver:** `monitor-01.jameshouse` / `192.168.2.52`  
 **Source:** ASUS `RT-AC86U` / `192.168.2.1`  
 **Transport:** UDP/5514  
-**Status:** operational; receiver and router forwarding validated 10 September 2026; Alloy/Loki ingestion pending
+**Status:** operational; local receiver and router forwarding validated; Alloy/Loki ingestion not deployed  
+**Last current-state review:** 12 September 2026
 
 ## Purpose
 
-The ASUS RT-AC86U exposes limited monitoring telemetry. Its built-in remote log capability provides an additional source of operational and network context without introducing another VM or logging platform.
+The ASUS RT-AC86U remote-log capability provides operational/network context without requiring another VM.
 
-The current implementation stores router logs locally on `monitor-01`. Real router forwarding has been proven end-to-end. Alloy/Loki ingestion is the next logging phase.
+The current implementation stores router logs locally on `monitor-01`. Central Loki/Alloy ingestion is a future phase, not current state.
 
-## Data path
+## Current data path
 
 ```text
 RT-AC86U 192.168.2.1
@@ -25,22 +26,34 @@ monitor-01 192.168.2.52
         |
         +--> /var/log/homelab/router/rt-ac86u.log
         |
-        +--> logrotate (30 daily rotations)
+        +--> logrotate
         |
-        +--> next: Alloy -> Loki -> Grafana
+        +--> future: Alloy -> Loki -> Grafana
 ```
+
+## Current validated state
+
+The 12 September audit confirmed:
+
+- rsyslog active/enabled on `monitor-01`;
+- UDP/5514 listening on `.52`;
+- source filtering configured for router `.1`;
+- `/var/log/homelab/router/rt-ac86u.log` exists and is actively updating;
+- logrotate configuration exists;
+- zero failed systemd units.
+
+The earlier end-to-end packet test on 10 September 2026 proved actual router forwarding to the receiver. That historical test was launched from the then-current TestServer administration context; TestServer is now retired and should not be used for current deployment commands.
 
 ## Security boundary
 
 The receiver:
 
-- binds only to `192.168.2.52:5514/udp`;
-- accepts messages only when rsyslog reports the source address as `192.168.2.1`;
-- discards traffic arriving on this dedicated listener from any other source;
-- does not expose TCP/514 or UDP/514;
-- does not introduce a host-firewall framework solely for this listener.
+- binds to the dedicated router-syslog listener on `192.168.2.52:5514/udp`;
+- accepts the expected router source `192.168.2.1`;
+- is LAN-only;
+- does not provide cryptographic authentication, confidentiality or integrity because the transport is UDP syslog.
 
-The source-IP restriction is a filtering control, not cryptographic authentication. UDP syslog provides no confidentiality or integrity protection, so this listener is LAN-only.
+Source-IP filtering is useful but is not equivalent to authenticated log transport.
 
 ## Retention
 
@@ -50,98 +63,89 @@ Router logs are written to:
 /var/log/homelab/router/rt-ac86u.log
 ```
 
-Initial rotation policy:
+Current local rotation provides short-term resilience. Retention can be revisited after central logging is deliberately deployed and real log volume is understood.
 
-- daily rotation;
-- 30 retained rotations;
-- compression enabled;
-- empty logs are not rotated;
-- rotated files remain local to `monitor-01`.
+## Deployment / reconciliation
 
-Retention can be revisited after real log volume is measured.
+Normal controller:
 
-## Deployment
+```text
+admin-01
+192.168.2.48
+~/projects/homelab-platform
+```
 
-From TestServer:
+Approved wrapper:
 
 ```bash
 cd ~/projects/homelab-platform
 bash IaC/scripts/deploy-router-syslog-receiver.sh
 ```
 
-The wrapper performs:
+The wrapper manages/validates:
 
-1. monitor-01 identity validation;
-2. UDP/5514 collision detection;
-3. Ansible syntax validation;
-4. rsyslog installation and configuration;
-5. `rsyslogd -N1` configuration validation;
-6. exact listener/source-filter validation;
-7. logrotate policy validation;
-8. a second Ansible apply that must report `changed=0`.
+- `monitor-01` identity;
+- UDP/5514 collision/listener state;
+- Ansible configuration;
+- rsyslog configuration validation;
+- source filtering;
+- logrotate policy;
+- idempotence.
 
-## Router forwarding validation
+## Router forwarding configuration
 
-The RT-AC86U remote-log destination is configured as:
+Expected router destination:
 
 ```text
 server: 192.168.2.52
 port:   5514
 ```
 
-End-to-end forwarding was validated on 10 September 2026 from TestServer by capturing the receiver traffic on `monitor-01` while generating a benign router SSH event.
+The 10 September packet validation observed real UDP traffic from the router to `.52:5514` and matching router events in the dedicated file.
 
-Observed packet path:
+Repeat an end-to-end packet/log proof after:
 
-```text
-192.168.2.1:50100 -> 192.168.2.52:5514/udp
-```
+- router firmware/reset changes;
+- receiver rebuild;
+- rsyslog configuration changes;
+- switch/network redesign affecting the path.
 
-The validation capture received three matching packets with zero packets dropped by the receiver kernel. The dedicated log simultaneously recorded real RT-AC86U events including Dropbear connection, public-key authentication success and disconnect messages.
+## Monitoring and alerting
 
-The dedicated log path was confirmed as:
+`monitor-01` itself receives the normal host/platform monitoring coverage.
 
-```text
-/var/log/homelab/router/rt-ac86u.log
-```
+No content-based router-log alerting is required by default. Add log alerts only after representative messages are classified and the result is actionable.
 
-This proves the router-to-rsyslog local collection path. Repeat the same packet/log test after router firmware changes, receiver rebuilds, or syslog configuration changes.
-
-## Alerting
-
-`monitor-01` receives the normal **standard alerting** coverage for host reachability, Node Exporter availability, CPU, memory and filesystem capacity as those monitoring stages are enabled.
-
-No content-based router-log alerts are enabled initially. Alert rules should only be introduced after representative RT-AC86U messages have been observed and classified, to avoid noisy or low-value alerts.
+The audit also observed frequent router SSH-related log activity associated with an internal infrastructure source. Treat that as an item for later attribution/documentation, not as a reason to change the router during this documentation pass.
 
 ## Future logging integration
 
-When Alloy/Loki is deployed:
+Loki and Alloy are **not deployed on `monitor-01`** today.
 
-- ingest the dedicated router log rather than broad host syslog;
-- add only stable labels such as `job=router_syslog`, `device=rt-ac86u`, `device_type=router`, `vendor=asus` and `site=home`;
-- preserve the raw message;
-- do not promote source IPs, usernames, process IDs, destination addresses or message text to Loki labels;
-- parse event fields at query time unless a field proves stable and low-cardinality;
-- keep local rotation as a short-term resilience layer unless central retention makes it unnecessary;
-- validate the full path from new router event to Loki query before declaring central ingestion operational.
+If/when central logging is implemented:
 
-Suggested initial Loki selector:
+- ingest only the dedicated router log rather than broad host syslog;
+- use stable low-cardinality labels such as `job=router_syslog`, device/vendor/site identifiers;
+- preserve raw messages;
+- avoid usernames, process IDs, destination IPs or full message text as Loki labels;
+- validate the complete path from a fresh router event to a Loki query before declaring central ingestion operational.
+
+Suggested future selector:
 
 ```logql
 {job="router_syslog", device="rt-ac86u"}
 ```
 
-## Definition of done
+## Definition of current done state
 
 The local receiver phase is complete because:
 
-- rsyslog is IaC-managed on monitor-01;
-- UDP/5514 listens on the dedicated receiver;
-- the listener filters to the RT-AC86U source;
-- log rotation is configured;
-- the deployment is designed to be idempotent;
-- router forwarding is configured;
-- real RT-AC86U packets have been captured at the receiver;
-- real RT-AC86U messages have been proven in the dedicated log.
+- rsyslog is IaC-managed on `monitor-01`;
+- UDP/5514 listens on the expected receiver;
+- router source filtering exists;
+- rotation is configured;
+- real router packets were proven end-to-end;
+- real router messages are present in the dedicated log;
+- the file remained live during the 12 September audit.
 
-The next phase is complete only when Alloy tails this dedicated file, Loki receives the entries, and a Grafana/Loki query proves the end-to-end central logging path.
+The central logging phase remains future work until Alloy and Loki are deliberately deployed and validated.
