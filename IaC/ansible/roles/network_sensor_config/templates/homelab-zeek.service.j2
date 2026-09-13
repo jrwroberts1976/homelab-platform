@@ -1,0 +1,19 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Homelab Zeek network sensor
+After=network-online.target sensor-capture-nic.service
+Wants=network-online.target
+Requires=sensor-capture-nic.service
+ConditionPathExists={{ network_sensor_config_capture_gate_file }}
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart={{ network_sensor_config_zeek_prefix }}/bin/zeekctl deploy
+ExecReload={{ network_sensor_config_zeek_prefix }}/bin/zeekctl deploy
+ExecStop={{ network_sensor_config_zeek_prefix }}/bin/zeekctl stop
+TimeoutStartSec=90
+TimeoutStopSec=60
+
+[Install]
+WantedBy=multi-user.target
