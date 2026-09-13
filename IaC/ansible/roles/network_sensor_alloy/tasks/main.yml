@@ -109,6 +109,8 @@
       - alloy
       - validate
       - "{{ network_sensor_alloy_config_file }}"
+  args:
+    chdir: /
   changed_when: false
 
 - name: Verify Alloy can read Suricata and Zeek logs
@@ -121,6 +123,7 @@
     runuser -u alloy -- head -c 1 "$ZEEK_LOG" >/dev/null
   args:
     executable: /bin/bash
+    chdir: /
   changed_when: false
 
 - name: Verify Loki endpoint is reachable from sensor-01
