@@ -1,0 +1,186 @@
+---
+- name: Validate monitor Alloy target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == monitor_router_alloy_expected_hostname
+      - monitor_router_alloy_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing Alloy deployment: expected Debian 13 monitor-01 at
+      {{ monitor_router_alloy_expected_ipv4 }}.
+
+- name: Verify router syslog receiver is active before log shipping
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled rsyslog | grep -Fxq enabled
+    systemctl is-active rsyslog | grep -Fxq active
+    ss -H -lunp | grep -F '{{ monitor_router_alloy_syslog_bind }}' | grep -Fq rsyslogd
+    test -s '{{ monitor_router_alloy_router_log }}'
+    grep -m1 -F '{{ monitor_router_alloy_router_hostname_prefix }}' '{{ monitor_router_alloy_router_log }}' >/dev/null
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Install Grafana repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Grafana APT signing key
+  ansible.builtin.get_url:
+    url: "{{ monitor_router_alloy_grafana_key_url }}"
+    dest: "{{ monitor_router_alloy_grafana_key_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: monitor_router_alloy_repo_key
+
+- name: Configure Grafana APT repository
+  ansible.builtin.copy:
+    dest: "{{ monitor_router_alloy_grafana_repo_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {{ monitor_router_alloy_grafana_repo }}
+  register: monitor_router_alloy_repo_file
+
+- name: Install Grafana Alloy
+  ansible.builtin.apt:
+    name: alloy
+    state: present
+    update_cache: true
+  register: monitor_router_alloy_package
+
+- name: Grant Alloy access to router logs
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - adm
+    append: true
+  register: monitor_router_alloy_group_access
+
+- name: Harden Alloy configuration directory permissions
+  ansible.builtin.file:
+    path: "{{ monitor_router_alloy_config_dir }}"
+    state: directory
+    owner: root
+    group: alloy
+    mode: "0750"
+
+- name: Install monitor router Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ monitor_router_alloy_config_file }}"
+    owner: root
+    group: alloy
+    mode: "0640"
+  register: monitor_router_alloy_config
+
+- name: Ensure Alloy data directory ownership
+  ansible.builtin.file:
+    path: "{{ monitor_router_alloy_data_dir }}"
+    state: directory
+    owner: alloy
+    group: alloy
+    mode: "0750"
+
+- name: Validate Alloy configuration as the packaged Alloy user
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - alloy
+      - --
+      - alloy
+      - validate
+      - "{{ monitor_router_alloy_config_file }}"
+  args:
+    chdir: /
+  changed_when: false
+
+- name: Verify Alloy can read the router log
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - alloy
+      - --
+      - test
+      - -r
+      - "{{ monitor_router_alloy_router_log }}"
+  args:
+    chdir: /
+  changed_when: false
+
+- name: Verify local Loki endpoint is ready
+  ansible.builtin.uri:
+    url: "{{ monitor_router_alloy_loki_ready_url }}"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: monitor_router_alloy_loki_ready
+  changed_when: false
+  failed_when: >-
+    monitor_router_alloy_loki_ready.status != 200
+    or (monitor_router_alloy_loki_ready.content | trim) != 'ready'
+
+- name: Restart Alloy after package, access, or configuration change
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: restarted
+  when: >-
+    monitor_router_alloy_package.changed
+    or monitor_router_alloy_group_access.changed
+    or monitor_router_alloy_config.changed
+
+- name: Ensure Alloy is enabled and running
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: started
+  when: not (
+    monitor_router_alloy_package.changed
+    or monitor_router_alloy_group_access.changed
+    or monitor_router_alloy_config.changed
+    )
+
+- name: Verify Alloy runtime identity and service state
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled alloy | grep -Fxq enabled
+    systemctl is-active alloy | grep -Fxq active
+    MAINPID="$(systemctl show --property=MainPID --value alloy)"
+    test "${MAINPID:-0}" -gt 0
+    test -d "/proc/${MAINPID}"
+    test "$(ps -o user= -p "$MAINPID" | xargs)" = "alloy"
+    id -nG alloy | tr ' ' '\n' | grep -Fxq adm
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify no failed systemd units after Alloy deployment
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: monitor_router_alloy_failed_units
+  changed_when: false
+  failed_when: monitor_router_alloy_failed_units.stdout | trim | length > 0
