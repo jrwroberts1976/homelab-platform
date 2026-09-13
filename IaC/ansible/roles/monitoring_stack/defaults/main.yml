@@ -108,6 +108,7 @@ monitoring_grafana_dashboard_files:
   - "homelab-observability.json"
   - "homelab-security-events.json"
   - "homelab-patch-estate.json"
+  - "homelab-node-detail.json"
 
 monitoring_grafana_dashboard_uids:
   - "homelab-operations"
@@ -118,3 +119,4 @@ monitoring_grafana_dashboard_uids:
   - "homelab-observability"
   - "homelab-security"
   - "homelab-patching"
+  - "homelab-node-detail"
