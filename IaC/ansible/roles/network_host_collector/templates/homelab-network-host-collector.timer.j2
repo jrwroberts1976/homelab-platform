@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Homelab Network Host Collector
+
+[Timer]
+OnBootSec=2min
+OnUnitActiveSec={{ network_host_collector_interval }}
+AccuracySec=30s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

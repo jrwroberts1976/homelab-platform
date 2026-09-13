@@ -1,0 +1,95 @@
+---
+- name: Validate network host collector target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.distribution == "Debian"
+      - network_host_collector_interface in ansible_facts.interfaces
+    fail_msg: >-
+      Refusing to deploy network host collector to an
+      unexpected host or interface.
+
+- name: Require explicit approval before collector deployment
+  ansible.builtin.assert:
+    that:
+      - network_host_collector_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to deploy the network host collector.
+      Re-run with -e network_host_collector_allow_deploy=true
+      after validation.
+
+- name: Install collector dependencies
+  ansible.builtin.apt:
+    name:
+      - nmap
+      - python3
+      - logrotate
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure collector directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ network_host_collector_state_dir }}"
+      mode: "0755"
+    - path: "{{ network_host_collector_events_dir }}"
+      mode: "0755"
+
+- name: Verify node-exporter textfile directory exists
+  ansible.builtin.stat:
+    path: "{{ network_host_collector_textfile_dir }}"
+  register: network_host_collector_textfile_state
+
+- name: Require node-exporter textfile collector
+  ansible.builtin.assert:
+    that:
+      - network_host_collector_textfile_state.stat.exists
+      - network_host_collector_textfile_state.stat.isdir
+
+- name: Install network host collector
+  ansible.builtin.template:
+    src: homelab-network-host-collector.py.j2
+    dest: "{{ network_host_collector_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install collector service
+  ansible.builtin.template:
+    src: homelab-network-host-collector.service.j2
+    dest: "/etc/systemd/system/{{ network_host_collector_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install collector timer
+  ansible.builtin.template:
+    src: homelab-network-host-collector.timer.j2
+    dest: "/etc/systemd/system/{{ network_host_collector_timer }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install network host event log rotation
+  ansible.builtin.template:
+    src: homelab-network-host-collector.logrotate.j2
+    dest: /etc/logrotate.d/homelab-network-host-collector
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reconcile network host collector timer state
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_collector_timer }}"
+    enabled: "{{ network_host_collector_enable_timer | bool }}"
+    state: "{{ 'started' if network_host_collector_enable_timer | bool else 'stopped' }}"

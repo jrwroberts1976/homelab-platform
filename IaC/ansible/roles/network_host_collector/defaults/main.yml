@@ -1,0 +1,38 @@
+---
+network_host_collector_subnet: "192.168.2.0/24"
+network_host_collector_interface: "vmbr0"
+
+network_host_collector_script:
+  "/usr/local/sbin/homelab-network-host-collector"
+
+network_host_collector_state_dir:
+  "/var/lib/homelab-network-hosts"
+
+network_host_collector_inventory:
+  "{{ network_host_collector_state_dir }}/inventory.json"
+
+network_host_collector_events_dir:
+  "/var/log/homelab-network-hosts"
+
+network_host_collector_events:
+  "{{ network_host_collector_events_dir }}/events.jsonl"
+
+network_host_collector_textfile_dir:
+  "/var/lib/prometheus/node-exporter"
+
+network_host_collector_metrics:
+  "{{ network_host_collector_textfile_dir }}/homelab_network_hosts.prom"
+
+network_host_collector_service:
+  "homelab-network-host-collector.service"
+
+network_host_collector_timer:
+  "homelab-network-host-collector.timer"
+
+network_host_collector_interval: "5min"
+
+network_host_collector_offline_after_seconds: 900
+
+# Deployment and periodic scanning are deliberately separate gates.
+network_host_collector_allow_deploy: false
+network_host_collector_enable_timer: false
