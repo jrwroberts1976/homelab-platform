@@ -1,0 +1,151 @@
+---
+- name: Validate Zeek activation target and capture intent
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == network_sensor_zeek_expected_hostname
+      - network_sensor_zeek_expected_ipv4 in ansible_facts.all_ipv4_addresses
+      - network_sensor_config_capture_enabled | default(false) | bool
+      - network_sensor_config_capture_interface | default('') | length > 0
+      - network_sensor_config_capture_mac | default('') is match('^([0-9A-Fa-f]{2}:){5}[0-9A-Fa-f]{2}$')
+    fail_msg: >-
+      Refusing Zeek activation: sensor-01 must be Debian 13 at
+      {{ network_sensor_zeek_expected_ipv4 }} with active capture explicitly
+      enabled and a valid dedicated capture interface/MAC in inventory.
+
+- name: Verify capture gate and passive NIC state before Zeek activation
+  ansible.builtin.shell: |
+    set -euo pipefail
+    IFACE='{{ network_sensor_config_capture_interface }}'
+    EXPECTED_MAC='{{ network_sensor_config_capture_mac | lower }}'
+
+    test -f '{{ network_sensor_zeek_capture_gate_file }}'
+    grep -Fqx 'interface={{ network_sensor_config_capture_interface }}' '{{ network_sensor_zeek_capture_gate_file }}'
+    grep -Fqx 'mac={{ network_sensor_config_capture_mac | lower }}' '{{ network_sensor_zeek_capture_gate_file }}'
+
+    test -d "/sys/class/net/${IFACE}"
+    test "$(cat "/sys/class/net/${IFACE}/address")" = "$EXPECTED_MAC"
+    ! ip -4 -o addr show dev "$IFACE" | grep -q ' inet '
+    ! ip -6 -o addr show dev "$IFACE" | grep -q ' inet6 '
+    ip link show dev "$IFACE" | grep -q 'PROMISC'
+    ethtool -k "$IFACE" | grep -Fq 'tcp-segmentation-offload: off'
+    ethtool -k "$IFACE" | grep -Fq 'generic-segmentation-offload: off'
+    ethtool -k "$IFACE" | grep -Fq 'generic-receive-offload: off'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify Suricata is already active on the dedicated capture interface
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled suricata | grep -Fxq enabled
+    systemctl is-active suricata | grep -Fxq active
+    pgrep -x suricata >/dev/null
+    grep -Fq -- '- interface: {{ network_sensor_config_capture_interface }}' /etc/suricata/suricata.yaml
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Validate Zeek configuration before activation
+  ansible.builtin.command:
+    argv:
+      - "{{ network_sensor_zeek_prefix }}/bin/zeekctl"
+      - check
+  register: network_sensor_zeek_check
+  changed_when: false
+  failed_when: network_sensor_zeek_check.rc != 0
+
+- name: Verify Zeek interface and correlation policies
+  ansible.builtin.shell: |
+    set -euo pipefail
+    grep -Fxq 'interface={{ network_sensor_config_capture_interface }}' '{{ network_sensor_zeek_node_file }}'
+    grep -Fq '@load policy/tuning/json-logs' '{{ network_sensor_zeek_policy_file }}'
+    grep -Fq '@load policy/protocols/conn/community-id-logging' '{{ network_sensor_zeek_policy_file }}'
+    grep -Fq 'redef CommunityID::seed = 0;' '{{ network_sensor_zeek_policy_file }}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Install managed Zeek lifecycle service
+  ansible.builtin.template:
+    src: homelab-zeek.service.j2
+    dest: "{{ network_sensor_zeek_service_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_zeek_service_template
+
+- name: Reload systemd after Zeek service change
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: network_sensor_zeek_service_template.changed
+
+- name: Restart Zeek when lifecycle service changed
+  ansible.builtin.systemd_service:
+    name: "{{ network_sensor_zeek_service_name }}"
+    enabled: true
+    state: restarted
+  when: network_sensor_zeek_service_template.changed
+
+- name: Ensure Zeek lifecycle service is enabled and started
+  ansible.builtin.systemd_service:
+    name: "{{ network_sensor_zeek_service_name }}"
+    enabled: true
+    state: started
+  when: not network_sensor_zeek_service_template.changed
+
+- name: Wait for Zeek runtime to report running
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for _ in $(seq 1 {{ network_sensor_zeek_runtime_wait_seconds }}); do
+      if '{{ network_sensor_zeek_prefix }}/bin/zeekctl' status \
+          | grep -Eq '^zeek[[:space:]]+standalone[[:space:]]+localhost[[:space:]]+running' \
+          && pgrep -x zeek >/dev/null; then
+        exit 0
+      fi
+      sleep 1
+    done
+    '{{ network_sensor_zeek_prefix }}/bin/zeekctl' status >&2 || true
+    exit 1
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Wait for live Zeek JSON connection telemetry with Community ID
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for _ in $(seq 1 {{ network_sensor_zeek_runtime_wait_seconds }}); do
+      if test -s '{{ network_sensor_zeek_conn_log }}' \
+          && test "$(head -c 1 '{{ network_sensor_zeek_conn_log }}')" = '{' \
+          && grep -m1 -F '"community_id"' '{{ network_sensor_zeek_conn_log }}' >/dev/null 2>&1; then
+        exit 0
+      fi
+      sleep 1
+    done
+    exit 1
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify Zeek service persistence and current log link
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled '{{ network_sensor_zeek_service_name }}' | grep -Fxq enabled
+    systemctl is-active '{{ network_sensor_zeek_service_name }}' | grep -Fxq active
+    test -L '{{ network_sensor_zeek_prefix }}/logs/current'
+    test -s '{{ network_sensor_zeek_conn_log }}'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify no failed systemd units after Zeek activation
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: network_sensor_zeek_failed_units
+  changed_when: false
+  failed_when: network_sensor_zeek_failed_units.stdout | trim | length > 0
