@@ -1,0 +1,167 @@
+{
+  "id": null,
+  "uid": "homelab-network-device-detail",
+  "title": "Homelab — Network Device Detail",
+  "description": "Focused per-device view using only core network discovery data: identity, presence, first/last seen and discovery latency.",
+  "tags": ["homelab", "network", "device", "detail"],
+  "timezone": "browser",
+  "schemaVersion": 41,
+  "version": 1,
+  "refresh": "30s",
+  "time": {"from": "now-24h", "to": "now"},
+  "timepicker": {},
+  "templating": {
+    "list": [
+      {
+        "name": "device",
+        "label": "Device IP",
+        "type": "query",
+        "datasource": {"type": "prometheus", "uid": "prometheus"},
+        "query": {
+          "query": "label_values(homelab_network_host_info, ip)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {"selected": true, "text": "192.168.2.1", "value": "192.168.2.1"},
+        "sort": 1
+      }
+    ]
+  },
+  "annotations": {"list": []},
+  "links": [],
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Current Status",
+      "description": "Current presence state from the network host collector.",
+      "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_up{ip=\"$device\"}", "instant": true, "range": false}],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "min": 0,
+          "max": 1,
+          "mappings": [{"type": "value", "options": {"0": {"text": "Offline", "color": "red"}, "1": {"text": "Online", "color": "green"}}}],
+          "thresholds": {"mode": "absolute", "steps": [{"color": "red", "value": null}, {"color": "green", "value": 1}]}
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "First Seen",
+      "description": "When this IP/device record was first observed by the collector.",
+      "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_first_seen_seconds{ip=\"$device\"} * 1000", "instant": true, "range": false}],
+      "fieldConfig": {"defaults": {"unit": "dateTimeAsIso"}, "overrides": []},
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""},
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Last Seen",
+      "description": "Most recent time this device was observed by the collector.",
+      "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_last_seen_seconds{ip=\"$device\"} * 1000", "instant": true, "range": false}],
+      "fieldConfig": {"defaults": {"unit": "dateTimeAsIso"}, "overrides": []},
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""},
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Discovery Latency",
+      "description": "Latest discovery latency reported by the collector.",
+      "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_latency_milliseconds{ip=\"$device\"}", "instant": true, "range": false}],
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "options": {
+        "reduceOptions": {"values": false, "calcs": ["lastNotNull"], "fields": ""},
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "area",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "table",
+      "title": "Device Identity",
+      "description": "Identity fields currently known by the core network discovery collector.",
+      "gridPos": {"x": 0, "y": 4, "w": 24, "h": 7},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_info{ip=\"$device\"}", "instant": true, "range": false, "format": "table"}],
+      "transformations": [
+        {"id": "labelsToFields", "options": {"mode": "columns"}},
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "Value": true, "__name__": true, "instance": true, "job": true, "target_name": true},
+            "indexByName": {"hostname": 0, "ip": 1, "mac": 2, "vendor": 3},
+            "renameByName": {"hostname": "Hostname", "ip": "IP Address", "mac": "MAC Address", "vendor": "Vendor"}
+          }
+        }
+      ],
+      "fieldConfig": {"defaults": {}, "overrides": []},
+      "options": {"showHeader": true, "cellHeight": "sm"}
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Presence History",
+      "description": "Online/offline state over the selected dashboard time range.",
+      "gridPos": {"x": 0, "y": 11, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_up{ip=\"$device\"}", "legendFormat": "Presence"}],
+      "fieldConfig": {"defaults": {"unit": "short", "min": 0, "max": 1}, "overrides": []},
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"]},
+        "tooltip": {"mode": "single", "sort": "none"}
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Discovery Latency History",
+      "description": "Discovery latency over the selected dashboard time range.",
+      "gridPos": {"x": 12, "y": 11, "w": 12, "h": 8},
+      "datasource": {"type": "prometheus", "uid": "prometheus"},
+      "targets": [{"refId": "A", "expr": "homelab_network_host_latency_milliseconds{ip=\"$device\"}", "legendFormat": "Latency"}],
+      "fieldConfig": {"defaults": {"unit": "ms"}, "overrides": []},
+      "options": {
+        "legend": {"displayMode": "list", "placement": "bottom", "calcs": ["lastNotNull"]},
+        "tooltip": {"mode": "single", "sort": "none"}
+      }
+    }
+  ]
+}
