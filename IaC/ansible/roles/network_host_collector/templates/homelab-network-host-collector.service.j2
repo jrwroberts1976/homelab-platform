@@ -8,7 +8,13 @@ Type=oneshot
 User=root
 Group=root
 UMask=0027
+{% if network_host_collector_alert_enabled | bool %}
+EnvironmentFile=-{{ network_host_collector_alert_environment }}
+{% endif %}
 ExecStart={{ network_host_collector_script }}
+{% if network_host_collector_alert_enabled | bool %}
+ExecStartPost=-{{ network_host_collector_alert_script }}
+{% endif %}
 
 NoNewPrivileges=true
 PrivateTmp=true
