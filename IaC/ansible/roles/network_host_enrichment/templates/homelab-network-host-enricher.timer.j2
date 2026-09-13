@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodic Homelab Network Host Enrichment
+
+[Timer]
+OnBootSec=15min
+OnUnitActiveSec={{ network_host_enrichment_interval }}
+RandomizedDelaySec=10min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target

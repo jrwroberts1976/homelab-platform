@@ -1,0 +1,94 @@
+---
+- name: Validate network host enrichment target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.distribution == "Debian"
+    fail_msg: >-
+      Refusing to deploy network host enrichment to an
+      unexpected host.
+
+- name: Require explicit deployment approval
+  ansible.builtin.assert:
+    that:
+      - network_host_enrichment_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to deploy the network host enrichment collector.
+      Re-run with -e network_host_enrichment_allow_deploy=true
+      after validation.
+
+- name: Install enrichment dependencies
+  ansible.builtin.apt:
+    name:
+      - nmap
+      - python3
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Verify V1 inventory exists
+  ansible.builtin.stat:
+    path: "{{ network_host_enrichment_inventory }}"
+  register: network_host_enrichment_inventory_state
+
+- name: Require V1 network inventory
+  ansible.builtin.assert:
+    that:
+      - network_host_enrichment_inventory_state.stat.exists
+      - network_host_enrichment_inventory_state.stat.isreg
+    fail_msg: >-
+      V1 network host inventory does not exist.
+      V2 enrichment will not run without V1.
+
+- name: Verify node exporter textfile directory
+  ansible.builtin.stat:
+    path: "{{ network_host_enrichment_textfile_dir }}"
+  register: network_host_enrichment_textfile_state
+
+- name: Require node exporter textfile collector
+  ansible.builtin.assert:
+    that:
+      - network_host_enrichment_textfile_state.stat.exists
+      - network_host_enrichment_textfile_state.stat.isdir
+
+- name: Ensure enrichment state directory exists
+  ansible.builtin.file:
+    path: "{{ network_host_enrichment_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install network host enricher
+  ansible.builtin.template:
+    src: homelab-network-host-enricher.py.j2
+    dest: "{{ network_host_enrichment_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install enrichment service
+  ansible.builtin.template:
+    src: homelab-network-host-enricher.service.j2
+    dest: "/etc/systemd/system/{{ network_host_enrichment_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install enrichment timer
+  ansible.builtin.template:
+    src: homelab-network-host-enricher.timer.j2
+    dest: "/etc/systemd/system/{{ network_host_enrichment_timer }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reconcile enrichment timer
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_enrichment_timer }}"
+    enabled: "{{ network_host_enrichment_enable_timer | bool }}"
+    state: "{{ 'started' if network_host_enrichment_enable_timer | bool else 'stopped' }}"
