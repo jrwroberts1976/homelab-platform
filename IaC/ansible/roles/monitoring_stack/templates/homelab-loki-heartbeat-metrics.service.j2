@@ -1,0 +1,8 @@
+[Unit]
+Description=Homelab Loki heartbeat freshness metrics collector
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-loki-heartbeat-metrics

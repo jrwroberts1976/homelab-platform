@@ -1,0 +1,4 @@
+---
+# BirdNET Docker-host Alloy profile layered on the shared alloy_hosts contract.
+alloy_host_role: docker-birdnet
+alloy_require_proxmox: false

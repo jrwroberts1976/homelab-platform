@@ -1,0 +1,6 @@
+---
+# Shared observability contract for every host managed by the Alloy baseline.
+alloy_loki_endpoint: "http://192.168.2.52:3100/loki/api/v1/push"
+alloy_loki_ready_url: "http://192.168.2.52:3100/ready"
+alloy_environment: homelab
+alloy_package_version: "1.19.2-1"

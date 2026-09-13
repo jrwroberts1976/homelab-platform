@@ -1,0 +1,4 @@
+---
+# Cloud workload Alloy profile layered on the shared alloy_hosts contract.
+alloy_host_role: cloud-host
+alloy_require_proxmox: false

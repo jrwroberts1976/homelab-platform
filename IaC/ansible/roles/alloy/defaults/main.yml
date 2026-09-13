@@ -1,0 +1,34 @@
+---
+alloy_package_name: alloy
+alloy_package_version: "1.19.2-1"
+
+alloy_grafana_repo_key_url: "https://apt.grafana.com/gpg-full.key"
+alloy_grafana_repo_key_path: "/etc/apt/keyrings/grafana.asc"
+alloy_grafana_repo_file: "/etc/apt/sources.list.d/grafana.list"
+alloy_grafana_repo_line: >-
+  deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main
+
+alloy_config_path: "/etc/alloy/config.alloy"
+alloy_environment_file: "/etc/default/alloy"
+alloy_storage_path: "/var/lib/alloy"
+alloy_http_listen_addr: "127.0.0.1:12345"
+
+alloy_textfile_directory: "/var/lib/prometheus/node-exporter"
+alloy_health_collector_path: "/usr/local/sbin/homelab-alloy-health-collector"
+alloy_health_service_name: "homelab-alloy-health.service"
+alloy_health_timer_name: "homelab-alloy-health.timer"
+alloy_heartbeat_service_name: "homelab-alloy-heartbeat.service"
+alloy_heartbeat_timer_name: "homelab-alloy-heartbeat.timer"
+
+alloy_supported_architectures:
+  - x86_64
+  - aarch64
+alloy_require_proxmox: false
+
+alloy_loki_endpoint: "http://192.168.2.52:3100/loki/api/v1/push"
+alloy_loki_ready_url: "http://192.168.2.52:3100/ready"
+alloy_environment: homelab
+alloy_host_label: "{{ inventory_hostname }}"
+alloy_host_role: linux-host
+alloy_journal_job: systemd-journal
+alloy_journal_source: journal

@@ -73,9 +73,47 @@
     - "{{ monitoring_root }}/prometheus"
     - "{{ monitoring_root }}/alertmanager"
     - "{{ monitoring_root }}/blackbox"
+    - "{{ monitoring_root }}/loki"
     - "{{ monitoring_root }}/grafana"
     - "{{ monitoring_root }}/grafana/provisioning"
     - "{{ monitoring_root }}/grafana/provisioning/datasources"
+
+- name: Ensure monitor node-exporter textfile directory exists
+  ansible.builtin.file:
+    path: "{{ monitoring_node_exporter_textfile_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Loki heartbeat freshness collector
+  ansible.builtin.template:
+    src: loki-heartbeat-metrics.py.j2
+    dest: /usr/local/sbin/homelab-loki-heartbeat-metrics
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Loki heartbeat freshness service
+  ansible.builtin.template:
+    src: homelab-loki-heartbeat-metrics.service.j2
+    dest: /etc/systemd/system/homelab-loki-heartbeat-metrics.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Loki heartbeat freshness timer
+  ansible.builtin.template:
+    src: homelab-loki-heartbeat-metrics.timer.j2
+    dest: /etc/systemd/system/homelab-loki-heartbeat-metrics.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd for Loki heartbeat collector
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  changed_when: false
 
 - name: Install protected monitoring environment
   ansible.builtin.template:
@@ -90,6 +128,14 @@
   ansible.builtin.template:
     src: docker-compose.yml.j2
     dest: "{{ monitoring_root }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Loki configuration
+  ansible.builtin.template:
+    src: loki.yml.j2
+    dest: "{{ monitoring_root }}/loki/loki.yml"
     owner: root
     group: root
     mode: "0644"
@@ -151,6 +197,14 @@
     group: root
     mode: "0644"
 
+- name: Provision Grafana Loki datasource
+  ansible.builtin.template:
+    src: grafana-loki-datasource.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/datasources/loki.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Validate Prometheus alert rules
   ansible.builtin.command:
     argv:
@@ -165,6 +219,19 @@
       - check
       - rules
       - /etc/prometheus/alerts.yml
+  changed_when: false
+
+- name: Validate Loki configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - run
+      - --rm
+      - -v
+      - "{{ monitoring_root }}/loki:/etc/loki:ro"
+      - "{{ monitoring_loki_image }}"
+      - -config.file=/etc/loki/loki.yml
+      - -verify-config=true
   changed_when: false
 
 - name: Validate Docker Compose configuration
@@ -235,6 +302,55 @@
   when: monitoring_alertmanager_config.changed
   changed_when: true
 
+- name: Wait for Loki readiness
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3100/ready
+    status_code: 200
+    return_content: true
+  register: monitoring_loki_ready
+  until:
+    - monitoring_loki_ready.status == 200
+    - "'ready' in (monitoring_loki_ready.content | lower)"
+  retries: 30
+  delay: 2
+
+- name: Verify Loki build information API
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3100/loki/api/v1/status/buildinfo
+    status_code: 200
+    return_content: true
+  register: monitoring_loki_buildinfo
+  changed_when: false
+  failed_when: >-
+    monitoring_loki_buildinfo.status != 200
+    or monitoring_loki_buildinfo.json.version is not defined
+
+- name: Enable Loki heartbeat freshness timer
+  ansible.builtin.systemd_service:
+    name: homelab-loki-heartbeat-metrics.timer
+    state: started
+    enabled: true
+
+- name: Prime Loki heartbeat freshness metrics
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - start
+      - homelab-loki-heartbeat-metrics.service
+  changed_when: false
+
+- name: Verify node-exporter publishes Loki heartbeat metrics
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9100/metrics
+    status_code: 200
+    return_content: true
+  register: monitoring_heartbeat_metrics
+  changed_when: false
+  failed_when: >-
+    monitoring_heartbeat_metrics.status != 200
+    or 'homelab_loki_heartbeat_query_success' not in monitoring_heartbeat_metrics.content
+    or 'homelab_loki_heartbeat_present' not in monitoring_heartbeat_metrics.content
+
 - name: Wait for Prometheus readiness
   ansible.builtin.uri:
     url: http://127.0.0.1:9090/-/ready
@@ -252,14 +368,16 @@
     status_code: 200
   changed_when: false
 
-- name: Verify Prometheus runtime config contains node exporter job
+- name: Verify Prometheus runtime config contains required jobs
   ansible.builtin.uri:
     url: http://127.0.0.1:9090/api/v1/status/config
     status_code: 200
     return_content: true
   register: monitoring_prometheus_runtime_config
   changed_when: false
-  failed_when: "'job_name: node-exporter' not in monitoring_prometheus_runtime_config.json.data.yaml"
+  failed_when: >-
+    'job_name: node-exporter' not in monitoring_prometheus_runtime_config.json.data.yaml
+    or 'job_name: loki' not in monitoring_prometheus_runtime_config.json.data.yaml
 
 - name: Verify production alert rules are loaded
   ansible.builtin.uri:
@@ -273,6 +391,9 @@
     or 'ProxmoxHTTPSDown' not in monitoring_prometheus_rules.content
     or 'CoreHostUnreachable' not in monitoring_prometheus_rules.content
     or 'NodeExporterDown' not in monitoring_prometheus_rules.content
+    or 'AlloyServiceDown' not in monitoring_prometheus_rules.content
+    or 'AlloyWriteDroppedEntries' not in monitoring_prometheus_rules.content
+    or 'AlloyTelemetrySilent' not in monitoring_prometheus_rules.content
     or 'NodeFilesystemSpaceLow' not in monitoring_prometheus_rules.content
     or 'NodeMemoryHigh' not in monitoring_prometheus_rules.content
     or 'NodeCPUHigh' not in monitoring_prometheus_rules.content
@@ -320,12 +441,30 @@
     - >-
       monitoring_prometheus_targets.json.data.activeTargets | length
       >= (
-        2
+        3
         + (monitoring_node_exporter_targets | length)
         + (monitoring_icmp_targets | length)
         + (monitoring_pve_https_targets | length)
         + (monitoring_dns_tcp_targets | length)
       )
+  retries: 30
+  delay: 2
+
+- name: Wait for Loki Prometheus target to become healthy
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9090/api/v1/targets
+    status_code: 200
+    return_content: true
+  register: monitoring_loki_target_status
+  changed_when: false
+  until:
+    - monitoring_loki_target_status.json.status == "success"
+    - >-
+      monitoring_loki_target_status.json.data.activeTargets
+      | selectattr('labels.job', 'equalto', 'loki')
+      | selectattr('health', 'equalto', 'up')
+      | list
+      | length == 1
   retries: 30
   delay: 2
 

@@ -1,0 +1,4 @@
+---
+# Administration/controller Alloy profile layered on the shared alloy_hosts contract.
+alloy_host_role: controller
+alloy_require_proxmox: false

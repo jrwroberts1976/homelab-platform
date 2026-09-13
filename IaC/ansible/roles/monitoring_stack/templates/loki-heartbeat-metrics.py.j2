@@ -1,0 +1,125 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import tempfile
+import time
+import urllib.parse
+import urllib.request
+from pathlib import Path
+
+LOKI_URL = "http://127.0.0.1:3100"
+HOSTS = {{ monitoring_alloy_heartbeat_hosts | to_json }}
+LOOKBACK_SECONDS = {{ monitoring_alloy_heartbeat_lookback_seconds }}
+OUTPUT = Path("{{ monitoring_node_exporter_textfile_directory }}/homelab_loki_heartbeat.prom")
+MARKER = "HOMELAB_ALLOY_HEARTBEAT"
+
+
+def label_escape(value: str) -> str:
+    return value.replace("\\", "\\\\").replace("\n", "\\n").replace('"', '\\"')
+
+
+def query_host(host: str, now_ns: int):
+    selector = '{host="' + host.replace('"', '\\"') + '"} |= "' + MARKER + '"'
+    params = urllib.parse.urlencode(
+        {
+            "query": selector,
+            "start": str(now_ns - LOOKBACK_SECONDS * 1_000_000_000),
+            "end": str(now_ns),
+            "limit": "20",
+            "direction": "backward",
+        }
+    )
+    request = urllib.request.Request(
+        f"{LOKI_URL}/loki/api/v1/query_range?{params}",
+        headers={"User-Agent": "homelab-loki-heartbeat-metrics/1"},
+    )
+    with urllib.request.urlopen(request, timeout=8) as response:
+        payload = json.load(response)
+
+    if payload.get("status") != "success":
+        raise RuntimeError("Loki query did not return success")
+
+    timestamps = []
+    for result in payload.get("data", {}).get("result", []):
+        for value in result.get("values", []):
+            timestamps.append(int(value[0]))
+
+    return max(timestamps) if timestamps else None
+
+
+def metric_line(name: str, host: str, value) -> str:
+    return name + '{source_host="' + host + '"} ' + str(value)
+
+
+def main() -> None:
+    now = time.time()
+    now_ns = int(now * 1_000_000_000)
+    lines = [
+        "# HELP homelab_loki_heartbeat_collector_timestamp_seconds Unix timestamp of the latest Loki heartbeat collector run.",
+        "# TYPE homelab_loki_heartbeat_collector_timestamp_seconds gauge",
+        f"homelab_loki_heartbeat_collector_timestamp_seconds {int(now)}",
+        "# HELP homelab_loki_heartbeat_query_success Whether the Loki heartbeat query completed successfully for a source host.",
+        "# TYPE homelab_loki_heartbeat_query_success gauge",
+        "# HELP homelab_loki_heartbeat_present Whether a recent Alloy heartbeat exists in Loki for a source host.",
+        "# TYPE homelab_loki_heartbeat_present gauge",
+        "# HELP homelab_loki_heartbeat_last_timestamp_seconds Unix timestamp of the newest Alloy heartbeat stored in Loki.",
+        "# TYPE homelab_loki_heartbeat_last_timestamp_seconds gauge",
+        "# HELP homelab_loki_heartbeat_age_seconds Age in seconds of the newest Alloy heartbeat stored in Loki.",
+        "# TYPE homelab_loki_heartbeat_age_seconds gauge",
+    ]
+
+    for host in HOSTS:
+        escaped = label_escape(host)
+        try:
+            latest_ns = query_host(host, now_ns)
+            lines.append(
+                metric_line("homelab_loki_heartbeat_query_success", escaped, 1)
+            )
+            if latest_ns is None:
+                lines.append(
+                    metric_line("homelab_loki_heartbeat_present", escaped, 0)
+                )
+                continue
+
+            latest_seconds = latest_ns / 1_000_000_000
+            age_seconds = max(0.0, now - latest_seconds)
+            lines.append(
+                metric_line("homelab_loki_heartbeat_present", escaped, 1)
+            )
+            lines.append(
+                metric_line(
+                    "homelab_loki_heartbeat_last_timestamp_seconds",
+                    escaped,
+                    f"{latest_seconds:.3f}",
+                )
+            )
+            lines.append(
+                metric_line(
+                    "homelab_loki_heartbeat_age_seconds",
+                    escaped,
+                    f"{age_seconds:.3f}",
+                )
+            )
+        except Exception:
+            lines.append(
+                metric_line("homelab_loki_heartbeat_query_success", escaped, 0)
+            )
+            lines.append(
+                metric_line("homelab_loki_heartbeat_present", escaped, 0)
+            )
+
+    OUTPUT.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp_name = tempfile.mkstemp(prefix=OUTPUT.name + ".", dir=str(OUTPUT.parent))
+    try:
+        with os.fdopen(fd, "w", encoding="utf-8") as handle:
+            handle.write("\n".join(lines) + "\n")
+        os.chmod(tmp_name, 0o644)
+        os.replace(tmp_name, OUTPUT)
+    finally:
+        if os.path.exists(tmp_name):
+            os.unlink(tmp_name)
+
+
+if __name__ == "__main__":
+    main()

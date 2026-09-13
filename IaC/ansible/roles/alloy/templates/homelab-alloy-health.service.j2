@@ -1,0 +1,7 @@
+[Unit]
+Description=Homelab Alloy health metrics collector
+After=alloy.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-alloy-health-collector
