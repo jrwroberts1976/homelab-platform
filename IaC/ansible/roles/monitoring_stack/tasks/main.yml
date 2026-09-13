@@ -77,6 +77,8 @@
     - "{{ monitoring_root }}/grafana"
     - "{{ monitoring_root }}/grafana/provisioning"
     - "{{ monitoring_root }}/grafana/provisioning/datasources"
+    - "{{ monitoring_root }}/grafana/provisioning/dashboards"
+    - "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab"
 
 - name: Ensure monitor node-exporter textfile directory exists
   ansible.builtin.file:
@@ -205,6 +207,35 @@
     group: root
     mode: "0644"
 
+- name: Provision Grafana dashboard provider
+  ansible.builtin.template:
+    src: grafana-dashboard-provider.yml.j2
+    dest: "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: monitoring_grafana_dashboard_provider
+
+- name: Install provisioned Grafana dashboards
+  ansible.builtin.copy:
+    src: "grafana/dashboards/{{ item }}"
+    dest: "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ monitoring_grafana_dashboard_files }}"
+  register: monitoring_grafana_dashboard_files_result
+
+- name: Validate provisioned Grafana dashboard JSON
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - json.tool
+      - "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab/{{ item }}"
+  loop: "{{ monitoring_grafana_dashboard_files }}"
+  changed_when: false
+
 - name: Validate Prometheus alert rules
   ansible.builtin.command:
     argv:
@@ -274,6 +305,20 @@
     or 'Recreated' in monitoring_compose_up.stderr
     or 'Starting' in monitoring_compose_up.stderr
     or 'Started' in monitoring_compose_up.stderr
+
+- name: Restart Grafana after dashboard provisioning changes
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - restart
+      - grafana
+  when: >-
+    monitoring_grafana_dashboard_provider.changed
+    or monitoring_grafana_dashboard_files_result.changed
+  changed_when: true
 
 - name: Validate Alertmanager configuration
   ansible.builtin.command:
@@ -409,6 +454,22 @@
     - monitoring_grafana_health.json.database == "ok"
   retries: 30
   delay: 2
+
+- name: Verify provisioned Grafana dashboards
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:3000/api/dashboards/uid/{{ item }}"
+    method: GET
+    url_username: "{{ monitoring_grafana_admin_user }}"
+    url_password: "{{ monitoring_grafana_admin_password }}"
+    force_basic_auth: true
+    status_code: 200
+    return_content: false
+  loop: "{{ monitoring_grafana_dashboard_uids }}"
+  register: monitoring_grafana_dashboard_verify
+  until: monitoring_grafana_dashboard_verify.status == 200
+  retries: 15
+  delay: 2
+  no_log: true
 
 - name: Wait for Alertmanager readiness
   ansible.builtin.uri:

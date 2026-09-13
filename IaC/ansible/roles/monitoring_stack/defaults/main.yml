@@ -98,3 +98,23 @@ monitoring_node_exporter_targets:
 monitoring_alert_email_to: "jrwroberts1976@gmail.com"
 monitoring_alert_email_from: "jrwroberts1976@gmail.com"
 monitoring_alert_smtp_smarthost: "192.168.2.54:25"
+
+monitoring_grafana_dashboard_files:
+  - "homelab-operations-overview.json"
+  - "homelab-network-hosts.json"
+  - "homelab-physical-network.json"
+  - "homelab-linux-estate.json"
+  - "homelab-service-availability.json"
+  - "homelab-observability.json"
+  - "homelab-security-events.json"
+  - "homelab-patch-estate.json"
+
+monitoring_grafana_dashboard_uids:
+  - "homelab-operations"
+  - "homelab-network-hosts"
+  - "homelab-physical-network"
+  - "homelab-linux-estate"
+  - "homelab-availability"
+  - "homelab-observability"
+  - "homelab-security"
+  - "homelab-patching"
