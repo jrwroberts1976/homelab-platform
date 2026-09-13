@@ -1,0 +1,75 @@
+// Managed by homelab-platform IaC.
+// sensor-01 security logs -> monitor-01 Loki.
+
+logging {
+  level = "info"
+}
+
+loki.write "monitor_01" {
+  endpoint {
+    url = "{{ network_sensor_alloy_loki_push_url }}"
+  }
+}
+
+loki.source.file "suricata" {
+  targets = [{
+    __path__    = "{{ network_sensor_alloy_suricata_log }}",
+    host        = "{{ network_sensor_alloy_expected_hostname }}",
+    service     = "suricata",
+    job         = "{{ network_sensor_alloy_job }}",
+    environment = "{{ network_sensor_alloy_environment }}",
+  }]
+
+  tail_from_end = true
+  forward_to    = [loki.process.suricata.receiver]
+}
+
+loki.process "suricata" {
+  forward_to = [loki.write.monitor_01.receiver]
+
+  stage.json {
+    expressions = {
+      event_ts = "timestamp",
+    }
+  }
+
+  stage.timestamp {
+    source            = "event_ts"
+    format            = "2006-01-02T15:04:05.999999999-0700"
+    action_on_failure = "skip"
+  }
+}
+
+loki.source.file "zeek" {
+  targets = [{
+    __path__    = "{{ network_sensor_alloy_zeek_log_glob }}",
+    host        = "{{ network_sensor_alloy_expected_hostname }}",
+    service     = "zeek",
+    job         = "{{ network_sensor_alloy_job }}",
+    environment = "{{ network_sensor_alloy_environment }}",
+  }]
+
+  tail_from_end = true
+  forward_to    = [loki.process.zeek.receiver]
+
+  file_match {
+    enabled     = true
+    sync_period = "5s"
+  }
+}
+
+loki.process "zeek" {
+  forward_to = [loki.write.monitor_01.receiver]
+
+  stage.json {
+    expressions = {
+      event_ts = "ts",
+    }
+  }
+
+  stage.timestamp {
+    source            = "event_ts"
+    format            = "Unix"
+    action_on_failure = "skip"
+  }
+}

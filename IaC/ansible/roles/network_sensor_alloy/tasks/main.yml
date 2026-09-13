@@ -1,0 +1,185 @@
+---
+- name: Validate sensor Alloy target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == network_sensor_alloy_expected_hostname
+      - network_sensor_alloy_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing Alloy deployment: expected Debian 13 sensor-01 at
+      {{ network_sensor_alloy_expected_ipv4 }}.
+
+- name: Verify packet engines are active before log shipping
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-active suricata | grep -Fxq active
+    systemctl is-active homelab-zeek.service | grep -Fxq active
+    test -s '{{ network_sensor_alloy_suricata_log }}'
+    test -d /opt/zeek/spool/zeek
+    find /opt/zeek/spool/zeek -maxdepth 1 -type f -name '*.log' -print -quit | grep -q .
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Install Grafana repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+      - gpg
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create APT keyring directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Grafana APT signing key
+  ansible.builtin.get_url:
+    url: "{{ network_sensor_alloy_grafana_key_url }}"
+    dest: "{{ network_sensor_alloy_grafana_key_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_alloy_repo_key
+
+- name: Configure Grafana APT repository
+  ansible.builtin.copy:
+    dest: "{{ network_sensor_alloy_grafana_repo_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      {{ network_sensor_alloy_grafana_repo }}
+  register: network_sensor_alloy_repo_file
+
+- name: Install Grafana Alloy
+  ansible.builtin.apt:
+    name: alloy
+    state: present
+    update_cache: true
+  register: network_sensor_alloy_package
+
+- name: Grant Alloy access to live Zeek logs
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - zeek
+    append: true
+  register: network_sensor_alloy_group_access
+
+- name: Harden Alloy configuration directory permissions
+  ansible.builtin.file:
+    path: "{{ network_sensor_alloy_config_dir }}"
+    state: directory
+    owner: root
+    group: alloy
+    mode: "0750"
+
+- name: Install sensor Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ network_sensor_alloy_config_file }}"
+    owner: root
+    group: alloy
+    mode: "0640"
+  register: network_sensor_alloy_config
+
+- name: Ensure Alloy data directory ownership
+  ansible.builtin.file:
+    path: "{{ network_sensor_alloy_data_dir }}"
+    state: directory
+    owner: alloy
+    group: alloy
+    mode: "0750"
+
+- name: Validate Alloy configuration as the packaged Alloy user
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - alloy
+      - --
+      - alloy
+      - validate
+      - "{{ network_sensor_alloy_config_file }}"
+  args:
+    chdir: /
+  changed_when: false
+
+- name: Verify Alloy can read Suricata and Zeek logs
+  ansible.builtin.shell: |
+    set -euo pipefail
+    runuser -u alloy -- test -r '{{ network_sensor_alloy_suricata_log }}'
+    ZEEK_LOG="$(find /opt/zeek/spool/zeek -maxdepth 1 -type f -name '*.log' -print -quit)"
+    test -n "$ZEEK_LOG"
+    runuser -u alloy -- test -r "$ZEEK_LOG"
+    runuser -u alloy -- head -c 1 "$ZEEK_LOG" >/dev/null
+  args:
+    executable: /bin/bash
+    chdir: /
+  changed_when: false
+
+- name: Verify Loki endpoint is reachable from sensor-01
+  ansible.builtin.uri:
+    url: "{{ network_sensor_alloy_loki_ready_url }}"
+    method: GET
+    return_content: true
+    status_code: 200
+  register: network_sensor_alloy_loki_ready
+  changed_when: false
+  failed_when: >-
+    network_sensor_alloy_loki_ready.status != 200
+    or (network_sensor_alloy_loki_ready.content | trim) != 'ready'
+
+- name: Restart Alloy after package, access, or configuration change
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: restarted
+  when: >-
+    network_sensor_alloy_package.changed
+    or network_sensor_alloy_group_access.changed
+    or network_sensor_alloy_config.changed
+
+- name: Ensure Alloy is enabled and running
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: started
+  when: not (
+    network_sensor_alloy_package.changed
+    or network_sensor_alloy_group_access.changed
+    or network_sensor_alloy_config.changed
+    )
+
+- name: Verify Alloy runtime identity and service state
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled alloy | grep -Fxq enabled
+    systemctl is-active alloy | grep -Fxq active
+    MAINPID="$(systemctl show --property=MainPID --value alloy)"
+    test "${MAINPID:-0}" -gt 0
+    test -d "/proc/${MAINPID}"
+    test "$(ps -o user= -p "$MAINPID" | xargs)" = "alloy"
+    id -nG alloy | tr ' ' '\n' | grep -Fxq zeek
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify no failed systemd units after Alloy deployment
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: network_sensor_alloy_failed_units
+  changed_when: false
+  failed_when: network_sensor_alloy_failed_units.stdout | trim | length > 0
