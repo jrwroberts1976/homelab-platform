@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import re
+import subprocess
+import tempfile
+import time
+from collections import defaultdict
+from pathlib import Path
+
+SWITCH_NAME = {{ hp_switch_collector_switch_name | to_json }}
+SWITCH_ADDRESS = {{ hp_switch_collector_switch_address | to_json }}
+SNMP_VERSION = {{ hp_switch_collector_snmp_version | to_json }}
+
+METRICS_FILE = Path({{ hp_switch_collector_metrics_file | to_json }})
+TOPOLOGY_FILE = Path({{ hp_switch_collector_topology_file | to_json }})
+
+OIDS = {
+    "sysDescr": "1.3.6.1.2.1.1.1",
+    "sysUpTime": "1.3.6.1.2.1.1.3",
+    "sysName": "1.3.6.1.2.1.1.5",
+
+    "ifDescr": "1.3.6.1.2.1.2.2.1.2",
+    "ifSpeed": "1.3.6.1.2.1.2.2.1.5",
+    "ifAdminStatus": "1.3.6.1.2.1.2.2.1.7",
+    "ifOperStatus": "1.3.6.1.2.1.2.2.1.8",
+
+    "ifInDiscards": "1.3.6.1.2.1.2.2.1.13",
+    "ifInErrors": "1.3.6.1.2.1.2.2.1.14",
+    "ifOutDiscards": "1.3.6.1.2.1.2.2.1.19",
+    "ifOutErrors": "1.3.6.1.2.1.2.2.1.20",
+
+    "ifHCInOctets": "1.3.6.1.2.1.31.1.1.1.6",
+    "ifHCOutOctets": "1.3.6.1.2.1.31.1.1.1.10",
+
+    "bridgePortIfIndex": "1.3.6.1.2.1.17.1.4.1.2",
+    "fdbPort": "1.3.6.1.2.1.17.4.3.1.2",
+}
+
+
+def snmpwalk(oid):
+    cmd = [
+        "snmpwalk",
+        "-v" + SNMP_VERSION,
+        "-On",
+        "-t",
+        "3",
+        "-r",
+        "1",
+        SWITCH_ADDRESS,
+        oid,
+    ]
+
+    result = subprocess.run(
+        cmd,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        text=True,
+        timeout=20,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"snmpwalk failed for {oid}: "
+            + result.stderr.strip()
+        )
+
+    return result.stdout.splitlines()
+
+
+def prometheus_escape(value):
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace('"', '\\"')
+    )
+
+
+def indexed_integer(lines, base_oid):
+    values = {}
+
+    pattern = re.compile(
+        rf"^\.{re.escape(base_oid)}\.(\d+)"
+        r"\s+=\s+\S+:\s+(-?\d+)"
+    )
+
+    for line in lines:
+        match = pattern.search(line)
+
+        if match:
+            values[int(match.group(1))] = int(match.group(2))
+
+    return values
+
+
+def indexed_string(lines, base_oid):
+    values = {}
+
+    pattern = re.compile(
+        rf"^\.{re.escape(base_oid)}\.(\d+)"
+        r'\s+=\s+STRING:\s+"(.*)"$'
+    )
+
+    for line in lines:
+        match = pattern.search(line)
+
+        if match:
+            values[int(match.group(1))] = match.group(2)
+
+    return values
+
+
+def scalar_string(lines):
+    for line in lines:
+        match = re.search(r'STRING:\s+"(.*)"$', line)
+
+        if match:
+            return match.group(1)
+
+    return ""
+
+
+def scalar_timeticks(lines):
+    for line in lines:
+        match = re.search(r"Timeticks:\s+\((\d+)\)", line)
+
+        if match:
+            return int(match.group(1)) / 100.0
+
+    return 0.0
+
+
+def parse_fdb(lines):
+    entries = []
+
+    pattern = re.compile(
+        r"^\.1\.3\.6\.1\.2\.1\.17\.4\.3\.1\.2"
+        r"\.(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)\.(\d+)"
+        r"\s+=\s+INTEGER:\s+(\d+)"
+    )
+
+    for line in lines:
+        match = pattern.search(line)
+
+        if not match:
+            continue
+
+        mac = ":".join(
+            f"{int(match.group(i)):02x}"
+            for i in range(1, 7)
+        )
+
+        bridge_port = int(match.group(7))
+
+        entries.append(
+            {
+                "mac": mac,
+                "bridge_port": bridge_port,
+            }
+        )
+
+    return entries
+
+
+def atomic_write(path, content, mode):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, temporary = tempfile.mkstemp(
+        prefix=path.name + ".",
+        dir=str(path.parent),
+    )
+
+    try:
+        with os.fdopen(fd, "w") as handle:
+            handle.write(content)
+            handle.flush()
+            os.fsync(handle.fileno())
+
+        os.chmod(temporary, mode)
+        os.replace(temporary, path)
+
+    finally:
+        try:
+            os.unlink(temporary)
+        except FileNotFoundError:
+            pass
+
+
+started = time.time()
+metrics = []
+topology = {
+    "switch": SWITCH_NAME,
+    "address": SWITCH_ADDRESS,
+    "collected_at": int(started),
+    "ports": {},
+    "forwarding_database": [],
+}
+
+try:
+    raw = {
+        name: snmpwalk(oid)
+        for name, oid in OIDS.items()
+    }
+
+    sys_descr = scalar_string(raw["sysDescr"])
+    sys_name = scalar_string(raw["sysName"])
+    uptime = scalar_timeticks(raw["sysUpTime"])
+
+    if_descr = indexed_string(
+        raw["ifDescr"],
+        OIDS["ifDescr"],
+    )
+
+    speed = indexed_integer(
+        raw["ifSpeed"],
+        OIDS["ifSpeed"],
+    )
+
+    admin = indexed_integer(
+        raw["ifAdminStatus"],
+        OIDS["ifAdminStatus"],
+    )
+
+    oper = indexed_integer(
+        raw["ifOperStatus"],
+        OIDS["ifOperStatus"],
+    )
+
+    rx_bytes = indexed_integer(
+        raw["ifHCInOctets"],
+        OIDS["ifHCInOctets"],
+    )
+
+    tx_bytes = indexed_integer(
+        raw["ifHCOutOctets"],
+        OIDS["ifHCOutOctets"],
+    )
+
+    rx_errors = indexed_integer(
+        raw["ifInErrors"],
+        OIDS["ifInErrors"],
+    )
+
+    tx_errors = indexed_integer(
+        raw["ifOutErrors"],
+        OIDS["ifOutErrors"],
+    )
+
+    rx_discards = indexed_integer(
+        raw["ifInDiscards"],
+        OIDS["ifInDiscards"],
+    )
+
+    tx_discards = indexed_integer(
+        raw["ifOutDiscards"],
+        OIDS["ifOutDiscards"],
+    )
+
+    bridge_map = indexed_integer(
+        raw["bridgePortIfIndex"],
+        OIDS["bridgePortIfIndex"],
+    )
+
+    fdb = parse_fdb(raw["fdbPort"])
+
+    metrics.extend(
+        [
+            "# HELP homelab_switch_up SNMP collection success for the switch.",
+            "# TYPE homelab_switch_up gauge",
+            f'homelab_switch_up{{switch="{prometheus_escape(SWITCH_NAME)}"}} 1',
+            "# HELP homelab_switch_scrape_timestamp_seconds Unix time of the successful switch collection.",
+            "# TYPE homelab_switch_scrape_timestamp_seconds gauge",
+            f'homelab_switch_scrape_timestamp_seconds{{switch="{prometheus_escape(SWITCH_NAME)}"}} {int(started)}',
+            "# HELP homelab_switch_uptime_seconds SNMP sysUpTime converted to seconds.",
+            "# TYPE homelab_switch_uptime_seconds gauge",
+            f'homelab_switch_uptime_seconds{{switch="{prometheus_escape(SWITCH_NAME)}"}} {uptime}',
+            "# HELP homelab_switch_info Static identity information for the switch.",
+            "# TYPE homelab_switch_info gauge",
+            (
+                'homelab_switch_info{'
+                f'switch="{prometheus_escape(SWITCH_NAME)}",'
+                f'sys_name="{prometheus_escape(sys_name)}",'
+                f'description="{prometheus_escape(sys_descr)}"'
+                "} 1"
+            ),
+        ]
+    )
+
+    metric_defs = [
+        (
+            "homelab_switch_port_admin_up",
+            "Whether the switch port is administratively up.",
+            "gauge",
+            admin,
+            lambda value: 1 if value == 1 else 0,
+        ),
+        (
+            "homelab_switch_port_up",
+            "Whether the switch port is operationally up.",
+            "gauge",
+            oper,
+            lambda value: 1 if value == 1 else 0,
+        ),
+        (
+            "homelab_switch_port_speed_bps",
+            "Configured or negotiated interface speed in bits per second.",
+            "gauge",
+            speed,
+            int,
+        ),
+        (
+            "homelab_switch_port_rx_bytes_total",
+            "64-bit received octet counter.",
+            "counter",
+            rx_bytes,
+            int,
+        ),
+        (
+            "homelab_switch_port_tx_bytes_total",
+            "64-bit transmitted octet counter.",
+            "counter",
+            tx_bytes,
+            int,
+        ),
+        (
+            "homelab_switch_port_rx_errors_total",
+            "Received interface error counter.",
+            "counter",
+            rx_errors,
+            int,
+        ),
+        (
+            "homelab_switch_port_tx_errors_total",
+            "Transmitted interface error counter.",
+            "counter",
+            tx_errors,
+            int,
+        ),
+        (
+            "homelab_switch_port_rx_discards_total",
+            "Received interface discard counter.",
+            "counter",
+            rx_discards,
+            int,
+        ),
+        (
+            "homelab_switch_port_tx_discards_total",
+            "Transmitted interface discard counter.",
+            "counter",
+            tx_discards,
+            int,
+        ),
+    ]
+
+    # Physical ports on this J9279A are ifIndexes 1-24.
+    for metric_name, help_text, metric_type, values, convert in metric_defs:
+        metrics.append(f"# HELP {metric_name} {help_text}")
+        metrics.append(f"# TYPE {metric_name} {metric_type}")
+
+        for port in range(1, 25):
+            if port not in values:
+                continue
+
+            metrics.append(
+                f'{metric_name}{{switch="{prometheus_escape(SWITCH_NAME)}",port="{port}"}} '
+                f"{convert(values[port])}"
+            )
+
+    macs_per_port = defaultdict(int)
+
+    for entry in fdb:
+        bridge_port = entry["bridge_port"]
+
+        if bridge_port not in bridge_map:
+            continue
+
+        if_index = bridge_map[bridge_port]
+
+        if if_index < 1 or if_index > 24:
+            continue
+
+        entry["port"] = if_index
+        topology["forwarding_database"].append(entry)
+        macs_per_port[if_index] += 1
+
+    metrics.extend(
+        [
+            "# HELP homelab_switch_port_learned_macs Number of forwarding-table MAC addresses learned on the port.",
+            "# TYPE homelab_switch_port_learned_macs gauge",
+        ]
+    )
+
+    for port in range(1, 25):
+        metrics.append(
+            f'homelab_switch_port_learned_macs{{switch="{prometheus_escape(SWITCH_NAME)}",port="{port}"}} '
+            f"{macs_per_port.get(port, 0)}"
+        )
+
+    for port in range(1, 25):
+        topology["ports"][str(port)] = {
+            "description": if_descr.get(port, str(port)),
+            "admin_up": admin.get(port) == 1,
+            "oper_up": oper.get(port) == 1,
+            "speed_bps": speed.get(port, 0),
+            "rx_bytes_total": rx_bytes.get(port, 0),
+            "tx_bytes_total": tx_bytes.get(port, 0),
+            "rx_errors_total": rx_errors.get(port, 0),
+            "tx_errors_total": tx_errors.get(port, 0),
+            "rx_discards_total": rx_discards.get(port, 0),
+            "tx_discards_total": tx_discards.get(port, 0),
+            "learned_macs": macs_per_port.get(port, 0),
+        }
+
+    atomic_write(
+        TOPOLOGY_FILE,
+        json.dumps(topology, indent=2, sort_keys=True) + "\n",
+        0o600,
+    )
+
+    atomic_write(
+        METRICS_FILE,
+        "\n".join(metrics) + "\n",
+        0o644,
+    )
+
+except Exception as exc:
+    # Do not overwrite the last good topology document on failure.
+    failure_metrics = [
+        "# HELP homelab_switch_up SNMP collection success for the switch.",
+        "# TYPE homelab_switch_up gauge",
+        f'homelab_switch_up{{switch="{prometheus_escape(SWITCH_NAME)}"}} 0',
+        "# HELP homelab_switch_scrape_timestamp_seconds Unix time of the attempted switch collection.",
+        "# TYPE homelab_switch_scrape_timestamp_seconds gauge",
+        f'homelab_switch_scrape_timestamp_seconds{{switch="{prometheus_escape(SWITCH_NAME)}"}} {int(started)}',
+    ]
+
+    atomic_write(
+        METRICS_FILE,
+        "\n".join(failure_metrics) + "\n",
+        0o644,
+    )
+
+    raise SystemExit(f"switch collection failed: {exc}")

@@ -1,0 +1,22 @@
+---
+hp_switch_collector_expected_hostname: monitor-01
+hp_switch_collector_expected_ipv4: 192.168.2.52
+
+hp_switch_collector_switch_name: hp-switch
+hp_switch_collector_switch_address: 192.168.2.16
+hp_switch_collector_snmp_version: "2c"
+
+hp_switch_collector_script: /usr/local/sbin/homelab-hp-switch-collector
+hp_switch_collector_snmp_config_directory: /etc/homelab-switch-collector/snmp
+hp_switch_collector_snmp_config_file: /etc/homelab-switch-collector/snmp/snmp.conf
+hp_switch_collector_state_directory: /var/lib/homelab-switch-collector
+hp_switch_collector_topology_file: /var/lib/homelab-switch-collector/topology.json
+
+hp_switch_collector_textfile_directory: /var/lib/prometheus/node-exporter
+hp_switch_collector_metrics_file: /var/lib/prometheus/node-exporter/homelab_switch.prom
+
+hp_switch_collector_interval: 60
+hp_switch_collector_randomized_delay: 10
+
+# Deployment must be explicitly authorised.
+hp_switch_collector_allow_deploy: false

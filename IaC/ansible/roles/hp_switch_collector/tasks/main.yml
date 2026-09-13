@@ -1,0 +1,134 @@
+---
+- name: Require explicit HP switch collector deployment approval
+  ansible.builtin.assert:
+    that:
+      - hp_switch_collector_allow_deploy | bool
+    fail_msg: >-
+      Refusing to deploy HP switch collector without
+      hp_switch_collector_allow_deploy=true.
+
+- name: Validate collector target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == hp_switch_collector_expected_hostname
+      - ansible_facts.default_ipv4.address == hp_switch_collector_expected_ipv4
+    fail_msg: >-
+      Refusing to deploy HP switch collector: expected Debian 13
+      monitor-01 at 192.168.2.52.
+
+- name: Require protected SNMP community
+  ansible.builtin.assert:
+    that:
+      - hp_switch_collector_snmp_community | length > 0
+    fail_msg: No HP switch SNMP community is available.
+  no_log: true
+
+- name: Install SNMP client
+  ansible.builtin.apt:
+    name:
+      - snmp
+      - python3
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create protected SNMP configuration directory
+  ansible.builtin.file:
+    path: "{{ hp_switch_collector_snmp_config_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Create collector state directory
+  ansible.builtin.file:
+    path: "{{ hp_switch_collector_state_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Ensure node-exporter textfile directory exists
+  ansible.builtin.file:
+    path: "{{ hp_switch_collector_textfile_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install protected Net-SNMP configuration
+  ansible.builtin.template:
+    src: snmp.conf.j2
+    dest: "{{ hp_switch_collector_snmp_config_file }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install HP switch collector
+  ansible.builtin.template:
+    src: homelab-hp-switch-collector.py.j2
+    dest: "{{ hp_switch_collector_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install HP switch collector service
+  ansible.builtin.template:
+    src: homelab-hp-switch-collector.service.j2
+    dest: /etc/systemd/system/homelab-hp-switch-collector.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install HP switch collector timer
+  ansible.builtin.template:
+    src: homelab-hp-switch-collector.timer.j2
+    dest: /etc/systemd/system/homelab-hp-switch-collector.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Enable and start HP switch collector timer
+  ansible.builtin.systemd_service:
+    name: homelab-hp-switch-collector.timer
+    enabled: true
+    state: started
+
+- name: Run initial HP switch collection
+  ansible.builtin.systemd_service:
+    name: homelab-hp-switch-collector.service
+    state: started
+
+- name: Read generated switch metrics
+  ansible.builtin.slurp:
+    src: "{{ hp_switch_collector_metrics_file }}"
+  register: hp_switch_collector_metrics
+
+- name: Verify switch collection succeeded
+  ansible.builtin.assert:
+    that:
+      - >-
+        'homelab_switch_up{switch="' +
+        hp_switch_collector_switch_name +
+        '"} 1'
+        in
+        (hp_switch_collector_metrics.content | b64decode)
+      - >-
+        'homelab_switch_port_rx_bytes_total'
+        in
+        (hp_switch_collector_metrics.content | b64decode)
+      - >-
+        'homelab_switch_port_tx_bytes_total'
+        in
+        (hp_switch_collector_metrics.content | b64decode)
+      - >-
+        'homelab_switch_port_learned_macs'
+        in
+        (hp_switch_collector_metrics.content | b64decode)
