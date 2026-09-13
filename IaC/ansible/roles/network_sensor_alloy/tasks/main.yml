@@ -99,25 +99,28 @@
     group: alloy
     mode: "0750"
 
-- name: Validate Alloy configuration
+- name: Validate Alloy configuration as the packaged Alloy user
   ansible.builtin.command:
     argv:
+      - runuser
+      - -u
+      - alloy
+      - --
       - alloy
       - validate
       - "{{ network_sensor_alloy_config_file }}"
-  become_user: alloy
   changed_when: false
 
 - name: Verify Alloy can read Suricata and Zeek logs
   ansible.builtin.shell: |
     set -euo pipefail
-    test -r '{{ network_sensor_alloy_suricata_log }}'
-    ZEEK_LOG="$(find /opt/zeek/spool/zeek -maxdepth 1 -type f -name '*.log' -readable -print -quit)"
+    runuser -u alloy -- test -r '{{ network_sensor_alloy_suricata_log }}'
+    ZEEK_LOG="$(find /opt/zeek/spool/zeek -maxdepth 1 -type f -name '*.log' -print -quit)"
     test -n "$ZEEK_LOG"
-    head -c 1 "$ZEEK_LOG" >/dev/null
+    runuser -u alloy -- test -r "$ZEEK_LOG"
+    runuser -u alloy -- head -c 1 "$ZEEK_LOG" >/dev/null
   args:
     executable: /bin/bash
-  become_user: alloy
   changed_when: false
 
 - name: Verify Loki endpoint is reachable from sensor-01
