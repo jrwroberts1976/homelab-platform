@@ -1,0 +1,12 @@
+[Unit]
+Description=Check for New Network Hosts Requiring Deep Profiling
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec={{ network_host_deep_profiler_interval }}
+AccuracySec=15s
+RandomizedDelaySec=20s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

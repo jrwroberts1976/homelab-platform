@@ -1,0 +1,45 @@
+---
+network_host_deep_profiler_inventory:
+  "/var/lib/homelab-network-hosts/inventory.json"
+
+network_host_deep_profiler_state_dir:
+  "/var/lib/homelab-network-hosts"
+
+network_host_deep_profiler_state:
+  "{{ network_host_deep_profiler_state_dir }}/deep-profiles.json"
+
+network_host_deep_profiler_metrics_dir:
+  "/var/lib/prometheus/node-exporter"
+
+network_host_deep_profiler_metrics:
+  "{{ network_host_deep_profiler_metrics_dir }}/homelab_network_host_deep_profiles.prom"
+
+network_host_deep_profiler_script:
+  "/usr/local/sbin/homelab-network-host-deep-profiler"
+
+network_host_deep_profiler_service:
+  "homelab-network-host-deep-profiler.service"
+
+network_host_deep_profiler_timer:
+  "homelab-network-host-deep-profiler.timer"
+
+network_host_deep_profiler_interface: "vmbr0"
+
+# Worker is cheap when there are no pending hosts.
+network_host_deep_profiler_interval: "2min"
+
+# Only try ARP for a host V1 has genuinely seen recently.
+network_host_deep_profiler_recent_seen_seconds: 360
+
+# Never launch multiple expensive full scans in one worker run.
+network_host_deep_profiler_max_profiles_per_run: 1
+
+network_host_deep_profiler_udp_ports:
+  "53,67,68,69,123,137,138,161,500,514,1900,4500,5353,5683"
+
+network_host_deep_profiler_scripts:
+  "banner,http-title,http-headers,http-server-header,ssl-cert,ssl-enum-ciphers,ssh-hostkey,ssh2-enum-algos,smb-os-discovery,smb2-time,smb2-security-mode,nbstat,rdp-ntlm-info"
+
+# Separate deployment and automation safety gates.
+network_host_deep_profiler_allow_deploy: false
+network_host_deep_profiler_enable_timer: false

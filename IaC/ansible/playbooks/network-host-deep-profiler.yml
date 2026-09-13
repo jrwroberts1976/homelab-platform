@@ -1,0 +1,8 @@
+---
+- name: Deploy Network Host Deep Profiler
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: network_host_deep_profiler

@@ -1,0 +1,86 @@
+---
+- name: Validate deep profiler target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.distribution == "Debian"
+      - network_host_deep_profiler_interface in ansible_facts.interfaces
+    fail_msg: >-
+      Refusing to deploy the network deep profiler to an
+      unexpected host or interface.
+
+- name: Require explicit deployment approval
+  ansible.builtin.assert:
+    that:
+      - network_host_deep_profiler_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Deep profiler deployment requires explicit approval with
+      -e network_host_deep_profiler_allow_deploy=true.
+
+- name: Install deep profiler dependencies
+  ansible.builtin.apt:
+    name:
+      - nmap
+      - python3
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Check V1 inventory
+  ansible.builtin.stat:
+    path: "{{ network_host_deep_profiler_inventory }}"
+  register: deep_profiler_inventory_state
+
+- name: Require working V1 inventory
+  ansible.builtin.assert:
+    that:
+      - deep_profiler_inventory_state.stat.exists
+      - deep_profiler_inventory_state.stat.isreg
+    fail_msg: >-
+      V1 inventory is required before the deep profiler can
+      be installed.
+
+- name: Check node exporter textfile directory
+  ansible.builtin.stat:
+    path: "{{ network_host_deep_profiler_metrics_dir }}"
+  register: deep_profiler_metrics_state
+
+- name: Require node exporter textfile directory
+  ansible.builtin.assert:
+    that:
+      - deep_profiler_metrics_state.stat.exists
+      - deep_profiler_metrics_state.stat.isdir
+
+- name: Install deep profiler
+  ansible.builtin.template:
+    src: homelab-network-host-deep-profiler.py.j2
+    dest: "{{ network_host_deep_profiler_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install deep profiler service
+  ansible.builtin.template:
+    src: homelab-network-host-deep-profiler.service.j2
+    dest: "/etc/systemd/system/{{ network_host_deep_profiler_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install deep profiler timer
+  ansible.builtin.template:
+    src: homelab-network-host-deep-profiler.timer.j2
+    dest: "/etc/systemd/system/{{ network_host_deep_profiler_timer }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Reconcile deep profiler timer
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_deep_profiler_timer }}"
+    enabled: "{{ network_host_deep_profiler_enable_timer | bool }}"
+    state: "{{ 'started' if network_host_deep_profiler_enable_timer | bool else 'stopped' }}"

@@ -1,0 +1,747 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import subprocess
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+
+from pathlib import Path
+
+
+INVENTORY_FILE = Path(
+    "{{ network_host_deep_profiler_inventory }}"
+)
+
+STATE_FILE = Path(
+    "{{ network_host_deep_profiler_state }}"
+)
+
+METRIC_FILE = Path(
+    "{{ network_host_deep_profiler_metrics }}"
+)
+
+INTERFACE = "{{ network_host_deep_profiler_interface }}"
+
+RECENT_SEEN_SECONDS = (
+    {{ network_host_deep_profiler_recent_seen_seconds }}
+)
+
+MAX_PROFILES_PER_RUN = (
+    {{ network_host_deep_profiler_max_profiles_per_run }}
+)
+
+UDP_PORTS = "{{ network_host_deep_profiler_udp_ports }}"
+
+SAFE_SCRIPTS = "{{ network_host_deep_profiler_scripts }}"
+
+NOW = int(time.time())
+
+
+def load_json(path, optional=False):
+    if optional and not path.exists():
+        return None
+
+    if not path.exists():
+        raise RuntimeError(
+            "Required file does not exist: " + str(path)
+        )
+
+    try:
+        data = json.loads(path.read_text())
+    except Exception as exc:
+        raise RuntimeError(
+            "Refusing to use unreadable JSON file: "
+            + str(path)
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise RuntimeError(
+            "Invalid JSON structure in: " + str(path)
+        )
+
+    return data
+
+
+def save_atomic(path, text, mode):
+    path.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+    )
+
+    fd, tmp = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix="." + path.name + ".",
+    )
+
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def normalise_mac(value):
+    return str(value or "").strip().lower()
+
+
+def ip_sort(value):
+    try:
+        return tuple(
+            int(part)
+            for part in value.split(".")
+        )
+    except Exception:
+        return (999, 999, 999, 999)
+
+
+def run_nmap(args, timeout=1800):
+    result = subprocess.run(
+        ["nmap", *args],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=timeout,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "nmap failed: "
+            + result.stderr.strip()
+        )
+
+    return result.stdout
+
+
+def fresh_arp_presence(ip):
+    xml = run_nmap(
+        [
+            "-sn",
+            "-PR",
+            "-n",
+            "-e",
+            INTERFACE,
+            "-oX",
+            "-",
+            ip,
+        ],
+        timeout=30,
+    )
+
+    root = ET.fromstring(xml)
+
+    for host in root.findall("host"):
+        status = host.find("status")
+
+        if (
+            status is not None
+            and status.get("state") == "up"
+        ):
+            return True
+
+    return False
+
+
+def parse_host(xml):
+    root = ET.fromstring(xml)
+    host = root.find("host")
+
+    if host is None:
+        return {
+            "os_matches": [],
+            "ports": [],
+        }
+
+    os_matches = []
+
+    for match in host.findall("./os/osmatch")[:5]:
+        classes = []
+
+        for item in match.findall("osclass")[:5]:
+            classes.append({
+                "type": item.get("type", ""),
+                "vendor": item.get("vendor", ""),
+                "os_family": item.get("osfamily", ""),
+                "os_generation": item.get("osgen", ""),
+                "accuracy": item.get("accuracy", ""),
+                "cpe": [
+                    element.text
+                    for element in item.findall("cpe")
+                    if element.text
+                ],
+            })
+
+        os_matches.append({
+            "name": match.get("name", ""),
+            "accuracy": match.get("accuracy", ""),
+            "classes": classes,
+        })
+
+    ports = []
+
+    for port in host.findall("./ports/port"):
+        state = port.find("state")
+
+        if state is None:
+            continue
+
+        state_name = state.get("state", "")
+
+        if state_name not in (
+            "open",
+            "open|filtered",
+        ):
+            continue
+
+        service = port.find("service")
+
+        service_data = {
+            "name": "",
+            "product": "",
+            "version": "",
+            "extra_info": "",
+            "os_type": "",
+            "device_type": "",
+            "hostname": "",
+            "tunnel": "",
+            "cpe": [],
+        }
+
+        if service is not None:
+            service_data.update({
+                "name": service.get("name", ""),
+                "product": service.get("product", ""),
+                "version": service.get("version", ""),
+                "extra_info": service.get(
+                    "extrainfo",
+                    "",
+                ),
+                "os_type": service.get(
+                    "ostype",
+                    "",
+                ),
+                "device_type": service.get(
+                    "devicetype",
+                    "",
+                ),
+                "hostname": service.get(
+                    "hostname",
+                    "",
+                ),
+                "tunnel": service.get(
+                    "tunnel",
+                    "",
+                ),
+                "cpe": [
+                    element.text
+                    for element in service.findall("cpe")
+                    if element.text
+                ],
+            })
+
+        scripts = {}
+
+        for script in port.findall("script"):
+            output = " ".join(
+                script.get("output", "").split()
+            )
+
+            # Keep detail in JSON, but bound individual output.
+            scripts[script.get("id", "")] = output[:4000]
+
+        ports.append({
+            "protocol": port.get("protocol", ""),
+            "port": int(
+                port.get("portid", "0")
+            ),
+            "state": state_name,
+            "service": service_data,
+            "scripts": scripts,
+        })
+
+    ports.sort(
+        key=lambda item: (
+            item["protocol"],
+            item["port"],
+        )
+    )
+
+    return {
+        "os_matches": os_matches,
+        "ports": ports,
+    }
+
+
+def deep_tcp_scan(ip):
+    xml = run_nmap([
+        "-sS",
+        "-sV",
+        "--version-all",
+        "-O",
+        "--osscan-guess",
+        "--max-os-tries",
+        "2",
+        "-Pn",
+        "-n",
+        "-T3",
+        "--max-retries",
+        "2",
+        "--host-timeout",
+        "20m",
+        "-p-",
+        "--script",
+        SAFE_SCRIPTS,
+        "-oX",
+        "-",
+        ip,
+    ])
+
+    return parse_host(xml)
+
+
+def deep_udp_scan(ip):
+    xml = run_nmap([
+        "-sU",
+        "-sV",
+        "--version-light",
+        "-Pn",
+        "-n",
+        "-T3",
+        "--max-retries",
+        "1",
+        "--host-timeout",
+        "10m",
+        "-p",
+        UDP_PORTS,
+        "-oX",
+        "-",
+        ip,
+    ])
+
+    return parse_host(xml)
+
+
+def prom_escape(value):
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", " ")
+    )
+
+
+def write_metrics(profiles):
+    metrics = [
+        "# HELP homelab_network_host_deep_profile_state Current one-time deep profiling state for a MAC address.",
+        "# TYPE homelab_network_host_deep_profile_state gauge",
+        "# HELP homelab_network_host_deep_profile_open_tcp_ports_total Open TCP ports found by the one-time deep profile.",
+        "# TYPE homelab_network_host_deep_profile_open_tcp_ports_total gauge",
+        "# HELP homelab_network_host_deep_profile_last_success_seconds Unix timestamp of the completed one-time profile.",
+        "# TYPE homelab_network_host_deep_profile_last_success_seconds gauge",
+    ]
+
+    for mac in sorted(profiles):
+        record = profiles[mac]
+
+        state_labels = (
+            'mac="' + prom_escape(mac) + '",'
+            'status="' + prom_escape(
+                record.get("status", "")
+            ) + '"'
+        )
+
+        metrics.append(
+            "homelab_network_host_deep_profile_state{"
+            + state_labels
+            + "} 1"
+        )
+
+        if record.get("status") != "complete":
+            continue
+
+        profile = record.get("profile", {})
+
+        tcp_ports = [
+            item
+            for item in profile.get(
+                "tcp",
+                {},
+            ).get("ports", [])
+            if item.get("state") == "open"
+        ]
+
+        info_labels = (
+            'mac="' + prom_escape(mac) + '",'
+            'ip="' + prom_escape(
+                record.get("profiled_ip", "")
+            ) + '"'
+        )
+
+        metrics.append(
+            "homelab_network_host_deep_profile_open_tcp_ports_total{"
+            + info_labels
+            + "} "
+            + str(len(tcp_ports))
+        )
+
+        metrics.append(
+            "homelab_network_host_deep_profile_last_success_seconds{"
+            + 'mac="' + prom_escape(mac) + '"'
+            + "} "
+            + str(
+                int(
+                    record.get(
+                        "profiled_at",
+                        0,
+                    ) or 0
+                )
+            )
+        )
+
+    save_atomic(
+        METRIC_FILE,
+        "\n".join(metrics) + "\n",
+        0o644,
+    )
+
+
+inventory = load_json(INVENTORY_FILE)
+
+state = load_json(
+    STATE_FILE,
+    optional=True,
+)
+
+# First ever execution is a BASELINE ONLY.
+#
+# Existing devices become grandfathered so deploying this feature
+# does not launch deep scans against the whole current estate.
+if state is None:
+    profiles = {}
+
+    for ip in sorted(
+        inventory,
+        key=ip_sort,
+    ):
+        host = inventory[ip]
+        mac = normalise_mac(
+            host.get("mac", "")
+        )
+
+        if not mac:
+            continue
+
+        profiles[mac] = {
+            "status": "baseline",
+            "baselined_at": NOW,
+            "first_known": int(
+                host.get(
+                    "first_seen",
+                    NOW,
+                ) or NOW
+            ),
+            "last_inventory_seen": int(
+                host.get(
+                    "last_seen",
+                    0,
+                ) or 0
+            ),
+            "last_ip": ip,
+            "hostname": host.get(
+                "hostname",
+                "",
+            ),
+            "vendor": host.get(
+                "vendor",
+                "",
+            ),
+        }
+
+    state = {
+        "schema_version": 1,
+        "initialized_at": NOW,
+        "profiles": profiles,
+    }
+
+    save_atomic(
+        STATE_FILE,
+        json.dumps(
+            state,
+            indent=2,
+            sort_keys=True,
+        ) + "\n",
+        0o600,
+    )
+
+    write_metrics(profiles)
+
+    print(
+        json.dumps({
+            "event": "deep_profile_baseline_created",
+            "existing_macs": len(profiles),
+            "deep_scans_started": 0,
+        }),
+        flush=True,
+    )
+
+    raise SystemExit(0)
+
+
+profiles = state.get("profiles")
+
+if not isinstance(profiles, dict):
+    raise RuntimeError(
+        "Refusing to overwrite invalid deep profile state"
+    )
+
+
+# Reconcile the current V1 inventory into MAC-keyed state.
+for ip in sorted(
+    inventory,
+    key=ip_sort,
+):
+    host = inventory[ip]
+
+    mac = normalise_mac(
+        host.get("mac", "")
+    )
+
+    if not mac:
+        continue
+
+    record = profiles.get(mac)
+
+    if record is None:
+        record = {
+            "status": "pending",
+            "discovered_at": NOW,
+            "attempt_count": 0,
+            "last_presence_check": 0,
+            "last_error": "",
+        }
+
+        profiles[mac] = record
+
+        print(
+            json.dumps({
+                "event": "new_mac_pending_deep_profile",
+                "mac": mac,
+                "ip": ip,
+                "hostname": host.get(
+                    "hostname",
+                    "",
+                ),
+                "vendor": host.get(
+                    "vendor",
+                    "",
+                ),
+            }),
+            flush=True,
+        )
+
+    record["last_ip"] = ip
+    record["last_inventory_seen"] = int(
+        host.get(
+            "last_seen",
+            0,
+        ) or 0
+    )
+
+    if host.get("hostname"):
+        record["hostname"] = host["hostname"]
+
+    if host.get("vendor"):
+        record["vendor"] = host["vendor"]
+
+
+profiles_started = 0
+
+pending = sorted(
+    [
+        (mac, record)
+        for mac, record in profiles.items()
+        if record.get("status") == "pending"
+    ],
+    key=lambda item: int(
+        item[1].get(
+            "discovered_at",
+            0,
+        ) or 0
+    ),
+)
+
+
+for mac, record in pending:
+    if profiles_started >= MAX_PROFILES_PER_RUN:
+        break
+
+    ip = record.get("last_ip", "")
+
+    if not ip:
+        continue
+
+    last_seen = int(
+        record.get(
+            "last_inventory_seen",
+            0,
+        ) or 0
+    )
+
+    age = NOW - last_seen
+
+    # This is what protects us from the .252 situation:
+    # V1's grace-period online state alone is never sufficient.
+    if (
+        last_seen <= 0
+        or age > RECENT_SEEN_SECONDS
+    ):
+        continue
+
+    record["last_presence_check"] = NOW
+
+    try:
+        live = fresh_arp_presence(ip)
+    except Exception as exc:
+        record["last_error"] = (
+            "presence_check: " + str(exc)
+        )
+        continue
+
+    if not live:
+        record["last_error"] = (
+            "fresh_arp_presence_failed"
+        )
+
+        print(
+            json.dumps({
+                "event": "deep_profile_waiting_for_presence",
+                "mac": mac,
+                "ip": ip,
+            }),
+            flush=True,
+        )
+
+        continue
+
+    record["attempt_count"] = int(
+        record.get(
+            "attempt_count",
+            0,
+        ) or 0
+    ) + 1
+
+    record["last_attempt"] = NOW
+    record["last_error"] = ""
+
+    errors = {}
+
+    try:
+        tcp = deep_tcp_scan(ip)
+    except Exception as exc:
+        record["last_error"] = (
+            "tcp_scan: " + str(exc)
+        )
+
+        print(
+            json.dumps({
+                "event": "deep_profile_failed",
+                "mac": mac,
+                "ip": ip,
+                "error": record["last_error"],
+            }),
+            flush=True,
+        )
+
+        continue
+
+    try:
+        udp = deep_udp_scan(ip)
+    except Exception as exc:
+        udp = {
+            "os_matches": [],
+            "ports": [],
+        }
+
+        errors["udp"] = str(exc)
+
+    record.update({
+        "status": "complete",
+        "profiled_at": NOW,
+        "profiled_ip": ip,
+        "last_error": "",
+        "profile": {
+            "tcp": tcp,
+            "udp": udp,
+            "errors": errors,
+        },
+    })
+
+    profiles_started += 1
+
+    print(
+        json.dumps({
+            "event": "deep_profile_complete",
+            "mac": mac,
+            "ip": ip,
+            "hostname": record.get(
+                "hostname",
+                "",
+            ),
+            "tcp_open_ports": len(
+                tcp.get("ports", [])
+            ),
+            "udp_interesting_ports": len(
+                udp.get("ports", [])
+            ),
+            "partial": bool(errors),
+        }),
+        flush=True,
+    )
+
+
+state["profiles"] = profiles
+state["last_run"] = NOW
+
+save_atomic(
+    STATE_FILE,
+    json.dumps(
+        state,
+        indent=2,
+        sort_keys=True,
+    ) + "\n",
+    0o600,
+)
+
+write_metrics(profiles)
+
+print(
+    json.dumps({
+        "event": "deep_profiler_worker_complete",
+        "pending": sum(
+            1
+            for item in profiles.values()
+            if item.get("status") == "pending"
+        ),
+        "complete": sum(
+            1
+            for item in profiles.values()
+            if item.get("status") == "complete"
+        ),
+        "baseline": sum(
+            1
+            for item in profiles.values()
+            if item.get("status") == "baseline"
+        ),
+        "deep_scans_started_this_run": profiles_started,
+    }),
+    flush=True,
+)
