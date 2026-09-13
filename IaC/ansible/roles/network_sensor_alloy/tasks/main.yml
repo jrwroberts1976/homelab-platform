@@ -112,10 +112,9 @@
   ansible.builtin.shell: |
     set -euo pipefail
     test -r '{{ network_sensor_alloy_suricata_log }}'
-    shopt -s nullglob
-    zeek_logs=(/opt/zeek/spool/zeek/*.log)
-    test "${#zeek_logs[@]}" -gt 0
-    head -c 1 "${zeek_logs[0]}" >/dev/null
+    ZEEK_LOG="$(find /opt/zeek/spool/zeek -maxdepth 1 -type f -name '*.log' -readable -print -quit)"
+    test -n "$ZEEK_LOG"
+    head -c 1 "$ZEEK_LOG" >/dev/null
   args:
     executable: /bin/bash
   become_user: alloy
