@@ -25,6 +25,7 @@ network_sensor_config_suricata_dropin: /etc/systemd/system/suricata.service.d/10
 network_sensor_config_suricata_capture_dropin: /etc/systemd/system/suricata.service.d/20-capture-interface.conf
 
 network_sensor_config_zeek_prefix: /opt/zeek
+network_sensor_config_zeek_service: /etc/systemd/system/homelab-zeek.service
 network_sensor_config_zeek_node_file: /opt/zeek/etc/node.cfg
 network_sensor_config_zeek_networks_file: /opt/zeek/etc/networks.cfg
 network_sensor_config_zeek_local_file: /opt/zeek/share/zeek/site/local.zeek
