@@ -9,6 +9,15 @@
       Refusing to deploy network host collector to an
       unexpected host or interface.
 
+- name: Require explicit approval before collector deployment
+  ansible.builtin.assert:
+    that:
+      - network_host_collector_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to deploy the network host collector.
+      Re-run with -e network_host_collector_allow_deploy=true
+      after validation.
+
 - name: Install collector dependencies
   ansible.builtin.apt:
     name:
@@ -79,8 +88,8 @@
   ansible.builtin.systemd_service:
     daemon_reload: true
 
-- name: Enable network host collector timer
+- name: Reconcile network host collector timer state
   ansible.builtin.systemd_service:
     name: "{{ network_host_collector_timer }}"
-    enabled: true
-    state: started
+    enabled: "{{ network_host_collector_enable_timer | bool }}"
+    state: "{{ 'started' if network_host_collector_enable_timer | bool else 'stopped' }}"

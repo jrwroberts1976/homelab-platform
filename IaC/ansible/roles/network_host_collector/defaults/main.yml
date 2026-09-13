@@ -32,3 +32,7 @@ network_host_collector_timer:
 network_host_collector_interval: "5min"
 
 network_host_collector_offline_after_seconds: 900
+
+# Deployment and periodic scanning are deliberately separate gates.
+network_host_collector_allow_deploy: false
+network_host_collector_enable_timer: false

@@ -58,12 +58,17 @@ def load_state():
 
     try:
         data = json.loads(STATE_FILE.read_text())
-        if isinstance(data, dict):
-            return data
-    except Exception:
-        pass
+    except Exception as exc:
+        raise RuntimeError(
+            f"Refusing to overwrite unreadable inventory: {STATE_FILE}"
+        ) from exc
 
-    return {}
+    if not isinstance(data, dict):
+        raise RuntimeError(
+            f"Refusing to overwrite invalid inventory structure: {STATE_FILE}"
+        )
+
+    return data
 
 
 def save_atomic(path, text, mode):
