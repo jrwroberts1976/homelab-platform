@@ -1,0 +1,273 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import smtplib
+import sys
+import tempfile
+import time
+from email.message import EmailMessage
+from pathlib import Path
+
+INVENTORY_FILE = Path("{{ network_host_collector_inventory }}")
+REGISTRY_FILE = Path("{{ network_host_collector_alert_registry }}")
+SMTP_HOST = "{{ network_host_collector_alert_smtp_host }}"
+SMTP_PORT = {{ network_host_collector_alert_smtp_port }}
+MAIL_FROM = "{{ network_host_collector_alert_from }}"
+MAIL_TO = os.environ.get("NETWORK_DEVICE_ALERT_TO", "").strip()
+COLLECTOR_HOST = "Proxmox-2"
+NOW = int(time.time())
+
+
+def load_json(path):
+    try:
+        data = json.loads(path.read_text())
+    except FileNotFoundError:
+        return None
+    except Exception as exc:
+        raise RuntimeError(f"Unable to read valid JSON from {path}") from exc
+
+    return data
+
+
+def save_atomic(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+    )
+
+    try:
+        with os.fdopen(fd, "w") as fh:
+            json.dump(payload, fh, indent=2, sort_keys=True)
+            fh.write("\n")
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def normalise_inventory(data):
+    if not isinstance(data, dict):
+        raise RuntimeError("Network host inventory must be a JSON object")
+
+    devices = {}
+
+    for ip, entry in data.items():
+        if not isinstance(entry, dict):
+            continue
+
+        mac = str(entry.get("mac", "")).strip().lower()
+
+        if not mac:
+            continue
+
+        candidate = {
+            "ip": str(entry.get("ip") or ip),
+            "mac": mac,
+            "hostname": str(entry.get("hostname", "")),
+            "vendor": str(entry.get("vendor", "")),
+            "first_seen": int(entry.get("first_seen", 0) or 0),
+            "last_seen": int(entry.get("last_seen", 0) or 0),
+            "online": bool(entry.get("online", False)),
+        }
+
+        existing = devices.get(mac)
+
+        if existing is None or candidate["last_seen"] >= existing["last_seen"]:
+            devices[mac] = candidate
+
+    return devices
+
+
+def registry_entry(device, status):
+    return {
+        "status": status,
+        "recorded_at": NOW,
+        "ip": device.get("ip", ""),
+        "hostname": device.get("hostname", ""),
+        "vendor": device.get("vendor", ""),
+        "first_seen": int(device.get("first_seen", 0) or 0),
+    }
+
+
+def timestamp_text(timestamp):
+    if not timestamp:
+        return "unknown"
+
+    return time.strftime(
+        "%Y-%m-%d %H:%M:%S %Z",
+        time.localtime(timestamp),
+    )
+
+
+def emit(event, **fields):
+    print(
+        json.dumps(
+            {
+                "event": event,
+                "timestamp": NOW,
+                **fields,
+            },
+            sort_keys=True,
+            separators=(",", ":"),
+        ),
+        flush=True,
+    )
+
+
+def build_device_message(device):
+    hostname = device.get("hostname") or "unknown"
+    mac = device["mac"]
+
+    message = EmailMessage()
+    message["From"] = MAIL_FROM
+    message["To"] = MAIL_TO
+    message["Subject"] = f"New network device detected: {hostname} [{mac}]"
+    message.set_content(
+        "A device has joined the homelab network for the first time.\n\n"
+        f"IP address: {device.get('ip') or 'unknown'}\n"
+        f"MAC address: {mac}\n"
+        f"Hostname: {hostname}\n"
+        f"Vendor: {device.get('vendor') or 'unknown'}\n"
+        f"First seen: {timestamp_text(device.get('first_seen', 0))}\n"
+        f"Collector: {COLLECTOR_HOST}\n\n"
+        "This alert is sent once per MAC address. A device returning later "
+        "or receiving a different IP address will not generate another "
+        "first-seen alert.\n"
+    )
+
+    return message
+
+
+def build_test_message():
+    message = EmailMessage()
+    message["From"] = MAIL_FROM
+    message["To"] = MAIL_TO
+    message["Subject"] = "Homelab network device alert test"
+    message.set_content(
+        "This is a test of the homelab new-network-device email alert path.\n\n"
+        f"Collector: {COLLECTOR_HOST}\n"
+        f"SMTP relay: {SMTP_HOST}:{SMTP_PORT}\n"
+    )
+    return message
+
+
+def send_message(message):
+    with smtplib.SMTP(SMTP_HOST, SMTP_PORT, timeout=10) as smtp:
+        smtp.ehlo()
+        smtp.send_message(message)
+
+
+def main():
+    if "--test-email" in sys.argv:
+        if not MAIL_TO:
+            raise RuntimeError("NETWORK_DEVICE_ALERT_TO is not configured")
+
+        send_message(build_test_message())
+        emit("network_device_alert_test_sent")
+        return 0
+
+    inventory = load_json(INVENTORY_FILE)
+
+    if inventory is None:
+        emit("network_device_alert_inventory_missing")
+        return 0
+
+    devices = normalise_inventory(inventory)
+    registry = load_json(REGISTRY_FILE)
+
+    if registry is None:
+        baseline = {
+            mac: registry_entry(device, "baseline")
+            for mac, device in sorted(devices.items())
+        }
+
+        save_atomic(
+            REGISTRY_FILE,
+            {
+                "version": 1,
+                "devices": baseline,
+            },
+        )
+
+        emit(
+            "network_device_alert_baseline_seeded",
+            count=len(baseline),
+        )
+        return 0
+
+    if not isinstance(registry, dict):
+        raise RuntimeError("Alert registry must be a JSON object")
+
+    known = registry.get("devices")
+
+    if not isinstance(known, dict):
+        raise RuntimeError("Alert registry devices must be a JSON object")
+
+    pending = [
+        device
+        for mac, device in sorted(devices.items())
+        if mac not in known and device.get("online", False)
+    ]
+
+    if not pending:
+        return 0
+
+    if not MAIL_TO:
+        emit(
+            "network_device_alert_recipient_missing",
+            pending=len(pending),
+        )
+        return 0
+
+    changed = False
+
+    for device in pending:
+        mac = device["mac"]
+
+        try:
+            send_message(build_device_message(device))
+        except Exception as exc:
+            emit(
+                "network_device_alert_send_failed",
+                mac=mac,
+                ip=device.get("ip", ""),
+                error=str(exc),
+            )
+            continue
+
+        known[mac] = registry_entry(device, "alerted")
+        changed = True
+
+        emit(
+            "network_device_alert_sent",
+            mac=mac,
+            ip=device.get("ip", ""),
+            hostname=device.get("hostname", ""),
+            vendor=device.get("vendor", ""),
+        )
+
+    if changed:
+        registry["version"] = 1
+        registry["devices"] = known
+        save_atomic(REGISTRY_FILE, registry)
+
+    return 0
+
+
+if __name__ == "__main__":
+    try:
+        raise SystemExit(main())
+    except Exception as exc:
+        emit(
+            "network_device_alert_error",
+            error=str(exc),
+        )
+        raise
