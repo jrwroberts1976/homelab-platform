@@ -1,0 +1,11 @@
+---
+network_sensor_zeek_expected_hostname: sensor-01
+network_sensor_zeek_expected_ipv4: 192.168.2.55
+network_sensor_zeek_capture_gate_file: /etc/homelab-network-sensor/capture-enabled
+network_sensor_zeek_prefix: /opt/zeek
+network_sensor_zeek_service_name: homelab-zeek.service
+network_sensor_zeek_service_file: /etc/systemd/system/homelab-zeek.service
+network_sensor_zeek_node_file: /opt/zeek/etc/node.cfg
+network_sensor_zeek_policy_file: /opt/zeek/share/zeek/site/homelab.zeek
+network_sensor_zeek_conn_log: /opt/zeek/logs/current/conn.log
+network_sensor_zeek_runtime_wait_seconds: 30
