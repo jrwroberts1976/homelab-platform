@@ -41,7 +41,9 @@
     set -euo pipefail
     systemctl is-enabled suricata | grep -Fxq enabled
     systemctl is-active suricata | grep -Fxq active
-    pgrep -x suricata >/dev/null
+    MAINPID="$(systemctl show --property=MainPID --value suricata)"
+    test "${MAINPID:-0}" -gt 0
+    test -d "/proc/${MAINPID}"
     grep -Fq -- '- interface: {{ network_sensor_config_capture_interface }}' /etc/suricata/suricata.yaml
   args:
     executable: /bin/bash
@@ -100,8 +102,7 @@
     set -euo pipefail
     for _ in $(seq 1 {{ network_sensor_zeek_runtime_wait_seconds }}); do
       if '{{ network_sensor_zeek_prefix }}/bin/zeekctl' status \
-          | grep -Eq '^zeek[[:space:]]+standalone[[:space:]]+localhost[[:space:]]+running' \
-          && pgrep -x zeek >/dev/null; then
+          | grep -Eq '^zeek[[:space:]]+standalone[[:space:]]+localhost[[:space:]]+running'; then
         exit 0
       fi
       sleep 1
