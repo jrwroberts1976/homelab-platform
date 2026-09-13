@@ -1,0 +1,19 @@
+---
+network_sensor_alloy_expected_hostname: sensor-01
+network_sensor_alloy_expected_ipv4: 192.168.2.55
+network_sensor_alloy_environment: homelab
+network_sensor_alloy_job: network-security
+
+network_sensor_alloy_loki_push_url: http://192.168.2.52:3100/loki/api/v1/push
+network_sensor_alloy_loki_ready_url: http://192.168.2.52:3100/ready
+
+network_sensor_alloy_grafana_key_url: https://apt.grafana.com/gpg.key
+network_sensor_alloy_grafana_key_file: /etc/apt/keyrings/grafana.asc
+network_sensor_alloy_grafana_repo_file: /etc/apt/sources.list.d/grafana.list
+network_sensor_alloy_grafana_repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+
+network_sensor_alloy_config_dir: /etc/alloy
+network_sensor_alloy_config_file: /etc/alloy/config.alloy
+network_sensor_alloy_data_dir: /var/lib/alloy
+network_sensor_alloy_suricata_log: /var/log/suricata/eve.json
+network_sensor_alloy_zeek_log_glob: /opt/zeek/spool/zeek/*.log
