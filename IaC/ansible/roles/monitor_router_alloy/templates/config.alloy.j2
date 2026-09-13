@@ -1,0 +1,26 @@
+// Managed by homelab-platform IaC.
+// monitor-01 ASUS router syslog -> local Loki.
+
+logging {
+  level = "info"
+}
+
+loki.write "local" {
+  endpoint {
+    url = "{{ monitor_router_alloy_loki_push_url }}"
+  }
+}
+
+loki.source.file "router_syslog" {
+  targets = [{
+    __path__    = "{{ monitor_router_alloy_router_log }}",
+    host        = "{{ monitor_router_alloy_expected_hostname }}",
+    service     = "{{ monitor_router_alloy_service }}",
+    device      = "{{ monitor_router_alloy_device }}",
+    job         = "{{ monitor_router_alloy_job }}",
+    environment = "{{ monitor_router_alloy_environment }}",
+  }]
+
+  tail_from_end = true
+  forward_to    = [loki.write.local.receiver]
+}

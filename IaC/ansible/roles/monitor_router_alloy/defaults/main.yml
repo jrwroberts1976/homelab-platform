@@ -1,0 +1,23 @@
+---
+monitor_router_alloy_expected_hostname: monitor-01
+monitor_router_alloy_expected_ipv4: 192.168.2.52
+monitor_router_alloy_environment: homelab
+monitor_router_alloy_job: network-infrastructure
+monitor_router_alloy_service: router-syslog
+monitor_router_alloy_device: rt-ac86u
+
+monitor_router_alloy_router_log: /var/log/homelab/router/rt-ac86u.log
+monitor_router_alloy_router_hostname_prefix: RT-AC86U-
+monitor_router_alloy_syslog_bind: 192.168.2.52:5514
+
+monitor_router_alloy_loki_push_url: http://127.0.0.1:3100/loki/api/v1/push
+monitor_router_alloy_loki_ready_url: http://127.0.0.1:3100/ready
+
+monitor_router_alloy_grafana_key_url: https://apt.grafana.com/gpg.key
+monitor_router_alloy_grafana_key_file: /etc/apt/keyrings/grafana.asc
+monitor_router_alloy_grafana_repo_file: /etc/apt/sources.list.d/grafana.list
+monitor_router_alloy_grafana_repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+
+monitor_router_alloy_config_dir: /etc/alloy
+monitor_router_alloy_config_file: /etc/alloy/config.alloy
+monitor_router_alloy_data_dir: /var/lib/alloy

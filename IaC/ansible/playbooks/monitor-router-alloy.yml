@@ -1,0 +1,7 @@
+---
+- name: Deploy Alloy router log shipping on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  roles:
+    - monitor_router_alloy
