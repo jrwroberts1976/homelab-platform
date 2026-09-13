@@ -1,0 +1,10 @@
+{{ network_host_collector_events }} {
+    daily
+    rotate 14
+    size 1M
+    compress
+    delaycompress
+    missingok
+    notifempty
+    create 0640 root adm
+}

@@ -1,0 +1,23 @@
+[Unit]
+Description=Homelab Network Host Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0027
+ExecStart={{ network_host_collector_script }}
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+
+ReadWritePaths={{ network_host_collector_state_dir }}
+ReadWritePaths={{ network_host_collector_events_dir }}
+ReadWritePaths={{ network_host_collector_textfile_dir }}
+
+[Install]
+WantedBy=multi-user.target

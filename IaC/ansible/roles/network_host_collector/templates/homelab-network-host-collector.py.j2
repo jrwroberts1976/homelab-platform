@@ -1,0 +1,343 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import socket
+import subprocess
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+SUBNET = "{{ network_host_collector_subnet }}"
+INTERFACE = "{{ network_host_collector_interface }}"
+
+STATE_FILE = Path("{{ network_host_collector_inventory }}")
+EVENT_FILE = Path("{{ network_host_collector_events }}")
+METRIC_FILE = Path("{{ network_host_collector_metrics }}")
+
+OFFLINE_AFTER = {{ network_host_collector_offline_after_seconds }}
+
+NOW = int(time.time())
+
+
+def run(cmd):
+    return subprocess.run(
+        cmd,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        check=True,
+    ).stdout
+
+
+def reverse_dns(ip):
+    try:
+        result = subprocess.run(
+            ["getent", "hosts", ip],
+            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            timeout=2,
+            check=False,
+        )
+
+        if result.returncode != 0 or not result.stdout.strip():
+            return ""
+
+        fields = result.stdout.split()
+        return fields[1] if len(fields) >= 2 else ""
+
+    except Exception:
+        return ""
+
+
+def load_state():
+    if not STATE_FILE.exists():
+        return {}
+
+    try:
+        data = json.loads(STATE_FILE.read_text())
+        if isinstance(data, dict):
+            return data
+    except Exception:
+        pass
+
+    return {}
+
+
+def save_atomic(path, text, mode):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+    )
+
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def emit_event(event):
+    EVENT_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    payload = {
+        "timestamp": NOW,
+        **event,
+    }
+
+    line = json.dumps(
+        payload,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+
+    with EVENT_FILE.open("a") as fh:
+        fh.write(line + "\n")
+
+    # systemd journal -> existing Alloy -> Loki
+    print(line, flush=True)
+
+
+def scan():
+    xml = run([
+        "nmap",
+        "-sn",
+        "-n",
+        "-e",
+        INTERFACE,
+        "-oX",
+        "-",
+        SUBNET,
+    ])
+
+    root = ET.fromstring(xml)
+    found = {}
+
+    for host in root.findall("host"):
+        status = host.find("status")
+
+        if status is None or status.get("state") != "up":
+            continue
+
+        ip = ""
+        mac = ""
+        vendor = ""
+
+        for address in host.findall("address"):
+            atype = address.get("addrtype")
+
+            if atype == "ipv4":
+                ip = address.get("addr", "")
+
+            elif atype == "mac":
+                mac = address.get("addr", "").lower()
+                vendor = address.get("vendor", "")
+
+        if not ip:
+            continue
+
+        times = host.find("times")
+        latency_ms = None
+
+        if times is not None and times.get("srtt"):
+            try:
+                latency_ms = round(
+                    int(times.get("srtt")) / 1000.0,
+                    3,
+                )
+            except Exception:
+                pass
+
+        found[ip] = {
+            "ip": ip,
+            "mac": mac,
+            "vendor": vendor,
+            "hostname": reverse_dns(ip),
+            "latency_ms": latency_ms,
+        }
+
+    return found
+
+
+previous = load_state()
+current_scan = scan()
+
+inventory = dict(previous)
+
+for ip, discovered in current_scan.items():
+    old = previous.get(ip)
+
+    if old is None:
+        inventory[ip] = {
+            **discovered,
+            "first_seen": NOW,
+            "last_seen": NOW,
+            "online": True,
+        }
+
+        emit_event({
+            "event": "host_discovered",
+            **inventory[ip],
+        })
+
+        continue
+
+    entry = dict(old)
+
+    changes = {}
+
+    for field in (
+        "mac",
+        "vendor",
+        "hostname",
+    ):
+        old_value = entry.get(field, "")
+        new_value = discovered.get(field, "")
+
+        if new_value and old_value != new_value:
+            changes[field] = {
+                "old": old_value,
+                "new": new_value,
+            }
+
+            entry[field] = new_value
+
+    entry["latency_ms"] = discovered.get("latency_ms")
+    entry["last_seen"] = NOW
+
+    was_online = bool(entry.get("online", False))
+    entry["online"] = True
+
+    inventory[ip] = entry
+
+    if not was_online:
+        emit_event({
+            "event": "host_online",
+            **entry,
+        })
+
+    if changes:
+        emit_event({
+            "event": "host_identity_changed",
+            "ip": ip,
+            "changes": changes,
+        })
+
+
+for ip, old in previous.items():
+    if ip in current_scan:
+        continue
+
+    entry = dict(old)
+
+    age = NOW - int(entry.get("last_seen", 0) or 0)
+
+    if (
+        entry.get("online", False)
+        and age >= OFFLINE_AFTER
+    ):
+        entry["online"] = False
+
+        emit_event({
+            "event": "host_offline",
+            **entry,
+            "seconds_since_last_seen": age,
+        })
+
+    inventory[ip] = entry
+
+
+save_atomic(
+    STATE_FILE,
+    json.dumps(
+        inventory,
+        indent=2,
+        sort_keys=True,
+    ) + "\n",
+    0o600,
+)
+
+
+def esc(value):
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", " ")
+    )
+
+
+metrics = [
+    "# HELP homelab_network_host_info Static and discovered identity information for a network host.",
+    "# TYPE homelab_network_host_info gauge",
+    "# HELP homelab_network_host_up Whether the network host is currently considered online.",
+    "# TYPE homelab_network_host_up gauge",
+    "# HELP homelab_network_host_last_seen_seconds Unix timestamp when the network host was last observed.",
+    "# TYPE homelab_network_host_last_seen_seconds gauge",
+    "# HELP homelab_network_host_first_seen_seconds Unix timestamp when the network host was first observed.",
+    "# TYPE homelab_network_host_first_seen_seconds gauge",
+    "# HELP homelab_network_host_latency_milliseconds Last observed discovery latency.",
+    "# TYPE homelab_network_host_latency_milliseconds gauge",
+    "# HELP homelab_network_host_inventory_total Total hosts retained in the network inventory.",
+    "# TYPE homelab_network_host_inventory_total gauge",
+]
+
+for ip in sorted(inventory):
+    host = inventory[ip]
+
+    base_labels = f'ip="{esc(ip)}"'
+
+    info_labels = (
+        f'ip="{esc(ip)}",'
+        f'mac="{esc(host.get("mac", ""))}",'
+        f'hostname="{esc(host.get("hostname", ""))}",'
+        f'vendor="{esc(host.get("vendor", ""))}"'
+    )
+
+    metrics.append(
+        'homelab_network_host_info{' + info_labels + '} 1'
+    )
+
+    metrics.append(
+        'homelab_network_host_up{' + base_labels + '} '
+        + str(1 if host.get("online") else 0)
+    )
+
+    metrics.append(
+        'homelab_network_host_first_seen_seconds{' + base_labels + '} '
+        + str(int(host.get("first_seen", 0) or 0))
+    )
+
+    metrics.append(
+        'homelab_network_host_last_seen_seconds{' + base_labels + '} '
+        + str(int(host.get("last_seen", 0) or 0))
+    )
+
+    latency = host.get("latency_ms")
+
+    if latency is not None:
+        metrics.append(
+            'homelab_network_host_latency_milliseconds{' + base_labels + '} '
+            + str(latency)
+        )
+
+metrics.append(
+    f"homelab_network_host_inventory_total {len(inventory)}"
+)
+
+save_atomic(
+    METRIC_FILE,
+    "\n".join(metrics) + "\n",
+    0o644,
+)
