@@ -1,0 +1,4 @@
+---
+# Edge-host Alloy profile layered on the shared alloy_hosts contract.
+alloy_host_role: edge-host
+alloy_require_proxmox: false

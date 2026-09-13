@@ -1,0 +1,47 @@
+// Managed by Ansible. Do not edit manually.
+
+loki.relabel "journal" {
+  forward_to = [loki.process.journal_hygiene.receiver]
+
+  rule {
+    target_label = "job"
+    replacement  = "{{ alloy_journal_job }}"
+  }
+}
+
+loki.source.journal "system" {
+  forward_to = [loki.relabel.journal.receiver]
+
+  labels = {
+    hostname    = "{{ alloy_host_label }}",
+    host        = "{{ alloy_host_label }}",
+    role        = "{{ alloy_host_role }}",
+    environment = "{{ alloy_environment }}",
+    source      = "{{ alloy_journal_source }}",
+  }
+}
+
+loki.process "journal_hygiene" {
+  forward_to = [loki.write.homelab.receiver]
+
+  // Ansible module invocation records can contain raw command arguments.
+  // Journal MESSAGE differs by host: some retain the ansible-ansible.*
+  // prefix while others expose only the wrapper payload. Match both forms.
+  stage.drop {
+    expression          = "^(ansible-ansible\\..* )?Invoked with _raw_params="
+    drop_counter_reason = "ansible_module_invocation"
+  }
+
+  // Debian 13/OpenSSH may emit this exact benign legacy-accounting warning
+  // when /run/utmp is absent while wtmpdb handles SSH accounting.
+  stage.drop {
+    expression          = "^syslogin_perform_logout: logout\\(\\) returned an error$"
+    drop_counter_reason = "debian_openssh_logout_noise"
+  }
+}
+
+loki.write "homelab" {
+  endpoint {
+    url = "{{ alloy_loki_endpoint }}"
+  }
+}

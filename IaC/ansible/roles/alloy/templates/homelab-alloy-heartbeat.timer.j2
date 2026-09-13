@@ -1,0 +1,13 @@
+[Unit]
+Description=Emit Homelab Alloy journal heartbeat every five minutes
+
+[Timer]
+OnBootSec=30s
+OnUnitActiveSec=5min
+AccuracySec=30s
+RandomizedDelaySec=15s
+Persistent=true
+Unit=homelab-alloy-heartbeat.service
+
+[Install]
+WantedBy=timers.target

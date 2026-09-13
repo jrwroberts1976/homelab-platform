@@ -1,0 +1,72 @@
+#!/bin/sh
+
+OUT="{{ alloy_textfile_directory }}/homelab_alloy_health.prom"
+TMP="${OUT}.tmp"
+RAW="$(mktemp)"
+HOST="{{ alloy_host_label }}"
+
+cleanup() {
+    rm -f "$RAW" "$TMP"
+}
+
+trap cleanup 0 HUP INT TERM
+
+write_failure() {
+    NOW="$(date +%s)"
+    cat >"$TMP" <<EOF
+# HELP homelab_alloy_health_scrape_success Whether the local Alloy metrics endpoint was scraped successfully.
+# TYPE homelab_alloy_health_scrape_success gauge
+homelab_alloy_health_scrape_success{host="$HOST"} 0
+# HELP homelab_alloy_health_collector_timestamp_seconds Unix timestamp of the latest Alloy health collector run.
+# TYPE homelab_alloy_health_collector_timestamp_seconds gauge
+homelab_alloy_health_collector_timestamp_seconds{host="$HOST"} $NOW
+EOF
+    chmod 0644 "$TMP"
+    mv "$TMP" "$OUT"
+}
+
+if ! curl -fsS --max-time 5 "http://{{ alloy_http_listen_addr }}/metrics" >"$RAW"; then
+    write_failure
+    exit 0
+fi
+
+sum_metric() {
+    awk -v name="$1" '
+        index($1, name "{") == 1 || $1 == name { total += $NF }
+        END { printf "%.0f\n", total + 0 }
+    ' "$RAW"
+}
+
+SENT_ENTRIES="$(sum_metric loki_write_sent_entries_total)"
+SENT_BYTES="$(sum_metric loki_write_sent_bytes_total)"
+RETRIES="$(sum_metric loki_write_batch_retries_total)"
+DROPPED_ENTRIES="$(sum_metric loki_write_dropped_entries_total)"
+DROPPED_BYTES="$(sum_metric loki_write_dropped_bytes_total)"
+NOW="$(date +%s)"
+
+cat >"$TMP" <<EOF
+# HELP homelab_alloy_health_scrape_success Whether the local Alloy metrics endpoint was scraped successfully.
+# TYPE homelab_alloy_health_scrape_success gauge
+homelab_alloy_health_scrape_success{host="$HOST"} 1
+# HELP homelab_alloy_health_collector_timestamp_seconds Unix timestamp of the latest Alloy health collector run.
+# TYPE homelab_alloy_health_collector_timestamp_seconds gauge
+homelab_alloy_health_collector_timestamp_seconds{host="$HOST"} $NOW
+# HELP homelab_alloy_write_sent_entries_total Log entries successfully sent by Alloy to Loki.
+# TYPE homelab_alloy_write_sent_entries_total counter
+homelab_alloy_write_sent_entries_total{host="$HOST"} $SENT_ENTRIES
+# HELP homelab_alloy_write_sent_bytes_total Log bytes successfully sent by Alloy to Loki.
+# TYPE homelab_alloy_write_sent_bytes_total counter
+homelab_alloy_write_sent_bytes_total{host="$HOST"} $SENT_BYTES
+# HELP homelab_alloy_write_batch_retries_total Alloy Loki write batch retries.
+# TYPE homelab_alloy_write_batch_retries_total counter
+homelab_alloy_write_batch_retries_total{host="$HOST"} $RETRIES
+# HELP homelab_alloy_write_dropped_entries_total Log entries dropped by Alloy before successful Loki ingestion.
+# TYPE homelab_alloy_write_dropped_entries_total counter
+homelab_alloy_write_dropped_entries_total{host="$HOST"} $DROPPED_ENTRIES
+# HELP homelab_alloy_write_dropped_bytes_total Log bytes dropped by Alloy before successful Loki ingestion.
+# TYPE homelab_alloy_write_dropped_bytes_total counter
+homelab_alloy_write_dropped_bytes_total{host="$HOST"} $DROPPED_BYTES
+EOF
+
+chmod 0644 "$TMP"
+mv "$TMP" "$OUT"

@@ -1,0 +1,12 @@
+[Unit]
+Description=Collect Homelab Alloy health metrics every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitActiveSec=60s
+AccuracySec=15s
+Persistent=true
+Unit=homelab-alloy-health.service
+
+[Install]
+WantedBy=timers.target

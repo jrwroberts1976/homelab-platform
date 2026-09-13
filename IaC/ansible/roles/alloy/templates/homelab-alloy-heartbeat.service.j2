@@ -1,0 +1,8 @@
+[Unit]
+Description=Homelab Alloy end-to-end journal heartbeat
+After=alloy.service
+
+[Service]
+Type=oneshot
+ExecCondition=/usr/bin/systemctl is-active --quiet alloy.service
+ExecStart=/usr/bin/logger -t homelab-observability-heartbeat HOMELAB_ALLOY_HEARTBEAT host={{ alloy_host_label }}

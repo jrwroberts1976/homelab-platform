@@ -1,0 +1,4 @@
+---
+# Proxmox-specific Alloy profile layered on the shared alloy_hosts contract.
+alloy_host_role: proxmox-host
+alloy_require_proxmox: true

@@ -1,0 +1,4 @@
+---
+# Media-host Alloy profile layered on the shared alloy_hosts contract.
+alloy_host_role: media-host
+alloy_require_proxmox: false

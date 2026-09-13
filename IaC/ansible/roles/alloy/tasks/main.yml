@@ -1,0 +1,309 @@
+---
+- name: Validate Alloy target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.architecture in alloy_supported_architectures
+      - ansible_facts.hostname == inventory_hostname
+    fail_msg: >-
+      Refusing to deploy Alloy: expected Debian 13 host on a supported
+      architecture with hostname matching inventory name {{ inventory_hostname }}.
+
+- name: Verify Proxmox profile target
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  register: alloy_pve_version
+  changed_when: false
+  when: alloy_require_proxmox | bool
+
+- name: Verify central Loki is reachable before installation
+  ansible.builtin.uri:
+    url: "{{ alloy_loki_ready_url }}"
+    status_code: 200
+    return_content: true
+  register: alloy_loki_ready
+  changed_when: false
+  failed_when: >-
+    alloy_loki_ready.status != 200
+    or 'ready' not in (alloy_loki_ready.content | lower)
+
+- name: Install Alloy repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure APT keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Grafana repository signing key
+  ansible.builtin.get_url:
+    url: "{{ alloy_grafana_repo_key_url }}"
+    dest: "{{ alloy_grafana_repo_key_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Grafana APT repository definition
+  ansible.builtin.copy:
+    content: "{{ alloy_grafana_repo_line }}\n"
+    dest: "{{ alloy_grafana_repo_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: alloy_repo_definition
+
+- name: Remove duplicate Grafana Deb822 repository definition
+  ansible.builtin.file:
+    path: /etc/apt/sources.list.d/grafana.sources
+    state: absent
+  register: alloy_duplicate_repo_definition
+
+- name: Refresh APT metadata after repository configuration
+  ansible.builtin.apt:
+    update_cache: true
+  when: >-
+    alloy_repo_definition.changed
+    or alloy_duplicate_repo_definition.changed
+
+- name: Install pinned Alloy package
+  ansible.builtin.apt:
+    name: "{{ alloy_package_name }}={{ alloy_package_version }}"
+    state: present
+    allow_downgrade: true
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Alloy has journal-reading group membership
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - adm
+      - systemd-journal
+    append: true
+  notify: Restart alloy
+
+- name: Secure Alloy configuration directory
+  ansible.builtin.file:
+    path: /etc/alloy
+    state: directory
+    owner: root
+    group: alloy
+    mode: "0750"
+
+- name: Secure Alloy storage directory
+  ansible.builtin.file:
+    path: "{{ alloy_storage_path }}"
+    state: directory
+    owner: alloy
+    group: alloy
+    mode: "0750"
+
+- name: Install managed Alloy service environment
+  ansible.builtin.template:
+    src: alloy.default.j2
+    dest: "{{ alloy_environment_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  notify: Restart alloy
+
+- name: Install validated Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: "{{ alloy_config_path }}"
+    owner: root
+    group: alloy
+    mode: "0640"
+    backup: true
+    validate: "/usr/bin/alloy validate %s"
+  notify: Restart alloy
+
+- name: Apply pending Alloy restart before validation
+  ansible.builtin.meta: flush_handlers
+
+- name: Ensure Alloy is enabled and running
+  ansible.builtin.systemd_service:
+    name: alloy
+    state: started
+    enabled: true
+
+- name: Validate installed Alloy configuration
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/alloy
+      - validate
+      - "{{ alloy_config_path }}"
+  changed_when: false
+
+- name: Wait for Alloy local readiness
+  ansible.builtin.uri:
+    url: http://127.0.0.1:12345/-/ready
+    status_code: 200
+    return_content: true
+  register: alloy_local_ready
+  until:
+    - alloy_local_ready.status == 200
+    - "'ready' in (alloy_local_ready.content | lower)"
+  retries: 20
+  delay: 2
+  changed_when: false
+
+- name: Verify Alloy service runs as dedicated user
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - alloy
+      - --property=User
+      - --value
+  register: alloy_service_user
+  changed_when: false
+  failed_when: alloy_service_user.stdout | trim != 'alloy'
+
+- name: Verify Alloy can read the systemd journal
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - alloy
+      - --
+      - journalctl
+      - -n
+      - "1"
+      - --no-pager
+  changed_when: false
+
+- name: Verify installed Alloy package version
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - -f=${Version}
+      - alloy
+  register: alloy_installed_version
+  changed_when: false
+  failed_when: alloy_installed_version.stdout | trim != alloy_package_version
+
+- name: Verify node-exporter textfile collector directory exists
+  ansible.builtin.stat:
+    path: "{{ alloy_textfile_directory }}"
+  register: alloy_textfile_directory_state
+
+- name: Require existing node-exporter textfile collector
+  ansible.builtin.assert:
+    that:
+      - alloy_textfile_directory_state.stat.exists
+      - alloy_textfile_directory_state.stat.isdir
+    fail_msg: >-
+      Node-exporter textfile directory {{ alloy_textfile_directory }} is absent;
+      refusing to deploy Alloy health export without a Prometheus collection path.
+
+- name: Install Alloy health collector
+  ansible.builtin.template:
+    src: alloy-health-collector.sh.j2
+    dest: "{{ alloy_health_collector_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Alloy health collector service
+  ansible.builtin.template:
+    src: homelab-alloy-health.service.j2
+    dest: "/etc/systemd/system/{{ alloy_health_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Alloy health collector timer
+  ansible.builtin.template:
+    src: homelab-alloy-health.timer.j2
+    dest: "/etc/systemd/system/{{ alloy_health_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Alloy journal heartbeat service
+  ansible.builtin.template:
+    src: homelab-alloy-heartbeat.service.j2
+    dest: "/etc/systemd/system/{{ alloy_heartbeat_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Alloy journal heartbeat timer
+  ansible.builtin.template:
+    src: homelab-alloy-heartbeat.timer.j2
+    dest: "/etc/systemd/system/{{ alloy_heartbeat_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd for Alloy telemetry units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  changed_when: false
+
+- name: Enable Alloy health collector timer
+  ansible.builtin.systemd_service:
+    name: "{{ alloy_health_timer_name }}"
+    state: started
+    enabled: true
+
+- name: Enable Alloy journal heartbeat timer
+  ansible.builtin.systemd_service:
+    name: "{{ alloy_heartbeat_timer_name }}"
+    state: started
+    enabled: true
+
+- name: Prime Alloy health metrics immediately
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - start
+      - "{{ alloy_health_service_name }}"
+  changed_when: false
+
+- name: Emit an immediate Alloy journal heartbeat
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - start
+      - "{{ alloy_heartbeat_service_name }}"
+  changed_when: false
+
+- name: Verify node-exporter publishes Alloy health metrics
+  ansible.builtin.uri:
+    url: http://127.0.0.1:9100/metrics
+    status_code: 200
+    return_content: true
+  register: alloy_node_exporter_metrics
+  changed_when: false
+  failed_when: >-
+    alloy_node_exporter_metrics.status != 200
+    or 'homelab_alloy_health_scrape_success' not in alloy_node_exporter_metrics.content
+    or 'homelab_alloy_write_sent_entries_total' not in alloy_node_exporter_metrics.content
+    or 'node_systemd_unit_state' not in alloy_node_exporter_metrics.content
+    or 'name="alloy.service"' not in alloy_node_exporter_metrics.content
+
+- name: Verify target has no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: alloy_failed_units
+  changed_when: false
+  failed_when: alloy_failed_units.stdout | trim | length > 0

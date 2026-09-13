@@ -1,0 +1,10 @@
+---
+- name: Deploy baseline observability agents
+  hosts: alloy_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+
+  roles:
+    - role: node_exporter
+    - role: alloy

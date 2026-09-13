@@ -33,6 +33,7 @@ services:
       - grafana-data:/var/lib/grafana
     depends_on:
       - prometheus
+      - loki
 
   alertmanager:
     image: {{ monitoring_alertmanager_image }}
@@ -58,7 +59,19 @@ services:
     volumes:
       - ./blackbox:/etc/blackbox_exporter:ro
 
+  loki:
+    image: {{ monitoring_loki_image }}
+    restart: unless-stopped
+    command:
+      - -config.file=/etc/loki/loki.yml
+    ports:
+      - "3100:3100"
+    volumes:
+      - ./loki:/etc/loki:ro
+      - loki-data:/loki
+
 volumes:
   prometheus-data:
   grafana-data:
   alertmanager-data:
+  loki-data:

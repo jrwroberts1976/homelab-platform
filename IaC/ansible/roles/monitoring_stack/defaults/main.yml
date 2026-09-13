@@ -7,23 +7,47 @@ monitoring_prometheus_image: prom/prometheus:v3.14.0
 monitoring_grafana_image: grafana/grafana:13.2.1
 monitoring_alertmanager_image: prom/alertmanager:v0.34.0
 monitoring_blackbox_image: prom/blackbox-exporter:v0.28.0
+monitoring_loki_image: grafana/loki:3.7.7
 
 monitoring_prometheus_retention: 30d
+monitoring_loki_retention: 336h
+monitoring_loki_schema_from: "2020-10-24"
 monitoring_grafana_admin_user: admin
+
+monitoring_node_exporter_textfile_directory: /var/lib/prometheus/node-exporter
+monitoring_alloy_heartbeat_hosts:
+  - PROXMOX
+  - Proxmox-2
+  - edge-01
+  - mail-relay-01
+  - media-01
+  - dns-01
+  - dns-02
+  - cloud-01
+  - docker-01
+  - admin-01
+monitoring_alloy_heartbeat_lookback_seconds: 1800
+monitoring_alloy_heartbeat_stale_seconds: 600
 
 monitoring_icmp_targets:
   - address: 192.168.2.1
     label: router
+  - address: 192.168.2.48
+    label: admin-01
   - address: 192.168.2.50
     label: dns-02
   - address: 192.168.2.51
     label: dns-01
   - address: 192.168.2.52
     label: monitor-01
+  - address: 192.168.2.53
+    label: cloud-01
   - address: 192.168.2.54
     label: mail-relay-01
   - address: 192.168.2.55
     label: sensor-01
+  - address: 192.168.2.56
+    label: edge-01
   - address: 192.168.2.70
     label: PROXMOX
   - address: 192.168.2.71
@@ -46,16 +70,22 @@ monitoring_dns_tcp_targets:
     label: dns-01
 
 monitoring_node_exporter_targets:
+  - address: 192.168.2.48:9100
+    label: admin-01
   - address: 192.168.2.50:9100
     label: dns-02
   - address: 192.168.2.51:9100
     label: dns-01
   - address: 192.168.2.52:9100
     label: monitor-01
+  - address: 192.168.2.53:9100
+    label: cloud-01
   - address: 192.168.2.54:9100
     label: mail-relay-01
   - address: 192.168.2.55:9100
     label: sensor-01
+  - address: 192.168.2.56:9100
+    label: edge-01
   - address: 192.168.2.70:9100
     label: PROXMOX
   - address: 192.168.2.71:9100
@@ -64,7 +94,6 @@ monitoring_node_exporter_targets:
     label: media-01
   - address: 192.168.2.220:9100
     label: docker-01
-
 
 monitoring_alert_email_to: "jrwroberts1976@gmail.com"
 monitoring_alert_email_from: "jrwroberts1976@gmail.com"
