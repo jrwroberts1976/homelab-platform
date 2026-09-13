@@ -1,0 +1,21 @@
+[Unit]
+Description=Homelab Network Host Enrichment Collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0027
+
+ExecStart={{ network_host_enrichment_script }}
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ network_host_enrichment_state_dir }}
+ReadWritePaths={{ network_host_enrichment_textfile_dir }}
+
+TimeoutStartSec=20min

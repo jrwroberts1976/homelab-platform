@@ -1,0 +1,36 @@
+---
+network_host_enrichment_inventory:
+  "/var/lib/homelab-network-hosts/inventory.json"
+
+network_host_enrichment_state_dir:
+  "/var/lib/homelab-network-hosts"
+
+network_host_enrichment_output:
+  "{{ network_host_enrichment_state_dir }}/enrichment.json"
+
+network_host_enrichment_textfile_dir:
+  "/var/lib/prometheus/node-exporter"
+
+network_host_enrichment_metrics:
+  "{{ network_host_enrichment_textfile_dir }}/homelab_network_host_enrichment.prom"
+
+network_host_enrichment_script:
+  "/usr/local/sbin/homelab-network-host-enricher"
+
+network_host_enrichment_service:
+  "homelab-network-host-enricher.service"
+
+network_host_enrichment_timer:
+  "homelab-network-host-enricher.timer"
+
+network_host_enrichment_interval: "6h"
+
+network_host_enrichment_ports:
+  "22,23,25,53,80,110,143,443,445,554,587,631,993,995,1883,3000,3001,5000,8000,8080,8089,8123,8443,8883,9000,9100,9443,10000,32400"
+
+network_host_enrichment_tls_ports:
+  "443,8443,9443"
+
+# Deployment and periodic execution are separately gated.
+network_host_enrichment_allow_deploy: false
+network_host_enrichment_enable_timer: false

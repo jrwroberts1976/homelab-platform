@@ -1,0 +1,654 @@
+#!/usr/bin/env python3
+
+import glob
+import json
+import os
+import re
+import socket
+import subprocess
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+INVENTORY_FILE = Path("{{ network_host_enrichment_inventory }}")
+ENRICHMENT_FILE = Path("{{ network_host_enrichment_output }}")
+METRIC_FILE = Path("{{ network_host_enrichment_metrics }}")
+
+SERVICE_PORTS = "{{ network_host_enrichment_ports }}"
+TLS_PORTS = "{{ network_host_enrichment_tls_ports }}"
+
+NOW = int(time.time())
+
+
+def load_json(path, optional=False):
+    if optional and not path.exists():
+        return {}
+
+    if not path.exists():
+        raise RuntimeError(f"Required file does not exist: {path}")
+
+    try:
+        data = json.loads(path.read_text())
+    except Exception as exc:
+        raise RuntimeError(
+            f"Refusing to use unreadable JSON file: {path}"
+        ) from exc
+
+    if not isinstance(data, dict):
+        raise RuntimeError(
+            f"Invalid JSON structure in: {path}"
+        )
+
+    return data
+
+
+def save_atomic(path, text, mode):
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+    )
+
+    try:
+        with os.fdopen(fd, "w") as fh:
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+
+        os.chmod(tmp, mode)
+        os.replace(tmp, path)
+
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def run_nmap(args):
+    result = subprocess.run(
+        ["nmap", *args],
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=1200,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "nmap failed: " + result.stderr.strip()
+        )
+
+    return result.stdout
+
+
+def host_ip(host):
+    for address in host.findall("address"):
+        if address.get("addrtype") == "ipv4":
+            return address.get("addr", "")
+
+    return ""
+
+
+def scan_services(ips):
+    result = {ip: [] for ip in ips}
+
+    if not ips:
+        return result
+
+    xml = run_nmap([
+        "-sT",
+        "-sV",
+        "--version-light",
+        "-Pn",
+        "-n",
+        "--open",
+        "-T3",
+        "--max-retries",
+        "1",
+        "--host-timeout",
+        "30s",
+        "-p",
+        SERVICE_PORTS,
+        "-oX",
+        "-",
+        *ips,
+    ])
+
+    root = ET.fromstring(xml)
+
+    for host in root.findall("host"):
+        ip = host_ip(host)
+
+        if not ip:
+            continue
+
+        services = []
+
+        for port in host.findall("./ports/port"):
+            state = port.find("state")
+
+            if state is None or state.get("state") != "open":
+                continue
+
+            service = port.find("service")
+
+            services.append({
+                "protocol": port.get("protocol", ""),
+                "port": int(port.get("portid", "0")),
+                "service": (
+                    service.get("name", "")
+                    if service is not None
+                    else ""
+                ),
+                "product": (
+                    service.get("product", "")
+                    if service is not None
+                    else ""
+                ),
+                "version": (
+                    service.get("version", "")
+                    if service is not None
+                    else ""
+                ),
+                "extra_info": (
+                    service.get("extrainfo", "")
+                    if service is not None
+                    else ""
+                ),
+                "tunnel": (
+                    service.get("tunnel", "")
+                    if service is not None
+                    else ""
+                ),
+            })
+
+        result[ip] = sorted(
+            services,
+            key=lambda item: (
+                item["protocol"],
+                item["port"],
+            ),
+        )
+
+    return result
+
+
+def certificate_field(output, prefix):
+    for line in output.splitlines():
+        line = line.strip()
+
+        if line.startswith(prefix):
+            return line[len(prefix):].strip()
+
+    return ""
+
+
+def common_name(subject):
+    match = re.search(
+        r"commonName=([^/,\n]+)",
+        subject,
+        re.IGNORECASE,
+    )
+
+    return match.group(1).strip() if match else ""
+
+
+def timestamp(value):
+    if not value:
+        return None
+
+    try:
+        clean = value.strip()
+
+        if clean.endswith("Z"):
+            clean = clean[:-1] + "+00:00"
+
+        dt = datetime.fromisoformat(clean)
+
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+
+        return int(dt.timestamp())
+
+    except Exception:
+        return None
+
+
+def scan_tls(ips):
+    result = {ip: [] for ip in ips}
+
+    if not ips:
+        return result
+
+    xml = run_nmap([
+        "-sT",
+        "-Pn",
+        "-n",
+        "--open",
+        "-T3",
+        "--max-retries",
+        "1",
+        "--host-timeout",
+        "30s",
+        "-p",
+        TLS_PORTS,
+        "--script",
+        "ssl-cert",
+        "-oX",
+        "-",
+        *ips,
+    ])
+
+    root = ET.fromstring(xml)
+
+    for host in root.findall("host"):
+        ip = host_ip(host)
+
+        if not ip:
+            continue
+
+        certificates = []
+
+        for port in host.findall("./ports/port"):
+            state = port.find("state")
+
+            if state is None or state.get("state") != "open":
+                continue
+
+            script = port.find('./script[@id="ssl-cert"]')
+
+            if script is None:
+                continue
+
+            output = script.get("output", "")
+
+            subject = certificate_field(output, "Subject:")
+            issuer = certificate_field(output, "Issuer:")
+            not_before = certificate_field(output, "Not valid before:")
+            not_after = certificate_field(output, "Not valid after:")
+            san = certificate_field(
+                output,
+                "Subject Alternative Name:",
+            )
+            sha256 = certificate_field(output, "SHA-256:")
+
+            certificates.append({
+                "port": int(port.get("portid", "0")),
+                "subject": subject,
+                "subject_cn": common_name(subject),
+                "issuer": issuer,
+                "issuer_cn": common_name(issuer),
+                "subject_alternative_name": san,
+                "not_before": not_before,
+                "not_before_seconds": timestamp(not_before),
+                "not_after": not_after,
+                "not_after_seconds": timestamp(not_after),
+                "sha256": sha256,
+            })
+
+        result[ip] = sorted(
+            certificates,
+            key=lambda item: item["port"],
+        )
+
+    return result
+
+
+def proxmox_identity_by_mac():
+    identities = {}
+
+    node = socket.gethostname()
+
+    sources = (
+        (
+            "qemu",
+            "/etc/pve/qemu-server/*.conf",
+            "name",
+        ),
+        (
+            "lxc",
+            "/etc/pve/lxc/*.conf",
+            "hostname",
+        ),
+    )
+
+    mac_pattern = re.compile(
+        r"(?i)([0-9a-f]{2}(?::[0-9a-f]{2}){5})"
+    )
+
+    for guest_type, pattern, name_key in sources:
+        for filename in sorted(glob.glob(pattern)):
+            path = Path(filename)
+            vmid = path.stem
+            name = ""
+            macs = []
+
+            try:
+                lines = path.read_text().splitlines()
+            except Exception:
+                continue
+
+            for line in lines:
+                if line.startswith(name_key + ":"):
+                    name = line.split(":", 1)[1].strip()
+
+                if re.match(r"^net\d+:", line):
+                    match = mac_pattern.search(line)
+
+                    if match:
+                        macs.append(
+                            match.group(1).lower()
+                        )
+
+            for mac in macs:
+                identities[mac] = {
+                    "source": "proxmox_local",
+                    "node": node,
+                    "guest_type": guest_type,
+                    "vmid": vmid,
+                    "name": name,
+                }
+
+    return identities
+
+
+def prom_escape(value):
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace('"', '\\"')
+        .replace("\n", " ")
+    )
+
+
+inventory = load_json(INVENTORY_FILE)
+
+previous = load_json(
+    ENRICHMENT_FILE,
+    optional=True,
+)
+
+previous_hosts = previous.get("hosts", {})
+
+if not isinstance(previous_hosts, dict):
+    raise RuntimeError(
+        "Refusing to overwrite invalid enrichment state"
+    )
+
+online_ips = sorted(
+    [
+        ip
+        for ip, host in inventory.items()
+        if host.get("online") is True
+    ],
+    key=lambda value: tuple(
+        int(part)
+        for part in value.split(".")
+    ),
+)
+
+scan_errors = {}
+
+try:
+    services = scan_services(online_ips)
+except Exception as exc:
+    services = {
+        ip: []
+        for ip in online_ips
+    }
+    scan_errors["services"] = str(exc)
+
+try:
+    certificates = scan_tls(online_ips)
+except Exception as exc:
+    certificates = {
+        ip: []
+        for ip in online_ips
+    }
+    scan_errors["tls"] = str(exc)
+
+proxmox_by_mac = proxmox_identity_by_mac()
+
+hosts = {}
+
+for ip in sorted(
+    inventory,
+    key=lambda value: tuple(
+        int(part)
+        for part in value.split(".")
+    ),
+):
+    base = inventory[ip]
+    prior = previous_hosts.get(ip, {})
+
+    entry = {
+        "ip": ip,
+        "inventory_online": bool(
+            base.get("online", False)
+        ),
+        "mac": base.get("mac", ""),
+        "hostname": base.get("hostname", ""),
+        "vendor": base.get("vendor", ""),
+    }
+
+    if not base.get("online", False):
+        if isinstance(prior, dict):
+            for field in (
+                "services",
+                "tls_certificates",
+                "proxmox",
+                "last_enriched",
+            ):
+                if field in prior:
+                    entry[field] = prior[field]
+
+        entry["enrichment_status"] = "offline_skipped"
+        hosts[ip] = entry
+        continue
+
+    mac = (
+        base.get("mac", "")
+        or ""
+    ).lower()
+
+    entry.update({
+        "services": services.get(ip, []),
+        "tls_certificates": certificates.get(ip, []),
+        "proxmox": proxmox_by_mac.get(mac),
+        "last_enriched": NOW,
+        "enrichment_status": (
+            "partial"
+            if scan_errors
+            else "success"
+        ),
+    })
+
+    hosts[ip] = entry
+
+
+document = {
+    "schema_version": 1,
+    "generated_at": NOW,
+    "source_inventory": str(INVENTORY_FILE),
+    "online_hosts_scanned": len(online_ips),
+    "scan_errors": scan_errors,
+    "hosts": hosts,
+}
+
+save_atomic(
+    ENRICHMENT_FILE,
+    json.dumps(
+        document,
+        indent=2,
+        sort_keys=True,
+    ) + "\n",
+    0o600,
+)
+
+
+metrics = [
+    "# HELP homelab_network_host_enrichment_last_run_seconds Last V2 enrichment execution time.",
+    "# TYPE homelab_network_host_enrichment_last_run_seconds gauge",
+    "# HELP homelab_network_host_enrichment_component_success Whether an enrichment component completed successfully.",
+    "# TYPE homelab_network_host_enrichment_component_success gauge",
+    "# HELP homelab_network_host_enrichment_open_ports_total Number of open selected TCP ports.",
+    "# TYPE homelab_network_host_enrichment_open_ports_total gauge",
+    "# HELP homelab_network_host_enrichment_port_info Discovered open TCP service.",
+    "# TYPE homelab_network_host_enrichment_port_info gauge",
+    "# HELP homelab_network_host_enrichment_tls_certificate_info TLS certificate identity.",
+    "# TYPE homelab_network_host_enrichment_tls_certificate_info gauge",
+    "# HELP homelab_network_host_enrichment_tls_not_after_seconds TLS certificate expiry timestamp.",
+    "# TYPE homelab_network_host_enrichment_tls_not_after_seconds gauge",
+    "# HELP homelab_network_host_enrichment_proxmox_guest_info Local Proxmox guest identity matched by MAC address.",
+    "# TYPE homelab_network_host_enrichment_proxmox_guest_info gauge",
+]
+
+metrics.append(
+    "homelab_network_host_enrichment_last_run_seconds "
+    + str(NOW)
+)
+
+for component in (
+    "services",
+    "tls",
+):
+    metrics.append(
+        'homelab_network_host_enrichment_component_success{component="'
+        + component
+        + '"} '
+        + (
+            "0"
+            if component in scan_errors
+            else "1"
+        )
+    )
+
+for ip in sorted(
+    hosts,
+    key=lambda value: tuple(
+        int(part)
+        for part in value.split(".")
+    ),
+):
+    host = hosts[ip]
+
+    if host.get("enrichment_status") not in (
+        "success",
+        "partial",
+    ):
+        continue
+
+    ip_label = 'ip="' + prom_escape(ip) + '"'
+
+    host_services = host.get("services", [])
+
+    metrics.append(
+        "homelab_network_host_enrichment_open_ports_total{"
+        + ip_label
+        + "} "
+        + str(len(host_services))
+    )
+
+    for service in host_services:
+        labels = ",".join([
+            ip_label,
+            'port="' + prom_escape(service["port"]) + '"',
+            'protocol="' + prom_escape(service["protocol"]) + '"',
+            'service="' + prom_escape(service["service"]) + '"',
+            'product="' + prom_escape(service["product"]) + '"',
+            'version="' + prom_escape(service["version"]) + '"',
+        ])
+
+        metrics.append(
+            "homelab_network_host_enrichment_port_info{"
+            + labels
+            + "} 1"
+        )
+
+    for cert in host.get(
+        "tls_certificates",
+        [],
+    ):
+        labels = ",".join([
+            ip_label,
+            'port="' + prom_escape(cert["port"]) + '"',
+            'subject_cn="' + prom_escape(cert["subject_cn"]) + '"',
+            'issuer_cn="' + prom_escape(cert["issuer_cn"]) + '"',
+        ])
+
+        metrics.append(
+            "homelab_network_host_enrichment_tls_certificate_info{"
+            + labels
+            + "} 1"
+        )
+
+        if cert.get("not_after_seconds") is not None:
+            expiry_labels = ",".join([
+                ip_label,
+                'port="' + prom_escape(cert["port"]) + '"',
+            ])
+
+            metrics.append(
+                "homelab_network_host_enrichment_tls_not_after_seconds{"
+                + expiry_labels
+                + "} "
+                + str(cert["not_after_seconds"])
+            )
+
+    proxmox = host.get("proxmox")
+
+    if proxmox:
+        labels = ",".join([
+            ip_label,
+            'node="' + prom_escape(proxmox.get("node", "")) + '"',
+            'guest_type="' + prom_escape(proxmox.get("guest_type", "")) + '"',
+            'vmid="' + prom_escape(proxmox.get("vmid", "")) + '"',
+            'name="' + prom_escape(proxmox.get("name", "")) + '"',
+        ])
+
+        metrics.append(
+            "homelab_network_host_enrichment_proxmox_guest_info{"
+            + labels
+            + "} 1"
+        )
+
+
+save_atomic(
+    METRIC_FILE,
+    "\n".join(metrics) + "\n",
+    0o644,
+)
+
+
+summary = {
+    "event": "network_host_enrichment_complete",
+    "online_hosts_scanned": len(online_ips),
+    "service_endpoints": sum(
+        len(value)
+        for value in services.values()
+    ),
+    "tls_certificates": sum(
+        len(value)
+        for value in certificates.values()
+    ),
+    "proxmox_guests_matched": sum(
+        1
+        for host in hosts.values()
+        if host.get("proxmox")
+    ),
+    "scan_errors": scan_errors,
+}
+
+print(
+    json.dumps(
+        summary,
+        sort_keys=True,
+        separators=(",", ":"),
+    ),
+    flush=True,
+)
