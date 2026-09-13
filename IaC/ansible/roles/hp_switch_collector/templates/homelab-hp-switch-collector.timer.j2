@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Homelab HP ProCurve SNMP Collector
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ hp_switch_collector_interval }}s
+RandomizedDelaySec={{ hp_switch_collector_randomized_delay }}s
+AccuracySec=5s
+Persistent=true
+
+[Install]
+WantedBy=timers.target

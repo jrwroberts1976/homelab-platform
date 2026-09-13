@@ -1,0 +1,46 @@
+---
+- name: Deploy HP ProCurve SNMP collector
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    hp_switch_collector_snmp_community_from_env: >-
+      {{
+        lookup(
+          'ansible.builtin.env',
+          'HP_SWITCH_SNMP_COMMUNITY'
+        )
+        | default('', true)
+      }}
+
+  pre_tasks:
+    - name: Read existing protected SNMP community when controller secret is absent
+      ansible.builtin.shell: |
+        if [ -f /etc/homelab-switch-collector/snmp/snmp.conf ]; then
+          sed -n 's/^defCommunity[[:space:]]*//p' \
+            /etc/homelab-switch-collector/snmp/snmp.conf |
+            head -n 1
+        fi
+      args:
+        executable: /bin/bash
+      register: hp_switch_collector_existing_community
+      changed_when: false
+      no_log: true
+      when: hp_switch_collector_snmp_community_from_env | length == 0
+
+    - name: Resolve protected SNMP community
+      ansible.builtin.set_fact:
+        hp_switch_collector_snmp_community: >-
+          {{
+            hp_switch_collector_snmp_community_from_env
+            if (hp_switch_collector_snmp_community_from_env | length > 0)
+            else (
+              hp_switch_collector_existing_community.stdout
+              | default('')
+            )
+          }}
+      no_log: true
+
+  roles:
+    - role: hp_switch_collector
