@@ -6,15 +6,17 @@ Private Infrastructure-as-Code, operational documentation and migration workspac
 
 This repository is currently **private** while the platform, recovery model and documentation are being consolidated.
 
-The estate has moved beyond the original “future authority” phase. `IaC/` is now authoritative for infrastructure and service configuration that has been explicitly migrated and validated here. Legacy repositories may still remain authoritative or useful reference sources for areas that have **not** yet been reconciled; they are retired only after unique content and recovery dependencies are reviewed.
+The estate has moved beyond the original “future authority” phase. `IaC/` is authoritative for infrastructure and service configuration that has been explicitly migrated and validated here. Legacy repositories may still remain useful reference sources for areas that have **not** yet been reconciled; they are retired only after unique content and recovery dependencies are reviewed.
 
 For the current estate, start with:
 
 - [Current-State Architecture](docs/architecture/CURRENT-STATE.md)
 - [Target-State Architecture](docs/architecture/TARGET-STATE.md)
+- [Proxmox Cluster Implementation Record](docs/architecture/PROXMOX-CLUSTER-REBUILD-PLAN.md)
+- [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
 - [Migration Tracker](docs/migrations/MIGRATION-TRACKER.md)
 - [Runbook Catalogue](runbooks/README.md)
-- [12 September 2026 Documentation Review](docs/DOCUMENTATION-REVIEW-2026-09-12.md)
+- [14 September 2026 Estate Audit](docs/architecture/ESTATE-AUDIT-2026-09-14.md)
 
 ## IaC authority
 
@@ -34,71 +36,121 @@ admin-01
 ~/projects/homelab-platform
 ```
 
+`admin-01` is also the external Corosync QNetd host for the Proxmox cluster.
+
 The retired `TestServer` identity must not be used as the current controller. Its Raspberry Pi 4 hardware is now `docker-01` at `192.168.2.220`.
 
 ## Current core estate
 
 | Host / service | Address | Current role |
 |---|---:|---|
-| `admin-01` | `192.168.2.48` | Administration / SSH jump / IaC controller |
+| `admin-01` | `192.168.2.48` | Administration / SSH jump / IaC controller / QNetd |
 | `dns-02` | `192.168.2.50` | Pi-hole + Unbound, CT100 on `PROXMOX` |
 | `dns-01` | `192.168.2.51` | Pi-hole + Unbound, CT101 on `Proxmox-2` |
-| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox |
-| `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis |
-| `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay |
-| `sensor-01` | `192.168.2.55` | Suricata/Zeek platform; Phase 1 complete |
-| `edge-01` | `192.168.2.56` | Reserved edge LXC; Cloudflare Tunnel not deployed |
-| `PROXMOX` | `192.168.2.70` | Primary standalone Proxmox VE node |
-| `Proxmox-2` | `192.168.2.71` | Secondary standalone Proxmox VE node |
-| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint |
+| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox/Loki, VM202 on `Proxmox-2` |
+| `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis, VM200 on `PROXMOX` |
+| `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT102 on `PROXMOX` |
+| `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive sensor, VM201 on `PROXMOX` |
+| `edge-01` | `192.168.2.56` | Reserved edge LXC, CT103 on `Proxmox-2`; Cloudflare Tunnel not deployed |
+| `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 |
+| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / Network Host Collector |
+| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / Proxmox NFS backup target |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
 
 Retired identities include `TestServer`, `DietPi`, `ids-01`, the former `k3s-node-01` identity and the old `.242` DNS resolver.
 
-## Current platform position
+## Proxmox cluster
 
-### Monitoring
-
-The core metrics platform on `monitor-01` is operational.
-
-Latest validated state:
+The live Proxmox platform is the two-node cluster:
 
 ```text
-Prometheus active targets: 25
-Healthy targets:           25
-Active alerts:             0
+jameshouse-pve
+
+PROXMOX
+  management: 192.168.2.70
+  Corosync link0: 10.255.255.1/30
+  node ID: 1
+
+Proxmox-2
+  management: 192.168.2.71
+  Corosync link0: 10.255.255.2/30
+  node ID: 2
 ```
 
-Prometheus, Grafana, Alertmanager and Blackbox Exporter are live. `mail-relay-01` now has both ICMP and Node Exporter coverage. Loki and Alloy are **not deployed on `monitor-01`**; central logging remains future work.
+Corosync uses:
+
+- direct point-to-point USB Ethernet `link0`, priority 20;
+- normal LAN `link1`, priority 5, as fallback;
+- `admin-01` as QDevice/QNetd third vote on TCP/5403.
+
+Validated quorum is three expected/total votes with quorum two and `Quorate Qdevice`.
+
+Current workload placement:
+
+```text
+PROXMOX
+  CT100 dns-02
+  CT102 mail-relay-01
+  VM200 cloud-01
+  VM201 sensor-01
+  VM9000 / VM9001 templates
+
+Proxmox-2
+  CT101 dns-01
+  CT103 edge-01
+  VM202 monitor-01
+```
+
+The actual node hostname is still `PROXMOX`; “Proxmox-1” is only a human-friendly diagram label.
+
+Production guest disks remain on node-local `local-lvm`, so cluster membership does not by itself provide automatic guest HA after loss of a node-local disk owner.
+
+## Current platform position
+
+### Monitoring and logging
+
+`monitor-01` provides the central observability platform:
+
+- Prometheus;
+- Grafana;
+- Alertmanager;
+- Blackbox Exporter;
+- Loki;
+- native Grafana Alloy;
+- ASUS router syslog ingestion and retention.
+
+Alloy is deployed across the managed estate. Network Hosts discovery/enrichment/deep profiling and HP ProCurve telemetry are operational.
 
 ### Cloud
 
-`cloud-01` is a live production Nextcloud service using a dedicated 200 GiB VM data disk at `/srv/cloud-01-data`.
+`cloud-01` is a live production Nextcloud service using PostgreSQL, Redis and a dedicated ext4 data disk.
 
-The former 4 TB WD USB disk is not the cloud production data disk.
-
-Backup and restore proof remain outstanding.
+VM-level snapshot backup proof exists. Application-consistent Nextcloud/PostgreSQL recovery remains a separate outstanding proof.
 
 ### Network sensor
 
-`sensor-01` Phase 1 is complete: VM, toolchain, management network and Node Exporter are live. Suricata and Zeek remain deliberately stopped until the dedicated USB capture NIC, switch repatching and SPAN path are ready.
+`sensor-01` is an active passive-sensor platform. Suricata and Zeek are operational and consume traffic from the dedicated capture path fed by the HP ProCurve mirror configuration.
 
-HP ProCurve port 24 is a **future** SPAN destination. It currently carries the primary ASUS router link and switch mirroring is disabled.
+The switch currently mirrors ports 1–23 to port 24.
 
 ### Edge
 
-`edge-01` exists as a healthy LXC at `.56`, but no `cloudflared` package/service/process is deployed. Cloudflare Tunnel implementation is future work.
+`edge-01` exists as a healthy LXC at `.56`, but no `cloudflared` package/service/process is deployed. Cloudflare Tunnel implementation remains future work until there is a real service requirement.
 
 ### Backup / recovery
 
-The current estate does **not** yet have an active production backup platform:
+`media-01` is the primary Proxmox guest-backup target using NFS v4.2/TCP.
 
-- no PBS server;
-- zero scheduled Proxmox guest backup jobs on either node;
-- no active estate-wide Restic/Backrest platform found in the latest audit;
-- restore testing not proven.
+Current cluster storage uses node-scoped namespaces:
 
-Backup/recovery is therefore a top-priority platform gap rather than a completed migration.
+```text
+PROXMOX   -> media-backup-proxmox   -> /srv/backup/pve-proxmox
+Proxmox-2 -> media-backup-proxmox-2 -> /srv/backup/pve-proxmox-2
+```
+
+Pre-cluster backup/restore evidence is strong, including all seven production guests and an isolated CT103 restore/boot proof.
+
+Cluster formation changed `monitor-01` from standalone VMID 200 to cluster VMID 202. The immediate backup follow-up is therefore to reconcile the live schedule/IaC to final placement, take fresh cluster-era backups and observe an unattended successful post-cluster cycle.
 
 ## Principles
 
@@ -112,28 +164,27 @@ Backup/recovery is therefore a top-priority platform gap rather than a completed
 - Historical evidence is preserved rather than rewritten to look current.
 - Legacy repositories are retired only after useful content and recovery dependencies are understood.
 - A healthy service is not considered fully recovery-ready until important data has a proven restore path.
+- Cluster membership, quorum and guest-data HA are separate concerns and must not be conflated.
 
 ## Delivery backlog
 
-Percentages are planning estimates, not health scores. “Operational” means the current service is live; it does not imply backup/recovery or every planned observability layer is complete.
+The current high-value work is now:
 
-| Workstream | Current position | Next milestone | Planning completion |
-|---|---|---|---:|
-| `docker-01` / BirdNET-Go | Dedicated host operational; Docker/BirdNET-Go and Node Exporter healthy | Protect persistent BirdNET state and prove recovery | 100% host/service build |
-| `cloud-01` baseline | VM/storage/OS baseline operational | Maintain IaC/idempotence and integrate recovery | 100% |
-| Nextcloud private cloud | Nextcloud/PostgreSQL/Redis/cron operational on 200 GiB data disk | Backup + representative restore + broader observability | 80% |
-| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox operational, 25/25 targets up | Add useful service telemetry; logging remains separate | 70% |
-| Central logging | Router syslog local receiver works; no central Loki/Alloy on monitor-01 | Design/deploy Alloy + Loki if still required | 20% |
-| Network Hosts platform | Enriched collector/dashboard design defined | Build collector and dashboard | 20% |
-| Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard | 20% |
-| Backup / recovery redesign | Current no-backup risk documented; target principles defined | Select storage/PBS placement, deploy jobs, test restores | 20% design / implementation pending |
-| Network sensor Phase 2 | Phase 1 complete; capture NIC not yet available | USB NIC + repatch + SPAN + packet proof | 50% overall sensor programme |
-| Edge / Cloudflare Tunnel | `edge-01` host provisioned; cloudflared absent | Design/deploy connector if approved | 25% host-only |
-| Runbook catalogue | Core operational services indexed and current-state reconciliation completed | Add Proxmox/backup recovery procedures and test runbooks | 70% |
-| Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths | 40% |
-| Password manager | Preferred product direction remains future work | Final security/backup review and host decision | 5% |
-| Home automation | Future project | Host/platform and device-integration design | 0% |
-| FreeSWITCH / SIP | PBX direction identified; SIP supplier TBD | Select host/supplier and define security/network design | 0% |
+| Workstream | Current position | Next milestone |
+|---|---|---|
+| Proxmox cluster | Two-node cluster + dual Corosync links + QDevice operational | Prove link fallback and controlled single-node maintenance behaviour |
+| Cluster backup reconciliation | Node-scoped NFS storage retained; VM202 is new cluster identity | Update job/IaC guest set to `101,103,202`, take fresh backups, observe unattended run |
+| Recovery depth | LXC restore proof exists; VM/application proof incomplete | QEMU restore + application-consistent `cloud-01` recovery |
+| Second-copy resilience | Primary NFS backup target operational | Add independent second copy for important data |
+| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add cluster/QDevice/link health and useful service telemetry |
+| Network Hosts platform | Discovery/enrichment/deep profiling/notifications/dashboards operational | Correlate with switch topology and keep data actionable |
+| Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
+| Network hardening | SPAN and telemetry operational | Refresh physical port map; restrict legacy SNMP/Telnet exposure |
+| Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths |
+| Edge / Cloudflare Tunnel | `edge-01` host provisioned; cloudflared absent | Deploy only when approved/needed |
+| Password manager | Future work | Final security/backup review and host decision |
+| Home automation | Future project | Host/platform and device-integration design |
+| FreeSWITCH / SIP | Future project | Select host/supplier and define security/network design |
 
 ## Production runbooks
 
@@ -150,6 +201,7 @@ Current service/recovery documents include:
 - [media-01 Service](production%20docs/MEDIA-SERVICE.md)
 - [Router Syslog Service](production%20docs/ROUTER-SYSLOG-SERVICE.md)
 - [Time Service](production%20docs/TIME-SERVICE.md)
+- [Proxmox Backup Recovery](production%20docs/PROXMOX-BACKUP-RECOVERY.md)
 - [Cloudflare Pages Production Pipeline](production%20docs/CLOUDFLARE-PAGES-PRODUCTION-PIPELINE.md)
 
 ## Documentation rule
