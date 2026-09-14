@@ -1,0 +1,8 @@
+---
+- name: Configure Proxmox root notification recipient
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: proxmox_notification_recipient
