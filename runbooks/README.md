@@ -49,12 +49,14 @@ The retired identities `TestServer` and `DietPi`, and the decommissioned host `i
 - `edge-01` exists as CT103 at `192.168.2.56`, but `cloudflared` is not deployed.
 - `sensor-01` capture is operational; Suricata and Zeek are active and HP ProCurve port 24 is the live SPAN destination for ports 1–23.
 - `monitor-01` runs the production Prometheus/Grafana/Alertmanager/Blackbox/Loki stack and Alloy logging pipeline.
-- `cloud-01` is live on its dedicated 200 GiB VM data disk and now has a proven VM-level snapshot backup; application-consistent Nextcloud/PostgreSQL recovery is still unproven.
+- `cloud-01` is live on its dedicated 200 GiB VM data disk and has a proven VM-level snapshot backup; application-consistent Nextcloud/PostgreSQL recovery is still unproven.
 - `media-01` is both the Kodi endpoint and the primary Proxmox NFS backup target.
 - the two standalone Proxmox nodes both currently have an unrelated VMID `200`; their active backup namespaces must remain isolated until guest IDs become cluster-unique.
 - all seven production Proxmox guests have successful backup evidence in isolated repositories.
 - CT103 has a proven isolated LXC restore/boot path.
-- the final isolated scheduled-job cutover and first unattended run are not yet evidenced in this catalogue and must not be represented as proven.
+- the isolated nightly backup jobs are live and policy-validated: `PROXMOX` runs at 02:15 to `media-backup-proxmox`; `Proxmox-2` runs at 03:15 to `media-backup-proxmox-2`; both use snapshot mode, zstd, `keep-last=3` and the notification system.
+- the schedule reconciliation is idempotent (`changed=0` on both nodes on 14 September 2026) and zero failed systemd units were observed.
+- the first unattended overnight run remains to be observed before unattended execution history is called proven.
 - `docker-01` remains deliberately single-purpose for BirdNET-Go.
 
 ## Current coverage gaps
@@ -101,7 +103,7 @@ Not every field is mandatory. Keep **the affected target** separate from **the e
 
 Do not advance `last_validated` merely because a document was edited. Use the date only when the documented path has been proven at the appropriate level.
 
-For example, CT103's LXC restore path is proven on 14 September 2026, while the final isolated scheduled-job cutover is not yet evidenced and therefore must remain pending.
+For example, CT103's LXC restore path and the final isolated schedule cutover were both proven on 14 September 2026, while the first unattended overnight execution remains pending observation.
 
 ## Change rules
 
