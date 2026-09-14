@@ -38,6 +38,8 @@ The following capabilities are implemented and must not be presented as future g
 - all seven production Proxmox guests have completed successful snapshot backup proof.
 - CT103 has completed an isolated LXC restore/boot proof.
 - Proxmox notification delivery through `mail-relay-01` is proven.
+- the isolated nightly backup jobs are live: `PROXMOX` at 02:15 to `media-backup-proxmox` and `Proxmox-2` at 03:15 to `media-backup-proxmox-2`, both using snapshot mode, zstd, `keep-last=3` and the PVE notification system.
+- schedule reconciliation is idempotent and was validated with zero failed systemd units on both PVE nodes.
 - legacy `TestServer`, `DietPi`, `ids-01` and `k3s-node-01` identities are retired.
 
 These completed capabilities should be maintained and improved, not re-planned from scratch.
@@ -57,7 +59,7 @@ The separate namespaces are intentional while the standalone hosts both contain 
 
 Remaining target outcomes:
 
-- record the final isolated schedule cutover and first unattended overnight run;
+- observe and record the first unattended overnight run;
 - review capacity after several retention cycles;
 - prove at least one QEMU VM restore;
 - prove application-consistent Nextcloud/PostgreSQL recovery for `cloud-01`;
@@ -162,7 +164,7 @@ Remaining direction:
 - continue service-specific telemetry where actionable;
 - correlate Network Hosts inventory, enrichment, deep profiles and switch topology;
 - build the planned Web Platform / Analytics dashboard combining Cloudflare edge/security information, Umami visitor analytics and origin/application health from Grafana/Loki;
-- add backup freshness/storage-capacity visibility once the scheduled path is operationally observed;
+- add backup freshness/storage-capacity visibility after unattended execution history is available;
 - keep alerts actionable and low-noise.
 
 ## Security platform
