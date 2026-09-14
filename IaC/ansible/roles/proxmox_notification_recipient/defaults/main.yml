@@ -1,0 +1,4 @@
+---
+proxmox_notification_recipient_allow_deploy: false
+proxmox_notification_recipient_email: "jrwroberts1976@gmail.com"
+proxmox_notification_recipient_expected_ipv4: "{{ ansible_host }}"
