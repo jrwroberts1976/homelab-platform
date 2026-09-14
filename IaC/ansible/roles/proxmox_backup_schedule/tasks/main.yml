@@ -46,8 +46,6 @@
       - "'--vmid' in proxmox_backup_schedule_api_usage.stdout"
       - "'--prune-backups' in proxmox_backup_schedule_api_usage.stdout"
       - "'--notification-mode' in proxmox_backup_schedule_api_usage.stdout"
-      - "'--notification-target' in proxmox_backup_schedule_api_usage.stdout"
-      - "'--notification-policy' in proxmox_backup_schedule_api_usage.stdout"
     fail_msg: >-
       This Proxmox node does not expose the backup-job API parameters expected by
       the IaC role. Refusing to create a schedule.
@@ -138,6 +136,36 @@
         | list | length) == 1
     fail_msg: "Approved backup notification target is missing."
 
+- name: Read notification matchers
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - /cluster/notifications/matchers
+      - --output-format
+      - json
+  register: proxmox_backup_schedule_matchers
+  changed_when: false
+
+- name: Record approved notification matcher
+  ansible.builtin.set_fact:
+    proxmox_backup_schedule_matching_matchers: >-
+      {{
+        proxmox_backup_schedule_matchers.stdout | from_json
+        | selectattr('name', 'equalto', proxmox_backup_schedule_notification_matcher)
+        | list
+      }}
+
+- name: Require notification matcher routes to approved target
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_schedule_matching_matchers | length == 1
+      - (proxmox_backup_schedule_matching_matchers[0].mode | default('')) == 'all'
+      - proxmox_backup_schedule_notification_target in (proxmox_backup_schedule_matching_matchers[0].target | default([]))
+    fail_msg: >-
+      The approved PVE notification matcher does not route notifications to the
+      approved mail-to-root target. Refusing to create scheduled backups.
+
 - name: Verify every selected production guest exists
   ansible.builtin.command:
     argv:
@@ -195,10 +223,11 @@
       - (proxmox_backup_schedule_existing_jobs[0].vmid | string) == proxmox_backup_schedule_vmids
       - (proxmox_backup_schedule_existing_jobs[0].node | string) == inventory_hostname
       - (proxmox_backup_schedule_existing_jobs[0].enabled | int) == 1
+      - (proxmox_backup_schedule_existing_jobs[0]['notification-mode'] | default('')) == proxmox_backup_schedule_notification_mode
     fail_msg: >-
       A backup job with the approved IaC ID already exists but does not match the
-      expected node, schedule, guest selection, storage, mode or compression.
-      Refusing to overwrite it.
+      expected node, schedule, guest selection, storage, mode, compression or
+      notification mode. Refusing to overwrite it.
   when: proxmox_backup_schedule_existing_jobs | length == 1
 
 - name: Create approved nightly backup job
@@ -227,10 +256,6 @@
       - '1'
       - --notification-mode
       - "{{ proxmox_backup_schedule_notification_mode }}"
-      - --notification-target
-      - "{{ proxmox_backup_schedule_notification_target }}"
-      - --notification-policy
-      - "{{ proxmox_backup_schedule_notification_policy }}"
       - --comment
       - "Homelab nightly guest backup managed by IaC"
   when: proxmox_backup_schedule_existing_jobs | length == 0
@@ -262,8 +287,6 @@
       - (proxmox_backup_schedule_reconciled.node | string) == inventory_hostname
       - (proxmox_backup_schedule_reconciled.enabled | int) == 1
       - (proxmox_backup_schedule_reconciled['notification-mode'] | default('')) == proxmox_backup_schedule_notification_mode
-      - (proxmox_backup_schedule_reconciled['notification-target'] | default('')) == proxmox_backup_schedule_notification_target
-      - (proxmox_backup_schedule_reconciled['notification-policy'] | default('')) == proxmox_backup_schedule_notification_policy
       - (proxmox_backup_schedule_reconciled['prune-backups']['keep-last'] | int) == proxmox_backup_schedule_keep_last
     fail_msg: "Reconciled backup job does not match the approved IaC policy."
 
