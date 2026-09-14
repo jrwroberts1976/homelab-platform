@@ -1,0 +1,24 @@
+---
+- name: Configure nightly Proxmox guest backup schedules
+  hosts: proxmox_hosts
+  gather_facts: true
+  serial: 1
+  vars:
+    proxmox_backup_schedule_matrix:
+      PROXMOX:
+        id: homelab-nightly-proxmox
+        schedule: "02:15"
+        guests:
+          - {id: 100, type: lxc}
+          - {id: 102, type: lxc}
+          - {id: 200, type: qemu}
+          - {id: 201, type: qemu}
+      Proxmox-2:
+        id: homelab-nightly-proxmox-2
+        schedule: "03:15"
+        guests:
+          - {id: 101, type: lxc}
+          - {id: 103, type: lxc}
+          - {id: 200, type: qemu}
+  roles:
+    - role: proxmox_backup_schedule
