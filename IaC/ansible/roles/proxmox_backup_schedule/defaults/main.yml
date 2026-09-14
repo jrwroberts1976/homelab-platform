@@ -1,6 +1,6 @@
 ---
 proxmox_backup_schedule_allow_deploy: false
-proxmox_backup_schedule_storage: media-backup
+proxmox_backup_schedule_legacy_storage: media-backup
 proxmox_backup_schedule_mode: snapshot
 proxmox_backup_schedule_compress: zstd
 proxmox_backup_schedule_keep_last: 3
