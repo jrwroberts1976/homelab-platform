@@ -5,6 +5,7 @@
       - media_firewall_expected_ipv4 in ansible_facts.all_ipv4_addresses
       - media_firewall_lan_subnet | length > 0
       - media_firewall_monitor_ipv4 | length > 0
+      - media_firewall_backup_nfs_clients | length > 0
     fail_msg: >-
       Refusing to configure media firewall on an unexpected host.
 
@@ -57,7 +58,17 @@
       - "'policy drop' in media_firewall_ruleset.stdout"
       - "'tcp dport 22' in media_firewall_ruleset.stdout"
       - "'tcp dport 445' in media_firewall_ruleset.stdout"
+      - "'tcp dport 2049' in media_firewall_ruleset.stdout"
       - "'tcp dport 9100' in media_firewall_ruleset.stdout"
       - media_firewall_lan_subnet in media_firewall_ruleset.stdout
       - media_firewall_monitor_ipv4 in media_firewall_ruleset.stdout
     fail_msg: "Active nftables ruleset does not match the media-01 security policy."
+
+- name: Validate each authorised Proxmox NFS client is present in firewall policy
+  ansible.builtin.assert:
+    that:
+      - item in media_firewall_ruleset.stdout
+  loop: "{{ media_firewall_backup_nfs_clients }}"
+  loop_control:
+    label: "{{ item }}"
+  fail_msg: "Expected Proxmox NFS client is missing from the media-01 firewall policy."
