@@ -16,6 +16,8 @@ SNMP_VERSION = {{ hp_switch_collector_snmp_version | to_json }}
 METRICS_FILE = Path({{ hp_switch_collector_metrics_file | to_json }})
 TOPOLOGY_FILE = Path({{ hp_switch_collector_topology_file | to_json }})
 
+{% raw %}
+
 OIDS = {
     "sysDescr": "1.3.6.1.2.1.1.1",
     "sysUpTime": "1.3.6.1.2.1.1.3",
@@ -444,3 +446,4 @@ except Exception as exc:
     )
 
     raise SystemExit(f"switch collection failed: {exc}")
+{% endraw %}
