@@ -320,6 +320,9 @@ runbooks:
     status: active
     service_state: operational
     applies_to:
+      cluster:
+        name: jameshouse-pve
+        qdevice_host: admin-01
       hosts:
         - {name: PROXMOX, address: 192.168.2.70, role: backup_source_hypervisor}
         - {name: Proxmox-2, address: 192.168.2.71, role: backup_source_hypervisor}
@@ -329,11 +332,13 @@ runbooks:
       storage:
         - id: media-backup-proxmox
           source_host: PROXMOX
+          node_scope: PROXMOX
           server: 192.168.2.195
           export: /srv/backup/pve-proxmox
           protocol: nfs4
         - id: media-backup-proxmox-2
           source_host: Proxmox-2
+          node_scope: Proxmox-2
           server: 192.168.2.195
           export: /srv/backup/pve-proxmox-2
           protocol: nfs4
@@ -372,24 +377,29 @@ runbooks:
         job_id: homelab-nightly-proxmox-2
         schedule: "03:15"
         storage: media-backup-proxmox-2
-        guests: [101, 103, 200]
+        guests: [101, 103, 202]
       mode: snapshot
       compression: zstd
       keep_last: 3
-      live_cutover_validation: proven_2026-09-14
+      post_cluster_live_validation: pending
     validation:
-      nfs_write_read_delete: proven_both_hypervisors
-      isolated_namespaces: proven_2026-09-14
-      all_seven_guest_backups: proven_2026-09-14
+      nfs_write_read_delete: proven_both_hypervisors_precluster
+      node_scoped_storage_after_cluster_join: proven_2026-09-14
+      all_seven_guest_backups: proven_precluster_2026-09-14
       unprivileged_lxc_backup: proven_ct103_2026-09-14
-      archive_integrity: proven
+      archive_integrity: proven_precluster
       isolated_lxc_restore_boot: proven_ct103_2026-09-14
       notification_delivery: proven_both_hypervisors_2026-09-14
-      schedule_policy_live: proven_both_hypervisors_2026-09-14
-      schedule_iac_reconciliation: idempotent_changed_0_2026-09-14
+      old_standalone_schedule_policy: proven_2026-09-14
+      final_cluster_schedule_iac_reconciliation: pending_vm202
+      fresh_vm202_backup: pending
+      first_unattended_post_cluster_schedule_run: pending
       qemu_restore: pending
       application_consistent_cloud_restore: pending
-      first_unattended_isolated_schedule_run: pending
+    notes:
+      - monitor-01 is VM202; the former Proxmox-2 VM200 identity is historical
+      - retained precluster LVs on Proxmox-2 are rollback evidence and are not active guest disks
+      - cluster quorum does not make node-local local-lvm guest disks highly available
     last_validated: 2026-09-14
 
   birdnet_service:
@@ -450,6 +460,18 @@ runbooks:
       type: local_wired_admin_session
 
 coverage_gaps:
+  proxmox_cluster_backup_reconcile:
+    priority: high
+    category: backup
+    applies_to:
+      - {name: PROXMOX, address: 192.168.2.70}
+      - {name: Proxmox-2, address: 192.168.2.71}
+      - {name: monitor-01, address: 192.168.2.52, vmid: 202}
+    reason: >-
+      The backup transport and pre-cluster schedule were proven, but the final
+      cluster-era Proxmox-2 job and IaC must be reconciled to guests 101,103,202
+      and followed by fresh VM202 and unattended post-cluster backup proof.
+
   backup_secondary_copy:
     priority: high
     category: backup
@@ -472,6 +494,18 @@ coverage_gaps:
     reason: >-
       QEMU restore, application-consistent cloud recovery and non-Proxmox data
       recovery are not yet proven estate-wide.
+
+  proxmox_cluster_resilience:
+    priority: high
+    category: proxmox
+    applies_to:
+      - {name: PROXMOX, address: 192.168.2.70}
+      - {name: Proxmox-2, address: 192.168.2.71}
+      - {name: admin-01, address: 192.168.2.48, role: qnetd}
+    reason: >-
+      Cluster membership, dual Corosync links and QDevice are proven healthy,
+      but deliberate link0 failover and controlled single-node quorum behaviour
+      have not yet been exercised.
 
   proxmox_node_health:
     priority: high
