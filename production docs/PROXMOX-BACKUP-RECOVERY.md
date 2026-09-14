@@ -1,46 +1,69 @@
 # Proxmox Guest Backup and Recovery
 
-**Status:** operationally proven primary guest-backup path; scheduled jobs pending  
+**Status:** operationally proven primary guest-backup path; all seven production guests backed up to isolated per-node repositories; final schedule cutover and first unattended run not yet evidenced in this close-out  
 **Last validated:** 14 September 2026
 
 ## Purpose
 
-This runbook documents the current Proxmox VE guest-backup path, validation gates and the proven restore procedure.
+This runbook documents the current Proxmox VE guest-backup architecture, validation gates and proven restore procedure.
 
-The primary guest-backup repository is an NFS export hosted by `media-01` and registered on both standalone Proxmox nodes as `media-backup`.
-
-This is a phase-one backup platform. It does not yet provide an independent secondary copy, and it does not by itself protect non-Proxmox data stored on `media-01`, `docker-01`, the IaC controller, or application-specific consistency requirements such as Nextcloud/PostgreSQL.
+The two Proxmox nodes are standalone and both contain an unrelated QEMU VMID `200`. Their backup repositories are therefore intentionally isolated so retention/pruning cannot mix the two VM200 backup groups.
 
 ## Architecture
 
 ```text
-PROXMOX .70 ---------\
-                      +---- NFS v4.2/TCP ----> media-01 .195
-Proxmox-2 .71 -------/                         /srv/backup/pve
+PROXMOX .70
+  media-backup-proxmox
+  -> NFS v4.2/TCP -> media-01 .195:/srv/backup/pve-proxmox
 
-PROXMOX .70 ---------\
-                      +---- SMTP/25 ----------> mail-relay-01 .54
-Proxmox-2 .71 -------/                         -> smtp.gmail.com:587
+Proxmox-2 .71
+  media-backup-proxmox-2
+  -> NFS v4.2/TCP -> media-01 .195:/srv/backup/pve-proxmox-2
+
+Legacy rollback only
+  media-backup
+  -> media-01 .195:/srv/backup/pve
 ```
 
-Proxmox storage definition:
+The isolated exports are client-specific:
 
 ```text
-nfs: media-backup
-        export /srv/backup/pve
-        path /mnt/pve/media-backup
-        server 192.168.2.195
-        content backup
-        options vers=4.2,proto=tcp
+/srv/backup/pve-proxmox   -> 192.168.2.70 only
+/srv/backup/pve-proxmox-2 -> 192.168.2.71 only
 ```
 
-The NFS export permits only the two Proxmox hosts. The backup repository remains root-owned and is not made broadly writable for unprivileged LXC UID mappings.
+The legacy `/srv/backup/pve` export remains temporarily available as rollback evidence. Do not use it for new production retention while the hosts are standalone and both contain VMID 200.
+
+## Current guest scope
+
+```text
+PROXMOX .70 -> media-backup-proxmox
+  CT100 dns-02
+  CT102 mail-relay-01
+  VM200 cloud-01
+  VM201 sensor-01
+
+Proxmox-2 .71 -> media-backup-proxmox-2
+  CT101 dns-01
+  CT103 edge-01
+  VM200 monitor-01
+```
+
+Templates 9000/9001 are excluded from the initial production schedule.
+
+All seven production guests have completed a successful snapshot-mode manual backup proof to the correct isolated namespace.
+
+## Service availability during backup
+
+Production backup mode is `snapshot`.
+
+VMs remain running during backup. LXC containers remain running; Proxmox may briefly freeze them while taking the snapshot. This is not a stop-mode backup and services should not be offline for the duration of the archive copy.
 
 ## Local vzdump workspace
 
-Unprivileged LXC backup to the NFS repository initially failed because the temporary `vzdump` directory on NFS was not writable by the remapped container UID.
+Unprivileged LXC backup initially failed when `vzdump` used an NFS-hosted temporary workspace that the remapped UID could not enter.
 
-The approved design is therefore a local temporary workspace on each hypervisor:
+The approved local temporary workspace on both hypervisors is:
 
 ```text
 tmpdir: /var/lib/vz/vzdump-tmp
@@ -48,101 +71,111 @@ tmpdir: /var/lib/vz/vzdump-tmp
 
 Required state:
 
-- owner: `root`;
-- group: `root`;
-- mode: `1777`;
-- minimum deployment gate: 20 GiB free on the filesystem hosting `/var/lib/vz`;
-- UID 100000 write test must pass;
-- workspace must be empty after validation.
+- owner `root`;
+- group `root`;
+- mode `1777`;
+- deployment free-space gate: 20 GiB;
+- UID 100000 write test passes;
+- workspace is clean after validation.
 
-Do not solve the unprivileged-LXC backup problem by making the NFS backup repository broadly writable.
+Do not make the NFS backup repository broadly writable to solve an LXC temporary-workspace problem.
 
 ## IaC authority
 
-Relevant playbooks and roles:
+Relevant playbooks:
 
 ```text
 IaC/ansible/playbooks/media-backup-target.yml
+IaC/ansible/playbooks/media-backup-split-prep.yml
 IaC/ansible/playbooks/proxmox-backup-storage.yml
+IaC/ansible/playbooks/proxmox-backup-storage-split.yml
 IaC/ansible/playbooks/proxmox-vzdump-runtime.yml
 IaC/ansible/playbooks/proxmox-notification-recipient.yml
 IaC/ansible/playbooks/proxmox-mail-relay-client.yml
+IaC/ansible/playbooks/proxmox-backup-schedule.yml
+```
 
+Relevant roles:
+
+```text
 IaC/ansible/roles/media_backup_target/
+IaC/ansible/roles/media_backup_split_prep/
 IaC/ansible/roles/proxmox_backup_storage/
+IaC/ansible/roles/proxmox_backup_storage_split/
 IaC/ansible/roles/proxmox_vzdump_runtime/
 IaC/ansible/roles/proxmox_notification_recipient/
 IaC/ansible/roles/proxmox_mail_relay_client/
+IaC/ansible/roles/proxmox_backup_schedule/
 ```
 
-Deployment roles use explicit approval gates. Do not bypass those gates for routine changes.
+All deployment roles use explicit approval gates and fail closed on unexpected host/storage/schedule state.
 
 ## Notification path
 
-Both Proxmox nodes use the built-in `mail-to-root` target. `root@pam` is configured with the approved notification recipient.
+Both PVE nodes use PVE's notification system. The built-in `default-matcher` routes notifications to `mail-to-root`.
 
-Both nodes relay outbound mail through:
+Both nodes relay through:
 
 ```text
 relayhost = [192.168.2.54]:25
 ```
 
-`mail-relay-01` is the only host that authenticates to Gmail. The two Proxmox hosts must not send directly to Gmail.
+`mail-relay-01` authenticates upstream to Gmail over TLS on `smtp.gmail.com:587`.
 
-On 14 September 2026 the complete path was proven from both hypervisors:
-
-```text
-Proxmox -> mail-relay-01 -> smtp.gmail.com:587 -> recipient
-```
-
-Both test messages returned `dsn=2.0.0` and `status=sent`, and the relay queue was empty afterwards.
-
-## Proven backup test
-
-The first successful backup proof used `edge-01`, LXC CT103 on `Proxmox-2`.
-
-Observed result:
+The complete path was proven from both hypervisors:
 
 ```text
-backup mode: snapshot
-source guest remained running
-archive size: approximately 568 MiB
-archive compression: zstd
-archive integrity: PASS via zstd -t
-backup repository: media-backup
-local temporary workspace cleaned after backup
+Proxmox -> mail-relay-01 -> Gmail relay -> recipient
 ```
 
-The tested command shape was:
+Historical stale queue entries on `Proxmox-2` were removed after the successful delivery proof.
 
-```bash
-vzdump 103 \
-  --storage media-backup \
-  --mode snapshot \
-  --compress zstd
+## Backup proof
+
+### Proxmox-2
+
+A complete production backup set was proven for:
+
+```text
+CT101 dns-01
+CT103 edge-01
+VM200 monitor-01
 ```
 
-Because `/etc/vzdump.conf` now defines the local `tmpdir`, the normal command no longer needs an explicit `--tmpdir` option.
+The resulting legacy-source artifacts were copied into `/srv/backup/pve-proxmox-2/dump` and validated by matching names and byte sizes before `media-backup-proxmox-2` was registered.
+
+### PROXMOX
+
+A complete isolated production backup set was proven directly to `media-backup-proxmox` for:
+
+```text
+CT100 dns-02
+CT102 mail-relay-01
+VM200 cloud-01
+VM201 sensor-01
+```
+
+Post-backup storage remained healthy with substantial free capacity and zero failed systemd units.
 
 ## Proven restore test
 
-On 14 September 2026 the CT103 archive was restored on `Proxmox-2` under temporary VMID `903`.
+CT103 (`edge-01`) was restored on `Proxmox-2` under temporary VMID `903`.
 
-Safety controls used during the proof:
+Safety controls:
 
-1. confirmed the source CT103 remained running;
-2. confirmed temporary VMID 903 did not already exist;
-3. inspected backup metadata/configuration before restore;
-4. restored onto `local-lvm` under the temporary VMID;
-5. kept the restored container stopped initially;
-6. removed every restored network interface before first boot;
-7. changed the hostname to an unmistakable restore-test identity;
-8. mounted the restored filesystem offline and checked OS/system files;
-9. booted the restored container with no production network interface;
-10. verified the guest filesystem and OS responded correctly;
-11. stopped and destroyed the temporary restore;
-12. confirmed the temporary VMID and LVM volume were removed;
-13. confirmed live CT103 remained running and the source backup remained present.
+1. source CT103 confirmed running;
+2. temporary VMID confirmed unused;
+3. embedded backup configuration inspected;
+4. restore performed to `local-lvm`;
+5. restored guest kept stopped initially;
+6. restored production network interfaces removed before boot;
+7. hostname changed to a restore-test identity;
+8. filesystem inspected offline;
+9. restored container booted without a production network interface;
+10. OS/filesystem verified;
+11. temporary guest stopped and destroyed;
+12. temporary VMID/LV absence confirmed;
+13. live CT103 and source backup confirmed intact.
 
 Result:
 
@@ -155,94 +188,106 @@ temporary_restore_removed=PASS
 restore_proof=PASS
 ```
 
-This proves the phase-one Proxmox LXC backup path is restorable, not merely writable.
+This proves the LXC backup path is restorable, not merely writable.
+
+A QEMU VM restore proof remains pending.
+
+## Manual backup commands
+
+Use the host-specific storage ID.
+
+`PROXMOX`:
+
+```bash
+vzdump 100 102 200 201 \
+  --storage media-backup-proxmox \
+  --mode snapshot \
+  --compress zstd \
+  --prune-backups 'keep-last=3' \
+  --notification-mode notification-system
+```
+
+`Proxmox-2`:
+
+```bash
+vzdump 101 103 200 \
+  --storage media-backup-proxmox-2 \
+  --mode snapshot \
+  --compress zstd \
+  --prune-backups 'keep-last=3' \
+  --notification-mode notification-system
+```
+
+Because `/etc/vzdump.conf` defines the approved local tmpdir, normal commands do not need a separate `--tmpdir` argument.
 
 ## Manual restore procedure
 
-For a future restore test or recovery:
+1. Identify the correct host-specific backup storage.
+2. List candidate volumes with `pvesm list <storage-id> --content backup`.
+3. Inspect embedded configuration with `pvesm extractconfig <volid>` where applicable.
+4. Select a proven-unused temporary VMID for a test restore.
+5. Restore to suitable local storage while keeping the guest stopped.
+6. Remove/replace production networking before first test boot.
+7. Inspect the restored filesystem offline where possible.
+8. Boot only after network isolation is verified.
+9. For test restores, destroy the temporary guest after evidence is captured.
+10. For production recovery, deliberately reconcile hostname, MAC/IP identity, secrets, dependencies and service ownership before returning the guest to the LAN.
 
-1. identify the exact backup volume with `pvesm list media-backup`;
-2. inspect embedded configuration with `pvesm extractconfig <volid>`;
-3. select a proven-unused VMID;
-4. restore to suitable local storage while keeping the guest stopped;
-5. before any test boot, remove or replace copied production networking to prevent IP/MAC/service conflicts;
-6. inspect the restored filesystem offline where possible;
-7. boot only after isolation controls are verified;
-8. for a test restore, destroy the temporary guest after evidence is collected;
-9. for production recovery, deliberately reconcile hostname, network identity, secrets, dependencies and service ownership before returning the restored guest to the LAN.
+Never boot a cloned restore with the original production network identity while the live source guest still exists.
 
-Never start a cloned restore with the original production IP/MAC configuration while the live source guest is still present.
+## Schedule and retention
 
-## Current guest scope
-
-```text
-PROXMOX .70
-  CT100 dns-02
-  CT102 mail-relay-01
-  VM200 cloud-01
-  VM201 sensor-01
-
-Proxmox-2 .71
-  CT101 dns-01
-  CT103 edge-01
-  VM200 monitor-01
-```
-
-Templates are not part of the initial production guest-backup schedule unless explicitly approved.
-
-## Retention
-
-No scheduled backup job is approved until the schedule/retention IaC is deployed and validated.
-
-Initial production retention should be conservative while real estate-wide archive sizes are measured:
+Approved IaC policy:
 
 ```text
-keep-last=3
+PROXMOX
+  id: homelab-nightly-proxmox
+  time: 02:15
+  storage: media-backup-proxmox
+  guests: 100,102,200,201
+
+Proxmox-2
+  id: homelab-nightly-proxmox-2
+  time: 03:15
+  storage: media-backup-proxmox-2
+  guests: 101,103,200
+
+mode: snapshot
+compression: zstd
+retention: keep-last=3
+notification-mode: notification-system
 ```
 
-After several successful estate-wide runs and capacity review, expand to a deliberate daily/weekly/monthly policy if capacity and recovery objectives support it.
+The jobs were deliberately disabled when the shared-namespace collision was found. The current IaC allows only a controlled transition from the disabled legacy job to its approved isolated storage and validates a proven archive for every guest before enabling the job.
 
-## Validation before enabling schedules
-
-The following are already proven:
-
-- media-01 NFS health and capacity;
-- NFS write/read/delete from both hypervisors;
-- `media-backup` storage registration on both hypervisors;
-- local `vzdump` workspace on both hypervisors;
-- successful unprivileged LXC snapshot backup;
-- archive integrity test;
-- controlled isolated restore and boot;
-- Proxmox notification delivery through `mail-relay-01` to Gmail.
-
-Still required before calling the wider backup programme complete:
-
-- scheduled guest backup jobs;
-- successful scheduled backup run on both nodes;
-- size/capacity review after representative full estate backup;
-- VM restore proof in addition to the LXC proof;
-- application-consistent recovery proof for `cloud-01`/Nextcloud/PostgreSQL;
-- independent secondary copy for important data;
-- protection of controller/IaC recovery identities and state;
-- protection of non-Proxmox persistent data including `media-01` and `docker-01` where required.
+At this close-out the cutover playbook is syntax-valid, but the supplied evidence does not include the final live cutover result or first unattended run. Keep those as operational validation items rather than documenting them as already proven.
 
 ## Failure handling
 
 If a backup fails:
 
-1. do not immediately delete the last known-good backup;
+1. do not delete the last known-good backup;
 2. verify the source guest is healthy;
-3. inspect `vzdump` output and the local temporary workspace;
-4. inspect `pvesm status --storage media-backup`;
-5. inspect NFS connectivity and `media-01` capacity;
-6. confirm `/var/lib/vz/vzdump-tmp` has mode `1777` and sufficient free space;
-7. confirm the notification was delivered through `mail-relay-01`;
-8. correct the fault through IaC where practical;
-9. repeat a manual proof before relying on the next scheduled run if the failure affected the backup path itself.
+3. inspect the `vzdump` task log and local tmpdir;
+4. inspect the correct isolated storage with `pvesm status --storage <storage-id>`;
+5. inspect the matching NFS export and `media-01` capacity;
+6. verify `/var/lib/vz/vzdump-tmp` remains mode `1777` with sufficient free space;
+7. verify notification delivery through `mail-relay-01`;
+8. correct drift through IaC where practical;
+9. repeat a controlled manual proof if the fault affected the backup path itself.
 
 ## Known limitations
 
-- `media-01` is currently the primary guest-backup target, so its own `/srv/media` data is not protected by backing up to itself.
-- There is not yet an independent secondary backup copy.
+- `media-01` is the primary guest-backup target, so its own `/srv/media` data is not protected by these repositories.
+- There is no independent secondary copy yet.
+- QEMU VM restore is not yet proven.
+- `cloud-01` still needs application-consistent Nextcloud/PostgreSQL recovery proof.
+- `docker-01`, controller recovery state and other non-Proxmox persistent data need explicit protection.
 - The suspect 4 TB WD disk on `PROXMOX` must not become the sole trusted copy of important data.
-- A successful VM/LXC image backup does not automatically prove application-consistent recovery for databases and stateful applications.
+- A successful VM/LXC image backup does not automatically prove application-consistent database recovery.
+
+## Future cluster note
+
+The two PVE nodes are currently standalone. A future cluster may be reconsidered when dedicated Corosync networking and quorum/QDevice design are approved.
+
+Until then, preserve the isolated backup namespaces because both hosts contain an unrelated VMID `200`.
