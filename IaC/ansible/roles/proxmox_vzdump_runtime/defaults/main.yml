@@ -1,0 +1,5 @@
+---
+proxmox_vzdump_runtime_allow_deploy: false
+proxmox_vzdump_runtime_tmpdir: "/var/lib/vz/vzdump-tmp"
+proxmox_vzdump_runtime_min_free_gib: 20
+proxmox_vzdump_runtime_expected_ipv4: "{{ ansible_host }}"
