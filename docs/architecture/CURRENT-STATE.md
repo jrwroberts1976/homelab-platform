@@ -320,7 +320,13 @@ Chrony is active on both nodes.
 
 ## Patch state
 
-The 14 September audit identified package-update backlog on several hosts. Those counts are a point-in-time audit observation, not an architecture property. Apply updates through the normal controlled patch workflow.
+The package-update backlog identified by the 14 September audit was processed through the controlled patch workflow on 14 September 2026.
+
+The active estate completed the cycle with no known remaining package backlog from that audit and no required reboots. Hosts requiring controlled restart were validated after boot, including `docker-01`, `media-01` and both Proxmox nodes.
+
+The detailed maintenance evidence is recorded in [`PATCH-CYCLE-CLOSEOUT-2026-09-14.md`](PATCH-CYCLE-CLOSEOUT-2026-09-14.md).
+
+Future updates remain operational lifecycle work and must continue through the controlled patch workflow.
 
 ## Remaining current-state work
 
@@ -333,7 +339,6 @@ Major outstanding work now includes:
 - deploy `edge-01` Cloudflare Tunnel only when approved;
 - refresh the physical switch/router port map after SPAN activation;
 - complete remaining switch/router hardening decisions;
-- process package updates through the controlled patch workflow;
 - continue service-specific observability and recovery documentation.
 
 Already validated services must not be rolled backwards merely to match older documentation.

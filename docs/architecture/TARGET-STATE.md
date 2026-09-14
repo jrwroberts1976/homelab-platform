@@ -95,11 +95,13 @@ Only after cluster membership and guest identity are stable should the backup na
 
 ## Priority 3 — controlled patch and lifecycle management
 
-The 14 September estate audit identified package-update backlog on several hosts.
+The package-update backlog identified by the 14 September estate audit was cleared through the controlled patch workflow on 14 September 2026.
 
-Target outcome:
+The closeout evidence is recorded in [`PATCH-CYCLE-CLOSEOUT-2026-09-14.md`](PATCH-CYCLE-CLOSEOUT-2026-09-14.md).
 
-- process host updates through the existing controlled patch workflow;
+The ongoing target is now routine lifecycle management:
+
+- process future host updates through the existing controlled patch workflow;
 - preserve service availability and recovery gates during Proxmox and production-service maintenance;
 - deliberately manage PVE patch levels;
 - keep application/container version ownership explicit.
