@@ -294,7 +294,8 @@ runbooks:
     applies_to:
       hosts:
         - {name: mail-relay-01, address: 192.168.2.54, role: smtp_relay}
-        - {name: PROXMOX, address: 192.168.2.70, role: relay_hypervisor}
+        - {name: PROXMOX, address: 192.168.2.70, role: smtp_client}
+        - {name: Proxmox-2, address: 192.168.2.71, role: smtp_client}
       services: [postfix, smtp, node_exporter]
     run_from:
       name: admin-01
@@ -306,7 +307,10 @@ runbooks:
     iac:
       playbooks:
         - IaC/ansible/playbooks/mail-relay.yml
+        - IaC/ansible/playbooks/proxmox-mail-relay-client.yml
         - IaC/ansible/playbooks/node-exporters.yml
+      roles:
+        - IaC/ansible/roles/proxmox_mail_relay_client/
       terraform:
         - IaC/terraform/proxmox/mail-relay/
     monitoring:
@@ -314,7 +318,53 @@ runbooks:
       node_exporter: active
       prometheus_target: active
       service_specific_mail_metrics: future
-    last_validated: 2026-09-12
+      proxmox_notification_delivery: proven_2026-09-14
+    last_validated: 2026-09-14
+
+  proxmox_backup_recovery:
+    title: Proxmox Guest Backup and Recovery
+    category: backup
+    document_type: recovery_runbook
+    document: "production docs/PROXMOX-BACKUP-RECOVERY.md"
+    status: active
+    service_state: operational
+    applies_to:
+      hosts:
+        - {name: PROXMOX, address: 192.168.2.70, role: backup_source_hypervisor}
+        - {name: Proxmox-2, address: 192.168.2.71, role: backup_source_hypervisor}
+        - {name: media-01, address: 192.168.2.195, role: primary_nfs_backup_target}
+        - {name: mail-relay-01, address: 192.168.2.54, role: backup_notification_relay}
+      services: [vzdump, nfs, postfix, proxmox_notifications]
+      storage:
+        id: media-backup
+        server: 192.168.2.195
+        export: /srv/backup/pve
+        protocol: nfs4
+    run_from:
+      name: admin-01
+      address: 192.168.2.48
+    iac:
+      playbooks:
+        - IaC/ansible/playbooks/media-backup-target.yml
+        - IaC/ansible/playbooks/proxmox-backup-storage.yml
+        - IaC/ansible/playbooks/proxmox-vzdump-runtime.yml
+        - IaC/ansible/playbooks/proxmox-notification-recipient.yml
+        - IaC/ansible/playbooks/proxmox-mail-relay-client.yml
+      roles:
+        - IaC/ansible/roles/media_backup_target/
+        - IaC/ansible/roles/proxmox_backup_storage/
+        - IaC/ansible/roles/proxmox_vzdump_runtime/
+        - IaC/ansible/roles/proxmox_notification_recipient/
+        - IaC/ansible/roles/proxmox_mail_relay_client/
+    validation:
+      nfs_write_read_delete: proven_both_hypervisors
+      unprivileged_lxc_backup: proven_ct103_2026-09-14
+      archive_integrity: proven_zstd_test
+      isolated_restore_boot: proven_ct103_2026-09-14
+      notification_delivery: proven_both_hypervisors_2026-09-14
+      scheduled_jobs: pending
+      vm_restore: pending
+    last_validated: 2026-09-14
 
   birdnet_service:
     title: BirdNET-Go Production Service
@@ -376,14 +426,24 @@ runbooks:
       type: local_wired_admin_session
 
 coverage_gaps:
-  backup_recovery:
+  backup_secondary_copy:
     priority: high
     category: backup
     applies_to:
+      - {name: media-01, address: 192.168.2.195}
       - {name: PROXMOX, address: 192.168.2.70}
       - {name: Proxmox-2, address: 192.168.2.71}
+    reason: the primary Proxmox guest backup and LXC restore path is proven, but important data does not yet have an independent secondary backup copy
+
+  application_backup_recovery:
+    priority: high
+    category: backup
+    applies_to:
       - {name: cloud-01, address: 192.168.2.53}
-    reason: no active PBS or Restic backup platform and no proven estate-wide restore path currently exists
+      - {name: docker-01, address: 192.168.2.220}
+      - {name: media-01, address: 192.168.2.195}
+      - {name: admin-01, address: 192.168.2.48}
+    reason: application-consistent and non-Proxmox data recovery is not yet proven estate-wide
 
   proxmox_node_health:
     priority: high
@@ -420,4 +480,4 @@ coverage_gaps:
     category: core_infrastructure
     applies_to:
       - {name: mail-relay-01, address: 192.168.2.54}
-    reason: service is documented and operational but an end-to-end rebuild/recovery test has not been proven
+    reason: service and client delivery are operational but a full destructive rebuild/recovery test has not been proven
