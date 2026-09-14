@@ -146,7 +146,7 @@ Validated state:
 - Node Exporter and Alloy active;
 - zero failed systemd units.
 
-A complete VM-level snapshot backup of VM200 is now proven on the isolated `media-backup-proxmox` repository. Application-consistent Nextcloud/PostgreSQL recovery remains unproven and is still a separate requirement.
+A complete VM-level snapshot backup of VM200 is proven on the isolated `media-backup-proxmox` repository. Application-consistent Nextcloud/PostgreSQL recovery remains unproven and is still a separate requirement.
 
 ## Network sensor
 
@@ -247,13 +247,29 @@ Proxmox-2 storage: media-backup-proxmox-2 -> /srv/backup/pve-proxmox-2
 legacy rollback storage: media-backup -> /srv/backup/pve
 backup mode: snapshot
 compression: zstd
-retention policy in IaC: keep-last=3
+retention: keep-last=3
 local tmpdir: /var/lib/vz/vzdump-tmp
 ```
 
 All seven production PVE guests have successful backup evidence in the isolated namespaces. CT103 has also completed an isolated restore/boot proof. Proxmox notification delivery through `mail-relay-01` is proven end to end.
 
-The nightly schedule policy is encoded in IaC for 02:15 on `PROXMOX` and 03:15 on `Proxmox-2`. During correction of the shared VMID-200 namespace collision, both jobs were deliberately disabled. The final isolated-storage cutover playbook is syntax-valid, but the supplied validation record does not yet show the final live cutover result or first unattended run. Do not describe those as proven until observed.
+The nightly backup jobs are now live and policy-validated:
+
+```text
+PROXMOX .70
+  homelab-nightly-proxmox
+  02:15
+  media-backup-proxmox
+  VMIDs 100,102,200,201
+
+Proxmox-2 .71
+  homelab-nightly-proxmox-2
+  03:15
+  media-backup-proxmox-2
+  VMIDs 101,103,200
+```
+
+Both jobs are enabled, use snapshot mode, zstd, `keep-last=3` and `notification-system`. Re-running the IaC reconciliation on 14 September produced `changed=0` on both nodes and zero failed systemd units, proving the live schedule policy matches Git-managed desired state. The first unattended overnight execution remains to be observed.
 
 Outstanding recovery gaps are now narrower:
 
@@ -310,7 +326,7 @@ The 14 September audit identified package-update backlog on several hosts. Those
 
 Major outstanding work now includes:
 
-- observe and record the final isolated backup schedule cutover and first unattended run;
+- observe and record the first unattended isolated backup run;
 - prove a representative QEMU restore and application-consistent `cloud-01` recovery;
 - establish an independent second backup copy and non-Proxmox data protection;
 - revisit a two-node Proxmox cluster only after dedicated Corosync NICs and quorum/QDevice design are ready;
