@@ -8,6 +8,7 @@
       PROXMOX:
         id: homelab-nightly-proxmox
         schedule: "02:15"
+        storage: media-backup-proxmox
         guests:
           - {id: 100, type: lxc}
           - {id: 102, type: lxc}
@@ -16,6 +17,7 @@
       Proxmox-2:
         id: homelab-nightly-proxmox-2
         schedule: "03:15"
+        storage: media-backup-proxmox-2
         guests:
           - {id: 101, type: lxc}
           - {id: 103, type: lxc}
