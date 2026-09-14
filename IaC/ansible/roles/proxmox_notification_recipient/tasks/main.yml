@@ -1,0 +1,99 @@
+---
+- name: Validate explicit Proxmox notification-recipient deployment approval
+  ansible.builtin.assert:
+    that:
+      - proxmox_notification_recipient_allow_deploy | bool
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == inventory_hostname
+      - ansible_facts.default_ipv4.address == proxmox_notification_recipient_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+      - proxmox_notification_recipient_email | length > 3
+    fail_msg: >-
+      Refusing to configure the Proxmox notification recipient without explicit
+      approval or on an unexpected target.
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  changed_when: false
+
+- name: Read root pam user before reconciliation
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - /access/users/root@pam
+      - --output-format
+      - json
+  register: proxmox_notification_recipient_before
+  changed_when: false
+
+- name: Record current root pam email
+  ansible.builtin.set_fact:
+    proxmox_notification_recipient_current_email: >-
+      {{
+        (proxmox_notification_recipient_before.stdout | from_json).email
+        | default('')
+      }}
+
+- name: Configure root pam notification email
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - /access/users/root@pam
+      - --email
+      - "{{ proxmox_notification_recipient_email }}"
+  when: proxmox_notification_recipient_current_email != proxmox_notification_recipient_email
+  changed_when: true
+
+- name: Read root pam user after reconciliation
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - /access/users/root@pam
+      - --output-format
+      - json
+  register: proxmox_notification_recipient_after
+  changed_when: false
+
+- name: Validate root pam notification email
+  ansible.builtin.assert:
+    that:
+      - >-
+        ((proxmox_notification_recipient_after.stdout | from_json).email
+        | default('')) == proxmox_notification_recipient_email
+    fail_msg: "root@pam email did not reconcile to the approved notification recipient."
+
+- name: Read Proxmox notification targets
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - /cluster/notifications/targets
+      - --output-format
+      - json
+  register: proxmox_notification_recipient_targets
+  changed_when: false
+
+- name: Validate built-in mail-to-root notification target exists
+  ansible.builtin.assert:
+    that:
+      - >-
+        (proxmox_notification_recipient_targets.stdout | from_json
+        | selectattr('name', 'equalto', 'mail-to-root')
+        | list | length) == 1
+    fail_msg: "The built-in mail-to-root Proxmox notification target is missing."
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: proxmox_notification_recipient_failed_units
+  changed_when: false
+  failed_when: proxmox_notification_recipient_failed_units.stdout | trim | length > 0

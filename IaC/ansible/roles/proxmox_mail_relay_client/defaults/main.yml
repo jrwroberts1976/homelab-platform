@@ -1,0 +1,5 @@
+---
+proxmox_mail_relay_client_allow_deploy: false
+proxmox_mail_relay_client_host: "192.168.2.54"
+proxmox_mail_relay_client_port: 25
+proxmox_mail_relay_client_expected_ipv4: "{{ ansible_host }}"

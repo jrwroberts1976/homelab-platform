@@ -1,0 +1,118 @@
+---
+- name: Validate explicit backup-target deployment approval
+  ansible.builtin.assert:
+    that:
+      - media_backup_target_allow_deploy | bool
+      - ansible_facts.hostname == media_backup_target_expected_hostname
+      - media_backup_target_expected_ipv4 in ansible_facts.all_ipv4_addresses
+      - media_backup_target_clients | length > 0
+    fail_msg: >-
+      Refusing to configure the media backup target without explicit approval
+      or on an unexpected host.
+
+- name: Determine root filesystem free space
+  ansible.builtin.set_fact:
+    media_backup_target_root_available_bytes: >-
+      {{
+        ansible_facts.mounts
+        | selectattr('mount', 'equalto', '/')
+        | map(attribute='size_available')
+        | first
+        | default(0)
+        | int
+      }}
+
+- name: Require backup-target headroom on media-01
+  ansible.builtin.assert:
+    that:
+      - media_backup_target_root_available_bytes | int >= (media_backup_target_min_free_gib | int * 1024 * 1024 * 1024)
+    fail_msg: >-
+      Refusing to configure or reconcile the backup target because the root
+      filesystem has less than {{ media_backup_target_min_free_gib }} GiB free.
+
+- name: Install NFS server package
+  ansible.builtin.apt:
+    name: nfs-kernel-server
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Create Proxmox backup export directory
+  ansible.builtin.file:
+    path: "{{ media_backup_target_export_path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Ensure NFS exports include directory exists
+  ansible.builtin.file:
+    path: /etc/exports.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install restricted Proxmox backup export
+  ansible.builtin.template:
+    src: homelab-pve-backup.exports.j2
+    dest: /etc/exports.d/homelab-pve-backup.exports
+    owner: root
+    group: root
+    mode: "0644"
+  register: media_backup_target_export_file
+
+- name: Reload NFS exports when configuration changes
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/exportfs
+      - -ra
+  when: media_backup_target_export_file.changed
+  changed_when: true
+
+- name: Enable and start NFS server
+  ansible.builtin.systemd_service:
+    name: nfs-kernel-server.service
+    enabled: true
+    state: started
+
+- name: Read active NFS exports
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/exportfs
+      - -v
+  register: media_backup_target_exports
+  changed_when: false
+
+- name: Validate backup export path
+  ansible.builtin.assert:
+    that:
+      - media_backup_target_export_path in media_backup_target_exports.stdout
+    fail_msg: "The Proxmox backup NFS export is not active."
+
+- name: Validate each authorised Proxmox client is exported
+  ansible.builtin.assert:
+    that:
+      - item in media_backup_target_exports.stdout
+    fail_msg: "Expected Proxmox backup client is missing from the active export."
+  loop: "{{ media_backup_target_clients }}"
+  loop_control:
+    label: "{{ item }}"
+
+- name: Verify NFS server is listening on TCP 2049
+  ansible.builtin.shell: >-
+    ss -ltnH | awk '{print $4}' | grep -Eq '(^|:)2049$'
+  args:
+    executable: /bin/bash
+  changed_when: false
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: media_backup_target_failed_units
+  changed_when: false
+  failed_when: media_backup_target_failed_units.stdout | trim | length > 0

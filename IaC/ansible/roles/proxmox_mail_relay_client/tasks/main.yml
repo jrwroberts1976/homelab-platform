@@ -1,0 +1,147 @@
+---
+- name: Validate explicit Proxmox mail relay deployment approval
+  ansible.builtin.assert:
+    that:
+      - proxmox_mail_relay_client_allow_deploy | bool
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == inventory_hostname
+      - ansible_facts.default_ipv4.address == proxmox_mail_relay_client_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+    fail_msg: >-
+      Refusing to configure Proxmox mail relay without explicit approval or on
+      an unexpected target.
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  changed_when: false
+
+- name: Verify Postfix is installed
+  ansible.builtin.command:
+    argv:
+      - postconf
+      - mail_version
+  changed_when: false
+
+- name: Verify mail relay is reachable from Proxmox host
+  ansible.builtin.wait_for:
+    host: "{{ proxmox_mail_relay_client_host }}"
+    port: "{{ proxmox_mail_relay_client_port }}"
+    connect_timeout: 3
+    timeout: 5
+
+- name: Read current Postfix relayhost
+  ansible.builtin.command:
+    argv:
+      - postconf
+      - -h
+      - relayhost
+  register: proxmox_mail_relay_client_before
+  changed_when: false
+
+- name: Record approved Postfix relayhost
+  ansible.builtin.set_fact:
+    proxmox_mail_relay_client_value: >-
+      [{{ proxmox_mail_relay_client_host }}]:{{ proxmox_mail_relay_client_port }}
+
+- name: Configure Postfix relayhost
+  ansible.builtin.command:
+    argv:
+      - postconf
+      - -e
+      - "relayhost={{ proxmox_mail_relay_client_value }}"
+  when: proxmox_mail_relay_client_before.stdout | trim != proxmox_mail_relay_client_value
+  changed_when: true
+  register: proxmox_mail_relay_client_relay_change
+
+- name: Inspect aliases source
+  ansible.builtin.stat:
+    path: /etc/aliases
+  register: proxmox_mail_relay_client_aliases
+
+- name: Require aliases source file
+  ansible.builtin.assert:
+    that:
+      - proxmox_mail_relay_client_aliases.stat.exists
+      - proxmox_mail_relay_client_aliases.stat.isreg
+    fail_msg: "/etc/aliases is missing or is not a regular file."
+
+- name: Inspect aliases database
+  ansible.builtin.stat:
+    path: /etc/aliases.db
+  register: proxmox_mail_relay_client_aliases_db
+
+- name: Rebuild aliases database when missing or stale
+  ansible.builtin.command:
+    argv:
+      - newaliases
+  when: >-
+    (not proxmox_mail_relay_client_aliases_db.stat.exists) or
+    ((proxmox_mail_relay_client_aliases.stat.mtime | float) >
+     (proxmox_mail_relay_client_aliases_db.stat.mtime | default(0) | float))
+  changed_when: true
+  register: proxmox_mail_relay_client_alias_rebuild
+
+- name: Validate Postfix configuration
+  ansible.builtin.command:
+    argv:
+      - postfix
+      - check
+  changed_when: false
+
+- name: Reload Postfix when mail routing changed
+  ansible.builtin.service:
+    name: postfix
+    state: reloaded
+  when: >-
+    (proxmox_mail_relay_client_relay_change is changed) or
+    (proxmox_mail_relay_client_alias_rebuild is changed)
+
+- name: Read reconciled Postfix relayhost
+  ansible.builtin.command:
+    argv:
+      - postconf
+      - -h
+      - relayhost
+  register: proxmox_mail_relay_client_after
+  changed_when: false
+
+- name: Validate reconciled Postfix relayhost
+  ansible.builtin.assert:
+    that:
+      - proxmox_mail_relay_client_after.stdout | trim == proxmox_mail_relay_client_value
+    fail_msg: "Postfix relayhost did not reconcile to the approved mail relay."
+
+- name: Verify aliases database exists after reconciliation
+  ansible.builtin.stat:
+    path: /etc/aliases.db
+  register: proxmox_mail_relay_client_aliases_db_after
+
+- name: Validate aliases database
+  ansible.builtin.assert:
+    that:
+      - proxmox_mail_relay_client_aliases_db_after.stat.exists
+      - proxmox_mail_relay_client_aliases_db_after.stat.isreg
+    fail_msg: "/etc/aliases.db was not created successfully."
+
+- name: Verify Postfix service is active
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - postfix
+  register: proxmox_mail_relay_client_postfix_active
+  changed_when: false
+  failed_when: proxmox_mail_relay_client_postfix_active.stdout | trim != 'active'
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: proxmox_mail_relay_client_failed_units
+  changed_when: false
+  failed_when: proxmox_mail_relay_client_failed_units.stdout | trim | length > 0

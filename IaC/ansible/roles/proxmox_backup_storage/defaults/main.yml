@@ -1,0 +1,9 @@
+---
+proxmox_backup_storage_allow_deploy: false
+proxmox_backup_storage_id: media-backup
+proxmox_backup_storage_server: "192.168.2.195"
+proxmox_backup_storage_export: "/srv/backup/pve"
+proxmox_backup_storage_path: "/mnt/pve/media-backup"
+proxmox_backup_storage_content: "backup"
+proxmox_backup_storage_options: "vers=4.2,proto=tcp"
+proxmox_backup_storage_expected_ipv4: "{{ ansible_host }}"

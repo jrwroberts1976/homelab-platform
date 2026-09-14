@@ -1,0 +1,11 @@
+---
+proxmox_backup_storage_split_allow_deploy: false
+proxmox_backup_storage_split_server: "192.168.2.195"
+proxmox_backup_storage_split_content: "backup"
+proxmox_backup_storage_split_options: "vers=4.2,proto=tcp"
+proxmox_backup_storage_split_expected_ipv4: "{{ ansible_host }}"
+proxmox_backup_storage_split_legacy_id: media-backup
+proxmox_backup_storage_split_legacy_export: /srv/backup/pve
+proxmox_backup_storage_split_legacy_path: /mnt/pve/media-backup
+proxmox_backup_storage_split_legacy_options: "vers=4.2,proto=tcp"
+proxmox_backup_storage_split_min_free_gib: 100

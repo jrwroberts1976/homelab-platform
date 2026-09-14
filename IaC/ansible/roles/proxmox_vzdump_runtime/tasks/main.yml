@@ -1,0 +1,164 @@
+---
+- name: Validate explicit vzdump runtime deployment approval
+  ansible.builtin.assert:
+    that:
+      - proxmox_vzdump_runtime_allow_deploy | bool
+      - ansible_facts.distribution == 'Debian'
+      - ansible_facts.hostname == inventory_hostname
+      - ansible_facts.default_ipv4.address == proxmox_vzdump_runtime_expected_ipv4
+      - ansible_facts.default_ipv4.interface == 'vmbr0'
+    fail_msg: >-
+      Refusing to configure vzdump runtime without explicit approval or on an
+      unexpected Proxmox host.
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  register: proxmox_vzdump_runtime_pveversion
+  changed_when: false
+
+- name: Read available space for local vzdump workspace
+  ansible.builtin.command:
+    argv:
+      - df
+      - -B1
+      - --output=avail
+      - /var/lib/vz
+  register: proxmox_vzdump_runtime_df
+  changed_when: false
+
+- name: Record local vzdump workspace free bytes
+  ansible.builtin.set_fact:
+    proxmox_vzdump_runtime_available_bytes: >-
+      {{ proxmox_vzdump_runtime_df.stdout_lines[-1] | trim | int }}
+
+- name: Require local vzdump workspace headroom
+  ansible.builtin.assert:
+    that:
+      - >-
+        (proxmox_vzdump_runtime_available_bytes | int) >=
+        ((proxmox_vzdump_runtime_min_free_gib | int) * 1024 * 1024 * 1024)
+    fail_msg: >-
+      Refusing to configure the local vzdump workspace because /var/lib/vz has
+      less than {{ proxmox_vzdump_runtime_min_free_gib }} GiB available.
+
+- name: Create local vzdump temporary workspace
+  ansible.builtin.file:
+    path: "{{ proxmox_vzdump_runtime_tmpdir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '1777'
+
+- name: Inspect existing vzdump configuration
+  ansible.builtin.stat:
+    path: /etc/vzdump.conf
+  register: proxmox_vzdump_runtime_conf_stat
+
+- name: Read existing vzdump configuration
+  ansible.builtin.slurp:
+    src: /etc/vzdump.conf
+  register: proxmox_vzdump_runtime_conf_before
+  when: proxmox_vzdump_runtime_conf_stat.stat.exists
+
+- name: Detect active tmpdir settings before reconciliation
+  ansible.builtin.set_fact:
+    proxmox_vzdump_runtime_active_tmpdirs: >-
+      {{
+        (
+          (proxmox_vzdump_runtime_conf_before.content | b64decode)
+          if proxmox_vzdump_runtime_conf_stat.stat.exists
+          else ''
+        )
+        | regex_findall('(?m)^\\s*tmpdir\\s*:\\s*(\\S+)\\s*$')
+      }}
+
+- name: Refuse to replace a different active vzdump tmpdir
+  ansible.builtin.assert:
+    that:
+      - >-
+        (proxmox_vzdump_runtime_active_tmpdirs | length == 0) or
+        (proxmox_vzdump_runtime_active_tmpdirs == [proxmox_vzdump_runtime_tmpdir])
+    fail_msg: >-
+      An active vzdump tmpdir already points somewhere else:
+      {{ proxmox_vzdump_runtime_active_tmpdirs }}. Refusing to overwrite it.
+
+- name: Ensure vzdump configuration file exists
+  ansible.builtin.copy:
+    content: "# Managed in part by homelab-platform IaC.\n"
+    dest: /etc/vzdump.conf
+    owner: root
+    group: root
+    mode: '0644'
+    force: false
+
+- name: Configure local vzdump temporary workspace
+  ansible.builtin.lineinfile:
+    path: /etc/vzdump.conf
+    regexp: '^\s*#?\s*tmpdir\s*:'
+    line: "tmpdir: {{ proxmox_vzdump_runtime_tmpdir }}"
+    owner: root
+    group: root
+    mode: '0644'
+    backup: true
+
+- name: Verify remapped unprivileged LXC root can write local workspace
+  ansible.builtin.command:
+    argv:
+      - setpriv
+      - --reuid=100000
+      - --regid=100000
+      - --clear-groups
+      - touch
+      - "{{ proxmox_vzdump_runtime_tmpdir }}/.uid100000-write-proof"
+  changed_when: true
+
+- name: Remove remapped UID write proof
+  ansible.builtin.file:
+    path: "{{ proxmox_vzdump_runtime_tmpdir }}/.uid100000-write-proof"
+    state: absent
+
+- name: Read reconciled vzdump tmpdir setting
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -E
+      - '^tmpdir:'
+      - /etc/vzdump.conf
+  register: proxmox_vzdump_runtime_tmpdir_setting
+  changed_when: false
+
+- name: Validate reconciled vzdump tmpdir setting
+  ansible.builtin.assert:
+    that:
+      - >-
+        (proxmox_vzdump_runtime_tmpdir_setting.stdout | trim) ==
+        ('tmpdir: ' ~ proxmox_vzdump_runtime_tmpdir)
+    fail_msg: >-
+      vzdump tmpdir configuration did not reconcile to the approved local path.
+
+- name: Verify local workspace is currently empty
+  ansible.builtin.find:
+    paths: "{{ proxmox_vzdump_runtime_tmpdir }}"
+    file_type: any
+    hidden: true
+  register: proxmox_vzdump_runtime_contents
+
+- name: Require clean local workspace after validation
+  ansible.builtin.assert:
+    that:
+      - proxmox_vzdump_runtime_contents.matched == 0
+    fail_msg: >-
+      Unexpected files remain in the local vzdump temporary workspace.
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: proxmox_vzdump_runtime_failed_units
+  changed_when: false
+  failed_when: proxmox_vzdump_runtime_failed_units.stdout | trim | length > 0
