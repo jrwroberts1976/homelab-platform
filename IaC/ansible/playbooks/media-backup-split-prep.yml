@@ -1,0 +1,8 @@
+---
+- name: Prepare isolated Proxmox backup namespaces on media-01
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: media_backup_split_prep
