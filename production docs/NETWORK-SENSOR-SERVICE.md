@@ -1,11 +1,11 @@
 # Homelab Network Sensor Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** Phase 1 deployed and validated; Phase 2 capture activation pending dedicated USB NIC and switch repatching  
+**Status:** passive capture operational; Suricata and Zeek active  
 **Host:** `sensor-01.jameshouse`  
 **IPv4:** `192.168.2.55`  
 **Placement:** VM 201 on `PROXMOX` / `192.168.2.70`  
-**Last current-state review:** 12 September 2026
+**Last current-state review:** 14 September 2026
 
 ## Purpose
 
@@ -13,48 +13,89 @@
 
 It is deliberately separate from `monitor-01` so loss or maintenance of one Proxmox host does not remove both sensing and monitoring.
 
-The design has two network roles:
+The design uses two network roles:
 
 1. **management NIC** — normal LAN connectivity for SSH, package updates and Prometheus scraping;
-2. **capture NIC** — future dedicated USB Ethernet adapter passed directly through from `PROXMOX` and connected to the HP ProCurve SPAN destination.
+2. **capture NIC** — dedicated USB Ethernet adapter passed through from `PROXMOX` and connected to the HP ProCurve mirror/SPAN destination.
 
-The capture NIC must never have a normal IP address, gateway, DHCP client, DNS role or Proxmox bridge membership.
+The capture NIC is a passive observation interface and must not be repurposed as a normal routed management interface.
 
-## Current phase state
+## Current operational state
 
-### Phase 1 — COMPLETE
+The earlier Phase 1-only description is superseded.
 
-Validated 12 September 2026:
+Direct validation on 14 September 2026 showed:
 
-- Debian 13 VM is live at `192.168.2.55`;
-- management networking works;
-- only `lo` and the management `eth0` are present;
-- no USB/capture NIC is attached;
-- Suricata is installed and deliberately inactive/disabled;
-- Zeek is installed and deliberately inactive;
-- Node Exporter is active on TCP/9100;
-- zero failed systemd units;
-- Prometheus ICMP and Node Exporter targets are healthy.
+```text
+management interface: eth0
+capture interface:    enx00249b63b38a
+capture state:        UP, PROMISC, LOWER_UP
+```
 
-### Phase 2 — PENDING
+The capture activation gate exists at:
 
-Phase 2 begins only when the dedicated USB capture NIC is available and the physical switch repatching is approved.
+```text
+/etc/homelab-network-sensor/capture-enabled
+```
 
-Do not start Suricata or Zeek merely because the software is installed.
+Current engine state:
 
-## Current toolchain
-
-| Tool | Validated state | Purpose |
+| Tool | Version | Validated state |
 |---|---|---|
-| Suricata | 8.0.6, AF_PACKET support present | IDS/NSM detection engine |
-| `suricata-update` | installed | Managed rules |
-| Zeek | 8.0.10 under `/opt/zeek` | Passive metadata/protocol telemetry |
-| Node Exporter | 1.9.0, active | VM OS/resource health |
-| tcpdump | installed | Packet-arrival/SPAN validation |
-| ethtool | installed | Capture-NIC/offload inspection |
-| jq | installed | EVE JSON inspection |
+| Suricata | 8.0.6 | active and enabled |
+| `suricata-update` | installed | rules-management tool available |
+| Zeek | 8.0.10 | `homelab-zeek.service` active and enabled; `zeekctl status` reports running |
+| Alloy | 1.19.2 | active |
+| Node Exporter | 1.9.0 | active |
 
-The installed toolchain does not mean capture is operational. There is currently no dedicated capture interface.
+The compact estate audit reported zero failed systemd units on `sensor-01`.
+
+## Capture design
+
+Current physical/logical path:
+
+```text
+LAN switch traffic
+        |
+        v
+HP ProCurve 2510G-24
+        |
+        | mirror sources: ports 1-23
+        v
+port 24 mirror destination
+        |
+        v
+dedicated USB Ethernet adapter
+        |
+        v
+PROXMOX .70
+USB passthrough
+        |
+        v
+sensor-01
+        |
+        +--> eth0: management
+        |
+        +--> enx00249b63b38a: passive capture
+                 |
+                 +--> Suricata
+                 |
+                 +--> Zeek
+```
+
+The older documentation that described mirroring as disabled and port 24 as only a planned future destination is no longer current.
+
+Current switch configuration evidence includes:
+
+```text
+mirror-port 24
+interface 1-23
+   monitor
+```
+
+`show monitor` confirms port 24 as the mirror destination and ports 1 through 23 as monitoring sources.
+
+The previous dated physical port map must not be reused after this change without a fresh port-by-port validation.
 
 ## Why both Suricata and Zeek
 
@@ -66,13 +107,9 @@ Zeek primarily answers:
 
 > What hosts, connections, protocols and behaviours were observed?
 
-They are complementary.
+They are complementary. The design uses shared identifiers/configuration where practical so Suricata detections can be correlated with Zeek connection metadata.
 
-The target design uses a shared Community ID configuration so Suricata alerts can be correlated with Zeek connection records.
-
-## Data paths after activation
-
-### Suricata
+## Suricata
 
 Primary structured output:
 
@@ -80,9 +117,11 @@ Primary structured output:
 /var/log/suricata/eve.json
 ```
 
-Expected event families may include alerts, anomalies, flows, DNS, HTTP, TLS, SSH and stats depending on the final configuration.
+Useful event families can include alerts, anomalies, flows, DNS, HTTP, TLS, SSH and stats depending on the deployed rules/configuration.
 
-### Zeek
+Current validation proved Suricata 8.0.6 active and enabled.
+
+## Zeek
 
 Primary logs:
 
@@ -90,134 +129,68 @@ Primary logs:
 /opt/zeek/logs/current/
 ```
 
-Useful logs include connection, DNS, TLS/SSL, HTTP, SSH, known-host/service, notice, weird, capture-loss and stats data.
+Useful outputs include connection, DNS, TLS/SSL, HTTP, SSH, known-host/service, notice, weird, capture-loss and stats data.
 
-## Capture design
-
-Target physical path:
+Direct validation on 14 September reported:
 
 ```text
-selected LAN traffic
-        |
-        v
-HP ProCurve 2510G-24
-        |
-        | configured mirror/SPAN session
-        v
-port 24 — future SPAN destination
-        |
-        v
-dedicated USB Ethernet adapter
-        |
-        v
-PROXMOX .70
-USB passthrough
-        |
-        v
-sensor-01 capture NIC
-(no IP, no DHCP, no route)
-        |
-        +--> Suricata
-        |
-        +--> Zeek
+Name  Type       Host       Status   Pid    Started
+zeek  standalone localhost  running  25809  13 Sep 06:26:55
 ```
 
-## Important current switch reality
+The exact PID/start time is observational evidence, not a desired-state value.
 
-The 12 September switch audit proved:
+## Rules and policy
 
-- port mirroring is currently **disabled**;
-- port 24 is currently **not** a SPAN destination;
-- port 24 currently carries the primary ASUS router connection;
-- physical patching is expected to change when the new USB capture adapter arrives.
-
-Port 24 remains the **planned future SPAN destination**, but that is target state, not current state.
-
-Do not configure mirroring until the repatching plan has been agreed and the router/uplink path has been safely moved.
-
-## Capture-interface activation policy
-
-When the USB capture NIC arrives:
-
-1. record the adapter make/model, USB identity and MAC;
-2. agree the final switch patching plan;
-3. move the current port-24 router connection to its approved final port;
-4. verify normal LAN/router connectivity after the move;
-5. configure the HP ProCurve mirror/SPAN session with port 24 as destination;
-6. pass the USB adapter directly through to `sensor-01`;
-7. verify it is not part of a Proxmox bridge;
-8. give the guest capture interface no IP configuration;
-9. disable inappropriate packet-merging/offload features where required;
-10. use `tcpdump` to prove mirrored traffic arrives;
-11. inspect packet/drop counters;
-12. enable Suricata through IaC;
-13. enable Zeek through IaC;
-14. validate both engines against the same mirrored traffic;
-15. validate log volume, storage and CPU/RAM impact;
-16. validate monitoring/log forwarding.
-
-No switch mirror change should be considered complete until packet arrival is proven in the guest.
-
-## Current switch evidence relevant to the sensor
-
-Current evidence-backed switch mappings include:
-
-```text
-port 18 -> Proxmox-2 .71
-port 20 -> admin-01 .48
-port 21 -> PROXMOX .70
-port 23 -> docker-01 .220
-port 24 -> primary ASUS router .1
-```
-
-This is a dated snapshot and **not** the final repatching plan.
-
-## Rules
-
-Initial Suricata rule policy remains:
+Suricata rule policy remains:
 
 - use `suricata-update`;
-- begin from the approved baseline feed;
+- use the approved baseline feed;
 - keep local suppressions/thresholds under Git;
 - never silently suppress noisy signatures without recording why;
 - validate the ruleset before reload.
 
-## Monitoring integration
+Zeek policy/configuration should likewise remain Git-managed through the current IaC role rather than being hand-edited on the VM.
 
-Current monitoring:
+## Monitoring and logging
 
-- ICMP probe from `monitor-01` — healthy;
-- Node Exporter on TCP/9100 — healthy.
+Current host/platform monitoring includes:
 
-After capture activation, add monitoring for:
+- ICMP reachability;
+- Node Exporter;
+- Alloy 1.19.2;
+- zero failed-unit validation.
 
-- engine service state;
+Alloy is now part of the deployed logging architecture. The older text that described central Loki/Alloy as future-only is superseded.
+
+Sensor observability should continue to focus on useful signals such as:
+
+- Suricata/Zeek service state;
 - packet/drop counters;
 - capture loss;
-- rule-update health;
-- log growth/disk capacity;
+- rules/update health;
+- log growth and disk capacity;
 - CPU/memory impact;
-- optional sensor-specific Prometheus export only after compatibility is proven.
+- event/alert rates where actionable.
 
-## Logging direction
-
-Do not assume Loki/Alloy exists centrally today.
-
-When central logging is deliberately deployed, ingest useful Suricata/Zeek outputs with stable low-cardinality labels and preserve raw structured content for query-time analysis.
+Avoid high-cardinality Loki labels such as arbitrary IPs, ports, usernames or full event text.
 
 ## IaC ownership
 
-Current relevant paths include:
+Relevant paths include:
 
 ```text
 IaC/terraform/proxmox/sensor-01/
+IaC/ansible/playbooks/proxmox-sensor-capture.yml
 IaC/ansible/playbooks/network-sensor.yml
 IaC/ansible/playbooks/network-sensor-config.yml
+IaC/ansible/playbooks/network-sensor-zeek.yml
+IaC/ansible/playbooks/network-sensor-alloy.yml
+IaC/ansible/roles/proxmox_sensor_capture_usb/
 IaC/ansible/roles/network_sensor/
 IaC/ansible/roles/network_sensor_config/
-IaC/scripts/deploy-sensor-01-vm.sh
-IaC/scripts/deploy-network-sensor-toolchain.sh
-IaC/scripts/configure-network-sensor-phase1.sh
+IaC/ansible/roles/network_sensor_zeek/
+IaC/ansible/roles/network_sensor_alloy/
 ```
 
 Normal controller:
@@ -225,32 +198,38 @@ Normal controller:
 ```text
 admin-01
 192.168.2.48
+~/projects/homelab-platform
 ```
 
-## Phase 1 definition of done
+## Operational safety gates
 
-Phase 1 is complete because:
+The capture design must continue to preserve these boundaries:
 
-- VM identity/placement are correct;
+- `eth0` remains the management path;
+- the capture adapter remains dedicated to passive observation;
+- capture activation remains gated through IaC/state validation;
+- switch mirror changes require deliberate validation;
+- any future interface rename or USB replacement must be reconciled into IaC before engines are blindly restarted;
+- after switch, hypervisor or USB changes, prove packet arrival and inspect capture/drop counters before declaring the sensor healthy.
+
+## Definition of current operational state
+
+The sensor is operational because:
+
+- VM identity and placement are correct;
 - management networking works;
-- Suricata is installed;
-- Zeek is installed;
-- packet engines are safely stopped without a capture NIC;
-- Node Exporter is healthy;
-- monitoring sees the host;
-- zero failed units were observed.
+- the dedicated capture interface is present, up and promiscuous;
+- the capture gate exists;
+- switch mirroring is configured with port 24 as destination and ports 1-23 as sources;
+- Suricata is active/enabled;
+- Zeek is active/enabled and reports its standalone process running;
+- Node Exporter and Alloy are deployed;
+- zero failed systemd units were observed during the 14 September compact audit.
 
-## Phase 2 definition of done
+## Remaining follow-up
 
-Phase 2 is complete only when:
-
-- dedicated USB capture NIC is installed and identified;
-- switch repatching is complete and documented;
-- port 24 is actually configured as SPAN destination;
-- mirrored packets are proven at `sensor-01`;
-- capture NIC has no management IP/route;
-- Suricata runs and produces valid EVE data;
-- Zeek runs and produces valid telemetry;
-- capture loss/resource impact are acceptable;
-- monitoring/logging is operational;
-- final port map and recovery/runbook documentation are updated.
+- keep the physical switch port map current after SPAN changes;
+- monitor capture loss and resource impact over time;
+- tune Suricata/Zeek output only from observed operational needs;
+- maintain low-cardinality Loki labels and useful dashboards;
+- retain repeatable capture-path validation in the runbook/IaC workflow.

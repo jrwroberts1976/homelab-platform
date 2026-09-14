@@ -6,7 +6,7 @@
 **Platform:** Raspberry Pi 5, Debian 13, 512 GB-class NVMe  
 **Primary workload:** Kodi media endpoint  
 **Status:** operational; nftables and extended Pi/NVMe monitoring remain follow-up gates  
-**Last current-state review:** 12 September 2026
+**Last current-state review:** 14 September 2026
 
 ## Service role
 
@@ -18,21 +18,17 @@ The former `k3s-node-01` identity is retired.
 
 ## Current live state
 
-Validated 12 September 2026:
+Validated 14 September 2026:
 
-- Debian 13;
-- Kodi active/enabled;
-- LightDM inactive/disabled;
+- Debian 13 / aarch64;
+- Kodi 21.3 active/enabled;
 - Samba active/enabled;
-- SMB listening on TCP/445;
-- media directories under `/srv/media` present;
-- Chrony active and using the local Proxmox time service;
-- Node Exporter active on TCP/9100;
-- Prometheus ICMP and Node Exporter targets healthy;
-- nftables inactive/disabled;
+- Chrony active;
+- Node Exporter 1.9.0 active;
+- Alloy 1.19.2 active;
 - zero failed systemd units.
 
-`hostname -f` returned the short hostname `media-01` during the audit. Local DNS naming remains `media-01.jameshouse`, but the host itself should not be documented as having a proven FQDN configuration until that is deliberately checked/reconciled.
+The intended nftables policy remains a separate follow-up and must not be described as active until deliberately deployed and remotely validated.
 
 ## Kodi
 
@@ -41,9 +37,8 @@ Kodi runs as a dedicated systemd service:
 - unit: `kodi.service`;
 - user: `james`;
 - launcher: `/usr/bin/kodi-standalone`;
-- LightDM disabled;
-- service configured to restart after failure;
-- boot target remains suitable for the local media/HDMI role.
+- service enabled and active;
+- package version validated as `3:21.3+dfsg-1+rpt3`.
 
 Managed Kodi configuration should remain in Ansible rather than being treated as authoritative GUI state.
 
@@ -76,40 +71,38 @@ User media is persistent data and needs an intentional backup decision; IaC does
 
 ## Time
 
-`media-01` uses Chrony as an NTP client.
-
-Preferred homelab sources:
+`media-01` uses Chrony as an NTP client with the two local Proxmox time sources as the intended upstreams:
 
 ```text
 192.168.2.70
 192.168.2.71
 ```
 
-The 12 September audit confirmed Chrony was active and the host was using the local time service.
+Chrony was active during the 14 September compact audit.
 
-## Monitoring
+## Monitoring and logging
 
-Node Exporter is already live and scraped by Prometheus.
+Current host observability includes:
 
-Current monitoring:
+- ICMP/availability coverage through the central monitoring design;
+- Node Exporter on TCP/9100;
+- Alloy 1.19.2 as part of the deployed central logging baseline;
+- zero failed-unit validation.
 
-- ICMP probe: healthy;
-- Node Exporter TCP/9100: healthy.
+The older statement that Alloy/Loki logging was future-only is superseded. Loki now exists centrally on `monitor-01`, and Alloy is active on `media-01`.
 
-Still useful to add:
+Still useful to add where actionable:
 
 - Raspberry Pi temperature/throttling metrics;
 - NVMe SMART/health metrics;
-- Kodi service availability alerting if actionable;
-- Alloy/Loki logging only after the central logging platform actually exists.
+- Kodi service availability alerting;
+- media storage capacity and failure signals.
 
 ## Host firewall
 
-An nftables role/design exists but the live 12 September audit confirmed nftables is **not deployed**.
+An nftables role/design exists but the live estate audit did not establish an active nftables policy on `media-01`.
 
-Intended policy remains a follow-up change and must not be marked complete until a live apply and remote validation prove it.
-
-Do not confuse a defined Ansible role with an active firewall.
+Do not confuse a defined Ansible role with deployed firewall state. Apply and remotely validate any firewall change separately so SSH, SMB, monitoring and media functions are not accidentally cut off.
 
 ## IaC paths
 
@@ -119,13 +112,14 @@ Primary deployment:
 IaC/ansible/playbooks/media-01.yml
 ```
 
-Supporting roles:
+Supporting roles include:
 
 ```text
 IaC/ansible/roles/chrony_client/
 IaC/ansible/roles/media_endpoint/
 IaC/ansible/roles/media_smb/
 IaC/ansible/roles/node_exporter/
+IaC/ansible/roles/alloy/
 IaC/ansible/roles/media_firewall/
 ```
 
@@ -139,27 +133,27 @@ admin-01
 ~/projects/homelab-platform
 ```
 
-The retired `TestServer` identity at `.220` must not be used as the controller. `.220` is now `docker-01`.
+The retired `TestServer` identity at `.220` must not be used as the controller. `.220` is `docker-01`.
 
 ## Validation standard
 
-A stable Ansible reconciliation should normally produce a second run with:
+A stable Ansible reconciliation should normally produce a second run with no unintended changes and:
 
 ```text
-changed=0
 failed=0
 unreachable=0
 ```
 
 Service validation should include:
 
-- Kodi active and only the intended runtime present;
-- Samba configuration/service healthy;
+- Kodi active;
+- Samba healthy;
 - expected media paths present;
 - Chrony healthy;
 - Node Exporter healthy;
+- Alloy healthy;
 - zero unexpected failed units;
-- firewall behaviour checked only after nftables is actually deployed.
+- firewall behaviour checked only after nftables is deliberately deployed.
 
 ## Recovery
 
@@ -171,17 +165,17 @@ Recovery order:
 2. restore approved SSH/controller access;
 3. check out reviewed `homelab-platform` state;
 4. restore protected SMB credential material;
-5. run the media Ansible playbook;
+5. run the media Ansible playbook and baseline observability roles;
 6. restore/copy user media under `/srv/media` if required;
-7. validate Kodi, SMB, Chrony and monitoring;
+7. validate Kodi, SMB, Chrony, Node Exporter and Alloy;
 8. apply/validate firewall only if that separate change has been approved;
-9. run a second Ansible pass and require zero unintended drift.
+9. run a second Ansible pass and require no unintended drift.
 
 ## Remaining completion gates
 
-- apply and remotely validate the intended nftables policy;
+- apply and remotely validate the intended nftables policy if still required;
 - add Pi temperature/throttling metrics;
 - add NVMe SMART/health metrics;
 - decide/prove backup protection for user media;
-- configure optional Kodi user-service credentials/settings that are intentionally outside Git;
-- add central logging only when Loki/Alloy exists.
+- configure optional Kodi credentials/settings that are intentionally outside Git;
+- continue central logging/dashboard work only where it adds operational value.

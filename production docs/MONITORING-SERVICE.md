@@ -1,15 +1,15 @@
 # Homelab Monitoring Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** operational core metrics platform; Loki/Alloy not deployed on `monitor-01`  
+**Status:** operational metrics, alerting and logging platform  
 **Primary host:** `monitor-01.jameshouse`  
 **IPv4:** `192.168.2.52`  
 **Placement:** VM 200 on `Proxmox-2` / `192.168.2.71`  
-**Last current-state review:** 12 September 2026
+**Last current-state review:** 14 September 2026
 
 ## Purpose
 
-`monitor-01` is the central metrics/probe/alerting platform for the homelab.
+`monitor-01` is the central monitoring and logging platform for the homelab.
 
 Current core services:
 
@@ -17,8 +17,11 @@ Current core services:
 - Grafana
 - Alertmanager
 - Blackbox Exporter
+- Loki
+- Alloy
+- rsyslog receiver for ASUS router logs
 
-Loki and Alloy are **not deployed on `monitor-01`**. Router syslog is collected locally by rsyslog as a separate current service and can be integrated into Loki later if the central logging design is approved.
+The earlier 12 September statement that Loki and Alloy were not deployed is superseded.
 
 ## VM state
 
@@ -29,24 +32,23 @@ monitor-01.jameshouse
 192.168.2.52
 VM ID 200
 Proxmox-2
-4 vCPU
-6144 MiB RAM
-80 GiB disk
 Debian 13
 ```
 
-The VM is intended to be reproducible through Git/IaC. Persistent Prometheus/Grafana data is useful but configuration/dashboard authority should remain in Git wherever practical.
+The VM is intended to be reproducible through Git/IaC. Persistent monitoring data is useful, but configuration/dashboard authority should remain in Git wherever practical.
 
 ## Application versions
 
-Validated current Compose images:
+Direct validation on 14 September 2026 found:
 
-| Service | Version |
+| Service | Image/version |
 |---|---|
-| Grafana | 13.2.1 |
-| Prometheus | 3.14.0 |
-| Alertmanager | 0.34.0 |
-| Blackbox Exporter | 0.28.0 |
+| Grafana | `grafana/grafana:13.2.1` |
+| Prometheus | `prom/prometheus:v3.14.0` |
+| Alertmanager | `prom/alertmanager:v0.34.0` |
+| Blackbox Exporter | `prom/blackbox-exporter:v0.28.0` |
+| Loki | `grafana/loki:3.7.7` |
+| Alloy | `1.19.2` native package/service |
 
 Compose path:
 
@@ -56,104 +58,124 @@ Compose path:
 
 ## Current health
 
-The latest 12 September 2026 validation found:
+Direct 14 September validation showed all five containers running:
 
 ```text
-Prometheus:       healthy
-Grafana:          healthy
-Alertmanager:     healthy
-Blackbox Exporter healthy
-active targets:   25
-healthy targets:  25
-active alerts:    0
-failed systemd:   0
+monitoring-loki-1
+monitoring-grafana-1
+monitoring-prometheus-1
+monitoring-alertmanager-1
+monitoring-blackbox-1
 ```
 
-Grafana's database/health endpoint was healthy during the validation.
-
-## Current target coverage
-
-Observed target coverage includes:
-
-### DNS
-
-- DNS TCP probe: `192.168.2.50:53`
-- DNS TCP probe: `192.168.2.51:53`
-- Node Exporter on both resolvers
-
-### ICMP
-
-Observed ICMP probe targets include:
-
-- ASUS router `.1`
-- `dns-02 .50`
-- `dns-01 .51`
-- `monitor-01 .52`
-- `mail-relay-01 .54`
-- `sensor-01 .55`
-- `PROXMOX .70`
-- `Proxmox-2 .71`
-- `media-01 .195`
-- `docker-01 .220`
-
-### Proxmox HTTPS
-
-- `https://192.168.2.70:8006`
-- `https://192.168.2.71:8006`
-
-### Node Exporter
-
-Current validated Node Exporter targets include:
+Listeners were present on:
 
 ```text
-dns-01          192.168.2.51:9100
-dns-02          192.168.2.50:9100
-monitor-01      192.168.2.52:9100
-mail-relay-01   192.168.2.54:9100
-sensor-01       192.168.2.55:9100
-PROXMOX         192.168.2.70:9100
-Proxmox-2       192.168.2.71:9100
-media-01        192.168.2.195:9100
-docker-01       192.168.2.220:9100
+TCP/3000   Grafana
+TCP/3100   Loki
+TCP/9090   Prometheus
+TCP/9093   Alertmanager
+TCP/9115   Blackbox Exporter
+TCP/12345  Alloy local UI/API on loopback
 ```
 
-`mail-relay-01` host monitoring was added and validated on 12 September 2026. Its ICMP and Node Exporter targets are both `up`.
+Local health checks returned HTTP 200 for:
+
+```text
+http://127.0.0.1:9090/-/healthy
+http://127.0.0.1:3000/api/health
+http://127.0.0.1:9093/-/healthy
+http://127.0.0.1:3100/ready
+```
+
+The compact audit also reported zero failed systemd units on `monitor-01`.
+
+## Metrics coverage
+
+Prometheus remains the authority for host/service metrics and Blackbox probes.
+
+Validated target families include:
+
+- DNS TCP probes;
+- ICMP probes;
+- Proxmox HTTPS probes;
+- Node Exporter across the managed estate;
+- service-specific metrics where deliberately added.
+
+The exact target count is operational data and may change as the estate evolves. Do not preserve an old target count in documentation as if it were a design constraint.
+
+## Logging architecture
+
+Loki is now part of the monitoring Compose stack and Alloy provides the host/log forwarding layer.
+
+Current high-level path:
+
+```text
+managed hosts / service logs
+        |
+        v
+Alloy
+        |
+        v
+Loki on monitor-01
+        |
+        v
+Grafana
+```
+
+Alloy 1.19.2 is deployed across the current managed baseline, including both Proxmox nodes, DNS resolvers, cloud, mail relay, media, BirdNET, edge and administration hosts.
+
+`admin-01` was reconciled during the 14 September audit after being identified as the one baseline host without Alloy.
+
+## Router syslog relationship
+
+`monitor-01` receives ASUS router remote syslog on UDP/5514 through rsyslog and stores the dedicated local file at:
+
+```text
+/var/log/homelab/router/rt-ac86u.log
+```
+
+Alloy now ships that file to the local Loki service at:
+
+```text
+http://127.0.0.1:3100/loki/api/v1/push
+```
+
+Local file retention/rotation remains useful resilience and is not replaced by Loki.
+
+See `ROUTER-SYSLOG-SERVICE.md` for the receiver and log-path details.
 
 ## Failure-domain placement
 
-Monitoring runs on `Proxmox-2` so loss of the primary `PROXMOX` host does not also remove monitoring.
+Monitoring runs on `Proxmox-2` so loss of the primary `PROXMOX` node does not also remove central visibility.
 
-This gives useful visibility into workloads on the other host including:
-
-- `dns-02`
-- `mail-relay-01`
-- `cloud-01`
-- `sensor-01`
-- the `PROXMOX` node itself.
-
-The two hypervisors remain standalone by design.
+`Proxmox-2` remains a standalone Proxmox node by design.
 
 ## IaC ownership
 
-- Terraform/OpenTofu: monitoring VM definition
-- Ansible: Debian baseline, Docker/Compose, service files, persistent directories and health checks
-- Compose: Prometheus, Grafana, Alertmanager and Blackbox Exporter
-- Prometheus configuration: Git-managed scrape/probe targets
-- Grafana provisioning: Git-managed datasource/dashboards where practical
-- Alertmanager configuration: Git-managed routing with protected secrets outside Git
-- managed DNS: `monitor-01.jameshouse -> 192.168.2.52`
+Current ownership model:
 
-Manual GUI edits are not authoritative unless reconciled back into Git.
+- Terraform/OpenTofu: monitoring VM definition;
+- Ansible: Debian baseline, Docker/Compose, Alloy, service files, persistent directories and health checks;
+- Compose: Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki;
+- Prometheus configuration: Git-managed scrape/probe targets;
+- Grafana provisioning: Git-managed datasource/dashboards where practical;
+- Loki configuration: Git-managed;
+- Alloy configuration: Git-managed through the relevant host/service roles;
+- Alertmanager configuration: Git-managed routing with protected secrets outside Git.
 
-Primary paths:
+Primary paths include:
 
 ```text
 IaC/terraform/proxmox/monitor-01/
 IaC/ansible/playbooks/monitoring.yml
+IaC/ansible/playbooks/monitor-router-alloy.yml
 IaC/ansible/roles/monitoring_stack/
+IaC/ansible/roles/monitor_router_alloy/
 IaC/scripts/deploy-monitoring-platform.sh
-IaC/scripts/preflight-monitoring.sh
 ```
+
+Manual GUI edits are not authoritative unless reconciled back into Git.
 
 ## Controller
 
@@ -165,86 +187,38 @@ admin-01
 ~/projects/homelab-platform
 ```
 
-The retired `TestServer` identity at `.220` must not be used as the normal monitoring controller. `.220` is now `docker-01`.
-
-## Ports
-
-LAN management/application ports:
-
-- Grafana: TCP/3000
-- Prometheus: TCP/9090
-- Alertmanager: TCP/9093
-- Blackbox Exporter: TCP/9115
-
-The 12 September audit found no Loki TCP/3100 listener and no Alloy TCP/12345 listener on `monitor-01`.
-
-## Router syslog relationship
-
-`monitor-01` also receives the ASUS router's remote syslog through rsyslog on UDP/5514 and stores it locally at:
-
-```text
-/var/log/homelab/router/rt-ac86u.log
-```
-
-That local receiver is operational and documented separately in `ROUTER-SYSLOG-SERVICE.md`.
-
-This is **not** evidence that Loki/Alloy central logging exists.
+The retired `TestServer` identity at `.220` must not be used as the controller. `.220` is `docker-01`.
 
 ## Alerting policy
 
 Alerting should remain actionable rather than comprehensive for its own sake.
 
-Current validation state:
-
-```text
-active Prometheus alerts: 0
-```
-
 New rules should be introduced only when:
 
-- the underlying metric/probe is stable;
+- the underlying metric/log signal is stable;
 - the alert has a clear operator action;
 - planned maintenance/outages are considered;
 - noisy duplicates are avoided.
 
-## Planned observability work
+Log ingestion does not imply that every log message should generate an alert.
 
-Future work includes:
+## Current follow-up work
 
-- central Loki/Alloy design if still required;
-- router syslog ingestion into that pipeline;
-- service-specific metrics where useful;
-- enriched Network Hosts data gatherer/dashboard;
-- Web Platform / Analytics dashboard combining Cloudflare edge/security data, Umami analytics and origin/application health;
-- additional service monitoring where it provides actionable value.
+Useful next work includes:
 
-Do not treat planned dashboards/logging as already deployed.
-
-## Validation
-
-Useful current checks from `admin-01` include controller-side HTTP/API checks against the four services and inspection of Prometheus targets/alerts.
-
-A healthy monitoring service should show:
-
-- Prometheus API responsive;
-- Grafana health responsive;
-- Alertmanager responsive;
-- Blackbox Exporter responsive;
-- configured targets healthy or with understood failures;
-- no unexplained active alerts;
-- zero unexpected failed units on `monitor-01`.
+- continue enriched Network Hosts dashboards and device-detail views;
+- build the planned Web Platform / Analytics dashboard combining Cloudflare, Umami and origin health;
+- add service-specific metrics/log views only where operationally useful;
+- continue backup/recovery work for persistent monitoring state where justified;
+- periodically validate Loki ingestion and label cardinality.
 
 ## Definition of current operational state
 
-The core monitoring platform is operational because:
+The monitoring platform is operational because:
 
 - `monitor-01` exists at the intended address/placement;
-- all four core services are healthy;
-- current target discovery works;
-- 25/25 active targets were healthy during the latest validation;
-- Node Exporter covers the current core host set including `mail-relay-01`;
-- DNS/ICMP/Proxmox HTTPS probes are live;
-- Grafana is connected to Prometheus;
-- no active Prometheus alerts were present during the validation.
-
-Loki/Alloy deployment remains a future workstream, not a condition for calling the current metrics platform operational.
+- Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki are running;
+- Prometheus, Grafana, Alertmanager and Loki health endpoints returned HTTP 200 during the 14 September validation;
+- Alloy is active on `monitor-01` and across the managed baseline;
+- router syslog has a local rsyslog path and an active Alloy/Loki ingestion path;
+- zero failed systemd units were observed on `monitor-01` during the compact audit.
