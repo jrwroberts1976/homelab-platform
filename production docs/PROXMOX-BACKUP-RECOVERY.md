@@ -1,38 +1,40 @@
 # Proxmox Guest Backup and Recovery
 
-**Status:** operationally proven primary guest-backup path; all seven production guests backed up to isolated per-node repositories; nightly isolated schedule policy live and validated; first unattended run pending observation  
+**Status:** operationally proven primary guest-backup path; final cluster-era schedule requires VM202/job reconciliation and fresh unattended proof  
 **Last validated:** 14 September 2026
 
 ## Purpose
 
 This runbook documents the current Proxmox VE guest-backup architecture, validation gates and proven restore procedure.
 
-The two Proxmox nodes are standalone and both contain an unrelated QEMU VMID `200`. Their backup repositories are therefore intentionally isolated so retention/pruning cannot mix the two VM200 backup groups.
+The two PVE nodes are now members of `jameshouse-pve`. Production guest IDs are cluster-unique, with `monitor-01` now VM202 on `Proxmox-2`.
+
+The two existing NFS backup namespaces remain intentionally node-scoped because they are already deployed and proven. Cluster membership makes a single shared namespace technically possible, but there is no operational requirement to collapse the current design before fresh cluster-era backup evidence exists.
 
 ## Architecture
 
 ```text
 PROXMOX .70
   media-backup-proxmox
+  node scope: PROXMOX
   -> NFS v4.2/TCP -> media-01 .195:/srv/backup/pve-proxmox
 
 Proxmox-2 .71
   media-backup-proxmox-2
+  node scope: Proxmox-2
   -> NFS v4.2/TCP -> media-01 .195:/srv/backup/pve-proxmox-2
 
-Legacy rollback only
+Legacy rollback
   media-backup
   -> media-01 .195:/srv/backup/pve
 ```
 
-The isolated exports are client-specific:
+The host-specific exports are client-restricted:
 
 ```text
 /srv/backup/pve-proxmox   -> 192.168.2.70 only
 /srv/backup/pve-proxmox-2 -> 192.168.2.71 only
 ```
-
-The legacy `/srv/backup/pve` export remains temporarily available as rollback evidence. Do not use it for new production retention while the hosts are standalone and both contain VMID 200.
 
 ## Current guest scope
 
@@ -46,12 +48,12 @@ PROXMOX .70 -> media-backup-proxmox
 Proxmox-2 .71 -> media-backup-proxmox-2
   CT101 dns-01
   CT103 edge-01
-  VM200 monitor-01
+  VM202 monitor-01
 ```
 
 Templates 9000/9001 are excluded from the production schedule.
 
-All seven production guests have completed a successful snapshot-mode manual backup proof to the correct isolated namespace.
+All seven workloads had successful snapshot-mode backup evidence before cluster formation. CT101 and CT103 have since moved back to `Proxmox-2`, and monitor has changed from the old standalone VMID 200 to cluster VMID 202. Fresh cluster-era backup evidence is therefore required for the final `.71` set.
 
 ## Service availability during backup
 
@@ -108,7 +110,9 @@ IaC/ansible/roles/proxmox_mail_relay_client/
 IaC/ansible/roles/proxmox_backup_schedule/
 ```
 
-All deployment roles use explicit approval gates and fail closed on unexpected host/storage/schedule state.
+All deployment roles use explicit approval gates and should fail closed on unexpected host/storage/schedule state.
+
+The backup schedule IaC must be reconciled from the former `Proxmox-2` VMID 200 monitor entry to VMID 202 before it is treated as current authority for the cluster-era `.71` job.
 
 ## Notification path
 
@@ -128,13 +132,11 @@ The complete path was proven from both hypervisors:
 Proxmox -> mail-relay-01 -> Gmail relay -> recipient
 ```
 
-Historical stale queue entries on `Proxmox-2` were removed after the successful delivery proof.
+## Historical backup proof
 
-## Backup proof
+### Pre-cluster Proxmox-2
 
-### Proxmox-2
-
-A complete production backup set was proven for:
+A complete production backup set was proven for the then-current standalone identities:
 
 ```text
 CT101 dns-01
@@ -142,11 +144,11 @@ CT103 edge-01
 VM200 monitor-01
 ```
 
-The resulting legacy-source artifacts were copied into `/srv/backup/pve-proxmox-2/dump` and validated by matching names and byte sizes before `media-backup-proxmox-2` was registered.
+That VM200 archive remains useful historical recovery evidence for the pre-cluster monitor identity. It does not replace the need for a new VM202 backup.
 
 ### PROXMOX
 
-A complete isolated production backup set was proven directly to `media-backup-proxmox` for:
+A complete production backup set was proven directly to `media-backup-proxmox` for:
 
 ```text
 CT100 dns-02
@@ -155,11 +157,13 @@ VM200 cloud-01
 VM201 sensor-01
 ```
 
-Post-backup storage remained healthy with substantial free capacity and zero failed systemd units.
+### Cluster migration backups
+
+Fresh stop-mode migration backups of CT101, CT103 and the old monitor VM200 were also taken immediately before the `Proxmox-2` join. Those archives and saved guest configuration were retained as rollback evidence during cluster formation.
 
 ## Proven restore test
 
-CT103 (`edge-01`) was restored on `Proxmox-2` under temporary VMID `903`.
+CT103 (`edge-01`) was restored on `Proxmox-2` under temporary VMID `903` before cluster formation.
 
 Safety controls:
 
@@ -194,7 +198,7 @@ A QEMU VM restore proof remains pending.
 
 ## Manual backup commands
 
-Use the host-specific storage ID.
+Use the node-scoped storage ID.
 
 `PROXMOX`:
 
@@ -210,7 +214,7 @@ vzdump 100 102 200 201 \
 `Proxmox-2`:
 
 ```bash
-vzdump 101 103 200 \
+vzdump 101 103 202 \
   --storage media-backup-proxmox-2 \
   --mode snapshot \
   --compress zstd \
@@ -220,9 +224,11 @@ vzdump 101 103 200 \
 
 Because `/etc/vzdump.conf` defines the approved local tmpdir, normal commands do not need a separate `--tmpdir` argument.
 
+Before running a cluster-era manual backup, verify that the storage is active on the intended node and that the guest IDs are currently placed there.
+
 ## Manual restore procedure
 
-1. Identify the correct host-specific backup storage.
+1. Identify the correct node-scoped backup storage.
 2. List candidate volumes with `pvesm list <storage-id> --content backup`.
 3. Inspect embedded configuration with `pvesm extractconfig <volid>` where applicable.
 4. Select a proven-unused temporary VMID for a test restore.
@@ -237,7 +243,7 @@ Never boot a cloned restore with the original production network identity while 
 
 ## Schedule and retention
 
-Live approved policy:
+Intended post-cluster policy:
 
 ```text
 PROXMOX
@@ -250,7 +256,7 @@ Proxmox-2
   id: homelab-nightly-proxmox-2
   time: 03:15
   storage: media-backup-proxmox-2
-  guests: 101,103,200
+  guests: 101,103,202
 
 mode: snapshot
 compression: zstd
@@ -258,45 +264,64 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The jobs were deliberately disabled when the shared-namespace collision was found. The current IaC allows only a controlled transition from the disabled legacy job to its approved isolated storage and validates a proven archive for every guest before enabling the job.
+The old standalone schedule was previously proven with `Proxmox-2` guests `101,103,200`. Cluster formation changed that identity to VM202 and replaced the joining node's `/etc/pve` state with the cluster filesystem.
 
-Final live validation on 14 September 2026 proved:
+Therefore do **not** claim the final `Proxmox-2` job is proven merely from the old pre-cluster validation.
+
+Post-cluster schedule closeout requires:
 
 ```text
 PROXMOX storage=media-backup-proxmox
 PROXMOX schedule=02:15
-PROXMOX enabled=1
 PROXMOX vmids=100,102,200,201
 
 Proxmox-2 storage=media-backup-proxmox-2
 Proxmox-2 schedule=03:15
-Proxmox-2 enabled=1
-Proxmox-2 vmids=101,103,200
+Proxmox-2 vmids=101,103,202
 
 mode=snapshot
 compression=zstd
 notification-mode=notification-system
 keep-last=3
-schedule_cutover=PASS
 ```
 
-The Ansible reconciliation also returned `changed=0`, `unreachable=0` and `failed=0` on both nodes, confirming the live job definitions already matched the merged IaC. Zero failed systemd units were observed.
+Then prove:
 
-The first unattended overnight execution remains the next operational observation; the schedule configuration itself is proven live.
+- IaC reconciliation is idempotent;
+- fresh backup archives exist for final cluster-era identities;
+- VM202 archive is readable and integrity-checked;
+- the first unattended post-cluster run succeeds;
+- notifications are delivered.
+
+## Cluster migration rollback state
+
+The old `Proxmox-2` local volumes were renamed before guest migration rather than deleted:
+
+```text
+precluster-20260914-vm-101-disk-0
+precluster-20260914-vm-103-disk-0
+precluster-20260914-vm-200-cloudinit
+precluster-20260914-vm-200-disk-0
+```
+
+They are **not active guest disks**. They are temporary rollback evidence.
+
+Do not delete them until fresh cluster-era backups and the final placement have been explicitly accepted. Once they are retired, record the removal so the LVs cannot later be mistaken for active or unexplained storage.
 
 ## Failure handling
 
 If a backup fails:
 
 1. do not delete the last known-good backup;
-2. verify the source guest is healthy;
+2. verify the source guest is healthy and on the expected cluster node;
 3. inspect the `vzdump` task log and local tmpdir;
-4. inspect the correct isolated storage with `pvesm status --storage <storage-id>`;
+4. inspect the correct node-scoped storage with `pvesm status --storage <storage-id>`;
 5. inspect the matching NFS export and `media-01` capacity;
 6. verify `/var/lib/vz/vzdump-tmp` remains mode `1777` with sufficient free space;
 7. verify notification delivery through `mail-relay-01`;
-8. correct drift through IaC where practical;
-9. repeat a controlled manual proof if the fault affected the backup path itself.
+8. verify the scheduled VMID list has not drifted from cluster placement;
+9. correct drift through IaC where practical;
+10. repeat a controlled manual proof if the fault affected the backup path itself.
 
 ## Known limitations
 
@@ -307,9 +332,12 @@ If a backup fails:
 - `docker-01`, controller recovery state and other non-Proxmox persistent data need explicit protection.
 - The suspect 4 TB WD disk on `PROXMOX` must not become the sole trusted copy of important data.
 - A successful VM/LXC image backup does not automatically prove application-consistent database recovery.
+- Cluster quorum does not make node-local `local-lvm` disks available on another node after a hardware failure.
 
-## Future cluster note
+## Cluster note
 
-The two PVE nodes are currently standalone. A future cluster may be reconsidered when dedicated Corosync networking and quorum/QDevice design are approved.
+`jameshouse-pve` is now the production Proxmox platform. It uses dedicated Corosync link0, LAN fallback link1 and a QDevice on `admin-01`.
 
-Until then, preserve the isolated backup namespaces because both hosts contain an unrelated VMID `200`.
+The cluster has removed the old duplicate-VMID constraint: `cloud-01` is VM200 and `monitor-01` is VM202.
+
+The current node-scoped backup namespaces may be retained indefinitely if they remain operationally useful. Any future consolidation to one cluster-wide namespace must be treated as a separate controlled change with fresh backup/restore proof rather than assumed to be necessary.
