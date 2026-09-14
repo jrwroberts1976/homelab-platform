@@ -4,13 +4,13 @@
 **Host:** `media-01`  
 **IPv4:** `192.168.2.195`  
 **Platform:** Raspberry Pi 5, Debian 13, 512 GB-class NVMe  
-**Primary workload:** Kodi media endpoint  
+**Primary workload:** Kodi media endpoint and primary Proxmox guest-backup target  
 **Status:** operational; nftables and extended Pi/NVMe monitoring remain follow-up gates  
 **Last current-state review:** 14 September 2026
 
 ## Service role
 
-`media-01` is a dedicated living-room/media endpoint managed through Git-backed Ansible.
+`media-01` is a dedicated living-room/media endpoint managed through Git-backed Ansible. It also provides the current primary NFS target for Proxmox guest backups.
 
 The operating-system/service layer is reproducible. Media content under `/srv/media` is user data and is not recreated by the role.
 
@@ -26,6 +26,8 @@ Validated 14 September 2026:
 - Chrony active;
 - Node Exporter 1.9.0 active;
 - Alloy 1.19.2 active;
+- NFS server active;
+- NVMe SMART health PASS during backup-target validation;
 - zero failed systemd units.
 
 The intended nftables policy remains a separate follow-up and must not be described as active until deliberately deployed and remotely validated.
@@ -69,6 +71,36 @@ Kodi uses local filesystem paths rather than looping back through SMB.
 
 User media is persistent data and needs an intentional backup decision; IaC does not recreate it.
 
+## Proxmox guest-backup target
+
+`media-01` now provides separate NFS namespaces for the two standalone Proxmox nodes so duplicate VMIDs cannot collide in the backup repository:
+
+```text
+/srv/backup/pve-proxmox     -> PROXMOX .70 only
+/srv/backup/pve-proxmox-2   -> Proxmox-2 .71 only
+```
+
+The original `/srv/backup/pve` export and `media-backup` PVE storage remain preserved temporarily as rollback evidence while the isolated-storage schedule cutover is completed and observed.
+
+Validated backup-target state includes:
+
+- NFS v4.2/TCP;
+- exports restricted to the intended Proxmox client addresses;
+- root-owned backup repositories;
+- write/read/delete validation from both hypervisors;
+- isolated per-node PVE storage registration;
+- complete production guest backup sets on both isolated namespaces;
+- approximately 414 GiB free after the first complete `.70` backup set.
+
+The backup repository is on the same physical NVMe as the rest of `media-01`. It protects the Proxmox guests from hypervisor loss, but **does not protect `media-01` itself** from NVMe or host failure. User media under `/srv/media` still requires an independent failure-domain copy.
+
+See:
+
+```text
+docs/architecture/BACKUP-STRATEGY.md
+production docs/PROXMOX-BACKUP-RECOVERY.md
+```
+
 ## Time
 
 `media-01` uses Chrony as an NTP client with the two local Proxmox time sources as the intended upstreams:
@@ -96,20 +128,30 @@ Still useful to add where actionable:
 - Raspberry Pi temperature/throttling metrics;
 - NVMe SMART/health metrics;
 - Kodi service availability alerting;
-- media storage capacity and failure signals.
+- media/backup storage capacity and failure signals;
+- backup freshness/status metrics for the isolated Proxmox namespaces.
 
 ## Host firewall
 
 An nftables role/design exists but the live estate audit did not establish an active nftables policy on `media-01`.
 
-Do not confuse a defined Ansible role with deployed firewall state. Apply and remotely validate any firewall change separately so SSH, SMB, monitoring and media functions are not accidentally cut off.
+The NFS backup-target deployment currently relies on the validated host/network controls encoded by the backup IaC and restricted exports. Any wider firewall rollout must be applied and remotely validated separately so SSH, SMB, monitoring, media and NFS backup functions are not accidentally cut off.
 
 ## IaC paths
 
-Primary deployment:
+Primary media deployment:
 
 ```text
 IaC/ansible/playbooks/media-01.yml
+```
+
+Backup-target IaC includes:
+
+```text
+IaC/ansible/playbooks/media-backup-target.yml
+IaC/ansible/playbooks/media-backup-split-prep.yml
+IaC/ansible/roles/media_backup_target/
+IaC/ansible/roles/media_backup_split_prep/
 ```
 
 Supporting roles include:
@@ -149,6 +191,8 @@ Service validation should include:
 - Kodi active;
 - Samba healthy;
 - expected media paths present;
+- NFS backup exports and namespaces healthy;
+- sufficient NVMe free space;
 - Chrony healthy;
 - Node Exporter healthy;
 - Alloy healthy;
@@ -167,15 +211,18 @@ Recovery order:
 4. restore protected SMB credential material;
 5. run the media Ansible playbook and baseline observability roles;
 6. restore/copy user media under `/srv/media` if required;
-7. validate Kodi, SMB, Chrony, Node Exporter and Alloy;
-8. apply/validate firewall only if that separate change has been approved;
-9. run a second Ansible pass and require no unintended drift.
+7. recreate the approved NFS backup namespaces through IaC;
+8. restore backup archives from an independent copy if the NVMe itself was lost;
+9. validate Kodi, SMB, NFS, Chrony, Node Exporter and Alloy;
+10. apply/validate firewall only if that separate change has been approved;
+11. run a second Ansible pass and require no unintended drift.
 
 ## Remaining completion gates
 
 - apply and remotely validate the intended nftables policy if still required;
 - add Pi temperature/throttling metrics;
-- add NVMe SMART/health metrics;
+- add NVMe SMART/health and backup-capacity metrics;
+- establish an independent secondary copy for important Proxmox backups;
 - decide/prove backup protection for user media;
 - configure optional Kodi credentials/settings that are intentionally outside Git;
 - continue central logging/dashboard work only where it adds operational value.
