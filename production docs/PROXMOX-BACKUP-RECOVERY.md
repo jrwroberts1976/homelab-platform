@@ -1,6 +1,6 @@
 # Proxmox Guest Backup and Recovery
 
-**Status:** operationally proven primary guest-backup path; all seven production guests backed up to isolated per-node repositories; final schedule cutover and first unattended run not yet evidenced in this close-out  
+**Status:** operationally proven primary guest-backup path; all seven production guests backed up to isolated per-node repositories; nightly isolated schedule policy live and validated; first unattended run pending observation  
 **Last validated:** 14 September 2026
 
 ## Purpose
@@ -49,7 +49,7 @@ Proxmox-2 .71 -> media-backup-proxmox-2
   VM200 monitor-01
 ```
 
-Templates 9000/9001 are excluded from the initial production schedule.
+Templates 9000/9001 are excluded from the production schedule.
 
 All seven production guests have completed a successful snapshot-mode manual backup proof to the correct isolated namespace.
 
@@ -237,7 +237,7 @@ Never boot a cloned restore with the original production network identity while 
 
 ## Schedule and retention
 
-Approved IaC policy:
+Live approved policy:
 
 ```text
 PROXMOX
@@ -260,7 +260,29 @@ notification-mode: notification-system
 
 The jobs were deliberately disabled when the shared-namespace collision was found. The current IaC allows only a controlled transition from the disabled legacy job to its approved isolated storage and validates a proven archive for every guest before enabling the job.
 
-At this close-out the cutover playbook is syntax-valid, but the supplied evidence does not include the final live cutover result or first unattended run. Keep those as operational validation items rather than documenting them as already proven.
+Final live validation on 14 September 2026 proved:
+
+```text
+PROXMOX storage=media-backup-proxmox
+PROXMOX schedule=02:15
+PROXMOX enabled=1
+PROXMOX vmids=100,102,200,201
+
+Proxmox-2 storage=media-backup-proxmox-2
+Proxmox-2 schedule=03:15
+Proxmox-2 enabled=1
+Proxmox-2 vmids=101,103,200
+
+mode=snapshot
+compression=zstd
+notification-mode=notification-system
+keep-last=3
+schedule_cutover=PASS
+```
+
+The Ansible reconciliation also returned `changed=0`, `unreachable=0` and `failed=0` on both nodes, confirming the live job definitions already matched the merged IaC. Zero failed systemd units were observed.
+
+The first unattended overnight execution remains the next operational observation; the schedule configuration itself is proven live.
 
 ## Failure handling
 

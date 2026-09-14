@@ -1,6 +1,6 @@
 # Backup Strategy
 
-**Status:** primary Proxmox guest-backup platform operationally proven; isolated per-node repositories and all seven production guest backups proven; VM/application restore and independent secondary-copy coverage remain open  
+**Status:** primary Proxmox guest-backup platform operationally proven; isolated per-node repositories, all seven production guest backups and live nightly schedule policy proven; unattended execution history, VM/application restore and independent secondary-copy coverage remain open  
 **Reviewed:** 14 September 2026
 
 ## Requirement
@@ -44,9 +44,14 @@ all seven production guest backups: proven
 archive integrity checks: proven
 CT103 isolated LXC restore + boot: proven
 notification delivery through mail-relay-01: proven end to end
-retention policy in IaC: keep-last=3
-schedule cutover IaC: syntax validated
-live isolated schedule cutover / first unattended run: not yet evidenced in this close-out record
+retention policy: keep-last=3
+PROXMOX nightly job: enabled, 02:15, media-backup-proxmox
+Proxmox-2 nightly job: enabled, 03:15, media-backup-proxmox-2
+schedule mode/compression: snapshot / zstd
+schedule notification mode: notification-system
+schedule reconciliation: idempotent, changed=0 on both PVE nodes
+failed systemd units during final cutover validation: 0
+first unattended isolated schedule run: pending observation
 secondary independent backup copy: not implemented
 VM restore proof: pending
 application-consistent cloud restore: pending
@@ -162,7 +167,7 @@ End-to-end notification tests from both PVE nodes completed successfully and sta
 
 ## Schedule and retention policy
 
-Approved schedule policy encoded in IaC:
+Live approved schedule policy:
 
 ```text
 PROXMOX .70
@@ -183,9 +188,11 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-During the namespace-collision correction both jobs were deliberately disabled. The IaC now implements a fail-closed transition from the disabled legacy job to the correct isolated storage and refuses to enable a job unless the approved storage is active and an existing proven archive is present for every selected guest.
+During the namespace-collision correction both jobs were deliberately disabled. The IaC implements a fail-closed transition from the disabled legacy job to the correct isolated storage and refuses to enable a job unless the approved storage is active and an existing proven archive is present for every selected guest.
 
-At this documentation close-out, the cutover playbook has passed syntax validation but the conversation evidence does not include the final live cutover result or the first unattended overnight run. Do not record either as proven until observed.
+The final live validation on 14 September 2026 proved both jobs enabled against the correct isolated storage IDs, with the expected guest selections, schedules, snapshot mode, zstd compression, `keep-last=3` retention and notification-system routing. Re-running the Ansible reconciliation returned `changed=0` for both PVE nodes with `failed=0`, confirming live state matches Git-managed policy.
+
+The first unattended overnight execution remains to be observed before unattended execution history is described as proven.
 
 ## IaC authority
 
@@ -285,9 +292,9 @@ Do not collapse the isolated backup namespaces while the hosts are standalone an
 
 ## Remaining priorities
 
-The primary guest-backup project can be considered implemented at the manual/proven layer. Remaining work is:
+The primary guest-backup project is implemented and the live schedule policy is proven. Remaining work is:
 
-1. observe and record the isolated schedule cutover and first unattended run;
+1. observe and record the first unattended run;
 2. review real retention/storage growth after multiple runs;
 3. prove at least one QEMU VM restore;
 4. prove application-consistent `cloud-01` recovery;
@@ -305,6 +312,7 @@ Primary Proxmox guest backup is operationally proven because:
 - archive integrity checks have passed;
 - an LXC restore has been booted safely in isolation;
 - notifications have been delivered through the approved relay path;
-- retention and scheduled-job policy are encoded in Git-managed IaC.
+- the nightly jobs are live on the correct isolated storage IDs;
+- retention and scheduled-job policy are encoded in Git-managed IaC and live reconciliation is idempotent.
 
 Estate-wide recovery is not complete until VM, application, non-Proxmox and independent-secondary-copy recovery classes are also proven.

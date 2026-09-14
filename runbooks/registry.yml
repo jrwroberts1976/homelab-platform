@@ -376,7 +376,7 @@ runbooks:
       mode: snapshot
       compression: zstd
       keep_last: 3
-      live_cutover_validation: pending_evidence
+      live_cutover_validation: proven_2026-09-14
     validation:
       nfs_write_read_delete: proven_both_hypervisors
       isolated_namespaces: proven_2026-09-14
@@ -385,6 +385,8 @@ runbooks:
       archive_integrity: proven
       isolated_lxc_restore_boot: proven_ct103_2026-09-14
       notification_delivery: proven_both_hypervisors_2026-09-14
+      schedule_policy_live: proven_both_hypervisors_2026-09-14
+      schedule_iac_reconciliation: idempotent_changed_0_2026-09-14
       qemu_restore: pending
       application_consistent_cloud_restore: pending
       first_unattended_isolated_schedule_run: pending
