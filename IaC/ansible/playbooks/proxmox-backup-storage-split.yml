@@ -1,0 +1,22 @@
+---
+- name: Register isolated media-01 backup storage per standalone Proxmox node
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+
+  vars:
+    proxmox_backup_storage_split_matrix:
+      PROXMOX:
+        id: media-backup-proxmox
+        export: /srv/backup/pve-proxmox
+        path: /mnt/pve/media-backup-proxmox
+        job_id: homelab-nightly-proxmox
+      Proxmox-2:
+        id: media-backup-proxmox-2
+        export: /srv/backup/pve-proxmox-2
+        path: /mnt/pve/media-backup-proxmox-2
+        job_id: homelab-nightly-proxmox-2
+
+  roles:
+    - role: proxmox_backup_storage_split
