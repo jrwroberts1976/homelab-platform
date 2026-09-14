@@ -10,7 +10,7 @@ It describes what is live now. Historical host identities and earlier migration 
 
 Legacy repositories may remain useful reference sources for areas not yet migrated. They must not be treated as current authority after their workload or configuration has been explicitly migrated and validated in `homelab-platform`.
 
-A detailed reconciliation trail for this snapshot is recorded in `docs/architecture/ESTATE-AUDIT-2026-09-14.md`.
+A detailed reconciliation trail for the 14 September estate snapshot is recorded in `docs/architecture/ESTATE-AUDIT-2026-09-14.md`.
 
 ## Active estate
 
@@ -26,7 +26,7 @@ A detailed reconciliation trail for this snapshot is recorded in `docs/architect
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
 | `PROXMOX` | `192.168.2.70` | Primary standalone Proxmox VE node | ACTIVE |
 | `Proxmox-2` | `192.168.2.71` | Secondary standalone Proxmox VE node and network-host collector | ACTIVE |
-| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi media endpoint | ACTIVE |
+| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host | ACTIVE |
 | ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller | ACTIVE |
 | ASUS AiMesh node | `192.168.2.181` | Wireless mesh node | ACTIVE |
@@ -47,7 +47,9 @@ Historical hardware and audit documents remain useful evidence but are not live 
 
 ## Proxmox platform
 
-The two Proxmox nodes are intentionally standalone. No production design depends on Corosync or shared cluster membership.
+The two Proxmox nodes are currently standalone. No current production design depends on Corosync or shared cluster membership.
+
+A future cluster rebuild is under consideration once dedicated Corosync networking and a quorum/QDevice design are available. Until such a design is approved and implemented, all documentation and backup policy must treat the hosts as standalone systems.
 
 ### `PROXMOX` — `192.168.2.70`
 
@@ -59,7 +61,7 @@ Validated 14 September 2026:
 - Chrony active;
 - Node Exporter active;
 - Alloy 1.19.2 active;
-- zero failed systemd units during the compact estate audit.
+- zero failed systemd units during the latest backup validation.
 
 Live workload placement:
 
@@ -72,7 +74,7 @@ Live workload placement:
 | VM | 9000 | Debian cloud template | stopped |
 | VM | 9001 | Debian cloud template with QGA | stopped |
 
-An obsolete earlier Network Host Collector installation was found on this node during the 14 September audit. Its timer was enabled but inactive, there was no inventory file, and the unit referenced the superseded `/usr/local/bin/homelab-network-host-collector.py` implementation. It was backed up under `/root/legacy-network-host-collector-20260914-060957` and removed. The current collector belongs on `Proxmox-2` only.
+An obsolete earlier Network Host Collector installation was found on this node during the 14 September audit, backed up and removed. The current collector belongs on `Proxmox-2` only.
 
 ### `Proxmox-2` — `192.168.2.71`
 
@@ -84,8 +86,8 @@ Validated 14 September 2026:
 - Chrony active;
 - Node Exporter active;
 - Alloy 1.19.2 active;
-- zero failed systemd units during the compact estate audit;
-- active Network Host Collector timer with current inventory under `/var/lib/homelab-network-hosts/inventory.json`.
+- zero failed systemd units during the latest backup validation;
+- active Network Host Collector with inventory under `/var/lib/homelab-network-hosts/inventory.json`.
 
 Live guests:
 
@@ -95,7 +97,7 @@ Live guests:
 | LXC | 101 | `dns-01` | running |
 | LXC | 103 | `edge-01` | running |
 
-The two Proxmox nodes are on different current patch levels and should continue through the normal controlled patch workflow rather than being assumed identical.
+Both standalone nodes currently contain an unrelated VMID `200`. This is why their NFS backup namespaces are kept separate.
 
 ## DNS
 
@@ -106,16 +108,7 @@ dns-01  192.168.2.51
 dns-02  192.168.2.50
 ```
 
-Both workloads run:
-
-- Pi-hole Core 6.4.3;
-- Pi-hole Web 6.6;
-- Pi-hole FTL 6.7;
-- Unbound 1.22.0;
-- Node Exporter;
-- Alloy 1.19.2.
-
-Both reported zero failed systemd units in the 14 September compact audit.
+Both workloads run Pi-hole Core 6.4.3, Pi-hole Web 6.6, Pi-hole FTL 6.7, Unbound 1.22.0, Node Exporter and Alloy 1.19.2.
 
 Managed local-record parity remains authoritative through IaC. `192.168.2.48` is `admin-01` and must not be treated as a DNS resolver.
 
@@ -123,7 +116,7 @@ Managed local-record parity remains authoritative through IaC. `192.168.2.48` is
 
 `monitor-01` is the central metrics, alerting and logging platform.
 
-Direct validation on 14 September 2026 proved these containers running:
+Validated running containers include:
 
 | Service | Image/version | State |
 |---|---|---|
@@ -133,36 +126,15 @@ Direct validation on 14 September 2026 proved these containers running:
 | Blackbox Exporter | `prom/blackbox-exporter:v0.28.0` | running |
 | Loki | `grafana/loki:3.7.7` | running |
 
-Native Alloy 1.19.2 is also active on `monitor-01` and listens locally on TCP/12345.
+Native Alloy 1.19.2 is active on `monitor-01`. Router syslog continues to arrive through rsyslog on UDP/5514, is retained under `/var/log/homelab/router/rt-ac86u.log`, and is shipped to Loki through Alloy.
 
-Validated listeners include:
-
-```text
-3000  Grafana
-3100  Loki
-9090  Prometheus
-9093  Alertmanager
-9115  Blackbox Exporter
-12345 Alloy local UI/API
-```
-
-Direct local health checks returned HTTP 200 for Prometheus, Grafana, Alertmanager and Loki.
-
-Router syslog still arrives through rsyslog on UDP/5514 and is stored at:
-
-```text
-/var/log/homelab/router/rt-ac86u.log
-```
-
-Alloy now ships that dedicated log into the local Loki service on `monitor-01`. The old statement that Loki/Alloy are future-only is superseded.
-
-The broader Alloy baseline is deployed across the current managed estate. During this audit `admin-01` was the one identified drift item and was reconciled successfully to Alloy 1.19.2.
+The broader Alloy baseline is deployed across the current managed estate.
 
 ## Production cloud service
 
 `cloud-01` is a live production Nextcloud platform.
 
-Validated 14 September state:
+Validated state:
 
 - Debian 13 VM on `PROXMOX`;
 - dedicated 200 GiB ext4 data disk at `/srv/cloud-01-data`;
@@ -171,85 +143,77 @@ Validated 14 September state:
 - PostgreSQL `18.6-alpine` healthy;
 - Redis `8.2.9-alpine` healthy;
 - application endpoint `192.168.2.53:8080`;
-- Node Exporter active;
-- Alloy 1.19.2 active;
+- Node Exporter and Alloy active;
 - zero failed systemd units.
 
-The former 4 TB WD USB disk is not the cloud production data disk. Backup and restore proof for important cloud data remains outstanding.
+A complete VM-level snapshot backup of VM200 is now proven on the isolated `media-backup-proxmox` repository. Application-consistent Nextcloud/PostgreSQL recovery remains unproven and is still a separate requirement.
 
 ## Network sensor
 
-`sensor-01` is now an active passive network sensor; the earlier Phase 1-only description is superseded.
+`sensor-01` is an active passive network sensor.
 
-Validated 14 September 2026:
+Validated state includes:
 
 - Debian 13 VM at `192.168.2.55`;
 - management interface `eth0` up;
-- dedicated capture interface `enx00249b63b38a` up with promiscuous mode enabled;
-- capture gate `/etc/homelab-network-sensor/capture-enabled` present;
-- Suricata 8.0.6 active and enabled;
-- Zeek 8.0.10 installed under `/opt/zeek`;
-- `homelab-zeek.service` active and enabled;
-- `zeekctl status` reports the standalone Zeek process running;
-- Node Exporter active;
-- Alloy 1.19.2 active;
+- dedicated capture interface `enx00249b63b38a` up in promiscuous mode;
+- capture gate present;
+- Suricata 8.0.6 active/enabled;
+- Zeek 8.0.10 active;
+- Node Exporter and Alloy active;
 - zero failed systemd units.
 
-The capture path must continue to preserve separation between the management interface and the passive capture interface. The capture adapter must not be repurposed as a normal routed management interface.
+The capture adapter remains dedicated to passive monitoring and must not be repurposed as a normal routed management or future Corosync interface.
 
 ## Network host discovery
 
 The current Network Host Collector is deployed on `Proxmox-2` only.
 
-Validated state on 14 September 2026:
+Validated state includes the five-minute discovery collector, enrichment timer, one-time deep profiler for new hosts, current inventory under `/var/lib/homelab-network-hosts/inventory.json`, first-seen notification and Git-managed Grafana Network Hosts dashboards.
 
-- `homelab-network-host-collector.timer` enabled and active;
-- approximately five-minute scan cadence;
-- inventory updating under `/var/lib/homelab-network-hosts/inventory.json`;
-- deep-profiling and enrichment components are managed separately through the current IaC roles.
-
-The obsolete earlier collector installation on `PROXMOX` was removed during the audit.
+The obsolete collector installation on `PROXMOX` was removed.
 
 ## Edge host
 
 `edge-01` is a running Debian 13 LXC, CT 103 on `Proxmox-2`, at `192.168.2.56`.
 
-Current evidence shows:
-
-- no `cloudflared` package/binary/service;
-- Node Exporter active;
-- Alloy 1.19.2 active;
-- zero failed systemd units.
-
-The host remains reserved for a future Cloudflare Tunnel connector. The connector workload is not deployed.
+No `cloudflared` workload is deployed. Node Exporter and Alloy are active. The host remains reserved for a future Cloudflare Tunnel connector.
 
 ## Mail relay
 
 `mail-relay-01` is CT 102 on `PROXMOX` at `192.168.2.54`.
 
+Postfix is active/enabled and remains the approved internal SMTP relay to Gmail. The relay path was also proven for Proxmox notification delivery from both hypervisors.
+
+Protected Gmail relay credentials remain outside Git.
+
+## Media and primary backup target
+
+`media-01` at `192.168.2.195` is the Raspberry Pi 5 Kodi endpoint and the primary Proxmox guest-backup target.
+
 Validated state includes:
-
-- Debian 13;
-- Postfix active/enabled;
-- SMTP relay design through Gmail smart host retained;
-- Node Exporter active;
-- Alloy 1.19.2 active;
-- zero failed systemd units.
-
-The internal relay ACL remains intentionally restricted. Protected Gmail relay credentials remain outside Git.
-
-## Media
-
-`media-01` at `192.168.2.195` is the Raspberry Pi 5 Kodi endpoint.
-
-Validated 14 September state includes:
 
 - Kodi 21.3 active/enabled;
 - Samba active/enabled;
+- NFS server active;
+- NVMe-backed ext4 filesystem healthy with substantial free capacity during backup proof;
 - Chrony active;
 - Node Exporter active;
 - Alloy 1.19.2 active;
 - zero failed systemd units.
+
+Current backup exports:
+
+```text
+/srv/backup/pve-proxmox
+  client: 192.168.2.70
+
+/srv/backup/pve-proxmox-2
+  client: 192.168.2.71
+
+/srv/backup/pve
+  legacy rollback namespace retained temporarily
+```
 
 The intended nftables policy remains a separate follow-up until deliberately deployed and remotely validated.
 
@@ -257,20 +221,7 @@ The intended nftables policy remains a separate follow-up until deliberately dep
 
 `admin-01` at `192.168.2.48` is the normal controller for homelab administration and IaC.
 
-During the 14 September audit:
-
-- Node Exporter was healthy;
-- Alloy was found missing despite `admin-01` being part of the Ansible Alloy baseline;
-- `smartmontools.service` was the only failed unit because the Raspberry Pi boots from SD (`mmcblk0`) and no SMART-capable device was available to monitor.
-
-The SMART daemon was disabled/stopped and its failed state cleared. The package remains installed for future SMART-capable storage. The existing Alloy playbook was then applied with interactive become authentication and completed successfully.
-
-Current state:
-
-- Alloy 1.19.2 installed;
-- Alloy enabled and active;
-- Node Exporter active;
-- zero failed systemd units.
+Current state includes Alloy 1.19.2, Node Exporter and zero failed systemd units after the inapplicable smartd daemon was disabled/stopped on the SD-card-based Raspberry Pi.
 
 Production Ansible should normally be launched from the checked-out `homelab-platform` repository on this host.
 
@@ -278,29 +229,42 @@ Production Ansible should normally be launched from the checked-out `homelab-pla
 
 `docker-01` at `192.168.2.220` remains the dedicated Raspberry Pi 4 BirdNET-Go host.
 
-Validated state:
-
-- Debian 13 / aarch64;
-- Docker active/enabled;
-- exactly one intended application container;
-- `birdnet-go` using `ghcr.io/tphakala/birdnet-go:20260823`;
-- container healthy;
-- Node Exporter active;
-- Alloy 1.19.2 active;
-- zero failed systemd units.
+Validated state includes Debian 13/aarch64, Docker active, one intended BirdNET-Go application container, Node Exporter and Alloy active, and zero failed systemd units.
 
 The former TestServer workload estate must not be silently reintroduced.
 
 ## Backup posture
 
-The 12 September backup audit remains the latest evidence-backed backup assessment:
+The previous no-backup assessment is superseded.
 
-- no active production Proxmox Backup Server;
-- no proven production Restic/Backrest platform;
-- no proven end-to-end restore workflow for the important production data sets;
-- no production design should treat the WD 4 TB disk as the sole copy of important data.
+The primary Proxmox guest-backup platform is operationally proven:
 
-Backup implementation and restore proof remain outstanding work.
+```text
+backup host: media-01 .195
+protocol: NFS v4.2/TCP
+PROXMOX storage: media-backup-proxmox -> /srv/backup/pve-proxmox
+Proxmox-2 storage: media-backup-proxmox-2 -> /srv/backup/pve-proxmox-2
+legacy rollback storage: media-backup -> /srv/backup/pve
+backup mode: snapshot
+compression: zstd
+retention policy in IaC: keep-last=3
+local tmpdir: /var/lib/vz/vzdump-tmp
+```
+
+All seven production PVE guests have successful backup evidence in the isolated namespaces. CT103 has also completed an isolated restore/boot proof. Proxmox notification delivery through `mail-relay-01` is proven end to end.
+
+The nightly schedule policy is encoded in IaC for 02:15 on `PROXMOX` and 03:15 on `Proxmox-2`. During correction of the shared VMID-200 namespace collision, both jobs were deliberately disabled. The final isolated-storage cutover playbook is syntax-valid, but the supplied validation record does not yet show the final live cutover result or first unattended run. Do not describe those as proven until observed.
+
+Outstanding recovery gaps are now narrower:
+
+- QEMU VM restore proof;
+- application-consistent Nextcloud/PostgreSQL recovery;
+- independent secondary copy;
+- protection of `media-01` user media, BirdNET persistent state and controller recovery state.
+
+The suspect WD 4 TB disk must not be the sole trusted backup copy.
+
+See `docs/architecture/BACKUP-STRATEGY.md` and `production docs/PROXMOX-BACKUP-RECOVERY.md`.
 
 ## Network infrastructure
 
@@ -315,25 +279,17 @@ Current known platform:
 - management configured as `dhcp-bootp`;
 - SNMP community `public` configured as `Unrestricted`;
 - Telnet administration available;
-- SSH unavailable.
+- SSH unavailable;
+- port 24 is the mirror destination;
+- ports 1–23 are monitoring sources.
 
-The earlier 12 September statement that port mirroring was disabled is superseded. Current switch configuration shows:
-
-```text
-mirror-port 24
-interface 1-23
-   monitor
-```
-
-`show monitor` confirms port 24 as the mirror destination with ports 1 through 23 as monitoring sources.
-
-The earlier dated physical port map, including the old port-24 router mapping, must not be treated as current after activation of the mirror configuration. A new physical port map should be captured separately rather than inferred.
+The older physical port map must not be treated as current after SPAN activation. Capture a new map rather than infer it.
 
 ### ASUS
 
 The ASUS RT-AC86U remains gateway, DHCP authority and AiMesh controller. AiMesh nodes are at `.181` and `.218`.
 
-Router syslog forwarding to `monitor-01 .52:5514/udp` remains operational and is now integrated into the Alloy/Loki logging path while retaining the local rsyslog file.
+Router syslog forwarding to `monitor-01 .52:5514/udp` remains operational and integrated into Alloy/Loki while retaining the local rsyslog file.
 
 ## Time service
 
@@ -344,24 +300,24 @@ ntp-01.jameshouse -> 192.168.2.70
 ntp-02.jameshouse -> 192.168.2.71
 ```
 
-Chrony is active on both nodes and remains the intended local time-service design.
+Chrony is active on both nodes.
 
 ## Patch state
 
-The 14 September compact audit identified a non-trivial package-update backlog on several hosts, particularly `media-01`, `Proxmox-2`, `admin-01` and `docker-01`.
-
-Those counts are an audit snapshot from the hosts' then-current APT metadata rather than an architecture property. Apply them through the normal patch-management workflow; do not treat them as documentation configuration drift.
+The 14 September audit identified package-update backlog on several hosts. Those counts are a point-in-time audit observation, not an architecture property. Apply updates through the normal controlled patch workflow.
 
 ## Remaining current-state work
 
 Major outstanding work now includes:
 
-- design and deploy the `edge-01` Cloudflare Tunnel connector only when approved;
-- build a real backup platform and prove representative restores;
-- refresh the physical switch/router port map after the SPAN activation;
+- observe and record the final isolated backup schedule cutover and first unattended run;
+- prove a representative QEMU restore and application-consistent `cloud-01` recovery;
+- establish an independent second backup copy and non-Proxmox data protection;
+- revisit a two-node Proxmox cluster only after dedicated Corosync NICs and quorum/QDevice design are ready;
+- deploy `edge-01` Cloudflare Tunnel only when approved;
+- refresh the physical switch/router port map after SPAN activation;
 - complete remaining switch/router hardening decisions;
-- process the package-update backlog through the controlled patch workflow;
-- continue service-specific observability, Network Hosts enrichment and recovery documentation;
-- validate and document restore paths for cloud, BirdNET and media user data.
+- process package updates through the controlled patch workflow;
+- continue service-specific observability and recovery documentation.
 
 Already validated services must not be rolled backwards merely to match older documentation.
