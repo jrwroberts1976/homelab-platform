@@ -16,10 +16,11 @@
   ansible.builtin.set_fact:
     proxmox_backup_schedule_job: "{{ proxmox_backup_schedule_matrix[inventory_hostname] }}"
 
-- name: Record approved VMID selection
+- name: Record approved schedule values
   ansible.builtin.set_fact:
     proxmox_backup_schedule_vmids: >-
       {{ proxmox_backup_schedule_job.guests | map(attribute='id') | map('string') | join(',') }}
+    proxmox_backup_schedule_storage_path: "/mnt/pve/{{ proxmox_backup_schedule_job.storage }}"
 
 - name: Verify target is a Proxmox VE host
   ansible.builtin.command:
@@ -48,31 +49,32 @@
       - "'--notification-mode' in proxmox_backup_schedule_api_usage.stdout"
     fail_msg: >-
       This Proxmox node does not expose the backup-job API parameters expected by
-      the IaC role. Refusing to create a schedule.
+      the IaC role. Refusing to configure the schedule.
 
-- name: Verify media-backup storage is active
+- name: Verify approved isolated backup storage is active
   ansible.builtin.command:
     argv:
       - pvesm
       - status
       - --storage
-      - "{{ proxmox_backup_schedule_storage }}"
+      - "{{ proxmox_backup_schedule_job.storage }}"
   register: proxmox_backup_schedule_storage_status
   changed_when: false
 
-- name: Require active media-backup storage
+- name: Require active isolated backup storage
   ansible.builtin.assert:
     that:
+      - proxmox_backup_schedule_job.storage in proxmox_backup_schedule_storage_status.stdout
       - "' active ' in (' ' ~ proxmox_backup_schedule_storage_status.stdout ~ ' ')"
-    fail_msg: "Approved backup storage is not active."
+    fail_msg: "Approved isolated backup storage is not active."
 
-- name: Read backup target free space
+- name: Read isolated backup target free space
   ansible.builtin.command:
     argv:
       - df
       - -B1
       - --output=avail
-      - /mnt/pve/media-backup
+      - "{{ proxmox_backup_schedule_storage_path }}"
   register: proxmox_backup_schedule_df
   changed_when: false
 
@@ -86,8 +88,8 @@
     that:
       - proxmox_backup_schedule_available_bytes | int >= (proxmox_backup_schedule_min_free_gib | int * 1024 * 1024 * 1024)
     fail_msg: >-
-      Refusing to schedule backups because the backup target has less than
-      {{ proxmox_backup_schedule_min_free_gib }} GiB free.
+      Refusing to enable scheduled backups because the isolated backup target has
+      less than {{ proxmox_backup_schedule_min_free_gib }} GiB free.
 
 - name: Read configured vzdump tmpdir
   ansible.builtin.command:
@@ -96,7 +98,6 @@
       - -E
       - '^tmpdir:[[:space:]]+/var/lib/vz/vzdump-tmp$'
       - /etc/vzdump.conf
-  register: proxmox_backup_schedule_tmpdir
   changed_when: false
 
 - name: Verify notification recipient
@@ -164,7 +165,7 @@
       - proxmox_backup_schedule_notification_target in (proxmox_backup_schedule_matching_matchers[0].target | default([]))
     fail_msg: >-
       The approved PVE notification matcher does not route notifications to the
-      approved mail-to-root target. Refusing to create scheduled backups.
+      approved mail-to-root target. Refusing to enable scheduled backups.
 
 - name: Verify every selected production guest exists
   ansible.builtin.command:
@@ -186,6 +187,20 @@
   loop: "{{ proxmox_backup_schedule_guest_checks.results }}"
   loop_control:
     label: "{{ item.item.id }}"
+
+- name: Require a proven backup archive for every scheduled guest
+  ansible.builtin.shell: >-
+    set -o pipefail;
+    find {{ proxmox_backup_schedule_storage_path | quote }}/dump
+    -maxdepth 1 -type f
+    -name {{ ('vzdump-' ~ item.type ~ '-' ~ (item.id | string) ~ '-*.' ~ ('tar.zst' if item.type == 'lxc' else 'vma.zst')) | quote }}
+    -print -quit | grep -q .
+  args:
+    executable: /bin/bash
+  loop: "{{ proxmox_backup_schedule_job.guests }}"
+  loop_control:
+    label: "{{ item.type }} {{ item.id }}"
+  changed_when: false
 
 - name: Read existing backup jobs
   ansible.builtin.command:
@@ -213,24 +228,29 @@
       - proxmox_backup_schedule_existing_jobs | length <= 1
     fail_msg: "Multiple backup jobs unexpectedly use the approved IaC job ID."
 
-- name: Refuse to overwrite a mismatched existing job
+- name: Validate existing job before reconciliation
   ansible.builtin.assert:
     that:
-      - proxmox_backup_schedule_existing_jobs[0].storage == proxmox_backup_schedule_storage
       - proxmox_backup_schedule_existing_jobs[0].schedule == proxmox_backup_schedule_job.schedule
       - proxmox_backup_schedule_existing_jobs[0].mode == proxmox_backup_schedule_mode
       - proxmox_backup_schedule_existing_jobs[0].compress == proxmox_backup_schedule_compress
       - (proxmox_backup_schedule_existing_jobs[0].vmid | string) == proxmox_backup_schedule_vmids
       - (proxmox_backup_schedule_existing_jobs[0].node | string) == inventory_hostname
-      - (proxmox_backup_schedule_existing_jobs[0].enabled | int) == 1
       - (proxmox_backup_schedule_existing_jobs[0]['notification-mode'] | default('')) == proxmox_backup_schedule_notification_mode
+      - (proxmox_backup_schedule_existing_jobs[0]['prune-backups']['keep-last'] | int) == proxmox_backup_schedule_keep_last
+      - >-
+        proxmox_backup_schedule_existing_jobs[0].storage == proxmox_backup_schedule_job.storage
+        or
+        (
+          proxmox_backup_schedule_existing_jobs[0].storage == proxmox_backup_schedule_legacy_storage
+          and (proxmox_backup_schedule_existing_jobs[0].enabled | int) == 0
+        )
     fail_msg: >-
-      A backup job with the approved IaC ID already exists but does not match the
-      expected node, schedule, guest selection, storage, mode, compression or
-      notification mode. Refusing to overwrite it.
+      The existing backup job is not the approved disabled legacy job or the
+      approved isolated-storage job. Refusing to reconcile it.
   when: proxmox_backup_schedule_existing_jobs | length == 1
 
-- name: Create approved nightly backup job
+- name: Create approved nightly backup job when absent
   ansible.builtin.command:
     argv:
       - pvesh
@@ -245,7 +265,7 @@
       - --node
       - "{{ inventory_hostname }}"
       - --storage
-      - "{{ proxmox_backup_schedule_storage }}"
+      - "{{ proxmox_backup_schedule_job.storage }}"
       - --mode
       - "{{ proxmox_backup_schedule_mode }}"
       - --compress
@@ -261,7 +281,20 @@
   when: proxmox_backup_schedule_existing_jobs | length == 0
   changed_when: true
 
-- name: Read reconciled backup job
+- name: Cut disabled legacy job over to isolated storage
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - "/cluster/backup/{{ proxmox_backup_schedule_job.id }}"
+      - --storage
+      - "{{ proxmox_backup_schedule_job.storage }}"
+  when:
+    - proxmox_backup_schedule_existing_jobs | length == 1
+    - proxmox_backup_schedule_existing_jobs[0].storage == proxmox_backup_schedule_legacy_storage
+  changed_when: true
+
+- name: Read job after storage reconciliation
   ansible.builtin.command:
     argv:
       - pvesh
@@ -269,26 +302,65 @@
       - "/cluster/backup/{{ proxmox_backup_schedule_job.id }}"
       - --output-format
       - json
-  register: proxmox_backup_schedule_job_after
+  register: proxmox_backup_schedule_job_after_storage
   changed_when: false
 
-- name: Record reconciled backup job
+- name: Record job after storage reconciliation
   ansible.builtin.set_fact:
-    proxmox_backup_schedule_reconciled: "{{ proxmox_backup_schedule_job_after.stdout | from_json }}"
+    proxmox_backup_schedule_reconciled: "{{ proxmox_backup_schedule_job_after_storage.stdout | from_json }}"
 
-- name: Validate reconciled backup job core policy
+- name: Validate isolated storage before enabling schedule
   ansible.builtin.assert:
     that:
-      - proxmox_backup_schedule_reconciled.storage == proxmox_backup_schedule_storage
+      - proxmox_backup_schedule_reconciled.storage == proxmox_backup_schedule_job.storage
       - proxmox_backup_schedule_reconciled.schedule == proxmox_backup_schedule_job.schedule
       - proxmox_backup_schedule_reconciled.mode == proxmox_backup_schedule_mode
       - proxmox_backup_schedule_reconciled.compress == proxmox_backup_schedule_compress
       - (proxmox_backup_schedule_reconciled.vmid | string) == proxmox_backup_schedule_vmids
       - (proxmox_backup_schedule_reconciled.node | string) == inventory_hostname
-      - (proxmox_backup_schedule_reconciled.enabled | int) == 1
       - (proxmox_backup_schedule_reconciled['notification-mode'] | default('')) == proxmox_backup_schedule_notification_mode
       - (proxmox_backup_schedule_reconciled['prune-backups']['keep-last'] | int) == proxmox_backup_schedule_keep_last
-    fail_msg: "Reconciled backup job does not match the approved IaC policy."
+    fail_msg: "Backup job did not reconcile safely to the isolated storage policy."
+
+- name: Enable approved backup schedule
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - "/cluster/backup/{{ proxmox_backup_schedule_job.id }}"
+      - --enabled
+      - '1'
+  when: (proxmox_backup_schedule_reconciled.enabled | int) == 0
+  changed_when: true
+
+- name: Read final reconciled backup job
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - "/cluster/backup/{{ proxmox_backup_schedule_job.id }}"
+      - --output-format
+      - json
+  register: proxmox_backup_schedule_job_final
+  changed_when: false
+
+- name: Record final reconciled backup job
+  ansible.builtin.set_fact:
+    proxmox_backup_schedule_final: "{{ proxmox_backup_schedule_job_final.stdout | from_json }}"
+
+- name: Validate final enabled backup policy
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_schedule_final.storage == proxmox_backup_schedule_job.storage
+      - proxmox_backup_schedule_final.schedule == proxmox_backup_schedule_job.schedule
+      - proxmox_backup_schedule_final.mode == proxmox_backup_schedule_mode
+      - proxmox_backup_schedule_final.compress == proxmox_backup_schedule_compress
+      - (proxmox_backup_schedule_final.vmid | string) == proxmox_backup_schedule_vmids
+      - (proxmox_backup_schedule_final.node | string) == inventory_hostname
+      - (proxmox_backup_schedule_final.enabled | int) == 1
+      - (proxmox_backup_schedule_final['notification-mode'] | default('')) == proxmox_backup_schedule_notification_mode
+      - (proxmox_backup_schedule_final['prune-backups']['keep-last'] | int) == proxmox_backup_schedule_keep_last
+    fail_msg: "Final backup job does not match the approved isolated-storage policy."
 
 - name: Verify no failed systemd units
   ansible.builtin.command:
