@@ -23,6 +23,11 @@ table inet media_filter {
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 22 accept comment "LAN SSH"
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 445 accept comment "LAN SMB"
 
+    # Proxmox backup NFS is reachable only by the two hypervisors.
+{% for client in media_firewall_backup_nfs_clients %}
+    ip saddr {{ client }} tcp dport 2049 accept comment "Proxmox backup NFS"
+{% endfor %}
+
     # Prometheus node_exporter is readable only by monitor-01.
     ip saddr {{ media_firewall_monitor_ipv4 }} tcp dport 9100 accept comment "monitor-01 node_exporter"
   }
