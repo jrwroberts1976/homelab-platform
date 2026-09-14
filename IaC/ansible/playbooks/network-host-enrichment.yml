@@ -4,5 +4,10 @@
   become: true
   gather_facts: true
 
+  vars:
+    # Production desired state: enrichment is periodic once explicitly deployed.
+    # The role default remains disabled as a safety gate for reuse/checks.
+    network_host_enrichment_enable_timer: true
+
   roles:
     - role: network_host_enrichment
