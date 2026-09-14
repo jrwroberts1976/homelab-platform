@@ -1,0 +1,298 @@
+---
+- name: Validate explicit split-storage deployment approval
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage_split_allow_deploy | bool
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == inventory_hostname
+      - ansible_facts.default_ipv4.address == proxmox_backup_storage_split_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+      - inventory_hostname in proxmox_backup_storage_split_matrix
+    fail_msg: >-
+      Refusing to register isolated backup storage without explicit approval or
+      on an unexpected Proxmox host.
+
+- name: Record approved isolated backup storage
+  ansible.builtin.set_fact:
+    proxmox_backup_storage_split_target: "{{ proxmox_backup_storage_split_matrix[inventory_hostname] }}"
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  changed_when: false
+
+- name: Require scheduled backup job to remain disabled during storage migration
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - get
+      - "/cluster/backup/{{ proxmox_backup_storage_split_target.job_id }}"
+      - --output-format
+      - json
+  register: proxmox_backup_storage_split_job
+  changed_when: false
+
+- name: Validate backup schedule safety hold
+  ansible.builtin.assert:
+    that:
+      - ((proxmox_backup_storage_split_job.stdout | from_json).enabled | default(1) | int) == 0
+    fail_msg: >-
+      The approved backup job is not disabled. Refusing to change backup storage
+      while an unattended backup could start.
+
+- name: Read legacy media-backup definition
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import sys
+
+        storage_id = sys.argv[1]
+        target = f"nfs: {storage_id}"
+        block = []
+        collecting = False
+
+        for line in Path("/etc/pve/storage.cfg").read_text().splitlines():
+            if not collecting:
+                if line.strip() == target:
+                    collecting = True
+                    block.append(line)
+                continue
+            if line and not line[0].isspace():
+                break
+            block.append(line)
+
+        if not collecting:
+            raise SystemExit(1)
+        print("\n".join(block))
+      - "{{ proxmox_backup_storage_split_legacy_id }}"
+  register: proxmox_backup_storage_split_legacy_before
+  changed_when: false
+
+- name: Require expected legacy rollback storage
+  ansible.builtin.assert:
+    that:
+      - "'server ' ~ proxmox_backup_storage_split_server in proxmox_backup_storage_split_legacy_before.stdout"
+      - "'export ' ~ proxmox_backup_storage_split_legacy_export in proxmox_backup_storage_split_legacy_before.stdout"
+      - "'content ' ~ proxmox_backup_storage_split_content in proxmox_backup_storage_split_legacy_before.stdout"
+    fail_msg: >-
+      Legacy media-backup does not match the expected rollback storage. Refusing
+      to add an isolated replacement.
+
+- name: Verify legacy rollback storage remains active
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - status
+      - --storage
+      - "{{ proxmox_backup_storage_split_legacy_id }}"
+  register: proxmox_backup_storage_split_legacy_status
+  changed_when: false
+
+- name: Require active legacy rollback storage
+  ansible.builtin.assert:
+    that:
+      - "' active ' in (' ' ~ proxmox_backup_storage_split_legacy_status.stdout ~ ' ')"
+    fail_msg: "Legacy media-backup storage is not active."
+
+- name: Inspect isolated storage definition
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import sys
+
+        storage_id = sys.argv[1]
+        target = f"nfs: {storage_id}"
+        block = []
+        collecting = False
+
+        for line in Path("/etc/pve/storage.cfg").read_text().splitlines():
+            if not collecting:
+                if line.strip() == target:
+                    collecting = True
+                    block.append(line)
+                continue
+            if line and not line[0].isspace():
+                break
+            block.append(line)
+
+        if not collecting:
+            raise SystemExit(1)
+        print("\n".join(block))
+      - "{{ proxmox_backup_storage_split_target.id }}"
+  register: proxmox_backup_storage_split_existing
+  changed_when: false
+  failed_when: proxmox_backup_storage_split_existing.rc not in [0, 1]
+
+- name: Refuse mismatched existing isolated storage
+  ansible.builtin.assert:
+    that:
+      - "'server ' ~ proxmox_backup_storage_split_server in proxmox_backup_storage_split_existing.stdout"
+      - "'export ' ~ proxmox_backup_storage_split_target.export in proxmox_backup_storage_split_existing.stdout"
+      - "'path ' ~ proxmox_backup_storage_split_target.path in proxmox_backup_storage_split_existing.stdout"
+      - "'content ' ~ proxmox_backup_storage_split_content in proxmox_backup_storage_split_existing.stdout"
+      - "'options ' ~ proxmox_backup_storage_split_options in proxmox_backup_storage_split_existing.stdout"
+    fail_msg: >-
+      The isolated storage ID already exists but does not match the approved
+      host-specific NFS namespace. Refusing to modify it.
+  when: proxmox_backup_storage_split_existing.rc == 0
+
+- name: Register isolated backup-only NFS storage
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - add
+      - nfs
+      - "{{ proxmox_backup_storage_split_target.id }}"
+      - --server
+      - "{{ proxmox_backup_storage_split_server }}"
+      - --export
+      - "{{ proxmox_backup_storage_split_target.export }}"
+      - --path
+      - "{{ proxmox_backup_storage_split_target.path }}"
+      - --content
+      - "{{ proxmox_backup_storage_split_content }}"
+      - --options
+      - "{{ proxmox_backup_storage_split_options }}"
+  when: proxmox_backup_storage_split_existing.rc == 1
+  changed_when: true
+
+- name: Read isolated storage status
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - status
+      - --storage
+      - "{{ proxmox_backup_storage_split_target.id }}"
+  register: proxmox_backup_storage_split_status
+  changed_when: false
+
+- name: Require isolated storage active
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage_split_target.id in proxmox_backup_storage_split_status.stdout
+      - "'active' in proxmox_backup_storage_split_status.stdout"
+    fail_msg: "Isolated backup storage is registered but not active."
+
+- name: Require isolated storage capacity headroom
+  ansible.builtin.command:
+    argv:
+      - df
+      - -B1
+      - --output=avail
+      - "{{ proxmox_backup_storage_split_target.path }}"
+  register: proxmox_backup_storage_split_df
+  changed_when: false
+
+- name: Validate isolated storage free space
+  ansible.builtin.assert:
+    that:
+      - (proxmox_backup_storage_split_df.stdout_lines[-1] | trim | int) >= (proxmox_backup_storage_split_min_free_gib | int * 1024 * 1024 * 1024)
+    fail_msg: >-
+      Isolated backup storage has less than
+      {{ proxmox_backup_storage_split_min_free_gib }} GiB free.
+
+- name: Prove isolated storage is writable
+  ansible.builtin.copy:
+    content: "homelab-isolated-storage-proof {{ inventory_hostname }}\n"
+    dest: "{{ proxmox_backup_storage_split_target.path }}/.iac-write-proof-{{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: "0600"
+  register: proxmox_backup_storage_split_write_proof
+
+- name: Remove isolated storage write proof
+  ansible.builtin.file:
+    path: "{{ proxmox_backup_storage_split_target.path }}/.iac-write-proof-{{ inventory_hostname }}"
+    state: absent
+
+- name: Discover backup artifacts on isolated storage
+  ansible.builtin.find:
+    paths: "{{ proxmox_backup_storage_split_target.path }}/dump"
+    recurse: false
+    file_type: file
+  register: proxmox_backup_storage_split_artifacts
+
+- name: Require PROXMOX namespace empty before first .70 backup
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage_split_artifacts.matched | int == 0
+    fail_msg: "PROXMOX isolated namespace unexpectedly contains backup artifacts."
+  when: inventory_hostname == 'PROXMOX'
+
+- name: Require copied Proxmox-2 production backup set
+  ansible.builtin.assert:
+    that:
+      - >-
+        proxmox_backup_storage_split_artifacts.files
+        | map(attribute='path')
+        | select('match', '.*vzdump-lxc-101-.*\\.tar\\.zst$')
+        | list | length > 0
+      - >-
+        proxmox_backup_storage_split_artifacts.files
+        | map(attribute='path')
+        | select('match', '.*vzdump-lxc-103-.*\\.tar\\.zst$')
+        | list | length > 0
+      - >-
+        proxmox_backup_storage_split_artifacts.files
+        | map(attribute='path')
+        | select('match', '.*vzdump-qemu-200-.*\\.vma\\.zst$')
+        | list | length > 0
+    fail_msg: >-
+      Proxmox-2 isolated namespace does not contain the copied proven production
+      backup set.
+  when: inventory_hostname == 'Proxmox-2'
+
+- name: Re-read legacy media-backup definition
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import sys
+
+        storage_id = sys.argv[1]
+        target = f"nfs: {storage_id}"
+        block = []
+        collecting = False
+
+        for line in Path("/etc/pve/storage.cfg").read_text().splitlines():
+            if not collecting:
+                if line.strip() == target:
+                    collecting = True
+                    block.append(line)
+                continue
+            if line and not line[0].isspace():
+                break
+            block.append(line)
+
+        if not collecting:
+            raise SystemExit(1)
+        print("\n".join(block))
+      - "{{ proxmox_backup_storage_split_legacy_id }}"
+  register: proxmox_backup_storage_split_legacy_after
+  changed_when: false
+
+- name: Require legacy rollback storage unchanged
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage_split_legacy_after.stdout == proxmox_backup_storage_split_legacy_before.stdout
+    fail_msg: "Legacy media-backup definition changed unexpectedly."
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: proxmox_backup_storage_split_failed_units
+  changed_when: false
+  failed_when: proxmox_backup_storage_split_failed_units.stdout | trim | length > 0
