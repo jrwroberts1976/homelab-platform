@@ -1,9 +1,9 @@
 # Homelab Cloud Data Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** operational on LAN; backup/restore proof and external access remain outstanding  
+**Status:** operational on LAN; VM-level snapshot backup proven; application-consistent restore and external access remain outstanding  
 **Primary service:** Nextcloud  
-**Last current-state review:** 12 September 2026
+**Last current-state review:** 14 September 2026
 
 ## Production identity
 
@@ -35,8 +35,6 @@ The former 4 TB WD USB disk attached to `PROXMOX` is **not** part of the current
 
 ## Application stack
 
-Current Compose stack:
-
 | Component | Current state |
 |---|---|
 | Nextcloud | `34.0.3-apache`, operational |
@@ -50,31 +48,11 @@ Compose location:
 /opt/cloud-01/docker-compose.yml
 ```
 
-The 12 September audit confirmed:
-
-- four expected containers running;
-- PostgreSQL accepting connections;
-- Redis authenticated health checks passing;
-- Nextcloud installed/current;
-- no maintenance mode;
-- no database upgrade pending;
-- HTTP response on `.53:8080`;
-- zero failed systemd units.
-
-A raw unauthenticated `redis-cli ping` returning `NOAUTH` is expected because Redis authentication is enabled.
+The 14 September state confirms the expected application containers are running, PostgreSQL and Redis are healthy, the application responds on `.53:8080`, Node Exporter/Alloy are active and there are no unexpected failed systemd units.
 
 ## Redis persistence repair
 
-During the estate audit, Redis persistence had failed because the host bind directory was owned by `root:root` while the container writes as numeric UID/GID `999:1000`.
-
-The live directory ownership was corrected and the Ansible role was updated in the earlier production fix so IaC now reconciles the required numeric ownership.
-
-After repair, validation confirmed:
-
-- authenticated `PING` succeeds;
-- `BGSAVE` succeeds;
-- persistence status is healthy;
-- container health is healthy.
+Redis persistence was previously repaired by reconciling the host bind-directory ownership to the container's numeric UID/GID requirements. The Ansible role now owns that state.
 
 Do not disable Redis `stop-writes-on-bgsave-error` as a workaround for storage/permission faults.
 
@@ -111,11 +89,11 @@ The application role must only operate against the approved dedicated cloud data
 /srv/cloud-01-data
 ```
 
-The deployment wrapper includes storage-identity and explicit-deployment approval gates. Do not bypass those controls merely because the service is already live.
+Do not bypass storage-identity or explicit deployment gates merely because the service is already live.
 
 ## SMTP
 
-The current IaC design routes Nextcloud SMTP through the internal relay:
+Nextcloud SMTP uses the internal relay:
 
 ```text
 mail-relay-01
@@ -149,20 +127,32 @@ Must be protected separately because it is not reconstructable from Git alone:
 
 The live 200 GiB data disk is production storage, **not a backup**.
 
-## Backup/recovery gap
+## Backup state
 
-As of 12 September 2026, cloud backup/restore proof is **not complete**.
+The earlier statement that no production backup platform exists is superseded.
 
-The estate audit found no active PBS/Restic production backup platform and no proven end-to-end Nextcloud restore.
+VM200 (`cloud-01`) has completed a successful Proxmox snapshot backup to the isolated storage:
 
-Do not describe the cloud service as fully recovery-ready until:
+```text
+PVE node: PROXMOX .70
+storage ID: media-backup-proxmox
+NFS target: media-01:/srv/backup/pve-proxmox
+mode: snapshot
+compression: zstd
+```
 
-- important user data has an independent backup;
-- PostgreSQL has an application-consistent protection/restore path;
-- protected secrets/state are recoverable;
-- a representative restore has been tested.
+The VM remained running during the backup proof. This protects the VM disks/configuration at the hypervisor level.
 
-See `docs/architecture/BACKUP-STRATEGY.md`.
+What is **not** yet proven:
+
+- a QEMU VM restore of `cloud-01` or another representative VM;
+- application-consistent recovery of Nextcloud files plus PostgreSQL state;
+- recovery of protected secrets/Terraform state;
+- an independent secondary copy outside the `media-01` NVMe failure domain.
+
+Therefore the service has a proven **VM-level backup**, but it must not yet be described as fully application-recovery-ready.
+
+See `docs/architecture/BACKUP-STRATEGY.md` and `production docs/PROXMOX-BACKUP-RECOVERY.md`.
 
 ## External access
 
@@ -170,20 +160,11 @@ Current production access is LAN-only at `.53:8080`.
 
 There is no deployed `cloudflared` connector in `edge-01` and external Cloudflare access is not part of the validated current state.
 
-Any future public access must be a separately reviewed change covering:
-
-- HTTPS/origin policy;
-- authentication controls;
-- tunnel/reverse-proxy design;
-- credential storage/rotation;
-- rate limiting where appropriate;
-- backup/recovery readiness;
-- monitoring/logging;
-- rollback.
+Any future public access must be separately reviewed for HTTPS/origin policy, authentication, tunnel/reverse-proxy design, credential rotation, rate limiting, recovery readiness, monitoring and rollback.
 
 ## Validation
 
-Useful non-destructive service checks include:
+Useful non-destructive checks include:
 
 ```bash
 ssh cloud-01 'hostname; systemctl --failed --no-pager'
@@ -192,25 +173,18 @@ ssh cloud-01 'findmnt /srv/cloud-01-data'
 curl -I http://192.168.2.53:8080/
 ```
 
-Application-specific checks should use the approved wrapper/IaC validation rather than exposing protected credentials in shell history.
+Application-specific checks should use approved wrappers/IaC validation rather than exposing protected credentials in shell history.
 
 ## Definition of current operational state
 
-The LAN cloud service is operational because:
+The LAN cloud service is operational because VM identity/placement, dedicated storage, Nextcloud, PostgreSQL, Redis, cron, LAN HTTP access and DNS are proven.
 
-- VM identity/placement are proven;
-- dedicated 200 GiB data storage is mounted;
-- Nextcloud is running;
-- PostgreSQL is healthy;
-- Redis is healthy and persistence works;
-- cron is running;
-- LAN HTTP access works;
-- DNS works;
-- zero failed systemd units were observed.
+Backup state is now stronger than the original build: the whole VM has a successful snapshot backup on the isolated primary repository.
 
 Outstanding completion work:
 
-- production backup implementation;
-- restore testing;
-- broader observability/logging where useful;
+- QEMU restore proof;
+- application-consistent Nextcloud/PostgreSQL recovery proof;
+- independent secondary copy;
+- broader observability where useful;
 - external access only if later approved.
