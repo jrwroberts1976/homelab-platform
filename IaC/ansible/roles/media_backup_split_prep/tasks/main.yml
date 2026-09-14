@@ -1,0 +1,221 @@
+---
+- name: Validate explicit namespace-split preparation approval
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_allow_deploy | bool
+      - ansible_facts.hostname == media_backup_split_prep_expected_hostname
+      - media_backup_split_prep_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to prepare split backup namespaces without explicit approval or
+      on an unexpected host.
+
+- name: Determine root filesystem free space
+  ansible.builtin.set_fact:
+    media_backup_split_prep_root_available_bytes: >-
+      {{
+        ansible_facts.mounts
+        | selectattr('mount', 'equalto', '/')
+        | map(attribute='size_available')
+        | first
+        | default(0)
+        | int
+      }}
+
+- name: Require backup-target headroom
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_root_available_bytes | int >= (media_backup_split_prep_min_free_gib | int * 1024 * 1024 * 1024)
+    fail_msg: >-
+      Refusing to prepare split backup namespaces because media-01 has less than
+      {{ media_backup_split_prep_min_free_gib }} GiB free.
+
+- name: Verify legacy backup directory exists
+  ansible.builtin.stat:
+    path: "{{ media_backup_split_prep_legacy_path }}"
+  register: media_backup_split_prep_legacy_stat
+
+- name: Require existing legacy backup directory
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_legacy_stat.stat.exists
+      - media_backup_split_prep_legacy_stat.stat.isdir
+    fail_msg: "Legacy Proxmox backup directory is missing."
+
+- name: Read active exports before migration preparation
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/exportfs
+      - -v
+  register: media_backup_split_prep_exports_before
+  changed_when: false
+
+- name: Require legacy export to remain active during preparation
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_legacy_path in media_backup_split_prep_exports_before.stdout
+      - media_backup_split_prep_proxmox_client in media_backup_split_prep_exports_before.stdout
+      - media_backup_split_prep_proxmox2_client in media_backup_split_prep_exports_before.stdout
+    fail_msg: >-
+      The expected legacy NFS export is not active for both Proxmox clients.
+      Refusing to begin the namespace split.
+
+- name: Create isolated backup namespace directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  loop:
+    - "{{ media_backup_split_prep_proxmox_path }}"
+    - "{{ media_backup_split_prep_proxmox2_path }}"
+    - "{{ media_backup_split_prep_proxmox_path }}/dump"
+    - "{{ media_backup_split_prep_proxmox2_path }}/dump"
+
+- name: Install temporary split NFS exports alongside legacy export
+  ansible.builtin.template:
+    src: homelab-pve-backup-split.exports.j2
+    dest: /etc/exports.d/homelab-pve-backup-split.exports
+    owner: root
+    group: root
+    mode: "0644"
+  register: media_backup_split_prep_export_file
+
+- name: Reload NFS exports when split export configuration changes
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/exportfs
+      - -ra
+  when: media_backup_split_prep_export_file.changed
+  changed_when: true
+
+- name: Read active exports after split preparation
+  ansible.builtin.command:
+    argv:
+      - /usr/sbin/exportfs
+      - -v
+  register: media_backup_split_prep_exports_after
+  changed_when: false
+
+- name: Validate old and new exports coexist
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_legacy_path in media_backup_split_prep_exports_after.stdout
+      - media_backup_split_prep_proxmox_path in media_backup_split_prep_exports_after.stdout
+      - media_backup_split_prep_proxmox2_path in media_backup_split_prep_exports_after.stdout
+    fail_msg: >-
+      Legacy and split NFS exports are not simultaneously active. Refusing to
+      continue with archive copying.
+
+- name: Discover Proxmox-2 backup artifacts in legacy namespace
+  ansible.builtin.find:
+    paths: "{{ media_backup_split_prep_legacy_path }}/dump"
+    recurse: false
+    file_type: file
+    patterns:
+      - "vzdump-lxc-101-*"
+      - "vzdump-lxc-103-*"
+      - "vzdump-qemu-200-*"
+  register: media_backup_split_prep_proxmox2_source_files
+
+- name: Require proven Proxmox-2 backup archives before copying
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_proxmox2_source_files.matched | int > 0
+      - >-
+        media_backup_split_prep_proxmox2_source_files.files
+        | map(attribute='path')
+        | select('match', '.*vzdump-lxc-101-.*\\.tar\\.zst$')
+        | list | length > 0
+      - >-
+        media_backup_split_prep_proxmox2_source_files.files
+        | map(attribute='path')
+        | select('match', '.*vzdump-lxc-103-.*\\.tar\\.zst$')
+        | list | length > 0
+      - >-
+        media_backup_split_prep_proxmox2_source_files.files
+        | map(attribute='path')
+        | select('match', '.*vzdump-qemu-200-.*\\.vma\\.zst$')
+        | list | length > 0
+    fail_msg: >-
+      The expected complete Proxmox-2 backup set is not present in the legacy
+      namespace. Refusing to migrate partial evidence.
+
+- name: Copy Proxmox-2 backup artifacts into isolated namespace
+  ansible.builtin.copy:
+    src: "{{ item.path }}"
+    dest: "{{ media_backup_split_prep_proxmox2_path }}/dump/{{ item.path | basename }}"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+    force: false
+  loop: "{{ media_backup_split_prep_proxmox2_source_files.files }}"
+  loop_control:
+    label: "{{ item.path | basename }}"
+
+- name: Verify copied artifact names and sizes match source
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import sys
+
+        src = Path(sys.argv[1]) / 'dump'
+        dst = Path(sys.argv[2]) / 'dump'
+        prefixes = ('vzdump-lxc-101-', 'vzdump-lxc-103-', 'vzdump-qemu-200-')
+
+        src_files = {p.name: p.stat().st_size for p in src.iterdir()
+                     if p.is_file() and p.name.startswith(prefixes)}
+        dst_files = {p.name: p.stat().st_size for p in dst.iterdir()
+                     if p.is_file() and p.name.startswith(prefixes)}
+
+        if not src_files:
+            raise SystemExit('no source backup artifacts found')
+        if src_files != dst_files:
+            missing = sorted(set(src_files) - set(dst_files))
+            extra = sorted(set(dst_files) - set(src_files))
+            wrong = sorted(name for name in set(src_files) & set(dst_files)
+                           if src_files[name] != dst_files[name])
+            raise SystemExit(f'migration mismatch missing={missing} extra={extra} wrong_size={wrong}')
+
+        print(f'copied_artifacts={len(dst_files)}')
+        print(f'copied_bytes={sum(dst_files.values())}')
+        print('artifact_copy_validation=PASS')
+      - "{{ media_backup_split_prep_legacy_path }}"
+      - "{{ media_backup_split_prep_proxmox2_path }}"
+  register: media_backup_split_prep_copy_validation
+  changed_when: false
+
+- name: Verify new PROXMOX namespace is still empty
+  ansible.builtin.find:
+    paths: "{{ media_backup_split_prep_proxmox_path }}/dump"
+    recurse: false
+    file_type: file
+  register: media_backup_split_prep_proxmox_files
+
+- name: Require no archives in PROXMOX namespace before first .70 backup
+  ansible.builtin.assert:
+    that:
+      - media_backup_split_prep_proxmox_files.matched | int == 0
+    fail_msg: >-
+      The new PROXMOX namespace unexpectedly contains files. Refusing to proceed.
+
+- name: Verify NFS server remains active
+  ansible.builtin.systemd_service:
+    name: nfs-kernel-server.service
+    state: started
+    enabled: true
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: media_backup_split_prep_failed_units
+  changed_when: false
+  failed_when: media_backup_split_prep_failed_units.stdout | trim | length > 0
