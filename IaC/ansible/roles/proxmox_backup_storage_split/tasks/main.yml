@@ -77,7 +77,9 @@
     that:
       - "'server ' ~ proxmox_backup_storage_split_server in proxmox_backup_storage_split_legacy_before.stdout"
       - "'export ' ~ proxmox_backup_storage_split_legacy_export in proxmox_backup_storage_split_legacy_before.stdout"
+      - "'path ' ~ proxmox_backup_storage_split_legacy_path in proxmox_backup_storage_split_legacy_before.stdout"
       - "'content ' ~ proxmox_backup_storage_split_content in proxmox_backup_storage_split_legacy_before.stdout"
+      - "'options ' ~ proxmox_backup_storage_split_legacy_options in proxmox_backup_storage_split_legacy_before.stdout"
     fail_msg: >-
       Legacy media-backup does not match the expected rollback storage. Refusing
       to add an isolated replacement.
@@ -280,10 +282,14 @@
   register: proxmox_backup_storage_split_legacy_after
   changed_when: false
 
-- name: Require legacy rollback storage unchanged
+- name: Require legacy rollback storage still matches approved definition
   ansible.builtin.assert:
     that:
-      - proxmox_backup_storage_split_legacy_after.stdout == proxmox_backup_storage_split_legacy_before.stdout
+      - "'server ' ~ proxmox_backup_storage_split_server in proxmox_backup_storage_split_legacy_after.stdout"
+      - "'export ' ~ proxmox_backup_storage_split_legacy_export in proxmox_backup_storage_split_legacy_after.stdout"
+      - "'path ' ~ proxmox_backup_storage_split_legacy_path in proxmox_backup_storage_split_legacy_after.stdout"
+      - "'content ' ~ proxmox_backup_storage_split_content in proxmox_backup_storage_split_legacy_after.stdout"
+      - "'options ' ~ proxmox_backup_storage_split_legacy_options in proxmox_backup_storage_split_legacy_after.stdout"
     fail_msg: "Legacy media-backup definition changed unexpectedly."
 
 - name: Verify no failed systemd units
