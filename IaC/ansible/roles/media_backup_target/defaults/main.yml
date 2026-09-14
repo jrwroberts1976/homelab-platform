@@ -1,0 +1,10 @@
+---
+media_backup_target_expected_hostname: "media-01"
+media_backup_target_expected_ipv4: "192.168.2.195"
+media_backup_target_export_path: "/srv/backup/pve"
+media_backup_target_clients:
+  - "192.168.2.70"
+  - "192.168.2.71"
+media_backup_target_export_options: "rw,sync,no_subtree_check,no_root_squash"
+media_backup_target_min_free_gib: 100
+media_backup_target_allow_deploy: false
