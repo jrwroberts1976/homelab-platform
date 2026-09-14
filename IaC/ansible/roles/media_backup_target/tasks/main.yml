@@ -86,10 +86,10 @@
   ansible.builtin.assert:
     that:
       - item in media_backup_target_exports.stdout
+    fail_msg: "Expected Proxmox backup client is missing from the active export."
   loop: "{{ media_backup_target_clients }}"
   loop_control:
     label: "{{ item }}"
-  fail_msg: "Expected Proxmox backup client is missing from the active export."
 
 - name: Verify NFS server is listening on TCP 2049
   ansible.builtin.shell: >-
