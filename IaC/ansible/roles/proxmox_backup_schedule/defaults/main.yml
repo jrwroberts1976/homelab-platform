@@ -5,7 +5,7 @@ proxmox_backup_schedule_mode: snapshot
 proxmox_backup_schedule_compress: zstd
 proxmox_backup_schedule_keep_last: 3
 proxmox_backup_schedule_notification_mode: notification-system
+proxmox_backup_schedule_notification_matcher: default-matcher
 proxmox_backup_schedule_notification_target: mail-to-root
-proxmox_backup_schedule_notification_policy: failure
 proxmox_backup_schedule_min_free_gib: 100
 proxmox_backup_schedule_expected_ipv4: "{{ ansible_host }}"
