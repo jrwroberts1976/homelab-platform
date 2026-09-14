@@ -1,0 +1,132 @@
+---
+- name: Validate explicit Proxmox backup-storage deployment approval
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage_allow_deploy | bool
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == inventory_hostname
+      - ansible_facts.default_ipv4.address == proxmox_backup_storage_expected_ipv4
+      - ansible_facts.default_ipv4.interface == "vmbr0"
+    fail_msg: >-
+      Refusing to configure Proxmox backup storage without explicit approval
+      or on an unexpected target.
+
+- name: Verify target is a Proxmox VE host
+  ansible.builtin.command:
+    argv:
+      - pveversion
+  register: proxmox_backup_storage_pveversion
+  changed_when: false
+
+- name: Inspect existing storage definition
+  ansible.builtin.command:
+    argv:
+      - /bin/bash
+      - -lc
+      - >-
+        grep -A 8 -E '^nfs: {{ proxmox_backup_storage_id | regex_escape }}$'
+        /etc/pve/storage.cfg
+  register: proxmox_backup_storage_existing
+  changed_when: false
+  failed_when: proxmox_backup_storage_existing.rc not in [0, 1]
+
+- name: Refuse to overwrite a mismatched existing storage definition
+  ansible.builtin.assert:
+    that:
+      - "'server ' ~ proxmox_backup_storage_server in proxmox_backup_storage_existing.stdout"
+      - "'export ' ~ proxmox_backup_storage_export in proxmox_backup_storage_existing.stdout"
+      - "'path ' ~ proxmox_backup_storage_path in proxmox_backup_storage_existing.stdout"
+      - "'content ' ~ proxmox_backup_storage_content in proxmox_backup_storage_existing.stdout"
+      - "'options ' ~ proxmox_backup_storage_options in proxmox_backup_storage_existing.stdout"
+    fail_msg: >-
+      A storage named {{ proxmox_backup_storage_id }} already exists but does
+      not match the approved media-01 backup target. Refusing to modify it.
+  when: proxmox_backup_storage_existing.rc == 0
+
+- name: Register media-01 NFS as backup-only Proxmox storage
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - add
+      - nfs
+      - "{{ proxmox_backup_storage_id }}"
+      - --server
+      - "{{ proxmox_backup_storage_server }}"
+      - --export
+      - "{{ proxmox_backup_storage_export }}"
+      - --path
+      - "{{ proxmox_backup_storage_path }}"
+      - --content
+      - "{{ proxmox_backup_storage_content }}"
+      - --options
+      - "{{ proxmox_backup_storage_options }}"
+  when: proxmox_backup_storage_existing.rc == 1
+  register: proxmox_backup_storage_add
+  changed_when: proxmox_backup_storage_existing.rc == 1
+
+- name: Read Proxmox backup storage status
+  ansible.builtin.command:
+    argv:
+      - pvesm
+      - status
+      - --storage
+      - "{{ proxmox_backup_storage_id }}"
+  register: proxmox_backup_storage_status
+  changed_when: false
+
+- name: Validate Proxmox backup storage is active
+  ansible.builtin.assert:
+    that:
+      - proxmox_backup_storage_id in proxmox_backup_storage_status.stdout
+      - "'active' in proxmox_backup_storage_status.stdout"
+    fail_msg: >-
+      {{ proxmox_backup_storage_id }} is registered but not active on
+      {{ inventory_hostname }}.
+
+- name: Read reconciled storage definition
+  ansible.builtin.command:
+    argv:
+      - /bin/bash
+      - -lc
+      - >-
+        grep -A 8 -E '^nfs: {{ proxmox_backup_storage_id | regex_escape }}$'
+        /etc/pve/storage.cfg
+  register: proxmox_backup_storage_reconciled
+  changed_when: false
+
+- name: Validate backup-only storage definition
+  ansible.builtin.assert:
+    that:
+      - "'server ' ~ proxmox_backup_storage_server in proxmox_backup_storage_reconciled.stdout"
+      - "'export ' ~ proxmox_backup_storage_export in proxmox_backup_storage_reconciled.stdout"
+      - "'path ' ~ proxmox_backup_storage_path in proxmox_backup_storage_reconciled.stdout"
+      - "'content ' ~ proxmox_backup_storage_content in proxmox_backup_storage_reconciled.stdout"
+      - "'options ' ~ proxmox_backup_storage_options in proxmox_backup_storage_reconciled.stdout"
+      - "'images' not in proxmox_backup_storage_reconciled.stdout"
+      - "'rootdir' not in proxmox_backup_storage_reconciled.stdout"
+    fail_msg: "Proxmox backup storage definition is not backup-only as expected."
+
+- name: Prove registered storage is writable
+  ansible.builtin.copy:
+    content: "homelab-proxmox-storage-proof {{ inventory_hostname }}\n"
+    dest: "{{ proxmox_backup_storage_path }}/.iac-write-proof-{{ inventory_hostname }}"
+    owner: root
+    group: root
+    mode: "0600"
+  register: proxmox_backup_storage_write_proof
+
+- name: Remove storage write proof
+  ansible.builtin.file:
+    path: "{{ proxmox_backup_storage_path }}/.iac-write-proof-{{ inventory_hostname }}"
+    state: absent
+
+- name: Verify no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: proxmox_backup_storage_failed_units
+  changed_when: false
+  failed_when: proxmox_backup_storage_failed_units.stdout | trim | length > 0
