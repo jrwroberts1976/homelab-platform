@@ -1,7 +1,7 @@
 # Backup Strategy
 
-**Status:** current-state gap documented; target design still to be implemented  
-**Reviewed:** 12 September 2026
+**Status:** phase-one Proxmox guest-backup path operationally proven; scheduled production jobs and secondary-copy coverage still pending  
+**Reviewed:** 14 September 2026
 
 ## Requirement
 
@@ -19,19 +19,131 @@ Git/IaC remains the source of truth for deployment, enrollment, schedules and po
 
 ## Current state
 
-The 12 September estate audit found **no active production backup platform**.
+The estate now has a **proven primary Proxmox guest-backup path**.
 
-### Proxmox
-
-Both standalone Proxmox nodes currently have:
+Both standalone Proxmox nodes register an NFS backup storage named `media-backup`, hosted by `media-01`:
 
 ```text
-scheduled guest backup jobs: 0
+PROXMOX .70 ---------\
+                      +---- NFS v4.2/TCP ----> media-01 .195
+Proxmox-2 .71 -------/                         /srv/backup/pve
 ```
 
-There is no deployed Proxmox Backup Server.
+The storage definition is backup-only and is managed through IaC.
 
-The PBS client tooling being present on a Proxmox host does not mean a PBS server or datastore exists.
+Current state on 14 September 2026:
+
+```text
+media-backup storage: active on both PVE nodes
+NFS target health: proven
+NFS write/read/delete: proven from both PVE nodes
+local vzdump tmpdir: proven on both PVE nodes
+manual LXC backup: proven
+archive integrity test: proven
+isolated LXC restore + boot: proven
+Proxmox notification delivery: proven end to end
+scheduled guest backup jobs: 0
+secondary independent backup copy: not yet implemented
+```
+
+This is no longer a no-backup estate, but backup/recovery is **not yet complete estate-wide**.
+
+### Proxmox guest backup platform
+
+The approved phase-one design uses native Proxmox `vzdump` backups to NFS storage on `media-01`.
+
+Storage target:
+
+```text
+host: media-01
+address: 192.168.2.195
+path: /srv/backup/pve
+PVE storage ID: media-backup
+protocol: NFS v4.2/TCP
+content: backup only
+```
+
+The NFS export is restricted to:
+
+```text
+192.168.2.70
+192.168.2.71
+```
+
+The target remains root-owned. It is not made broadly writable to solve LXC UID-remapping problems.
+
+### Local vzdump workspace
+
+The first unprivileged LXC backup attempt failed because `vzdump` attempted to use an NFS-hosted temporary workspace that the remapped container UID could not enter.
+
+The approved solution is a local workspace on each hypervisor:
+
+```text
+tmpdir: /var/lib/vz/vzdump-tmp
+```
+
+Required state:
+
+- owner `root`;
+- group `root`;
+- mode `1777`;
+- at least 20 GiB free at deployment time;
+- UID 100000 write proof passes;
+- workspace is empty after validation.
+
+This design preserves restrictive permissions on the NFS backup repository.
+
+### Backup proof
+
+On 14 September 2026 `edge-01` LXC CT103 on `Proxmox-2` was backed up successfully while running.
+
+Observed result:
+
+```text
+backup mode: snapshot
+archive compression: zstd
+archive size: approximately 568 MiB
+source guest after backup: running
+zstd archive integrity test: PASS
+backup inventory visibility: PASS
+```
+
+### Restore proof
+
+The CT103 archive was restored under temporary VMID 903 on `Proxmox-2`.
+
+The restored guest was kept stopped initially, all restored production networking was removed, the filesystem was inspected offline, and the temporary guest was then booted without a production network interface.
+
+Validation result:
+
+```text
+archive_config_gate=PASS
+network_isolation=PASS
+offline_filesystem_restore=PASS
+isolated_boot=PASS
+temporary_restore_removed=PASS
+restore_proof=PASS
+```
+
+The live CT103 remained running throughout and the temporary restore was removed cleanly afterwards.
+
+This proves the primary LXC guest-backup path is **restorable**, not merely writable.
+
+### Notifications
+
+Both Proxmox nodes use the built-in `mail-to-root` notification target and the approved `root@pam` email recipient.
+
+Both nodes relay mail through:
+
+```text
+[192.168.2.54]:25
+```
+
+`mail-relay-01` then authenticates to Gmail over TLS on `smtp.gmail.com:587`.
+
+End-to-end tests on 14 September 2026 showed successful delivery from both hypervisors with `dsn=2.0.0` and `status=sent`.
+
+Direct delivery from Proxmox to Gmail is not the approved design.
 
 ### Restic / Backrest
 
@@ -47,9 +159,9 @@ The WDC WD40EZRX 4 TB-class disk currently attached to `PROXMOX` is:
 
 - blank/unallocated;
 - unmounted;
-- not a backup repository;
+- not the primary backup repository;
 - not the `cloud-01` production data disk;
-- suitable only for POC/risk testing unless later reassessed.
+- suitable only for supplementary/POC use unless later reassessed.
 
 Current health evidence:
 
@@ -62,24 +174,40 @@ Current health evidence:
 
 This disk must never be the sole copy of important data.
 
-## Backup gap statement
+## Remaining backup gap statement
 
-At present:
+The primary Proxmox LXC path is proven, but important gaps remain:
 
-- VM/LXC recovery depends on rebuild/IaC plus any surviving application data;
-- important persistent application data does not yet have a proven estate-wide backup path;
-- Terraform state and protected controller configuration require independent protection;
-- restore testing is not proven.
+- there are still no scheduled guest backup jobs;
+- no independent secondary copy exists yet for important guest backups;
+- VM restore proof is still outstanding;
+- `cloud-01` requires application-consistent Nextcloud/PostgreSQL recovery proof;
+- Terraform state and protected controller configuration still require independent protection;
+- `media-01` cannot protect its own irreplaceable `/srv/media` data by backing up to the same physical disk;
+- non-Proxmox persistent state on `docker-01` and the IaC controller still needs explicit policy.
 
-A healthy running service is therefore **not equivalent to a recoverable service**.
+A healthy running service is therefore still **not equivalent to a recoverable service** unless its relevant recovery class has been proven.
 
-## Preferred target platform
+## Platform direction
+
+### Current approved platform
+
+For the present estate and available hardware, the approved production direction is:
+
+- native Proxmox `vzdump` guest backups;
+- `media-01` NFS storage as the primary guest-backup target;
+- local `vzdump` temporary workspace on each hypervisor;
+- Proxmox notification delivery via `mail-relay-01`;
+- Git-managed IaC for storage, runtime and mail configuration;
+- conservative retention initially while real archive sizes are measured.
+
+This avoids purchasing dedicated hardware before the actual capacity and recovery requirements justify it.
 
 ### Proxmox Backup Server
 
-Proxmox Backup Server remains the preferred direction for VM/LXC backup, subject to a deliberate placement/storage decision.
+Proxmox Backup Server remains a possible future enhancement rather than an immediate requirement.
 
-Reasons:
+Potential benefits remain:
 
 - native Proxmox VE integration;
 - incremental backup and deduplication;
@@ -88,13 +216,13 @@ Reasons:
 - restore support;
 - web GUI;
 - optional client-side encryption;
-- ability to maintain a second copy/remote sync later.
+- remote sync/second-copy options.
 
-The earlier design that assumed a future `pve-02` rebuild with `pbs-01` as a VM is superseded. `Proxmox-2` is already a live standalone production node. Any PBS placement must now be designed against the actual current estate rather than inherited from the earlier greenfield plan.
+Any future PBS deployment must be justified against the proven phase-one platform, actual capacity, restore requirements and available hardware. There is currently no approved dedicated PBS host/datastore placement.
 
 ## Placement principles
 
-A future backup server/datastore must satisfy these rules:
+Backup storage must satisfy these rules:
 
 1. backup storage must be healthy and intentionally selected;
 2. the only backup copy must not live solely on the same compute/system disk as the workloads being protected;
@@ -103,17 +231,7 @@ A future backup server/datastore must satisfy these rules:
 5. recovery identities, secrets and Terraform state require protection independent of the normal running controller;
 6. a backup platform is not accepted until restore testing succeeds.
 
-Possible PBS placement options should be evaluated later against:
-
-- available physical storage;
-- USB/SATA/NVMe reliability;
-- compute/RAM headroom;
-- failure domains;
-- power/network dependency;
-- restore performance;
-- cost.
-
-No exact PBS host/datastore placement is currently approved by this document.
+The current `media-01` design satisfies the first Proxmox-node failure-domain objective, but not yet the independent-secondary-copy objective.
 
 ## Backup scope
 
@@ -125,7 +243,7 @@ Protect:
 - guest configuration required for restore;
 - application-consistent data where required.
 
-Current guests requiring an explicit backup policy include:
+Current guests requiring an explicit production backup policy:
 
 ```text
 PROXMOX .70
@@ -140,6 +258,8 @@ Proxmox-2 .71
   VM200 monitor-01
 ```
 
+Templates 9000/9001 are not part of the initial production guest-backup schedule unless explicitly approved.
+
 Not all guests require the same retention or recovery objective.
 
 ### `cloud-01`
@@ -153,6 +273,8 @@ High-priority persistent assets include:
 - Terraform state required to manage/rebuild the VM cleanly.
 
 The live 200 GiB cloud data disk is production storage, **not a backup**.
+
+A successful VM-level backup will not by itself prove application consistency. A Nextcloud/PostgreSQL recovery test remains required.
 
 ### DNS
 
@@ -180,7 +302,9 @@ Do not waste backup capacity on container images or reproducible build/runtime c
 
 ### `media-01`
 
-User media under `/srv/media` is not reproducible from IaC and needs an intentional protection decision.
+User media under `/srv/media` is not reproducible from IaC and needs a backup destination in a different physical failure domain.
+
+The current `/srv/backup/pve` repository is on the same `media-01` NVMe and therefore **cannot count as protection for `media-01` itself**.
 
 Kodi configuration already managed in Ansible is reproducible; unmanaged personal state is not.
 
@@ -212,70 +336,96 @@ Target minimum for important data:
 2. **Independent secondary copy**
    - separate physical storage and preferably separate failure domain;
    - synchronized or backed up independently;
-   - usable if the primary backup datastore fails.
+   - usable if the primary backup repository fails.
+
+The phase-one Proxmox platform currently has a proven primary copy only. The second-copy requirement remains open.
 
 For irreplaceable documents/photos/recovery identities, an off-site or cloud copy should be added where practical.
 
 ## Retention starting point
 
-A reasonable initial policy to validate against actual capacity:
+Until representative estate-wide backups have run and actual archive sizes are known, use a conservative initial policy:
 
-- daily: 7
-- weekly: 4
-- monthly: 12
-- yearly: 3
+```text
+keep-last=3
+```
+
+After capacity and backup-duration evidence has been collected, consider expanding to a deliberate daily/weekly/monthly policy.
+
+A possible later target remains:
+
+- daily: 7;
+- weekly: 4;
+- monthly: 12;
+- yearly: 3.
+
+Do not adopt the larger policy merely because it fits syntactically; validate it against real storage consumption and recovery objectives.
 
 Critical databases or rapidly changing state may require a shorter RPO than one day.
-
-Retention is not considered effective until representative restores have succeeded.
 
 ## Verification and restore policy
 
 A successful backup job is not enough.
 
-The target platform must include:
+The platform must include:
 
-- scheduled datastore/repository verification;
 - alerting for failed/stale backups;
+- periodic archive/repository health checks;
 - periodic test restores;
 - documented restore procedures;
 - at least one proven restore for each major workload/data class.
 
-Suggested restore-test classes:
+Current restore-test state:
 
-- one Proxmox LXC;
-- one Proxmox VM;
-- Nextcloud database + files consistency restore;
-- controller Terraform state recovery;
-- one bare-metal/non-Proxmox application-data restore such as BirdNET or media data.
+```text
+Proxmox LXC: proven (CT103 edge-01, 2026-09-14)
+Proxmox VM: pending
+Nextcloud database + files consistency: pending
+controller Terraform/state recovery: pending
+bare-metal/non-Proxmox data: pending
+```
 
-## Migration / implementation sequence
+The detailed LXC restore procedure is documented in:
 
-1. Treat the current no-backup state as an explicit operational risk.
-2. Inventory historical Restic/recovery media before discarding it.
-3. Confirm protected copies of required secrets/recovery identities without exposing them.
-4. Define RPO/RTO priorities by workload.
-5. Select healthy primary backup storage.
-6. Select PBS placement, or approve another platform if PBS no longer fits.
-7. Deploy the platform through Git-managed IaC where practical.
-8. Create Proxmox guest backup jobs.
-9. Add application-aware protection for `cloud-01` and other stateful workloads.
-10. Protect controller Terraform/secrets/recovery state independently.
-11. Establish an independent second copy.
-12. Configure verification/retention/alerts.
-13. Perform test restores.
-14. Only after recovery proof, retire historical backup paths or media that are no longer needed.
+```text
+production docs/PROXMOX-BACKUP-RECOVERY.md
+```
+
+## Implementation sequence
+
+Completed:
+
+1. inventory current storage and historical backup state;
+2. select `media-01` NVMe as the phase-one primary guest-backup target;
+3. deploy restricted NFS export through IaC;
+4. register `media-backup` on both PVE nodes through IaC;
+5. deploy local `vzdump` workspace through IaC;
+6. prove manual LXC backup and archive integrity;
+7. prove isolated LXC restore and boot;
+8. configure and prove Proxmox notification delivery through `mail-relay-01`.
+
+Next:
+
+9. create scheduled Proxmox guest backup jobs with conservative retention;
+10. prove scheduled runs on both hypervisors;
+11. review actual archive sizes, duration and capacity;
+12. prove at least one VM restore;
+13. add application-aware protection and recovery testing for `cloud-01`;
+14. protect controller Terraform/secrets/recovery state independently;
+15. establish an independent second copy for important data;
+16. define protection for `media-01` and other non-Proxmox persistent state;
+17. only then retire historical backup paths/media that no longer have recovery value.
 
 ## Definition of done
 
-Backup/recovery is not complete until:
+Backup/recovery is not estate-wide complete until:
 
-- a production backup platform is deployed;
-- healthy dedicated backup storage is in use;
+- scheduled guest backup jobs run successfully;
+- failed/stale jobs alert through the proven notification path;
 - all important workloads/data have an explicit policy;
-- scheduled jobs run successfully;
-- stale/failed jobs alert;
 - at least two useful copies exist for important data;
 - controller recovery state is protected off-host;
-- representative restores have been tested and documented;
+- representative LXC, VM, application and non-Proxmox restores have been tested and documented;
 - historical repositories/media have been deliberately retained or retired.
+
+The phase-one **Proxmox LXC primary backup and restore path is already operationally proven**; the remaining items above are expansion and resilience work, not a return to the previous no-backup state.
