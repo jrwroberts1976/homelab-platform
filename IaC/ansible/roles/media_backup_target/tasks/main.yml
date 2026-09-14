@@ -45,6 +45,14 @@
     group: root
     mode: "0700"
 
+- name: Ensure NFS exports include directory exists
+  ansible.builtin.file:
+    path: /etc/exports.d
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Install restricted Proxmox backup export
   ansible.builtin.template:
     src: homelab-pve-backup.exports.j2
