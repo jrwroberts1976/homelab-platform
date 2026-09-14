@@ -21,11 +21,34 @@
 - name: Inspect existing storage definition
   ansible.builtin.command:
     argv:
-      - /bin/bash
-      - -lc
-      - >-
-        grep -A 8 -E '^nfs: {{ proxmox_backup_storage_id | regex_escape }}$'
-        /etc/pve/storage.cfg
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import sys
+
+        storage_id = sys.argv[1]
+        target = f"nfs: {storage_id}"
+        block = []
+        collecting = False
+
+        for line in Path("/etc/pve/storage.cfg").read_text().splitlines():
+            if not collecting:
+                if line.strip() == target:
+                    collecting = True
+                    block.append(line)
+                continue
+
+            if line and not line[0].isspace():
+                break
+
+            block.append(line)
+
+        if not collecting:
+            raise SystemExit(1)
+
+        print("\n".join(block))
+      - "{{ proxmox_backup_storage_id }}"
   register: proxmox_backup_storage_existing
   changed_when: false
   failed_when: proxmox_backup_storage_existing.rc not in [0, 1]
@@ -86,11 +109,34 @@
 - name: Read reconciled storage definition
   ansible.builtin.command:
     argv:
-      - /bin/bash
-      - -lc
-      - >-
-        grep -A 8 -E '^nfs: {{ proxmox_backup_storage_id | regex_escape }}$'
-        /etc/pve/storage.cfg
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import sys
+
+        storage_id = sys.argv[1]
+        target = f"nfs: {storage_id}"
+        block = []
+        collecting = False
+
+        for line in Path("/etc/pve/storage.cfg").read_text().splitlines():
+            if not collecting:
+                if line.strip() == target:
+                    collecting = True
+                    block.append(line)
+                continue
+
+            if line and not line[0].isspace():
+                break
+
+            block.append(line)
+
+        if not collecting:
+            raise SystemExit(1)
+
+        print("\n".join(block))
+      - "{{ proxmox_backup_storage_id }}"
   register: proxmox_backup_storage_reconciled
   changed_when: false
 
