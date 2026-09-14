@@ -2,13 +2,11 @@
 
 Private Infrastructure-as-Code, operational documentation and migration workspace for the JRW Roberts homelab.
 
-## Status
+## Current status
 
-This repository is currently **private** while the platform, recovery model and documentation are being consolidated.
+The platform is now operating from the Git-managed `homelab-platform` model rather than the former consolidated/legacy layout. `IaC/` is the authority for infrastructure and service configuration that has been explicitly migrated and validated here.
 
-The estate has moved beyond the original “future authority” phase. `IaC/` is authoritative for infrastructure and service configuration that has been explicitly migrated and validated here. Legacy repositories may still remain useful reference sources for areas that have **not** yet been reconciled; they are retired only after unique content and recovery dependencies are reviewed.
-
-For the current estate, start with:
+The main current-state references are:
 
 - [Current-State Architecture](docs/architecture/CURRENT-STATE.md)
 - [Target-State Architecture](docs/architecture/TARGET-STATE.md)
@@ -18,17 +16,9 @@ For the current estate, start with:
 - [Runbook Catalogue](runbooks/README.md)
 - [14 September 2026 Estate Audit](docs/architecture/ESTATE-AUDIT-2026-09-14.md)
 
-## IaC authority
+## Control plane
 
-All new Infrastructure-as-Code belongs under [`IaC/`](IaC/).
-
-Terraform provisions supported infrastructure and Ansible reconciles operating systems/services. Existing production state is discovered and validated before it is changed.
-
-The older top-level `terraform/` path predates this convention and remains a legacy area until its references and state handling are deliberately reconciled.
-
-## Current control point
-
-Normal homelab administration and production Ansible execution use:
+Normal administration and production Ansible execution use:
 
 ```text
 admin-01
@@ -40,7 +30,7 @@ admin-01
 
 The retired `TestServer` identity must not be used as the current controller. Its Raspberry Pi 4 hardware is now `docker-01` at `192.168.2.220`.
 
-## Current core estate
+## Core estate
 
 | Host / service | Address | Current role |
 |---|---:|---|
@@ -61,11 +51,9 @@ Retired identities include `TestServer`, `DietPi`, `ids-01`, the former `k3s-nod
 
 ## Proxmox cluster
 
-The live Proxmox platform is the two-node cluster:
+The live Proxmox platform is the two-node `jameshouse-pve` cluster:
 
 ```text
-jameshouse-pve
-
 PROXMOX
   management: 192.168.2.70
   Corosync link0: 10.255.255.1/30
@@ -77,13 +65,17 @@ Proxmox-2
   node ID: 2
 ```
 
-Corosync uses:
+Corosync uses the direct point-to-point USB Ethernet path as preferred `link0`, the management LAN as `link1` fallback, and `admin-01` as the QDevice/QNetd third vote.
 
-- direct point-to-point USB Ethernet `link0`, priority 20;
-- normal LAN `link1`, priority 5, as fallback;
-- `admin-01` as QDevice/QNetd third vote on TCP/5403.
+Validated quorum is:
 
-Validated quorum is three expected/total votes with quorum two and `Quorate Qdevice`.
+```text
+Nodes:          2
+Expected votes: 3
+Total votes:    3
+Quorum:         2
+Flags:          Quorate Qdevice
+```
 
 Current workload placement:
 
@@ -101,96 +93,86 @@ Proxmox-2
   VM202 monitor-01
 ```
 
-The actual node hostname is still `PROXMOX`; “Proxmox-1” is only a human-friendly diagram label.
+The actual node hostname remains `PROXMOX`; “Proxmox-1” is only a human-friendly diagram label.
 
-Production guest disks remain on node-local `local-lvm`, so cluster membership does not by itself provide automatic guest HA after loss of a node-local disk owner.
+Production guest disks remain on node-local storage, so cluster membership and quorum do not by themselves provide automatic guest-data HA after loss of a node-local disk owner.
 
-## Current platform position
-
-### Monitoring and logging
-
-`monitor-01` provides the central observability platform:
-
-- Prometheus;
-- Grafana;
-- Alertmanager;
-- Blackbox Exporter;
-- Loki;
-- native Grafana Alloy;
-- ASUS router syslog ingestion and retention.
-
-Alloy is deployed across the managed estate. Network Hosts discovery/enrichment/deep profiling and HP ProCurve telemetry are operational.
-
-### Cloud
-
-`cloud-01` is a live production Nextcloud service using PostgreSQL, Redis and a dedicated ext4 data disk.
-
-VM-level snapshot backup proof exists. Application-consistent Nextcloud/PostgreSQL recovery remains a separate outstanding proof.
-
-### Network sensor
-
-`sensor-01` is an active passive-sensor platform. Suricata and Zeek are operational and consume traffic from the dedicated capture path fed by the HP ProCurve mirror configuration.
-
-The switch currently mirrors ports 1–23 to port 24.
-
-### Edge
-
-`edge-01` exists as a healthy LXC at `.56`, but no `cloudflared` package/service/process is deployed. Cloudflare Tunnel implementation remains future work until there is a real service requirement.
-
-### Backup / recovery
+## Backup and recovery
 
 `media-01` is the primary Proxmox guest-backup target using NFS v4.2/TCP.
 
-Current cluster storage uses node-scoped namespaces:
-
 ```text
-PROXMOX   -> media-backup-proxmox   -> /srv/backup/pve-proxmox
-Proxmox-2 -> media-backup-proxmox-2 -> /srv/backup/pve-proxmox-2
+PROXMOX
+  job: homelab-nightly-proxmox
+  time: 02:15
+  storage: media-backup-proxmox
+  guests: 100,102,200,201
+
+Proxmox-2
+  job: homelab-nightly-proxmox-2
+  time: 03:15
+  storage: media-backup-proxmox-2
+  guests: 101,103,202
+
+mode: snapshot
+compression: zstd
+retention: keep-last=3
+notification-mode: notification-system
 ```
 
-Pre-cluster backup/restore evidence is strong, including all seven production guests and an isolated CT103 restore/boot proof.
+The post-cluster `Proxmox-2` job has been recreated through IaC using VM202, a fresh VM202 snapshot archive has passed Zstandard integrity testing and Proxmox inventory validation, and a full two-node Ansible reconciliation returned `changed=0`, `unreachable=0`, `failed=0`.
 
-Cluster formation changed `monitor-01` from standalone VMID 200 to cluster VMID 202. The immediate backup follow-up is therefore to reconcile the live schedule/IaC to final placement, take fresh cluster-era backups and observe an unattended successful post-cluster cycle.
+The only immediate schedule proof still outstanding is the first unattended post-cluster 02:15/03:15 cycle. Pre-cluster restore evidence also includes an isolated CT103 restore/boot proof; a representative QEMU restore and application-consistent `cloud-01` recovery remain separate recovery goals.
 
-## Principles
+## Platform services
 
-- Git is the desired-state authority for migrated areas.
-- Infrastructure changes are reviewed before deployment.
-- Host/workload ownership is explicit.
-- Secrets and Terraform state are never stored in plaintext Git.
-- Existing production state is discovered before it is changed.
-- Reconciliation should be idempotent.
-- Migration remains workload-by-workload with rollback/recovery paths.
-- Historical evidence is preserved rather than rewritten to look current.
-- Legacy repositories are retired only after useful content and recovery dependencies are understood.
-- A healthy service is not considered fully recovery-ready until important data has a proven restore path.
-- Cluster membership, quorum and guest-data HA are separate concerns and must not be conflated.
+### Monitoring and logging
 
-## Delivery backlog
+`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki. Native Grafana Alloy is deployed across the managed estate. Router syslog, Network Hosts discovery/enrichment/deep profiling, first-seen notification and HP ProCurve telemetry are operational.
 
-The current high-value work is now:
+### Cloud
+
+`cloud-01` is a live production Nextcloud service using PostgreSQL, Redis and a dedicated ext4 data disk. VM-level snapshot backup is proven; application-consistent Nextcloud/PostgreSQL recovery remains outstanding.
+
+### Network sensor
+
+`sensor-01` is an active passive-sensor platform. Suricata and Zeek consume mirrored traffic from the HP ProCurve SPAN path, with ports 1–23 mirrored to port 24.
+
+### Edge
+
+`edge-01` is a healthy LXC at `.56`, but `cloudflared` is not deployed. Tunnel implementation remains future work until there is a real service requirement.
+
+## Delivery priorities
 
 | Workstream | Current position | Next milestone |
 |---|---|---|
-| Proxmox cluster | Two-node cluster + dual Corosync links + QDevice operational | Prove link fallback and controlled single-node maintenance behaviour |
-| Cluster backup reconciliation | Node-scoped NFS storage retained; VM202 is new cluster identity | Update job/IaC guest set to `101,103,202`, take fresh backups, observe unattended run |
-| Recovery depth | LXC restore proof exists; VM/application proof incomplete | QEMU restore + application-consistent `cloud-01` recovery |
-| Second-copy resilience | Primary NFS backup target operational | Add independent second copy for important data |
-| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add cluster/QDevice/link health and useful service telemetry |
-| Network Hosts platform | Discovery/enrichment/deep profiling/notifications/dashboards operational | Correlate with switch topology and keep data actionable |
+| Proxmox cluster | Two-node cluster, dual Corosync links and QDevice operational | Prove link0 -> link1 fallback and controlled single-node quorum behaviour |
+| Backup schedule | Final cluster-era jobs and VM202 IaC reconciled; fresh VM202 backup proven | Observe first unattended post-cluster run |
+| Recovery depth | LXC restore proof exists | Fresh QEMU restore proof + application-consistent `cloud-01` recovery |
+| Second-copy resilience | Primary NFS backup target operational | Add an independent second copy for important data |
+| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry |
+| Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
-| Network hardening | SPAN and telemetry operational | Refresh physical port map; restrict legacy SNMP/Telnet exposure |
+| Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |
 | Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths |
-| Edge / Cloudflare Tunnel | `edge-01` host provisioned; cloudflared absent | Deploy only when approved/needed |
-| Password manager | Future work | Final security/backup review and host decision |
-| Home automation | Future project | Host/platform and device-integration design |
-| FreeSWITCH / SIP | Future project | Select host/supplier and define security/network design |
+| Edge / Cloudflare Tunnel | Host provisioned, tunnel absent | Deploy only when approved/needed |
+
+## Operating principles
+
+- Git is the desired-state authority for migrated areas.
+- Existing production state is discovered before it is changed.
+- Infrastructure changes are reviewed and validated incrementally.
+- Reconciliation should be idempotent.
+- Secrets and Terraform state are never stored in plaintext Git.
+- Historical evidence is preserved but clearly separated from current operational truth.
+- Cluster membership, quorum, workload placement and guest-data HA are separate concerns.
+- A healthy service is not considered recovery-ready until important data has a proven restore path.
 
 ## Production runbooks
 
-The authoritative index is [runbooks/README.md](runbooks/README.md) / [runbooks/registry.yml](runbooks/registry.yml).
+The authoritative index is [runbooks/README.md](runbooks/README.md) and [runbooks/registry.yml](runbooks/registry.yml).
 
-Current service/recovery documents include:
+Key service and recovery documents include:
 
 - [DNS Service Recovery Plan](production%20docs/DNS-SERVICE-RECOVERY-PLAN.md)
 - [Monitoring Service](production%20docs/MONITORING-SERVICE.md)
@@ -206,8 +188,8 @@ Current service/recovery documents include:
 
 ## Documentation rule
 
-Current-state, target-state and historical evidence must remain distinct:
+Current state, future design and historical evidence remain distinct:
 
-- current operational truth -> `CURRENT-STATE.md` / service docs / runbook registry;
+- current operational truth -> `CURRENT-STATE.md`, service docs and runbook registry;
 - future design -> `TARGET-STATE.md` and explicitly planned runbooks;
-- dated migration/audit evidence -> retained as historical records, with superseded banners where ambiguity would otherwise be dangerous.
+- dated migration/audit evidence -> retained as historical records, with superseded context where necessary.
