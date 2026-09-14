@@ -68,7 +68,7 @@
   ansible.builtin.assert:
     that:
       - item in media_firewall_ruleset.stdout
+    fail_msg: "Expected Proxmox NFS client is missing from the media-01 firewall policy."
   loop: "{{ media_firewall_backup_nfs_clients }}"
   loop_control:
     label: "{{ item }}"
-  fail_msg: "Expected Proxmox NFS client is missing from the media-01 firewall policy."
