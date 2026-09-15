@@ -95,13 +95,17 @@
       - --quiet
   changed_when: false
 
-- name: Require explicit deployment approval
-  ansible.builtin.assert:
-    that:
-      - greenbone_stack_allow_deploy | bool or ansible_check_mode
-    fail_msg: >-
-      Greenbone configuration validated but deployment is blocked.
-      Re-run with -e greenbone_stack_allow_deploy=true.
+- name: Report Greenbone staging-only mode
+  ansible.builtin.debug:
+    msg: >-
+      Greenbone Compose configuration is staged and validated.
+      Image pull and container startup remain blocked because
+      greenbone_stack_allow_deploy=false.
+  when: not (greenbone_stack_allow_deploy | bool)
+
+- name: Stop Greenbone host before deployment when approval gate is closed
+  ansible.builtin.meta: end_host
+  when: not (greenbone_stack_allow_deploy | bool)
 
 - name: Pull Greenbone Community images
   ansible.builtin.command:
