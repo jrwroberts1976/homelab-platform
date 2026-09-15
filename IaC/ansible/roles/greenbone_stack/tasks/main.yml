@@ -1,0 +1,241 @@
+---
+- name: Validate Greenbone target identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == greenbone_stack_expected_hostname
+      - greenbone_stack_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing Greenbone deployment: expected Debian 13 greenbone-01
+      at the approved IPv4 address.
+
+- name: Verify Greenbone registry DNS
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - registry.community.greenbone.net
+  register: greenbone_registry_dns
+  changed_when: false
+  failed_when: >-
+    greenbone_registry_dns.rc != 0
+    or greenbone_registry_dns.stdout | trim | length == 0
+
+- name: Verify Docker is available
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - version
+  changed_when: false
+
+- name: Validate protected Greenbone administrator secret
+  ansible.builtin.assert:
+    that:
+      - >-
+        (greenbone_admin_password | length >= 16)
+        or not (greenbone_stack_allow_deploy | bool)
+        or ansible_check_mode
+    fail_msg: >-
+      GREENBONE_ADMIN_PASSWORD must be supplied from the protected
+      controller environment and must contain at least 16 characters.
+  no_log: true
+
+- name: Ensure Greenbone application root exists
+  ansible.builtin.file:
+    path: "{{ greenbone_stack_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install approved upstream Greenbone compose file
+  ansible.builtin.copy:
+    src: compose.yaml
+    dest: "{{ greenbone_stack_root }}/compose.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Verify deployed upstream compose checksum
+  ansible.builtin.stat:
+    path: "{{ greenbone_stack_root }}/compose.yaml"
+    checksum_algorithm: sha256
+  register: greenbone_compose_state
+
+- name: Require approved Greenbone compose checksum
+  ansible.builtin.assert:
+    that:
+      - greenbone_compose_state.stat.checksum == greenbone_stack_upstream_compose_sha256
+    fail_msg: >-
+      Greenbone compose checksum does not match the vendored,
+      reviewed upstream compose file.
+
+- name: Install LAN-only Greenbone compose override
+  ansible.builtin.template:
+    src: compose.override.yaml.j2
+    dest: "{{ greenbone_stack_root }}/compose.override.yaml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate merged Greenbone Compose configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greenbone_stack_root }}/compose.yaml"
+      - -f
+      - "{{ greenbone_stack_root }}/compose.override.yaml"
+      - config
+      - --quiet
+  changed_when: false
+
+- name: Require explicit deployment approval
+  ansible.builtin.assert:
+    that:
+      - greenbone_stack_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Greenbone configuration validated but deployment is blocked.
+      Re-run with -e greenbone_stack_allow_deploy=true.
+
+- name: Pull Greenbone Community images
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greenbone_stack_root }}/compose.yaml"
+      - -f
+      - "{{ greenbone_stack_root }}/compose.override.yaml"
+      - pull
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Reconcile Greenbone Community containers
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greenbone_stack_root }}/compose.yaml"
+      - -f
+      - "{{ greenbone_stack_root }}/compose.override.yaml"
+      - up
+      - -d
+      - --remove-orphans
+  register: greenbone_compose_up
+  changed_when: >-
+    'Creating' in greenbone_compose_up.stderr
+    or 'Created' in greenbone_compose_up.stderr
+    or 'Recreating' in greenbone_compose_up.stderr
+    or 'Recreated' in greenbone_compose_up.stderr
+    or 'Starting' in greenbone_compose_up.stderr
+    or 'Started' in greenbone_compose_up.stderr
+  when: not ansible_check_mode
+
+- name: Wait for Greenbone LAN HTTPS listener
+  ansible.builtin.wait_for:
+    host: "{{ greenbone_stack_bind_ipv4 }}"
+    port: "{{ greenbone_stack_https_port }}"
+    timeout: 1200
+    state: started
+  when: not ansible_check_mode
+
+- name: Wait for Greenbone web interface
+  ansible.builtin.uri:
+    url: "https://{{ greenbone_stack_bind_ipv4 }}:{{ greenbone_stack_https_port }}/"
+    validate_certs: false
+    status_code:
+      - 200
+      - 302
+  register: greenbone_web
+  retries: 120
+  delay: 10
+  until: greenbone_web.status in [200, 302]
+  when: not ansible_check_mode
+
+- name: Read Greenbone administrator password marker
+  ansible.builtin.stat:
+    path: "{{ greenbone_stack_root }}/.admin-password-managed"
+  register: greenbone_admin_marker
+  when: not ansible_check_mode
+
+- name: Replace insecure default Greenbone administrator password
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greenbone_stack_root }}/compose.yaml"
+      - -f
+      - "{{ greenbone_stack_root }}/compose.override.yaml"
+      - exec
+      - -T
+      - -u
+      - gvmd
+      - gvmd
+      - gvmd
+      - --user=admin
+      - "--new-password={{ greenbone_admin_password }}"
+  register: greenbone_admin_password_result
+  retries: 120
+  delay: 5
+  until: greenbone_admin_password_result.rc == 0
+  changed_when: true
+  no_log: true
+  when:
+    - not ansible_check_mode
+    - not greenbone_admin_marker.stat.exists
+
+- name: Record managed Greenbone administrator password
+  ansible.builtin.copy:
+    content: "managed-by-homelab-platform\n"
+    dest: "{{ greenbone_stack_root }}/.admin-password-managed"
+    owner: root
+    group: root
+    mode: "0600"
+  when:
+    - not ansible_check_mode
+    - not greenbone_admin_marker.stat.exists
+
+- name: Verify Greenbone HTTPS listener
+  ansible.builtin.command:
+    argv:
+      - ss
+      - -ltn
+      - "sport = :{{ greenbone_stack_https_port }}"
+  register: greenbone_https_listener
+  changed_when: false
+  failed_when: >-
+    greenbone_stack_bind_ipv4 not in greenbone_https_listener.stdout
+  when: not ansible_check_mode
+
+- name: Show Greenbone container state
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - -f
+      - "{{ greenbone_stack_root }}/compose.yaml"
+      - -f
+      - "{{ greenbone_stack_root }}/compose.override.yaml"
+      - ps
+  register: greenbone_compose_ps
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify no failed Greenbone host systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: greenbone_failed_units
+  changed_when: false
+  failed_when: greenbone_failed_units.stdout | trim | length > 0
