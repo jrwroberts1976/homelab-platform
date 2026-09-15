@@ -1,14 +1,3 @@
-resource "proxmox_download_file" "debian_cloud_image" {
-  content_type       = "import"
-  datastore_id       = var.image_datastore_id
-  node_name          = var.proxmox_node_name
-  url                = var.debian_cloud_image_url
-  file_name          = "debian-13-genericcloud-amd64-20260712-2537.qcow2"
-  checksum           = var.debian_cloud_image_sha512
-  checksum_algorithm = "sha512"
-  overwrite          = false
-}
-
 resource "proxmox_virtual_environment_vm" "greenbone" {
   name        = var.hostname
   description = "Homelab Greenbone vulnerability management platform managed by homelab-platform/IaC"
@@ -48,7 +37,7 @@ resource "proxmox_virtual_environment_vm" "greenbone" {
 
   disk {
     datastore_id = var.vm_datastore_id
-    import_from  = proxmox_download_file.debian_cloud_image.id
+    import_from  = var.debian_cloud_image_id
     interface    = "scsi0"
     iothread     = true
     discard      = "on"

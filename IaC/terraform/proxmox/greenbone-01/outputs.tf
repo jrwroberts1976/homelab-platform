@@ -15,5 +15,5 @@ output "greenbone_node" {
 }
 
 output "debian_cloud_image_id" {
-  value = proxmox_download_file.debian_cloud_image.id
+  value = var.debian_cloud_image_id
 }

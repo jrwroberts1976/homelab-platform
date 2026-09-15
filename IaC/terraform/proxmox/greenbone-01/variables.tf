@@ -100,14 +100,8 @@ variable "protect_after_build" {
   default     = false
 }
 
-variable "debian_cloud_image_url" {
-  description = "Pinned Debian 13 genericcloud QCOW2 image."
+variable "debian_cloud_image_id" {
+  description = "Existing Debian 13 cloud image on Proxmox-2 local import storage."
   type        = string
-  default     = "https://cloud.debian.org/cdimage/cloud/trixie/20260712-2537/debian-13-genericcloud-amd64-20260712-2537.qcow2"
-}
-
-variable "debian_cloud_image_sha512" {
-  description = "SHA-512 checksum for the pinned Debian 13 genericcloud QCOW2 image."
-  type        = string
-  default     = "7ae53e9dbee282bfc16f289dec483dde3a8598769c38a267948310f7a2a52c662620198603bc52c142627efba379863d16079698a10b34102d55bcedd40e8d32"
+  default     = "local:import/debian-13-genericcloud-amd64-20260712-2537.qcow2"
 }
