@@ -46,7 +46,7 @@ The retired controller identity must not be used as the current controller; the 
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT102 on `PROXMOX` |
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive sensor, VM201 on `PROXMOX` |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT103 on `Proxmox-2`; Cloudflare Tunnel not deployed |
-| `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM203 on `Proxmmox-2` |
+| `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM203 on `Proxmox-2` |
 | `komodo-01` | `192.168.2.58` | Komodo container-management control plane, CT104 on `PROXMOX` |
 | `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT105 on `PROXMOX` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 |
