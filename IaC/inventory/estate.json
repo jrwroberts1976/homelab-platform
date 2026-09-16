@@ -169,8 +169,8 @@
       "document_label": "komodo-01",
       "address": "192.168.2.58",
       "state": "planned",
-      "kind": "vm",
-      "role": "Planned Komodo container-management control plane, VM204 on PROXMOX",
+      "kind": "ct",
+      "role": "Planned Komodo container-management control plane, unprivileged CT104 on PROXMOX",
       "managed_by_ansible": true
     }
   ],

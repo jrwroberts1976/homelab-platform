@@ -15,18 +15,20 @@ require_cmd() {
 
 KOMODO_HOSTNAME="komodo-01"
 KOMODO_IPV4="192.168.2.58"
-KOMODO_VM_ID="204"
-SOURCE_VM_ID="9001"
+KOMODO_CT_ID="104"
+KOMODO_MAC="02:00:00:00:01:04"
 
 TARGET_PVE="PROXMOX"
 PVE_HOST="192.168.2.70"
 
+LXC_TEMPLATE="local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
+
 PVE_ENV_FILE="$HOME/.config/homelab-iac/proxmox.env"
 PVE_ROOT_SSH_KEY="$HOME/.ssh/proxmox-root"
+AUTOMATION_PUBLIC_KEY="$HOME/.ssh/proxmox-automation.pub"
 
 REPO_ROOT="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/../.." && pwd)}"
 TF_SOURCE_DIR="$REPO_ROOT/IaC/terraform/proxmox/komodo-01"
-ANSIBLE_DIR="$REPO_ROOT/IaC/ansible"
 
 STATE_ROOT="$HOME/.local/state/homelab-iac/komodo-01"
 DEPLOY_DIR="$STATE_ROOT/terraform"
@@ -35,7 +37,7 @@ RUNNER_TMP="${RUNNER_TEMP:-/var/tmp}"
 PLAN_FILE="$RUNNER_TMP/komodo-01-create.tfplan"
 PLAN_JSON="$RUNNER_TMP/komodo-01-create.tfplan.json"
 
-for cmd in terraform ansible-playbook jq ssh; do
+for cmd in terraform jq ssh; do
   require_cmd "$cmd"
 done
 
@@ -45,18 +47,34 @@ done
 [ -r "$PVE_ROOT_SSH_KEY" ] ||
   die "Missing Proxmox root SSH key: $PVE_ROOT_SSH_KEY"
 
+[ -r "$AUTOMATION_PUBLIC_KEY" ] ||
+  die "Missing automation public key: $AUTOMATION_PUBLIC_KEY"
+
 # shellcheck disable=SC1090
 . "$PVE_ENV_FILE"
 
 : "${TF_VAR_proxmox_api_token:?TF_VAR_proxmox_api_token missing from $PVE_ENV_FILE}"
 export TF_VAR_proxmox_api_token
 
-printf '===== KOMODO-01 TERRAFORM PLAN-ONLY WORKFLOW =====\n'
+PUBLIC_KEY="$(tr -d '\r\n' < "$AUTOMATION_PUBLIC_KEY")"
+
+printf '%s\n' "$PUBLIC_KEY" |
+  grep -Eq '^ssh-(ed25519|rsa|ecdsa)' ||
+  die "Automation public key is invalid"
+
+TF_VAR_ssh_public_keys="$(
+  jq -cn --arg key "$PUBLIC_KEY" '[$key]'
+)"
+
+export TF_VAR_ssh_public_keys
+
+printf '===== KOMODO-01 LXC TERRAFORM PLAN-ONLY WORKFLOW =====\n'
 printf 'hostname=%s\n' "$KOMODO_HOSTNAME"
 printf 'ipv4=%s\n' "$KOMODO_IPV4"
-printf 'vm_id=%s\n' "$KOMODO_VM_ID"
-printf 'clone_source_vm_id=%s\n' "$SOURCE_VM_ID"
+printf 'ct_id=%s\n' "$KOMODO_CT_ID"
+printf 'mac=%s\n' "$KOMODO_MAC"
 printf 'pve=%s\n' "$TARGET_PVE"
+printf 'template=%s\n' "$LXC_TEMPLATE"
 printf 'terraform_state=%s\n' "$DEPLOY_DIR"
 printf 'NOTE: Terraform apply is not performed by this workflow.\n'
 
@@ -77,11 +95,20 @@ if ssh \
   -o BatchMode=yes \
   "root@$PVE_HOST" \
   "find /etc/pve/nodes -type f \
-     \( -path '*/qemu-server/$KOMODO_VM_ID.conf' \
-        -o -path '*/lxc/$KOMODO_VM_ID.conf' \) \
+     \( -path '*/qemu-server/$KOMODO_CT_ID.conf' \
+        -o -path '*/lxc/$KOMODO_CT_ID.conf' \) \
      -print -quit | grep -q ."
 then
-  die "Cluster guest ID $KOMODO_VM_ID already exists"
+  die "Cluster guest ID $KOMODO_CT_ID already exists"
+fi
+
+if ssh \
+  -i "$PVE_ROOT_SSH_KEY" \
+  -o BatchMode=yes \
+  "root@$PVE_HOST" \
+  "grep -RFiq '$KOMODO_MAC' /etc/pve/nodes"
+then
+  die "MAC $KOMODO_MAC already exists in the Proxmox cluster"
 fi
 
 if ssh \
@@ -99,7 +126,16 @@ ssh \
   -o BatchMode=yes \
   "root@$PVE_HOST" \
   "pvesm status --storage vm-ssd | grep -q active" ||
-  die "vm-ssd is not active on $TARGET_PVE"
+  die "vm-ssd is not active"
+
+ssh \
+  -i "$PVE_ROOT_SSH_KEY" \
+  -o BatchMode=yes \
+  "root@$PVE_HOST" \
+  "pveam list local |
+   awk '{print \$1}' |
+   grep -Fxq '$LXC_TEMPLATE'" ||
+  die "Required Debian 13 LXC template is unavailable"
 
 HOST_AVAILABLE_KIB="$(
   ssh \
@@ -110,61 +146,14 @@ HOST_AVAILABLE_KIB="$(
 )"
 
 [ "$HOST_AVAILABLE_KIB" -ge 4194304 ] ||
-  die "PROXMOX has less than 4 GiB MemAvailable; refusing Komodo planning"
+  die "PROXMOX has less than 4 GiB MemAvailable"
 
-SOURCE_CONFIG="$(
-  ssh \
-    -i "$PVE_ROOT_SSH_KEY" \
-    -o BatchMode=yes \
-    "root@$PVE_HOST" \
-    "qm config '$SOURCE_VM_ID'"
-)" ||
-  die "Clone source VM $SOURCE_VM_ID is not readable"
-
-printf '%s\n' "$SOURCE_CONFIG" |
-  grep -Fxq 'template: 1' ||
-  die "Clone source $SOURCE_VM_ID is not a template"
-
-printf '%s\n' "$SOURCE_CONFIG" |
-  grep -Fxq 'name: debian-13-cloud-template-qga' ||
-  die "Clone source $SOURCE_VM_ID has the wrong template identity"
-
-printf '%s\n' "$SOURCE_CONFIG" |
-  grep -Eq '^agent: .*enabled=1' ||
-  die "Clone source $SOURCE_VM_ID does not have QEMU Guest Agent enabled"
-
-printf '%s\n' "$SOURCE_CONFIG" |
-  grep -Eq '^scsi0: vm-ssd:base-9001-disk-0,' ||
-  die "Template system disk is not the expected vm-ssd base disk"
-
-printf '%s\n' "$SOURCE_CONFIG" |
-  grep -Eq '^ide2: vm-ssd:vm-9001-cloudinit,' ||
-  die "Template cloud-init disk is not on vm-ssd"
-
-printf '%s\n' "$SOURCE_CONFIG" |
-  grep -Eq '^net0: .*bridge=vmbr0' ||
-  die "Template NIC is not on vmbr0"
-
-printf 'vmid_%s=AVAILABLE\n' "$KOMODO_VM_ID"
+printf 'ctid_%s=AVAILABLE\n' "$KOMODO_CT_ID"
 printf 'ipv4_%s=NO_ACTIVE_HOST\n' "$KOMODO_IPV4"
+printf 'mac_%s=AVAILABLE\n' "$KOMODO_MAC"
 printf 'vm_ssd=ACTIVE\n'
+printf 'lxc_template=AVAILABLE\n'
 printf 'host_mem_available_kib=%s\n' "$HOST_AVAILABLE_KIB"
-printf 'clone_source_%s=VALID\n' "$SOURCE_VM_ID"
-
-printf '\n===== CLOUD-INIT PREREQUISITE =====\n'
-printf 'This phase may only reconcile the managed komodo-01 cloud-init snippet.\n'
-
-cd "$ANSIBLE_DIR"
-
-ANSIBLE_ROLES_PATH="$ANSIBLE_DIR/roles" \
-  ansible-playbook playbooks/proxmox-komodo-prereqs.yml
-
-ssh \
-  -i "$PVE_ROOT_SSH_KEY" \
-  -o BatchMode=yes \
-  "root@$PVE_HOST" \
-  'test -s /var/lib/vz/snippets/komodo-01-user-data.yaml' ||
-  die "Managed komodo-01 cloud-init snippet is missing"
 
 printf '\n===== PREPARE DURABLE TERRAFORM STATE =====\n'
 
@@ -208,29 +197,31 @@ chmod 0600 "$PLAN_FILE" "$PLAN_JSON"
 jq -e '
   [.resource_changes[] | select(.change.actions != ["no-op"])] as $changes
   | ($changes | length) == 1
-  and $changes[0].address == "proxmox_virtual_environment_vm.komodo"
+  and $changes[0].address == "proxmox_virtual_environment_container.komodo"
   and $changes[0].change.actions == ["create"]
-  and $changes[0].change.after.name == "komodo-01"
   and $changes[0].change.after.node_name == "PROXMOX"
-  and $changes[0].change.after.vm_id == 204
-  and $changes[0].change.after.clone[0].vm_id == 9001
-  and $changes[0].change.after.clone[0].full == true
-  and $changes[0].change.after.clone[0].datastore_id == "vm-ssd"
+  and $changes[0].change.after.vm_id == 104
+  and $changes[0].change.after.unprivileged == true
+  and $changes[0].change.after.features[0].nesting == true
+  and $changes[0].change.after.features[0].keyctl == true
   and $changes[0].change.after.cpu[0].cores == 2
   and $changes[0].change.after.memory[0].dedicated == 2048
-  and $changes[0].change.after.memory[0].floating == 2048
+  and $changes[0].change.after.memory[0].swap == 512
   and $changes[0].change.after.disk[0].datastore_id == "vm-ssd"
   and $changes[0].change.after.disk[0].size == 32
+  and $changes[0].change.after.initialization[0].hostname == "komodo-01"
   and $changes[0].change.after.initialization[0].ip_config[0].ipv4[0].address
       == "192.168.2.58/24"
   and $changes[0].change.after.initialization[0].ip_config[0].ipv4[0].gateway
       == "192.168.2.1"
-  and $changes[0].change.after.initialization[0].user_data_file_id
-      == "local:snippets/komodo-01-user-data.yaml"
-  and $changes[0].change.after.network_device[0].bridge == "vmbr0"
+  and $changes[0].change.after.network_interface[0].bridge == "vmbr0"
+  and $changes[0].change.after.network_interface[0].mac_address
+      == "02:00:00:00:01:04"
+  and $changes[0].change.after.operating_system[0].template_file_id
+      == "local:vztmpl/debian-13-standard_13.6-1_amd64.tar.zst"
   and $changes[0].change.after.protection == false
 ' "$PLAN_JSON" >/dev/null ||
-  die "Plan differs from the approved komodo-01 specification"
+  die "Plan differs from the approved komodo-01 LXC specification"
 
 printf '\n===== APPROVED CHANGE SET =====\n'
 
@@ -241,23 +232,29 @@ jq -r '
   | @tsv
 ' "$PLAN_JSON"
 
-printf '\n===== APPROVED KOMODO SPEC =====\n'
-printf 'source_template=9001\n'
-printf 'full_clone=true\n'
-printf 'komodo_vm_id=204\n'
-printf 'komodo_ipv4=192.168.2.58/24\n'
+printf '\n===== APPROVED KOMODO LXC SPEC =====\n'
+printf 'ct_id=104\n'
+printf 'unprivileged=true\n'
+printf 'nesting=true\n'
+printf 'keyctl=true\n'
+printf 'ipv4=192.168.2.58/24\n'
+printf 'mac=02:00:00:00:01:04\n'
 printf 'cpu_cores=2\n'
 printf 'memory_mb=2048\n'
+printf 'swap_mb=512\n'
 printf 'disk=vm-ssd:32GiB\n'
-printf 'management_bridge=vmbr0\n'
 printf 'protection=false\n'
 
 printf '\n===== PLAN SUMMARY =====\n'
-terraform -chdir="$DEPLOY_DIR" show "$PLAN_FILE" | tail -100
+
+terraform \
+  -chdir="$DEPLOY_DIR" \
+  show "$PLAN_FILE" |
+tail -120
 
 printf '\n===== RESULT =====\n'
-printf 'KOMODO-01 TERRAFORM PLAN=PASS\n'
+printf 'KOMODO-01 LXC TERRAFORM PLAN=PASS\n'
 printf 'plan_file=%s\n' "$PLAN_FILE"
 printf 'plan_json=%s\n' "$PLAN_JSON"
 printf 'terraform_apply=NOT_RUN\n'
-printf 'vm204=NOT_CREATED\n'
+printf 'ct104=NOT_CREATED\n'

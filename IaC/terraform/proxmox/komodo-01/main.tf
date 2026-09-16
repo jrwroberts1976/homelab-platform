@@ -1,64 +1,38 @@
-resource "proxmox_virtual_environment_vm" "komodo" {
-  name        = var.hostname
-  description = "Homelab Komodo container-management control plane managed by homelab-platform/IaC"
-  node_name   = var.proxmox_node_name
-  vm_id       = var.vm_id
+resource "proxmox_virtual_environment_container" "komodo" {
+  node_name    = var.proxmox_node_name
+  vm_id        = var.ct_id
+  description  = "Komodo container-management control plane managed by homelab-platform/IaC"
+  unprivileged = true
 
-  clone {
-    vm_id        = var.clone_source_vm_id
-    node_name    = var.proxmox_node_name
-    datastore_id = var.vm_datastore_id
-    full         = true
+  features {
+    nesting = true
+    keyctl  = true
   }
 
-  tags = [
-    "homelab",
-    "iac",
-    "core",
-    "management",
-    "komodo",
-  ]
-
-  started         = true
-  on_boot         = true
-  protection      = var.protect_after_build
-  stop_on_destroy = true
-
-  agent {
-    enabled = true
-    trim    = true
-  }
+  started       = true
+  start_on_boot = true
+  protection    = var.protect_after_build
 
   cpu {
     cores = var.cpu_cores
-    type  = "x86-64-v2-AES"
   }
 
   memory {
     dedicated = var.memory_mb
-    floating  = var.memory_mb
+    swap      = var.swap_mb
   }
 
-  scsi_hardware = "virtio-scsi-single"
-
   disk {
-    datastore_id = var.vm_datastore_id
-    interface    = "scsi0"
-    aio          = "io_uring"
-    backup       = true
-    cache        = "none"
-    discard      = "on"
-    iothread     = true
-    ssd          = true
+    datastore_id = var.rootfs_datastore_id
     size         = var.disk_size_gb
   }
 
   initialization {
-    datastore_id = var.vm_datastore_id
+    hostname = var.hostname
 
     dns {
-      domain  = var.domain
-      servers = var.dns_servers
+      domain  = var.search_domain
+      servers = var.bootstrap_dns_servers
     }
 
     ip_config {
@@ -68,17 +42,39 @@ resource "proxmox_virtual_environment_vm" "komodo" {
       }
     }
 
-    user_data_file_id = "local:snippets/komodo-01-user-data.yaml"
+    user_account {
+      keys = var.ssh_public_keys
+    }
   }
 
-  network_device {
-    bridge = var.bridge
-    model  = "virtio"
+  network_interface {
+    name        = "eth0"
+    bridge      = var.bridge
+    firewall    = var.enable_pve_firewall
+    mac_address = var.mac_address
   }
 
   operating_system {
-    type = "l26"
+    template_file_id = var.template_file_id
+    type             = "debian"
   }
 
-  serial_device {}
+  tags = [
+    "homelab",
+    "iac",
+    "core",
+    "management",
+    "komodo",
+    "docker",
+  ]
+
+  startup {
+    order      = 50
+    up_delay   = 5
+    down_delay = 5
+  }
+
+  wait_for_ip {
+    ipv4 = true
+  }
 }
