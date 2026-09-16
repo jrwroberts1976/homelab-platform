@@ -17,6 +17,8 @@ The main current-state references are:
 - [Runbook Catalogue](runbooks/README.md)
 - [14 September 2026 Estate Audit](docs/architecture/ESTATE-AUDIT-2026-09-14.md)
 
+Machine identity/address truth is recorded in `IaC/inventory/estate.json` and must be checked before allocating a new hostname, LAN address or VMID.
+
 ## Control plane
 
 Normal administration and production Ansible execution use:
@@ -43,6 +45,7 @@ The retired `TestServer` identity must not be used as the current controller. It
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT102 on `PROXMOX` |
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive sensor, VM201 on `PROXMOX` |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT103 on `Proxmox-2`; Cloudflare Tunnel not deployed |
+| `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM203 on `Proxmox-2` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 |
 | `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / Network Host Collector |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / Proxmox NFS backup target |
@@ -92,6 +95,7 @@ Proxmox-2
   CT101 dns-01
   CT103 edge-01
   VM202 monitor-01
+  VM203 greenbone-01
 ```
 
 The actual node hostname remains `PROXMOX`; “Proxmox-1” is only a human-friendly diagram label.
@@ -113,7 +117,7 @@ Proxmox-2
   job: homelab-nightly-proxmox-2
   time: 03:15
   storage: media-backup-proxmox-2
-  guests: 101,103,202
+  guests: 101,103,202,203
 
 mode: snapshot
 compression: zstd
@@ -121,9 +125,9 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The post-cluster `Proxmox-2` job has been recreated through IaC using VM202, a fresh VM202 snapshot archive has passed Zstandard integrity testing and Proxmox inventory validation, and a full two-node Ansible reconciliation returned `changed=0`, `unreachable=0`, `failed=0`.
+The cluster-era `Proxmox-2` schedule is reconciled through IaC and an immediate repeat run returned `changed=0`. The unattended 16 September cycle succeeded for CT101, CT103 and VM202. VM203 has two manual snapshot archives with successful Zstandard integrity proof and is now included in the nightly schedule.
 
-The only immediate schedule proof still outstanding is the first unattended post-cluster 02:15/03:15 cycle. Pre-cluster restore evidence also includes an isolated CT103 restore/boot proof; a representative QEMU restore and application-consistent `cloud-01` recovery remain separate recovery goals.
+The remaining immediate schedule proof is the first unattended 03:15 cycle that includes VM203. Pre-cluster restore evidence includes an isolated CT103 restore/boot proof; a representative QEMU restore and application-consistent `cloud-01` recovery remain separate recovery goals.
 
 ## Platform services
 
@@ -139,6 +143,10 @@ The only immediate schedule proof still outstanding is the first unattended post
 
 `sensor-01` is an active passive-sensor platform. Suricata and Zeek consume mirrored traffic from the HP ProCurve SPAN path, with ports 1–23 mirrored to port 24.
 
+### Vulnerability scanning
+
+`greenbone-01` is the active LAN-only vulnerability scanner. Greenbone Community Containers are deployed on VM203, feed readiness reached 4/4, the commissioning self-scan completed with no Critical/High/Medium findings, VM backup integrity is proven and Proxmox protection is enabled.
+
 ### Edge
 
 `edge-01` is a healthy LXC at `.56`, but `cloudflared` is not deployed. Tunnel implementation remains future work until there is a real service requirement.
@@ -148,12 +156,13 @@ The only immediate schedule proof still outstanding is the first unattended post
 | Workstream | Current position | Next milestone |
 |---|---|---|
 | Proxmox cluster | Two-node cluster, dual Corosync links and QDevice operational | Prove link0 -> link1 fallback and controlled single-node quorum behaviour |
-| Backup schedule | Final cluster-era jobs and VM202 IaC reconciled; fresh VM202 backup proven | Observe first unattended post-cluster run |
-| Recovery depth | LXC restore proof exists | Fresh QEMU restore proof + application-consistent `cloud-01` recovery |
+| Backup schedule | Cluster-era jobs reconciled; VM203 manual backup/integrity proven and scheduled | Observe first unattended run including VM203 |
+| Recovery depth | LXC restore proof exists | QEMU restore proof + application-consistent `cloud-01` recovery |
 | Second-copy resilience | Primary NFS backup target operational | Add an independent second copy for important data |
 | Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry |
 | Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
-| Remote-access VPN | `vpn-01` WireGuard VM design approved; implementation not started | Preflight `.57`/VMID 203, provision VM, prove external split-tunnel access |
+| Vulnerability management | `greenbone-01` commissioned and protected | Observe scheduled backup, tune hardening/update policy as needed |
+| Remote-access VPN | Dedicated WireGuard VM design retained; address and VMID deliberately unallocated | Allocate collision-free identity during deployment preflight, then build/test |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
 | Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |
 | Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths |
@@ -162,6 +171,7 @@ The only immediate schedule proof still outstanding is the first unattended post
 ## Operating principles
 
 - Git is the desired-state authority for migrated areas.
+- `IaC/inventory/estate.json` is the canonical machine-readable identity/address source.
 - Existing production state is discovered before it is changed.
 - Infrastructure changes are reviewed and validated incrementally.
 - Reconciliation should be idempotent.
@@ -180,6 +190,7 @@ Key service and recovery documents include:
 - [Monitoring Service](production%20docs/MONITORING-SERVICE.md)
 - [Cloud Data Service](production%20docs/CLOUD-SERVICE.md)
 - [Network Sensor Service](production%20docs/NETWORK-SENSOR-SERVICE.md)
+- [Greenbone Vulnerability Scanner Service](production%20docs/GREENBONE-SERVICE.md)
 - [Mail Relay Service](production%20docs/MAIL-RELAY-SERVICE.md)
 - [BirdNET-Go Service](production%20docs/BIRDNET-SERVICE.md)
 - [media-01 Service](production%20docs/MEDIA-SERVICE.md)
@@ -192,6 +203,6 @@ Key service and recovery documents include:
 
 Current state, future design and historical evidence remain distinct:
 
-- current operational truth -> `CURRENT-STATE.md`, service docs and runbook registry;
+- current operational truth -> `IaC/inventory/estate.json`, `CURRENT-STATE.md`, service docs and runbook registry;
 - future design -> `TARGET-STATE.md` and explicitly planned runbooks;
 - dated migration/audit evidence -> retained as historical records, with superseded context where necessary.
