@@ -8,3 +8,7 @@
 
 # Keep documented examples and provider lock files in Git
 !**/*.tfvars.example
+
+# Runtime environment secret files
+**/*.env
+!**/*.env.example

@@ -1,0 +1,39 @@
+---
+# Staged commissioning inventory.
+#
+# zabbix-01 deliberately remains outside inventory/hosts.yml until CT105
+# has been created, validated and commissioned.
+
+all:
+  children:
+    zabbix_platform:
+      hosts:
+        zabbix-01:
+          ansible_host: 192.168.2.59
+          ansible_user: root
+          ansible_ssh_private_key_file: ~/.ssh/proxmox-automation
+          homelab_tags:
+            - homelab
+            - iac
+            - monitoring
+            - zabbix
+            - lxc
+          homelab_comment: >-
+            Planned Zabbix monitoring platform,
+            CT105 on PROXMOX
+
+    postgresql_servers:
+      children:
+        zabbix_platform: {}
+
+    timescaledb_servers:
+      children:
+        zabbix_platform: {}
+
+    zabbix_servers:
+      children:
+        zabbix_platform: {}
+
+    zabbix_agents:
+      children:
+        zabbix_platform: {}
