@@ -83,7 +83,27 @@ ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" \
   "PVE_NODE_NAME='$PVE_NODE_NAME' HOME_VM_ID='$HOME_VM_ID' HOME_IPV4='$HOME_IPV4' HOME_MAC='$HOME_MAC' HOME_HOSTNAME='$HOME_HOSTNAME' HAOS_IMAGE_NAME='$HAOS_IMAGE_NAME' bash -s" <<'REMOTE_GATE'
 set -euo pipefail
 
+storage_value() {
+  local key="$1"
+  awk -v key="$key" '
+    /^[^[:space:]].*:[[:space:]]*/ {
+      in_local = ($1 == "dir:" && $2 == "local")
+      next
+    }
+    in_local && $1 == key {
+      $1 = ""
+      sub(/^[[:space:]]+/, "", $0)
+      print
+      exit
+    }
+  ' /etc/pve/storage.cfg
+}
+
 test "$(hostname -s)" = "$PVE_NODE_NAME"
+test -r /etc/pve/storage.cfg || {
+  echo 'storage_cfg_readable=NO'
+  exit 24
+}
 
 if qm config "$HOME_VM_ID" >/dev/null 2>&1 || pct config "$HOME_VM_ID" >/dev/null 2>&1; then
   echo "VMID $HOME_VM_ID already exists"
@@ -100,20 +120,23 @@ test "$AVAILABLE_MB" -ge 5000 || {
   echo "available_memory_mb=$AVAILABLE_MB"
   exit 27
 }
-
 echo "available_memory_mb=$AVAILABLE_MB"
 
 pvesm status | awk '$1 == "vm-ssd" && $3 == "active" {found=1; if ($6 < 67108864) exit 2} END {if (!found) exit 3}'
 echo 'vm_ssd_capacity=PASS'
 
-LOCAL_CONFIG="$(pvesm config local)"
-LOCAL_PATH="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "path" {print $2; exit}')"
-LOCAL_CONTENT="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content" {print $2; exit}')"
-CONTENT_DIRS="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content-dirs" {print $2; exit}')"
+LOCAL_PATH="$(storage_value path)"
+LOCAL_CONTENT="$(storage_value content)"
+CONTENT_DIRS="$(storage_value content-dirs)"
 
 test -n "$LOCAL_PATH" || {
-  echo 'local storage path could not be determined'
+  echo 'local storage path could not be determined from /etc/pve/storage.cfg'
   exit 28
+}
+
+test -n "$LOCAL_CONTENT" || {
+  echo 'local storage content could not be determined from /etc/pve/storage.cfg'
+  exit 29
 }
 
 case ",$LOCAL_CONTENT," in
@@ -121,7 +144,7 @@ case ",$LOCAL_CONTENT," in
   *)
     echo "local_storage_content=$LOCAL_CONTENT"
     echo 'local storage does not permit import content'
-    exit 29
+    exit 30
     ;;
 esac
 
@@ -140,8 +163,10 @@ fi
 IMPORT_DIR="${LOCAL_PATH%/}/${IMPORT_REL#/}"
 IMPORT_PATH="$IMPORT_DIR/$HAOS_IMAGE_NAME"
 
+printf 'storage_cfg_source=/etc/pve/storage.cfg\n'
 printf 'local_storage_path=%s\n' "$LOCAL_PATH"
 printf 'local_storage_content=%s\n' "$LOCAL_CONTENT"
+printf 'local_content_dirs=%s\n' "${CONTENT_DIRS:-DEFAULT}"
 printf 'haos_import_directory=%s\n' "$IMPORT_DIR"
 printf 'haos_import_path=%s\n' "$IMPORT_PATH"
 printf 'live_collision_capacity_gate=PASS\n'
@@ -150,7 +175,6 @@ REMOTE_GATE
 if ping -c 2 -W 1 "$HOME_IPV4" >/dev/null 2>&1; then
   die "IP $HOME_IPV4 responds before home-01 creation"
 fi
-
 printf 'ipv4_silent=PASS\n'
 
 [ ! -e "$STATE_DIR/terraform.tfstate" ] || die "home-01 Terraform state already exists"
@@ -160,21 +184,41 @@ ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" \
   "HAOS_URL='$HAOS_URL' HAOS_SHA256='$HAOS_SHA256' HAOS_IMAGE_ID='$HAOS_IMAGE_ID' HAOS_IMAGE_NAME='$HAOS_IMAGE_NAME' bash -s" <<'REMOTE'
 set -euo pipefail
 
-for cmd in curl sha256sum xz qemu-img pvesm awk dirname readlink; do
+for cmd in curl sha256sum xz qemu-img pvesm awk readlink; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "missing command: $cmd"
     exit 31
   }
 done
 
-LOCAL_CONFIG="$(pvesm config local)"
-LOCAL_PATH="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "path" {print $2; exit}')"
-LOCAL_CONTENT="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content" {print $2; exit}')"
-CONTENT_DIRS="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content-dirs" {print $2; exit}')"
+test -r /etc/pve/storage.cfg || {
+  echo 'storage_cfg_readable=NO'
+  exit 32
+}
+
+storage_value() {
+  local key="$1"
+  awk -v key="$key" '
+    /^[^[:space:]].*:[[:space:]]*/ {
+      in_local = ($1 == "dir:" && $2 == "local")
+      next
+    }
+    in_local && $1 == key {
+      $1 = ""
+      sub(/^[[:space:]]+/, "", $0)
+      print
+      exit
+    }
+  ' /etc/pve/storage.cfg
+}
+
+LOCAL_PATH="$(storage_value path)"
+LOCAL_CONTENT="$(storage_value content)"
+CONTENT_DIRS="$(storage_value content-dirs)"
 
 test -n "$LOCAL_PATH" || {
-  echo 'local storage path could not be determined'
-  exit 32
+  echo 'local storage path could not be determined from /etc/pve/storage.cfg'
+  exit 33
 }
 
 case ",$LOCAL_CONTENT," in
@@ -182,7 +226,7 @@ case ",$LOCAL_CONTENT," in
   *)
     echo "local_storage_content=$LOCAL_CONTENT"
     echo 'local storage does not permit import content'
-    exit 33
+    exit 34
     ;;
 esac
 
@@ -279,7 +323,6 @@ terraform -chdir="$STATE_DIR" apply -input=false "$PLAN_FILE" \
 printf '\n===== PROXMOX RUNTIME VALIDATION =====\n'
 ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" "
 set -euo pipefail
-
 qm status '$HOME_VM_ID' | grep -qx 'status: running'
 qm config '$HOME_VM_ID' | grep -qx 'name: $HOME_HOSTNAME'
 qm config '$HOME_VM_ID' | grep -qx 'bios: ovmf'
@@ -290,7 +333,6 @@ qm config '$HOME_VM_ID' | grep -q 'agent: enabled=1'
 qm config '$HOME_VM_ID' | grep -q 'onboot: 1'
 qm config '$HOME_VM_ID' | grep -qi '$HOME_MAC'
 qm config '$HOME_VM_ID' | grep -q '^scsi0: vm-ssd:'
-
 echo 'vm_runtime_config=PASS'
 " || die "Home Assistant VM runtime validation failed"
 
@@ -298,7 +340,6 @@ printf '\n===== DISCOVER FIRST-BOOT DHCP ADDRESS =====\n'
 DHCP_IP=""
 for attempt in $(seq 1 90); do
   GUEST_JSON="$(ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" "qm guest cmd '$HOME_VM_ID' network-get-interfaces 2>/dev/null" || true)"
-
   DHCP_IP="$(printf '%s' "$GUEST_JSON" | jq -r '
     [
       .[]?
@@ -308,16 +349,13 @@ for attempt in $(seq 1 90); do
       | select(. != "127.0.0.1")
     ][0] // empty
   ' 2>/dev/null || true)"
-
   if [ -n "$DHCP_IP" ]; then
     break
   fi
-
   sleep 5
 done
 
 [ -n "$DHCP_IP" ] || die "HAOS booted but a guest-agent IPv4 address was not discovered"
-
 printf 'first_boot_ipv4=%s\n' "$DHCP_IP"
 printf 'planned_static_ipv4=%s\n' "$HOME_IPV4"
 
@@ -332,7 +370,6 @@ for attempt in $(seq 1 90); do
 done
 
 [ "$WEB_READY" -eq 1 ] || die "Home Assistant port 8123 did not become ready on first-boot address $DHCP_IP"
-
 printf 'home_assistant_http=PASS\n'
 
 printf '\n===== TERRAFORM DRIFT CHECK =====\n'
