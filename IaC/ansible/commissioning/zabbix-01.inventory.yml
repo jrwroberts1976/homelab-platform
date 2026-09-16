@@ -1,8 +1,9 @@
 ---
 # Staged commissioning inventory.
 #
-# zabbix-01 deliberately remains outside inventory/hosts.yml until CT105
-# has been created, validated and commissioned.
+# This file deliberately lives outside the normal inventory directory so
+# zabbix-01 cannot be discovered by an inventory-directory invocation.
+# Promote the host to inventory/hosts.yml only after CT105 is commissioned.
 
 all:
   children:
