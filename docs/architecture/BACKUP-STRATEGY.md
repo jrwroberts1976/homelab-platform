@@ -1,6 +1,6 @@
 # Backup Strategy
 
-**Status:** primary Proxmox guest-backup platform operational; cluster-era jobs reconciled through IaC; VM203 manual backup and integrity proven; first unattended cycle including VM203 remains pending  
+**Status:** primary Proxmox guest-backup platform operational; both cluster-era jobs reconciled through IaC; CT104, CT105 and VM203 have manual backup/integrity proof; first unattended cycles including those newly added guests remain pending observation  
 **Reviewed:** 16 September 2026
 
 ## Requirement
@@ -13,7 +13,7 @@ Git/IaC remains the source of truth for deployment, storage registration, schedu
 
 The estate has a proven primary Proxmox guest-backup platform using native Proxmox `vzdump` backups to NFS storage on `media-01`.
 
-The two hypervisors are now members of the `jameshouse-pve` cluster and all production guest VMIDs are cluster-unique. The pre-cluster repository split remains in service because it is already proven and provides clear node-scoped ownership; there is no requirement to collapse it merely because cluster membership now exists.
+The two hypervisors are members of the `jameshouse-pve` cluster and all production guest VMIDs are cluster-unique. The pre-cluster repository split remains in service because it is already proven and provides clear node-scoped ownership; there is no requirement to collapse it merely because cluster membership now exists.
 
 ```text
 PROXMOX .70
@@ -44,7 +44,7 @@ per-node isolated exports: active
 per-node PVE storage registration: active
 legacy media-backup rollback storage: preserved
 local vzdump tmpdir: proven on both PVE nodes
-all seven production guest backups: proven
+all seven then-production guest backups: proven
 archive integrity checks: proven
 CT103 isolated LXC restore + boot: proven
 notification delivery through mail-relay-01: proven end to end
@@ -57,7 +57,7 @@ schedule reconciliation: idempotent, changed=0 on both nodes
 failed systemd units during final pre-cluster cutover validation: 0
 ```
 
-That evidence remains valid proof that the backup transport, archives, notification path and LXC restore mechanism worked. It must not be misrepresented as proof that the final cluster-era job definitions are already correct, because cluster formation changed `monitor-01` from VMID `200` to VMID `202` and replaced cluster-wide `/etc/pve` job configuration during the join.
+That evidence remains valid proof that the backup transport, archives, notification path and LXC restore mechanism worked. It must not be misrepresented as proof that every current guest has already completed an unattended cluster-era run, because later commissioning added VM203, CT104 and CT105.
 
 ### Current cluster-era guest scope
 
@@ -65,6 +65,8 @@ That evidence remains valid proof that the backup transport, archives, notificat
 PROXMOX .70 -> media-backup-proxmox
   CT100 dns-02
   CT102 mail-relay-01
+  CT104 komodo-01
+  CT105 zabbix-01
   VM200 cloud-01
   VM201 sensor-01
 
@@ -76,6 +78,8 @@ Proxmox-2 .71 -> media-backup-proxmox-2
 ```
 
 Templates 9000/9001 remain excluded from the production backup schedule.
+
+CT104 and CT105 each have successful manual snapshot-mode backup evidence on `media-backup-proxmox`, including compressed archive integrity validation. VM203 has manual snapshot archives with successful Zstandard integrity proof on `media-backup-proxmox-2`.
 
 ## Backup target
 
@@ -150,6 +154,8 @@ This proves the LXC backup path is restorable, not merely writable.
 
 A representative QEMU VM restore proof remains required.
 
+Application-level restore evidence also exists separately for Komodo and Zabbix database state; that does not replace whole-guest restore evidence.
+
 ## Notifications
 
 Both Proxmox nodes use PVE's notification system. The built-in `default-matcher` routes notifications to `mail-to-root`, and `root@pam` has the approved recipient configured.
@@ -173,7 +179,7 @@ PROXMOX .70
   job: homelab-nightly-proxmox
   schedule: 02:15
   target: media-backup-proxmox
-  guests: 100,102,200,201
+  guests: 100,102,104,105,200,201
 
 Proxmox-2 .71
   job: homelab-nightly-proxmox-2
@@ -187,21 +193,23 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The `Proxmox-2` schedule has now been reconciled through IaC to `101,103,202,203`. The reconciliation role explicitly updates an approved guest-selection difference while continuing to fail closed on unexpected storage, schedule, node, retention or notification state. A second deployment run completed idempotently with `changed=0`.
+The current selections are defined in `IaC/ansible/playbooks/proxmox-backup-schedule.yml`. Reconciliation continues to fail closed on unexpected storage, schedule, node, retention or notification state. The live jobs were reconciled after CT104 and CT105 were added, and stable repeat reconciliation returned `changed=0`.
 
 Validated cluster-era evidence:
 
-1. `Proxmox-2` IaC guest selection is `101,103,202,203`;
-2. live storage remains `media-backup-proxmox-2`;
-3. schedule remains `03:15`, snapshot mode, zstd and `keep-last=3`;
-4. the unattended 16 September cycle succeeded for `101,103,202`;
-5. VM203 has two manual snapshot backup archives;
-6. VM203 archive integrity was proven with `zstd -t`;
-7. VM203 was added through IaC and the second reconciliation run was idempotent;
-8. backup notification delivery remains operational.
+1. `PROXMOX` IaC guest selection is `100,102,104,105,200,201`;
+2. `Proxmox-2` IaC guest selection is `101,103,202,203`;
+3. live storage remains `media-backup-proxmox` / `media-backup-proxmox-2` on the intended nodes;
+4. schedules remain `02:15` and `03:15`, snapshot mode, zstd and `keep-last=3`;
+5. the unattended 16 September `Proxmox-2` cycle succeeded for `101,103,202`;
+6. VM203 has manual snapshot backup/integrity proof and is included in the 03:15 job;
+7. CT104 has manual snapshot backup/integrity proof and is included in the 02:15 job;
+8. CT105 has manual snapshot backup/integrity proof and is included in the 02:15 job;
+9. backup notification delivery remains operational.
 
 Remaining backup closeout:
 
+- observe the first unattended 02:15 cycle that includes CT104 and CT105;
 - observe the first unattended 03:15 cycle that includes VM203;
 - perform a representative isolated QEMU restore proof;
 - add an independent secondary copy;
@@ -266,7 +274,15 @@ The VM-level backup is proven to complete, but that does **not** prove applicati
 
 ### `greenbone-01`
 
-`greenbone-01` is VM203 on `Proxmox-2`. Two manual snapshot archives exist, integrity was proven with `zstd -t`, the VM is protected, and the schedule now includes VM203. The first unattended cycle including VM203 remains to be observed.
+`greenbone-01` is VM203 on `Proxmox-2`. Manual snapshot archives exist, integrity was proven with `zstd -t`, the VM is protected, and the schedule includes VM203. The first unattended cycle including VM203 remains to be observed.
+
+### `komodo-01`
+
+`komodo-01` is CT104 on `PROXMOX`. A manual whole-container snapshot backup and archive-integrity check are proven, and the 02:15 job includes CT104. Komodo also has application-level backup/isolated database-restore proof. The first unattended CT104 schedule execution remains to be observed; Proxmox protection remains a separate decision.
+
+### `zabbix-01`
+
+`zabbix-01` is CT105 on `PROXMOX`. A manual whole-container snapshot backup and archive-integrity check are proven, the 02:15 job includes CT105, and PostgreSQL/TimescaleDB logical backup/restore validation is proven. The first unattended CT105 schedule execution remains to be observed.
 
 ### DNS
 
@@ -318,22 +334,23 @@ The current NFS/vzdump design intentionally uses available hardware first. A fut
 
 ## Cluster effect on backup design
 
-The cluster has removed the duplicate-VMID constraint that originally forced separate repositories: `cloud-01` remains VM200 and `monitor-01` is now VM202.
+The cluster has removed the duplicate-VMID constraint that originally forced separate repositories: `cloud-01` remains VM200 and `monitor-01` is VM202.
 
 That makes a future shared cluster-wide backup namespace technically possible, but it is **not** an immediate migration requirement. The existing node-scoped repositories are already deployed, understood and proven. Simplification should happen only if it reduces operational risk and after fresh cluster-era recovery proof exists.
 
-Production guest disks remain on node-local `local-lvm`; therefore backup/recovery remains critical even though cluster quorum is now resilient through QDevice.
+Production guest disks remain on node-local storage; therefore backup/recovery remains critical even though cluster quorum is resilient through QDevice.
 
 ## Remaining priorities
 
-1. observe and record the first unattended `Proxmox-2` run including VM203;
-2. review real retention/storage growth after multiple runs;
-3. prove at least one QEMU VM restore;
-4. prove application-consistent `cloud-01` recovery;
-5. protect controller recovery identities/state independently;
-6. establish an independent second copy for important data;
-7. define protection for `media-01`, `docker-01` and other non-Proxmox persistent state;
-8. remove the retained pre-cluster LVs only after fresh backup confidence is explicit.
+1. observe and record the first unattended `PROXMOX` run including CT104 and CT105;
+2. observe and record the first unattended `Proxmox-2` run including VM203;
+3. review real retention/storage growth after multiple runs;
+4. prove at least one QEMU VM restore;
+5. prove application-consistent `cloud-01` recovery;
+6. protect controller recovery identities/state independently;
+7. establish an independent second copy for important data;
+8. define protection for `media-01`, `docker-01` and other non-Proxmox persistent state;
+9. remove the retained pre-cluster LVs only after fresh backup confidence is explicit.
 
 ## Definition of done
 
@@ -341,13 +358,14 @@ The backup platform is operationally useful today because:
 
 - the NFS target is healthy;
 - each PVE node has its intended node-scoped backup storage;
-- all seven pre-cluster production guests have successful backup evidence;
+- all seven pre-cluster production guests have successful historical backup evidence;
 - fresh cluster-era VM202 backup evidence exists;
-- VM203 has manual backup and integrity proof and is included in the reconciled schedule;
+- VM203, CT104 and CT105 have manual backup/integrity proof and are included in the reconciled schedules;
 - archive integrity checks have passed;
 - an LXC restore has been booted safely in isolation;
+- Komodo and Zabbix have separate application-level restore proof;
 - notifications have been delivered through the approved relay path.
 
-The **cluster-era schedule** is reconciled through IaC. The remaining schedule proof is the first unattended `Proxmox-2` cycle that includes VM203.
+The **cluster-era schedules** are reconciled through IaC. The remaining schedule proof is unattended execution with the newly added VM203, CT104 and CT105 included.
 
 Estate-wide recovery is not complete until VM, application, non-Proxmox and independent-secondary-copy recovery classes are also proven.
