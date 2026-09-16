@@ -26,7 +26,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive network sensor, VM 201 on `PROXMOX` | ACTIVE — CAPTURE OPERATIONAL |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM 203 on `Proxmox-2` | ACTIVE — LAN-ONLY SCANNER |
-| `komodo-01` | `192.168.2.58` | Komodo control-plane host, unprivileged CT 104 on `PROXMOX` | ACTIVE — DOCKER COMMISSIONED; KOMODO CORE PENDING |
+| `komodo-01` | `192.168.2.58` | Komodo control-plane host, unprivileged CT 104 on `PROXMOX` | ACTIVE — KOMODO CORE COMMISSIONED; APP BACKUP/RESTORE PROVEN |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
@@ -230,9 +230,9 @@ Remaining acceptance work is explicit end-to-end access to intended internal man
 
 ## Komodo management host
 
-`komodo-01` is the active base host for the planned Komodo container-management control plane.
+`komodo-01` is the active Komodo container-management control plane.
 
-Validated base-host state on 16 September 2026:
+Validated state on 16 September 2026:
 
 - Debian 13 unprivileged LXC at `192.168.2.58`;
 - CTID 104 on `PROXMOX`;
@@ -248,9 +248,16 @@ Validated base-host state on 16 September 2026:
 - Docker recovery after a CT reboot is validated;
 - the Docker Ansible role is idempotent;
 - no additional LXC privileges were added;
-- Komodo Core is not yet deployed.
+- MongoDB `8.0.32` is running healthy without a host-exposed TCP/27017 listener;
+- Komodo Core `2.3.3` is running and the web UI login is validated;
+- Core is currently LAN/VPN administered over `http://192.168.2.58:9120`;
+- the Core deployment has no Docker socket mount and no local Periphery service;
+- a Komodo application backup was created in `/var/backups/komodo/2026-09-16_10-33-04` and all 22 gzip collection files passed integrity validation;
+- that backup was restored into the isolated `komodo_restore_validation` database and the populated `User`, `Tag`, `Procedure` and `Update` collections matched the live backup baseline;
+- the live `komodo` database remained unchanged during restore validation and the temporary restore database was removed afterward;
+- CT104 Proxmox backup inclusion and Proxmox protection remain pending.
 
-The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated. The next controlled stage is deployment of MongoDB and Komodo Core only; Periphery will be onboarded separately after Core backup and recovery are proven.
+The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated. Komodo application backup and isolated recovery are now proven. The next controlled stage is durable Proxmox backup inclusion for CT104 followed by protection enablement. HTTPS hardening remains required before broader routine administrative use, and Periphery onboarding remains a separate later stage.
 
 ## Production cloud service
 
