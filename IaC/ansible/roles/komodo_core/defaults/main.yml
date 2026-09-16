@@ -8,7 +8,7 @@ komodo_core_secret_root: /opt/komodo/secrets
 
 komodo_core_allow_deploy: false
 
-komodo_core_image: "ghcr.io/moghtech/komodo-core:2"
+komodo_core_image: "ghcr.io/moghtech/komodo-core:2.3.3"
 komodo_core_mongo_image: "mongo:8.0.32"
 
 komodo_core_http_bind: "192.168.2.58"
