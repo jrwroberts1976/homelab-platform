@@ -95,9 +95,9 @@ variable "disk_size_gb" {
 }
 
 variable "protect_after_build" {
-  description = "Enable Proxmox VM protection only after deployment and validation pass."
+  description = "Enable Proxmox VM protection after successful deployment, scan and backup validation."
   type        = bool
-  default     = false
+  default     = true
 }
 
 variable "debian_cloud_image_id" {

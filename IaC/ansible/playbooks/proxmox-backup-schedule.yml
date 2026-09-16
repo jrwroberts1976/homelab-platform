@@ -22,5 +22,6 @@
           - {id: 101, type: lxc}
           - {id: 103, type: lxc}
           - {id: 202, type: qemu}
+          - {id: 203, type: qemu}
   roles:
     - role: proxmox_backup_schedule
