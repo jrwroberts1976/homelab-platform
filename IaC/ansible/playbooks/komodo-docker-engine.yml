@@ -1,0 +1,11 @@
+---
+- name: Install Docker Engine on komodo-01
+  hosts: komodo_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: docker_engine
+      vars:
+        docker_engine_expected_hostname: komodo-01
+        docker_engine_expected_ipv4: 192.168.2.58

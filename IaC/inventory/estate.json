@@ -91,6 +91,15 @@
       "managed_by_ansible": true
     },
     {
+      "name": "komodo-01",
+      "document_label": "komodo-01",
+      "address": "192.168.2.58",
+      "state": "active",
+      "kind": "lxc",
+      "role": "Komodo container-management control-plane base host, CT104 on PROXMOX; Docker and Komodo application not yet deployed",
+      "managed_by_ansible": true
+    },
+    {
       "name": "PROXMOX",
       "document_label": "PROXMOX",
       "address": "192.168.2.70",
@@ -163,17 +172,7 @@
       "managed_by_ansible": false
     }
   ],
-  "planned_assets": [
-    {
-      "name": "komodo-01",
-      "document_label": "komodo-01",
-      "address": "192.168.2.58",
-      "state": "planned",
-      "kind": "ct",
-      "role": "Planned Komodo container-management control plane, unprivileged CT104 on PROXMOX",
-      "managed_by_ansible": true
-    }
-  ],
+  "planned_assets": [],
   "retired_identities": [
     {
       "token": "DietPi",

@@ -26,6 +26,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive network sensor, VM 201 on `PROXMOX` | ACTIVE — CAPTURE OPERATIONAL |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM 203 on `Proxmox-2` | ACTIVE — LAN-ONLY SCANNER |
+| `komodo-01` | `192.168.2.58` | Komodo control-plane base host, unprivileged CT 104 on `PROXMOX` | ACTIVE — BASE CT VALIDATED; DOCKER/KOMODO NOT YET DEPLOYED |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
@@ -133,6 +134,7 @@ Live workload placement:
 |---|---:|---|---|
 | LXC | 100 | `dns-02` | running |
 | LXC | 102 | `mail-relay-01` | running |
+| LXC | 104 | `komodo-01` | running |
 | VM | 200 | `cloud-01` | running |
 | VM | 201 | `sensor-01` | running |
 | VM | 9000 | Debian cloud template | stopped |
@@ -169,7 +171,7 @@ The former standalone `monitor-01` VMID `200` was changed to cluster VMID `202`,
 
 ### Storage and HA boundary
 
-Production guest disks remain on node-local `local-lvm` storage.
+Production guest disks remain on node-local storage, including `local-lvm` and `vm-ssd` depending on the guest.
 
 The cluster therefore provides a common management plane, cluster-wide identity, Corosync/quorum and controlled migration workflows, but it is **not yet a shared-storage/replicated-disk HA platform**. Automatic guest restart after loss of the node owning a local disk must not be assumed.
 
@@ -225,6 +227,25 @@ Validated on 16 September 2026:
 The former dedicated `vpn-01` WireGuard design and exploratory WireGuard-on-`docker-01` path are not current production architecture. No VPN VMID or separate LAN address is allocated.
 
 Remaining acceptance work is explicit end-to-end access to intended internal management services from outside the LAN, internal DNS proof, DDNS endpoint validation and router-reset/replacement recovery/client re-enrolment documentation.
+
+## Komodo management host
+
+`komodo-01` is the active base host for the planned Komodo container-management control plane.
+
+Validated base-host state on 16 September 2026:
+
+- Debian 13 unprivileged LXC at `192.168.2.58`;
+- CTID 104 on `PROXMOX`;
+- 2 CPU cores, 2048 MiB RAM, 512 MiB swap and 32 GiB `vm-ssd` root filesystem;
+- fixed MAC `02:00:00:00:01:04`;
+- LXC `nesting=1` and root-managed `keyctl=1`;
+- Terraform state contains exactly the Komodo LXC resource and reports no drift;
+- direct root SSH through the homelab automation key is validated;
+- cgroup v2 and nested user namespaces are available;
+- Docker is not yet installed;
+- Komodo is not yet installed.
+
+The Proxmox kernel contains the `overlay` filesystem module, but it was not loaded at the last Docker compatibility preflight. Loading and persisting that module is the next controlled prerequisite before Docker installation.
 
 ## Production cloud service
 
