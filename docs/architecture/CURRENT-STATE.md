@@ -27,6 +27,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM 203 on `Proxmox-2` | ACTIVE — LAN-ONLY SCANNER |
 | `komodo-01` | `192.168.2.58` | Komodo control-plane host, unprivileged CT 104 on `PROXMOX` | ACTIVE — KOMODO CORE COMMISSIONED; APP BACKUP/RESTORE PROVEN |
+| `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT 105 on `PROXMOX` | ACTIVE — PLATFORM COMMISSIONED; BACKUP/IAC SCHEDULE PROVEN |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
@@ -135,6 +136,7 @@ Live workload placement:
 | LXC | 100 | `dns-02` | running |
 | LXC | 102 | `mail-relay-01` | running |
 | LXC | 104 | `komodo-01` | running |
+| LXC | 105 | `zabbix-01` | running |
 | VM | 200 | `cloud-01` | running |
 | VM | 201 | `sensor-01` | running |
 | VM | 9000 | Debian cloud template | stopped |
@@ -189,6 +191,26 @@ Both workloads run Pi-hole Core 6.4.3, Pi-hole Web 6.6, Pi-hole FTL 6.7, Unbound
 Managed local-record parity remains authoritative through IaC. `192.168.2.48` is `admin-01` and must not be treated as a DNS resolver.
 
 After CT101 migrated back to `Proxmox-2`, Pi-hole and Unbound were active, no failed units were present, DNS returned `NOERROR`, and network reachability was clean.
+
+## Zabbix monitoring
+
+`zabbix-01` is the active dedicated Zabbix monitoring platform.
+
+Validated state on 16 September 2026:
+
+- Debian 13 unprivileged LXC at `192.168.2.59`;
+- CTID 105 on `PROXMOX`;
+- PostgreSQL and TimescaleDB active;
+- Zabbix Server active;
+- Zabbix Agent 2 active and enabled locally;
+- Agent 2 listens on TCP/10050;
+- Nginx and PHP-FPM active;
+- frontend HTTP health returned 200;
+- whole-container backup integrity proven;
+- application logical backup and restore validation proven;
+- CT105 is included in the `homelab-nightly-proxmox` 02:15 backup schedule;
+- the pre-platform rollback snapshot remains retained;
+- wider Agent 2 rollout to the managed Debian estate is pending.
 
 ## Monitoring and logging
 
