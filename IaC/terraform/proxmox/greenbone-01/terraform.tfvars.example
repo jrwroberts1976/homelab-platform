@@ -8,7 +8,7 @@
 #
 # Supply secrets/identity through the environment, never this file:
 #
-# export TF_VAR_proxmox_api_token='iac@pve!opentofu=...'
+# export TF_VAR_proxmox_api_token='iac@pve!terraform=<token-secret>'
 #
 # The Greenbone SSH public key is consumed by the Ansible hypervisor prerequisite
 # that manages the Proxmox cloud-init snippet, not by Terraform.
