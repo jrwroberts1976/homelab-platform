@@ -10,9 +10,9 @@ services:
       - "0.25"
     environment:
       MONGO_INITDB_ROOT_USERNAME: "{{ komodo_core_database_username }}"
-      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/komodo_database_password
+      MONGO_INITDB_ROOT_PASSWORD_FILE: /run/secrets/mongo_database_password
     secrets:
-      - komodo_database_password
+      - mongo_database_password
     volumes:
       - mongo-data:/data/db
       - mongo-config:/data/configdb
@@ -22,7 +22,7 @@ services:
         - >-
           mongosh --quiet
           --username "{{ komodo_core_database_username }}"
-          --password "$$(cat /run/secrets/komodo_database_password)"
+          --password "$$(cat /run/secrets/mongo_database_password)"
           --authenticationDatabase admin
           --eval 'quit(db.adminCommand({ ping: 1 }).ok ? 0 : 1)'
       interval: 10s
@@ -88,6 +88,9 @@ volumes:
   komodo-keys:
 
 secrets:
+  mongo_database_password:
+    file: "{{ komodo_core_secret_root }}/mongo_database_password"
+
   komodo_database_password:
     file: "{{ komodo_core_secret_root }}/database_password"
 

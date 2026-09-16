@@ -51,6 +51,15 @@
     - path: "{{ komodo_core_secret_root }}"
       mode: "0700"
 
+- name: Install protected MongoDB database secret
+  ansible.builtin.copy:
+    content: "{{ komodo_core_database_password }}\n"
+    dest: "{{ komodo_core_secret_root }}/mongo_database_password"
+    owner: "{{ komodo_core_mongo_secret_uid }}"
+    group: "{{ komodo_core_mongo_secret_gid }}"
+    mode: "0400"
+  no_log: true
+
 - name: Install protected Komodo secret files
   ansible.builtin.copy:
     content: "{{ item.value }}\n"
