@@ -36,6 +36,7 @@ IaC/
         ├── dns-02/
         ├── dns-resolver/
         ├── greenbone-01/
+        ├── home-01/
         ├── komodo-01/
         ├── mail-relay/
         ├── monitor-01/
@@ -70,6 +71,20 @@ As of 16 September 2026 the production Ansible inventory covers the following 15
 The `zabbix_agents` group contains all 15 systems. Zabbix Agent 2 is deployed across that group and the matching 15 Zabbix host objects are reporting through the active-agent template.
 
 `ids-01`, `TestServer`, `DietPi` and the former `k3s-node-01` identity are not active platform targets. Historical references should remain historical rather than being reused as current-state authority.
+
+## Planned infrastructure
+
+`home-01` is now deliberately reserved in canonical truth after a successful live collision/capacity preflight:
+
+```text
+hostname: home-01
+address:  192.168.2.60
+VMID:     204
+node:     PROXMOX
+platform: Home Assistant OS 18.2
+```
+
+Its Terraform source is under `IaC/terraform/proxmox/home-01/`, and `IaC/scripts/deploy-home-01.sh` is the guarded build entry point. The VM remains a planned asset until Home Assistant onboarding, persistent `.60` networking, backup/recovery and external monitoring gates are proven. HAOS is an appliance platform and is therefore not automatically added to the Ansible-managed Linux estate.
 
 ## Important current-state distinctions
 
