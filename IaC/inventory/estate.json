@@ -96,7 +96,7 @@
       "address": "192.168.2.58",
       "state": "active",
       "kind": "lxc",
-      "role": "Komodo container-management control-plane base host, CT104 on PROXMOX; Docker and Komodo application not yet deployed",
+      "role": "Komodo container-management control-plane host, CT104 on PROXMOX; Docker commissioned, Komodo Core application pending deployment",
       "managed_by_ansible": true
     },
     {

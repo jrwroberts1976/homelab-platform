@@ -1,0 +1,51 @@
+---
+komodo_core_expected_hostname: komodo-01
+komodo_core_expected_ipv4: 192.168.2.58
+
+komodo_core_stack_root: /opt/komodo
+komodo_core_backup_root: /var/backups/komodo
+komodo_core_secret_root: /opt/komodo/secrets
+
+komodo_core_allow_deploy: false
+
+komodo_core_image: "ghcr.io/moghtech/komodo-core:2"
+komodo_core_mongo_image: "mongo:8.0.32"
+
+komodo_core_http_bind: "192.168.2.58"
+komodo_core_http_port: 9120
+komodo_core_host_url: "http://192.168.2.58:9120"
+
+komodo_core_title: "Komodo"
+komodo_core_timezone: "Europe/London"
+
+komodo_core_database_username: "komodo"
+
+komodo_core_admin_username: >-
+  {{
+    lookup('ansible.builtin.env', 'KOMODO_INIT_ADMIN_USERNAME')
+    | default('', true)
+  }}
+
+komodo_core_admin_password: >-
+  {{
+    lookup('ansible.builtin.env', 'KOMODO_INIT_ADMIN_PASSWORD')
+    | default('', true)
+  }}
+
+komodo_core_database_password: >-
+  {{
+    lookup('ansible.builtin.env', 'KOMODO_DATABASE_PASSWORD')
+    | default('', true)
+  }}
+
+komodo_core_jwt_secret: >-
+  {{
+    lookup('ansible.builtin.env', 'KOMODO_JWT_SECRET')
+    | default('', true)
+  }}
+
+komodo_core_webhook_secret: >-
+  {{
+    lookup('ansible.builtin.env', 'KOMODO_WEBHOOK_SECRET')
+    | default('', true)
+  }}
