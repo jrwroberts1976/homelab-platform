@@ -6,6 +6,11 @@ komodo_core_stack_root: /opt/komodo
 komodo_core_backup_root: /var/backups/komodo
 komodo_core_secret_root: /opt/komodo/secrets
 
+# mongo:8.0.32 reads *_FILE secrets after dropping to mongodb.
+# The official image defines the mongodb account as UID/GID 999.
+komodo_core_mongo_secret_uid: "999"
+komodo_core_mongo_secret_gid: "999"
+
 komodo_core_allow_deploy: false
 
 komodo_core_image: "ghcr.io/moghtech/komodo-core:2.3.3"
