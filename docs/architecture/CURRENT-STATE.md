@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
 This document records the validated current homelab estate as of 16 September 2026.
@@ -29,7 +30,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host | ACTIVE |
-| ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller | ACTIVE |
+| ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN remote-access endpoint | ACTIVE |
 | ASUS AiMesh node | `192.168.2.181` | Wireless mesh node | ACTIVE |
 | ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
 | HP ProCurve 2510G-24 | `192.168.2.16` | Core managed switch / SPAN source | ACTIVE |
@@ -201,9 +202,29 @@ Validated running containers include:
 | Blackbox Exporter | `prom/blackbox-exporter:v0.28.0` | running |
 | Loki | `grafana/loki:3.7.7` | running |
 
-Native Alloy is active on `monitor-01`. Router syslog continues to arrive through rsyslog on UDP/5514, is retained under `/var/log/homelab/router/rt-ac86u.log`, and is shipped to Loki through Alloy.
+Native Alloy is active on `monitor-01`. Router syslog continues to arrive through rsyslog on UDP/5514, is retained under `/var/log/homelab/router/rt-ac86u.log`, and is shipped to Loki through the dedicated router Alloy role.
+
+On 16 September 2026 the live router log contained OpenVPN authentication, tunnel-establishment, client-address and disconnect/error messages from an external test session, and the live Alloy configuration was verified to tail that router log.
 
 The broader Alloy baseline is deployed across the current managed estate.
+
+## Remote access VPN
+
+The selected remote-access endpoint is the native OpenVPN server on the ASUS RT-AC86U at `192.168.2.1`.
+
+Validated on 16 September 2026:
+
+- OpenVPN Server 1 reported running;
+- an external client successfully completed username/password authentication;
+- the tunnel was established and a `10.8.0.3` client address was allocated during the observed session;
+- the router pushed the internal route `192.168.2.0/24`;
+- the router pushed DNS servers `192.168.2.51` and `192.168.2.50`;
+- the observed session used UDP, TLS 1.3 and AES-256-GCM;
+- the VPN events were retained in router syslog on `monitor-01` and are part of the Alloy-to-Loki stream.
+
+The former dedicated `vpn-01` WireGuard design and exploratory WireGuard-on-`docker-01` path are not current production architecture. No VPN VMID or separate LAN address is allocated.
+
+Remaining acceptance work is explicit end-to-end access to intended internal management services from outside the LAN, internal DNS proof, DDNS endpoint validation and router-reset/replacement recovery/client re-enrolment documentation.
 
 ## Production cloud service
 
