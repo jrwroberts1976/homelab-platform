@@ -26,7 +26,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive network sensor, VM 201 on `PROXMOX` | ACTIVE — CAPTURE OPERATIONAL |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM 203 on `Proxmox-2` | ACTIVE — LAN-ONLY SCANNER |
-| `komodo-01` | `192.168.2.58` | Komodo control-plane base host, unprivileged CT 104 on `PROXMOX` | ACTIVE — BASE CT VALIDATED; DOCKER/KOMODO NOT YET DEPLOYED |
+| `komodo-01` | `192.168.2.58` | Komodo control-plane host, unprivileged CT 104 on `PROXMOX` | ACTIVE — DOCKER COMMISSIONED; KOMODO CORE PENDING |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
@@ -242,10 +242,15 @@ Validated base-host state on 16 September 2026:
 - Terraform state contains exactly the Komodo LXC resource and reports no drift;
 - direct root SSH through the homelab automation key is validated;
 - cgroup v2 and nested user namespaces are available;
-- Docker is not yet installed;
-- Komodo is not yet installed.
+- Docker Engine 29.8.1 and Docker Compose 5.5.1 are commissioned;
+- Docker uses the containerd `overlayfs` snapshotter with cgroup v2;
+- container networking, named volumes and LAN port publishing are validated;
+- Docker recovery after a CT reboot is validated;
+- the Docker Ansible role is idempotent;
+- no additional LXC privileges were added;
+- Komodo Core is not yet deployed.
 
-The Proxmox kernel contains the `overlay` filesystem module, but it was not loaded at the last Docker compatibility preflight. Loading and persisting that module is the next controlled prerequisite before Docker installation.
+The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated. The next controlled stage is deployment of MongoDB and Komodo Core only; Periphery will be onboarded separately after Core backup and recovery are proven.
 
 ## Production cloud service
 

@@ -1,0 +1,167 @@
+---
+- name: Validate Komodo protected secrets
+  ansible.builtin.assert:
+    that:
+      - komodo_core_admin_username | length >= 3
+      - komodo_core_admin_password | length >= 16
+      - komodo_core_database_password | length >= 32
+      - komodo_core_jwt_secret | length >= 32
+      - komodo_core_webhook_secret | length >= 32
+    fail_msg: >-
+      Load the protected komodo-01 controller environment before deployment.
+  no_log: true
+
+- name: Validate Komodo host identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == komodo_core_expected_hostname
+      - komodo_core_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to deploy Komodo Core to an unexpected host.
+
+- name: Verify Docker Engine is operational
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+  changed_when: false
+
+- name: Verify Docker Compose is operational
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - version
+  changed_when: false
+
+- name: Ensure Komodo directories exist
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - path: "{{ komodo_core_stack_root }}"
+      mode: "0755"
+    - path: "{{ komodo_core_backup_root }}"
+      mode: "0700"
+    - path: "{{ komodo_core_secret_root }}"
+      mode: "0700"
+
+- name: Install protected Komodo secret files
+  ansible.builtin.copy:
+    content: "{{ item.value }}\n"
+    dest: "{{ komodo_core_secret_root }}/{{ item.name }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - name: database_password
+      value: "{{ komodo_core_database_password }}"
+    - name: admin_password
+      value: "{{ komodo_core_admin_password }}"
+    - name: jwt_secret
+      value: "{{ komodo_core_jwt_secret }}"
+    - name: webhook_secret
+      value: "{{ komodo_core_webhook_secret }}"
+  no_log: true
+
+- name: Install Komodo Compose definition
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ komodo_core_stack_root }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Komodo Compose definition
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo
+      - --file
+      - "{{ komodo_core_stack_root }}/compose.yml"
+      - config
+      - --quiet
+  changed_when: false
+
+- name: Require explicit approval before Komodo deployment
+  ansible.builtin.assert:
+    that:
+      - komodo_core_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to pull images or start Komodo Core.
+      Re-run with -e komodo_core_allow_deploy=true after validation.
+
+- name: Pull Komodo application images
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo
+      - --file
+      - "{{ komodo_core_stack_root }}/compose.yml"
+      - pull
+  changed_when: false
+
+- name: Reconcile Komodo Core stack
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo
+      - --file
+      - "{{ komodo_core_stack_root }}/compose.yml"
+      - up
+      - -d
+      - --remove-orphans
+  register: komodo_core_compose_up
+  changed_when: >-
+    'Creating' in komodo_core_compose_up.stderr
+    or 'Created' in komodo_core_compose_up.stderr
+    or 'Recreating' in komodo_core_compose_up.stderr
+    or 'Recreated' in komodo_core_compose_up.stderr
+    or 'Starting' in komodo_core_compose_up.stderr
+    or 'Started' in komodo_core_compose_up.stderr
+  no_log: true
+
+- name: Wait for Komodo Core HTTP endpoint
+  ansible.builtin.uri:
+    url: >-
+      http://{{ komodo_core_http_bind }}:{{ komodo_core_http_port }}/
+    status_code: 200
+    return_content: false
+  register: komodo_core_http_status
+  until:
+    - komodo_core_http_status.status == 200
+  retries: 60
+  delay: 5
+
+- name: Read running Komodo services
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo
+      - --file
+      - "{{ komodo_core_stack_root }}/compose.yml"
+      - ps
+      - --services
+      - --status
+      - running
+  register: komodo_core_running_services
+  changed_when: false
+
+- name: Require MongoDB and Komodo Core to be running
+  ansible.builtin.assert:
+    that:
+      - "'mongo' in komodo_core_running_services.stdout_lines"
+      - "'core' in komodo_core_running_services.stdout_lines"
