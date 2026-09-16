@@ -1,0 +1,8 @@
+# Supply the API token through:
+# export TF_VAR_proxmox_api_token='...'
+
+ssh_public_keys = [
+  "ssh-ed25519 REPLACE_WITH_ADMIN_KEY"
+]
+
+protect_after_build = false
