@@ -1,5 +1,6 @@
 ---
 zabbix_version: "7.0"
+zabbix_repository_family: "{{ 'debian-arm64' if ansible_architecture in ['aarch64', 'arm64'] else 'debian' }}"
 zabbix_server_packages:
   - zabbix-server-pgsql
   - zabbix-frontend-php

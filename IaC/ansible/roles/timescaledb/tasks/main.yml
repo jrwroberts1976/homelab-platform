@@ -3,7 +3,8 @@
   ansible.builtin.assert:
     that:
       - ansible_distribution == 'Debian'
-      - ansible_distribution_major_version | int >= 13
+      - ansible_distribution_major_version | int == 13
+      - timescaledb_version is version('2.30.0', '<')
     fail_msg: "The TimescaleDB role currently targets Debian 13 or newer."
 
 - name: Install TimescaleDB repository prerequisites
@@ -51,6 +52,24 @@
     name: "{{ timescaledb_package }}"
     state: present
     update_cache: true
+
+- name: Read installed TimescaleDB package version
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - "-f=${Version}"
+      - "{{ timescaledb_package_name }}"
+  register: timescaledb_installed_package
+  changed_when: false
+
+- name: Require approved TimescaleDB package version
+  ansible.builtin.assert:
+    that:
+      - timescaledb_installed_package.stdout == timescaledb_package_version
+    fail_msg: >-
+      Installed TimescaleDB package does not match the approved
+      Zabbix-compatible version.
 
 - name: Configure TimescaleDB preload library
   ansible.builtin.copy:
