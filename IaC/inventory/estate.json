@@ -163,7 +163,17 @@
       "managed_by_ansible": false
     }
   ],
-  "planned_assets": [],
+  "planned_assets": [
+    {
+      "name": "komodo-01",
+      "document_label": "komodo-01",
+      "address": "192.168.2.58",
+      "state": "planned",
+      "kind": "ct",
+      "role": "Planned Komodo container-management control plane, unprivileged CT104 on PROXMOX",
+      "managed_by_ansible": true
+    }
+  ],
   "retired_identities": [
     {
       "token": "DietPi",
