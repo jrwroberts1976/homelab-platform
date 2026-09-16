@@ -1,0 +1,63 @@
+name: Estate and documentation guard
+
+on:
+  pull_request:
+    paths:
+      - 'IaC/inventory/**'
+      - 'IaC/ansible/inventory/**'
+      - 'docs/**'
+      - 'production docs/**'
+      - 'runbooks/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'scripts/validate-estate.py'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/workflows/validate-estate-docs.yml'
+  push:
+    branches:
+      - main
+    paths:
+      - 'IaC/inventory/**'
+      - 'IaC/ansible/inventory/**'
+      - 'docs/**'
+      - 'production docs/**'
+      - 'runbooks/**'
+      - 'README.md'
+      - 'AGENTS.md'
+      - 'scripts/validate-estate.py'
+      - '.github/PULL_REQUEST_TEMPLATE.md'
+      - '.github/workflows/validate-estate-docs.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  validate-estate:
+    name: Validate estate truth and document changes
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Check out repository history
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Validate estate and documentation
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PR_BASE: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD: ${{ github.event.pull_request.head.sha }}
+          PUSH_BASE: ${{ github.event.before }}
+          PUSH_HEAD: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [[ "$EVENT_NAME" == "pull_request" ]]; then
+            python3 scripts/validate-estate.py --base "$PR_BASE" --head "$PR_HEAD"
+          elif [[ "$EVENT_NAME" == "push" && ! "$PUSH_BASE" =~ ^0+$ ]]; then
+            python3 scripts/validate-estate.py --base "$PUSH_BASE" --head "$PUSH_HEAD"
+          else
+            python3 scripts/validate-estate.py
+          fi

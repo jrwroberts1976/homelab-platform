@@ -203,6 +203,18 @@ Approved resolver pair:
 
 `192.168.2.48` must not return as a resolver address.
 
+### Remote-access VPN
+
+A secure remote-access VPN is now an approved future workstream.
+
+The preferred design is a dedicated Debian VM named `vpn-01` running WireGuard, with the ASUS router exposing only the required UDP WireGuard port to that guest. The initial service is a split-tunnel administration path, not a general Internet egress VPN and not a reason to publish Proxmox, SSH, Grafana or other management services directly.
+
+The design currently proposes `192.168.2.57`, VMID `203` and VPN subnet `10.44.0.0/24`, subject to live collision checks before provisioning. Proper routed return traffic is preferred so internal logs retain individual VPN client addresses; NAT on `vpn-01` is the documented fallback if the router cannot persist the required static route safely.
+
+A router-hosted VPN remains a possible later break-glass path if its resilience benefit justifies the additional Internet-facing service. It is not required for the primary project.
+
+See [VPN Remote-Access Design and Project Plan](../network/VPN-REMOTE-ACCESS-DESIGN.md).
+
 ## Priority 6 — observability and analytics expansion
 
 The core metrics/logging/network-observability platform is live. Future work should add useful operational context rather than duplicate host-up telemetry.
@@ -267,6 +279,7 @@ The platform can be considered operationally mature when:
 - controlled patch/lifecycle management is routine;
 - physical network mapping reflects current SPAN/cabling reality;
 - remaining switch/router hardening decisions are completed or explicitly accepted;
+- remote administrative access uses a documented, monitored and recoverable VPN rather than directly exposed management services;
 - observability remains useful and low-noise;
 - service ownership and IaC authority remain unambiguous;
 - optional new services are introduced only when their operational value justifies their recovery and maintenance burden.

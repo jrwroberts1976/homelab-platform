@@ -1,0 +1,194 @@
+{
+  "schema_version": 1,
+  "validated_at": "2026-09-14",
+  "purpose": "Canonical machine-readable identity and addressing inventory for current homelab documentation checks.",
+  "authority": {
+    "identity_and_addressing": "IaC/inventory/estate.json",
+    "human_current_state": "docs/architecture/CURRENT-STATE.md",
+    "configuration": "IaC/",
+    "rule": "Historical conversation context and legacy repositories are evidence only and must not override this inventory or validated live state."
+  },
+  "assets": [
+    {
+      "name": "admin-01",
+      "document_label": "admin-01",
+      "address": "192.168.2.48",
+      "state": "active",
+      "kind": "physical",
+      "role": "Raspberry Pi 3 administration, SSH jump, IaC controller and Corosync QNetd host",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "dns-02",
+      "document_label": "dns-02",
+      "address": "192.168.2.50",
+      "state": "active",
+      "kind": "lxc",
+      "role": "Pi-hole and Unbound, CT100 on PROXMOX",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "dns-01",
+      "document_label": "dns-01",
+      "address": "192.168.2.51",
+      "state": "active",
+      "kind": "lxc",
+      "role": "Pi-hole and Unbound, CT101 on Proxmox-2",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "monitor-01",
+      "document_label": "monitor-01",
+      "address": "192.168.2.52",
+      "state": "active",
+      "kind": "vm",
+      "role": "Prometheus, Grafana, Alertmanager, Blackbox and Loki, VM202 on Proxmox-2",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "cloud-01",
+      "document_label": "cloud-01",
+      "address": "192.168.2.53",
+      "state": "active",
+      "kind": "vm",
+      "role": "Production Nextcloud, PostgreSQL and Redis, VM200 on PROXMOX",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "mail-relay-01",
+      "document_label": "mail-relay-01",
+      "address": "192.168.2.54",
+      "state": "active",
+      "kind": "lxc",
+      "role": "Internal Postfix SMTP relay, CT102 on PROXMOX",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "sensor-01",
+      "document_label": "sensor-01",
+      "address": "192.168.2.55",
+      "state": "active",
+      "kind": "vm",
+      "role": "Suricata and Zeek passive network sensor, VM201 on PROXMOX",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "edge-01",
+      "document_label": "edge-01",
+      "address": "192.168.2.56",
+      "state": "active",
+      "kind": "lxc",
+      "role": "Reserved edge LXC, CT103 on Proxmox-2; cloudflared not deployed",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "PROXMOX",
+      "document_label": "PROXMOX",
+      "address": "192.168.2.70",
+      "state": "active",
+      "kind": "physical",
+      "role": "Proxmox VE cluster node 1 and cluster anchor",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "Proxmox-2",
+      "document_label": "Proxmox-2",
+      "address": "192.168.2.71",
+      "state": "active",
+      "kind": "physical",
+      "role": "Proxmox VE cluster node 2 and Network Host Collector host",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "media-01",
+      "document_label": "media-01",
+      "address": "192.168.2.195",
+      "state": "active",
+      "kind": "physical",
+      "role": "Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "docker-01",
+      "document_label": "docker-01",
+      "address": "192.168.2.220",
+      "state": "active",
+      "kind": "physical",
+      "role": "Raspberry Pi 4 BirdNET-Go Docker host",
+      "managed_by_ansible": true
+    },
+    {
+      "name": "asus-router",
+      "document_label": "ASUS RT-AC86U",
+      "address": "192.168.2.1",
+      "state": "active",
+      "kind": "network",
+      "role": "Router, DHCP and AiMesh controller",
+      "managed_by_ansible": false
+    },
+    {
+      "name": "asus-aimesh-181",
+      "document_label": "ASUS AiMesh node",
+      "address": "192.168.2.181",
+      "state": "active",
+      "kind": "network",
+      "role": "Wireless mesh node",
+      "managed_by_ansible": false
+    },
+    {
+      "name": "asus-aimesh-218",
+      "document_label": "ASUS AiMesh node",
+      "address": "192.168.2.218",
+      "state": "active",
+      "kind": "network",
+      "role": "Wireless mesh node",
+      "managed_by_ansible": false
+    },
+    {
+      "name": "hp-procurve-2510g-24",
+      "document_label": "HP ProCurve 2510G-24",
+      "address": "192.168.2.16",
+      "state": "active",
+      "kind": "network",
+      "role": "Core managed switch and SPAN source",
+      "managed_by_ansible": false
+    }
+  ],
+  "planned_assets": [
+    {
+      "name": "vpn-01",
+      "address": "192.168.2.57",
+      "state": "planned_not_deployed",
+      "kind": "vm",
+      "vmid": 203,
+      "role": "Proposed WireGuard remote-access server"
+    }
+  ],
+  "retired_identities": [
+    {
+      "token": "DietPi",
+      "replacement": "admin-01",
+      "reason": "Retired identity for the Raspberry Pi 3 now operating as admin-01."
+    },
+    {
+      "token": "TestServer",
+      "replacement": "docker-01",
+      "reason": "Retired identity for the Raspberry Pi 4 now operating as docker-01."
+    },
+    {
+      "token": "ids-01",
+      "replacement": null,
+      "reason": "Decommissioned host identity."
+    },
+    {
+      "token": "k3s-node-01",
+      "replacement": "media-01",
+      "reason": "Historical identity associated with 192.168.2.195; the host is now media-01."
+    },
+    {
+      "token": "192.168.2.242",
+      "replacement": "dns-02 at 192.168.2.50",
+      "reason": "Former dns-02 address; retired."
+    }
+  ]
+}

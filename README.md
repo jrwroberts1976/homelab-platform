@@ -10,6 +10,7 @@ The main current-state references are:
 
 - [Current-State Architecture](docs/architecture/CURRENT-STATE.md)
 - [Target-State Architecture](docs/architecture/TARGET-STATE.md)
+- [VPN Remote-Access Design and Project Plan](docs/network/VPN-REMOTE-ACCESS-DESIGN.md)
 - [Proxmox Cluster Implementation Record](docs/architecture/PROXMOX-CLUSTER-REBUILD-PLAN.md)
 - [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
 - [Migration Tracker](docs/migrations/MIGRATION-TRACKER.md)
@@ -152,6 +153,7 @@ The only immediate schedule proof still outstanding is the first unattended post
 | Second-copy resilience | Primary NFS backup target operational | Add an independent second copy for important data |
 | Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry |
 | Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
+| Remote-access VPN | `vpn-01` WireGuard VM design approved; implementation not started | Preflight `.57`/VMID 203, provision VM, prove external split-tunnel access |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
 | Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |
 | Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths |
