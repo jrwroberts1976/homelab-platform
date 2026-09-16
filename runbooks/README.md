@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Homelab Runbook Catalogue
 
 This directory is the operational index for the homelab.
@@ -32,14 +33,15 @@ The retired identities `TestServer` and `DietPi`, and the decommissioned host `i
 | ID | Runbook | Category | Applies to | Normally run from | Runbook status | Service state | Last validated |
 |---|---|---|---|---|---|---|---|
 | `dns_service_recovery` | [DNS Service Recovery Plan](../production%20docs/DNS-SERVICE-RECOVERY-PLAN.md) | Network | `dns-01 .51`, `dns-02 .50`, Proxmox cluster, ASUS DHCP/DNS | `admin-01 .48` | Active | Operational | 2026-09-08 |
-| `router_syslog_service` | [ASUS Router Syslog Service](../production%20docs/ROUTER-SYSLOG-SERVICE.md) | Network | `RT-AC86U .1` -> `monitor-01 .52` | `admin-01 .48` | Active | Operational | 2026-09-14 |
+| `router_syslog_service` | [ASUS Router Syslog Service](../production%20docs/ROUTER-SYSLOG-SERVICE.md) | Network | `RT-AC86U .1` -> `monitor-01 .52` | `admin-01 .48` | Active | Operational | 2026-09-16 |
+| `remote_access_vpn` | [ASUS Router OpenVPN Remote Access](../docs/network/VPN-REMOTE-ACCESS-DESIGN.md) | Network security | `RT-AC86U .1`, `monitor-01 .52` logging | `admin-01 .48` | Active | Implementation in progress | 2026-09-16 |
 | `monitoring_service` | [Homelab Monitoring Service](../production%20docs/MONITORING-SERVICE.md) | Monitoring | `monitor-01 .52` VM202 on `Proxmox-2`, estate monitoring targets | `admin-01 .48` | Active | Operational | 2026-09-14 |
 | `network_sensor_service` | [Homelab Network Sensor Service](../production%20docs/NETWORK-SENSOR-SERVICE.md) | Security | `sensor-01 .55` on `PROXMOX .70`, HP ProCurve SPAN | `admin-01 .48` | Active | Operational | 2026-09-14 |
 | `time_service` | [Homelab Time Service](../production%20docs/TIME-SERVICE.md) | Core infrastructure | `PROXMOX .70`, `Proxmox-2 .71`, LAN clients | `admin-01 .48` | Active | Operational | 2026-09-12 |
 | `media_service` | [media-01 Production Service](../production%20docs/MEDIA-SERVICE.md) | Media / backup target | `media-01 .195` | `admin-01 .48` | Active | Operational | 2026-09-14 |
 | `cloud_service` | [Homelab Cloud Data Service](../production%20docs/CLOUD-SERVICE.md) | Cloud | `cloud-01 .53` on `PROXMOX .70` | `admin-01 .48` | Active | Operational | 2026-09-14 |
 | `mail_relay_service` | [Homelab Mail Relay Service](../production%20docs/MAIL-RELAY-SERVICE.md) | Core infrastructure | `mail-relay-01 .54`, both PVE notification clients | `admin-01 .48` | Active | Operational | 2026-09-14 |
-| `proxmox_backup_recovery` | [Proxmox Guest Backup and Recovery](../production%20docs/PROXMOX-BACKUP-RECOVERY.md) | Backup / recovery | `jameshouse-pve`, `media-01`, `mail-relay-01` | `admin-01 .48` | Active | Primary path operational; cluster-era schedule proof pending | 2026-09-14 |
+| `proxmox_backup_recovery` | [Proxmox Guest Backup and Recovery](../production%20docs/PROXMOX-BACKUP-RECOVERY.md) | Backup / recovery | `jameshouse-pve`, `media-01`, `mail-relay-01` | `admin-01 .48` | Active | Primary path operational; first unattended VM203 cycle pending | 2026-09-16 |
 | `birdnet_service` | [BirdNET-Go Production Service](../production%20docs/BIRDNET-SERVICE.md) | Application | `docker-01 .220` | `admin-01 .48` | Active | Operational | 2026-09-12 |
 | `cloudflare_pages_production` | [Cloudflare Pages Production Pipeline](../production%20docs/CLOUDFLARE-PAGES-PRODUCTION-PIPELINE.md) | Public web | `engineering-portfolio`, Cloudflare Pages | GitHub Actions/admin workstation | Active | Operational | 2026-09-07 |
 | `router_clean_rebuild` | [Router Clean-Rebuild Plan](../docs/network/ROUTER-RESET-PLAN.md) | Network | `RT-AC86U .1`, AiMesh nodes | Local wired admin session | Planned | Maintenance planned | — |
@@ -56,13 +58,13 @@ The retired identities `TestServer` and `DietPi`, and the decommissioned host `i
 - `edge-01` exists as CT103 at `192.168.2.56`, but `cloudflared` is not deployed.
 - `sensor-01` capture is operational; Suricata and Zeek are active and HP ProCurve port 24 is the live SPAN destination for ports 1–23.
 - `monitor-01` runs the production Prometheus/Grafana/Alertmanager/Blackbox/Loki stack and Alloy logging pipeline.
+- ASUS router syslog is retained locally on `monitor-01` and shipped to Loki; OpenVPN authentication/connection events were observed in that path on 16 September 2026.
+- the selected remote-access service is the ASUS router's OpenVPN server; external authentication/tunnel establishment are proven, while internal-service/DDNS/recovery gates remain open.
 - `cloud-01` is live on its dedicated 200 GiB VM data disk and has a proven VM-level snapshot backup; application-consistent Nextcloud/PostgreSQL recovery is still unproven.
 - `media-01` is both the Kodi endpoint and the primary Proxmox NFS backup target.
 - node-scoped backup storages remain `media-backup-proxmox` on `PROXMOX` and `media-backup-proxmox-2` on `Proxmox-2`.
-- all seven production guests have pre-cluster successful backup evidence and CT103 has a proven isolated LXC restore/boot path.
-- the old standalone `Proxmox-2` backup schedule referenced monitor VMID 200; final cluster-era desired state is `101,103,202` and requires reconciliation/fresh proof.
-- the first successful unattended **post-cluster** backup run remains to be observed before cluster-era unattended execution is called proven.
-- `docker-01` remains deliberately single-purpose for BirdNET-Go.
+- the final `Proxmox-2` backup schedule now includes `101,103,202,203`; the first unattended 03:15 cycle including VM203 remains to be observed.
+- `docker-01` remains deliberately single-purpose for BirdNET-Go unless a later reviewed design explicitly changes that role.
 
 ## Current coverage gaps
 
@@ -70,7 +72,8 @@ These are intentionally recorded in `registry.yml` so missing recovery proof is 
 
 | Gap | Priority | Applies to | Needed work |
 |---|---|---|---|
-| `proxmox_cluster_backup_reconcile` | High | `jameshouse-pve`, VM202, node-scoped NFS stores | Update `.71` job/IaC to `101,103,202`, fresh backups, unattended post-cluster proof |
+| `proxmox_cluster_backup_reconcile` | High | `jameshouse-pve`, VM203, node-scoped NFS stores | Observe and record first unattended 03:15 run that includes VM203 |
+| `remote_access_vpn_completion` | High | ASUS router, `admin-01`, `monitor-01` | Prove internal admin/DNS access externally, DDNS endpoint and router recovery/client re-enrolment |
 | `backup_secondary_copy` | High | primary backup target and important data | Independent second physical/failure-domain copy |
 | `application_backup_recovery` | High | `cloud-01`, `docker-01`, `media-01`, `admin-01` | Application-consistent and non-Proxmox recovery proof |
 | `proxmox_cluster_resilience` | High | `PROXMOX`, `Proxmox-2`, `admin-01` QDevice | Prove link0→link1 fallback and controlled one-node quorum behaviour |
@@ -110,7 +113,7 @@ Not every field is mandatory. Keep **the affected target** separate from **the e
 
 Do not advance `last_validated` merely because a document was edited. Use the date only when the documented path has been proven at the appropriate level.
 
-For example, the pre-cluster CT103 restore proof and backup schedule validation remain valid evidence dated 14 September 2026, while the final post-cluster schedule using VM202 still needs its own live proof.
+For example, the router-syslog/OpenVPN logging path has fresh live evidence dated 16 September 2026, while VPN DDNS and end-to-end internal administration access remain pending and are recorded as such.
 
 ## Change rules
 
@@ -119,7 +122,7 @@ When adding or changing an operational service:
 1. update the authoritative service/recovery document;
 2. update `runbooks/registry.yml` in the same change;
 3. keep host/IP data aligned with `IaC/ansible/inventory/hosts.yml` where the target is IaC-managed;
-4. record a `last_validated` date only after the documented path has been proven against the live service;
+4. record a `last_validated` date only after the documented path has been proven at the appropriate level;
 5. move obsolete procedures to `deprecated` or `retired` rather than leaving ambiguous active instructions;
 6. never add decommissioned or retired identities to active applicability lists.
 

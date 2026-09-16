@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Target-State Architecture
 
-This document describes the remaining target direction for the homelab after the September 2026 estate reconciliation, production `jameshouse-pve` cluster formation, primary Proxmox guest-backup implementation and Greenbone commissioning.
+This document describes the remaining target direction for the homelab after the September 2026 estate reconciliation, production `jameshouse-pve` cluster formation, primary Proxmox guest-backup implementation, Greenbone commissioning and selection of the router-hosted OpenVPN remote-access path.
 
 Implemented state belongs in `CURRENT-STATE.md`; this document is intentionally limited to work that still needs to be built, hardened or proven.
 
@@ -31,6 +31,8 @@ The following capabilities are implemented and must not be presented as future g
 - `dns-01` and `dns-02` provide the resolver pair.
 - `monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki.
 - Grafana Alloy is deployed across the managed estate.
+- ASUS router syslog is received on `monitor-01` and shipped to Loki through the dedicated Alloy router-log pipeline.
+- the ASUS RT-AC86U runs the selected OpenVPN remote-access endpoint; external authentication and tunnel establishment have been observed.
 - `cloud-01` provides production Nextcloud/PostgreSQL/Redis.
 - `mail-relay-01` provides the internal SMTP relay.
 - `sensor-01` is an operational passive sensor with Suricata and Zeek.
@@ -127,12 +129,12 @@ The 14 September package-update backlog was cleared through the controlled patch
 - preserve service availability and recovery gates during clustered Proxmox maintenance;
 - deliberately manage PVE patch levels;
 - keep application/container version ownership explicit;
-- use Komodo for routine Docker application/version operations where it has been proven appropriate;
+- use Komodo for routine Docker application/version operations once its production workflow has been proven;
 - retire older Docker-management paths only after equivalent control, secrets handling and rollback are demonstrated.
 
-`docker-01` remains intentionally single-purpose for BirdNET-Go unless a later reviewed design changes that role.
+`docker-01` remains intentionally single-purpose for BirdNET-Go unless a later reviewed design explicitly changes that role.
 
-## Priority 5 — network hardening and physical truth
+## Priority 5 — network hardening and remote access
 
 ### HP ProCurve
 
@@ -148,7 +150,9 @@ Do not invent physical switch-port assignments where they have not been validate
 
 ### ASUS router
 
-The ASUS RT-AC86U remains DHCP authority and AiMesh controller. A clean firmware/factory-reset rebuild remains optional and must preserve WAN configuration, DHCP reservations, DNS advertisement, Wi-Fi/AiMesh state, required port forwards/VPN/routing policy, syslog configuration and rollback access.
+The ASUS RT-AC86U remains DHCP authority, AiMesh controller and the selected OpenVPN remote-access endpoint.
+
+A clean firmware/factory-reset rebuild remains optional and must preserve WAN configuration, DHCP reservations, DNS advertisement, Wi-Fi/AiMesh state, OpenVPN, DDNS, required routing policy, syslog configuration and rollback access.
 
 Approved resolver pair:
 
@@ -159,19 +163,77 @@ Approved resolver pair:
 
 `192.168.2.48` must not return as a resolver address.
 
-### Remote-access VPN
+### Remote-access VPN completion
 
-A secure remote-access VPN remains an approved future workstream.
+The former dedicated `vpn-01`/WireGuard target is superseded. Do not allocate a VMID or LAN address for `vpn-01` unless a future architecture review deliberately replaces the current design.
 
-The preferred design is a dedicated Debian VM named `vpn-01` running WireGuard, with the ASUS router exposing only the required UDP WireGuard port to that guest. The initial service is a split-tunnel administration path, not a general Internet egress VPN and not a reason to publish Proxmox, SSH, Grafana or other management services directly.
+The selected service is ASUS OpenVPN Server 1. Remaining completion work is:
 
-The VPN's LAN address and VMID are now deliberately **unallocated**. The values previously proposed for the VPN are occupied by the live Greenbone VM and must not be reused. Deployment phase 0 must select a collision-free address and VMID from current canonical/live state before any Terraform definition or router forward is created.
+- prove intended internal administration access from a genuinely external network;
+- verify both internal DNS resolvers through the VPN;
+- confirm ASUS DDNS is configured and the exported client profile uses a stable hostname rather than depending on the current numeric WAN address;
+- prove the router/OpenVPN events can be queried in Loki through the existing router-syslog pipeline;
+- document router-reset/replacement recovery and client re-enrolment;
+- keep OpenVPN client profiles, passwords and protected certificate material outside Git.
 
-The VPN subnet remains proposed as `10.44.0.0/24`. Proper routed return traffic is preferred so internal logs retain individual VPN client addresses; NAT on `vpn-01` remains the documented fallback if the router cannot persist the required static route safely.
+See [VPN Remote-Access Design and Implementation Record](../network/VPN-REMOTE-ACCESS-DESIGN.md).
 
-See [VPN Remote-Access Design and Project Plan](../network/VPN-REMOTE-ACCESS-DESIGN.md).
+## Priority 6 — planned service expansion
 
-## Priority 6 — observability and analytics expansion
+Three additional services are now explicit planned workstreams. No new hostname, IP address, VMID or placement is allocated merely by recording them here; each gets a separate design/preflight before deployment.
+
+### Password manager
+
+Build a self-hosted password-management service, but choose the product and placement deliberately before implementation.
+
+Minimum design gates:
+
+- product selection based on supported clients, export/recovery capability and maintainability;
+- HTTPS and a defined trusted access path;
+- protected secrets and recovery material outside Git;
+- encrypted/off-host backup of persistent data;
+- proven restore before the service becomes the sole copy of important credentials;
+- monitored service availability;
+- documented emergency access if the homelab, DNS or VPN is unavailable;
+- MFA/passkey capability where supported and appropriate.
+
+No product is recorded as selected yet. Do not silently treat Vaultwarden, Bitwarden or another candidate as approved until the choice is made.
+
+### Home Assistant
+
+Build Home Assistant as the home-automation control plane.
+
+Design/preflight must decide:
+
+- Home Assistant OS VM versus another supported deployment model;
+- placement on the current Proxmox cluster;
+- required USB/Zigbee/Z-Wave/Bluetooth passthrough, if any;
+- local-only versus approved remote-access model;
+- DNS naming and certificate approach;
+- backup and restore of Home Assistant configuration/state;
+- monitoring without leaking entity/state data unnecessarily;
+- failure behaviour for automations that affect the physical home.
+
+Prefer local control and avoid making the Home Assistant management UI directly WAN-accessible merely for convenience.
+
+### Docker management platform
+
+Komodo remains the preferred direction for Docker application/version management, consistent with the current lifecycle-management plan.
+
+Before production adoption:
+
+- choose the management-server placement independently of the managed Docker hosts;
+- define how agents/endpoints authenticate;
+- keep API keys and deployment secrets outside plaintext Git;
+- prove deployment/update/rollback on a low-risk workload first;
+- confirm it can manage required Docker stacks without bypassing the Git/IaC authority model;
+- define what Komodo owns versus Ansible/Compose/GitHub workflows;
+- retire superseded Watchtower/WUD/manual update paths only after equivalent visibility and rollback are demonstrated;
+- send useful service/audit logs to the existing monitoring/logging platform where practical.
+
+This workstream must not automatically turn `docker-01` into a general-purpose application host; placement is a separate design decision.
+
+## Priority 7 — observability and analytics expansion
 
 The core metrics/logging/network-observability platform is live. Future work should add useful operational context rather than duplicate host-up telemetry:
 
@@ -219,10 +281,6 @@ Deploy Cloudflare Tunnel only when a real service requirement exists. Keep conne
 
 Public/static workloads should continue to use external hosting where that reduces homelab dependency. The personal portfolio site is an example of a workload that does not need home infrastructure for normal public availability.
 
-## Password manager
-
-A self-hosted password manager remains optional future work. Before deployment, choose the product/host intentionally, deploy through Git-managed IaC, keep recovery material outside Git, provide HTTPS, back up and restore-test persistent data, monitor availability and document emergency recovery independent of the running homelab.
-
 ## Completion criteria
 
 The platform can be considered operationally mature when:
@@ -236,7 +294,7 @@ The platform can be considered operationally mature when:
 - controlled patch/lifecycle management is routine;
 - physical network mapping reflects current SPAN/cabling reality;
 - remaining switch/router hardening decisions are completed or explicitly accepted;
-- remote administrative access uses a documented, monitored and recoverable VPN rather than directly exposed management services;
+- remote administrative access uses the documented router-hosted VPN rather than directly exposed management services;
 - vulnerability scanning remains maintainable and recovery-aware;
 - observability remains useful and low-noise;
 - service ownership and IaC authority remain unambiguous;

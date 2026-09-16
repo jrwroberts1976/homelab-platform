@@ -1,372 +1,249 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
-# VPN Remote-Access Design and Project Plan
+# VPN Remote-Access Design and Implementation Record
 
-**Status:** approved design / planned implementation; deployment identity not yet allocated  
+**Status:** implementation active; router-hosted OpenVPN selected and externally authenticated  
 **Reviewed:** 16 September 2026  
-**Primary design:** dedicated `vpn-01` Debian VM running WireGuard  
-**Secondary option:** router-hosted VPN retained as a possible break-glass/recovery path
+**Primary implementation:** ASUS RT-AC86U OpenVPN Server 1  
+**VPN subnet observed:** `10.8.0.0/24`  
+**Internal DNS:** `192.168.2.51`, `192.168.2.50`
 
 ## Goal
 
-Provide secure remote administrative access to the homelab without publishing management interfaces such as Proxmox, Grafana, SSH or internal web services directly to the Internet.
+Provide secure remote administrative access to the homelab without publishing Proxmox, Grafana, SSH, Pi-hole or other internal management interfaces directly to the Internet.
 
-The normal operating model will be:
+The selected operating model is:
 
 ```text
 Remote client
     |
-    | WireGuard / UDP 51820
+    | OpenVPN over UDP
     v
-ASUS RT-AC86U / WAN edge
+ASUS RT-AC86U 192.168.2.1
     |
-    | single UDP port-forward
+    | routed split-tunnel access
     v
-vpn-01
-    |
-    +----> 192.168.2.0/24 internal services
+192.168.2.0/24 internal services
 ```
 
-The VPN is an administration path, not a mechanism for making internal services public.
+The VPN is an administration path, not a mechanism for making internal services public and not a general Internet-egress VPN.
 
-## Design decision
+## Architecture decision
 
-Use a dedicated VM as the primary VPN endpoint rather than making the router the everyday VPN server.
+The previous design proposed a dedicated Debian `vpn-01` VM running WireGuard. During implementation discovery on 16 September 2026, the existing ASUS router was found to already have a native OpenVPN server running.
 
-Reasons:
+The production direction is therefore **router-hosted OpenVPN** rather than a new VM, container or host-level WireGuard service.
 
-- keeps remote-access policy separate from the router's DHCP, DNS-advertisement, Wi-Fi and AiMesh roles;
-- allows configuration to be managed and reviewed through the existing Git/IaC model;
-- provides normal Linux firewalling, logging, patching and monitoring;
-- permits WireGuard peer lifecycle to be managed independently of router firmware changes;
-- makes backup and recovery consistent with other Proxmox workloads;
-- avoids tying routine remote access to a future router factory-reset/rebuild.
+This choice removes the VPN's dependency on:
 
-The router remains attractive as an optional emergency path because it can remain available when the Proxmox guest hosting `vpn-01` is unavailable. That should be treated as a separate phase after the primary service is proven, using separate keys and a deliberately restricted policy.
+- either Proxmox node;
+- any Proxmox guest;
+- `docker-01` and Docker;
+- `admin-01` and the IaC/QNetd control plane.
 
-## Deployment identity
+It also avoids adding a WAN-facing service to an internal Linux host and avoids Docker firewall/routing interaction on `docker-01`.
 
-`vpn-01` remains the proposed service name, but its LAN address and VMID are deliberately **unallocated**.
+The trade-off is that VPN availability is now part of the router failure domain. Router backup/rebuild documentation must therefore preserve the VPN configuration and recovery path.
 
-The address and VMID previously proposed for this design are now occupied by the live `greenbone-01` scanner. They must not be reused for the VPN.
+## Current validated state
 
-Allocation happens only during deployment preflight, after checking the canonical estate inventory and live Proxmox/network state.
+Validated live on 16 September 2026:
 
-| Item | Current design value |
-|---|---|
-| Hostname | `vpn-01` (proposed) |
-| Platform | Debian minimal VM on Proxmox |
-| VMID | unallocated; assign during deployment preflight |
-| LAN address | unallocated; assign during deployment preflight |
-| Preferred node | `Proxmox-2`, subject to live capacity/recovery review |
-| Gateway | `192.168.2.1` |
-| VPN subnet | `10.44.0.0/24` |
-| VPN server address | `10.44.0.1/24` |
-| WireGuard port | `51820/udp` |
-| Initial mode | split tunnel |
-| Internal DNS | `192.168.2.51`, `192.168.2.50` |
+- ASUS RT-AC86U at `192.168.2.1`;
+- firmware `386.14_2`;
+- OpenVPN Server 1 reports **Running**;
+- a recreated VPN account was successfully authenticated from an external client;
+- the OpenVPN server allocated client address `10.8.0.3` during the observed test session;
+- the server pushed route `192.168.2.0/24` to the client;
+- the server pushed internal DNS `192.168.2.51` and `192.168.2.50`;
+- the observed transport was UDP;
+- the observed control channel negotiated TLS 1.3 with `TLS_AES_256_GCM_SHA384`;
+- the observed data channel used `AES-256-GCM`;
+- router OpenVPN events are present in the router's remote syslog stream on `monitor-01`;
+- those router logs are shipped to Loki through the dedicated Alloy router-syslog pipeline.
 
-Do not add `vpn-01` to `IaC/inventory/estate.json` until a real LAN address has been selected and collision-checked. Do not invent a replacement address or VMID merely to keep this design numerically complete.
+The external client authenticated and established a tunnel. Full acceptance still requires explicit proof that intended internal management services are reachable over that external tunnel and that DDNS survives WAN-address changes.
 
-## VM sizing
+## Addressing and routing
 
-WireGuard has small resource requirements for this estate.
-
-Initial allocation target:
+Observed OpenVPN client addressing uses:
 
 ```text
-vCPU:       1
-RAM:        512 MiB to 1 GiB
-Disk:       8 GiB
-NIC:        virtio, management LAN bridge
-OS:         current approved Debian minimal build
-Autostart:  enabled
+VPN network: 10.8.0.0/24
+router VPN gateway: 10.8.0.1
+example assigned client: 10.8.0.3
 ```
 
-Prefer the existing standard VM template/base-build path rather than introducing a special manual OS build.
-
-The service must not be described as highly available while its disk remains node-local.
-
-## WireGuard addressing and client model
-
-Use one peer/key pair per device. Never share a private key between devices.
-
-Suggested VPN allocation model:
+The router currently pushes:
 
 ```text
-10.44.0.1      vpn-01
-10.44.0.10+    individually assigned remote clients
-```
-
-Each peer record should have a human-readable device identity in the protected operational inventory. Private keys and complete client configuration files must not be committed to Git.
-
-Revocation is performed by removing the affected public-key peer from `vpn-01`, applying the configuration and recording the change.
-
-## Routing design
-
-### Preferred design: routed VPN subnet
-
-Prefer proper routing so internal systems can retain the real VPN client address (`10.44.0.x`) in logs.
-
-The implementation-time route will be:
-
-```text
-192.168.2.0/24 -> route 10.44.0.0/24 via <vpn-lan-ip>
-```
-
-During implementation, verify whether the live ASUS firmware can provide the required static route cleanly and whether that route survives reboot/configuration export.
-
-### Fallback design: NAT on vpn-01
-
-If the router cannot support the required static route reliably, use `nftables` masquerading on `vpn-01` for traffic from `10.44.0.0/24` to the LAN.
-
-This is operationally simpler but reduces per-client attribution on destination systems because connections may appear to originate from `vpn-01`.
-
-The chosen mode must be documented after live validation. Do not leave both methods enabled accidentally.
-
-## Split-tunnel policy
-
-The initial service should not become a general Internet egress VPN.
-
-Remote clients should route only the networks required to administer the homelab, initially:
-
-```text
-10.44.0.0/24
 192.168.2.0/24
 ```
 
-A future full-tunnel profile may be added only if there is a deliberate requirement.
+as the internal LAN route.
 
-## Access-control policy
-
-Do not treat VPN connectivity as unrestricted trust.
-
-Initial policy should permit the VPN subnet to reach only required management/service destinations, such as:
-
-- `admin-01` SSH;
-- Proxmox management on `192.168.2.70` and `192.168.2.71`;
-- Grafana/monitoring on `monitor-01`;
-- Pi-hole/Unbound DNS services;
-- selected internal application interfaces where remote administration is justified.
-
-The initial rule set should deny traffic not explicitly required. Administrative SSH to `vpn-01` itself should be permitted from the trusted LAN/admin path rather than exposed directly from the WAN.
-
-## Router/WAN changes
-
-The router should expose only the WireGuard listener required by the VM:
-
-```text
-WAN UDP/51820 -> <vpn-lan-ip> UDP/51820
-```
-
-No Proxmox, SSH, Grafana, Pi-hole or other management port should be forwarded to the Internet as part of this project.
-
-If the WAN address is dynamic, use the approved DDNS mechanism and keep the client endpoint name separate from private-key material.
-
-## Host firewall
-
-Use `nftables` on `vpn-01` with a default-deny policy.
-
-At minimum:
-
-- allow established/related traffic;
-- allow SSH administration only from approved internal management sources;
-- allow WireGuard UDP/51820 from the WAN-forwarded path;
-- allow forwarding from the WireGuard interface only to approved internal destinations/services;
-- deny unrelated forwarding;
-- enable NAT only if the fallback routing design is selected.
-
-Firewall configuration should be deployed through IaC once the live rule set has been validated.
-
-## DNS
-
-VPN clients may use the existing internal resolver pair:
+Internal DNS supplied to VPN clients is:
 
 ```text
 192.168.2.51  dns-01
 192.168.2.50  dns-02
 ```
 
-Validate both resolvers through the VPN path before making internal DNS the default in distributed client profiles.
+Do not add a competing WireGuard subnet or NAT path while this router-hosted implementation is the selected production design.
 
-## Monitoring and logging
+## Dynamic WAN address and DDNS
 
-`vpn-01` should follow the standard managed-host observability model.
+The client configuration should use a stable DDNS hostname rather than depending on a numeric WAN address.
 
-Required minimum:
+Required completion gate:
 
-- host availability and resource metrics in Prometheus;
-- Grafana Alloy/system journal shipping to Loki;
-- WireGuard service health;
-- interface state;
-- configured peer count;
-- latest-handshake age where useful;
-- authentication/configuration/firewall errors;
-- disk and package/update state through normal host monitoring.
+1. confirm the ASUS DDNS client is enabled;
+2. record the selected hostname without recording any DDNS secret;
+3. confirm the exported `.ovpn` profile references the stable hostname;
+4. prove an external connection after a WAN-address change or equivalent DDNS resolution validation.
 
-Avoid high-noise per-packet logging. A useful alert is service unavailable or no expected listener after boot; individual peer inactivity should not normally page.
+If the exported profile contains a numeric WAN address, regenerate/export it after DDNS is configured rather than hand-maintaining multiple divergent profiles.
 
-## Security controls
+## Client and credential model
 
-- use modern WireGuard keys generated on trusted systems;
-- one key pair per client;
-- never store private keys, QR codes or full client configuration in Git;
-- remove lost/retired device peers promptly;
-- keep the VM patched through the normal lifecycle-management process;
-- expose only UDP/51820 from the WAN;
-- retain normal SSH key-based administration;
-- do not enable password SSH from the Internet;
-- use a default-deny host firewall;
-- log configuration/service failures without logging secret material;
-- review active peers periodically;
-- maintain a documented key-rotation and peer-revocation procedure.
+- use an individual VPN account per person rather than a shared account;
+- use a strong VPN-specific password, not the router administrator password;
+- revoke an account promptly when access is no longer required;
+- export a fresh client profile after material server configuration changes;
+- treat exported `.ovpn` files as sensitive recovery/access material;
+- do not commit `.ovpn` profiles, passwords, certificate private material or router configuration exports containing secrets to Git;
+- avoid posting client profiles in tickets, chat or documentation.
 
-## Backup and recovery
+The router-generated `.ovpn` profile contains the CA/certificate material required by the client and must be distributed through a protected channel.
 
-After provisioning, add `vpn-01` to the appropriate Proxmox backup policy for its hosting node.
+## Access policy
 
-The VM backup is useful for rapid service recovery, but it must not be the only recovery route. Keep sufficient protected recovery material outside the VM to rebuild the service if the guest or Proxmox node is lost.
+The initial service remains split tunnel and is intended for administration of the homelab.
 
-Recovery documentation must identify the allocated LAN address and VMID, VPN subnet and endpoint port, hosting node, router dependency, firewall/routing mode, server-identity recovery method and external validation steps.
+Expected initial destinations include:
 
-Do not store recovery private keys in plaintext Git.
+```text
+admin-01    192.168.2.48
+monitor-01  192.168.2.52
+PROXMOX     192.168.2.70
+Proxmox-2   192.168.2.71
+```
 
-## Optional phase 2: router break-glass VPN
+The presence of the LAN route does not justify exposing these services directly on the WAN. Router administration, Proxmox management, SSH and Grafana should remain reachable through trusted LAN/VPN paths only.
 
-After `vpn-01` is stable, decide whether a second, router-hosted VPN endpoint is justified as an emergency access mechanism.
+## Logging and observability
 
-If implemented, use a separate listener/port and separate keys, restrict it to essential management access, test it from outside the LAN and preserve it explicitly through any future router rebuild.
+The existing router logging path is part of the VPN operational design:
 
-The router fallback is optional. The primary project is complete without it if the accepted recovery model is local access plus Proxmox/VM recovery.
+```text
+ASUS RT-AC86U
+    |
+    | remote syslog UDP/5514
+    v
+monitor-01
+    |
+    +--> /var/log/homelab/router/rt-ac86u.log
+    |
+    +--> Grafana Alloy
+             |
+             v
+            Loki
+```
 
-# Project plan
+The live Alloy configuration uses stable labels from the dedicated `monitor_router_alloy` role, including:
 
-## Phase 0 — preflight and identity allocation
+```text
+job="network-infrastructure"
+service="router-syslog"
+device="rt-ac86u"
+environment="homelab"
+```
 
-**Estimated effort:** 30–60 minutes
+OpenVPN authentication, connection, address-allocation and disconnect messages are therefore queryable centrally without deploying another collector on the router.
 
-Tasks:
+Avoid creating high-cardinality Loki labels from usernames, public client IP addresses, ports or PIDs. Those values belong in log content, not labels.
 
-- read `IaC/inventory/estate.json` and `CURRENT-STATE.md`;
-- choose a candidate unused LAN address without reusing any active/reserved address;
-- confirm that address is unused in DHCP reservations, active leases, ARP/network-host inventory and DNS;
-- choose an unused cluster-wide VMID;
-- confirm current Proxmox node capacity and placement;
-- confirm the standard Debian template/base-build path;
-- record current router firmware and WAN/DDNS state;
-- verify whether the router can provide a persistent static route to `10.44.0.0/24`;
-- capture current firewall/port-forward state before changing it;
-- update `IaC/inventory/estate.json` with the approved planned identity in the same change that starts implementation.
+## Router recovery dependency
 
-**Exit gate:** LAN address, VMID, node placement and routing method are explicitly approved with no collision.
+Because the VPN terminates on the router, any clean-reset/rebuild procedure must preserve or deliberately recreate:
 
-## Phase 1 — provision vpn-01
+- OpenVPN server enablement;
+- server advanced settings;
+- VPN users;
+- certificate/CA identity as appropriate for the recovery method;
+- DDNS configuration;
+- internal route/DNS advertisement;
+- router remote syslog destination `192.168.2.52:5514`;
+- a fresh exported client profile after rebuild if server identity changes.
 
-**Estimated effort:** 45–60 minutes
+Router administrator credentials, VPN passwords and protected certificate/private-key material must remain outside Git.
 
-- provision the VM from the approved template using the allocated identity;
-- configure hostname, reserved LAN address and DNS;
-- patch the OS and apply the normal SSH/admin baseline;
-- deploy monitoring/logging;
-- enable IP forwarding;
-- install WireGuard and managed `nftables` configuration;
-- enable service autostart.
+## Remaining implementation gates
 
-**Exit gate:** VM survives reboot, is reachable from the management LAN and has normal monitoring/logging.
+### Gate 1 — external management-path proof
 
-## Phase 2 — configure WireGuard and routing
+From mobile data or another genuinely external network:
 
-**Estimated effort:** 60–90 minutes
+- connect using the recreated VPN account;
+- prove expected access to `admin-01`;
+- prove expected access to both Proxmox management interfaces;
+- prove expected access to `monitor-01`/Grafana as required;
+- prove both internal DNS resolvers answer through the VPN;
+- confirm no extra WAN management ports were introduced.
 
-- generate the server key securely;
-- configure `wg0` as `10.44.0.1/24`;
-- add individually identified test peers;
-- implement preferred static routing or documented NAT fallback;
-- implement default-deny forwarding policy;
-- verify LAN-side connectivity before opening the WAN port.
+### Gate 2 — DDNS proof
 
-**Exit gate:** a test peer on a controlled path can reach only the intended internal destinations.
+- confirm ASUS DDNS state and hostname;
+- confirm the client profile uses that hostname;
+- verify external name resolution to the current WAN address;
+- reconnect externally using the DDNS endpoint.
 
-## Phase 3 — WAN cutover
+### Gate 3 — observability proof
 
-**Estimated effort:** 30–60 minutes
+- query Loki for the successful OpenVPN authentication/connection event;
+- confirm disconnect/failure messages are also retained;
+- keep the local router syslog file as the first receipt point;
+- add alerting only if a low-noise, actionable condition is identified.
 
-- create UDP/51820 port-forward to the allocated `vpn-01` LAN address;
-- configure/validate DDNS endpoint if required;
-- verify the listener from outside the home network;
-- test using mobile data or another genuinely external connection;
-- prove access to `admin-01`, both Proxmox nodes and monitoring as permitted;
-- confirm unrelated destinations remain blocked if outside policy.
+### Gate 4 — recovery proof
 
-**Exit gate:** remote access works externally without exposing any additional management service directly to the Internet.
+- capture the non-secret router settings required to rebuild the service;
+- confirm how server certificates/identity are recovered or regenerated;
+- verify account deletion/recreation;
+- document the client re-enrolment procedure after router replacement/reset.
 
-## Phase 4 — observability, backup and recovery
+## Acceptance criteria
 
-**Estimated effort:** 60–90 minutes
+The remote-access project is complete when:
 
-- add WireGuard-specific service/listener health telemetry;
-- confirm logs arrive in Loki;
-- add `vpn-01` to the correct Proxmox backup schedule;
-- take and validate the first backup;
-- write the operational/recovery runbook;
-- document peer add/remove/rotate procedure;
-- perform reboot testing for the VM and router path;
-- record the final routing method and firewall policy in Git.
+- router-hosted OpenVPN remains running after normal router restart;
+- an external client can authenticate and establish the tunnel;
+- intended internal administration destinations are reachable externally through the tunnel;
+- both internal DNS resolvers work through the VPN;
+- DDNS provides the stable endpoint and is represented correctly in the client profile;
+- no Proxmox, SSH, Grafana, Pi-hole or other management interface is directly exposed to the Internet;
+- router/OpenVPN events are visible in Loki;
+- VPN account revocation/recreation is documented and proven;
+- router recovery documentation includes the VPN;
+- sensitive client/server material remains outside Git.
 
-**Exit gate:** monitoring, backup, reboot persistence and recovery documentation are proven.
+## Rollback
 
-## Phase 5 — optional resilience decision
+If the router-hosted VPN causes unexpected behaviour:
 
-**Estimated effort:** 30–90 minutes, only if required
+1. disable OpenVPN Server 1 in the router UI;
+2. confirm normal LAN, DHCP, DNS, AiMesh and WAN operation;
+3. retain relevant router/Loki logs for diagnosis;
+4. do not alter unrelated router services merely to troubleshoot VPN access;
+5. re-enable only after the configuration issue is understood.
 
-Decide whether the router-hosted break-glass VPN is worth deploying. If yes, implement and test it as a separate restricted recovery service. If no, document the accepted recovery path and close the decision explicitly.
+## Superseded implementation work
 
-# Expected timeline
+The following design paths are no longer the selected production implementation:
 
-The primary `vpn-01` implementation remains approximately **5–7 hours of hands-on work**, allowing one controlled working-day project without rushing validation. Identity allocation is part of phase 0, not a pre-existing reservation.
+- dedicated `vpn-01` Debian VM;
+- WireGuard on `docker-01`;
+- WireGuard on `admin-01`.
 
-# Acceptance criteria
+The unmerged `feature/docker-01-wireguard` branch was created during exploration and must not be treated as deployed state. It can be removed after this router-hosted design change is reviewed and merged.
 
-The primary VPN project is complete only when:
-
-- `vpn-01` identity, allocated address, VMID and hosting node are recorded in Git;
-- WireGuard starts automatically after reboot;
-- at least two individually keyed clients have been tested;
-- external connectivity has been proven from outside the LAN;
-- no internal management web/SSH port has been exposed directly to the Internet;
-- access control is narrower than unrestricted LAN trust;
-- both internal DNS resolvers work through the VPN if configured for clients;
-- monitoring and logs are visible on `monitor-01`;
-- first Proxmox backup has succeeded and been validated;
-- peer revocation has been tested or demonstrably validated;
-- routing/NAT mode is explicitly documented;
-- secrets/private keys are absent from Git;
-- an operational/recovery runbook exists;
-- the router break-glass decision is recorded as implemented or intentionally deferred.
-
-# Rollback
-
-If WAN cutover produces unexpected behaviour:
-
-1. remove/disable the router UDP/51820 port-forward;
-2. disable the WireGuard interface/service on `vpn-01` if necessary;
-3. remove any new static route or NAT rule associated with `10.44.0.0/24`;
-4. confirm normal LAN, DNS, WAN and router operation is unchanged;
-5. retain the VM and logs for diagnosis rather than immediately destroying evidence.
-
-The project must not require rollback of unrelated router, DNS, Proxmox or switch configuration.
-
-# IaC/documentation outputs
-
-Expected repository outputs during implementation:
-
-- planned inventory entry for `vpn-01` once an address/VMID are genuinely allocated;
-- VM provisioning definition using the approved Proxmox/IaC path;
-- WireGuard package/service role or equivalent reviewed configuration;
-- managed `nftables` policy;
-- monitoring/logging integration;
-- backup-policy update;
-- production service document after go-live;
-- operational/recovery runbook and runbook-registry entry;
-- final update to `CURRENT-STATE.md` only after the service is proven operational.
-
-Until those acceptance gates are complete, this document remains a target design and project plan rather than evidence that the VPN is live.
+No `vpn-01` asset, VMID or LAN address should be added to the canonical estate for this implementation.

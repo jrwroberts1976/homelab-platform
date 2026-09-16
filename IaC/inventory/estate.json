@@ -132,7 +132,7 @@
       "address": "192.168.2.1",
       "state": "active",
       "kind": "network",
-      "role": "Router, DHCP and AiMesh controller",
+      "role": "Router, DHCP, AiMesh controller and OpenVPN remote-access endpoint",
       "managed_by_ansible": false
     },
     {

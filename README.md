@@ -10,7 +10,7 @@ The main current-state references are:
 
 - [Current-State Architecture](docs/architecture/CURRENT-STATE.md)
 - [Target-State Architecture](docs/architecture/TARGET-STATE.md)
-- [VPN Remote-Access Design and Project Plan](docs/network/VPN-REMOTE-ACCESS-DESIGN.md)
+- [VPN Remote-Access Design and Implementation Record](docs/network/VPN-REMOTE-ACCESS-DESIGN.md)
 - [Proxmox Cluster Implementation Record](docs/architecture/PROXMOX-CLUSTER-REBUILD-PLAN.md)
 - [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
 - [Migration Tracker](docs/migrations/MIGRATION-TRACKER.md)
@@ -50,6 +50,7 @@ The retired `TestServer` identity must not be used as the current controller. It
 | `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / Network Host Collector |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / Proxmox NFS backup target |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
+| ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN remote-access endpoint |
 
 Retired identities include `TestServer`, `DietPi`, `ids-01`, the former `k3s-node-01` identity and the old `.242` DNS resolver.
 
@@ -135,6 +136,14 @@ The remaining immediate schedule proof is the first unattended 03:15 cycle that 
 
 `monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki. Native Grafana Alloy is deployed across the managed estate. Router syslog, Network Hosts discovery/enrichment/deep profiling, first-seen notification and HP ProCurve telemetry are operational.
 
+The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/router/rt-ac86u.log` and shipped to Loki by the dedicated Alloy router-syslog pipeline. OpenVPN connection/authentication events are present in that stream.
+
+### Remote access
+
+The selected remote-access implementation is the native OpenVPN server on the ASUS RT-AC86U rather than the previously proposed WireGuard VM or a WireGuard deployment on `docker-01`/`admin-01`.
+
+External authentication and tunnel establishment have been observed. Remaining completion gates are explicit external access to the intended management services, internal DNS proof, DDNS endpoint validation and router-recovery/client-re-enrolment documentation.
+
 ### Cloud
 
 `cloud-01` is a live production Nextcloud service using PostgreSQL, Redis and a dedicated ext4 data disk. VM-level snapshot backup is proven; application-consistent Nextcloud/PostgreSQL recovery remains outstanding.
@@ -151,6 +160,16 @@ The remaining immediate schedule proof is the first unattended 03:15 cycle that 
 
 `edge-01` is a healthy LXC at `.56`, but `cloudflared` is not deployed. Tunnel implementation remains future work until there is a real service requirement.
 
+## Planned service expansion
+
+The next three service workstreams are now recorded explicitly. Recording them does **not** allocate a hostname, IP address, VMID or deployment host; each service requires a separate design and live/canonical preflight first.
+
+- **Password manager** — product not selected yet. The design must cover protected recovery material, HTTPS, MFA/passkey capability where supported, backup/restore proof and an emergency-access path that does not depend solely on the running homelab.
+- **Home Assistant** — design Home Assistant deployment, likely requiring a decision on Home Assistant OS versus another supported model, Proxmox placement, device passthrough, backup/recovery and remote-access boundaries.
+- **Docker management platform** — Komodo remains the preferred direction. Prove management-server placement, authentication/secrets handling, Git/IaC ownership boundaries, update/rollback and a low-risk pilot before retiring existing Docker update paths.
+
+See [Target-State Architecture](docs/architecture/TARGET-STATE.md) for the design gates.
+
 ## Delivery priorities
 
 | Workstream | Current position | Next milestone |
@@ -162,10 +181,12 @@ The remaining immediate schedule proof is the first unattended 03:15 cycle that 
 | Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry |
 | Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
 | Vulnerability management | `greenbone-01` commissioned and protected | Observe scheduled backup, tune hardening/update policy as needed |
-| Remote-access VPN | Dedicated WireGuard VM design retained; address and VMID deliberately unallocated | Allocate collision-free identity during deployment preflight, then build/test |
+| Remote-access VPN | Router-hosted OpenVPN selected; external authentication/tunnel observed; logs reach Loki | Prove internal admin access + DNS externally, validate DDNS and recovery |
+| Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
+| Home Assistant | Planned; placement unallocated | Choose supported deployment model and integration/backup requirements |
+| Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths only after rollback/ownership gates |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
 | Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |
-| Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths |
 | Edge / Cloudflare Tunnel | Host provisioned, tunnel absent | Deploy only when approved/needed |
 
 ## Operating principles
