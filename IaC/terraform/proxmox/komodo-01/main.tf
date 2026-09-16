@@ -6,7 +6,14 @@ resource "proxmox_virtual_environment_container" "komodo" {
 
   features {
     nesting = true
-    keyctl  = true
+  }
+
+  lifecycle {
+    # keyctl is deliberately root-managed on the Proxmox host because the
+    # Terraform API identity is not permitted to change this feature flag.
+    ignore_changes = [
+      features[0].keyctl,
+    ]
   }
 
   started       = true
