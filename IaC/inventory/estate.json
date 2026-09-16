@@ -96,7 +96,7 @@
       "address": "192.168.2.58",
       "state": "active",
       "kind": "lxc",
-      "role": "Komodo container-management control-plane host, CT104 on PROXMOX; Docker, MongoDB and Komodo Core commissioned; application backup and isolated restore validated; Proxmox backup inclusion and protection pending",
+      "role": "Komodo container-management control-plane host, CT104 on PROXMOX; Docker, MongoDB and Komodo Core commissioned; application backup and isolated restore validated; Proxmox backup scheduled with manual backup/integrity proof; first unattended run and protection remain pending",
       "managed_by_ansible": true
     },
     {
@@ -181,7 +181,17 @@
       "managed_by_ansible": false
     }
   ],
-  "planned_assets": [],
+  "planned_assets": [
+    {
+      "name": "home-01",
+      "document_label": "home-01",
+      "address": "192.168.2.60",
+      "state": "planned",
+      "kind": "vm",
+      "role": "Home Assistant OS 18.2, VM204 planned on PROXMOX; 2 vCPU, 4096 MiB RAM, 32 GiB vm-ssd; fixed MAC 02:00:00:00:02:04; backup/protection/radio integration pending commissioning",
+      "managed_by_ansible": false
+    }
+  ],
   "retired_identities": [
     {
       "token": "DietPi",

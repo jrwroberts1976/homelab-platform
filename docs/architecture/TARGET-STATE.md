@@ -187,24 +187,38 @@ See [VPN Remote-Access Design and Implementation Record](../network/VPN-REMOTE-A
 
 ### Home Assistant / home automation
 
-Home automation is the remaining major infrastructure platform. It has not yet been allocated a hostname, LAN address, VMID or cluster placement in canonical truth. `planned_assets` should remain empty until the live/canonical collision preflight is completed and a reviewed design intentionally reserves those values.
+Home automation remains the final major infrastructure platform to commission. The live/canonical preflight on 16 September 2026 passed and the following identity is now deliberately reserved in `planned_assets`:
 
-The preferred design direction is a dedicated supported Home Assistant deployment on the Proxmox platform, with the final deployment model fixed only after preflight and integration requirements are understood.
+```text
+hostname:      home-01
+IPv4:         192.168.2.60/24
+VMID:         204
+MAC:          02:00:00:00:02:04
+Proxmox node: PROXMOX
+storage:      vm-ssd
+```
 
-Design/preflight must decide and record:
+The approved deployment model is a dedicated Home Assistant OS 18.2 VM rather than an LXC/container deployment or a workload on `docker-01`. Initial sizing is 2 vCPU, 4096 MiB RAM and 32 GiB disk with OVMF/UEFI, Secure Boot pre-enrolled keys disabled, VirtIO networking/SCSI and QEMU guest agent enabled.
 
-- supported Home Assistant deployment model, with Home Assistant OS VM preferred unless a specific integration constraint justifies another supported model;
-- Proxmox node placement, resource sizing, storage and startup policy;
-- hostname, IP address and VMID after collision checks;
-- Zigbee/Z-Wave/Bluetooth architecture and whether radios are USB-passthrough or network-attached;
-- local-only versus approved remote-access model;
-- DNS naming and certificate approach;
-- Home Assistant native backup destination and restore procedure;
-- inclusion in the Proxmox guest-backup policy only after whole-guest backup validation;
-- monitoring without leaking unnecessary entity/state data;
-- failure behaviour for automations that affect the physical home.
+The base-build IaC lives under `IaC/terraform/proxmox/home-01/`, with a guarded deployment entry point at `IaC/scripts/deploy-home-01.sh`. The build pins the upstream HAOS image/checksum and refuses unexpected Terraform actions.
 
-Prefer local control and avoid making the Home Assistant management UI directly WAN-accessible merely for convenience.
+Remaining commissioning gates are:
+
+- review/merge the HAOS IaC and execute the guarded base deployment;
+- complete Home Assistant first-run onboarding;
+- configure and prove persistent `192.168.2.60` networking after the default first-boot DHCP stage;
+- publish/verify DNS on both managed resolvers only after `.60` is active;
+- create a native Home Assistant backup and document its restore path;
+- configure network/off-host backup where appropriate;
+- take and integrity-check a manual Proxmox snapshot backup before adding VM204 to the nightly job;
+- observe the first unattended backup including VM204;
+- add external HTTP/platform monitoring without unnecessarily exporting household entity/state data;
+- choose Zigbee/Z-Wave/Thread/Bluetooth architecture separately, preferring network-attached coordinators where practical to avoid unnecessary node affinity;
+- enable Proxmox protection only after recovery evidence justifies it.
+
+No direct WAN exposure is approved. Prefer local control and use the existing router-hosted VPN for remote administration unless a later reviewed design deliberately selects another supported Home Assistant remote-access mechanism.
+
+See [Home Automation / Home Assistant Design](HOME-AUTOMATION-DESIGN.md).
 
 ### Password manager
 
@@ -289,5 +303,5 @@ The platform can be considered operationally mature when:
 - vulnerability scanning remains maintainable and recovery-aware;
 - observability remains useful and low-noise across both Prometheus/Grafana/Loki and Zabbix;
 - service ownership and IaC authority remain unambiguous;
-- Home Assistant is introduced only after its identity/placement, backup/recovery and device-radio boundaries are explicitly designed and validated;
+- `home-01` is promoted from planned to active only after persistent networking, backup/recovery and external monitoring gates are proven;
 - optional new services are introduced only when their operational value justifies their recovery and maintenance burden.
