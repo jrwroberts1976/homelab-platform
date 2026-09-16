@@ -1,0 +1,92 @@
+---
+- name: Require expected Proxmox host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == proxmox_overlay_expected_hostname
+      - proxmox_overlay_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing overlay-module configuration on an unexpected Proxmox host.
+
+- name: Verify overlay kernel module exists
+  ansible.builtin.command:
+    argv:
+      - modinfo
+      - "{{ proxmox_overlay_module_name }}"
+  register: proxmox_overlay_modinfo
+  changed_when: false
+
+- name: Read validation LXC configuration
+  ansible.builtin.command:
+    argv:
+      - pct
+      - config
+      - "{{ proxmox_overlay_validation_ctid | string }}"
+  register: proxmox_overlay_ct_config
+  changed_when: false
+
+- name: Require approved Komodo LXC identity
+  ansible.builtin.assert:
+    that:
+      - >-
+        ('hostname: ' ~ proxmox_overlay_validation_hostname)
+        in proxmox_overlay_ct_config.stdout
+      - "'unprivileged: 1' in proxmox_overlay_ct_config.stdout"
+      - >-
+        proxmox_overlay_ct_config.stdout
+        is search('(?m)^features:.*nesting=1')
+      - >-
+        proxmox_overlay_ct_config.stdout
+        is search('(?m)^features:.*keyctl=1')
+      - >-
+        ('ip=' ~ proxmox_overlay_validation_ipv4)
+        in proxmox_overlay_ct_config.stdout
+      - >-
+        proxmox_overlay_ct_config.stdout
+        is not search('(?m)^features:.*(fuse=1|mknod=1|mount=)')
+    fail_msg: >-
+      CT104 does not match the approved komodo-01 configuration.
+
+- name: Check whether overlay is already loaded
+  ansible.builtin.stat:
+    path: /sys/module/overlay
+  register: proxmox_overlay_loaded
+
+- name: Persist overlay kernel module at boot
+  ansible.builtin.copy:
+    content: |
+      overlay
+    dest: "{{ proxmox_overlay_modules_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Load overlay kernel module
+  ansible.builtin.command:
+    argv:
+      - modprobe
+      - "{{ proxmox_overlay_module_name }}"
+  when: not proxmox_overlay_loaded.stat.exists
+  changed_when: true
+
+- name: Verify overlay filesystem is registered on Proxmox
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -w
+      - overlay
+      - /proc/filesystems
+  changed_when: false
+
+- name: Verify overlay filesystem is visible inside komodo-01
+  ansible.builtin.command:
+    argv:
+      - pct
+      - exec
+      - "{{ proxmox_overlay_validation_ctid | string }}"
+      - --
+      - grep
+      - -w
+      - overlay
+      - /proc/filesystems
+  changed_when: false
