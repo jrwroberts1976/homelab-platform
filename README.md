@@ -10,6 +10,7 @@ The main current-state references are:
 
 - [Current-State Architecture](docs/architecture/CURRENT-STATE.md)
 - [Target-State Architecture](docs/architecture/TARGET-STATE.md)
+- [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md)
 - [VPN Remote-Access Design and Implementation Record](docs/network/VPN-REMOTE-ACCESS-DESIGN.md)
 - [Proxmox Cluster Implementation Record](docs/architecture/PROXMOX-CLUSTER-REBUILD-PLAN.md)
 - [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
@@ -177,18 +178,18 @@ External authentication and tunnel establishment have been observed. Remaining c
 
 ## Planned service expansion
 
-Two service workstreams remain explicitly planned. Recording them does **not** allocate a hostname, IP address, VMID or deployment host; each requires a separate design and live/canonical preflight first.
+Two service workstreams remain explicitly planned. Canonical reservations are recorded only after a live/canonical collision preflight.
 
-- **Home Assistant / home automation** — this is the remaining major infrastructure platform. The next step is a live collision/capacity preflight and a reviewed deployment design covering Home Assistant OS/VM placement, device radios/passthrough, local control, backup/recovery and monitoring. No hostname/IP/VMID is allocated in canonical truth yet.
+- **Home Assistant / home automation** — the preflight passed and canonical planned identity is now reserved as `home-01`, `192.168.2.60`, VM204 on `PROXMOX`, fixed MAC `02:00:00:00:02:04`. The approved deployment model is Home Assistant OS 18.2 in a dedicated VM with 2 vCPU, 4 GiB RAM and a 32 GiB `vm-ssd` disk. It remains planned until commissioning, persistent `.60` networking, backup/recovery and monitoring gates pass.
 - **Password manager** — optional application workstream; product not selected. The design must cover protected recovery material, HTTPS, MFA/passkey capability where supported, backup/restore proof and an emergency-access path that does not depend solely on the running homelab.
 
-See [Target-State Architecture](docs/architecture/TARGET-STATE.md) for the design gates.
+See [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md) and [Target-State Architecture](docs/architecture/TARGET-STATE.md) for the design gates.
 
 ## Delivery priorities
 
 | Workstream | Current position | Next milestone |
 |---|---|---|
-| Home automation | Remaining major infrastructure platform; not yet allocated | Preflight placement/IP/VMID and produce Home Assistant design/IaC |
+| Home automation | `home-01` / `.60` / VM204 reserved as planned; HAOS IaC prepared | Review/merge IaC, deploy HAOS base VM, complete onboarding and persistent `.60` network configuration |
 | Proxmox cluster | Two-node cluster, dual Corosync links and QDevice operational | Prove link0 -> link1 fallback and controlled single-node quorum behaviour |
 | Backup schedule | Both IaC jobs include current production guests; CT104/CT105/VM203 have manual backup integrity proof | Observe first unattended runs containing the newly added guests |
 | Recovery depth | LXC restore proof exists | QEMU restore proof + application-consistent `cloud-01` recovery |
