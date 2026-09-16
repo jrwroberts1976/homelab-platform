@@ -11,7 +11,7 @@ It describes what is live now. Historical host identities and earlier migration 
 
 Legacy repositories may remain useful reference sources for areas not yet migrated. They must not be treated as current authority after their workload or configuration has been explicitly migrated and validated in `homelab-platform`.
 
-A detailed reconciliation trail for the 14 September estate snapshot is recorded in `docs/architecture/ESTATE-AUDIT-2026-09-14.md`.
+A detailed reconciliation trail for the 14 September estate snapshot is recorded in `docs/architecture/ESTATE-AUDIT-2026-09-14.md`. The post-commissioning document audit on 16 September is recorded in `docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-09-16.md`.
 
 ## Active estate
 
@@ -26,8 +26,8 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive network sensor, VM 201 on `PROXMOX` | ACTIVE — CAPTURE OPERATIONAL |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM 203 on `Proxmox-2` | ACTIVE — LAN-ONLY SCANNER |
-| `komodo-01` | `192.168.2.58` | Komodo control-plane host, unprivileged CT 104 on `PROXMOX` | ACTIVE — KOMODO CORE COMMISSIONED; APP BACKUP/RESTORE PROVEN |
-| `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT 105 on `PROXMOX` | ACTIVE — PLATFORM COMMISSIONED; BACKUP/IAC SCHEDULE PROVEN |
+| `komodo-01` | `192.168.2.58` | Komodo control-plane host, unprivileged CT 104 on `PROXMOX` | ACTIVE — KOMODO CORE COMMISSIONED; APP + MANUAL VM BACKUP PROVEN |
+| `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT 105 on `PROXMOX` | ACTIVE — PLATFORM + 15-HOST AGENT ESTATE REPORTING; MANUAL BACKUP/RESTORE PROVEN |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
@@ -200,17 +200,24 @@ Validated state on 16 September 2026:
 
 - Debian 13 unprivileged LXC at `192.168.2.59`;
 - CTID 105 on `PROXMOX`;
+- Zabbix API version `7.0.30` observed during host onboarding;
 - PostgreSQL and TimescaleDB active;
 - Zabbix Server active;
 - Zabbix Agent 2 active and enabled locally;
 - Agent 2 listens on TCP/10050;
 - Nginx and PHP-FPM active;
 - frontend HTTP health returned 200;
-- whole-container backup integrity proven;
+- whole-container manual backup integrity proven;
 - application logical backup and restore validation proven;
-- CT105 is included in the `homelab-nightly-proxmox` 02:15 backup schedule;
+- CT105 is included in the IaC/live `homelab-nightly-proxmox` 02:15 backup selection;
+- the first unattended 02:15 cycle including CT105 remains to be observed;
 - the pre-platform rollback snapshot remains retained;
-- wider Agent 2 rollout to the managed Debian estate is pending.
+- the `zabbix_agents` inventory group contains all 15 managed Linux systems;
+- Zabbix host group `Homelab/Linux` contains matching host objects linked to `Linux by Zabbix agent active`;
+- all 15 host objects were observed reporting on 16 September 2026;
+- active-agent hostnames match the Ansible inventory identities.
+
+The first estate-wide Agent2 play encountered an `admin-01` sudo/become-password issue, but that host subsequently reported to Zabbix. This is an Ansible privilege-escalation housekeeping item rather than an active Zabbix reporting gap.
 
 ## Monitoring and logging
 
@@ -277,9 +284,12 @@ Validated state on 16 September 2026:
 - a Komodo application backup was created in `/var/backups/komodo/2026-09-16_10-33-04` and all 22 gzip collection files passed integrity validation;
 - that backup was restored into the isolated `komodo_restore_validation` database and the populated `User`, `Tag`, `Procedure` and `Update` collections matched the live backup baseline;
 - the live `komodo` database remained unchanged during restore validation and the temporary restore database was removed afterward;
-- CT104 Proxmox backup inclusion and Proxmox protection remain pending.
+- CT104 manual Proxmox snapshot backup completed successfully on `media-backup-proxmox` and archive integrity/structure checks passed;
+- CT104 is included in the IaC/live `homelab-nightly-proxmox` 02:15 backup selection;
+- the first unattended 02:15 cycle including CT104 remains to be observed;
+- Proxmox protection remains disabled pending deliberate acceptance.
 
-The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated. Komodo application backup and isolated recovery are now proven. The next controlled stage is durable Proxmox backup inclusion for CT104 followed by protection enablement. HTTPS hardening remains required before broader routine administrative use, and Periphery onboarding remains a separate later stage.
+The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated. Komodo application backup, isolated recovery and manual whole-container backup are proven. Remaining platform work is the first unattended backup proof, protection decision, HTTPS hardening and deliberate Periphery/managed-host onboarding.
 
 ## Production cloud service
 
@@ -442,26 +452,29 @@ retention target: keep-last=3
 local tmpdir: /var/lib/vz/vzdump-tmp
 ```
 
-Before cluster formation all seven production PVE guests had successful snapshot-backup evidence, CT103 had an isolated restore/boot proof, and Proxmox notification delivery through `mail-relay-01` was proven end to end.
+Before cluster formation all seven then-production PVE guests had successful snapshot-backup evidence, CT103 had an isolated restore/boot proof, and Proxmox notification delivery through `mail-relay-01` was proven end to end.
 
-Cluster formation changed the monitor VMID and the final workload placement. The old standalone schedule proof must therefore not be represented as final cluster-era proof.
+Cluster formation changed the monitor VMID and later commissioning added VM203, CT104 and CT105. Historical schedule proof must therefore not be represented as proof of unattended execution for the complete current guest set.
 
-Expected post-cluster job selections are:
+Current post-cluster job selections are:
 
 ```text
 PROXMOX .70
-  VMIDs 100,102,200,201
+  VMIDs 100,102,104,105,200,201
   storage media-backup-proxmox
+  schedule 02:15
 
 Proxmox-2 .71
   VMIDs 101,103,202,203
   storage media-backup-proxmox-2
+  schedule 03:15
 ```
 
-The Proxmox-2 backup schedule is now reconciled through IaC to `101,103,202,203` and a second Ansible run completed with `changed=0`. The unattended 03:15 cycle on 16 September succeeded for `101,103,202`; VM203 has separate manual snapshot-backup and archive-integrity proof. The first unattended cycle that includes VM203 remains to be observed.
+Both job definitions are reconciled through IaC. CT104 and CT105 have successful manual snapshot/integrity proof and are included in the 02:15 job; their first unattended scheduled run remains to be observed. The unattended 03:15 cycle on 16 September succeeded for `101,103,202`; VM203 has separate manual snapshot/integrity proof and the first unattended cycle including VM203 remains to be observed.
 
 Outstanding recovery gaps include:
 
+- first unattended `PROXMOX` scheduled cycle including CT104 and CT105;
 - first unattended `Proxmox-2` scheduled cycle including VM203;
 - representative QEMU VM restore proof;
 - application-consistent Nextcloud/PostgreSQL recovery;
