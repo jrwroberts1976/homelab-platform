@@ -19,6 +19,7 @@ HAOS_VERSION="18.2"
 HAOS_URL="https://github.com/home-assistant/operating-system/releases/download/${HAOS_VERSION}/haos_ova-${HAOS_VERSION}.qcow2.xz"
 HAOS_SHA256="254e53f354df0739e3afc09be5431a07df53f0df6b703885404f665c454f254e"
 HAOS_IMAGE_ID="local:import/haos_ova-${HAOS_VERSION}.qcow2"
+HAOS_IMAGE_NAME="haos_ova-${HAOS_VERSION}.qcow2"
 
 REPO_ROOT="${GITHUB_WORKSPACE:-$(cd "$(dirname "$0")/../.." && pwd)}"
 CONFIG_DIR="$HOME/.config/homelab-iac"
@@ -78,37 +79,73 @@ printf '\n===== LIVE COLLISION / CAPACITY GATE =====\n'
 ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes -o ConnectTimeout=5 "root@$PVE_SSH_HOST" true \
   || die "Root SSH to PROXMOX failed"
 
-ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" "
+ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" \
+  "PVE_NODE_NAME='$PVE_NODE_NAME' HOME_VM_ID='$HOME_VM_ID' HOME_IPV4='$HOME_IPV4' HOME_MAC='$HOME_MAC' HOME_HOSTNAME='$HOME_HOSTNAME' HAOS_IMAGE_NAME='$HAOS_IMAGE_NAME' bash -s" <<'REMOTE_GATE'
 set -euo pipefail
 
-test \"\$(hostname -s)\" = '$PVE_NODE_NAME'
+test "$(hostname -s)" = "$PVE_NODE_NAME"
 
-if qm config '$HOME_VM_ID' >/dev/null 2>&1 || pct config '$HOME_VM_ID' >/dev/null 2>&1; then
-  echo 'VMID $HOME_VM_ID already exists'
+if qm config "$HOME_VM_ID" >/dev/null 2>&1 || pct config "$HOME_VM_ID" >/dev/null 2>&1; then
+  echo "VMID $HOME_VM_ID already exists"
   exit 25
 fi
 
-if grep -RHiE '$HOME_IPV4|$HOME_MAC|$HOME_HOSTNAME' /etc/pve/qemu-server /etc/pve/lxc 2>/dev/null; then
+if grep -RHiE "$HOME_IPV4|$HOME_MAC|$HOME_HOSTNAME" /etc/pve/qemu-server /etc/pve/lxc 2>/dev/null; then
   echo 'identity collision found in /etc/pve'
   exit 26
 fi
 
-AVAILABLE_MB=\"\$(free -m | awk '/^Mem:/ {print \$7}')\"
-test \"\$AVAILABLE_MB\" -ge 5000 || {
-  echo \"available_memory_mb=\$AVAILABLE_MB\"
+AVAILABLE_MB="$(free -m | awk '/^Mem:/ {print $7}')"
+test "$AVAILABLE_MB" -ge 5000 || {
+  echo "available_memory_mb=$AVAILABLE_MB"
   exit 27
 }
 
-echo \"available_memory_mb=\$AVAILABLE_MB\"
+echo "available_memory_mb=$AVAILABLE_MB"
 
-pvesm status | awk '\$1 == "vm-ssd" && \$3 == "active" {found=1; if (\$6 < 67108864) exit 2} END {if (!found) exit 3}'
+pvesm status | awk '$1 == "vm-ssd" && $3 == "active" {found=1; if ($6 < 67108864) exit 2} END {if (!found) exit 3}'
+echo 'vm_ssd_capacity=PASS'
 
-IMPORT_PATH=\"\$(pvesm path '$HAOS_IMAGE_ID')\"
-test -n \"\$IMPORT_PATH\"
-echo \"haos_import_path=\$IMPORT_PATH\"
+LOCAL_CONFIG="$(pvesm config local)"
+LOCAL_PATH="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "path" {print $2; exit}')"
+LOCAL_CONTENT="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content" {print $2; exit}')"
+CONTENT_DIRS="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content-dirs" {print $2; exit}')"
 
-echo 'live_collision_capacity_gate=PASS'
-" || die "PROXMOX collision/capacity gate failed"
+test -n "$LOCAL_PATH" || {
+  echo 'local storage path could not be determined'
+  exit 28
+}
+
+case ",$LOCAL_CONTENT," in
+  *,import,*) ;;
+  *)
+    echo "local_storage_content=$LOCAL_CONTENT"
+    echo 'local storage does not permit import content'
+    exit 29
+    ;;
+esac
+
+IMPORT_REL='template/import'
+if [ -n "$CONTENT_DIRS" ]; then
+  OLDIFS="$IFS"
+  IFS=','
+  for entry in $CONTENT_DIRS; do
+    case "$entry" in
+      import=*) IMPORT_REL="${entry#import=}" ;;
+    esac
+  done
+  IFS="$OLDIFS"
+fi
+
+IMPORT_DIR="${LOCAL_PATH%/}/${IMPORT_REL#/}"
+IMPORT_PATH="$IMPORT_DIR/$HAOS_IMAGE_NAME"
+
+printf 'local_storage_path=%s\n' "$LOCAL_PATH"
+printf 'local_storage_content=%s\n' "$LOCAL_CONTENT"
+printf 'haos_import_directory=%s\n' "$IMPORT_DIR"
+printf 'haos_import_path=%s\n' "$IMPORT_PATH"
+printf 'live_collision_capacity_gate=PASS\n'
+REMOTE_GATE
 
 if ping -c 2 -W 1 "$HOME_IPV4" >/dev/null 2>&1; then
   die "IP $HOME_IPV4 responds before home-01 creation"
@@ -120,27 +157,61 @@ printf 'ipv4_silent=PASS\n'
 
 printf '\n===== STAGE PINNED HAOS IMAGE =====\n'
 ssh -i "$PVE_ROOT_SSH_KEY" -o BatchMode=yes "root@$PVE_SSH_HOST" \
-  "HAOS_URL='$HAOS_URL' HAOS_SHA256='$HAOS_SHA256' HAOS_IMAGE_ID='$HAOS_IMAGE_ID' bash -s" <<'REMOTE'
+  "HAOS_URL='$HAOS_URL' HAOS_SHA256='$HAOS_SHA256' HAOS_IMAGE_ID='$HAOS_IMAGE_ID' HAOS_IMAGE_NAME='$HAOS_IMAGE_NAME' bash -s" <<'REMOTE'
 set -euo pipefail
 
-for cmd in curl sha256sum xz qemu-img pvesm; do
+for cmd in curl sha256sum xz qemu-img pvesm awk dirname readlink; do
   command -v "$cmd" >/dev/null 2>&1 || {
     echo "missing command: $cmd"
     exit 31
   }
 done
 
-DEST="$(pvesm path "$HAOS_IMAGE_ID")"
-DEST_DIR="$(dirname "$DEST")"
-ARCHIVE="/var/tmp/$(basename "$DEST").xz"
+LOCAL_CONFIG="$(pvesm config local)"
+LOCAL_PATH="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "path" {print $2; exit}')"
+LOCAL_CONTENT="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content" {print $2; exit}')"
+CONTENT_DIRS="$(printf '%s\n' "$LOCAL_CONFIG" | awk '$1 == "content-dirs" {print $2; exit}')"
+
+test -n "$LOCAL_PATH" || {
+  echo 'local storage path could not be determined'
+  exit 32
+}
+
+case ",$LOCAL_CONTENT," in
+  *,import,*) ;;
+  *)
+    echo "local_storage_content=$LOCAL_CONTENT"
+    echo 'local storage does not permit import content'
+    exit 33
+    ;;
+esac
+
+IMPORT_REL='template/import'
+if [ -n "$CONTENT_DIRS" ]; then
+  OLDIFS="$IFS"
+  IFS=','
+  for entry in $CONTENT_DIRS; do
+    case "$entry" in
+      import=*) IMPORT_REL="${entry#import=}" ;;
+    esac
+  done
+  IFS="$OLDIFS"
+fi
+
+DEST_DIR="${LOCAL_PATH%/}/${IMPORT_REL#/}"
+DEST="$DEST_DIR/$HAOS_IMAGE_NAME"
+ARCHIVE="/var/tmp/${HAOS_IMAGE_NAME}.xz"
 TMP_IMAGE="${DEST}.new"
 
 mkdir -p "$DEST_DIR"
 
 if [ -f "$DEST" ]; then
   qemu-img check "$DEST" >/dev/null
-  echo "haos_image=EXISTING_VALID"
+  RESOLVED="$(pvesm path "$HAOS_IMAGE_ID")"
+  test "$(readlink -f "$RESOLVED")" = "$(readlink -f "$DEST")"
+  echo 'haos_image=EXISTING_VALID'
   echo "haos_image_path=$DEST"
+  echo "haos_volume_id=$HAOS_IMAGE_ID"
   exit 0
 fi
 
@@ -158,9 +229,12 @@ chmod 0644 "$DEST"
 rm -f "$ARCHIVE"
 
 qemu-img check "$DEST" >/dev/null
+RESOLVED="$(pvesm path "$HAOS_IMAGE_ID")"
+test "$(readlink -f "$RESOLVED")" = "$(readlink -f "$DEST")"
 
-echo "haos_image=STAGED_VERIFIED"
+echo 'haos_image=STAGED_VERIFIED'
 echo "haos_image_path=$DEST"
+echo "haos_volume_id=$HAOS_IMAGE_ID"
 REMOTE
 
 printf '\n===== PREPARE DURABLE TERRAFORM STATE =====\n'
