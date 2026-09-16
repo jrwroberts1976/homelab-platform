@@ -100,6 +100,15 @@
       "managed_by_ansible": true
     },
     {
+      "name": "zabbix-01",
+      "document_label": "zabbix-01",
+      "address": "192.168.2.59",
+      "state": "active",
+      "kind": "lxc",
+      "role": "Zabbix monitoring platform, CT105 on PROXMOX; PostgreSQL, TimescaleDB, Zabbix Server, Agent 2 and Nginx active",
+      "managed_by_ansible": true
+    },
+    {
       "name": "PROXMOX",
       "document_label": "PROXMOX",
       "address": "192.168.2.70",
@@ -172,17 +181,7 @@
       "managed_by_ansible": false
     }
   ],
-  "planned_assets": [
-    {
-      "name": "zabbix-01",
-      "document_label": "zabbix-01",
-      "address": "192.168.2.59",
-      "state": "planned",
-      "kind": "lxc",
-      "role": "Planned Zabbix monitoring platform, CT105 on PROXMOX",
-      "managed_by_ansible": true
-    }
-  ],
+  "planned_assets": [],
   "retired_identities": [
     {
       "token": "DietPi",
