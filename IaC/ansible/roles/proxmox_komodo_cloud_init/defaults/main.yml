@@ -1,0 +1,11 @@
+---
+komodo_cloud_init_hostname: komodo-01
+komodo_cloud_init_domain: jameshouse
+
+komodo_cloud_init_expected_hypervisor_hostname: PROXMOX
+komodo_cloud_init_expected_hypervisor_ipv4: 192.168.2.70
+
+komodo_cloud_init_snippet_dir: /var/lib/vz/snippets
+komodo_cloud_init_snippet_name: komodo-01-user-data.yaml
+
+komodo_cloud_init_public_key: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/proxmox-automation.pub') | trim }}"

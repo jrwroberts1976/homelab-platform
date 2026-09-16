@@ -1,0 +1,30 @@
+#cloud-config
+hostname: {{ komodo_cloud_init_hostname }}
+fqdn: {{ komodo_cloud_init_hostname }}.{{ komodo_cloud_init_domain }}
+manage_etc_hosts: true
+timezone: Europe/London
+ssh_pwauth: false
+
+users:
+  - default
+  - name: james
+    groups:
+      - sudo
+    shell: /bin/bash
+    ssh_authorized_keys:
+      - {{ komodo_cloud_init_public_key }}
+    sudo: ALL=(ALL) NOPASSWD:ALL
+
+package_update: true
+
+packages:
+  - qemu-guest-agent
+  - python3
+  - sudo
+  - ca-certificates
+  - curl
+
+runcmd:
+  - systemctl enable qemu-guest-agent
+  - systemctl start qemu-guest-agent
+  - touch /var/lib/cloud/komodo-01-bootstrap-complete
