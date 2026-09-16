@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router Syslog Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
@@ -5,13 +6,13 @@
 **Source:** ASUS `RT-AC86U` / `192.168.2.1`  
 **Transport:** UDP/5514  
 **Status:** operational; local rsyslog receiver plus Alloy/Loki ingestion  
-**Last current-state review:** 14 September 2026
+**Last current-state review:** 16 September 2026
 
 ## Purpose
 
 The ASUS RT-AC86U remote-log capability provides operational/network context without requiring another VM.
 
-The service deliberately retains a local rsyslog file while also shipping the dedicated router log into Loki through Alloy.
+The service deliberately retains a local rsyslog file while also shipping the dedicated router log into Loki through Alloy. The same path now carries OpenVPN server events from the router, including authentication, tunnel establishment, address assignment and disconnect/error messages.
 
 ## Current data path
 
@@ -27,7 +28,7 @@ monitor-01 192.168.2.52
         |      +--> /var/log/homelab/router/rt-ac86u.log
         |      +--> logrotate
         |
-        +--> Alloy 1.19.2
+        +--> Alloy
                |
                v
         Loki on 127.0.0.1:3100
@@ -40,18 +41,19 @@ The earlier documentation that described Alloy/Loki as future work is superseded
 
 ## Current validated state
 
-The existing receiver remains operational:
+The receiver was revalidated live on 16 September 2026 from `admin-01`:
 
-- rsyslog active on `monitor-01`;
-- UDP/5514 configured as the dedicated router receiver;
-- source filtering retained for router `.1`;
-- `/var/log/homelab/router/rt-ac86u.log` is the dedicated local file;
-- logrotate policy remains part of the design;
-- zero failed systemd units were reported by the 14 September compact audit.
+- rsyslog is receiving the ASUS router stream on `monitor-01`;
+- `/var/log/homelab/router/rt-ac86u.log` existed and was actively updating;
+- recent OpenVPN server messages were present in the dedicated router log;
+- a successful external OpenVPN username/password authentication and tunnel establishment were visible in the file;
+- the observed VPN session included TLS 1.3 control-channel negotiation and an AES-256-GCM data channel;
+- Alloy's live `/etc/alloy/config.alloy` contains the dedicated `loki.source.file "router_syslog"` source;
+- the source points at `/var/log/homelab/router/rt-ac86u.log`;
+- stable labels include `service="router-syslog"` and `device="rt-ac86u"`;
+- the repository already contains the dedicated `monitor_router_alloy` role that manages this pipeline.
 
-The earlier packet validation proved router forwarding to the receiver. Current IaC now additionally deploys Alloy router-log shipping on `monitor-01`.
-
-Direct 14 September monitoring validation also proved Loki running and ready on TCP/3100 and Alloy active locally on TCP/12345.
+This confirms the router-to-rsyslog-to-Alloy path is not configuration drift: it is represented in the current IaC through the dedicated router Alloy role.
 
 ## Alloy/Loki configuration
 
@@ -68,7 +70,14 @@ service:          router-syslog
 device:           rt-ac86u
 ```
 
-These stable service/device labels are preferred over high-cardinality labels derived from arbitrary message content.
+The implementation is maintained by:
+
+```text
+IaC/ansible/playbooks/monitor-router-alloy.yml
+IaC/ansible/roles/monitor_router_alloy/
+```
+
+These stable service/device labels are preferred over high-cardinality labels derived from arbitrary message content. OpenVPN usernames, public client IP addresses, source ports and process IDs should remain in log content rather than becoming Loki labels.
 
 ## Security boundary
 
@@ -82,6 +91,8 @@ The receiver:
 Source-IP filtering is useful but is not equivalent to authenticated log transport.
 
 The Loki push path is local to `monitor-01` and does not require exposing a separate external log-ingest endpoint for the router.
+
+Router/OpenVPN logs may contain usernames, public source addresses and other connection metadata. Treat Loki/Grafana access as operationally sensitive and do not copy unnecessary connection metadata into public documentation.
 
 ## Retention
 
@@ -133,6 +144,7 @@ port:   5514
 Repeat an end-to-end packet/log proof after:
 
 - router firmware/reset changes;
+- OpenVPN server rebuild or certificate regeneration where logging behaviour changes;
 - receiver rebuild;
 - rsyslog configuration changes;
 - switch/network redesign affecting the path;
@@ -142,9 +154,15 @@ Repeat an end-to-end packet/log proof after:
 
 `monitor-01` receives the normal host/platform monitoring coverage and Loki readiness checks are part of the central monitoring validation.
 
-No content-based router-log alerting is required by default. Add log alerts only after representative messages are classified and the result is actionable.
+Useful Loki selection starts with the managed labels:
 
-Useful LogQL queries should use the managed stable labels rather than turning arbitrary IPs, usernames, PIDs or message text into labels.
+```logql
+{job="network-infrastructure", service="router-syslog", device="rt-ac86u"}
+```
+
+OpenVPN-focused investigation can then filter message content, for example by `ovpn-server`, authentication result or connection lifecycle message, without creating dynamic labels for usernames or IP addresses.
+
+No content-based router-log alerting is required by default. Add log alerts only after representative messages are classified and the result is actionable; repeated VPN authentication failure may be a future candidate if it can be made low-noise.
 
 ## Definition of current done state
 
@@ -156,5 +174,6 @@ The router logging path is operational because:
 - local rotation is configured;
 - the dedicated router log exists as the local source of truth for receipt;
 - Alloy router-log shipping is deployed through IaC;
-- Loki is running/ready on `monitor-01`;
-- the central monitoring platform and local Alloy service were directly validated on 14 September 2026.
+- the dedicated Alloy file source was verified live on 16 September 2026;
+- OpenVPN connection/authentication events were observed in the router log during external VPN testing;
+- Loki is the central destination for the stream.
