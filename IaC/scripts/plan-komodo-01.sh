@@ -203,7 +203,6 @@ jq -e '
   and $changes[0].change.after.vm_id == 104
   and $changes[0].change.after.unprivileged == true
   and $changes[0].change.after.features[0].nesting == true
-  and $changes[0].change.after.features[0].keyctl == true
   and $changes[0].change.after.cpu[0].cores == 2
   and $changes[0].change.after.memory[0].dedicated == 2048
   and $changes[0].change.after.memory[0].swap == 512
@@ -236,7 +235,7 @@ printf '\n===== APPROVED KOMODO LXC SPEC =====\n'
 printf 'ct_id=104\n'
 printf 'unprivileged=true\n'
 printf 'nesting=true\n'
-printf 'keyctl=true\n'
+printf 'keyctl=root-managed-post-create\n'
 printf 'ipv4=192.168.2.58/24\n'
 printf 'mac=02:00:00:00:01:04\n'
 printf 'cpu_cores=2\n'

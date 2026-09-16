@@ -1,0 +1,9 @@
+---
+komodo_lxc_ctid: 104
+komodo_lxc_hostname: komodo-01
+
+komodo_lxc_expected_hypervisor_hostname: PROXMOX
+komodo_lxc_expected_hypervisor_ipv4: 192.168.2.70
+
+komodo_lxc_expected_ipv4_cidr: 192.168.2.58/24
+komodo_lxc_expected_mac: "02:00:00:00:01:04"

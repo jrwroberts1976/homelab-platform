@@ -1,0 +1,8 @@
+---
+- name: Configure root-managed Komodo LXC features
+  hosts: PROXMOX
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: proxmox_komodo_lxc_features

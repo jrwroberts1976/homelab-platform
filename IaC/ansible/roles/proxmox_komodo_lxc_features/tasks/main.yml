@@ -1,0 +1,76 @@
+---
+- name: Require expected Proxmox host
+  ansible.builtin.assert:
+    that:
+      - ansible_distribution == "Debian"
+      - ansible_hostname == komodo_lxc_expected_hypervisor_hostname
+      - komodo_lxc_expected_hypervisor_ipv4 in ansible_all_ipv4_addresses
+    fail_msg: >-
+      Refusing to manage Komodo LXC features on an unexpected Proxmox host.
+
+- name: Read current Komodo LXC configuration
+  ansible.builtin.command:
+    argv:
+      - pct
+      - config
+      - "{{ komodo_lxc_ctid | string }}"
+  register: komodo_lxc_config
+  changed_when: false
+
+- name: Require expected Komodo LXC identity before root-only mutation
+  ansible.builtin.assert:
+    that:
+      - >-
+        ('hostname: ' ~ komodo_lxc_hostname)
+        in komodo_lxc_config.stdout
+      - "'unprivileged: 1' in komodo_lxc_config.stdout"
+      - >-
+        komodo_lxc_config.stdout
+        is search('(?m)^features:.*nesting=1')
+      - >-
+        ('ip=' ~ komodo_lxc_expected_ipv4_cidr)
+        in komodo_lxc_config.stdout
+      - >-
+        ('hwaddr=' ~ komodo_lxc_expected_mac)
+        in komodo_lxc_config.stdout
+      - >-
+        komodo_lxc_config.stdout
+        is not search('(?m)^features:.*(fuse=1|mknod=1|mount=)')
+    fail_msg: >-
+      CT104 does not match the approved komodo-01 identity or has unexpected
+      LXC feature flags. Refusing to change keyctl.
+
+- name: Enable root-only keyctl feature required by Docker-in-LXC
+  ansible.builtin.command:
+    argv:
+      - pct
+      - set
+      - "{{ komodo_lxc_ctid | string }}"
+      - "-features"
+      - "nesting=1,keyctl=1"
+  when: >-
+    komodo_lxc_config.stdout
+    is not search('(?m)^features:.*keyctl=1')
+  register: komodo_lxc_keyctl_change
+  changed_when: komodo_lxc_keyctl_change.rc == 0
+
+- name: Re-read Komodo LXC configuration
+  ansible.builtin.command:
+    argv:
+      - pct
+      - config
+      - "{{ komodo_lxc_ctid | string }}"
+  register: komodo_lxc_config_after
+  changed_when: false
+
+- name: Require approved Komodo LXC features
+  ansible.builtin.assert:
+    that:
+      - >-
+        komodo_lxc_config_after.stdout
+        is search('(?m)^features:.*nesting=1')
+      - >-
+        komodo_lxc_config_after.stdout
+        is search('(?m)^features:.*keyctl=1')
+    fail_msg: >-
+      komodo-01 does not have both nesting=1 and keyctl=1 after configuration.
