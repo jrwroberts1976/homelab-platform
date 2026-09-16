@@ -4,6 +4,8 @@ This directory is the configuration authority for the homelab hosts and services
 
 The normal controller is `admin-01` (`192.168.2.48`). Run production Ansible from the checked-out `homelab-platform` repository on that host unless a recovery runbook explicitly specifies another controller.
 
+Asset identity/addressing remains authoritative in `../inventory/estate.json`; the Ansible inventory must agree with that estate while adding connection, grouping and service-management metadata.
+
 ## Controller setup
 
 ```bash
@@ -18,17 +20,23 @@ ansible all --list-hosts
 
 | Group | Current members | Purpose |
 |---|---|---|
-| `admin_hosts` | `admin-01` | Administration / IaC controller |
+| `admin_hosts` | `admin-01` | Administration / IaC controller / QNetd |
 | `dns_resolvers` | `dns-01`, `dns-02` | Pi-hole + Unbound recursive DNS |
-| `proxmox_hosts` | `PROXMOX`, `Proxmox-2` | Standalone Proxmox VE hosts |
+| `proxmox_hosts` | `PROXMOX`, `Proxmox-2` | `jameshouse-pve` cluster nodes |
 | `proxmox_time_servers` | `PROXMOX`, `Proxmox-2` | Redundant LAN Chrony/NTP service |
-| `monitoring_hosts` | `monitor-01` | Prometheus, Grafana, Alertmanager and Blackbox |
+| `monitoring_hosts` | `monitor-01` | Prometheus, Grafana, Alertmanager, Blackbox and Loki |
 | `cloud_hosts` | `cloud-01` | Nextcloud private-cloud stack |
 | `mail_relay` | `mail-relay-01` | Internal Postfix notification relay |
 | `edge_hosts` | `edge-01` | Reserved edge host; Cloudflare Tunnel application not deployed |
-| `sensor_hosts` | `sensor-01` | Suricata/Zeek platform; capture phase pending |
-| `media_hosts` | `media-01` | Raspberry Pi 5 Kodi endpoint |
+| `sensor_hosts` | `sensor-01` | Operational Suricata/Zeek passive sensor |
+| `greenbone_hosts` | `greenbone-01` | Greenbone vulnerability scanning platform |
+| `komodo_hosts` | `komodo-01` | Komodo container-management control plane |
+| `zabbix_servers` | `zabbix-01` | Zabbix server platform |
+| `zabbix_agents` | 15 managed Linux systems | Zabbix Agent 2 estate |
+| `media_hosts` | `media-01` | Raspberry Pi 5 Kodi endpoint / backup target |
 | `birdnet_hosts` | `docker-01` | Raspberry Pi 4 BirdNET-Go Docker host |
+| `alloy_hosts` | managed observability subset | Grafana Alloy baseline/log collection |
+| `recovery_mirrors` | `admin-01`, `docker-01`, `media-01` | Recovery-state mirroring scope |
 
 Inventory group membership describes intended management scope. It does not by itself prove an application is deployed. In particular, `edge-01` is a healthy LXC but `cloudflared` is not currently installed/running.
 
@@ -45,8 +53,9 @@ The former DNS role at `192.168.2.48` has been retired; `.48` is `admin-01` and 
 
 | Playbook | Purpose |
 |---|---|
-| `proxmox-time.yml` | Configure both Proxmox hosts as Chrony/NTP servers |
+| `proxmox-time.yml` | Configure both Proxmox cluster nodes as Chrony/NTP servers |
 | `proxmox-resolver.yml` | Reconcile resolver configuration on both Proxmox hosts |
+| `proxmox-backup-schedule.yml` | Reconcile the node-scoped nightly Proxmox backup jobs |
 | `dns-resolver.yml` | Configure a reusable Pi-hole + Unbound resolver |
 | `dns-02.yml` | Legacy/specific entry point for the `dns-02` resolver build |
 | `dns-local-records.yml` | Reconcile managed Pi-hole local DNS records |
@@ -61,6 +70,10 @@ The former DNS role at `192.168.2.48` has been retired; `.48` is `admin-01` and 
 | `birdnet-01.yml` | Reconcile BirdNET-Go on target host `docker-01` |
 | `network-sensor.yml` | Reconcile the sensor toolchain |
 | `network-sensor-config.yml` | Reconcile guarded Suricata/Zeek configuration |
+| `zabbix-platform.yml` | Reconcile the dedicated Zabbix server platform under an explicit deployment gate |
+| `zabbix-agent.yml` | Reconcile Zabbix Agent 2 across `zabbix_agents` |
+
+Additional Greenbone and Komodo playbooks/roles are present under this directory and retain their service-specific approval/identity gates.
 
 The `birdnet-01.yml` filename is retained as an implementation interface; its current inventory target is `docker-01`.
 
@@ -80,6 +93,12 @@ ansible-playbook playbooks/<playbook>.yml
 Check mode is not a substitute for understanding the playbook. Some bootstrap workflows intentionally cannot complete meaningfully in check mode because later validation depends on resources created earlier in the same run.
 
 A stable second real reconciliation should normally report `changed=0`, `unreachable=0` and `failed=0`.
+
+### `admin-01` privilege escalation caveat
+
+`admin-01` uses the normal `james` account. Playbooks that set `become: true` may require an interactive become password unless the approved controller sudo policy/credential path explicitly provides one. The Zabbix estate rollout exposed this during the first all-host run; it is an Ansible privilege-escalation concern, not a Zabbix connectivity failure.
+
+Do not work around this by globally disabling privilege escalation or weakening sudo controls.
 
 ## Production Nextcloud
 
@@ -120,9 +139,19 @@ Chrony runs on the physical hypervisors so LAN time does not depend on a guest.
 
 ## Sensor state
 
-`sensor-01` Phase 1 is deployed and validated. Suricata/Zeek are installed but deliberately stopped because the dedicated capture NIC/SPAN path does not yet exist.
+`sensor-01` is operational. Suricata and Zeek run against the dedicated capture interface and approved SPAN path while management remains on the normal VM interface.
 
-Do not alter the guarded capture-interface configuration simply to make services run before the physical capture path is ready.
+The capture adapter is a passive-monitoring interface and must not be repurposed as a normal routed management or Corosync interface.
+
+## Zabbix state
+
+`zabbix-01` is the dedicated Zabbix server. The `zabbix_agents` group contains all 15 managed Linux systems; host objects are in `Homelab/Linux`, linked to `Linux by Zabbix agent active`, and all 15 were observed reporting on 16 September 2026.
+
+Agent configuration uses `192.168.2.59` for both `Server` and `ServerActive`. Hostname identity is the Ansible inventory hostname. UFW mutation remains disabled by default and must not be enabled estate-wide without host-specific firewall review.
+
+## Komodo state
+
+`komodo-01` is commissioned with Docker, MongoDB and Komodo Core. It is the preferred control plane for routine Docker application/version management as that workflow is adopted. Periphery onboarding and HTTPS hardening remain separate operational work.
 
 ## Protected configuration
 
@@ -141,9 +170,9 @@ SSH automation/recovery keys live under `~/.ssh/` and are referenced by the appr
 
 ## Monitoring coverage
 
-The central monitoring stack is operational on `monitor-01`.
+The central Prometheus/Grafana/Loki platform remains operational on `monitor-01`. Zabbix now provides a second, host/service-oriented monitoring plane across all 15 managed Linux systems.
 
-The 12 September audit found 23 active Prometheus targets, all healthy, and zero active alerts. Current target lists still do not imply complete service-level observability for every inventory host.
+Target membership does not imply complete service-level observability. Prefer actionable service health and low-noise alerts over duplicate host-up checks.
 
 `IaC/scripts/deploy-node-exporters.sh` derives its expected Node Exporter target count from the monitoring role defaults to reduce silent drift.
 
