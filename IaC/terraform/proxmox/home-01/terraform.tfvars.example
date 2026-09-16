@@ -1,0 +1,16 @@
+# Secrets stay outside Git. Supply TF_VAR_proxmox_api_token via ~/.config/homelab-iac/proxmox.env.
+
+proxmox_endpoint    = "https://192.168.2.70:8006/"
+proxmox_node_name   = "PROXMOX"
+vm_id               = 204
+hostname             = "home-01"
+expected_ipv4        = "192.168.2.60"
+mac_address          = "02:00:00:00:02:04"
+bridge               = "vmbr0"
+vm_datastore_id      = "vm-ssd"
+cpu_cores            = 2
+memory_mb             = 4096
+disk_size_gb         = 32
+haos_version         = "18.2"
+haos_image_id        = "local:import/haos_ova-18.2.qcow2"
+protect_after_build  = false
