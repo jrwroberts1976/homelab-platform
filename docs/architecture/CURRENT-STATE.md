@@ -1,6 +1,6 @@
 # Current-State Architecture
 
-This document records the validated current homelab estate as of 14 September 2026.
+This document records the validated current homelab estate as of 16 September 2026.
 
 It describes what is live now. Historical host identities and earlier migration assumptions remain useful evidence, but they are not current deployment authority.
 
@@ -24,6 +24,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT 102 on `PROXMOX` | ACTIVE |
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive network sensor, VM 201 on `PROXMOX` | ACTIVE — CAPTURE OPERATIONAL |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT 103 on `Proxmox-2` | HOST ACTIVE — CLOUDFLARED NOT DEPLOYED |
+| `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM 203 on `Proxmox-2` | ACTIVE — LAN-ONLY SCANNER |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
 | `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE |
@@ -161,6 +162,7 @@ Live guests:
 | LXC | 101 | `dns-01` | running |
 | LXC | 103 | `edge-01` | running |
 | VM | 202 | `monitor-01` | running |
+| VM | 203 | `greenbone-01` | running, protected |
 
 The former standalone `monitor-01` VMID `200` was changed to cluster VMID `202`, eliminating the pre-cluster duplicate-ID conflict with `cloud-01`.
 
@@ -221,6 +223,40 @@ Validated state:
 - zero failed systemd units in the last validation.
 
 A complete VM-level snapshot backup is proven on `media-backup-proxmox`. Application-consistent Nextcloud/PostgreSQL recovery remains unproven and is still a separate requirement.
+
+## Vulnerability scanning
+
+`greenbone-01` is the dedicated active vulnerability-scanning platform.
+
+Validated state on 16 September 2026:
+
+- Debian 13 VM at `192.168.2.57`;
+- VMID 203 on `Proxmox-2`;
+- 4 vCPU, 8192 MiB RAM and 80 GiB `local-lvm` disk;
+- Greenbone Community Containers deployed through Docker Compose;
+- HTTPS exposed to the LAN only on `192.168.2.57:443`;
+- Greenbone internal web/GMP listeners remain loopback-bound where intended;
+- feed readiness `4/4`;
+- OpenVAS VT feed version `202609140600`;
+- 187151 vulnerability tests loaded during commissioning;
+- Node Exporter and Alloy active;
+- Greenbone Docker logs proven in Loki;
+- VM-level Proxmox protection enabled.
+
+The controlled commissioning self-scan of `greenbone-01` completed with no Critical, High or Medium results. It produced one Low result at severity 2.1 for ICMP Timestamp Reply Information Disclosure and nine informational/log results. The ICMP timestamp item is tracked as a separate hardening follow-up; it did not block scanner commissioning.
+
+VM203 has two manual snapshot backup archives on `media-backup-proxmox-2`; archive integrity was proven with `zstd -t`. The nightly `Proxmox-2` job is IaC-managed at 03:15 and now selects `101,103,202,203`. VM203 is protected in Proxmox and the temporary `pre-greenbone-stack` commissioning snapshot has been removed.
+
+The scanner is deliberately separate from `sensor-01`. `sensor-01` performs passive Suricata/Zeek network observation; Greenbone performs active endpoint scanning. There is no direct sensor-to-Greenbone feed dependency.
+
+Operational boundaries:
+
+- no public/Cloudflare exposure;
+- Greenbone administrator credentials remain outside Git;
+- the current TLS certificate is self-signed;
+- Alloy's Docker-socket access is privileged and must be treated as root-equivalent access to the Docker host;
+- Community Container images use upstream rolling tags, so image immutability must not be assumed;
+- future deployments should change the default Greenbone administrator credential before enabling LAN exposure.
 
 ## Network sensor
 
@@ -342,101 +378,18 @@ PROXMOX .70
   storage media-backup-proxmox
 
 Proxmox-2 .71
-  VMIDs 101,103,202
+  VMIDs 101,103,202,203
   storage media-backup-proxmox-2
 ```
 
-The backup-schedule IaC and live job definitions need explicit post-cluster reconciliation to VM202, followed by fresh backup proof and an unattended successful cycle.
+The Proxmox-2 backup schedule is now reconciled through IaC to `101,103,202,203` and a second Ansible run completed with `changed=0`. The unattended 03:15 cycle on 16 September succeeded for `101,103,202`; VM203 has separate manual snapshot-backup and archive-integrity proof. The first unattended cycle that includes VM203 remains to be observed.
 
 Outstanding recovery gaps include:
 
-- fresh cluster-era backup proof for VM202 and the final `.71` placement;
+- first unattended `Proxmox-2` scheduled cycle including VM203;
 - representative QEMU VM restore proof;
 - application-consistent Nextcloud/PostgreSQL recovery;
 - independent secondary copy;
 - protection of `media-01` user media, BirdNET persistent state and controller recovery state.
 
 The suspect WD 4 TB disk must not be the sole trusted backup copy.
-
-See `docs/architecture/BACKUP-STRATEGY.md` and `production docs/PROXMOX-BACKUP-RECOVERY.md`.
-
-## Migration rollback evidence
-
-The cluster migration deliberately retained the previous `.71` local disks under non-conflicting names:
-
-```text
-precluster-20260914-vm-101-disk-0
-precluster-20260914-vm-103-disk-0
-precluster-20260914-vm-200-cloudinit
-precluster-20260914-vm-200-disk-0
-```
-
-These LVs are not active guest storage. They remain temporary rollback evidence until fresh cluster-era backups are validated.
-
-Additional pre-cluster guest/storage/job configuration and backup evidence is also retained. Cleanup must be deliberate rather than opportunistic.
-
-## Network infrastructure
-
-### HP ProCurve
-
-Current known platform:
-
-- HP ProCurve 2510G-24 / J9279A;
-- firmware Y.11.52;
-- management address `192.168.2.16`;
-- VLAN 1 untagged on ports 1–24;
-- management configured as `dhcp-bootp`;
-- SNMP community `public` configured as `Unrestricted`;
-- Telnet administration available;
-- SSH unavailable;
-- port 24 is the mirror destination;
-- ports 1–23 are monitoring sources.
-
-The older physical port map must not be treated as current after SPAN activation. Capture a new map rather than infer it.
-
-### ASUS
-
-The ASUS RT-AC86U remains gateway, DHCP authority and AiMesh controller. AiMesh nodes are at `.181` and `.218`.
-
-Router syslog forwarding to `monitor-01 .52:5514/udp` remains operational and integrated into Alloy/Loki while retaining the local rsyslog file.
-
-## Time service
-
-The physical Proxmox hosts provide redundant LAN NTP:
-
-```text
-ntp-01.jameshouse -> 192.168.2.70
-ntp-02.jameshouse -> 192.168.2.71
-```
-
-Chrony is active on both nodes.
-
-## Patch state
-
-The package-update backlog identified by the 14 September audit was processed through the controlled patch workflow on 14 September 2026.
-
-The active estate completed the cycle with no known remaining package backlog from that audit and no required reboots. Hosts requiring controlled restart were validated after boot, including `docker-01`, `media-01` and both Proxmox nodes.
-
-The detailed maintenance evidence is recorded in [`PATCH-CYCLE-CLOSEOUT-2026-09-14.md`](PATCH-CYCLE-CLOSEOUT-2026-09-14.md).
-
-Future updates remain operational lifecycle work and must continue through the controlled patch workflow.
-
-## Remaining current-state work
-
-Major outstanding work now includes:
-
-- reconcile backup IaC/live schedules with cluster placement and VM202;
-- create fresh cluster-era backup evidence and observe an unattended post-cluster cycle;
-- prove a representative QEMU restore and application-consistent `cloud-01` recovery;
-- establish an independent second backup copy and non-Proxmox data protection;
-- test Corosync link0 loss and link1 fallback in a controlled manner;
-- test single-node maintenance/quorum behaviour with QDevice available;
-- decide whether local-storage/manual recovery is sufficient or whether replication/shared storage and HA are justified;
-- remove retained pre-cluster rollback LVs only after fresh backup confidence is explicit;
-- update remaining IaC comments/runbooks that still describe the PVE hosts as standalone;
-- deploy `edge-01` Cloudflare Tunnel only when approved;
-- refresh the physical switch/router port map after SPAN activation;
-- complete remaining switch/router hardening decisions;
-- continue service-specific observability and recovery documentation.
-
-Already validated services must not be rolled backwards merely to match older documentation.
