@@ -99,13 +99,51 @@ runbooks:
         - IaC/scripts/deploy-router-syslog-receiver.sh
       playbooks:
         - IaC/ansible/playbooks/router-syslog.yml
+        - IaC/ansible/playbooks/monitor-router-alloy.yml
       roles:
         - IaC/ansible/roles/router_syslog_receiver/
+        - IaC/ansible/roles/monitor_router_alloy/
     monitoring:
-      loki_selector: '{job="router_syslog",device="rt-ac86u"}'
+      loki_selector: '{job="network-infrastructure",service="router-syslog",device="rt-ac86u"}'
       local_file_retention: active
       alloy_loki_pipeline: operational
-    last_validated: 2026-09-14
+      openvpn_events_observed: proven_2026-09-16
+    last_validated: 2026-09-16
+
+  remote_access_vpn:
+    title: ASUS Router OpenVPN Remote Access
+    category: network_security
+    document_type: implementation_runbook
+    document: docs/network/VPN-REMOTE-ACCESS-DESIGN.md
+    status: active
+    service_state: implementation_in_progress
+    applies_to:
+      hosts:
+        - {name: RT-AC86U, address: 192.168.2.1, role: openvpn_server}
+        - {name: monitor-01, address: 192.168.2.52, role: vpn_log_ingest}
+      services: [openvpn, router_syslog, alloy, loki]
+    run_from: {name: admin-01, address: 192.168.2.48}
+    network:
+      transport: udp
+      vpn_subnet: 10.8.0.0/24
+      lan_route: 192.168.2.0/24
+      dns_servers: [192.168.2.51, 192.168.2.50]
+    monitoring:
+      log_source: /var/log/homelab/router/rt-ac86u.log
+      loki_selector: '{job="network-infrastructure",service="router-syslog",device="rt-ac86u"}'
+    validation:
+      server_running: proven_2026-09-16
+      external_authentication: proven_2026-09-16
+      external_tunnel_establishment: proven_2026-09-16
+      internal_admin_access_from_external_client: pending
+      internal_dns_over_vpn: pending
+      ddns_endpoint: pending
+      router_recovery_and_client_reenrolment: pending
+    notes:
+      - the former dedicated vpn-01 WireGuard design is superseded
+      - no vpn-01 VMID or LAN address is allocated
+      - client profiles, passwords and protected certificate material must remain outside Git
+    last_validated: 2026-09-16
 
   monitoring_service:
     title: Homelab Monitoring Service
@@ -377,11 +415,11 @@ runbooks:
         job_id: homelab-nightly-proxmox-2
         schedule: "03:15"
         storage: media-backup-proxmox-2
-        guests: [101, 103, 202]
+        guests: [101, 103, 202, 203]
       mode: snapshot
       compression: zstd
       keep_last: 3
-      post_cluster_live_validation: pending
+      post_cluster_live_validation: vm203_unattended_cycle_pending
     validation:
       nfs_write_read_delete: proven_both_hypervisors_precluster
       node_scoped_storage_after_cluster_join: proven_2026-09-14
@@ -391,16 +429,16 @@ runbooks:
       isolated_lxc_restore_boot: proven_ct103_2026-09-14
       notification_delivery: proven_both_hypervisors_2026-09-14
       old_standalone_schedule_policy: proven_2026-09-14
-      final_cluster_schedule_iac_reconciliation: pending_vm202
-      fresh_vm202_backup: pending
-      first_unattended_post_cluster_schedule_run: pending
+      final_cluster_schedule_iac_reconciliation: proven_2026-09-16
+      fresh_vm202_backup: proven_2026-09-16
+      first_unattended_run_including_vm203: pending
       qemu_restore: pending
       application_consistent_cloud_restore: pending
     notes:
       - monitor-01 is VM202; the former Proxmox-2 VM200 identity is historical
       - retained precluster LVs on Proxmox-2 are rollback evidence and are not active guest disks
       - cluster quorum does not make node-local local-lvm guest disks highly available
-    last_validated: 2026-09-14
+    last_validated: 2026-09-16
 
   birdnet_service:
     title: BirdNET-Go Production Service
@@ -455,7 +493,7 @@ runbooks:
         - {name: RT-AC86U, address: 192.168.2.1, role: primary_router}
         - {name: AiMesh-node-1, address: 192.168.2.181, role: aimesh_node}
         - {name: AiMesh-node-2, address: 192.168.2.218, role: aimesh_node}
-      services: [wan, lan, dhcp, wifi, aimesh, qos, firewall, syslog_forwarding]
+      services: [wan, lan, dhcp, wifi, aimesh, qos, firewall, openvpn, ddns, syslog_forwarding]
     run_from:
       type: local_wired_admin_session
 
@@ -466,11 +504,23 @@ coverage_gaps:
     applies_to:
       - {name: PROXMOX, address: 192.168.2.70}
       - {name: Proxmox-2, address: 192.168.2.71}
-      - {name: monitor-01, address: 192.168.2.52, vmid: 202}
+      - {name: greenbone-01, address: 192.168.2.57, vmid: 203}
     reason: >-
-      The backup transport and pre-cluster schedule were proven, but the final
-      cluster-era Proxmox-2 job and IaC must be reconciled to guests 101,103,202
-      and followed by fresh VM202 and unattended post-cluster backup proof.
+      The final cluster-era schedule is reconciled to 101,103,202,203 and VM203
+      has manual backup/integrity proof, but the first unattended 03:15 cycle
+      that includes VM203 still needs to be observed and recorded.
+
+  remote_access_vpn_completion:
+    priority: high
+    category: network_security
+    applies_to:
+      - {name: RT-AC86U, address: 192.168.2.1}
+      - {name: admin-01, address: 192.168.2.48}
+      - {name: monitor-01, address: 192.168.2.52}
+    reason: >-
+      Router OpenVPN external authentication and tunnel establishment are proven,
+      but intended internal administration access, internal DNS, DDNS endpoint
+      behaviour and router recovery/client re-enrolment remain to be proven.
 
   backup_secondary_copy:
     priority: high
