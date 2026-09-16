@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Target-State Architecture
 
-This document describes the remaining target direction for the homelab after the September 2026 estate reconciliation, production `jameshouse-pve` cluster formation, primary Proxmox guest-backup implementation, Greenbone commissioning and selection of the router-hosted OpenVPN remote-access path.
+This document describes the remaining target direction for the homelab after the September 2026 estate reconciliation, production `jameshouse-pve` cluster formation, primary Proxmox guest-backup implementation, Greenbone commissioning, Komodo commissioning, Zabbix commissioning and selection of the router-hosted OpenVPN remote-access path.
 
 Implemented state belongs in `CURRENT-STATE.md`; this document is intentionally limited to work that still needs to be built, hardened or proven.
 
@@ -26,11 +26,12 @@ The following capabilities are implemented and must not be presented as future g
 - `PROXMOX` and `Proxmox-2` are members of the two-node `jameshouse-pve` Proxmox cluster.
 - the cluster uses dedicated Corosync link0 (`10.255.255.1/30` ↔ `10.255.255.2/30`) with management-LAN link1 fallback.
 - `admin-01` supplies the QDevice third vote through `corosync-qnetd`.
-- all production guest IDs are cluster-unique; `monitor-01` is VM202 and `greenbone-01` is VM203.
-- current guest placement is CT100/CT102/VM200/VM201 on `PROXMOX` and CT101/CT103/VM202/VM203 on `Proxmox-2`.
+- all production guest IDs are cluster-unique.
+- current guest placement is CT100/CT102/CT104/CT105/VM200/VM201 on `PROXMOX` and CT101/CT103/VM202/VM203 on `Proxmox-2`.
 - `dns-01` and `dns-02` provide the resolver pair.
 - `monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki.
 - Grafana Alloy is deployed across the managed estate.
+- `zabbix-01` provides Zabbix 7.0 with PostgreSQL/TimescaleDB and Agent 2; all 15 managed Linux systems have corresponding Zabbix host objects and were observed reporting through the active-agent template.
 - ASUS router syslog is received on `monitor-01` and shipped to Loki through the dedicated Alloy router-log pipeline.
 - the ASUS RT-AC86U runs the selected OpenVPN remote-access endpoint; external authentication and tunnel establishment have been observed.
 - `cloud-01` provides production Nextcloud/PostgreSQL/Redis.
@@ -38,16 +39,19 @@ The following capabilities are implemented and must not be presented as future g
 - `sensor-01` is an operational passive sensor with Suricata and Zeek.
 - the HP ProCurve mirrors ports 1–23 to port 24 for sensor capture.
 - `greenbone-01` is an operational LAN-only Greenbone Community vulnerability scanner with feeds ready, commissioning scan complete, VM backup integrity proven and Proxmox protection enabled.
+- `komodo-01` is the commissioned Docker/MongoDB/Komodo Core control plane; application backup and isolated restore are proven.
 - `media-01` is the Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
 - `docker-01` is the Raspberry Pi 4 BirdNET-Go Docker host.
 - the Network Host Collector is active on `Proxmox-2` only.
 - Network Hosts enrichment, deep profiling, first-seen notification and Grafana dashboards are implemented.
 - HP ProCurve SNMP telemetry is collected on `monitor-01`.
 - the primary Proxmox guest-backup platform uses node-scoped NFS namespaces on `media-01`.
+- the `PROXMOX` backup job is IaC-reconciled to `100,102,104,105,200,201`.
 - the `Proxmox-2` backup job is IaC-reconciled to `101,103,202,203`.
 - CT103 has completed an isolated LXC restore/boot proof.
+- CT104 and CT105 each have manual snapshot-backup/integrity evidence and are included in the primary scheduled job.
 - Proxmox notification delivery through `mail-relay-01` is proven.
-- legacy `TestServer`, `DietPi`, `ids-01` and `k3s-node-01` identities are retired.
+- legacy identities recorded as retired in `estate.json` are not current deployment targets.
 
 These completed capabilities should be maintained and improved, not re-planned from scratch.
 
@@ -64,16 +68,17 @@ Current scheduled guest sets are:
 
 ```text
 PROXMOX
-  100,102,200,201
+  100,102,104,105,200,201
 
 Proxmox-2
   101,103,202,203
 ```
 
-The schedule is reconciled through IaC. The unattended 16 September cycle succeeded for `101,103,202`; VM203 has separate manual snapshot and Zstandard-integrity proof and is now included in the job.
+The schedules are reconciled through IaC. CT104 and CT105 were added after successful manual snapshot backups and archive-integrity checks. The unattended 16 September `Proxmox-2` cycle succeeded for `101,103,202`; VM203 has separate manual snapshot and Zstandard-integrity proof and is included in the job.
 
 Remaining outcomes:
 
+- observe and record the first unattended 02:15 cycle that includes CT104 and CT105;
 - observe and record the first unattended 03:15 cycle that includes VM203;
 - review capacity after several retention cycles;
 - prove at least one representative QEMU VM restore;
@@ -97,7 +102,7 @@ Cluster creation is complete. Remaining resilience work:
 - document planned maintenance behaviour for one-node shutdowns;
 - decide whether node-local storage plus backup/manual recovery is sufficient;
 - if automatic guest failover is required, design storage replication or shared storage before enabling HA;
-- do not describe the cluster as guest-HA capable while production disks remain only on node-local `local-lvm`.
+- do not describe the cluster as guest-HA capable while production disks remain only on node-local storage.
 
 The cluster itself is not a substitute for guest-data availability.
 
@@ -129,7 +134,9 @@ The 14 September package-update backlog was cleared through the controlled patch
 - preserve service availability and recovery gates during clustered Proxmox maintenance;
 - deliberately manage PVE patch levels;
 - keep application/container version ownership explicit;
-- use Komodo for routine Docker application/version operations once its production workflow has been proven;
+- use the commissioned `komodo-01` control plane for routine Docker application/version operations as managed hosts are onboarded;
+- prove Komodo-managed update/rollback on low-risk workloads before retiring older Docker-management paths;
+- complete Komodo HTTPS hardening and deliberate Periphery onboarding without bypassing Git/IaC ownership;
 - retire older Docker-management paths only after equivalent control, secrets handling and rollback are demonstrated.
 
 `docker-01` remains intentionally single-purpose for BirdNET-Go unless a later reviewed design explicitly changes that role.
@@ -165,8 +172,6 @@ Approved resolver pair:
 
 ### Remote-access VPN completion
 
-The former dedicated `vpn-01`/WireGuard target is superseded. Do not allocate a VMID or LAN address for `vpn-01` unless a future architecture review deliberately replaces the current design.
-
 The selected service is ASUS OpenVPN Server 1. Remaining completion work is:
 
 - prove intended internal administration access from a genuinely external network;
@@ -178,13 +183,32 @@ The selected service is ASUS OpenVPN Server 1. Remaining completion work is:
 
 See [VPN Remote-Access Design and Implementation Record](../network/VPN-REMOTE-ACCESS-DESIGN.md).
 
-## Priority 6 — planned service expansion
+## Priority 6 — remaining service expansion
 
-Three additional services are now explicit planned workstreams. No new hostname, IP address, VMID or placement is allocated merely by recording them here; each gets a separate design/preflight before deployment.
+### Home Assistant / home automation
+
+Home automation is the remaining major infrastructure platform. It has not yet been allocated a hostname, LAN address, VMID or cluster placement in canonical truth. `planned_assets` should remain empty until the live/canonical collision preflight is completed and a reviewed design intentionally reserves those values.
+
+The preferred design direction is a dedicated supported Home Assistant deployment on the Proxmox platform, with the final deployment model fixed only after preflight and integration requirements are understood.
+
+Design/preflight must decide and record:
+
+- supported Home Assistant deployment model, with Home Assistant OS VM preferred unless a specific integration constraint justifies another supported model;
+- Proxmox node placement, resource sizing, storage and startup policy;
+- hostname, IP address and VMID after collision checks;
+- Zigbee/Z-Wave/Bluetooth architecture and whether radios are USB-passthrough or network-attached;
+- local-only versus approved remote-access model;
+- DNS naming and certificate approach;
+- Home Assistant native backup destination and restore procedure;
+- inclusion in the Proxmox guest-backup policy only after whole-guest backup validation;
+- monitoring without leaking unnecessary entity/state data;
+- failure behaviour for automations that affect the physical home.
+
+Prefer local control and avoid making the Home Assistant management UI directly WAN-accessible merely for convenience.
 
 ### Password manager
 
-Build a self-hosted password-management service, but choose the product and placement deliberately before implementation.
+A self-hosted password-management service remains an optional application workstream rather than a blocker for the infrastructure build.
 
 Minimum design gates:
 
@@ -197,52 +221,19 @@ Minimum design gates:
 - documented emergency access if the homelab, DNS or VPN is unavailable;
 - MFA/passkey capability where supported and appropriate.
 
-No product is recorded as selected yet. Do not silently treat Vaultwarden, Bitwarden or another candidate as approved until the choice is made.
-
-### Home Assistant
-
-Build Home Assistant as the home-automation control plane.
-
-Design/preflight must decide:
-
-- Home Assistant OS VM versus another supported deployment model;
-- placement on the current Proxmox cluster;
-- required USB/Zigbee/Z-Wave/Bluetooth passthrough, if any;
-- local-only versus approved remote-access model;
-- DNS naming and certificate approach;
-- backup and restore of Home Assistant configuration/state;
-- monitoring without leaking entity/state data unnecessarily;
-- failure behaviour for automations that affect the physical home.
-
-Prefer local control and avoid making the Home Assistant management UI directly WAN-accessible merely for convenience.
-
-### Docker management platform
-
-Komodo remains the preferred direction for Docker application/version management, consistent with the current lifecycle-management plan.
-
-Before production adoption:
-
-- choose the management-server placement independently of the managed Docker hosts;
-- define how agents/endpoints authenticate;
-- keep API keys and deployment secrets outside plaintext Git;
-- prove deployment/update/rollback on a low-risk workload first;
-- confirm it can manage required Docker stacks without bypassing the Git/IaC authority model;
-- define what Komodo owns versus Ansible/Compose/GitHub workflows;
-- retire superseded Watchtower/WUD/manual update paths only after equivalent visibility and rollback are demonstrated;
-- send useful service/audit logs to the existing monitoring/logging platform where practical.
-
-This workstream must not automatically turn `docker-01` into a general-purpose application host; placement is a separate design decision.
+No product is recorded as selected yet. Do not silently treat a candidate as approved until the choice is made.
 
 ## Priority 7 — observability and analytics expansion
 
-The core metrics/logging/network-observability platform is live. Future work should add useful operational context rather than duplicate host-up telemetry:
+The core metrics/logging/network-observability platform and Zabbix host-monitoring platform are live. Future work should add useful operational context rather than duplicate host-up telemetry:
 
 - add cluster-specific health for Corosync links, vote/quorum state and QDevice reachability;
-- continue service-specific telemetry where actionable;
+- tune Zabbix templates, dashboards and alerts so they are actionable and low-noise;
+- add service-specific Zabbix coverage only where it complements rather than duplicates Prometheus/Blackbox checks;
+- continue service-specific Prometheus/Loki telemetry where actionable;
 - correlate Network Hosts inventory, enrichment, deep profiles and switch topology;
 - build the planned Web Platform / Analytics dashboard combining Cloudflare edge/security information, Umami visitor analytics and origin/application health from Grafana/Loki;
-- add backup freshness/storage-capacity visibility after more unattended history is available;
-- keep alerts actionable and low-noise.
+- add backup freshness/storage-capacity visibility after more unattended history is available.
 
 ## Security platform
 
@@ -258,7 +249,7 @@ The passive sensor platform is implemented. Future work is incremental tuning an
 
 ### Vulnerability management
 
-Greenbone/OpenVAS is now implemented as `greenbone-01` VM203 on `Proxmox-2`; it is not future greenfield work.
+Greenbone/OpenVAS is implemented as `greenbone-01` VM203 on `Proxmox-2`; it is not future greenfield work.
 
 Remaining vulnerability-management work is operational:
 
@@ -285,7 +276,7 @@ Public/static workloads should continue to use external hosting where that reduc
 
 The platform can be considered operationally mature when:
 
-- post-cluster scheduled Proxmox backups have an observed unattended success record including VM203;
+- post-cluster scheduled Proxmox backups have an observed unattended success record for the complete current guest selections;
 - representative LXC, QEMU VM and application restores are proven;
 - important data has an independent secondary copy;
 - controller recovery state is protected off-host;
@@ -296,6 +287,7 @@ The platform can be considered operationally mature when:
 - remaining switch/router hardening decisions are completed or explicitly accepted;
 - remote administrative access uses the documented router-hosted VPN rather than directly exposed management services;
 - vulnerability scanning remains maintainable and recovery-aware;
-- observability remains useful and low-noise;
+- observability remains useful and low-noise across both Prometheus/Grafana/Loki and Zabbix;
 - service ownership and IaC authority remain unambiguous;
+- Home Assistant is introduced only after its identity/placement, backup/recovery and device-radio boundaries are explicitly designed and validated;
 - optional new services are introduced only when their operational value justifies their recovery and maintenance burden.

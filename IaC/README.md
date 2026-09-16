@@ -4,6 +4,8 @@
 
 The normal control point is `admin-01` (`192.168.2.48`). Terraform describes supported Proxmox guests and Ansible reconciles operating systems, services and shared platform configuration. Production state is discovered and validated before changes are applied.
 
+Machine identity, addressing and lifecycle state are authoritative in `IaC/inventory/estate.json`. The Ansible inventory describes management/configuration scope and must agree with that canonical estate.
+
 ## Operating rules
 
 - New Terraform, Ansible and deployment automation belongs under `IaC/`.
@@ -15,6 +17,7 @@ The normal control point is `admin-01` (`192.168.2.48`). Terraform describes sup
 - Reconciliation should be idempotent; a second real Ansible run is expected to report `changed=0` for a stable service.
 - Existing production resources must be imported/reconciled rather than recreated simply to make them match code.
 - Host and workload ownership must remain explicit.
+- New hostnames, IPs and VMIDs are allocated only after canonical/live collision checks.
 
 ## Layout
 
@@ -24,37 +27,47 @@ IaC/
 │   ├── inventory/
 │   ├── playbooks/
 │   └── roles/
+├── inventory/
+│   └── estate.json
 ├── scripts/
 └── terraform/
     └── proxmox/
         ├── cloud-01/
         ├── dns-02/
         ├── dns-resolver/
+        ├── greenbone-01/
+        ├── komodo-01/
         ├── mail-relay/
         ├── monitor-01/
-        └── sensor-01/
+        ├── sensor-01/
+        └── zabbix-01/
 ```
 
 The older top-level `terraform/` directory predates this convention. Do not add new IaC there. It can be migrated separately after its references and state handling are verified.
 
 ## Current managed estate
 
-The Ansible inventory is the machine-readable authority for host addresses and service groups. As of 12 September 2026 the active estate represented by this IaC includes:
+As of 16 September 2026 the production Ansible inventory covers the following 15 Linux systems:
 
 | Host / service | Address | Platform / role |
 |---|---:|---|
-| `admin-01` | `192.168.2.48` | Raspberry Pi 3 administration / IaC controller |
-| `dns-02` | `192.168.2.50` | Pi-hole + Unbound LXC on `PROXMOX` |
-| `dns-01` | `192.168.2.51` | Pi-hole + Unbound LXC on `Proxmox-2` |
-| `monitor-01` | `192.168.2.52` | Monitoring VM on `Proxmox-2` |
-| `cloud-01` | `192.168.2.53` | Nextcloud VM on `PROXMOX` |
-| `mail-relay-01` | `192.168.2.54` | Internal Postfix relay LXC on `PROXMOX` |
-| `sensor-01` | `192.168.2.55` | Network/security sensor VM on `PROXMOX`; Phase 1 complete |
-| `edge-01` | `192.168.2.56` | Reserved edge LXC on `Proxmox-2`; Cloudflare Tunnel workload not deployed |
-| `PROXMOX` | `192.168.2.70` | Primary standalone Proxmox VE host / NTP server |
-| `Proxmox-2` | `192.168.2.71` | Secondary standalone Proxmox VE host / NTP server |
-| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi media endpoint |
-| `docker-01` | `192.168.2.220` | Raspberry Pi 4 Docker / BirdNET-Go host |
+| `admin-01` | `192.168.2.48` | Raspberry Pi 3 administration / IaC controller / QNetd |
+| `dns-02` | `192.168.2.50` | Pi-hole + Unbound CT100 on `PROXMOX` |
+| `dns-01` | `192.168.2.51` | Pi-hole + Unbound CT101 on `Proxmox-2` |
+| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox/Loki VM202 on `Proxmox-2` |
+| `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis VM200 on `PROXMOX` |
+| `mail-relay-01` | `192.168.2.54` | Internal Postfix relay CT102 on `PROXMOX` |
+| `sensor-01` | `192.168.2.55` | Operational Suricata/Zeek sensor VM201 on `PROXMOX` |
+| `edge-01` | `192.168.2.56` | Reserved edge CT103 on `Proxmox-2`; Cloudflare Tunnel not deployed |
+| `greenbone-01` | `192.168.2.57` | Greenbone vulnerability scanner VM203 on `Proxmox-2` |
+| `komodo-01` | `192.168.2.58` | Komodo control plane CT104 on `PROXMOX` |
+| `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform CT105 on `PROXMOX` |
+| `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 / NTP |
+| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / NTP / Network Host Collector |
+| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / primary Proxmox NFS backup target |
+| `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
+
+The `zabbix_agents` group contains all 15 systems. Zabbix Agent 2 is deployed across that group and the matching 15 Zabbix host objects are reporting through the active-agent template.
 
 `ids-01`, `TestServer`, `DietPi` and the former `k3s-node-01` identity are not active platform targets. Historical references should remain historical rather than being reused as current-state authority.
 
@@ -62,15 +75,23 @@ The Ansible inventory is the machine-readable authority for host addresses and s
 
 ### `edge-01`
 
-The LXC host exists and is healthy, but no `cloudflared` package/binary/service/process is currently deployed. Do not treat membership in the `edge_hosts` inventory group as proof that the Cloudflare Tunnel application layer is operational.
+The LXC host exists and is healthy, but no `cloudflared` workload is currently deployed. Do not treat membership in the `edge_hosts` inventory group as proof that the Cloudflare Tunnel application layer is operational.
 
 ### `sensor-01`
 
-The VM/toolchain are live and validated. The dedicated capture NIC and SPAN path are not present yet, so Suricata/Zeek remain deliberately stopped.
+The dedicated capture path is operational. Suricata and Zeek are active on VM201 and consume the approved passive/SPAN traffic path. Older notes that describe capture as pending are historical and must not be used as current state.
 
 ### `cloud-01`
 
 `cloud-01` is production, not staging. It uses a dedicated 200 GiB VM data disk mounted at `/srv/cloud-01-data`. The former 4 TB WD USB disk is not its production data disk.
+
+### `komodo-01`
+
+CT104 is an unprivileged Debian 13 LXC with Docker, MongoDB and Komodo Core commissioned. Application backup and isolated database-restore validation are proven. CT104 is included in the IaC backup job; its first unattended scheduled run and Proxmox protection remain separate evidence gates.
+
+### `zabbix-01`
+
+CT105 is the dedicated Zabbix 7.0 platform using PostgreSQL/TimescaleDB, Zabbix Server, Agent 2 and Nginx. Application logical restore and manual whole-container backup integrity are proven. CT105 is included in the IaC backup job; first unattended scheduled execution remains to be observed.
 
 ## Production cloud state
 
@@ -86,7 +107,7 @@ Current production design:
 - explicit storage-identity and deployment-approval gates;
 - protected application secrets supplied outside Git.
 
-Backups, restore testing and full observability integration remain separate delivery workstreams; they are not reasons to treat the live Nextcloud deployment as staging.
+VM-level backup is proven. Application-consistent Nextcloud/PostgreSQL recovery remains a separate delivery requirement.
 
 ## Terraform state
 

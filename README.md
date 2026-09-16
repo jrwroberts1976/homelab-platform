@@ -16,6 +16,7 @@ The main current-state references are:
 - [Migration Tracker](docs/migrations/MIGRATION-TRACKER.md)
 - [Runbook Catalogue](runbooks/README.md)
 - [14 September 2026 Estate Audit](docs/architecture/ESTATE-AUDIT-2026-09-14.md)
+- [16 September 2026 Documentation Audit](docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-09-16.md)
 
 Machine identity/address truth is recorded in `IaC/inventory/estate.json` and must be checked before allocating a new hostname, LAN address or VMID.
 
@@ -31,7 +32,7 @@ admin-01
 
 `admin-01` is also the external Corosync QNetd host for the Proxmox cluster.
 
-The retired `TestServer` identity must not be used as the current controller. Its Raspberry Pi 4 hardware is now `docker-01` at `192.168.2.220`.
+The retired controller identity must not be used as the current controller; the Raspberry Pi 4 hardware is now `docker-01` at `192.168.2.220`.
 
 ## Core estate
 
@@ -46,13 +47,15 @@ The retired `TestServer` identity must not be used as the current controller. It
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive sensor, VM201 on `PROXMOX` |
 | `edge-01` | `192.168.2.56` | Reserved edge LXC, CT103 on `Proxmox-2`; Cloudflare Tunnel not deployed |
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM203 on `Proxmox-2` |
+| `komodo-01` | `192.168.2.58` | Komodo container-management control plane, CT104 on `PROXMOX` |
+| `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT105 on `PROXMOX` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 |
 | `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / Network Host Collector |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / Proxmox NFS backup target |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
 | ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN remote-access endpoint |
 
-Retired identities include `TestServer`, `DietPi`, `ids-01`, the former `k3s-node-01` identity and the old `.242` DNS resolver.
+Retired identities remain recorded in `IaC/inventory/estate.json`; they are historical evidence only and must not be reused as current deployment targets.
 
 ## Proxmox cluster
 
@@ -88,6 +91,8 @@ Current workload placement:
 PROXMOX
   CT100 dns-02
   CT102 mail-relay-01
+  CT104 komodo-01
+  CT105 zabbix-01
   VM200 cloud-01
   VM201 sensor-01
   VM9000 / VM9001 templates
@@ -112,7 +117,7 @@ PROXMOX
   job: homelab-nightly-proxmox
   time: 02:15
   storage: media-backup-proxmox
-  guests: 100,102,200,201
+  guests: 100,102,104,105,200,201
 
 Proxmox-2
   job: homelab-nightly-proxmox-2
@@ -126,9 +131,11 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The cluster-era `Proxmox-2` schedule is reconciled through IaC and an immediate repeat run returned `changed=0`. The unattended 16 September cycle succeeded for CT101, CT103 and VM202. VM203 has two manual snapshot archives with successful Zstandard integrity proof and is now included in the nightly schedule.
+Both job definitions are reconciled through IaC. CT104 and CT105 were added to the `PROXMOX` job after successful manual snapshot backups and archive-integrity validation. The first unattended 02:15 run including those two containers remains to be observed.
 
-The remaining immediate schedule proof is the first unattended 03:15 cycle that includes VM203. Pre-cluster restore evidence includes an isolated CT103 restore/boot proof; a representative QEMU restore and application-consistent `cloud-01` recovery remain separate recovery goals.
+The unattended 16 September `Proxmox-2` cycle succeeded for CT101, CT103 and VM202. VM203 has manual snapshot archives with successful Zstandard integrity proof and is included in the nightly job; the first unattended run including VM203 remains to be observed.
+
+Pre-cluster restore evidence includes an isolated CT103 restore/boot proof. A representative QEMU restore and application-consistent `cloud-01` recovery remain separate recovery goals.
 
 ## Platform services
 
@@ -138,9 +145,17 @@ The remaining immediate schedule proof is the first unattended 03:15 cycle that 
 
 The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/router/rt-ac86u.log` and shipped to Loki by the dedicated Alloy router-syslog pipeline. OpenVPN connection/authentication events are present in that stream.
 
+### Zabbix
+
+`zabbix-01` is the dedicated Zabbix 7.0 monitoring platform. The managed Linux estate contains 15 Zabbix Agent 2 targets. Matching host objects are grouped under `Homelab/Linux`, use `Linux by Zabbix agent active`, and all 15 were observed reporting on 16 September 2026.
+
+### Komodo
+
+`komodo-01` is the commissioned Komodo control plane. Docker, MongoDB and Komodo Core are operational, application backup/isolated restore are proven, and Komodo is the preferred path for routine Docker application/version management as managed-host onboarding proceeds. Periphery onboarding and HTTPS hardening remain later work.
+
 ### Remote access
 
-The selected remote-access implementation is the native OpenVPN server on the ASUS RT-AC86U rather than the previously proposed WireGuard VM or a WireGuard deployment on `docker-01`/`admin-01`.
+The selected remote-access implementation is the native OpenVPN server on the ASUS RT-AC86U rather than a separate VPN VM.
 
 External authentication and tunnel establishment have been observed. Remaining completion gates are explicit external access to the intended management services, internal DNS proof, DDNS endpoint validation and router-recovery/client-re-enrolment documentation.
 
@@ -162,11 +177,10 @@ External authentication and tunnel establishment have been observed. Remaining c
 
 ## Planned service expansion
 
-The next three service workstreams are now recorded explicitly. Recording them does **not** allocate a hostname, IP address, VMID or deployment host; each service requires a separate design and live/canonical preflight first.
+Two service workstreams remain explicitly planned. Recording them does **not** allocate a hostname, IP address, VMID or deployment host; each requires a separate design and live/canonical preflight first.
 
-- **Password manager** — product not selected yet. The design must cover protected recovery material, HTTPS, MFA/passkey capability where supported, backup/restore proof and an emergency-access path that does not depend solely on the running homelab.
-- **Home Assistant** — design Home Assistant deployment, likely requiring a decision on Home Assistant OS versus another supported model, Proxmox placement, device passthrough, backup/recovery and remote-access boundaries.
-- **Docker management platform** — Komodo remains the preferred direction. Prove management-server placement, authentication/secrets handling, Git/IaC ownership boundaries, update/rollback and a low-risk pilot before retiring existing Docker update paths.
+- **Home Assistant / home automation** — this is the remaining major infrastructure platform. The next step is a live collision/capacity preflight and a reviewed deployment design covering Home Assistant OS/VM placement, device radios/passthrough, local control, backup/recovery and monitoring. No hostname/IP/VMID is allocated in canonical truth yet.
+- **Password manager** — optional application workstream; product not selected. The design must cover protected recovery material, HTTPS, MFA/passkey capability where supported, backup/restore proof and an emergency-access path that does not depend solely on the running homelab.
 
 See [Target-State Architecture](docs/architecture/TARGET-STATE.md) for the design gates.
 
@@ -174,17 +188,18 @@ See [Target-State Architecture](docs/architecture/TARGET-STATE.md) for the desig
 
 | Workstream | Current position | Next milestone |
 |---|---|---|
+| Home automation | Remaining major infrastructure platform; not yet allocated | Preflight placement/IP/VMID and produce Home Assistant design/IaC |
 | Proxmox cluster | Two-node cluster, dual Corosync links and QDevice operational | Prove link0 -> link1 fallback and controlled single-node quorum behaviour |
-| Backup schedule | Cluster-era jobs reconciled; VM203 manual backup/integrity proven and scheduled | Observe first unattended run including VM203 |
+| Backup schedule | Both IaC jobs include current production guests; CT104/CT105/VM203 have manual backup integrity proof | Observe first unattended runs containing the newly added guests |
 | Recovery depth | LXC restore proof exists | QEMU restore proof + application-consistent `cloud-01` recovery |
 | Second-copy resilience | Primary NFS backup target operational | Add an independent second copy for important data |
+| Zabbix | Server + 15 active-agent hosts reporting | Tune actionable templates/alerts and add service-specific coverage |
 | Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry |
+| Komodo / container operations | Komodo Core commissioned; application backup/restore proven | Onboard managed Docker hosts, prove update/rollback ownership, then retire superseded paths |
 | Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
 | Vulnerability management | `greenbone-01` commissioned and protected | Observe scheduled backup, tune hardening/update policy as needed |
 | Remote-access VPN | Router-hosted OpenVPN selected; external authentication/tunnel observed; logs reach Loki | Prove internal admin access + DNS externally, validate DDNS and recovery |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
-| Home Assistant | Planned; placement unallocated | Choose supported deployment model and integration/backup requirements |
-| Komodo / container operations | Preferred direction agreed | Prove workflow and retire superseded update paths only after rollback/ownership gates |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
 | Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |
 | Edge / Cloudflare Tunnel | Host provisioned, tunnel absent | Deploy only when approved/needed |
