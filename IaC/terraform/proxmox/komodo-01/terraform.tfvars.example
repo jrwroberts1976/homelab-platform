@@ -1,0 +1,13 @@
+# Secrets are not stored here.
+# Supply the Proxmox token through:
+#
+#   TF_VAR_proxmox_api_token
+#
+# Current planned identity:
+#
+# hostname = komodo-01
+# VMID     = 204
+# IPv4     = 192.168.2.58/24
+# node     = PROXMOX
+#
+# Defaults in variables.tf are authoritative unless deliberately overridden.
