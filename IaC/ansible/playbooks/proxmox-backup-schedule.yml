@@ -13,6 +13,7 @@
           - {id: 100, type: lxc}
           - {id: 102, type: lxc}
           - {id: 104, type: lxc}
+          - {id: 105, type: lxc}
           - {id: 200, type: qemu}
           - {id: 201, type: qemu}
       Proxmox-2:
