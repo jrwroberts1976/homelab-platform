@@ -1,0 +1,10 @@
+---
+services:
+  gvm-config:
+    environment:
+      NGINX_HOST: "{{ greenbone_stack_bind_ipv4 }}"
+      NGINX_ACCESS_CONTROL_ALLOW_ORIGIN_HEADER: "https://{{ greenbone_stack_bind_ipv4 }}"
+
+  nginx:
+    ports:
+      - "{{ greenbone_stack_bind_ipv4 }}:{{ greenbone_stack_https_port }}:443"

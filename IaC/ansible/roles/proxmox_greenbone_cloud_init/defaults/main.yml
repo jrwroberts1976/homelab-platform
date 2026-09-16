@@ -1,0 +1,6 @@
+---
+greenbone_cloud_init_hostname: greenbone-01
+greenbone_cloud_init_domain: jameshouse
+greenbone_cloud_init_snippet_dir: /var/lib/vz/snippets
+greenbone_cloud_init_snippet_name: greenbone-01-user-data.yaml
+greenbone_cloud_init_public_key: "{{ lookup('file', lookup('env', 'HOME') ~ '/.ssh/proxmox-automation.pub') | trim }}"

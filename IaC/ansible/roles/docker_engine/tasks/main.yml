@@ -1,0 +1,129 @@
+---
+- name: Validate Docker Engine target identity
+  ansible.builtin.assert:
+    that:
+      - docker_engine_expected_hostname | length > 0
+      - docker_engine_expected_ipv4 | length > 0
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version in docker_engine_supported_debian_major_versions
+      - ansible_facts.hostname == docker_engine_expected_hostname
+      - docker_engine_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing Docker Engine deployment: target identity or supported
+      Debian version does not match the approved host.
+
+- name: Verify Docker repository DNS resolution
+  ansible.builtin.command:
+    argv:
+      - timeout
+      - 10s
+      - getent
+      - ahostsv4
+      - download.docker.com
+  register: docker_engine_dns
+  changed_when: false
+  failed_when: >-
+    docker_engine_dns.rc != 0
+    or docker_engine_dns.stdout | trim | length == 0
+
+- name: Read conflicting Docker package state
+  ansible.builtin.shell: |
+    dpkg-query -W \
+      -f='${binary:Package}\t${Status}\n' \
+      {{ docker_engine_conflicting_packages | join(' ') }} \
+      2>/dev/null \
+      | awk '$2 == "install" && $3 == "ok" && $4 == "installed" {print $1}' \
+      || true
+  args:
+    executable: /bin/bash
+  register: docker_engine_conflicts
+  changed_when: false
+
+- name: Refuse automatic replacement of another Docker runtime
+  ansible.builtin.assert:
+    that:
+      - docker_engine_conflicts.stdout | trim | length == 0
+    fail_msg: >-
+      Conflicting Docker/container packages are already installed:
+      {{ docker_engine_conflicts.stdout | trim }}.
+      Refusing automatic runtime migration.
+
+- name: Install Docker repository prerequisites
+  ansible.builtin.apt:
+    name:
+      - ca-certificates
+      - curl
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure APT keyring directory exists
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Docker repository signing key
+  ansible.builtin.get_url:
+    url: "{{ docker_engine_repository_key_url }}"
+    dest: "{{ docker_engine_repository_key_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Read Debian package architecture
+  ansible.builtin.command:
+    argv:
+      - dpkg
+      - --print-architecture
+  register: docker_engine_architecture
+  changed_when: false
+
+- name: Install Docker APT repository
+  ansible.builtin.template:
+    src: docker.sources.j2
+    dest: "{{ docker_engine_repository_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: docker_engine_repository
+
+- name: Install official Docker Engine
+  ansible.builtin.apt:
+    name: "{{ docker_engine_packages }}"
+    state: present
+    update_cache: true
+
+- name: Ensure Docker Engine is enabled and running
+  ansible.builtin.systemd_service:
+    name: docker
+    state: started
+    enabled: true
+
+- name: Verify Docker Engine
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+  changed_when: false
+
+- name: Verify Docker Compose plugin
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - version
+  changed_when: false
+
+- name: Verify target has no failed systemd units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: docker_engine_failed_units
+  changed_when: false
+  failed_when: docker_engine_failed_units.stdout | trim | length > 0

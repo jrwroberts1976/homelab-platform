@@ -1,0 +1,6 @@
+Types: deb
+URIs: {{ docker_engine_repository_url }}
+Suites: {{ ansible_facts.distribution_release }}
+Components: stable
+Architectures: {{ docker_engine_architecture.stdout | trim }}
+Signed-By: {{ docker_engine_repository_key_path }}

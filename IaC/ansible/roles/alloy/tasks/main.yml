@@ -93,6 +93,31 @@
     append: true
   notify: Restart alloy
 
+- name: Ensure Alloy has Docker log access
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - docker
+    append: true
+  notify: Restart alloy
+  when: alloy_docker_logs_enabled | bool
+
+- name: Verify Docker socket exists for Alloy
+  ansible.builtin.stat:
+    path: /var/run/docker.sock
+  register: alloy_docker_socket
+  when: alloy_docker_logs_enabled | bool
+
+- name: Require Docker socket when Docker log ingestion is enabled
+  ansible.builtin.assert:
+    that:
+      - alloy_docker_socket.stat.exists
+      - alloy_docker_socket.stat.issock
+    fail_msg: >-
+      Docker log ingestion is enabled but /var/run/docker.sock
+      is not available.
+  when: alloy_docker_logs_enabled | bool
+
 - name: Secure Alloy configuration directory
   ansible.builtin.file:
     path: /etc/alloy

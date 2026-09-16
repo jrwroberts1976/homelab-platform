@@ -25,6 +25,11 @@ alloy_supported_architectures:
   - aarch64
 alloy_require_proxmox: false
 
+# Optional Docker log ingestion. Disabled unless explicitly enabled
+# for an approved container host.
+alloy_docker_logs_enabled: false
+alloy_docker_host: "unix:///var/run/docker.sock"
+
 alloy_loki_endpoint: "http://192.168.2.52:3100/loki/api/v1/push"
 alloy_loki_ready_url: "http://192.168.2.52:3100/ready"
 alloy_environment: homelab

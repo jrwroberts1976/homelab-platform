@@ -40,6 +40,52 @@ loki.process "journal_hygiene" {
   }
 }
 
+{% if alloy_docker_logs_enabled | bool %}
+//
+// Docker container logging
+//
+// Docker metadata is discovered from the local daemon. Only hosts with
+// alloy_docker_logs_enabled=true receive this pipeline.
+//
+discovery.docker "containers" {
+  host = "{{ alloy_docker_host }}"
+}
+
+discovery.relabel "docker_logs" {
+  targets = []
+
+  rule {
+    source_labels = ["__meta_docker_container_name"]
+    regex         = "/(.*)"
+    target_label  = "container"
+  }
+
+  rule {
+    source_labels = [
+      "__meta_docker_container_label_com_docker_compose_service",
+    ]
+    target_label = "service"
+  }
+}
+
+loki.source.docker "containers" {
+  host    = "{{ alloy_docker_host }}"
+  targets = discovery.docker.containers.targets
+
+  labels = {
+    job         = "docker",
+    hostname    = "{{ alloy_host_label }}",
+    host        = "{{ alloy_host_label }}",
+    role        = "{{ alloy_host_role }}",
+    environment = "{{ alloy_environment }}",
+    source      = "docker",
+  }
+
+  relabel_rules = discovery.relabel.docker_logs.rules
+  forward_to    = [loki.write.homelab.receiver]
+}
+
+{% endif %}
 loki.write "homelab" {
   endpoint {
     url = "{{ alloy_loki_endpoint }}"

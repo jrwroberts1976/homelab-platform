@@ -1,7 +1,7 @@
 # Backup Strategy
 
-**Status:** primary Proxmox guest-backup platform proven before cluster formation; node-scoped NFS repositories remain operational; post-cluster schedule/VM202 reconciliation and fresh unattended proof remain open  
-**Reviewed:** 14 September 2026
+**Status:** primary Proxmox guest-backup platform operational; cluster-era jobs reconciled through IaC; VM203 manual backup and integrity proven; first unattended cycle including VM203 remains pending  
+**Reviewed:** 16 September 2026
 
 ## Requirement
 
@@ -72,6 +72,7 @@ Proxmox-2 .71 -> media-backup-proxmox-2
   CT101 dns-01
   CT103 edge-01
   VM202 monitor-01
+  VM203 greenbone-01
 ```
 
 Templates 9000/9001 remain excluded from the production backup schedule.
@@ -165,7 +166,7 @@ End-to-end notification tests from both PVE nodes completed successfully.
 
 ## Schedule and retention policy
 
-The intended cluster-era policy is:
+The current cluster-era policy is:
 
 ```text
 PROXMOX .70
@@ -178,7 +179,7 @@ Proxmox-2 .71
   job: homelab-nightly-proxmox-2
   schedule: 03:15
   target: media-backup-proxmox-2
-  guests: 101,103,202
+  guests: 101,103,202,203
 
 mode: snapshot
 compression: zstd
@@ -186,21 +187,25 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The old standalone IaC/job definition for `Proxmox-2` used VMID `200` for `monitor-01`. That value is now stale and must be changed to VMID `202` before the final cluster-era schedule can be called reconciled.
+The `Proxmox-2` schedule has now been reconciled through IaC to `101,103,202,203`. The reconciliation role explicitly updates an approved guest-selection difference while continuing to fail closed on unexpected storage, schedule, node, retention or notification state. A second deployment run completed idempotently with `changed=0`.
 
-Cluster formation also replaced `Proxmox-2`'s previous node-local `/etc/pve` view with the cluster configuration. The live `homelab-nightly-proxmox-2` job therefore needs explicit recreation/reconciliation and validation rather than being assumed to have survived the join.
+Validated cluster-era evidence:
 
-Required post-cluster evidence:
+1. `Proxmox-2` IaC guest selection is `101,103,202,203`;
+2. live storage remains `media-backup-proxmox-2`;
+3. schedule remains `03:15`, snapshot mode, zstd and `keep-last=3`;
+4. the unattended 16 September cycle succeeded for `101,103,202`;
+5. VM203 has two manual snapshot backup archives;
+6. VM203 archive integrity was proven with `zstd -t`;
+7. VM203 was added through IaC and the second reconciliation run was idempotent;
+8. backup notification delivery remains operational.
 
-1. IaC updated to `101,103,202` on `Proxmox-2`;
-2. both storage IDs active on their intended node and disabled on the other;
-3. live jobs match the desired schedule, storage, guest set and retention;
-4. fresh successful backups for the final `.71` guest set, especially VM202;
-5. archive visibility/integrity checked;
-6. an unattended post-cluster cycle observed successfully;
-7. notifications confirmed from the reconciled jobs.
+Remaining backup closeout:
 
-Until those gates pass, the **backup platform** is operationally proven but the **final post-cluster schedule state** is still pending reconciliation.
+- observe the first unattended 03:15 cycle that includes VM203;
+- perform a representative isolated QEMU restore proof;
+- add an independent secondary copy;
+- complete application-consistent Nextcloud/PostgreSQL recovery proof.
 
 ## IaC authority
 
@@ -257,7 +262,11 @@ The VM-level backup is proven to complete, but that does **not** prove applicati
 
 ### `monitor-01`
 
-`monitor-01` is now VM202 on `Proxmox-2`. A fresh VM202 backup is a high-priority post-cluster proof because pre-cluster monitor backups were stored under VMID 200.
+`monitor-01` is VM202 on `Proxmox-2`. Fresh cluster-era backup evidence exists and the unattended 16 September cycle completed successfully for VM202.
+
+### `greenbone-01`
+
+`greenbone-01` is VM203 on `Proxmox-2`. Two manual snapshot archives exist, integrity was proven with `zstd -t`, the VM is protected, and the schedule now includes VM203. The first unattended cycle including VM203 remains to be observed.
 
 ### DNS
 
@@ -317,16 +326,14 @@ Production guest disks remain on node-local `local-lvm`; therefore backup/recove
 
 ## Remaining priorities
 
-1. reconcile backup schedule IaC and live `Proxmox-2` job to VM202;
-2. take fresh cluster-era backups for the final guest placement;
-3. observe and record an unattended post-cluster run;
-4. review real retention/storage growth after multiple runs;
-5. prove at least one QEMU VM restore;
-6. prove application-consistent `cloud-01` recovery;
-7. protect controller recovery identities/state independently;
-8. establish an independent second copy for important data;
-9. define protection for `media-01`, `docker-01` and other non-Proxmox persistent state;
-10. remove the retained pre-cluster LVs only after fresh backup confidence is explicit.
+1. observe and record the first unattended `Proxmox-2` run including VM203;
+2. review real retention/storage growth after multiple runs;
+3. prove at least one QEMU VM restore;
+4. prove application-consistent `cloud-01` recovery;
+5. protect controller recovery identities/state independently;
+6. establish an independent second copy for important data;
+7. define protection for `media-01`, `docker-01` and other non-Proxmox persistent state;
+8. remove the retained pre-cluster LVs only after fresh backup confidence is explicit.
 
 ## Definition of done
 
@@ -335,10 +342,12 @@ The backup platform is operationally useful today because:
 - the NFS target is healthy;
 - each PVE node has its intended node-scoped backup storage;
 - all seven pre-cluster production guests have successful backup evidence;
+- fresh cluster-era VM202 backup evidence exists;
+- VM203 has manual backup and integrity proof and is included in the reconciled schedule;
 - archive integrity checks have passed;
 - an LXC restore has been booted safely in isolation;
 - notifications have been delivered through the approved relay path.
 
-The **cluster-era schedule** is done only when the live jobs and IaC match the final guest IDs/placement, fresh VM202-era archives exist and at least one unattended post-cluster cycle has succeeded.
+The **cluster-era schedule** is reconciled through IaC. The remaining schedule proof is the first unattended `Proxmox-2` cycle that includes VM203.
 
 Estate-wide recovery is not complete until VM, application, non-Proxmox and independent-secondary-copy recovery classes are also proven.

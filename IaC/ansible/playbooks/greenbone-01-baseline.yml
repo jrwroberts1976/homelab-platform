@@ -1,0 +1,14 @@
+---
+- name: Build greenbone-01 container host baseline
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    docker_engine_expected_hostname: greenbone-01
+    docker_engine_expected_ipv4: "{{ ansible_host }}"
+
+  roles:
+    - role: chrony_client
+    - role: docker_engine
+    - role: node_exporter

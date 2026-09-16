@@ -1,0 +1,17 @@
+---
+greenbone_stack_expected_hostname: greenbone-01
+greenbone_stack_expected_ipv4: "{{ ansible_host }}"
+
+greenbone_stack_root: /opt/greenbone-community
+greenbone_stack_bind_ipv4: "{{ ansible_host }}"
+greenbone_stack_https_port: 443
+
+greenbone_stack_allow_deploy: false
+
+greenbone_admin_password: >-
+  {{
+    lookup('env', 'GREENBONE_ADMIN_PASSWORD')
+    | default('', true)
+  }}
+
+greenbone_stack_upstream_compose_sha256: "5b5117a7c200491de13bc7b79c97dc858c016c51017982d8f1de7ca077c1a868"

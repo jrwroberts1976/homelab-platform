@@ -1,13 +1,13 @@
 # Proxmox Guest Backup and Recovery
 
-**Status:** operationally proven primary guest-backup path; final cluster-era schedule requires VM202/job reconciliation and fresh unattended proof  
-**Last validated:** 14 September 2026
+**Status:** operational primary guest-backup path; cluster-era schedule reconciled through IaC; first unattended run including VM203 pending  
+**Last validated:** 16 September 2026
 
 ## Purpose
 
 This runbook documents the current Proxmox VE guest-backup architecture, validation gates and proven restore procedure.
 
-The two PVE nodes are now members of `jameshouse-pve`. Production guest IDs are cluster-unique, with `monitor-01` now VM202 on `Proxmox-2`.
+The two PVE nodes are now members of `jameshouse-pve`. Production guest IDs are cluster-unique, with `monitor-01` now VM202 and `greenbone-01` VM203 on `Proxmox-2`.
 
 The two existing NFS backup namespaces remain intentionally node-scoped because they are already deployed and proven. Cluster membership makes a single shared namespace technically possible, but there is no operational requirement to collapse the current design before fresh cluster-era backup evidence exists.
 
@@ -49,11 +49,12 @@ Proxmox-2 .71 -> media-backup-proxmox-2
   CT101 dns-01
   CT103 edge-01
   VM202 monitor-01
+  VM203 greenbone-01
 ```
 
 Templates 9000/9001 are excluded from the production schedule.
 
-All seven workloads had successful snapshot-mode backup evidence before cluster formation. CT101 and CT103 have since moved back to `Proxmox-2`, and monitor has changed from the old standalone VMID 200 to cluster VMID 202. Fresh cluster-era backup evidence is therefore required for the final `.71` set.
+Seven production workloads had successful snapshot-mode backup evidence before cluster formation. Since then, the final cluster-era `Proxmox-2` placement has been proven for CT101, CT103 and VM202, and the unattended 03:15 cycle on 16 September completed successfully for those three guests. VM203 `greenbone-01` was subsequently added and has two manual snapshot archives with successful zstd integrity proof.
 
 ## Service availability during backup
 
@@ -112,7 +113,7 @@ IaC/ansible/roles/proxmox_backup_schedule/
 
 All deployment roles use explicit approval gates and should fail closed on unexpected host/storage/schedule state.
 
-The backup schedule IaC must be reconciled from the former `Proxmox-2` VMID 200 monitor entry to VMID 202 before it is treated as current authority for the cluster-era `.71` job.
+The backup schedule IaC is current authority for the cluster-era jobs. The `Proxmox-2` job is reconciled to `101,103,202,203`, and the reconciliation completed idempotently on its second run.
 
 ## Notification path
 
@@ -144,7 +145,7 @@ CT103 edge-01
 VM200 monitor-01
 ```
 
-That VM200 archive remains useful historical recovery evidence for the pre-cluster monitor identity. It does not replace the need for a new VM202 backup.
+That VM200 archive remains useful historical recovery evidence for the pre-cluster monitor identity. It does not replace the newer VM202-era proof.
 
 ### PROXMOX
 
@@ -214,7 +215,7 @@ vzdump 100 102 200 201 \
 `Proxmox-2`:
 
 ```bash
-vzdump 101 103 202 \
+vzdump 101 103 202 203 \
   --storage media-backup-proxmox-2 \
   --mode snapshot \
   --compress zstd \
@@ -243,7 +244,7 @@ Never boot a cloned restore with the original production network identity while 
 
 ## Schedule and retention
 
-Intended post-cluster policy:
+Current post-cluster policy:
 
 ```text
 PROXMOX
@@ -256,7 +257,7 @@ Proxmox-2
   id: homelab-nightly-proxmox-2
   time: 03:15
   storage: media-backup-proxmox-2
-  guests: 101,103,202
+  guests: 101,103,202,203
 
 mode: snapshot
 compression: zstd
@@ -264,20 +265,20 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The old standalone schedule was previously proven with `Proxmox-2` guests `101,103,200`. Cluster formation changed that identity to VM202 and replaced the joining node's `/etc/pve` state with the cluster filesystem.
+The old standalone schedule was previously proven with `Proxmox-2` guests `101,103,200`. Cluster formation changed monitor to VM202. The cluster-era job has now been reconciled through IaC and extended for VM203.
 
-Therefore do **not** claim the final `Proxmox-2` job is proven merely from the old pre-cluster validation.
-
-Post-cluster schedule closeout requires:
+Current closeout evidence:
 
 ```text
-PROXMOX storage=media-backup-proxmox
-PROXMOX schedule=02:15
-PROXMOX vmids=100,102,200,201
+PROXMOX
+  storage=media-backup-proxmox
+  schedule=02:15
+  vmids=100,102,200,201
 
-Proxmox-2 storage=media-backup-proxmox-2
-Proxmox-2 schedule=03:15
-Proxmox-2 vmids=101,103,202
+Proxmox-2
+  storage=media-backup-proxmox-2
+  schedule=03:15
+  vmids=101,103,202,203
 
 mode=snapshot
 compression=zstd
@@ -285,13 +286,9 @@ notification-mode=notification-system
 keep-last=3
 ```
 
-Then prove:
+The 16 September unattended `Proxmox-2` cycle completed successfully for `101,103,202`. VM203 has separate manual snapshot-backup and zstd-integrity proof, and the IaC reconciliation that added VM203 completed with `changed=0` on its second run.
 
-- IaC reconciliation is idempotent;
-- fresh backup archives exist for final cluster-era identities;
-- VM202 archive is readable and integrity-checked;
-- the first unattended post-cluster run succeeds;
-- notifications are delivered.
+The remaining schedule evidence is the first unattended 03:15 cycle that includes VM203. A representative isolated QEMU restore proof also remains required.
 
 ## Cluster migration rollback state
 

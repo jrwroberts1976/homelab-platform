@@ -234,7 +234,6 @@
       - proxmox_backup_schedule_existing_jobs[0].schedule == proxmox_backup_schedule_job.schedule
       - proxmox_backup_schedule_existing_jobs[0].mode == proxmox_backup_schedule_mode
       - proxmox_backup_schedule_existing_jobs[0].compress == proxmox_backup_schedule_compress
-      - (proxmox_backup_schedule_existing_jobs[0].vmid | string) == proxmox_backup_schedule_vmids
       - (proxmox_backup_schedule_existing_jobs[0].node | string) == inventory_hostname
       - (proxmox_backup_schedule_existing_jobs[0]['notification-mode'] | default('')) == proxmox_backup_schedule_notification_mode
       - (proxmox_backup_schedule_existing_jobs[0]['prune-backups']['keep-last'] | int) == proxmox_backup_schedule_keep_last
@@ -249,6 +248,19 @@
       The existing backup job is not the approved disabled legacy job or the
       approved isolated-storage job. Refusing to reconcile it.
   when: proxmox_backup_schedule_existing_jobs | length == 1
+
+- name: Reconcile approved backup guest selection
+  ansible.builtin.command:
+    argv:
+      - pvesh
+      - set
+      - "/cluster/backup/{{ proxmox_backup_schedule_job.id }}"
+      - --vmid
+      - "{{ proxmox_backup_schedule_vmids }}"
+  when:
+    - proxmox_backup_schedule_existing_jobs | length == 1
+    - (proxmox_backup_schedule_existing_jobs[0].vmid | string) != proxmox_backup_schedule_vmids
+  changed_when: true
 
 - name: Create approved nightly backup job when absent
   ansible.builtin.command:

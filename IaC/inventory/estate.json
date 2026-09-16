@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "validated_at": "2026-09-14",
+  "validated_at": "2026-09-16",
   "purpose": "Canonical machine-readable identity and addressing inventory for current homelab documentation checks.",
   "authority": {
     "identity_and_addressing": "IaC/inventory/estate.json",
@@ -82,6 +82,15 @@
       "managed_by_ansible": true
     },
     {
+      "name": "greenbone-01",
+      "document_label": "greenbone-01",
+      "address": "192.168.2.57",
+      "state": "active",
+      "kind": "vm",
+      "role": "Greenbone Community vulnerability scanner, VM203 on Proxmox-2",
+      "managed_by_ansible": true
+    },
+    {
       "name": "PROXMOX",
       "document_label": "PROXMOX",
       "address": "192.168.2.70",
@@ -154,16 +163,7 @@
       "managed_by_ansible": false
     }
   ],
-  "planned_assets": [
-    {
-      "name": "vpn-01",
-      "address": "192.168.2.57",
-      "state": "planned_not_deployed",
-      "kind": "vm",
-      "vmid": 203,
-      "role": "Proposed WireGuard remote-access server"
-    }
-  ],
+  "planned_assets": [],
   "retired_identities": [
     {
       "token": "DietPi",
