@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Homelab Greenbone Vulnerability Scanner Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
