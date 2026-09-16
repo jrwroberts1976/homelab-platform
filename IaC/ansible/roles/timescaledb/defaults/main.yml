@@ -8,7 +8,9 @@ timescaledb_repository_uri: https://packagecloud.io/timescale/timescaledb/debian
 # Keep this explicit rather than floating to an unsupported future release.
 timescaledb_version: "2.29.2"
 timescaledb_package_name: "timescaledb-2-postgresql-{{ postgresql_version }}"
+timescaledb_loader_package_name: "timescaledb-2-loader-postgresql-{{ postgresql_version }}"
 timescaledb_package_version: "2.29.2~debian13-1711"
 timescaledb_package: "{{ timescaledb_package_name }}={{ timescaledb_package_version }}"
+timescaledb_loader_package: "{{ timescaledb_loader_package_name }}={{ timescaledb_package_version }}"
 timescaledb_databases: []
 timescaledb_run_tune: false

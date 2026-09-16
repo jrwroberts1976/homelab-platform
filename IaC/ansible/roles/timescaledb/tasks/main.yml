@@ -47,11 +47,26 @@
       Components: main
       Signed-By: {{ timescaledb_repository_key_path }}
 
-- name: Install TimescaleDB package
+- name: Pin approved TimescaleDB package pair
+  ansible.builtin.copy:
+    dest: /etc/apt/preferences.d/timescaledb-zabbix
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      Package: {{ timescaledb_package_name }} {{ timescaledb_loader_package_name }}
+      Pin: version {{ timescaledb_package_version }}
+      Pin-Priority: 1001
+
+- name: Install pinned TimescaleDB packages
   ansible.builtin.apt:
-    name: "{{ timescaledb_package }}"
+    name:
+      - "{{ timescaledb_package }}"
+      - "{{ timescaledb_loader_package }}"
     state: present
     update_cache: true
+    allow_downgrade: true
+  register: timescaledb_package_install
 
 - name: Read installed TimescaleDB package version
   ansible.builtin.command:
@@ -63,13 +78,34 @@
   register: timescaledb_installed_package
   changed_when: false
 
-- name: Require approved TimescaleDB package version
+- name: Read installed TimescaleDB loader package version
+  ansible.builtin.command:
+    argv:
+      - dpkg-query
+      - -W
+      - "-f=${Version}"
+      - "{{ timescaledb_loader_package_name }}"
+  register: timescaledb_installed_loader_package
+  changed_when: false
+
+- name: Require approved TimescaleDB package pair
   ansible.builtin.assert:
     that:
       - timescaledb_installed_package.stdout == timescaledb_package_version
+      - timescaledb_installed_loader_package.stdout == timescaledb_package_version
     fail_msg: >-
-      Installed TimescaleDB package does not match the approved
-      Zabbix-compatible version.
+      Installed TimescaleDB server and loader packages must both match
+      the approved Zabbix-compatible version.
+
+- name: Require approved TimescaleDB control version
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -F
+      - -x
+      - "default_version = '{{ timescaledb_version }}'"
+      - "/usr/share/postgresql/{{ postgresql_version }}/extension/timescaledb.control"
+  changed_when: false
 
 - name: Configure TimescaleDB preload library
   ansible.builtin.copy:
@@ -82,12 +118,14 @@
       shared_preload_libraries = 'timescaledb'
   register: timescaledb_preload
 
-- name: Restart PostgreSQL after TimescaleDB preload change
+- name: Restart PostgreSQL after TimescaleDB package or preload change
   ansible.builtin.service:
     name: "{{ postgresql_service_name }}"
     state: restarted
     enabled: true
-  when: timescaledb_preload.changed
+  when: >-
+    timescaledb_package_install.changed or
+    timescaledb_preload.changed
 
 - name: Optionally run timescaledb-tune
   ansible.builtin.command:
