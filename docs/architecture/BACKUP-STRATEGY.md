@@ -1,7 +1,7 @@
 # Backup Strategy
 
-**Status:** primary Proxmox guest-backup platform operational; both cluster-era jobs reconciled through IaC; CT104, CT105 and VM203 have manual backup/integrity proof; first unattended cycles including those newly added guests remain pending observation  
-**Reviewed:** 16 September 2026
+**Status:** primary Proxmox guest-backup platform operational; both cluster-era jobs reconciled through IaC; CT105 and VM203 unattended evidence observed; VM204 scheduled with native/manual backup proof; CT104 and first unattended VM204 proof remain open  
+**Reviewed:** 17 September 2026
 
 ## Requirement
 
@@ -57,7 +57,7 @@ schedule reconciliation: idempotent, changed=0 on both nodes
 failed systemd units during final pre-cluster cutover validation: 0
 ```
 
-That evidence remains valid proof that the backup transport, archives, notification path and LXC restore mechanism worked. It must not be misrepresented as proof that every current guest has already completed an unattended cluster-era run, because later commissioning added VM203, CT104 and CT105.
+That evidence remains valid proof that the backup transport, archives, notification path and LXC restore mechanism worked. It must not be misrepresented as proof that every current guest has already completed an unattended cluster-era run, because later commissioning added VM203, CT104, CT105 and VM204.
 
 ### Current cluster-era guest scope
 
@@ -69,6 +69,7 @@ PROXMOX .70 -> media-backup-proxmox
   CT105 zabbix-01
   VM200 cloud-01
   VM201 sensor-01
+  VM204 home-01
 
 Proxmox-2 .71 -> media-backup-proxmox-2
   CT101 dns-01
@@ -80,6 +81,10 @@ Proxmox-2 .71 -> media-backup-proxmox-2
 Templates 9000/9001 remain excluded from the production backup schedule.
 
 CT104 and CT105 each have successful manual snapshot-mode backup evidence on `media-backup-proxmox`, including compressed archive integrity validation. VM203 has manual snapshot archives with successful Zstandard integrity proof on `media-backup-proxmox-2`.
+
+VM204 has both a native Home Assistant backup and a manual Proxmox snapshot archive. The VM204 archive passed compressed and embedded VMA integrity validation before the nightly schedule was extended to include it.
+
+The 17 September application audit observed unattended CT105 output from the 02:15 `PROXMOX` job and unattended CT101, CT103, VM202 and VM203 output from the 03:15 `Proxmox-2` job. The displayed `PROXMOX` repository tail did not include CT104, so this document does not claim first unattended CT104 proof from that output. VM204's observed archive at approximately 07:59 was the manual validation backup, not an unattended schedule run.
 
 ## Backup target
 
@@ -115,6 +120,8 @@ Legacy rollback export:
 ```
 
 The repositories remain root-owned. Do not make them broadly writable to work around unprivileged-LXC UID mapping.
+
+The 17 September audit observed approximately 338 GiB free on the underlying `media-01` filesystem and current backup archives in both node-specific repositories.
 
 ## Local vzdump workspace
 
@@ -154,7 +161,7 @@ This proves the LXC backup path is restorable, not merely writable.
 
 A representative QEMU VM restore proof remains required.
 
-Application-level restore evidence also exists separately for Komodo and Zabbix database state; that does not replace whole-guest restore evidence.
+Application-level restore evidence also exists separately for Komodo and Zabbix database state; that does not replace whole-guest restore evidence. Home Assistant currently has native-backup creation plus whole-VM archive integrity proof, but deeper HAOS/native restore validation remains open.
 
 ## Notifications
 
@@ -179,7 +186,7 @@ PROXMOX .70
   job: homelab-nightly-proxmox
   schedule: 02:15
   target: media-backup-proxmox
-  guests: 100,102,104,105,200,201
+  guests: 100,102,104,105,200,201,204
 
 Proxmox-2 .71
   job: homelab-nightly-proxmox-2
@@ -193,27 +200,28 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-The current selections are defined in `IaC/ansible/playbooks/proxmox-backup-schedule.yml`. Reconciliation continues to fail closed on unexpected storage, schedule, node, retention or notification state. The live jobs were reconciled after CT104 and CT105 were added, and stable repeat reconciliation returned `changed=0`.
+The current selections are defined in `IaC/ansible/playbooks/proxmox-backup-schedule.yml`. Reconciliation continues to fail closed on unexpected storage, schedule, node, retention or notification state.
 
 Validated cluster-era evidence:
 
-1. `PROXMOX` IaC guest selection is `100,102,104,105,200,201`;
-2. `Proxmox-2` IaC guest selection is `101,103,202,203`;
+1. `PROXMOX` IaC/live guest selection is `100,102,104,105,200,201,204`;
+2. `Proxmox-2` IaC/live guest selection is `101,103,202,203`;
 3. live storage remains `media-backup-proxmox` / `media-backup-proxmox-2` on the intended nodes;
 4. schedules remain `02:15` and `03:15`, snapshot mode, zstd and `keep-last=3`;
-5. the unattended 16 September `Proxmox-2` cycle succeeded for `101,103,202`;
-6. VM203 has manual snapshot backup/integrity proof and is included in the 03:15 job;
-7. CT104 has manual snapshot backup/integrity proof and is included in the 02:15 job;
-8. CT105 has manual snapshot backup/integrity proof and is included in the 02:15 job;
+5. CT105 unattended backup output was observed from the 17 September `PROXMOX` run;
+6. CT101, CT103, VM202 and VM203 unattended backup output was observed from the 17 September `Proxmox-2` run;
+7. CT104 has manual snapshot backup/integrity proof and is included in the 02:15 job, but the displayed 17 September sample did not prove its unattended run;
+8. VM204 has native Home Assistant backup plus manual snapshot/integrity proof and is included in the 02:15 job; first unattended proof remains pending;
 9. backup notification delivery remains operational.
 
 Remaining backup closeout:
 
-- observe the first unattended 02:15 cycle that includes CT104 and CT105;
-- observe the first unattended 03:15 cycle that includes VM203;
+- observe and record first unattended CT104 proof;
+- observe the first unattended 02:15 cycle containing VM204;
 - perform a representative isolated QEMU restore proof;
 - add an independent secondary copy;
-- complete application-consistent Nextcloud/PostgreSQL recovery proof.
+- complete application-consistent Nextcloud/PostgreSQL recovery proof;
+- deepen Home Assistant native/VM recovery validation.
 
 ## IaC authority
 
@@ -270,19 +278,23 @@ The VM-level backup is proven to complete, but that does **not** prove applicati
 
 ### `monitor-01`
 
-`monitor-01` is VM202 on `Proxmox-2`. Fresh cluster-era backup evidence exists and the unattended 16 September cycle completed successfully for VM202.
+`monitor-01` is VM202 on `Proxmox-2`. Fresh cluster-era unattended backup evidence exists, including the 17 September cycle.
 
 ### `greenbone-01`
 
-`greenbone-01` is VM203 on `Proxmox-2`. Manual snapshot archives exist, integrity was proven with `zstd -t`, the VM is protected, and the schedule includes VM203. The first unattended cycle including VM203 remains to be observed.
+`greenbone-01` is VM203 on `Proxmox-2`. Manual snapshot archives exist, integrity was proven with `zstd -t`, the VM is protected, the schedule includes VM203 and the 17 September unattended 03:15 archive was observed.
 
 ### `komodo-01`
 
-`komodo-01` is CT104 on `PROXMOX`. A manual whole-container snapshot backup and archive-integrity check are proven, and the 02:15 job includes CT104. Komodo also has application-level backup/isolated database-restore proof. The first unattended CT104 schedule execution remains to be observed; Proxmox protection remains a separate decision.
+`komodo-01` is CT104 on `PROXMOX`. A manual whole-container snapshot backup and archive-integrity check are proven, and the 02:15 job includes CT104. Komodo also has application-level backup/isolated database-restore proof. First unattended CT104 proof is still not claimed from the displayed 17 September audit output; Proxmox protection remains a separate decision.
 
 ### `zabbix-01`
 
-`zabbix-01` is CT105 on `PROXMOX`. A manual whole-container snapshot backup and archive-integrity check are proven, the 02:15 job includes CT105, and PostgreSQL/TimescaleDB logical backup/restore validation is proven. The first unattended CT105 schedule execution remains to be observed.
+`zabbix-01` is CT105 on `PROXMOX`. A manual whole-container snapshot backup and archive-integrity check are proven, the 02:15 job includes CT105, PostgreSQL/TimescaleDB logical backup/restore validation is proven and the 17 September unattended CT105 archive was observed.
+
+### `home-01`
+
+`home-01` is VM204 on `PROXMOX`. Native Home Assistant backup creation is proven, a manual whole-VM snapshot archive passed compressed/VMA integrity checks, the 02:15 job includes VM204 and Proxmox protection is enabled. First unattended VM204 execution and deeper restore proof remain open.
 
 ### DNS
 
@@ -342,15 +354,16 @@ Production guest disks remain on node-local storage; therefore backup/recovery r
 
 ## Remaining priorities
 
-1. observe and record the first unattended `PROXMOX` run including CT104 and CT105;
-2. observe and record the first unattended `Proxmox-2` run including VM203;
+1. observe and record first unattended CT104 proof;
+2. observe and record the first unattended VM204 backup;
 3. review real retention/storage growth after multiple runs;
 4. prove at least one QEMU VM restore;
 5. prove application-consistent `cloud-01` recovery;
-6. protect controller recovery identities/state independently;
-7. establish an independent second copy for important data;
-8. define protection for `media-01`, `docker-01` and other non-Proxmox persistent state;
-9. remove the retained pre-cluster LVs only after fresh backup confidence is explicit.
+6. deepen Home Assistant native/whole-VM recovery proof;
+7. protect controller recovery identities/state independently;
+8. establish an independent second copy for important data;
+9. define protection for `media-01`, `docker-01` and other non-Proxmox persistent state;
+10. remove retained pre-cluster LVs only after fresh backup confidence is explicit.
 
 ## Definition of done
 
@@ -359,13 +372,14 @@ The backup platform is operationally useful today because:
 - the NFS target is healthy;
 - each PVE node has its intended node-scoped backup storage;
 - all seven pre-cluster production guests have successful historical backup evidence;
-- fresh cluster-era VM202 backup evidence exists;
-- VM203, CT104 and CT105 have manual backup/integrity proof and are included in the reconciled schedules;
+- fresh unattended cluster-era evidence exists for CT105, CT101, CT103, VM202 and VM203;
+- VM203, CT104, CT105 and VM204 have manual backup/integrity proof and are included in reconciled schedules where applicable;
 - archive integrity checks have passed;
 - an LXC restore has been booted safely in isolation;
 - Komodo and Zabbix have separate application-level restore proof;
+- Home Assistant has a native backup in addition to whole-VM backup evidence;
 - notifications have been delivered through the approved relay path.
 
-The **cluster-era schedules** are reconciled through IaC. The remaining schedule proof is unattended execution with the newly added VM203, CT104 and CT105 included.
+The **cluster-era schedules** are reconciled through IaC. Remaining schedule proof is first unattended evidence for CT104 and VM204.
 
 Estate-wide recovery is not complete until VM, application, non-Proxmox and independent-secondary-copy recovery classes are also proven.
