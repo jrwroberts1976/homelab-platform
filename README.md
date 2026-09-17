@@ -18,6 +18,7 @@ The main current-state references are:
 - [Runbook Catalogue](runbooks/README.md)
 - [14 September 2026 Estate Audit](docs/architecture/ESTATE-AUDIT-2026-09-14.md)
 - [16 September 2026 Documentation Audit](docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-09-16.md)
+- [17 September 2026 Application Audit](docs/architecture/ESTATE-APPLICATION-AUDIT-2026-09-17.md)
 
 Machine identity/address truth is recorded in `IaC/inventory/estate.json` and must be checked before allocating a new hostname, LAN address or VMID.
 
@@ -50,6 +51,7 @@ The retired controller identity must not be used as the current controller; the 
 | `greenbone-01` | `192.168.2.57` | Greenbone Community vulnerability scanner, VM203 on `Proxmox-2` |
 | `komodo-01` | `192.168.2.58` | Komodo container-management control plane, CT104 on `PROXMOX` |
 | `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT105 on `PROXMOX` |
+| `home-01` | `192.168.2.60` | Home Assistant OS 18.2, VM204 on `PROXMOX` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 |
 | `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / Network Host Collector |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / Proxmox NFS backup target |
@@ -96,6 +98,7 @@ PROXMOX
   CT105 zabbix-01
   VM200 cloud-01
   VM201 sensor-01
+  VM204 home-01
   VM9000 / VM9001 templates
 
 Proxmox-2
@@ -118,7 +121,7 @@ PROXMOX
   job: homelab-nightly-proxmox
   time: 02:15
   storage: media-backup-proxmox
-  guests: 100,102,104,105,200,201
+  guests: 100,102,104,105,200,201,204
 
 Proxmox-2
   job: homelab-nightly-proxmox-2
@@ -132,9 +135,9 @@ retention: keep-last=3
 notification-mode: notification-system
 ```
 
-Both job definitions are reconciled through IaC. CT104 and CT105 were added to the `PROXMOX` job after successful manual snapshot backups and archive-integrity validation. The first unattended 02:15 run including those two containers remains to be observed.
+Both job definitions are reconciled through IaC. CT104, CT105 and VM203 have manual snapshot/integrity proof. The 17 September audit observed an unattended CT105 backup from the `PROXMOX` job and unattended CT101/CT103/VM202/VM203 backups from the `Proxmox-2` job. The displayed audit sample did not include CT104, so first unattended CT104 proof remains open.
 
-The unattended 16 September `Proxmox-2` cycle succeeded for CT101, CT103 and VM202. VM203 has manual snapshot archives with successful Zstandard integrity proof and is included in the nightly job; the first unattended run including VM203 remains to be observed.
+VM204 (`home-01`) has a native Home Assistant backup plus a manual Proxmox snapshot archive with compressed/VMA integrity proof and is included in the 02:15 schedule. Its first unattended scheduled backup remains to be observed.
 
 Pre-cluster restore evidence includes an isolated CT103 restore/boot proof. A representative QEMU restore and application-consistent `cloud-01` recovery remain separate recovery goals.
 
@@ -148,11 +151,15 @@ The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/ro
 
 ### Zabbix
 
-`zabbix-01` is the dedicated Zabbix 7.0 monitoring platform. The managed Linux estate contains 15 Zabbix Agent 2 targets. Matching host objects are grouped under `Homelab/Linux`, use `Linux by Zabbix agent active`, and all 15 were observed reporting on 16 September 2026.
+`zabbix-01` is the dedicated Zabbix 7.0 monitoring platform. The managed Linux estate contains 15 Zabbix Agent 2 targets. Matching host objects are grouped under `Homelab/Linux`, use `Linux by Zabbix agent active`, and all 15 were observed reporting on 16 September 2026. An unattended CT105 Proxmox backup was observed on 17 September.
 
 ### Komodo
 
 `komodo-01` is the commissioned Komodo control plane. Docker, MongoDB and Komodo Core are operational, application backup/isolated restore are proven, and Komodo is the preferred path for routine Docker application/version management as managed-host onboarding proceeds. Periphery onboarding and HTTPS hardening remain later work.
+
+### Home automation
+
+`home-01` is the commissioned Home Assistant platform. HAOS 18.2 runs as VM204 on `PROXMOX`; Home Assistant Core 2026.9.2 and Supervisor 2026.09.2 were healthy during the 17 September audit. The application is reachable on HTTP port 80 at `192.168.2.60` and `home-01`, both DNS resolvers return the correct record, native and manual VM backup evidence exists, and Proxmox protection is enabled. External monitoring, the first unattended VM204 backup and deeper restore proof remain follow-up items.
 
 ### Remote access
 
@@ -162,7 +169,7 @@ External authentication and tunnel establishment have been observed. Remaining c
 
 ### Cloud
 
-`cloud-01` is a live production Nextcloud service using PostgreSQL, Redis and a dedicated ext4 data disk. VM-level snapshot backup is proven; application-consistent Nextcloud/PostgreSQL recovery remains outstanding.
+`cloud-01` is a live production Nextcloud service using PostgreSQL, Redis and a dedicated ext4 data disk. VM-level snapshot backup is proven; application-consistent Nextcloud/PostgreSQL recovery remains outstanding. The 17 September audit also recorded a live/IaC Redis configuration-path difference for later reconciliation; the running service is healthy.
 
 ### Network sensor
 
@@ -178,27 +185,26 @@ External authentication and tunnel establishment have been observed. Remaining c
 
 ## Planned service expansion
 
-Two service workstreams remain explicitly planned. Canonical reservations are recorded only after a live/canonical collision preflight.
+One optional application workstream remains explicitly planned:
 
-- **Home Assistant / home automation** — the preflight passed and canonical planned identity is now reserved as `home-01`, `192.168.2.60`, VM204 on `PROXMOX`, fixed MAC `02:00:00:00:02:04`. The approved deployment model is Home Assistant OS 18.2 in a dedicated VM with 2 vCPU, 4 GiB RAM and a 32 GiB `vm-ssd` disk. It remains planned until commissioning, persistent `.60` networking, backup/recovery and monitoring gates pass.
-- **Password manager** — optional application workstream; product not selected. The design must cover protected recovery material, HTTPS, MFA/passkey capability where supported, backup/restore proof and an emergency-access path that does not depend solely on the running homelab.
+- **Password manager** — product not selected. The design must cover protected recovery material, HTTPS, MFA/passkey capability where supported, backup/restore proof and an emergency-access path that does not depend solely on the running homelab.
 
-See [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md) and [Target-State Architecture](docs/architecture/TARGET-STATE.md) for the design gates.
+Home Assistant is no longer a planned reservation: `home-01` is active and commissioned. See [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md) for current implementation and remaining closeout items.
 
 ## Delivery priorities
 
 | Workstream | Current position | Next milestone |
 |---|---|---|
-| Home automation | `home-01` / `.60` / VM204 reserved as planned; HAOS IaC prepared | Review/merge IaC, deploy HAOS base VM, complete onboarding and persistent `.60` network configuration |
+| Home automation | `home-01` active on `.60` as VM204; HAOS/Core/Supervisor healthy; native + manual VM backup evidence; protection enabled | Add external monitoring, observe first unattended VM204 backup, then decide radio/device integration |
 | Proxmox cluster | Two-node cluster, dual Corosync links and QDevice operational | Prove link0 -> link1 fallback and controlled single-node quorum behaviour |
-| Backup schedule | Both IaC jobs include current production guests; CT104/CT105/VM203 have manual backup integrity proof | Observe first unattended runs containing the newly added guests |
+| Backup schedule | Both IaC jobs include current production guests; unattended CT105 and VM203 evidence observed; VM204 scheduled with manual proof | Observe unattended CT104 and VM204 runs |
 | Recovery depth | LXC restore proof exists | QEMU restore proof + application-consistent `cloud-01` recovery |
 | Second-copy resilience | Primary NFS backup target operational | Add an independent second copy for important data |
 | Zabbix | Server + 15 active-agent hosts reporting | Tune actionable templates/alerts and add service-specific coverage |
-| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry |
+| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry and `home-01` external availability checks |
 | Komodo / container operations | Komodo Core commissioned; application backup/restore proven | Onboard managed Docker hosts, prove update/rollback ownership, then retire superseded paths |
 | Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
-| Vulnerability management | `greenbone-01` commissioned and protected | Observe scheduled backup, tune hardening/update policy as needed |
+| Vulnerability management | `greenbone-01` commissioned and protected | Tune hardening/update policy as needed |
 | Remote-access VPN | Router-hosted OpenVPN selected; external authentication/tunnel observed; logs reach Loki | Prove internal admin access + DNS externally, validate DDNS and recovery |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
