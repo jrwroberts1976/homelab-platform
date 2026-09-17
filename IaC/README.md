@@ -48,7 +48,7 @@ The older top-level `terraform/` directory predates this convention. Do not add 
 
 ## Current managed estate
 
-As of 16 September 2026 the production Ansible inventory covers the following 15 Linux systems:
+As of 17 September 2026 the production Ansible inventory covers the following 15 Linux systems:
 
 | Host / service | Address | Platform / role |
 |---|---:|---|
@@ -70,11 +70,13 @@ As of 16 September 2026 the production Ansible inventory covers the following 15
 
 The `zabbix_agents` group contains all 15 systems. Zabbix Agent 2 is deployed across that group and the matching 15 Zabbix host objects are reporting through the active-agent template.
 
+`home-01` is also an active production asset but is **not** part of the normal Ansible-managed Linux estate because HAOS is an appliance platform.
+
 `ids-01`, `TestServer`, `DietPi` and the former `k3s-node-01` identity are not active platform targets. Historical references should remain historical rather than being reused as current-state authority.
 
-## Planned infrastructure
+## Active Home Assistant infrastructure
 
-`home-01` is now deliberately reserved in canonical truth after a successful live collision/capacity preflight:
+`home-01` is commissioned and active:
 
 ```text
 hostname: home-01
@@ -82,9 +84,14 @@ address:  192.168.2.60
 VMID:     204
 node:     PROXMOX
 platform: Home Assistant OS 18.2
+Core:     2026.9.2
 ```
 
-Its Terraform source is under `IaC/terraform/proxmox/home-01/`, and `IaC/scripts/deploy-home-01.sh` is the guarded build entry point. The VM remains a planned asset until Home Assistant onboarding, persistent `.60` networking, backup/recovery and external monitoring gates are proven. HAOS is an appliance platform and is therefore not automatically added to the Ansible-managed Linux estate.
+Its Terraform source is under `IaC/terraform/proxmox/home-01/`, and `IaC/scripts/deploy-home-01.sh` is the guarded build entry point.
+
+Validated live state includes 2 vCPU, 4096 MiB RAM, 32 GiB `vm-ssd`, OVMF/q35, VirtIO network, QEMU guest agent, on-boot and Proxmox protection. The application endpoint is the proven port-80 URL `http://192.168.2.60/`; both managed DNS resolvers return the correct `home-01.jameshouse` record.
+
+Native Home Assistant backup and manual Proxmox VM backup/integrity proof exist. VM204 is included in the `PROXMOX` 02:15 nightly schedule. The first unattended VM204 run, external monitoring and deeper restore proof remain separate evidence gates.
 
 ## Important current-state distinctions
 
@@ -100,13 +107,19 @@ The dedicated capture path is operational. Suricata and Zeek are active on VM201
 
 `cloud-01` is production, not staging. It uses a dedicated 200 GiB VM data disk mounted at `/srv/cloud-01-data`. The former 4 TB WD USB disk is not its production data disk.
 
+The 17 September application audit confirmed Nextcloud/PostgreSQL/Redis health but also identified a live/IaC configuration-path difference for Redis authentication: live uses a mounted `redis.conf` while current IaC models the `.env`/`REDIS_PASSWORD` pattern. Treat this as configuration reconciliation work, not evidence that Redis is unhealthy.
+
 ### `komodo-01`
 
-CT104 is an unprivileged Debian 13 LXC with Docker, MongoDB and Komodo Core commissioned. Application backup and isolated database-restore validation are proven. CT104 is included in the IaC backup job; its first unattended scheduled run and Proxmox protection remain separate evidence gates.
+CT104 is an unprivileged Debian 13 LXC with Docker, MongoDB and Komodo Core commissioned. Application backup and isolated database-restore validation are proven. CT104 is included in the IaC backup job; first unattended scheduled proof remains open from the displayed 17 September audit evidence and Proxmox protection remains a separate decision.
 
 ### `zabbix-01`
 
-CT105 is the dedicated Zabbix 7.0 platform using PostgreSQL/TimescaleDB, Zabbix Server, Agent 2 and Nginx. Application logical restore and manual whole-container backup integrity are proven. CT105 is included in the IaC backup job; first unattended scheduled execution remains to be observed.
+CT105 is the dedicated Zabbix 7.0 platform using PostgreSQL/TimescaleDB, Zabbix Server, Agent 2 and Nginx. Application logical restore and manual whole-container backup integrity are proven. CT105 is included in the IaC backup job and an unattended 02:15 CT105 backup was observed on 17 September.
+
+### `media-01`
+
+The Kodi, Samba and NFS-backup workloads are operational. The 17 September audit found three IaC-managed Kodi add-ons absent: `weather.openmeteo`, `service.subtitles.opensubtitles-com` and `plugin.program.autocompletion`. Reconcile those separately after review; do not treat the healthy Kodi service itself as failed.
 
 ## Production cloud state
 
