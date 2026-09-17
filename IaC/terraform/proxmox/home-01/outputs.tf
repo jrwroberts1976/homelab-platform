@@ -15,5 +15,5 @@ output "expected_ipv4" {
 }
 
 output "home_assistant_url" {
-  value = "http://${var.expected_ipv4}:8123"
+  value = "http://${var.expected_ipv4}/"
 }
