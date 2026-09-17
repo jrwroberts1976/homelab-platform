@@ -38,6 +38,27 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
 | HP ProCurve 2510G-24 | `192.168.2.16` | Core managed switch / SPAN source | ACTIVE |
 
+## Web and service URLs
+
+These are the current LAN/VPN administration and service endpoints that are explicitly defined in IaC or validated during commissioning/audit work. They should not be treated as public endpoints unless separately documented.
+
+| Service | URL | Notes |
+|---|---|---|
+| Grafana | `http://192.168.2.52:3000/` | Main monitoring UI on `monitor-01` |
+| Prometheus | `http://192.168.2.52:9090/` | Metrics/query UI on `monitor-01` |
+| Alertmanager | `http://192.168.2.52:9093/` | Alert routing UI on `monitor-01` |
+| Blackbox Exporter | `http://192.168.2.52:9115/` | Probe service endpoint on `monitor-01` |
+| Loki | `http://192.168.2.52:3100/` | Loki HTTP/API endpoint on `monitor-01` |
+| Nextcloud | `http://192.168.2.53:8080/` | Production `cloud-01` frontend |
+| Greenbone | `https://192.168.2.57/` | LAN-only scanner UI; current certificate is self-signed |
+| Komodo | `http://192.168.2.58:9120/` | LAN/VPN administration UI |
+| Zabbix | `http://192.168.2.59:8080/` | Zabbix frontend |
+| Home Assistant | `http://home-01/` | Friendly DNS URL validated through both internal resolvers |
+| Home Assistant | `http://192.168.2.60/` | Direct-IP fallback |
+| Proxmox VE — `PROXMOX` | `https://192.168.2.70:8006/` | Cluster node 1 web UI |
+| Proxmox VE — `Proxmox-2` | `https://192.168.2.71:8006/` | Cluster node 2 web UI |
+| BirdNET-Go | `http://192.168.2.220:8080/` | `docker-01` web endpoint |
+
 ## Retired identities
 
 The following names must not be treated as active production hosts:
