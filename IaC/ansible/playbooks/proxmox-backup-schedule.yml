@@ -16,6 +16,7 @@
           - {id: 105, type: lxc}
           - {id: 200, type: qemu}
           - {id: 201, type: qemu}
+          - {id: 204, type: qemu}
       Proxmox-2:
         id: homelab-nightly-proxmox-2
         schedule: "03:15"
