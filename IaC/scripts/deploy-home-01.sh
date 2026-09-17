@@ -148,7 +148,7 @@ case ",$LOCAL_CONTENT," in
     ;;
 esac
 
-IMPORT_REL='template/import'
+IMPORT_REL='import'
 if [ -n "$CONTENT_DIRS" ]; then
   OLDIFS="$IFS"
   IFS=','
@@ -230,7 +230,7 @@ case ",$LOCAL_CONTENT," in
     ;;
 esac
 
-IMPORT_REL='template/import'
+IMPORT_REL='import'
 if [ -n "$CONTENT_DIRS" ]; then
   OLDIFS="$IFS"
   IFS=','
@@ -362,14 +362,14 @@ printf 'planned_static_ipv4=%s\n' "$HOME_IPV4"
 printf '\n===== HOME ASSISTANT WEB READINESS =====\n'
 WEB_READY=0
 for attempt in $(seq 1 90); do
-  if curl --fail --silent --show-error --max-time 5 "http://$DHCP_IP:8123/" >/dev/null 2>&1; then
+  if curl --fail --silent --show-error --max-time 5 "http://$DHCP_IP/" >/dev/null 2>&1; then
     WEB_READY=1
     break
   fi
   sleep 5
 done
 
-[ "$WEB_READY" -eq 1 ] || die "Home Assistant port 8123 did not become ready on first-boot address $DHCP_IP"
+[ "$WEB_READY" -eq 1 ] || die "Home Assistant HTTP port 80 did not become ready on first-boot address $DHCP_IP"
 printf 'home_assistant_http=PASS\n'
 
 printf '\n===== TERRAFORM DRIFT CHECK =====\n'
@@ -397,7 +397,7 @@ printf 'home-01 VM204 is running on PROXMOX.\n'
 printf 'HAOS=%s\n' "$HAOS_VERSION"
 printf 'first_boot_ipv4=%s\n' "$DHCP_IP"
 printf 'planned_static_ipv4=%s\n' "$HOME_IPV4"
-printf 'home_assistant_url=http://%s:8123\n' "$DHCP_IP"
+printf 'home_assistant_url=http://%s/\n' "$DHCP_IP"
 printf 'proxmox_protection=DISABLED_PENDING_BACKUP_PROOF\n'
 printf 'nightly_backup_schedule=NOT_YET_CHANGED\n'
 printf 'usb_radio_passthrough=NOT_YET_CONFIGURED\n'
