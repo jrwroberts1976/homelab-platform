@@ -89,7 +89,7 @@ variable "haos_image_id" {
 }
 
 variable "protect_after_build" {
-  description = "Enable Proxmox VM protection only after commissioning and backup validation."
+  description = "Enable Proxmox VM protection after commissioning and backup validation; the deployment workflow explicitly overrides this to false during initial build."
   type        = bool
-  default     = false
+  default     = true
 }
