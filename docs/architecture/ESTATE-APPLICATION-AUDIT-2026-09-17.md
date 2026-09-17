@@ -21,7 +21,7 @@ The live estate is broadly commissioned and operational. One clear application-c
 | `dns-02` | Pi-hole + Unbound | PASS |
 | `dns-01` | Pi-hole + Unbound | PASS |
 | `monitor-01` | Prometheus, Grafana, Alertmanager, Blackbox Exporter, Loki, router syslog ingestion | PASS |
-| `cloud-01` | Nextcloud, PostgreSQL, Redis | PASS — IaC/live Redis configuration drift recorded |
+| `cloud-01` | Nextcloud, PostgreSQL, Redis | PASS — Redis configuration drift reconciled; final IaC zero-drift closeout proven 17 September |
 | `mail-relay-01` | Postfix relay | PASS |
 | `sensor-01` | Suricata + Zeek passive sensor | PASS |
 | `edge-01` | Reserved edge LXC | PASS — host commissioned; `cloudflared` intentionally absent |
@@ -86,7 +86,20 @@ Both `dns-01` and `dns-02` passed:
 - dedicated data filesystem mounted correctly;
 - Alloy, Node Exporter and Zabbix Agent 2 active.
 
-Observed drift: the live Redis container uses a mounted `redis.conf`/`requirepass` configuration while the current IaC path expects the `.env`/`REDIS_PASSWORD` pattern. Redis itself is healthy and authenticated; this is configuration reconciliation work rather than an application outage.
+Audit finding: the live Redis container originally used a mounted `redis.conf`/`requirepass` configuration while the current IaC path expected the `.env`/`REDIS_PASSWORD` pattern. Redis itself remained healthy and authenticated; this was configuration reconciliation work rather than an application outage.
+
+Remediation completed later on 17 September 2026:
+
+- Redis was reconciled to the IaC-managed `.env`/`REDIS_PASSWORD` model and the unused legacy `redis.conf` was removed;
+- the Nextcloud administrator, PostgreSQL owner/bootstrap and Redis credentials exposed during diagnostic output were rotated without exposing replacement values in the closeout evidence;
+- PostgreSQL authentication was proven over the application network, the database container was recreated with current environment metadata, and Nextcloud remained on its established `oc_admin` application role;
+- Redis used a temporary dual-password ACL bridge while Nextcloud was moved to the new credential; the Redis container was then recreated from the IaC-managed secret, after which the old Redis password was rejected and its ACL hash was absent;
+- app and cron containers were reconciled to the rotated environment, while PostgreSQL and Redis health and Nextcloud HTTP 200 status remained healthy;
+- obsolete secret-bearing staging, rollback and temporary artifacts were purged from `admin-01` and `cloud-01` while live configuration files were preserved;
+- final production IaC closeout returned `changed=0` in check mode, approved reconciliation and the second idempotence run, with zero unreachable/failed tasks;
+- final health validation reported Nextcloud 34.0.3 healthy, required containers running, PostgreSQL and Redis healthy, dedicated storage validation passing and no failed systemd units.
+
+The `cloud-01` Redis configuration-drift remediation is therefore **CLOSED**.
 
 ### `mail-relay-01`
 
@@ -266,15 +279,16 @@ The audit output did not include CT104 in the displayed tail of the `PROXMOX` re
 ## Open remediation / reconciliation backlog
 
 1. Reconcile the three missing IaC-managed Kodi add-ons on `media-01`.
-2. Reconcile `cloud-01` Redis live configuration with the current IaC secret/configuration model without disrupting the healthy service.
-3. Review the `zabbix-01` LXC mount-unit baseline and remove false/noisy failed-unit conditions if appropriate.
-4. Add external monitoring for `home-01` and observe its first unattended scheduled backup.
-5. Reconcile documentation and canonical truth so `home-01` is active rather than planned.
-6. Review the Network Host Collector timer desired-state default versus the validated live enabled timer before changing either side.
-7. Review the retained generic `media-backup` storage after confidence in the split node-specific repositories is accepted.
-8. Reconcile the `admin-01` Git worktree back to `main` after repository branch cleanup.
-9. Continue recovery-depth work: representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery and independent second-copy protection.
+2. Review the `zabbix-01` LXC mount-unit baseline and remove false/noisy failed-unit conditions if appropriate.
+3. Add external monitoring for `home-01` and observe its first unattended scheduled backup.
+4. Reconcile documentation and canonical truth so `home-01` is active rather than planned.
+5. Review the Network Host Collector timer desired-state default versus the validated live enabled timer before changing either side.
+6. Review the retained generic `media-backup` storage after confidence in the split node-specific repositories is accepted.
+7. Reconcile the `admin-01` Git worktree back to `main` after repository branch cleanup.
+8. Continue recovery-depth work: representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery and independent second-copy protection.
+
+`cloud-01` Redis/configuration remediation is closed and is no longer part of the open backlog.
 
 ## Audit conclusion
 
-The estate audit found a commissioned, operational platform rather than a partially deployed one. No core server application is missing. Remaining work is bounded to one application-completeness issue plus configuration, documentation, monitoring and recovery-depth reconciliation.
+The estate audit found a commissioned, operational platform rather than a partially deployed one. No core server application is missing. The `cloud-01` Redis configuration-drift finding has been reconciled and closed. Remaining work is bounded to the media application-completeness issue plus other configuration, documentation, monitoring and recovery-depth reconciliation.
