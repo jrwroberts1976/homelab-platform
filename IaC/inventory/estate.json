@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "validated_at": "2026-09-16",
+  "validated_at": "2026-09-17",
   "purpose": "Canonical machine-readable identity and addressing inventory for current homelab documentation checks.",
   "authority": {
     "identity_and_addressing": "IaC/inventory/estate.json",
@@ -105,8 +105,17 @@
       "address": "192.168.2.59",
       "state": "active",
       "kind": "lxc",
-      "role": "Zabbix monitoring platform, CT105 on PROXMOX; PostgreSQL, TimescaleDB, Zabbix Server, Agent 2 and Nginx active",
+      "role": "Zabbix monitoring platform, CT105 on PROXMOX; PostgreSQL, TimescaleDB, Zabbix Server, Agent 2 and Nginx active; unattended nightly backup observed on 2026-09-17",
       "managed_by_ansible": true
+    },
+    {
+      "name": "home-01",
+      "document_label": "home-01",
+      "address": "192.168.2.60",
+      "state": "active",
+      "kind": "vm",
+      "role": "Home Assistant OS 18.2, VM204 on PROXMOX; Home Assistant Core 2026.9.2; 2 vCPU, 4096 MiB RAM, 32 GiB vm-ssd; fixed MAC 02:00:00:00:02:04; native backup and manual Proxmox backup/integrity proof complete; first unattended scheduled backup and external monitoring remain pending",
+      "managed_by_ansible": false
     },
     {
       "name": "PROXMOX",
@@ -181,17 +190,7 @@
       "managed_by_ansible": false
     }
   ],
-  "planned_assets": [
-    {
-      "name": "home-01",
-      "document_label": "home-01",
-      "address": "192.168.2.60",
-      "state": "planned",
-      "kind": "vm",
-      "role": "Home Assistant OS 18.2, VM204 planned on PROXMOX; 2 vCPU, 4096 MiB RAM, 32 GiB vm-ssd; fixed MAC 02:00:00:00:02:04; backup/protection/radio integration pending commissioning",
-      "managed_by_ansible": false
-    }
-  ],
+  "planned_assets": [],
   "retired_identities": [
     {
       "token": "DietPi",
