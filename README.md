@@ -165,7 +165,7 @@ The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/ro
 
 The selected remote-access implementation is the native OpenVPN server on the ASUS RT-AC86U rather than a separate VPN VM.
 
-External authentication and tunnel establishment have been observed. Remaining completion gates are explicit external access to the intended management services, internal DNS proof, DDNS endpoint validation and router-recovery/client-re-enrolment documentation.
+**VPN status: FULLY OPERATIONAL — accepted 18 September 2026.** The ASUS RT-AC86U OpenVPN service is the production remote-access path. A Windows laptop was validated from an external network with a `10.8.0.x` tunnel address, homelab LAN access and normal split-tunnel Internet access. DDNS and router/client recovery checks are retained as maintenance/recovery documentation rather than blockers to operational acceptance.
 
 ### Cloud
 
