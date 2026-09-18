@@ -205,7 +205,7 @@ Home Assistant is no longer a planned reservation: `home-01` is active and commi
 | Komodo / container operations | Komodo Core commissioned; application backup/restore proven | Onboard managed Docker hosts, prove update/rollback ownership, then retire superseded paths |
 | Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
 | Vulnerability management | `greenbone-01` commissioned and protected | Tune hardening/update policy as needed |
-| Remote-access VPN | Router-hosted OpenVPN selected; external authentication/tunnel observed; logs reach Loki | Prove internal admin access + DNS externally, validate DDNS and recovery |
+| Remote-access VPN | **FULLY OPERATIONAL** — router-hosted OpenVPN accepted 18 September 2026 for external laptop administration with split tunnelling | Maintain DDNS/router recovery/client re-enrolment documentation; no operational acceptance work remains |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
 | Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |

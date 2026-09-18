@@ -19,7 +19,7 @@ This tracker records the controlled migration from the former consolidated/legac
 | 2. Workload inventory | COMPLETE FOR CORE ESTATE | Core DNS, cloud, monitoring, mail, sensor, edge, media and BirdNET placements are explicit |
 | 3. Target architecture | CORE PLACEMENT IMPLEMENTED | Remaining decisions focus on recovery depth, HA/storage, second-copy resilience and hardening |
 | 4. Public website migration | COMPLETE | Public site no longer depends on normal homelab hosting |
-| 5. Proxmox IaC / clustering | CLUSTER IMPLEMENTED | `jameshouse-pve`, dual Corosync links, QDevice and cluster-unique VMIDs are live; cluster-era backup IaC is the next reconciliation |
+| 5. Proxmox IaC / clustering | CLUSTER IMPLEMENTED | `jameshouse-pve`, dual Corosync links, QDevice and cluster-unique VMIDs are live; resilience testing remains follow-up work |
 | 6. Komodo / container operations | IN PROGRESS / REVIEW | Move routine Docker operations to the approved Komodo workflow and retire redundant paths only after proof |
 | 7. Workload migration | SUBSTANTIALLY COMPLETE | Former consolidated TestServer/ids-01 roles redistributed; remaining work is cleanup and recovery proof |
 | 8. Monitoring/security separation | COMPLETE BASELINE | `monitor-01` and `sensor-01` are live; Suricata/Zeek capture and Loki/Alloy pipelines are operational |
@@ -227,15 +227,7 @@ Proxmox-2 -> media-backup-proxmox-2 -> /srv/backup/pve-proxmox-2
 
 All seven production guests had successful backup evidence before cluster formation and CT103 has a proven isolated LXC restore/boot test.
 
-The final cluster-era backup policy still needs reconciliation because `monitor-01` changed from standalone VM200 to VM202 and the joining node's cluster configuration replaced its previous job state.
-
-Desired `.71` schedule scope is now:
-
-```text
-101,103,202
-```
-
-Fresh VM202 backup evidence and an unattended post-cluster cycle are the immediate backup gates.
+The cluster-era backup policy has been reconciled through IaC. Current scheduled selections are `100,102,104,105,200,201,204` on `PROXMOX` and `101,103,202,203` on `Proxmox-2`. Unattended evidence has been observed for CT105 and for CT101/CT103/VM202/VM203; first unattended CT104 and VM204 proof remains open.
 
 See `docs/architecture/BACKUP-STRATEGY.md` and `production docs/PROXMOX-BACKUP-RECOVERY.md`.
 
@@ -247,13 +239,13 @@ Retain migration documentation as historical/recovery evidence, but do not descr
 
 ## Current next actions
 
-1. Reconcile `proxmox-backup-schedule.yml` and the live `.71` job from old monitor VMID 200 to VM202.
-2. Take fresh cluster-era backups and observe the first unattended post-cluster backup cycle.
-3. Prove a representative QEMU restore and application-consistent `cloud-01` recovery.
-4. Test Corosync link0 loss and prove link1 fallback without causing a node outage.
-5. Perform a controlled one-node maintenance/quorum test with QDevice available.
+1. Onboard managed Docker hosts to Komodo deliberately, beginning with discovery/read-only validation and then a low-risk update/rollback proof.
+2. Observe the remaining unattended CT104 and VM204 backup runs as routine maintenance evidence.
+3. Prove a representative QEMU restore and application-consistent `cloud-01` recovery when recovery-depth work is resumed.
+4. Test Corosync link0 loss and prove link1 fallback when physical access to the comms room is convenient.
+5. Perform a controlled one-node maintenance/quorum test with QDevice available after the link-fallback test.
 6. Decide whether node-local storage plus backup/manual recovery is sufficient or whether replication/shared storage and HA are justified.
 7. Remove retained pre-cluster LVs only after fresh backup confidence is explicit.
-8. Add an independent second backup copy and protect non-Proxmox persistent state.
-9. Finish remaining router/switch hardening and physical-port mapping work.
+8. Add an independent second backup copy and protect non-Proxmox persistent state when backup resilience is revisited.
+9. Finish remaining router/switch hardening and physical-port mapping work when physical access is convenient.
 10. Retire remaining legacy deployment/management paths only after replacements are proven.
