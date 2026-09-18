@@ -1,0 +1,3 @@
+---
+lxc_systemd_mount_baseline_expected_virtualization: "lxc"
+lxc_systemd_mount_baseline_units: []

@@ -34,6 +34,7 @@
           and must contain at least 24 characters.
 
   roles:
+    - role: lxc_systemd_mount_baseline
     - role: postgresql
     - role: timescaledb
     - role: zabbix_server

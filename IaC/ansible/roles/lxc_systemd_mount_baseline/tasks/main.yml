@@ -1,0 +1,59 @@
+---
+- name: Detect container virtualization
+  ansible.builtin.command:
+    argv:
+      - systemd-detect-virt
+      - --container
+  register: lxc_systemd_mount_baseline_virtualization
+  changed_when: false
+  check_mode: false
+
+- name: Require approved LXC systemd mount baseline
+  ansible.builtin.assert:
+    that:
+      - >-
+        lxc_systemd_mount_baseline_virtualization.stdout | trim ==
+        lxc_systemd_mount_baseline_expected_virtualization
+      - lxc_systemd_mount_baseline_units | length > 0
+    fail_msg: >-
+      Refusing systemd mount baseline reconciliation: the target must
+      be the expected LXC guest and an explicit unit list must exist.
+
+- name: Mask LXC-inapplicable systemd mount units
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: true
+  loop: "{{ lxc_systemd_mount_baseline_units }}"
+
+- name: Clear historical failed state for baseline units
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - reset-failed
+      - "{{ item }}"
+  loop: "{{ lxc_systemd_mount_baseline_units }}"
+  changed_when: false
+  failed_when: false
+  when: not ansible_check_mode
+
+- name: Read final baseline unit load state
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - show
+      - "{{ item }}"
+      - --property=LoadState
+      - --value
+  loop: "{{ lxc_systemd_mount_baseline_units }}"
+  register: lxc_systemd_mount_baseline_state
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Require baseline units to be masked
+  ansible.builtin.assert:
+    that:
+      - item.stdout | trim == 'masked'
+    fail_msg: >-
+      {{ item.item }} is not masked after LXC baseline reconciliation.
+  loop: "{{ lxc_systemd_mount_baseline_state.results }}"
+  when: not ansible_check_mode

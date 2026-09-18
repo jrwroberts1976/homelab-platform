@@ -1,0 +1,65 @@
+---
+- name: Reconcile zabbix-01 Proxmox LXC systemd baseline
+  hosts: zabbix_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Require approved zabbix-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'zabbix-01'
+          - ansible_host == '192.168.2.59'
+          - ansible_distribution == 'Debian'
+          - ansible_distribution_major_version | int == 13
+        fail_msg: >-
+          LXC baseline target does not match the approved
+          zabbix-01 Debian 13 identity.
+
+  roles:
+    - role: lxc_systemd_mount_baseline
+
+  post_tasks:
+    - name: Read failed systemd units
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - --failed
+          - --no-legend
+          - --plain
+      register: zabbix_lxc_failed_units
+      changed_when: false
+      check_mode: false
+
+    - name: Require no failed systemd units
+      ansible.builtin.assert:
+        that:
+          - zabbix_lxc_failed_units.stdout | trim == ''
+        fail_msg: >-
+          zabbix-01 still has failed systemd units after
+          LXC baseline reconciliation.
+
+    - name: Verify Zabbix platform services
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ item }}"
+      loop:
+        - postgresql
+        - zabbix-server
+        - zabbix-agent2
+        - nginx
+      register: zabbix_lxc_services
+      changed_when: false
+      failed_when: >-
+        zabbix_lxc_services.stdout | trim != 'active'
+      check_mode: false
+
+    - name: Verify Zabbix frontend
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        status_code: 200
+        return_content: false
+      changed_when: false
+      check_mode: false
