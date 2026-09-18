@@ -317,7 +317,11 @@ Validated state through 17 September 2026:
 - first unattended CT104 proof remains open from the displayed 17 September audit sample;
 - Proxmox protection remains disabled pending deliberate acceptance.
 
-The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated. Remaining platform work is first unattended backup proof, protection decision, HTTPS hardening and deliberate Periphery/managed-host onboarding.
+The Proxmox `overlay` filesystem module is loaded and persisted, and its visibility inside CT104 is validated.
+
+On 18 September 2026, `docker-01` became the first commissioned Komodo-managed Docker host. Komodo Periphery `2.3.3` runs on `docker-01` using the outbound Core connection to `http://192.168.2.58:9120`. Remote host and container terminals are disabled. Periphery identity is persisted in the Docker volume mounted at `/config/keys`, and keyless steady-state operation was proven across a forced container recreation. The bootstrap onboarding credential is not retained in the active host environment. The deployment is managed through the `komodo_periphery` Ansible role and completed an idempotent run with `changed=0`. BirdNET-Go remained healthy throughout commissioning.
+
+Remaining Komodo platform work includes first unattended CT104 backup proof, the Proxmox protection decision, HTTPS hardening and controlled onboarding of additional Docker hosts.
 
 ## Production cloud service
 
@@ -468,13 +472,17 @@ Production Ansible should normally be launched from the checked-out `homelab-pla
 
 ## Docker / BirdNET host
 
-`docker-01` at `192.168.2.220` remains the dedicated Raspberry Pi 4 BirdNET-Go host.
+`docker-01` at `192.168.2.220` remains the dedicated Raspberry Pi 4 BirdNET-Go host and is the first Docker host commissioned for management through Komodo.
 
-Validated state on 17 September includes Debian 13/arm64, Docker active, pinned image `ghcr.io/tphakala/birdnet-go:20260823` running healthy, HTTP endpoint responding, the intended USB microphone visible to both host ALSA and BirdNET-Go, and a five-second live-audio sample containing 78 matching microphone events. Current BirdNET data/log activity was also present.
+Validated application state includes Debian 13/arm64, Docker active, pinned image `ghcr.io/tphakala/birdnet-go:20260823` running healthy, HTTP endpoint responding, and the intended USB microphone operational.
 
-Alloy, Node Exporter and Zabbix Agent 2 are active and zero failed systemd units were present.
+Komodo Periphery `2.3.3` is deployed through the `komodo_periphery` Ansible role. It connects outbound to Komodo Core on `komodo-01` at `http://192.168.2.58:9120`; no Periphery management port is published on the host. Remote host and container terminals are disabled. Periphery identity is persisted through `/config/keys`, and successful Core login with no active onboarding credential was proven after forced container recreation. The steady-state Ansible deployment completed idempotently with `changed=0`.
 
-The former TestServer workload estate must not be silently reintroduced.
+BirdNET-Go remained running and healthy throughout Periphery commissioning. It is now also declared through the Git-managed `IaC/komodo/resources/docker-01.toml` resource and imported by the `homelab-platform` Komodo Resource Sync. The sync completed with state `OK` and the Deployment is visible as running on `docker-01`. The declaration remains `deploy = false`; live validation confirmed that the existing container was not replaced and remains owned by the `birdnet-go` Compose project at `/opt/birdnet-go/compose.yml`.
+
+Alloy, Node Exporter and Zabbix Agent 2 remain active.
+
+The former TestServer workload estate <!-- historical --> must not be silently reintroduced. Komodo management does not change the host's deliberately narrow BirdNET-Go workload role.
 
 ## Home automation
 

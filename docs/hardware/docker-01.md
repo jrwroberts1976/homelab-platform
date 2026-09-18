@@ -87,6 +87,33 @@ ghcr.io/tphakala/birdnet-go:20260823
 
 This snapshot records what was running on 12 September 2026; image/version management should follow the approved container-operations workflow rather than being hard-coded forever in documentation.
 
+## Komodo management
+
+Commissioned on 18 September 2026 as the first Docker host managed through Komodo.
+
+Validated state:
+
+- Komodo Periphery `2.3.3`;
+- deployed and maintained through the `komodo_periphery` Ansible role;
+- outbound connection to Komodo Core at `http://192.168.2.58:9120`;
+- no inbound Periphery management port published;
+- remote host terminals disabled;
+- remote container terminals disabled;
+- Periphery private/public identity persisted through `/config/keys`;
+- persistent identity proven across forced container recreation;
+- active Periphery environment contains no onboarding credential in steady state;
+- successful keyless login to Komodo Core proven;
+- steady-state Ansible run completed with `changed=0`;
+- BirdNET-Go remained running and healthy throughout commissioning;
+- BirdNET-Go is declared as a Komodo Deployment through the Git-managed resource file `IaC/komodo/resources/docker-01.toml`;
+- the `homelab-platform` Resource Sync reads the private `jrwroberts1976/homelab-platform` repository and completed successfully with state `OK`;
+- the initial Deployment declaration uses `deploy = false`, so commissioning did not replace or recreate the existing BirdNET-Go container;
+- live validation confirmed the running container remains owned by the `birdnet-go` Compose project at `/opt/birdnet-go/compose.yml`.
+
+The Komodo onboarding mechanism is bootstrap-only. It is not part of the normal host runtime configuration.
+
+Komodo provides the management plane for this Docker host; it does not change the workload boundary. `docker-01` remains a dedicated BirdNET-Go host and must not become a replacement for the retired TestServer container estate <!-- historical -->.
+
 ## Monitoring
 
 Node Exporter is active on TCP/9100.

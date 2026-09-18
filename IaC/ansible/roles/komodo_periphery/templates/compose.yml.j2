@@ -1,0 +1,20 @@
+services:
+  periphery:
+    image: "{{ komodo_periphery_image }}"
+    restart: unless-stopped
+    env_file:
+      - "{{ komodo_periphery_root }}/periphery.env"
+    environment:
+      PERIPHERY_ROOT_DIRECTORY: "{{ komodo_periphery_root }}"
+      PERIPHERY_CORE_ADDRESS: "{{ komodo_periphery_core_address }}"
+      PERIPHERY_CONNECT_AS: "{{ komodo_periphery_connect_as }}"
+      PERIPHERY_DISABLE_TERMINALS: "true"
+      PERIPHERY_DISABLE_CONTAINER_TERMINALS: "true"
+    volumes:
+      - komodo_periphery_keys:/config/keys
+      - /var/run/docker.sock:/var/run/docker.sock
+      - /proc:/proc
+      - "{{ komodo_periphery_root }}:{{ komodo_periphery_root }}"
+
+volumes:
+  komodo_periphery_keys:
