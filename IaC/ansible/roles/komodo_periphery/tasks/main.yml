@@ -1,0 +1,145 @@
+---
+- name: Validate Komodo Periphery host identity
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == komodo_periphery_expected_hostname
+      - komodo_periphery_expected_ipv4 in ansible_facts.all_ipv4_addresses
+    fail_msg: >-
+      Refusing to deploy Komodo Periphery to an unexpected host.
+
+- name: Verify Docker Engine is operational
+  ansible.builtin.command:
+    argv:
+      - docker
+      - info
+  changed_when: false
+
+- name: Verify Docker Compose is operational
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - version
+  changed_when: false
+
+- name: Read protected Komodo onboarding key
+  ansible.builtin.set_fact:
+    komodo_periphery_onboarding_key: >-
+      {{ lookup('ansible.builtin.file', komodo_periphery_onboarding_key_file) | trim }}
+  when: komodo_periphery_bootstrap | bool
+  no_log: true
+
+- name: Validate protected Komodo onboarding key
+  ansible.builtin.assert:
+    that:
+      - komodo_periphery_onboarding_key | length > 0
+    fail_msg: >-
+      Komodo onboarding key is missing or empty.
+  when: komodo_periphery_bootstrap | bool
+  no_log: true
+
+- name: Require explicit approval before Komodo Periphery deployment
+  ansible.builtin.assert:
+    that:
+      - komodo_periphery_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to pull or start Komodo Periphery.
+      Re-run with -e komodo_periphery_allow_deploy=true after validation.
+
+- name: Ensure Komodo Periphery root exists
+  ansible.builtin.file:
+    path: "{{ komodo_periphery_root }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install protected Komodo Periphery environment
+  ansible.builtin.copy:
+    dest: "{{ komodo_periphery_root }}/periphery.env"
+    owner: root
+    group: root
+    mode: "0600"
+    content: >-
+      {{ ('PERIPHERY_ONBOARDING_KEY=' ~ komodo_periphery_onboarding_key ~ '\n')
+         if (komodo_periphery_bootstrap | bool) else '' }}
+  no_log: true
+
+- name: Install Komodo Periphery Compose definition
+  ansible.builtin.template:
+    src: compose.yml.j2
+    dest: "{{ komodo_periphery_root }}/compose.yml"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Validate Komodo Periphery Compose definition
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo-periphery
+      - --file
+      - "{{ komodo_periphery_root }}/compose.yml"
+      - config
+      - --quiet
+  changed_when: false
+  no_log: true
+
+- name: Pull Komodo Periphery image
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo-periphery
+      - --file
+      - "{{ komodo_periphery_root }}/compose.yml"
+      - pull
+  changed_when: false
+
+- name: Reconcile Komodo Periphery
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo-periphery
+      - --file
+      - "{{ komodo_periphery_root }}/compose.yml"
+      - up
+      - -d
+  register: komodo_periphery_compose_up
+  changed_when: >-
+    'Creating' in komodo_periphery_compose_up.stderr
+    or 'Created' in komodo_periphery_compose_up.stderr
+    or 'Recreating' in komodo_periphery_compose_up.stderr
+    or 'Recreated' in komodo_periphery_compose_up.stderr
+    or 'Starting' in komodo_periphery_compose_up.stderr
+    or 'Started' in komodo_periphery_compose_up.stderr
+  no_log: true
+
+- name: Verify Komodo Periphery container is running
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-name
+      - komodo-periphery
+      - --file
+      - "{{ komodo_periphery_root }}/compose.yml"
+      - ps
+      - --services
+      - --status
+      - running
+  register: komodo_periphery_running_services
+  changed_when: false
+
+- name: Require Komodo Periphery to be running
+  ansible.builtin.assert:
+    that:
+      - "'periphery' in komodo_periphery_running_services.stdout_lines"
