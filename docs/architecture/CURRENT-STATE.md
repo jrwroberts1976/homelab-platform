@@ -327,6 +327,8 @@ All four Periphery hosts use Komodo Periphery `2.3.3`, connect outbound to Core 
 
 Existing application workloads were not migrated or recreated as part of Periphery onboarding. Monitoring services on `monitor-01`, Nextcloud services on `cloud-01`, Greenbone Community services on `greenbone-01`, and BirdNET-Go on `docker-01` remained operational through their respective commissioning validation.
 
+On 18 September 2026, the existing `monitor-01` monitoring Compose stack was imported into Komodo through the Git-managed `IaC/komodo/resources/monitor-01.toml` Resource Sync. Periphery reads the existing files-on-host stack through the read-only `/opt/monitoring` mount exposed at `/etc/komodo/stacks/monitoring`. Komodo successfully discovered Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki and reports all five services as running. Pre-import and post-import Docker container IDs were identical for all five services, proving that Resource Sync adoption did not recreate or redeploy the production monitoring workload.
+
 Remaining Komodo platform work includes first unattended CT104 backup proof, the Proxmox protection decision and HTTPS hardening.
 
 ## Production cloud service
