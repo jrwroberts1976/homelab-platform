@@ -329,6 +329,8 @@ Existing application workloads were not migrated or recreated as part of Periphe
 
 On 18 September 2026, the existing `monitor-01` monitoring Compose stack was imported into Komodo through the Git-managed `IaC/komodo/resources/monitor-01.toml` Resource Sync. Periphery reads the existing files-on-host stack through the read-only `/opt/monitoring` mount exposed at `/etc/komodo/stacks/monitoring`. Komodo successfully discovered Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki and reports all five services as running. Pre-import and post-import Docker container IDs were identical for all five services, proving that Resource Sync adoption did not recreate or redeploy the production monitoring workload.
 
+On 18 September 2026, the existing production `cloud-01` Compose stack was also imported into Komodo through the Git-managed `IaC/komodo/resources/cloud-01.toml` Resource Sync. Periphery reads the files-on-host stack through the read-only `/opt/cloud-01` mount exposed at `/etc/komodo/stacks/cloud-01`. The production `.env` remains host-only and is not stored in Git. Komodo successfully discovered all four services — Nextcloud app, Nextcloud cron, PostgreSQL and Redis — and reports the stack as running. Pre-import and post-import Docker container IDs were identical for all four services, proving that Resource Sync adoption did not recreate or redeploy the production cloud workload.
+
 Remaining Komodo platform work includes first unattended CT104 backup proof, the Proxmox protection decision and HTTPS hardening.
 
 ## Production cloud service
