@@ -1,0 +1,12 @@
+[[stack]]
+name = "monitoring"
+description = "Existing monitoring Compose stack on monitor-01; imported into Komodo without redeployment."
+
+[stack.config]
+server = "monitor-01"
+project_name = "monitoring"
+files_on_host = true
+run_directory = "/opt/monitoring"
+file_paths = ["docker-compose.yml"]
+env_file_path = ".env"
+send_alerts = true
