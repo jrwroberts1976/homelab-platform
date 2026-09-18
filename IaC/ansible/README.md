@@ -147,7 +147,7 @@ The capture adapter is a passive-monitoring interface and must not be repurposed
 
 `zabbix-01` is the dedicated Zabbix server. The `zabbix_agents` group contains all 15 managed Linux systems; host objects are in `Homelab/Linux`, linked to `Linux by Zabbix agent active`, and all 15 were observed reporting on 16 September 2026.
 
-Agent configuration uses `192.168.2.59` for both `Server` and `ServerActive`. Hostname identity is the Ansible inventory hostname. UFW mutation remains disabled by default and must not be enabled estate-wide without host-specific firewall review.
+Agent configuration normally uses `192.168.2.59` for both `Server` and `ServerActive`. On `zabbix-01`, passive `Server` access also permits `127.0.0.1` because the built-in `Zabbix server` host polls the local Agent 2 interface. Hostname identity is the Ansible inventory hostname. UFW mutation remains disabled by default and must not be enabled estate-wide without host-specific firewall review.
 
 ## Komodo state
 

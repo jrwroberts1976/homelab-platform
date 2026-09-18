@@ -30,7 +30,7 @@
   ansible.builtin.lineinfile:
     path: /etc/zabbix/zabbix_agent2.conf
     regexp: '^Server='
-    line: "Server={{ zabbix_server_address }}"
+    line: "Server={{ zabbix_agent_server_passive }}"
   register: zabbix_agent_server_config
 
 - name: Configure active Zabbix server
