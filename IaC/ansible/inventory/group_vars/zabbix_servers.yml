@@ -39,3 +39,11 @@ zabbix_server_nginx_server_name: _
 # zabbix-01 monitors its local passive Agent 2 interface through
 # 127.0.0.1 while retaining LAN access from the Zabbix server address.
 zabbix_agent_server_passive: "127.0.0.1,192.168.2.59"
+
+# Unprivileged Proxmox LXC systemd baseline.
+# These standard mount units are not applicable to the approved
+# zabbix-01 container runtime and previously produced failed units.
+lxc_systemd_mount_baseline_units:
+  - tmp.mount
+  - run-lock.mount
+  - dev-mqueue.mount
