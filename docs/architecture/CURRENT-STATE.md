@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
-This document records the validated current homelab estate as of 17 September 2026.
+This document records the validated current homelab estate through 18 September 2026.
 
 It describes what is live now. Historical host identities and earlier migration assumptions remain useful evidence, but they are not current deployment authority.
 
@@ -272,8 +272,9 @@ The broader Alloy baseline is deployed across the current managed estate accordi
 
 The selected remote-access endpoint is the native OpenVPN server on the ASUS RT-AC86U at `192.168.2.1`.
 
-Validated on 16 September 2026:
+Validated through 18 September 2026:
 
+- **production status: FULLY OPERATIONAL**;
 - OpenVPN Server 1 reported running;
 - an external client successfully completed username/password authentication;
 - the tunnel was established and a `10.8.0.3` client address was allocated during the observed session;
@@ -284,7 +285,7 @@ Validated on 16 September 2026:
 
 The former dedicated `vpn-01` WireGuard design and exploratory WireGuard-on-`docker-01` path are not current production architecture. No VPN VMID or separate LAN address is allocated.
 
-Remaining acceptance work is explicit end-to-end access to intended internal management services from outside the LAN, internal DNS proof, DDNS endpoint validation and router-reset/replacement recovery/client re-enrolment documentation.
+Production acceptance was completed on 18 September 2026 using a Windows laptop from an external network. The client received `10.8.0.2`, the remote homelab administration path was operational, and normal Internet access remained on the external network as intended for split tunnelling. The VPN is therefore **FULLY OPERATIONAL** for its production laptop remote-administration use case. DDNS and router-reset/replacement/client re-enrolment checks remain useful recovery/maintenance work and are not operational acceptance blockers.
 
 ## Komodo management host
 
