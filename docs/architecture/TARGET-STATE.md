@@ -33,7 +33,7 @@ The following capabilities are implemented and must not be presented as future g
 - Grafana Alloy is deployed across the managed estate.
 - `zabbix-01` provides Zabbix 7.0 with PostgreSQL/TimescaleDB and Agent 2; all 15 managed Linux systems have corresponding Zabbix host objects and were observed reporting through the active-agent template.
 - ASUS router syslog is received on `monitor-01` and shipped to Loki through the dedicated Alloy router-log pipeline.
-- the ASUS RT-AC86U runs the selected OpenVPN remote-access endpoint; external authentication and tunnel establishment have been observed.
+- the ASUS RT-AC86U runs the production OpenVPN remote-access endpoint; external Windows laptop administration with split tunnelling was accepted as fully operational on 18 September 2026.
 - `cloud-01` provides production Nextcloud/PostgreSQL/Redis.
 - `mail-relay-01` provides the internal SMTP relay.
 - `sensor-01` is an operational passive sensor with Suricata and Zeek.
@@ -170,15 +170,15 @@ Approved resolver pair:
 
 `192.168.2.48` must not return as a resolver address.
 
-### Remote-access VPN completion
+### Remote-access VPN maintenance
 
-The selected service is ASUS OpenVPN Server 1. Remaining completion work is:
+ASUS OpenVPN Server 1 is **FULLY OPERATIONAL** for the production remote-administration use case. External Windows laptop access with a `10.8.0.x` tunnel address, homelab LAN reachability and normal split-tunnel Internet access was accepted on 18 September 2026.
 
-- prove intended internal administration access from a genuinely external network;
-- verify both internal DNS resolvers through the VPN;
-- confirm ASUS DDNS is configured and the exported client profile uses a stable hostname rather than depending on the current numeric WAN address;
-- prove the router/OpenVPN events can be queried in Loki through the existing router-syslog pipeline;
-- document router-reset/replacement recovery and client re-enrolment;
+Remaining items are maintenance/recovery work rather than service-completion gates:
+
+- maintain/verify ASUS DDNS and the stable client endpoint;
+- retain router/OpenVPN observability through the existing router-syslog/Loki pipeline;
+- maintain router-reset/replacement recovery and client re-enrolment documentation;
 - keep OpenVPN client profiles, passwords and protected certificate material outside Git.
 
 See [VPN Remote-Access Design and Implementation Record](../network/VPN-REMOTE-ACCESS-DESIGN.md).
@@ -187,7 +187,7 @@ See [VPN Remote-Access Design and Implementation Record](../network/VPN-REMOTE-A
 
 ### Home Assistant / home automation
 
-Home automation remains the final major infrastructure platform to commission. The live/canonical preflight on 16 September 2026 passed and the following identity is now deliberately reserved in `planned_assets`:
+Home automation is commissioned as `home-01`; it is no longer a future platform build. The remaining work is operational closeout and later device/radio integration. The implemented identity is:
 
 ```text
 hostname:      home-01
@@ -198,23 +198,16 @@ Proxmox node: PROXMOX
 storage:      vm-ssd
 ```
 
-The approved deployment model is a dedicated Home Assistant OS 18.2 VM rather than an LXC/container deployment or a workload on `docker-01`. Initial sizing is 2 vCPU, 4096 MiB RAM and 32 GiB disk with OVMF/UEFI, Secure Boot pre-enrolled keys disabled, VirtIO networking/SCSI and QEMU guest agent enabled.
+The implemented deployment is a dedicated Home Assistant OS 18.2 VM rather than an LXC/container deployment or a workload on `docker-01`. It uses 2 vCPU, 4096 MiB RAM and 32 GiB disk with OVMF/UEFI, VirtIO networking/SCSI and QEMU guest agent enabled.
 
 The base-build IaC lives under `IaC/terraform/proxmox/home-01/`, with a guarded deployment entry point at `IaC/scripts/deploy-home-01.sh`. The build pins the upstream HAOS image/checksum and refuses unexpected Terraform actions.
 
-Remaining commissioning gates are:
+Remaining operational closeout is:
 
-- review/merge the HAOS IaC and execute the guarded base deployment;
-- complete Home Assistant first-run onboarding;
-- configure and prove persistent `192.168.2.60` networking after the default first-boot DHCP stage;
-- publish/verify DNS on both managed resolvers only after `.60` is active;
-- create a native Home Assistant backup and document its restore path;
-- configure network/off-host backup where appropriate;
-- take and integrity-check a manual Proxmox snapshot backup before adding VM204 to the nightly job;
 - observe the first unattended backup including VM204;
 - add external HTTP/platform monitoring without unnecessarily exporting household entity/state data;
-- choose Zigbee/Z-Wave/Thread/Bluetooth architecture separately, preferring network-attached coordinators where practical to avoid unnecessary node affinity;
-- enable Proxmox protection only after recovery evidence justifies it.
+- deepen native/whole-VM recovery validation as useful;
+- choose Zigbee/Z-Wave/Thread/Bluetooth architecture separately, preferring network-attached coordinators where practical to avoid unnecessary node affinity.
 
 No direct WAN exposure is approved. Prefer local control and use the existing router-hosted VPN for remote administration unless a later reviewed design deliberately selects another supported Home Assistant remote-access mechanism.
 
@@ -303,5 +296,5 @@ The platform can be considered operationally mature when:
 - vulnerability scanning remains maintainable and recovery-aware;
 - observability remains useful and low-noise across both Prometheus/Grafana/Loki and Zabbix;
 - service ownership and IaC authority remain unambiguous;
-- `home-01` is promoted from planned to active only after persistent networking, backup/recovery and external monitoring gates are proven;
+- `home-01` remains an active commissioned service with monitoring and recovery evidence maintained as the platform evolves;
 - optional new services are introduced only when their operational value justifies their recovery and maintenance burden.
