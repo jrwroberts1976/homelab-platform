@@ -1,0 +1,11 @@
+[[stack]]
+name = "greenbone-community-edition"
+description = "Existing production Greenbone Community Edition Compose stack on greenbone-01; imported into Komodo without redeployment."
+
+[stack.config]
+server = "greenbone-01"
+project_name = "greenbone-community-edition"
+files_on_host = true
+run_directory = "/etc/komodo/stacks/greenbone-community"
+file_paths = ["compose.yaml", "compose.override.yaml"]
+send_alerts = true

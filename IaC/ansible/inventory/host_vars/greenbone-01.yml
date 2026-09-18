@@ -1,0 +1,6 @@
+---
+# Allow Komodo Periphery to inspect the existing Greenbone Compose stack.
+# Only the two non-secret Compose files are exposed, read-only.
+komodo_periphery_host_mounts:
+  - /opt/greenbone-community/compose.yaml:/etc/komodo/stacks/greenbone-community/compose.yaml:ro
+  - /opt/greenbone-community/compose.override.yaml:/etc/komodo/stacks/greenbone-community/compose.override.yaml:ro
