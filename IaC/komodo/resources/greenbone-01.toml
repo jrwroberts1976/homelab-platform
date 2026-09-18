@@ -8,4 +8,5 @@ project_name = "greenbone-community-edition"
 files_on_host = true
 run_directory = "/etc/komodo/stacks/greenbone-community"
 file_paths = ["compose.yaml", "compose.override.yaml"]
+ignore_services = ["configure-openvas", "gpg-data", "gvm-config", "gvm-tools", "pg-gvm-migrator"]
 send_alerts = true
