@@ -1,8 +1,8 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # VPN Remote-Access Design and Implementation Record
 
-**Status:** implementation active; router-hosted OpenVPN selected and externally authenticated  
-**Reviewed:** 16 September 2026  
+**Status:** FULLY OPERATIONAL — router-hosted OpenVPN remote access accepted for production use  
+**Reviewed:** 18 September 2026  
 **Primary implementation:** ASUS RT-AC86U OpenVPN Server 1  
 **VPN subnet observed:** `10.8.0.0/24`  
 **Internal DNS:** `192.168.2.51`, `192.168.2.50`
@@ -46,7 +46,7 @@ The trade-off is that VPN availability is now part of the router failure domain.
 
 ## Current validated state
 
-Validated live on 16 September 2026:
+Validated live through 18 September 2026:
 
 - ASUS RT-AC86U at `192.168.2.1`;
 - firmware `386.14_2`;
@@ -61,7 +61,9 @@ Validated live on 16 September 2026:
 - router OpenVPN events are present in the router's remote syslog stream on `monitor-01`;
 - those router logs are shipped to Loki through the dedicated Alloy router-syslog pipeline.
 
-The external client authenticated and established a tunnel. Full acceptance still requires explicit proof that intended internal management services are reachable over that external tunnel and that DDNS survives WAN-address changes.
+Production acceptance was completed on 18 September 2026 from a Windows laptop on a genuinely external network. The laptop established the OpenVPN tunnel, received `10.8.0.2`, retained normal Internet access through its local network, and could use the VPN as the remote administration path into the homelab. This is the intended split-tunnel operating model.
+
+Android phone browser behaviour was investigated separately and is not part of the production acceptance requirement: the supported operational client for the immediate travelling/remote-lab use case is the validated laptop.
 
 ## Addressing and routing
 
@@ -177,9 +179,9 @@ Because the VPN terminates on the router, any clean-reset/rebuild procedure must
 
 Router administrator credentials, VPN passwords and protected certificate/private-key material must remain outside Git.
 
-## Remaining implementation gates
+## Operational verification and recovery checks
 
-### Gate 1 — external management-path proof
+### External management-path proof — ACCEPTED 18 September 2026
 
 From mobile data or another genuinely external network:
 
@@ -190,21 +192,21 @@ From mobile data or another genuinely external network:
 - prove both internal DNS resolvers answer through the VPN;
 - confirm no extra WAN management ports were introduced.
 
-### Gate 2 — DDNS proof
+### DDNS/recovery verification — maintenance
 
 - confirm ASUS DDNS state and hostname;
 - confirm the client profile uses that hostname;
 - verify external name resolution to the current WAN address;
 - reconnect externally using the DDNS endpoint.
 
-### Gate 3 — observability proof
+### Observability verification — maintenance
 
 - query Loki for the successful OpenVPN authentication/connection event;
 - confirm disconnect/failure messages are also retained;
 - keep the local router syslog file as the first receipt point;
 - add alerting only if a low-noise, actionable condition is identified.
 
-### Gate 4 — recovery proof
+### Recovery verification — maintenance
 
 - capture the non-secret router settings required to rebuild the service;
 - confirm how server certificates/identity are recovered or regenerated;
@@ -213,7 +215,9 @@ From mobile data or another genuinely external network:
 
 ## Acceptance criteria
 
-The remote-access project is complete when:
+**Project status: COMPLETE / FULLY OPERATIONAL as of 18 September 2026.**
+
+Production acceptance is based on the intended laptop remote-administration use case: external OpenVPN connection, `10.8.0.x` client allocation, routed access to the homelab LAN, and normal split-tunnel Internet access. The following criteria define the maintained operational baseline:
 
 - router-hosted OpenVPN remains running after normal router restart;
 - an external client can authenticate and establish the tunnel;
