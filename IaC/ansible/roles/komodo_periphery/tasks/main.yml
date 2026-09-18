@@ -62,9 +62,7 @@
     owner: root
     group: root
     mode: "0600"
-    content: >-
-      {{ ('PERIPHERY_ONBOARDING_KEY=' ~ komodo_periphery_onboarding_key ~ '\n')
-         if (komodo_periphery_bootstrap | bool) else '' }}
+    content: "{{ ('PERIPHERY_ONBOARDING_KEY=' ~ komodo_periphery_onboarding_key) if (komodo_periphery_bootstrap | bool) else '' }}"
   no_log: true
 
 - name: Install Komodo Periphery Compose definition

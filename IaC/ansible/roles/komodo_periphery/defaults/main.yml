@@ -1,15 +1,15 @@
 ---
-komodo_periphery_expected_hostname: docker-01
-komodo_periphery_expected_ipv4: 192.168.2.220
+komodo_periphery_expected_hostname: "{{ inventory_hostname }}"
+komodo_periphery_expected_ipv4: "{{ ansible_host }}"
 
 komodo_periphery_root: /etc/komodo
 komodo_periphery_image: "ghcr.io/moghtech/komodo-periphery:2.3.3"
 
 komodo_periphery_core_address: "http://192.168.2.58:9120"
-komodo_periphery_connect_as: "docker-01"
+komodo_periphery_connect_as: "{{ inventory_hostname }}"
 
 komodo_periphery_onboarding_key_file: >-
-  {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/docker-01-komodo-onboarding.key
+  {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/{{ inventory_hostname }}-komodo-onboarding.key
 
 komodo_periphery_allow_deploy: false
 

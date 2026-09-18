@@ -321,7 +321,13 @@ The Proxmox `overlay` filesystem module is loaded and persisted, and its visibil
 
 On 18 September 2026, `docker-01` became the first commissioned Komodo-managed Docker host. Komodo Periphery `2.3.3` runs on `docker-01` using the outbound Core connection to `http://192.168.2.58:9120`. Remote host and container terminals are disabled. Periphery identity is persisted in the Docker volume mounted at `/config/keys`, and keyless steady-state operation was proven across a forced container recreation. The bootstrap onboarding credential is not retained in the active host environment. The deployment is managed through the `komodo_periphery` Ansible role and completed an idempotent run with `changed=0`. BirdNET-Go remained healthy throughout commissioning.
 
-Remaining Komodo platform work includes first unattended CT104 backup proof, the Proxmox protection decision, HTTPS hardening and controlled onboarding of additional Docker hosts.
+The Komodo Periphery estate was expanded on 18 September 2026 to the remaining intended Docker application hosts: `monitor-01`, `cloud-01` and `greenbone-01`. Together with `docker-01`, the commissioned Periphery estate is therefore `docker-01`, `monitor-01`, `cloud-01` and `greenbone-01`. `komodo-01` remains the Core control-plane host and deliberately does not run Periphery.
+
+All four Periphery hosts use Komodo Periphery `2.3.3`, connect outbound to Core at `http://192.168.2.58:9120`, have remote host and container terminals disabled, persist their Periphery identity under `/config/keys`, and operate without an onboarding credential in the active host environment after commissioning. The generalized `komodo_periphery` Ansible role completed steady-state idempotency validation with `changed=0` on each commissioned host.
+
+Existing application workloads were not migrated or recreated as part of Periphery onboarding. Monitoring services on `monitor-01`, Nextcloud services on `cloud-01`, Greenbone Community services on `greenbone-01`, and BirdNET-Go on `docker-01` remained operational through their respective commissioning validation.
+
+Remaining Komodo platform work includes first unattended CT104 backup proof, the Proxmox protection decision and HTTPS hardening.
 
 ## Production cloud service
 
