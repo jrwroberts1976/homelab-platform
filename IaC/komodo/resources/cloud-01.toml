@@ -1,0 +1,12 @@
+[[stack]]
+name = "cloud-01"
+description = "Existing production Nextcloud Compose stack on cloud-01; imported into Komodo without redeployment."
+
+[stack.config]
+server = "cloud-01"
+project_name = "cloud-01"
+files_on_host = true
+run_directory = "/etc/komodo/stacks/cloud-01"
+file_paths = ["docker-compose.yml"]
+env_file_path = ".env"
+send_alerts = true

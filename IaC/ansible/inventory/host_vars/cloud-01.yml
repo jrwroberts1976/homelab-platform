@@ -1,0 +1,5 @@
+---
+# Allow Komodo Periphery to inspect the existing production cloud Compose stack.
+# Read-only during adoption; application secrets remain only in /opt/cloud-01/.env.
+komodo_periphery_host_mounts:
+  - /opt/cloud-01:/etc/komodo/stacks/cloud-01:ro
