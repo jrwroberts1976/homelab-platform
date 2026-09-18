@@ -478,7 +478,9 @@ Validated application state includes Debian 13/arm64, Docker active, pinned imag
 
 Komodo Periphery `2.3.3` is deployed through the `komodo_periphery` Ansible role. It connects outbound to Komodo Core on `komodo-01` at `http://192.168.2.58:9120`; no Periphery management port is published on the host. Remote host and container terminals are disabled. Periphery identity is persisted through `/config/keys`, and successful Core login with no active onboarding credential was proven after forced container recreation. The steady-state Ansible deployment completed idempotently with `changed=0`.
 
-BirdNET-Go remained running and healthy throughout Periphery commissioning. Alloy, Node Exporter and Zabbix Agent 2 remain active.
+BirdNET-Go remained running and healthy throughout Periphery commissioning. It is now also declared through the Git-managed `IaC/komodo/resources/docker-01.toml` resource and imported by the `homelab-platform` Komodo Resource Sync. The sync completed with state `OK` and the Deployment is visible as running on `docker-01`. The declaration remains `deploy = false`; live validation confirmed that the existing container was not replaced and remains owned by the `birdnet-go` Compose project at `/opt/birdnet-go/compose.yml`.
+
+Alloy, Node Exporter and Zabbix Agent 2 remain active.
 
 The former TestServer workload estate must not be silently reintroduced. Komodo management does not change the host's deliberately narrow BirdNET-Go workload role.
 

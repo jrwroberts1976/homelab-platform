@@ -104,7 +104,11 @@ Validated state:
 - active Periphery environment contains no onboarding credential in steady state;
 - successful keyless login to Komodo Core proven;
 - steady-state Ansible run completed with `changed=0`;
-- BirdNET-Go remained running and healthy throughout commissioning.
+- BirdNET-Go remained running and healthy throughout commissioning;
+- BirdNET-Go is declared as a Komodo Deployment through the Git-managed resource file `IaC/komodo/resources/docker-01.toml`;
+- the `homelab-platform` Resource Sync reads the private `jrwroberts1976/homelab-platform` repository and completed successfully with state `OK`;
+- the initial Deployment declaration uses `deploy = false`, so commissioning did not replace or recreate the existing BirdNET-Go container;
+- live validation confirmed the running container remains owned by the `birdnet-go` Compose project at `/opt/birdnet-go/compose.yml`.
 
 The Komodo onboarding mechanism is bootstrap-only. It is not part of the normal host runtime configuration.
 
