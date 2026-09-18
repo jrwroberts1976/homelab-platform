@@ -1,0 +1,6 @@
+---
+# Allow Komodo Periphery to inspect the existing monitoring Compose stack.
+# Read-only: Komodo can read the stack definition/configuration but cannot
+# modify these host files through this mount.
+komodo_periphery_host_mounts:
+  - /opt/monitoring:/etc/komodo/stacks/monitoring:ro

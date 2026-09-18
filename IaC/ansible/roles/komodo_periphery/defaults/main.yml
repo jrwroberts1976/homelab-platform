@@ -16,3 +16,7 @@ komodo_periphery_allow_deploy: false
 # Bootstrap is temporary and must only be enabled for initial enrolment
 # or an explicitly approved identity-recovery operation.
 komodo_periphery_bootstrap: false
+
+# Optional host paths exposed to Periphery for Komodo files-on-host stacks.
+# Define per host and prefer read-only mounts where Komodo only needs to read them.
+komodo_periphery_host_mounts: []
