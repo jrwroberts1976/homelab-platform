@@ -482,7 +482,7 @@ BirdNET-Go remained running and healthy throughout Periphery commissioning. It i
 
 Alloy, Node Exporter and Zabbix Agent 2 remain active.
 
-The former TestServer workload estate must not be silently reintroduced. Komodo management does not change the host's deliberately narrow BirdNET-Go workload role.
+The former TestServer workload estate <!-- historical --> must not be silently reintroduced. Komodo management does not change the host's deliberately narrow BirdNET-Go workload role.
 
 ## Home automation
 

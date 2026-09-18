@@ -112,7 +112,7 @@ Validated state:
 
 The Komodo onboarding mechanism is bootstrap-only. It is not part of the normal host runtime configuration.
 
-Komodo provides the management plane for this Docker host; it does not change the workload boundary. `docker-01` remains a dedicated BirdNET-Go host and must not become a replacement for the retired TestServer container estate.
+Komodo provides the management plane for this Docker host; it does not change the workload boundary. `docker-01` remains a dedicated BirdNET-Go host and must not become a replacement for the retired TestServer container estate <!-- historical -->.
 
 ## Monitoring
 
