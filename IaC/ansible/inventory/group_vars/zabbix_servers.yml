@@ -34,3 +34,8 @@ zabbix_timescaledb_database: zabbix
 
 zabbix_server_nginx_listen: 8080
 zabbix_server_nginx_server_name: _
+
+
+# zabbix-01 monitors its local passive Agent 2 interface through
+# 127.0.0.1 while retaining LAN access from the Zabbix server address.
+zabbix_agent_server_passive: "127.0.0.1,192.168.2.59"
