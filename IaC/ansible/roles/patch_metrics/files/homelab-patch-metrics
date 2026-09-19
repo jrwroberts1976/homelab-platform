@@ -1,0 +1,80 @@
+#!/usr/bin/env bash
+set -u
+set -o pipefail
+
+OUTDIR="/var/lib/prometheus/node-exporter"
+OUTFILE="/var/lib/prometheus/node-exporter/homelab_patch.prom"
+NOW="$(date +%s)"
+TMPFILE="$(mktemp "${OUTDIR}/.homelab_patch.prom.XXXXXX")"
+
+cleanup() {
+  rm -f "$TMPFILE"
+}
+trap cleanup EXIT
+
+previous_success=0
+if [ -r "$OUTFILE" ]; then
+  previous_success="$(
+    awk '/^homelab_patch_last_success_timestamp_seconds[[:space:]]/ { value=$2 } END { print value+0 }' \
+      "$OUTFILE" 2>/dev/null || true
+  )"
+fi
+
+updates_available=0
+security_updates_available=0
+last_success="$previous_success"
+
+if apt_simulation="$(apt-get -s -o Debug::NoLocking=true dist-upgrade 2>/dev/null)"; then
+  updates_available="$(
+    printf '%s\n' "$apt_simulation" |
+      awk '/^Inst / { count++ } END { print count+0 }'
+  )"
+  security_updates_available="$(
+    printf '%s\n' "$apt_simulation" |
+      awk 'BEGIN { IGNORECASE=1 } /^Inst / && /security/ { count++ } END { print count+0 }'
+  )"
+  last_success="$NOW"
+fi
+
+reboot_required=0
+if [ -e /var/run/reboot-required ]; then
+  reboot_required=1
+fi
+
+unattended_enabled=0
+if systemctl is-enabled --quiet unattended-upgrades.service 2>/dev/null; then
+  unattended_enabled=1
+fi
+
+unattended_active=0
+if systemctl is-active --quiet unattended-upgrades.service 2>/dev/null; then
+  unattended_active=1
+fi
+
+cat > "$TMPFILE" <<EOF
+# HELP homelab_updates_available Number of APT package updates currently visible in the local package cache.
+# TYPE homelab_updates_available gauge
+homelab_updates_available $updates_available
+# HELP homelab_security_updates_available Number of APT updates whose simulated upgrade source indicates security.
+# TYPE homelab_security_updates_available gauge
+homelab_security_updates_available $security_updates_available
+# HELP homelab_reboot_required Whether the host currently requires a reboot according to /var/run/reboot-required.
+# TYPE homelab_reboot_required gauge
+homelab_reboot_required $reboot_required
+# HELP homelab_unattended_upgrades_enabled Whether unattended-upgrades.service is enabled.
+# TYPE homelab_unattended_upgrades_enabled gauge
+homelab_unattended_upgrades_enabled $unattended_enabled
+# HELP homelab_unattended_upgrades_active Whether unattended-upgrades.service is active.
+# TYPE homelab_unattended_upgrades_active gauge
+homelab_unattended_upgrades_active $unattended_active
+# HELP homelab_patch_check_timestamp_seconds Unix timestamp of the latest collector execution.
+# TYPE homelab_patch_check_timestamp_seconds gauge
+homelab_patch_check_timestamp_seconds $NOW
+# HELP homelab_patch_last_success_timestamp_seconds Unix timestamp of the latest successful APT simulation.
+# TYPE homelab_patch_last_success_timestamp_seconds gauge
+homelab_patch_last_success_timestamp_seconds $last_success
+EOF
+
+chmod 0644 "$TMPFILE"
+mv -f "$TMPFILE" "$OUTFILE"
+trap - EXIT

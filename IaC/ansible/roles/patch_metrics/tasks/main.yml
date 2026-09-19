@@ -1,0 +1,61 @@
+---
+- name: Validate patch metrics host
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.os_family == "Debian"
+    fail_msg: "Patch metrics currently supports Debian-family hosts only."
+
+- name: Ensure node-exporter textfile directory exists
+  ansible.builtin.file:
+    path: "{{ patch_metrics_textfile_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install patch metrics collector
+  ansible.builtin.copy:
+    src: homelab-patch-metrics
+    dest: "{{ patch_metrics_script_path }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install patch metrics service
+  ansible.builtin.copy:
+    src: homelab-patch-metrics.service
+    dest: "/etc/systemd/system/{{ patch_metrics_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: patch_metrics_service_unit
+
+- name: Install patch metrics timer
+  ansible.builtin.copy:
+    src: homelab-patch-metrics.timer
+    dest: "/etc/systemd/system/{{ patch_metrics_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: patch_metrics_timer_unit
+
+- name: Reload systemd when patch metrics units change
+  ansible.builtin.systemd:
+    daemon_reload: true
+  when: patch_metrics_service_unit.changed or patch_metrics_timer_unit.changed
+
+- name: Enable and start patch metrics timer
+  ansible.builtin.systemd:
+    name: "{{ patch_metrics_timer_name }}"
+    enabled: true
+    state: started
+
+- name: Run patch metrics collector
+  ansible.builtin.command:
+    cmd: "{{ patch_metrics_script_path }}"
+  changed_when: false
+
+- name: Verify patch metrics output
+  ansible.builtin.command:
+    cmd: "grep -q '^homelab_patch_last_success_timestamp_seconds ' {{ patch_metrics_textfile_directory }}/homelab_patch.prom"
+  changed_when: false

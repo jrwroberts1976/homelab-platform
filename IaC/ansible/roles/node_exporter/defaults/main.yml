@@ -8,3 +8,6 @@ node_exporter_port: 9100
 # Recommends. The collectors package pulls in ipmitool/openipmi. Virtual guests
 # without /dev/ipmi0 must not be left with a permanently failed openipmi unit.
 node_exporter_disable_openipmi_without_device: true
+
+# Shared location for locally generated Prometheus metrics.
+node_exporter_textfile_directory: /var/lib/prometheus/node-exporter

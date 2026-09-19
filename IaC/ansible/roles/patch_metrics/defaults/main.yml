@@ -1,0 +1,5 @@
+---
+patch_metrics_script_path: /usr/local/sbin/homelab-patch-metrics
+patch_metrics_textfile_directory: /var/lib/prometheus/node-exporter
+patch_metrics_service_name: homelab-patch-metrics.service
+patch_metrics_timer_name: homelab-patch-metrics.timer

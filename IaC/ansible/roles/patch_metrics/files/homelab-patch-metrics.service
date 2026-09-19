@@ -1,0 +1,10 @@
+[Unit]
+Description=Homelab Linux patch telemetry collector
+After=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-patch-metrics
+User=root
+Group=root
+Nice=10

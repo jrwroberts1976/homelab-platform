@@ -86,6 +86,12 @@ monitoring_node_exporter_targets:
     label: sensor-01
   - address: 192.168.2.56:9100
     label: edge-01
+  - address: 192.168.2.57:9100
+    label: greenbone-01
+  - address: 192.168.2.58:9100
+    label: komodo-01
+  - address: 192.168.2.59:9100
+    label: zabbix-01
   - address: 192.168.2.70:9100
     label: PROXMOX
   - address: 192.168.2.71:9100

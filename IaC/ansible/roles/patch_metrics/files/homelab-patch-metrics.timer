@@ -1,0 +1,12 @@
+[Unit]
+Description=Run Homelab Linux patch telemetry hourly
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec=1h
+RandomizedDelaySec=5min
+Persistent=true
+Unit=homelab-patch-metrics.service
+
+[Install]
+WantedBy=timers.target

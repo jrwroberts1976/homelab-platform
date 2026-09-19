@@ -18,6 +18,7 @@
         executable: /bin/bash
       register: monitoring_existing_grafana_password
       changed_when: false
+      check_mode: false
       no_log: true
       when: monitoring_grafana_admin_password_from_env | length < 24
 

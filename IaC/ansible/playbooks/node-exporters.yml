@@ -1,13 +1,6 @@
 ---
 - name: Deploy Prometheus node exporter to core infrastructure
-  hosts:
-    - proxmox_hosts
-    - monitoring_hosts
-    - sensor_hosts
-    - dns_resolvers
-    - media_hosts
-    - mail_relay
-    - edge_hosts
+  hosts: zabbix_agents
   become: true
   gather_facts: true
 

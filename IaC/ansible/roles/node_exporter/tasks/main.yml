@@ -29,6 +29,14 @@
     update_cache: true
     cache_valid_time: 3600
 
+- name: Ensure node exporter textfile directory exists
+  ansible.builtin.file:
+    path: "{{ node_exporter_textfile_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
 - name: Check for local IPMI device nodes
   ansible.builtin.stat:
     path: "{{ item }}"
