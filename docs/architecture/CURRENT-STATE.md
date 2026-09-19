@@ -414,6 +414,9 @@ The 17 September audit confirmed the collector timer enabled/active, with fresh 
 
 The obsolete collector installation on `PROXMOX` was removed.
 
+The ASUS RT-AC86U at `192.168.2.1` is also an approved network-observation source for future DHCP/ARP inventory collection. The router runs Dropbear SSH and its privileged account is named `james` (UID 0) rather than `root`. Automated access from `monitor-01` uses the dedicated ED25519 private key `/root/.ssh/id_ed25519_asus_inventory`; the corresponding public key is authorised on the router. The router's ED25519 host key is pinned in `monitor-01`'s `/root/.ssh/known_hosts`. Do not change the SSH target user to `root`, and do not change ownership of `/root/.ssh` on this firmware: `james` is the UID-0 account and owns the directory by design. The dedicated monitor key was validated on 19 September 2026 with a successful non-interactive SSH test. Router DHCP leases are available from `/var/lib/misc/dnsmasq.leases`, and the router ARP table is available from `/proc/net/arp`.
+
+
 Current IaC defaults set `network_host_collector_enable_timer: false`, while validated live state has the timer enabled. Verify whether an intentional inventory/extra-var override exists before changing either side.
 
 ## Edge host
