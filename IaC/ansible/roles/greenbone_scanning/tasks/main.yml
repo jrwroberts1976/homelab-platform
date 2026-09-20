@@ -26,17 +26,10 @@
     - greenbone_scanning_admin_password | length < 16
     - greenbone_scanning_runtime_env_stat.stat.exists | default(false)
 
-- name: Recover existing Greenbone administrator credential
+- name: Decode existing Greenbone runtime credentials
   ansible.builtin.set_fact:
-    greenbone_scanning_admin_password: >-
-      {{
-        (
-          greenbone_scanning_existing_runtime_env.content
-          | b64decode
-          | regex_search('(?m)^GREENBONE_ADMIN_PASSWORD=(.*)$', '\\1')
-        )
-        | default('', true)
-      }}
+    greenbone_scanning_existing_runtime_text: >-
+      {{ greenbone_scanning_existing_runtime_env.content | b64decode }}
   no_log: true
   when:
     - greenbone_scanning_allow_deploy | bool
@@ -44,6 +37,22 @@
     - greenbone_scanning_admin_password | length < 16
     - greenbone_scanning_existing_runtime_env is defined
     - greenbone_scanning_existing_runtime_env.content is defined
+
+- name: Recover existing Greenbone administrator credential
+  ansible.builtin.set_fact:
+    greenbone_scanning_admin_password: >-
+      {{
+        greenbone_scanning_existing_runtime_text
+        | regex_findall('(?m)^GREENBONE_ADMIN_PASSWORD=(.*)$')
+        | first
+        | default('', true)
+      }}
+  no_log: true
+  when:
+    - greenbone_scanning_allow_deploy | bool
+    - not ansible_check_mode
+    - greenbone_scanning_admin_password | length < 16
+    - greenbone_scanning_existing_runtime_text is defined
 
 - name: Validate protected Greenbone administrator credential
   ansible.builtin.assert:
