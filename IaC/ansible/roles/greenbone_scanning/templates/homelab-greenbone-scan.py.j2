@@ -61,9 +61,11 @@ def write_gmp_config(username, password):
         f"password = {password}\n"
     )
 
-    fd = os.open(GMP_CONFIG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    fd = os.open(GMP_CONFIG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
     with os.fdopen(fd, "w") as handle:
         handle.write(content)
+
+    os.chown(GMP_CONFIG, 0, 1001)
 
 def gmp(xml):
     command = [
