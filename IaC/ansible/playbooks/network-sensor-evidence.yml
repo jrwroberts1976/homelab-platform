@@ -1,0 +1,8 @@
+---
+- name: Deploy network sensor evidence collector
+  hosts: sensor-01
+  become: true
+  gather_facts: false
+
+  roles:
+    - network_sensor_evidence
