@@ -1,0 +1,50 @@
+---
+- name: Create network sensor evidence state directory
+  ansible.builtin.file:
+    path: "{{ network_sensor_evidence_state_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install network sensor evidence collector
+  ansible.builtin.template:
+    src: network-sensor-evidence.py.j2
+    dest: /usr/local/sbin/homelab-network-sensor-evidence
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Validate network sensor evidence collector syntax
+  ansible.builtin.command:
+    cmd: python3 -m py_compile /usr/local/sbin/homelab-network-sensor-evidence
+  changed_when: false
+
+- name: Install network sensor evidence systemd service
+  ansible.builtin.template:
+    src: homelab-network-sensor-evidence.service.j2
+    dest: /etc/systemd/system/homelab-network-sensor-evidence.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_evidence_service_unit
+
+- name: Install network sensor evidence systemd timer
+  ansible.builtin.template:
+    src: homelab-network-sensor-evidence.timer.j2
+    dest: /etc/systemd/system/homelab-network-sensor-evidence.timer
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_evidence_timer_unit
+
+- name: Reload systemd for network sensor evidence units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: network_sensor_evidence_service_unit.changed or network_sensor_evidence_timer_unit.changed
+
+- name: Enable and start network sensor evidence timer
+  ansible.builtin.systemd_service:
+    name: homelab-network-sensor-evidence.timer
+    enabled: true
+    state: started
