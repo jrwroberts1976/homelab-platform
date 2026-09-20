@@ -1,0 +1,24 @@
+---
+- name: Create management report state directory
+  ansible.builtin.file:
+    path: "{{ management_report_state_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create management report output directory
+  ansible.builtin.file:
+    path: "{{ management_report_output_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install management report evidence collector
+  ansible.builtin.template:
+    src: management-report-collector.py.j2
+    dest: /usr/local/sbin/homelab-management-report-collector
+    owner: root
+    group: root
+    mode: "0750"

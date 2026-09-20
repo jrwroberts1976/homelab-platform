@@ -1,0 +1,201 @@
+#!/usr/bin/env python3
+
+import json
+import time
+from datetime import datetime, timezone
+from pathlib import Path
+
+import requests
+
+PROMETHEUS_URL = "{{ management_report_prometheus_url }}"
+ALERTMANAGER_URL = "{{ management_report_alertmanager_url }}"
+LOKI_URL = "{{ management_report_loki_url }}"
+EXPECTED_HOSTS = {{ management_report_expected_hosts | to_json }}
+EXPECTED_HOST_COUNT = len(EXPECTED_HOSTS)
+PATCH_FRESHNESS_SECONDS = {{ management_report_patch_freshness_minutes }} * 60
+LOKI_EVIDENCE_SECONDS = {{ management_report_evidence_hours }} * 3600
+OUTPUT_FILE = Path("{{ management_report_evidence_file }}")
+
+QUERIES = {
+    "node_exporter_up": 'up{job="node-exporter"}',
+    "firing_alerts": 'ALERTS{alertstate="firing"}',
+    "updates_available": "homelab_updates_available",
+    "security_updates_available": "homelab_security_updates_available",
+    "reboot_required": "homelab_reboot_required",
+    "unattended_upgrades_enabled": "homelab_unattended_upgrades_enabled",
+    "patch_last_success": "homelab_patch_last_success_timestamp_seconds",
+}
+
+
+def prometheus_query(query):
+    response = requests.get(
+        f"{PROMETHEUS_URL}/api/v1/query",
+        params={"query": query},
+        timeout=15,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Prometheus query failed: {query}")
+
+    return payload["data"]["result"]
+
+
+def alertmanager_alerts():
+    response = requests.get(
+        f"{ALERTMANAGER_URL}/api/v2/alerts",
+        timeout=15,
+    )
+    response.raise_for_status()
+    return response.json()
+
+
+def loki_label_values(label, query=None):
+    params = {"since": f"{LOKI_EVIDENCE_SECONDS}s"}
+    if query:
+        params["query"] = query
+
+    response = requests.get(
+        f"{LOKI_URL}/loki/api/v1/label/{label}/values",
+        params=params,
+        timeout=15,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    if payload.get("status") != "success":
+        raise RuntimeError(f"Loki label query failed: {label}")
+
+    return sorted(payload["data"])
+
+
+
+def by_target_name(results):
+    values = {}
+
+    for result in results:
+        target = result["metric"].get("target_name")
+        if not target:
+            continue
+
+        values[target] = float(result["value"][1])
+
+    return values
+
+
+def main():
+    collected_at = datetime.now(timezone.utc).isoformat()
+
+    raw = {
+        name: prometheus_query(query)
+        for name, query in QUERIES.items()
+    }
+
+    alertmanager_active_alerts = alertmanager_alerts()
+
+    patch = {
+        name: by_target_name(raw[name])
+        for name in (
+            "updates_available",
+            "security_updates_available",
+            "reboot_required",
+            "unattended_upgrades_enabled",
+            "patch_last_success",
+        )
+    }
+
+    exporter_up = by_target_name(raw["node_exporter_up"])
+
+    firing_alerts = [
+        {
+            "labels": result.get("metric", {}),
+            "value": float(result["value"][1]),
+        }
+        for result in raw["firing_alerts"]
+    ]
+
+    now = time.time()
+    patch_fresh_hosts = sum(
+        1
+        for timestamp in patch["patch_last_success"].values()
+        if 0 <= now - timestamp <= PATCH_FRESHNESS_SECONDS
+    )
+
+    loki_hosts = loki_label_values("host")
+    loki_jobs = {
+        "systemd-journal": loki_label_values("host", '{job="systemd-journal"}'),
+        "docker": loki_label_values("host", '{job="docker"}'),
+        "network-security": loki_label_values("host", '{job="network-security"}'),
+        "network-infrastructure": loki_label_values("host", '{job="network-infrastructure"}'),
+    }
+
+    loki_missing_hosts = sorted(set(EXPECTED_HOSTS) - set(loki_hosts))
+    loki_unexpected_hosts = sorted(set(loki_hosts) - set(EXPECTED_HOSTS))
+    host_names = sorted(set(exporter_up) | set(patch["updates_available"]) | set(patch["security_updates_available"]) | set(patch["reboot_required"]) | set(patch["unattended_upgrades_enabled"]) | set(patch["patch_last_success"]))
+    prometheus_missing_hosts = sorted(set(EXPECTED_HOSTS) - set(host_names))
+    prometheus_unexpected_hosts = sorted(set(host_names) - set(EXPECTED_HOSTS))
+
+
+    evidence = {
+        "schema_version": 1,
+        "collected_at": collected_at,
+        "loki": {
+            "evidence_window_hours": {{ management_report_evidence_hours }},
+            "expected_hosts": EXPECTED_HOST_COUNT,
+            "reporting_hosts": len(loki_hosts),
+            "missing_hosts": loki_missing_hosts,
+            "unexpected_hosts": loki_unexpected_hosts,
+            "hosts": loki_hosts,
+            "jobs": loki_jobs,
+        },
+        "alertmanager": {
+            "active_alert_count": len(alertmanager_active_alerts),
+            "active_alerts": alertmanager_active_alerts,
+        },
+        "prometheus": {
+            "expected_hosts": EXPECTED_HOST_COUNT,
+            "firing_alert_count": len(firing_alerts),
+            "firing_alerts": firing_alerts,
+            "node_exporter_reporting_hosts": len(exporter_up),
+            "missing_hosts": prometheus_missing_hosts,
+            "unexpected_hosts": prometheus_unexpected_hosts,
+            "node_exporter_up_hosts": sum(
+                1 for value in exporter_up.values() if value == 1
+            ),
+            "patch_reporting_hosts": len(patch["patch_last_success"]),
+            "patch_fresh_hosts": patch_fresh_hosts,
+            "patch_freshness_threshold_seconds": PATCH_FRESHNESS_SECONDS,
+            "hosts": {},
+        },
+    }
+
+    for host in host_names:
+        evidence["prometheus"]["hosts"][host] = {
+            "node_exporter_up": exporter_up.get(host),
+    "firing_alerts": 'ALERTS{alertstate="firing"}',
+            "updates_available": patch["updates_available"].get(host),
+            "security_updates_available": patch[
+                "security_updates_available"
+            ].get(host),
+            "reboot_required": patch["reboot_required"].get(host),
+            "unattended_upgrades_enabled": patch[
+                "unattended_upgrades_enabled"
+            ].get(host),
+            "patch_last_success_timestamp_seconds": patch[
+                "patch_last_success"
+            ].get(host),
+        }
+
+    OUTPUT_FILE.parent.mkdir(parents=True, exist_ok=True)
+
+    temporary = OUTPUT_FILE.with_suffix(".tmp")
+    temporary.write_text(
+        json.dumps(evidence, indent=2, sort_keys=True) + "\n",
+        encoding="utf-8",
+    )
+    temporary.replace(OUTPUT_FILE)
+
+
+if __name__ == "__main__":
+    main()

@@ -1,0 +1,8 @@
+---
+- name: Deploy homelab management reporting
+  hosts: admin_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: management_report

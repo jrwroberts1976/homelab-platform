@@ -1,0 +1,29 @@
+---
+management_report_expected_hosts:
+  - PROXMOX
+  - Proxmox-2
+  - admin-01
+  - cloud-01
+  - dns-01
+  - dns-02
+  - docker-01
+  - edge-01
+  - greenbone-01
+  - komodo-01
+  - mail-relay-01
+  - media-01
+  - monitor-01
+  - sensor-01
+  - zabbix-01
+management_report_evidence_hours: 24
+
+management_report_loki_url: "http://192.168.2.52:3100"
+management_report_prometheus_url: "http://192.168.2.52:9090"
+management_report_alertmanager_url: "http://192.168.2.52:9093"
+management_report_zabbix_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+
+management_report_state_directory: "/var/lib/homelab-management-report"
+management_report_output_directory: "/var/lib/homelab-management-report/reports"
+management_report_evidence_file: "/var/lib/homelab-management-report/evidence.json"
+
+management_report_patch_freshness_minutes: 90
