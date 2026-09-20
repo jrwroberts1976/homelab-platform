@@ -177,7 +177,7 @@ The selected remote-access implementation is the native OpenVPN server on the AS
 
 ### Vulnerability scanning
 
-`greenbone-01` is the active LAN-only vulnerability scanner. Greenbone Community Containers are deployed on VM203, feed readiness reached 4/4, the commissioning self-scan completed with no Critical/High/Medium findings, VM backup integrity is proven and Proxmox protection is enabled.
+`greenbone-01` is the active LAN-only vulnerability scanner. Greenbone Community Containers are deployed on VM203, feed readiness reached 4/4, the commissioning self-scan completed with no Critical/High/Medium findings, VM backup integrity is proven and Proxmox protection is enabled. An Ansible-managed scan runner now reconciles the managed-infrastructure and full-LAN Greenbone tasks and writes machine-readable evidence for downstream reporting; the end-to-end managed-scan/evidence pipeline is being validated before scheduled execution is enabled.
 
 ### Edge
 
@@ -207,9 +207,13 @@ Home Assistant is no longer a planned reservation: `home-01` is active and commi
 | Vulnerability management | `greenbone-01` commissioned and protected | Tune hardening/update policy as needed |
 | Remote-access VPN | **FULLY OPERATIONAL** — router-hosted OpenVPN accepted 18 September 2026 for external laptop administration with split tunnelling | Maintain DDNS/router recovery/client re-enrolment documentation; no operational acceptance work remains |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
-| Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Build unified dashboard |
+| Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Analyse `me.jrwroberts.co.uk`, record findings, then build unified dashboard |
 | Network hardening | SPAN and telemetry operational | Refresh physical port map and restrict legacy SNMP/Telnet exposure |
 | Edge / Cloudflare Tunnel | Host provisioned, tunnel absent | Deploy only when approved/needed |
+
+## Active documentation tasks
+
+- **Analyse `me.jrwroberts.co.uk`** — [Issue #125](https://github.com/jrwroberts1976/homelab-platform/issues/125). Review public site structure, content, performance, accessibility, SEO, security, technical delivery and useful analytics, then feed evidence-based findings into the Web Platform / Analytics roadmap. The public site remains externally hosted and must not become dependent on homelab availability.
 
 ## Operating principles
 
