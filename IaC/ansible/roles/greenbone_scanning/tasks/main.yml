@@ -1,0 +1,577 @@
+---
+- name: Validate Greenbone scanning target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == "greenbone-01"
+      - greenbone_scanning_root == "/opt/greenbone-community"
+    fail_msg: "Refusing Greenbone scanning configuration on an unexpected host."
+
+- name: Validate protected Greenbone administrator credential
+  ansible.builtin.assert:
+    that:
+      - greenbone_scanning_admin_password | length >= 16
+    fail_msg: >-
+      GREENBONE_ADMIN_PASSWORD must be supplied from the protected
+      controller environment.
+  no_log: true
+  when:
+    - greenbone_scanning_allow_deploy | bool
+    - not ansible_check_mode
+
+- name: Verify Greenbone Compose configuration exists
+  ansible.builtin.stat:
+    path: "{{ greenbone_scanning_root }}/compose.yaml"
+  register: greenbone_scanning_compose
+
+- name: Require existing Greenbone installation
+  ansible.builtin.assert:
+    that:
+      - greenbone_scanning_compose.stat.exists
+      - greenbone_scanning_compose.stat.isreg
+    fail_msg: "Existing Greenbone Compose installation was not found."
+
+- name: Build managed Greenbone target from current inventory
+  ansible.builtin.set_fact:
+    greenbone_scanning_managed_hosts: >-
+      {{ groups["zabbix_agents"]
+         | map("extract", hostvars, "ansible_host")
+         | join(",") }}
+
+- name: Test authenticated Greenbone GMP access
+  when:
+    - greenbone_scanning_allow_deploy | bool
+    - not ansible_check_mode
+  block:
+    - name: Ensure Greenbone scanning runtime directory exists
+      ansible.builtin.file:
+        path: "{{ greenbone_scanning_runtime_env | dirname }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Install protected Greenbone runtime credentials
+      ansible.builtin.copy:
+        content: |
+          GREENBONE_ADMIN_USERNAME={{ greenbone_scanning_admin_username }}
+          GREENBONE_ADMIN_PASSWORD={{ greenbone_scanning_admin_password }}
+        dest: "{{ greenbone_scanning_runtime_env }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Create Greenbone evidence directory
+      ansible.builtin.file:
+        path: "{{ greenbone_scanning_evidence_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install Greenbone automated scan runner
+      ansible.builtin.template:
+        src: homelab-greenbone-scan.py.j2
+        dest: "{{ greenbone_scanning_runner }}"
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Validate rendered Greenbone scan runner
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - py_compile
+          - "{{ greenbone_scanning_runner }}"
+      changed_when: false
+
+    - name: Create temporary protected GMP configuration
+      ansible.builtin.template:
+        src: gvm-tools.conf.j2
+        dest: "{{ greenbone_scanning_gmp_config }}"
+        owner: root
+        group: "1001"
+        mode: "0640"
+      no_log: true
+
+    - name: Query available Greenbone scanners
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - '<get_scanners/>'
+      register: greenbone_scanning_gmp_test
+      changed_when: false
+      no_log: true
+
+
+    - name: Parse Greenbone scanner
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); [print(c.get('id'), c.findtext('name', '')) for c in root.findall('.//scanner')]"
+        stdin: "{{ greenbone_scanning_gmp_test.stdout }}"
+      register: greenbone_scanning_config_summary
+      changed_when: false
+      no_log: true
+
+    - name: Show available Greenbone scanner summary
+      ansible.builtin.debug:
+        var: greenbone_scanning_config_summary.stdout_lines
+
+    - name: Query existing Greenbone targets
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - '<get_targets details="1"/>'
+      register: greenbone_scanning_targets_xml
+      changed_when: false
+      no_log: true
+
+    - name: Parse existing Greenbone targets
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); [print(t.get('id'), '|', t.findtext('name', ''), '|', t.findtext('hosts', ''), '| alive_test=' + t.findtext('alive_tests', '')) for t in root.findall('.//target')]"
+        stdin: "{{ greenbone_scanning_targets_xml.stdout }}"
+      register: greenbone_scanning_target_summary
+      changed_when: false
+      no_log: true
+
+    - name: Show existing Greenbone target summary
+      ansible.builtin.debug:
+        var: greenbone_scanning_target_summary.stdout_lines
+
+    - name: Find managed infrastructure target UUID
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); print(next((t.get('id') for t in root.findall('.//target') if t.findtext('name', '') == sys.argv[1]), ''))"
+          - "{{ greenbone_scanning_managed_target_name }}"
+        stdin: "{{ greenbone_scanning_targets_xml.stdout }}"
+      register: greenbone_scanning_managed_target_lookup
+      changed_when: false
+      no_log: true
+
+    - name: Show managed infrastructure target state
+      ansible.builtin.debug:
+        msg: >-
+          {{ greenbone_scanning_managed_target_name }}:
+          {{ 'present (' + greenbone_scanning_managed_target_lookup.stdout + ')'
+             if greenbone_scanning_managed_target_lookup.stdout | length > 0
+             else 'absent' }}
+
+    - name: Create managed infrastructure target
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - >-
+            <create_target>
+            <name>{{ greenbone_scanning_managed_target_name }}</name>
+            <hosts>{{ greenbone_scanning_managed_hosts }}</hosts>
+            <port_list id="{{ greenbone_scanning_port_list_id }}"/>
+            <alive_tests>Scan Config Default</alive_tests>
+            </create_target>
+      register: greenbone_scanning_managed_target_create
+      changed_when: true
+      no_log: true
+      when: greenbone_scanning_managed_target_lookup.stdout | length == 0
+
+    - name: Set managed infrastructure target UUID
+      ansible.builtin.set_fact:
+        greenbone_scanning_managed_target_id: >-
+          {{
+            greenbone_scanning_managed_target_lookup.stdout
+            if greenbone_scanning_managed_target_lookup.stdout | length > 0
+            else
+            (
+              (greenbone_scanning_managed_target_create.stdout
+               | regex_search('id="([^"]+)"', '\1'))
+              | default('', true)
+            )
+          }}
+
+    - name: Require managed infrastructure target UUID
+      ansible.builtin.assert:
+        that:
+          - greenbone_scanning_managed_target_id | length > 0
+        fail_msg: "Managed Greenbone target UUID could not be determined."
+
+    - name: Find current managed infrastructure target hosts
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); print(next((t.findtext('hosts', '') for t in root.findall('.//target') if t.get('id') == sys.argv[1]), ''))"
+          - "{{ greenbone_scanning_managed_target_id }}"
+        stdin: "{{ greenbone_scanning_targets_xml.stdout }}"
+      register: greenbone_scanning_managed_target_current_hosts
+      changed_when: false
+      no_log: true
+      when: greenbone_scanning_managed_target_lookup.stdout | length > 0
+
+    - name: Compare managed infrastructure target hosts with inventory
+      ansible.builtin.set_fact:
+        greenbone_scanning_managed_target_hosts_match: >-
+          {{
+            greenbone_scanning_managed_target_current_hosts.stdout.split(',')
+            | map('trim') | reject('equalto', '') | sort | list
+            ==
+            greenbone_scanning_managed_hosts.split(',')
+            | map('trim') | reject('equalto', '') | sort | list
+          }}
+      when: greenbone_scanning_managed_target_lookup.stdout | length > 0
+
+    - name: Show managed infrastructure target reconciliation state
+      ansible.builtin.debug:
+        msg: >-
+          Managed target hosts:
+          {{ 'in sync with Ansible inventory'
+             if greenbone_scanning_managed_target_hosts_match | default(false)
+             else 'DIFFERENT from Ansible inventory' }}
+      when: greenbone_scanning_managed_target_lookup.stdout | length > 0
+
+    - name: Reconcile managed infrastructure target hosts
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - >-
+            <modify_target target_id="{{ greenbone_scanning_managed_target_id }}">
+            <hosts>{{ greenbone_scanning_managed_hosts }}</hosts>
+            </modify_target>
+      changed_when: true
+      no_log: true
+      when:
+        - greenbone_scanning_managed_target_lookup.stdout | length > 0
+        - not (greenbone_scanning_managed_target_hosts_match | default(false))
+
+    - name: Find full LAN target UUID
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); print(next((t.get('id') for t in root.findall('.//target') if t.findtext('name', '') == sys.argv[1]), ''))"
+          - "{{ greenbone_scanning_full_lan_target_name }}"
+        stdin: "{{ greenbone_scanning_targets_xml.stdout }}"
+      register: greenbone_scanning_full_lan_target_lookup
+      changed_when: false
+      no_log: true
+
+    - name: Show full LAN target state
+      ansible.builtin.debug:
+        msg: >-
+          {{ greenbone_scanning_full_lan_target_name }}:
+          {{ 'present (' + greenbone_scanning_full_lan_target_lookup.stdout + ')'
+             if greenbone_scanning_full_lan_target_lookup.stdout | length > 0
+             else 'absent' }}
+
+    - name: Create full LAN target
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - >-
+            <create_target>
+            <name>{{ greenbone_scanning_full_lan_target_name }}</name>
+            <hosts>{{ greenbone_scanning_full_lan_target }}</hosts>
+            <port_list id="{{ greenbone_scanning_port_list_id }}"/>
+            <alive_tests>Scan Config Default</alive_tests>
+            </create_target>
+      register: greenbone_scanning_full_lan_target_create
+      changed_when: true
+      no_log: true
+      when: greenbone_scanning_full_lan_target_lookup.stdout | length == 0
+
+    - name: Set full LAN target UUID
+      ansible.builtin.set_fact:
+        greenbone_scanning_full_lan_target_id: >-
+          {{
+            greenbone_scanning_full_lan_target_lookup.stdout
+            if greenbone_scanning_full_lan_target_lookup.stdout | length > 0
+            else
+            (
+              (greenbone_scanning_full_lan_target_create.stdout
+               | regex_search('id="([^"]+)"', '\1'))
+              | default('', true)
+            )
+          }}
+
+    - name: Require full LAN target UUID
+      ansible.builtin.assert:
+        that:
+          - greenbone_scanning_full_lan_target_id | length > 0
+        fail_msg: "Full LAN Greenbone target UUID could not be determined."
+
+    - name: Query existing Greenbone tasks
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - '<get_tasks details="1"/>'
+      register: greenbone_scanning_tasks_xml
+      changed_when: false
+      no_log: true
+
+    - name: Parse existing Greenbone tasks
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); [print(t.get('id'), '|', t.findtext('name',''), '| target=' + str((t.find('target') or {}).get('id','')), '| config=' + str((t.find('config') or {}).get('id','')), '| scanner=' + str((t.find('scanner') or {}).get('id','')), '| status=' + t.findtext('status','')) for t in root.findall('.//task')]"
+        stdin: "{{ greenbone_scanning_tasks_xml.stdout }}"
+      register: greenbone_scanning_task_summary
+      changed_when: false
+      no_log: true
+
+    - name: Show existing Greenbone task summary
+      ansible.builtin.debug:
+        var: greenbone_scanning_task_summary.stdout_lines
+
+    - name: Find managed infrastructure task UUID
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); print(next((t.get('id') for t in root.findall('.//task') if t.findtext('name', '') == sys.argv[1]), ''))"
+          - "{{ greenbone_scanning_managed_task_name }}"
+        stdin: "{{ greenbone_scanning_tasks_xml.stdout }}"
+      register: greenbone_scanning_managed_task_lookup
+      changed_when: false
+      no_log: true
+
+    - name: Show managed infrastructure task state
+      ansible.builtin.debug:
+        msg: >-
+          {{ greenbone_scanning_managed_task_name }}:
+          {{ 'present (' + greenbone_scanning_managed_task_lookup.stdout + ')'
+             if greenbone_scanning_managed_task_lookup.stdout | length > 0
+             else 'absent' }}
+
+    - name: Find full LAN weekly task UUID
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); print(next((t.get('id') for t in root.findall('.//task') if t.findtext('name', '') == sys.argv[1]), ''))"
+          - "{{ greenbone_scanning_full_lan_task_name }}"
+        stdin: "{{ greenbone_scanning_tasks_xml.stdout }}"
+      register: greenbone_scanning_full_lan_task_lookup
+      changed_when: false
+      no_log: true
+
+    - name: Show full LAN weekly task state
+      ansible.builtin.debug:
+        msg: >-
+          {{ greenbone_scanning_full_lan_task_name }}:
+          {{ 'present (' + greenbone_scanning_full_lan_task_lookup.stdout + ')'
+             if greenbone_scanning_full_lan_task_lookup.stdout | length > 0
+             else 'absent' }}
+
+    - name: Create full LAN weekly task
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - >-
+            <create_task>
+            <name>{{ greenbone_scanning_full_lan_task_name }}</name>
+            <config id="{{ greenbone_scanning_scan_config_id }}"/>
+            <target id="{{ greenbone_scanning_full_lan_target_id }}"/>
+            <scanner id="{{ greenbone_scanning_scanner_id }}"/>
+            </create_task>
+      register: greenbone_scanning_full_lan_task_create
+      changed_when: true
+      no_log: true
+      when: greenbone_scanning_full_lan_task_lookup.stdout | length == 0
+
+    - name: Create managed infrastructure daily task
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - >-
+            <create_task>
+            <name>{{ greenbone_scanning_managed_task_name }}</name>
+            <config id="{{ greenbone_scanning_scan_config_id }}"/>
+            <target id="{{ greenbone_scanning_managed_target_id }}"/>
+            <scanner id="{{ greenbone_scanning_scanner_id }}"/>
+            </create_task>
+      register: greenbone_scanning_managed_task_create
+      changed_when: true
+      no_log: true
+      when: greenbone_scanning_managed_task_lookup.stdout | length == 0
+
+    - name: Query Greenbone reports
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_scanning_root }}/compose.override.yaml"
+          - run
+          - --rm
+          - --no-deps
+          - --volume
+          - "{{ greenbone_scanning_gmp_config }}:/run/gvm-tools.conf:ro"
+          - gvm-tools
+          - gvm-cli
+          - --config
+          - /run/gvm-tools.conf
+          - socket
+          - -X
+          - '<get_reports details="0"/>'
+      register: greenbone_scanning_reports_xml
+      changed_when: false
+      no_log: true
+
+    - name: Parse Greenbone report summary
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import sys, xml.etree.ElementTree as ET; root=ET.fromstring(sys.stdin.read()); [print(r.get('id'), '| task=' + str((r.find('task').get('id') if r.find('task') is not None else '')), '| name=' + r.findtext('task/name',''), '| scan_start=' + r.findtext('scan_start',''), '| scan_end=' + r.findtext('scan_end','')) for r in root.findall('.//report')]"
+        stdin: "{{ greenbone_scanning_reports_xml.stdout }}"
+      register: greenbone_scanning_report_summary
+      changed_when: false
+      no_log: true
+
+    - name: Show Greenbone report summary
+      ansible.builtin.debug:
+        var: greenbone_scanning_report_summary.stdout_lines
+
+
+  always:
+    - name: Remove temporary protected GMP configuration
+      ansible.builtin.file:
+        path: "{{ greenbone_scanning_gmp_config }}"
+        state: absent
+      no_log: true

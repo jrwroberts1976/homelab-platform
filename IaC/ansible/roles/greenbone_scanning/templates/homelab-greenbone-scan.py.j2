@@ -1,0 +1,461 @@
+#!/usr/bin/env python3
+
+import argparse
+import json
+import os
+import subprocess
+import sys
+import tempfile
+import time
+import xml.etree.ElementTree as ET
+from pathlib import Path
+from datetime import datetime, timezone
+
+COMPOSE_ROOT = "{{ greenbone_scanning_root }}"
+RUNTIME_ENV = Path("{{ greenbone_scanning_runtime_env }}")
+GMP_CONFIG = Path("{{ greenbone_scanning_runner_gmp_config }}")
+EVIDENCE_FILES = {
+    "managed": Path("{{ greenbone_scanning_managed_evidence_file }}"),
+    "full-lan": Path("{{ greenbone_scanning_full_lan_evidence_file }}"),
+}
+
+SMTP_HOST = "{{ greenbone_scanning_smtp_host }}"
+SMTP_PORT = {{ greenbone_scanning_smtp_port }}
+MAIL_FROM = "{{ greenbone_scanning_mail_from }}"
+MAIL_TO = "{{ greenbone_scanning_mail_to }}"
+
+POLL_SECONDS = {{ greenbone_scanning_poll_seconds }}
+SCAN_TIMEOUT_SECONDS = {{ greenbone_scanning_scan_timeout_seconds }}
+
+TASKS = {
+    "managed": {
+        "name": "{{ greenbone_scanning_managed_task_name }}",
+    },
+    "full-lan": {
+        "name": "{{ greenbone_scanning_full_lan_task_name }}",
+    },
+}
+
+def load_runtime_env():
+    values = {}
+    for line in RUNTIME_ENV.read_text().splitlines():
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        values[key] = value
+
+    username = values.get("GREENBONE_ADMIN_USERNAME", "")
+    password = values.get("GREENBONE_ADMIN_PASSWORD", "")
+
+    if not username or not password:
+        raise RuntimeError("Greenbone runtime credentials are incomplete")
+
+    return username, password
+
+def write_gmp_config(username, password):
+    GMP_CONFIG.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+    content = (
+        "[gmp]\n"
+        f"username = {username}\n"
+        f"password = {password}\n"
+    )
+
+    fd = os.open(GMP_CONFIG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+    with os.fdopen(fd, "w") as handle:
+        handle.write(content)
+
+def gmp(xml):
+    command = [
+        "docker", "compose",
+        "-f", f"{COMPOSE_ROOT}/compose.yaml",
+        "-f", f"{COMPOSE_ROOT}/compose.override.yaml",
+        "run", "--rm", "--no-deps",
+        "--volume", f"{GMP_CONFIG}:/run/gvm-tools.conf:ro",
+        "gvm-tools",
+        "gvm-cli",
+        "--config", "/run/gvm-tools.conf",
+        "socket",
+        "-X", xml,
+    ]
+
+    result = subprocess.run(
+        command,
+        cwd=COMPOSE_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Greenbone GMP command failed with exit code {result.returncode}: "
+            f"{result.stderr.strip()}"
+        )
+
+    return result.stdout
+
+def find_task_id(task_name):
+    response = gmp('<get_tasks details="0"/>')
+    root = ET.fromstring(response)
+
+    matches = [
+        task.get("id", "")
+        for task in root.findall(".//task")
+        if task.findtext("name", "").strip() == task_name
+    ]
+
+    matches = [task_id for task_id in matches if task_id]
+
+    if len(matches) != 1:
+        raise RuntimeError(
+            f"Expected exactly one Greenbone task named {task_name!r}; "
+            f"found {len(matches)}"
+        )
+
+    return matches[0]
+
+
+def start_scan(task_id):
+    response = gmp(f'<start_task task_id="{task_id}"/>')
+    root = ET.fromstring(response)
+
+    if root.get("status") != "202":
+        raise RuntimeError(
+            f"Greenbone refused to start task: "
+            f"{root.get('status')} {root.get('status_text', '')}"
+        )
+
+    report_id = root.findtext("report_id", "").strip()
+    if not report_id:
+        raise RuntimeError("Greenbone started task but returned no report ID")
+
+    return report_id
+
+def wait_for_scan(report_id):
+    deadline = time.monotonic() + SCAN_TIMEOUT_SECONDS
+
+    while time.monotonic() < deadline:
+        response = gmp(
+            f'<get_reports report_id="{report_id}" details="0"/>'
+        )
+        root = ET.fromstring(response)
+
+        reports = [
+            report for report in root.findall(".//report")
+            if report.get("id") == report_id
+        ]
+
+        status = next(
+            (
+                report.findtext("scan_run_status", "").strip()
+                for report in reports
+                if report.findtext("scan_run_status", "").strip()
+            ),
+            "",
+        )
+
+        if status == "Done":
+            return
+
+        if status in {"Stopped", "Interrupted"}:
+            raise RuntimeError(
+                f"Greenbone scan ended with status {status}"
+            )
+
+        time.sleep(POLL_SECONDS)
+
+    raise TimeoutError(
+        f"Greenbone scan exceeded {SCAN_TIMEOUT_SECONDS} seconds"
+    )
+
+def get_report(report_id):
+    response = gmp(
+        f'<get_reports report_id="{report_id}" details="1"/>'
+    )
+    root = ET.fromstring(response)
+
+    reports = [
+        report for report in root.findall(".//report")
+        if report.get("id") == report_id
+        and report.find("results") is not None
+    ]
+
+    if not reports:
+        raise RuntimeError(
+            f"Detailed Greenbone report {report_id} was not returned"
+        )
+
+    return reports[-1]
+
+def severity_name(score):
+    if score >= 9.0:
+        return "Critical"
+    if score >= 7.0:
+        return "High"
+    if score >= 4.0:
+        return "Medium"
+    if score > 0.0:
+        return "Low"
+    return "Log"
+
+def parse_results(report):
+    findings = []
+
+    for result in report.findall("./results/result"):
+        try:
+            score = float(result.findtext("severity", "0") or "0")
+        except ValueError:
+            score = 0.0
+
+        nvt = result.find("nvt")
+
+        findings.append({
+            "host": result.findtext("host", "").strip(),
+            "port": result.findtext("port", "").strip(),
+            "oid": nvt.get("oid", "") if nvt is not None else "",
+            "name": result.findtext("name", "").strip(),
+            "score": score,
+            "severity": severity_name(score),
+        })
+
+    return findings
+
+ACCEPTED_RISKS = {
+{% for risk in greenbone_scanning_accepted_risks %}
+    ("{{ risk.host }}", "{{ risk.oid }}"),
+{% endfor %}
+}
+
+def is_accepted(finding):
+    return (finding["host"], finding["oid"]) in ACCEPTED_RISKS
+
+def build_summary(findings):
+    counts = {
+        "Critical": 0,
+        "High": 0,
+        "Medium": 0,
+        "Low": 0,
+        "Log": 0,
+    }
+    actionable = []
+    accepted = []
+
+    for finding in findings:
+        if is_accepted(finding):
+            accepted.append(finding)
+        else:
+            actionable.append(finding)
+            counts[finding["severity"]] += 1
+
+    return counts, actionable, accepted
+
+def write_evidence(mode, task_name, report_id, counts, actionable, accepted):
+    evidence_file = EVIDENCE_FILES[mode]
+
+    evidence = {
+        "schema_version": 1,
+        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "mode": mode,
+        "task_name": task_name,
+        "report_id": report_id,
+        "severity_counts": counts,
+        "actionable_count": len(actionable),
+        "accepted_risk_count": len(accepted),
+        "actionable_findings": [
+            finding for finding in actionable
+            if finding["severity"] != "Log"
+        ],
+    }
+
+    evidence_file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
+    temporary_file = evidence_file.with_suffix(".json.tmp")
+
+    with temporary_file.open("w", encoding="utf-8") as handle:
+        json.dump(evidence, handle, indent=2, sort_keys=True)
+        handle.write("\n")
+
+    os.chmod(temporary_file, 0o640)
+    os.replace(temporary_file, evidence_file)
+
+
+def format_finding(finding):
+    return (
+        f'{finding["severity"]} {finding["score"]:.1f} | '
+        f'{finding["host"]} | {finding["port"]} | '
+        f'{finding["name"]} | OID {finding["oid"]}'
+    )
+
+def build_email(task_name, report_id, counts, actionable, accepted):
+    lines = [
+        f"Greenbone scan completed: {task_name}",
+        "",
+        f"Report ID: {report_id}",
+        "",
+        "Severity summary:",
+        f"Critical: {counts['Critical']}",
+        f"High:     {counts['High']}",
+        f"Medium:   {counts['Medium']}",
+        f"Low:      {counts['Low']}",
+        f"Log:      {counts['Log']}",
+        f"Accepted: {len(accepted)}",
+        "",
+        "Actionable findings:",
+    ]
+
+    non_log = [
+        finding for finding in actionable
+        if finding["severity"] != "Log"
+    ]
+
+    if non_log:
+        lines.extend(format_finding(finding) for finding in non_log)
+    else:
+        lines.append("None")
+
+    if accepted:
+        lines.extend(["", "Accepted risks:"])
+        lines.extend(format_finding(finding) for finding in accepted)
+
+    return "\n".join(lines) + "\n"
+
+def send_email(subject, body):
+    message = (
+        f"From: {MAIL_FROM}\n"
+        f"To: {MAIL_TO}\n"
+        f"Subject: {subject}\n"
+        "Content-Type: text/plain; charset=utf-8\n"
+        "\n"
+        f"{body}"
+    )
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        prefix="greenbone-mail-",
+        delete=True,
+    ) as handle:
+        handle.write(message)
+        handle.flush()
+
+        result = subprocess.run(
+            [
+                "curl",
+                "--silent",
+                "--show-error",
+                "--fail",
+                "--connect-timeout", "10",
+                "--max-time", "60",
+                "--mail-from", MAIL_FROM,
+                "--mail-rcpt", MAIL_TO,
+                "--upload-file", handle.name,
+                f"smtp://{SMTP_HOST}:{SMTP_PORT}/",
+            ],
+            text=True,
+            capture_output=True,
+            check=False,
+        )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"SMTP delivery failed with exit code {result.returncode}: "
+            f"{result.stderr.strip()}"
+        )
+
+def run_scan(mode):
+    task = TASKS[mode]
+
+    username, password = load_runtime_env()
+
+    try:
+        write_gmp_config(username, password)
+        print(f"Starting Greenbone task: {task['name']}", flush=True)
+
+        task_id = find_task_id(task["name"])
+        report_id = start_scan(task_id)
+        print(f"Report ID: {report_id}", flush=True)
+
+        wait_for_scan(report_id)
+
+        report = get_report(report_id)
+        findings = parse_results(report)
+        counts, actionable, accepted = build_summary(findings)
+
+        write_evidence(
+            mode,
+            task["name"],
+            report_id,
+            counts,
+            actionable,
+            accepted,
+        )
+
+        body = build_email(
+            task["name"],
+            report_id,
+            counts,
+            actionable,
+            accepted,
+        )
+
+        send_email(
+            f"Greenbone scan report - {task['name']}",
+            body,
+        )
+
+        print(
+            "Scan complete: "
+            f"Critical={counts['Critical']} "
+            f"High={counts['High']} "
+            f"Medium={counts['Medium']} "
+            f"Low={counts['Low']} "
+            f"Log={counts['Log']} "
+            f"Accepted={len(accepted)}",
+            flush=True,
+        )
+
+    finally:
+        GMP_CONFIG.unlink(missing_ok=True)
+
+
+def main():
+    parser = argparse.ArgumentParser(
+        description="Run an automated Greenbone scan and email the results."
+    )
+    parser.add_argument(
+        "mode",
+        choices=sorted(TASKS),
+        help="Greenbone task to run",
+    )
+    parser.add_argument(
+        "--check",
+        action="store_true",
+        help="Validate GMP access and task lookup without starting a scan",
+    )
+
+    args = parser.parse_args()
+
+    if args.check:
+        username, password = load_runtime_env()
+        try:
+            write_gmp_config(username, password)
+            task = TASKS[args.mode]
+            task_id = find_task_id(task["name"])
+            print(
+                f"CHECK=PASS mode={args.mode} "
+                f"task={task['name']} id={task_id}"
+            )
+        finally:
+            GMP_CONFIG.unlink(missing_ok=True)
+        return
+
+    run_scan(args.mode)
+
+
+if __name__ == "__main__":
+    try:
+        main()
+    except Exception as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        sys.exit(1)

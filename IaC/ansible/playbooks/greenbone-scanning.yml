@@ -1,0 +1,8 @@
+---
+- name: Configure Greenbone scanning and reporting
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: greenbone_scanning

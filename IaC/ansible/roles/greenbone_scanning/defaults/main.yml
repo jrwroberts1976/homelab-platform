@@ -1,0 +1,59 @@
+---
+greenbone_scanning_root: /opt/greenbone-community
+
+greenbone_scanning_admin_username: admin
+greenbone_scanning_admin_password: >-
+  {{
+    lookup('env', 'GREENBONE_ADMIN_PASSWORD')
+    | default('', true)
+  }}
+
+greenbone_scanning_smtp_host: "192.168.2.54"
+greenbone_scanning_smtp_port: 25
+greenbone_scanning_mail_from: "greenbone@jameshouse"
+greenbone_scanning_mail_to: "jrwroberts1976@gmail.com"
+
+greenbone_scanning_full_lan_target: "192.168.2.0/24"
+
+# Installation and scheduled execution are deliberately separate gates.
+greenbone_scanning_allow_deploy: false
+greenbone_scanning_enable_timers: false
+
+greenbone_scanning_gmp_config: /run/greenbone-scanning-gvm-tools.conf
+
+# Verified against the live Greenbone feed.
+greenbone_scanning_scan_config_name: "Full and fast"
+greenbone_scanning_scan_config_id: "daba56c8-73ec-11df-a475-002264764cea"
+
+greenbone_scanning_scanner_name: "OpenVAS Default"
+greenbone_scanning_scanner_id: "08b69003-5fc2-4037-a479-93b440211c73"
+
+# Greenbone objects managed by this role.
+greenbone_scanning_managed_target_name: "Homelab - Managed Infrastructure"
+greenbone_scanning_managed_task_name: "Homelab - Managed Infrastructure - Daily"
+
+greenbone_scanning_full_lan_target_name: "Homelab - Full LAN"
+greenbone_scanning_full_lan_task_name: "Homelab - Full LAN - Weekly"
+
+# Verified against the live Greenbone installation.
+greenbone_scanning_port_list_name: "All IANA assigned TCP"
+greenbone_scanning_port_list_id: "33d0cd82-57c6-11e1-8ed1-406186ea4fc5"
+
+# Findings explicitly accepted through reviewed IaC.
+# Match on both host and Greenbone NVT OID.
+# Keep empty unless a risk has been formally accepted.
+greenbone_scanning_accepted_risks: []
+
+# Root-only runtime credentials used by scheduled Greenbone automation.
+greenbone_scanning_runtime_env: /etc/greenbone-scanning/runtime.env
+
+# Automated scan runner and reporting.
+greenbone_scanning_runner: /usr/local/sbin/homelab-greenbone-scan
+greenbone_scanning_poll_seconds: 60
+greenbone_scanning_scan_timeout_seconds: 21600
+greenbone_scanning_runner_gmp_config: /run/greenbone-scanning/runner-gvm-tools.conf
+
+# Machine-readable evidence consumed by the daily management report.
+greenbone_scanning_evidence_directory: /var/lib/homelab-greenbone-scanning
+greenbone_scanning_managed_evidence_file: /var/lib/homelab-greenbone-scanning/managed.json
+greenbone_scanning_full_lan_evidence_file: /var/lib/homelab-greenbone-scanning/full-lan.json
