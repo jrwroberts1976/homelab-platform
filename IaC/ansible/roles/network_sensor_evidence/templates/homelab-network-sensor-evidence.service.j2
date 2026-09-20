@@ -1,0 +1,14 @@
+[Unit]
+Description=Homelab network sensor evidence collector
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/flock /run/homelab-network-sensor-evidence.lock /usr/local/sbin/homelab-network-sensor-evidence
+Nice=10
+
+[Install]
+WantedBy=multi-user.target
