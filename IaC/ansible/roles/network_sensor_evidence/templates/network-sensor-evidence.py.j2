@@ -1,0 +1,155 @@
+#!/usr/bin/env python3
+"""Compact incremental network-security evidence collector for sensor-01."""
+import gzip, ipaddress, json, os, socket, time
+from collections import Counter
+from datetime import datetime, timezone
+from pathlib import Path
+
+HOURS={{ network_sensor_evidence_hours | int }}
+RETENTION={{ network_sensor_evidence_retention_hours | int }}
+LIMIT={{ network_sensor_evidence_sample_limit | int }}
+SURICATA=Path({{ network_sensor_evidence_suricata_log | to_json }})
+ZEEK=Path({{ network_sensor_evidence_zeek_log_directory | to_json }})
+STATE_DIR=Path({{ network_sensor_evidence_state_directory | to_json }})
+STATE_FILE=Path({{ network_sensor_evidence_state_file | to_json }})
+EVIDENCE_FILE=Path({{ network_sensor_evidence_file | to_json }})
+NETWORKS=[ipaddress.ip_network(x) for x in {{ network_sensor_evidence_internal_networks | to_json }}]
+NOISE=set({{ network_sensor_evidence_noise_signatures | to_json }})
+
+def iso(t): return datetime.fromtimestamp(t,timezone.utc).isoformat()
+def hour(t): return datetime.fromtimestamp(t,timezone.utc).strftime("%Y-%m-%dT%H:00:00Z")
+def internal(x):
+    try: a=ipaddress.ip_address(x)
+    except (TypeError,ValueError): return False
+    return any(a in n for n in NETWORKS)
+def parse_ts(x):
+    try: return datetime.fromisoformat(x).timestamp()
+    except (TypeError,ValueError): return None
+def bucket():
+    return {"total":0,"noise":0,"significant":0,"severity":{},"category":{},"signature":{},
+            "inbound_no_response":0,"inbound_with_response":0,"outbound":0,
+            "outbound_dest":{},"samples":{"severity_1":[],"inbound_with_response":[],
+            "inbound_no_response":[],"outbound":[]}}
+def inc(d,k): d[str(k)]=int(d.get(str(k),0))+1
+def sample(a,x):
+    if len(a)<LIMIT:a.append(x)
+def summary(e,a):
+    f=e.get("flow") or {}
+    return {"timestamp":e.get("timestamp"),"src_ip":e.get("src_ip"),"src_port":e.get("src_port"),
+            "dest_ip":e.get("dest_ip"),"dest_port":e.get("dest_port"),"proto":e.get("proto"),
+            "signature":a.get("signature"),"category":a.get("category"),"severity":a.get("severity"),
+            "action":a.get("action"),"pkts_toserver":f.get("pkts_toserver"),
+            "pkts_toclient":f.get("pkts_toclient"),"bytes_toserver":f.get("bytes_toserver"),
+            "bytes_toclient":f.get("bytes_toclient"),"community_id":e.get("community_id")}
+def atomic(path,obj):
+    path.parent.mkdir(parents=True,exist_ok=True); tmp=path.with_name(path.name+".tmp")
+    with tmp.open("w") as f:
+        json.dump(obj,f,indent=2,sort_keys=True);f.write("\n");f.flush();os.fsync(f.fileno())
+    os.chmod(tmp,0o640);os.replace(tmp,path)
+def load():
+    if not STATE_FILE.exists(): return {"schema_version":2,"checkpoint":None,"hourly":{},"first_collection":None}
+    with STATE_FILE.open() as f:s=json.load(f)
+    if s.get("schema_version")!=2: raise RuntimeError("unsupported state schema")
+    return s
+def collect_suricata(s,now):
+    if not SURICATA.exists(): return {"status":"missing","records_read":0,"alerts_read":0}
+    st=SURICATA.stat();cp=s.get("checkpoint");off=0;rot=False
+    if cp:
+        same=cp.get("device")==st.st_dev and cp.get("inode")==st.st_ino
+        if same and st.st_size>=int(cp.get("offset",0)):off=int(cp["offset"])
+        else:rot=True
+    records=alerts=0;newest=None
+    with SURICATA.open("rb") as f:
+        f.seek(off)
+        while True:
+            line=f.readline()
+            if not line:break
+            records+=1
+            try:e=json.loads(line)
+            except (UnicodeDecodeError,json.JSONDecodeError):continue
+            t=parse_ts(e.get("timestamp"))
+            if t is None:continue
+            newest=t if newest is None else max(newest,t)
+            a=e.get("alert")
+            if not isinstance(a,dict):continue
+            alerts+=1;b=s["hourly"].setdefault(hour(t),bucket());b["total"]+=1
+            sig=a.get("signature") or "unknown"
+            if sig in NOISE:b["noise"]+=1;continue
+            b["significant"]+=1;inc(b["severity"],a.get("severity"));inc(b["category"],a.get("category") or "unknown");inc(b["signature"],sig)
+            x=summary(e,a)
+            if a.get("severity")==1:sample(b["samples"]["severity_1"],x)
+            si,di=internal(e.get("src_ip")),internal(e.get("dest_ip"));flow=e.get("flow") or {}
+            if not si and di:
+                response=int(flow.get("pkts_toclient") or 0)>0 or int(flow.get("bytes_toclient") or 0)>0
+                k="inbound_with_response" if response else "inbound_no_response";b[k]+=1;sample(b["samples"][k],x)
+            elif si and not di:
+                b["outbound"]+=1;inc(b["outbound_dest"],e.get("dest_ip") or "unknown");sample(b["samples"]["outbound"],x)
+        off=f.tell()
+    s["checkpoint"]={"device":st.st_dev,"inode":st.st_ino,"offset":off,"collected_at":iso(now)}
+    return {"status":"ok","records_read":records,"alerts_read":alerts,"rotation_detected":rot,
+            "newest_event":iso(newest) if newest else None}
+def prune(s,now):
+    cutoff=now-RETENTION*3600
+    s["hourly"]={k:v for k,v in s["hourly"].items()
+      if datetime.strptime(k,"%Y-%m-%dT%H:00:00Z").replace(tzinfo=timezone.utc).timestamp()+3600>=cutoff}
+def top(c):return [{"name":k,"count":v} for k,v in c.most_common(10)]
+def aggregate(s,cutoff,now):
+    totals=Counter();sev=Counter();cat=Counter();sig=Counter();dest=Counter()
+    samples={k:[] for k in ("severity_1","inbound_with_response","inbound_no_response","outbound")};hours=[]
+    for k in sorted(s["hourly"]):
+        t=datetime.strptime(k,"%Y-%m-%dT%H:00:00Z").replace(tzinfo=timezone.utc).timestamp()
+        if t+3600<cutoff or t>now:continue
+        hours.append(k);b=s["hourly"][k]
+        for n in ("total","noise","significant","inbound_no_response","inbound_with_response","outbound"):totals[n]+=b[n]
+        sev.update({x:int(y) for x,y in b["severity"].items()});cat.update({x:int(y) for x,y in b["category"].items()})
+        sig.update({x:int(y) for x,y in b["signature"].items()});dest.update({x:int(y) for x,y in b["outbound_dest"].items()})
+        for typ in samples:
+            for x in b["samples"][typ]:
+                if len(samples[typ])<LIMIT:samples[typ].append(x)
+    return {**dict(totals),"severity_counts":dict(sev),"top_categories":top(cat),"top_signatures":top(sig),
+            "top_outbound_destinations":top(dest),"samples":samples,"hour_buckets_included":hours}
+def opener(p):
+    return gzip.open(p,"rt",encoding="utf-8",errors="replace") if p.suffix==".gz" else p.open(errors="replace")
+def zeek(name,cutoff,now,keep=False):
+    paths=list(ZEEK.glob(f"20??-??-??/{name}.*.log.gz"));cur=ZEEK/"current"/f"{name}.log"
+    if cur.exists():paths.append(cur)
+    count=0;old=new=None;types=Counter();samples=[];failed=[]
+    for p in sorted(set(paths),key=str):
+        try:
+            with opener(p) as f:
+                for line in f:
+                    try:r=json.loads(line)
+                    except json.JSONDecodeError:continue
+                    t=r.get("ts")
+                    if not isinstance(t,(int,float)) or t<cutoff or t>now+300:continue
+                    count+=1;old=t if old is None else min(old,t);new=t if new is None else max(new,t)
+                    if name=="notice":
+                        types[r.get("note") or "unknown"]+=1
+                        if keep and len(samples)<LIMIT:sample(samples,{"timestamp":iso(t),"uid":r.get("uid"),"note":r.get("note"),
+                          "msg":r.get("msg"),"sub":r.get("sub"),"src":r.get("src"),"dst":r.get("dst"),"p":r.get("p")})
+        except (OSError,EOFError) as e:failed.append({"path":str(p),"error":str(e)})
+    out={"record_count":count,"oldest_event":iso(old) if old else None,"newest_event":iso(new) if new else None,"files_failed":failed}
+    if name=="notice":out.update({"notice_types":dict(types),"samples":samples})
+    return out
+def main():
+    now=time.time();cutoff=now-HOURS*3600;STATE_DIR.mkdir(parents=True,exist_ok=True);os.chmod(STATE_DIR,0o750)
+    s=load()
+    if not s.get("first_collection"):s["first_collection"]=iso(now)
+    run=collect_suricata(s,now);prune(s,now);roll=aggregate(s,cutoff,now)
+    z={n:zeek(n,cutoff,now,n=="notice") for n in ("conn","dns","ssl","notice")}
+    first=datetime.fromisoformat(s["first_collection"]).timestamp();warm=now-first>=HOURS*3600
+    zfail=sum((v["files_failed"] for v in z.values()),[])
+    zold=z["conn"]["oldest_event"]
+    zcomplete=bool(zold) and datetime.fromisoformat(zold).timestamp()<=cutoff+3600 and not zfail
+    coverage={"suricata":{"status":"complete" if warm and not run.get("rotation_detected") else "warming_up",
+      "requested_hours":HOURS,"warmup_complete":warm,"assurance_gap":not warm or bool(run.get("rotation_detected"))},
+      "zeek":{"status":"complete" if zcomplete else "partial","requested_hours":HOURS,"assurance_gap":not zcomplete}}
+    gaps=[]
+    if coverage["suricata"]["assurance_gap"]:gaps.append(f"Suricata rolling evidence has not yet established a complete {HOURS}-hour window.")
+    if coverage["zeek"]["assurance_gap"]:gaps.append(f"Zeek evidence did not establish a failure-free complete {HOURS}-hour window.")
+    if run.get("rotation_detected"):gaps.append("Suricata active-log rotation was detected; the incremental collector does not backfill the prior rotated file.")
+    evidence={"schema_version":2,"collected_at":iso(now),"sensor_host":socket.gethostname(),"requested_window_hours":HOURS,
+      "window_start":iso(cutoff),"window_end":iso(now),"coverage":coverage,"assurance_gaps":gaps,
+      "suricata":{"collection_run":run,"rolling":roll},"zeek":z}
+    atomic(STATE_FILE,s);atomic(EVIDENCE_FILE,evidence)
+if __name__=="__main__":main()
