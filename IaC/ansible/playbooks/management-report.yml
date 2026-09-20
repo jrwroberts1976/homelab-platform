@@ -1,6 +1,6 @@
 ---
 - name: Deploy homelab management reporting
-  hosts: admin_hosts
+  hosts: monitor-01
   become: true
   gather_facts: true
 

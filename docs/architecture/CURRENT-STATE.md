@@ -477,7 +477,9 @@ Cluster storage is node-scoped so `.70` uses `media-backup-proxmox` and `.71` us
 
 ## Administration host
 
-`admin-01` at `192.168.2.48` is the normal controller for homelab administration and IaC.
+`admin-01` at `192.168.2.48` is the Ansible/IaC controller for the homelab. Application and reporting workloads must not be placed on this host.
+
+The management-report runtime, evidence aggregation and future AI-assisted reporting pipeline are hosted on `monitor-01` at `192.168.2.52`. `mail-relay-01` remains responsible only for SMTP delivery.
 
 It is also the QNetd host for `jameshouse-pve` and listens on TCP/5403 for the two PVE QDevice clients. The 17 September audit observed established QNetd connections from both `.70` and `.71`; QNetd reported two clients and one connected cluster.
 
