@@ -1,0 +1,11 @@
+[Unit]
+Description=Collect homelab network sensor evidence every {{ network_sensor_evidence_collection_minutes }} minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ network_sensor_evidence_collection_minutes }}min
+Persistent=true
+Unit=homelab-network-sensor-evidence.service
+
+[Install]
+WantedBy=timers.target
