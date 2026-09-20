@@ -159,12 +159,40 @@ def main():
     zabbix_problems = zabbix_api(
         "problem.get",
         {
-            "output": ["eventid", "clock", "name", "severity"],
+            "output": ["eventid", "objectid", "clock", "name", "severity"],
             "groupids": [zabbix_group_id],
             "sortfield": ["eventid"],
             "sortorder": "DESC",
         },
     )
+
+    zabbix_trigger_ids = sorted(
+        {problem["objectid"] for problem in zabbix_problems}
+    )
+
+    zabbix_triggers = []
+    if zabbix_trigger_ids:
+        zabbix_triggers = zabbix_api(
+            "trigger.get",
+            {
+                "output": ["triggerid"],
+                "triggerids": zabbix_trigger_ids,
+                "selectHosts": ["host"],
+            },
+        )
+
+    zabbix_trigger_hosts = {
+        trigger["triggerid"]: sorted(
+            host["host"] for host in trigger.get("hosts", [])
+        )
+        for trigger in zabbix_triggers
+    }
+
+    for problem in zabbix_problems:
+        problem["hosts"] = zabbix_trigger_hosts.get(
+            problem["objectid"], []
+        )
+        problem.pop("objectid", None)
 
 
     patch = {
