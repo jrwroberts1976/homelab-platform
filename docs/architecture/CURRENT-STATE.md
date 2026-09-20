@@ -374,6 +374,8 @@ Validated state on 17 September 2026:
 
 The controlled commissioning self-scan of `greenbone-01` completed with no Critical, High or Medium results. It produced one Low result at severity 2.1 for ICMP Timestamp Reply Information Disclosure and nine informational/log results. The ICMP timestamp item is tracked as a separate hardening follow-up; it did not block scanner commissioning.
 
+On 20 September 2026, the Git-managed daily managed-infrastructure scan completed successfully and produced `/var/lib/homelab-greenbone-scanning/managed.json`. The validated report contained 0 Critical, 0 High, 0 Medium and 0 Low findings, with 10 Log-level observations. Managed Greenbone scanning and compact local evidence generation are therefore operational. Transport of this evidence into the central management-report pipeline remains separate outstanding work.
+
 VM203 has manual snapshot backup archives on `media-backup-proxmox-2`; archive integrity was proven with `zstd -t`. The nightly `Proxmox-2` job is IaC-managed at 03:15, selects `101,103,202,203`, and an unattended VM203 archive from the 17 September cycle was observed. VM203 is protected in Proxmox.
 
 The scanner is deliberately separate from `sensor-01`. `sensor-01` performs passive Suricata/Zeek network observation; Greenbone performs active endpoint scanning. There is no direct sensor-to-Greenbone feed dependency.
