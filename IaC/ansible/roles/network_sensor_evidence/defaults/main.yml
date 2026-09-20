@@ -1,0 +1,22 @@
+---
+network_sensor_evidence_hours: 24
+
+network_sensor_evidence_suricata_log: "/var/log/suricata/eve.json"
+network_sensor_evidence_zeek_log_directory: "/opt/zeek/logs"
+
+network_sensor_evidence_state_directory: "/var/lib/homelab-network-sensor-evidence"
+network_sensor_evidence_file: "/var/lib/homelab-network-sensor-evidence/evidence.json"
+
+network_sensor_evidence_internal_networks:
+  - "192.168.2.0/24"
+  - "10.8.0.0/24"
+
+network_sensor_evidence_noise_signatures:
+  - "SURICATA Ethertype unknown"
+  - "SURICATA STREAM Packet with invalid ack"
+  - "SURICATA STREAM SHUTDOWN RST invalid ack"
+
+network_sensor_evidence_collection_minutes: 15
+network_sensor_evidence_retention_hours: 26
+network_sensor_evidence_sample_limit: 10
+network_sensor_evidence_state_file: "/var/lib/homelab-network-sensor-evidence/state.json"
