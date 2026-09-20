@@ -10,6 +10,8 @@ import requests
 PROMETHEUS_URL = "{{ management_report_prometheus_url }}"
 ALERTMANAGER_URL = "{{ management_report_alertmanager_url }}"
 LOKI_URL = "{{ management_report_loki_url }}"
+ZABBIX_URL = "{{ management_report_zabbix_url }}"
+ZABBIX_TOKEN_FILE = Path("{{ management_report_zabbix_token_file }}")
 EXPECTED_HOSTS = {{ management_report_expected_hosts | to_json }}
 EXPECTED_HOST_COUNT = len(EXPECTED_HOSTS)
 PATCH_FRESHNESS_SECONDS = {{ management_report_patch_freshness_minutes }} * 60
@@ -71,6 +73,36 @@ def loki_label_values(label, query=None):
 
 
 
+def zabbix_api(method, params):
+    token = ZABBIX_TOKEN_FILE.read_text().strip()
+    if not token:
+        raise RuntimeError("Zabbix API token file is empty")
+
+    response = requests.post(
+        ZABBIX_URL,
+        headers={
+            "Authorization": f"Bearer {token}",
+            "Content-Type": "application/json-rpc",
+        },
+        json={
+            "jsonrpc": "2.0",
+            "method": method,
+            "params": params,
+            "id": 1,
+        },
+        timeout=15,
+    )
+    response.raise_for_status()
+
+    payload = response.json()
+    if "error" in payload:
+        raise RuntimeError(
+            f"Zabbix API {method} failed: {payload['error'].get('message', 'unknown error')}"
+        )
+
+    return payload["result"]
+
+
 def by_target_name(results):
     values = {}
 
@@ -93,6 +125,47 @@ def main():
     }
 
     alertmanager_active_alerts = alertmanager_alerts()
+
+    zabbix_groups = zabbix_api(
+        "hostgroup.get",
+        {
+            "output": ["groupid", "name"],
+            "filter": {"name": ["Homelab/Linux"]},
+        },
+    )
+    if len(zabbix_groups) != 1:
+        raise RuntimeError(
+            f"Expected exactly one Zabbix Homelab/Linux group, found {len(zabbix_groups)}"
+        )
+
+    zabbix_group_id = zabbix_groups[0]["groupid"]
+    zabbix_hosts = zabbix_api(
+        "host.get",
+        {
+            "output": ["host"],
+            "groupids": [zabbix_group_id],
+            "sortfield": "host",
+        },
+    )
+    zabbix_host_names = sorted(host["host"] for host in zabbix_hosts)
+
+    zabbix_missing_hosts = sorted(
+        set(EXPECTED_HOSTS) - set(zabbix_host_names)
+    )
+    zabbix_unexpected_hosts = sorted(
+        set(zabbix_host_names) - set(EXPECTED_HOSTS)
+    )
+
+    zabbix_problems = zabbix_api(
+        "problem.get",
+        {
+            "output": ["eventid", "clock", "name", "severity"],
+            "groupids": [zabbix_group_id],
+            "sortfield": ["eventid"],
+            "sortorder": "DESC",
+        },
+    )
+
 
     patch = {
         name: by_target_name(raw[name])
@@ -153,6 +226,16 @@ def main():
             "active_alert_count": len(alertmanager_active_alerts),
             "active_alerts": alertmanager_active_alerts,
         },
+        "zabbix": {
+            "group_name": "Homelab/Linux",
+            "expected_hosts": EXPECTED_HOST_COUNT,
+            "reporting_hosts": len(zabbix_host_names),
+            "missing_hosts": zabbix_missing_hosts,
+            "unexpected_hosts": zabbix_unexpected_hosts,
+            "hosts": zabbix_host_names,
+            "active_problem_count": len(zabbix_problems),
+            "active_problems": zabbix_problems,
+        },
         "prometheus": {
             "expected_hosts": EXPECTED_HOST_COUNT,
             "firing_alert_count": len(firing_alerts),
@@ -173,7 +256,6 @@ def main():
     for host in host_names:
         evidence["prometheus"]["hosts"][host] = {
             "node_exporter_up": exporter_up.get(host),
-    "firing_alerts": 'ALERTS{alertstate="firing"}',
             "updates_available": patch["updates_available"].get(host),
             "security_updates_available": patch[
                 "security_updates_available"

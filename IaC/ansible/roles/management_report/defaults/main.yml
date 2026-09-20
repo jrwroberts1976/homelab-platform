@@ -27,3 +27,5 @@ management_report_output_directory: "/var/lib/homelab-management-report/reports"
 management_report_evidence_file: "/var/lib/homelab-management-report/evidence.json"
 
 management_report_patch_freshness_minutes: 90
+
+management_report_zabbix_token_file: "/etc/homelab-management-report/zabbix-api-token"
