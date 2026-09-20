@@ -239,7 +239,10 @@ The core metrics/logging/network-observability platform and Zabbix host-monitori
 - add service-specific Zabbix coverage only where it complements rather than duplicates Prometheus/Blackbox checks;
 - continue service-specific Prometheus/Loki telemetry where actionable;
 - correlate Network Hosts inventory, enrichment, deep profiles and switch topology;
-- build the planned Web Platform / Analytics dashboard combining Cloudflare edge/security information, Umami visitor analytics and origin/application health from Grafana/Loki;
+- analyse `me.jrwroberts.co.uk` as the first evidence-gathering step for the Web Platform / Analytics workstream; record site structure, content, performance, accessibility, SEO, security and technical-delivery findings;
+- use the site analysis to refine the planned Cloudflare edge/security, Umami visitor analytics and Grafana/Loki origin/application-health design;
+- build the unified Web Platform / Analytics dashboard after the site-analysis findings are recorded;
+- keep the public portfolio externally hosted and independent of normal homelab availability;
 - add backup freshness/storage-capacity visibility after more unattended history is available.
 
 ## Security platform
@@ -265,7 +268,9 @@ Remaining vulnerability-management work is operational:
 - address the low-severity ICMP timestamp finding through reviewed IaC if remediation is desired;
 - define an explicit image-digest/update policy if rolling Community Container tags become operationally undesirable;
 - observe the first unattended VM203 backup;
-- maintain a repeatable scan/remediation workflow.
+- maintain a repeatable scan/remediation workflow;
+- complete validation of the Ansible-managed scan runner and machine-readable evidence pipeline before enabling recurring execution;
+- integrate the resulting Greenbone evidence with the management-report/AI-review workflow once the scan pipeline is proven.
 
 The active scanner remains separate from `sensor-01` passive detection.
 
