@@ -1,0 +1,11 @@
+[Unit]
+Description=Run ASUS network inventory collector periodically
+
+[Timer]
+OnBootSec=1min
+OnUnitActiveSec={{ asus_network_inventory_interval }}
+Persistent=true
+Unit=asus-network-inventory.service
+
+[Install]
+WantedBy=timers.target

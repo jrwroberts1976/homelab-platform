@@ -1,0 +1,92 @@
+---
+- name: Validate ASUS inventory target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == "monitor-01"
+      - ansible_facts.distribution == "Debian"
+      - "'192.168.2.52' in ansible_facts.all_ipv4_addresses"
+    fail_msg: >-
+      Refusing to deploy ASUS network inventory to an unexpected host.
+
+- name: Verify ASUS inventory SSH key exists
+  ansible.builtin.stat:
+    path: "{{ asus_network_inventory_ssh_key }}"
+  register: asus_network_inventory_key
+
+- name: Require ASUS inventory SSH key
+  ansible.builtin.assert:
+    that:
+      - asus_network_inventory_key.stat.exists
+      - asus_network_inventory_key.stat.isreg
+      - asus_network_inventory_key.stat.mode == "0600"
+    fail_msg: >-
+      ASUS inventory SSH private key is missing or has unsafe permissions.
+
+- name: Verify ASUS host key exists
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -F
+      - "{{ asus_network_inventory_router }}"
+      - -f
+      - "{{ asus_network_inventory_known_hosts }}"
+  changed_when: false
+
+- name: Ensure ASUS inventory state directory exists
+  ansible.builtin.file:
+    path: "{{ asus_network_inventory_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Ensure ASUS inventory textfile directory exists
+  ansible.builtin.file:
+    path: "{{ asus_network_inventory_textfile_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install ASUS network inventory collector
+  ansible.builtin.template:
+    src: asus-network-inventory.py.j2
+    dest: /usr/local/sbin/asus-network-inventory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Validate rendered ASUS collector syntax
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - py_compile
+      - /usr/local/sbin/asus-network-inventory
+  changed_when: false
+
+- name: Install ASUS inventory service
+  ansible.builtin.template:
+    src: asus-network-inventory.service.j2
+    dest: /etc/systemd/system/asus-network-inventory.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install ASUS inventory timer
+  ansible.builtin.template:
+    src: asus-network-inventory.timer.j2
+    dest: /etc/systemd/system/asus-network-inventory.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Enable and start ASUS inventory timer
+  ansible.builtin.systemd_service:
+    name: asus-network-inventory.timer
+    enabled: true
+    state: started

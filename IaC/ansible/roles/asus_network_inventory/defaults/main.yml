@@ -1,0 +1,15 @@
+---
+asus_network_inventory_router: "192.168.2.1"
+asus_network_inventory_router_user: "james"
+
+asus_network_inventory_ssh_key: "/root/.ssh/id_ed25519_asus_inventory"
+asus_network_inventory_known_hosts: "/root/.ssh/known_hosts"
+
+asus_network_inventory_state_dir: "/var/lib/asus-network-inventory"
+asus_network_inventory_database: "/var/lib/asus-network-inventory/assets.db"
+
+asus_network_inventory_textfile_dir: "/var/lib/prometheus/node-exporter"
+asus_network_inventory_metrics_file: "/var/lib/prometheus/node-exporter/asus-network-assets.prom"
+
+asus_network_inventory_interval: "5min"
+asus_network_inventory_offline_grace_seconds: 900
