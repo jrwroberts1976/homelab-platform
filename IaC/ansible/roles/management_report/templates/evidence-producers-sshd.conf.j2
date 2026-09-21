@@ -1,0 +1,13 @@
+# Managed by Ansible.
+# Restricted SFTP-only accounts used by specialist evidence producers.
+
+{% for producer in management_report_evidence_producers %}
+Match User {{ producer.user }}
+    ChrootDirectory {{ management_report_evidence_sources_directory }}/{{ producer.name }}
+    ForceCommand internal-sftp
+    DisableForwarding yes
+    PasswordAuthentication no
+    PubkeyAuthentication yes
+    AuthorizedKeysFile /etc/ssh/authorized_keys/%u
+
+{% endfor %}

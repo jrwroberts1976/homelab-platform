@@ -1,0 +1,55 @@
+#!/usr/bin/env python3
+
+import smtplib
+from email.message import EmailMessage
+from pathlib import Path
+
+
+REPORT = Path(
+    "{{ management_report_output_directory }}/latest.txt"
+)
+
+SMTP_HOST = "{{ management_report_mail_host }}"
+SMTP_PORT = {{ management_report_mail_port }}
+MAIL_FROM = "{{ management_report_mail_from }}"
+MAIL_TO = "{{ management_report_mail_to }}"
+
+SUBJECT = "Homelab Daily Management Report"
+
+
+def main():
+    if not REPORT.is_file():
+        raise SystemExit(
+            "Management report is missing: " + str(REPORT)
+        )
+
+    body = REPORT.read_text(encoding="utf-8")
+
+    if not body.strip():
+        raise SystemExit("Management report is empty")
+
+    message = EmailMessage()
+    message["From"] = MAIL_FROM
+    message["To"] = MAIL_TO
+    message["Subject"] = SUBJECT
+    message.set_content(body)
+
+    with smtplib.SMTP(
+        SMTP_HOST,
+        SMTP_PORT,
+        timeout=15,
+    ) as smtp:
+        smtp.send_message(message)
+
+    print(
+        "Management report sent to "
+        + MAIL_TO
+        + " via "
+        + SMTP_HOST
+        + ":"
+        + str(SMTP_PORT)
+    )
+
+
+if __name__ == "__main__":
+    main()

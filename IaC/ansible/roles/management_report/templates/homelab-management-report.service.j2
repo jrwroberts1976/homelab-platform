@@ -1,0 +1,15 @@
+[Unit]
+Description=Homelab daily management report
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+
+ExecStart=/usr/local/sbin/homelab-management-report-collector
+ExecStart=/usr/local/sbin/homelab-management-report
+ExecStart=/usr/local/sbin/homelab-management-report-mailer
+
+TimeoutStartSec=900

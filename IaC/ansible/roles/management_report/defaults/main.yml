@@ -29,3 +29,32 @@ management_report_evidence_file: "/var/lib/homelab-management-report/evidence.js
 management_report_patch_freshness_minutes: 90
 
 management_report_zabbix_token_file: "/etc/homelab-management-report/zabbix-api-token"
+
+# Specialist evidence received from dedicated producer hosts.
+management_report_evidence_sources_directory: "{{ management_report_state_directory }}/evidence-sources"
+
+# Greenbone specialist evidence.
+management_report_greenbone_evidence_file: "{{ management_report_evidence_sources_directory }}/greenbone-01/incoming/managed.json"
+management_report_greenbone_freshness_hours: 30
+
+# Passive network-security evidence from sensor-01.
+management_report_sensor_evidence_file: "{{ management_report_evidence_sources_directory }}/sensor-01/incoming/evidence.json"
+management_report_sensor_freshness_minutes: 45
+
+management_report_evidence_producers:
+  - name: sensor-01
+    user: evidence-sensor
+  - name: greenbone-01
+    user: evidence-greenbone
+    public_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOpjrYAfyc3HKsbH70Pb6vJMEAqIaeffe5FbeljHheC3 greenbone-01 evidence transfer to monitor-01"
+
+# Human-readable daily management report.
+management_report_mail_host: "mail-relay-01"
+management_report_mail_port: 25
+management_report_mail_from: "management-report@jameshouse"
+management_report_mail_to: "jrwroberts1976@gmail.com"
+
+# Daily management-report automation.
+management_report_enable_timer: true
+management_report_schedule: "*-*-* 06:00:00"
+management_report_randomized_delay_seconds: 0

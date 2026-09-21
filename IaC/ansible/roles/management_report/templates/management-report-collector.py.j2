@@ -17,6 +17,10 @@ EXPECTED_HOST_COUNT = len(EXPECTED_HOSTS)
 PATCH_FRESHNESS_SECONDS = {{ management_report_patch_freshness_minutes }} * 60
 LOKI_EVIDENCE_SECONDS = {{ management_report_evidence_hours }} * 3600
 OUTPUT_FILE = Path("{{ management_report_evidence_file }}")
+GREENBONE_EVIDENCE_FILE = Path("{{ management_report_greenbone_evidence_file }}")
+GREENBONE_FRESHNESS_SECONDS = {{ management_report_greenbone_freshness_hours }} * 3600
+SENSOR_EVIDENCE_FILE = Path("{{ management_report_sensor_evidence_file }}")
+SENSOR_FRESHNESS_SECONDS = {{ management_report_sensor_freshness_minutes }} * 60
 
 QUERIES = {
     "node_exporter_up": 'up{job="node-exporter"}',
@@ -114,6 +118,439 @@ def by_target_name(results):
         values[target] = float(result["value"][1])
 
     return values
+
+
+
+
+def sensor_evidence():
+    base = {
+        "source": str(SENSOR_EVIDENCE_FILE),
+        "freshness_threshold_seconds": SENSOR_FRESHNESS_SECONDS,
+    }
+
+    if not SENSOR_EVIDENCE_FILE.is_file():
+        return {
+            **base,
+            "status": "missing",
+            "reason": "sensor-01 evidence file is missing",
+        }
+
+    try:
+        payload = json.loads(
+            SENSOR_EVIDENCE_FILE.read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": f"Unable to read valid JSON: {exc}",
+        }
+
+    if not isinstance(payload, dict):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "sensor-01 evidence must be a JSON object",
+        }
+
+    required = {
+        "schema_version",
+        "sensor_host",
+        "collected_at",
+        "requested_window_hours",
+        "coverage",
+        "assurance_gaps",
+        "suricata",
+        "zeek",
+    }
+
+    missing = sorted(required - set(payload))
+    if missing:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "Missing required fields: " + ", ".join(missing),
+        }
+
+    if payload["schema_version"] != 2:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "Unsupported sensor schema_version: "
+                f"{payload['schema_version']!r}"
+            ),
+        }
+
+    if payload["sensor_host"] != "sensor-01":
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "Unexpected sensor_host: "
+                f"{payload['sensor_host']!r}"
+            ),
+        }
+
+    if payload["requested_window_hours"] != 24:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "Unexpected requested_window_hours: "
+                f"{payload['requested_window_hours']!r}"
+            ),
+        }
+
+    try:
+        evidence_time = datetime.fromisoformat(
+            str(payload["collected_at"]).replace("Z", "+00:00")
+        )
+    except ValueError:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "collected_at is not a valid ISO-8601 timestamp",
+        }
+
+    if evidence_time.tzinfo is None:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "collected_at must include a timezone",
+        }
+
+    evidence_time = evidence_time.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    age_seconds = (now - evidence_time).total_seconds()
+
+    if age_seconds < -300:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "collected_at is unexpectedly in the future",
+            "collected_at": payload["collected_at"],
+            "age_seconds": age_seconds,
+        }
+
+    identity = {
+        **base,
+        "schema_version": payload["schema_version"],
+        "sensor_host": payload["sensor_host"],
+        "collected_at": payload["collected_at"],
+        "age_seconds": max(0, age_seconds),
+        "requested_window_hours": payload["requested_window_hours"],
+    }
+
+    if age_seconds > SENSOR_FRESHNESS_SECONDS:
+        return {
+            **identity,
+            "status": "stale",
+            "reason": "sensor-01 evidence exceeds freshness threshold",
+        }
+
+    coverage = payload["coverage"]
+    assurance_gaps = payload["assurance_gaps"]
+    suricata = payload["suricata"]
+    zeek = payload["zeek"]
+
+    if not isinstance(coverage, dict):
+        return {
+            **identity,
+            "status": "invalid",
+            "reason": "coverage must be an object",
+        }
+
+    if not isinstance(assurance_gaps, list):
+        return {
+            **identity,
+            "status": "invalid",
+            "reason": "assurance_gaps must be a list",
+        }
+
+    if not isinstance(suricata, dict) or not isinstance(zeek, dict):
+        return {
+            **identity,
+            "status": "invalid",
+            "reason": "suricata and zeek must be objects",
+        }
+
+    suricata_rolling = suricata.get("rolling")
+    zeek_conn = zeek.get("conn")
+    zeek_dns = zeek.get("dns")
+    zeek_notice = zeek.get("notice")
+    zeek_ssl = zeek.get("ssl")
+
+    if not isinstance(suricata_rolling, dict):
+        return {
+            **identity,
+            "status": "invalid",
+            "reason": "suricata.rolling must be an object",
+        }
+
+    for name, value in (
+        ("zeek.conn", zeek_conn),
+        ("zeek.dns", zeek_dns),
+        ("zeek.notice", zeek_notice),
+        ("zeek.ssl", zeek_ssl),
+    ):
+        if not isinstance(value, dict):
+            return {
+                **identity,
+                "status": "invalid",
+                "reason": name + " must be an object",
+            }
+
+    return {
+        **identity,
+        "status": "ok",
+        "coverage": coverage,
+        "assurance_gap_count": len(assurance_gaps),
+        "assurance_gaps": assurance_gaps,
+        "suricata": {
+            "total": suricata_rolling.get("total"),
+            "significant": suricata_rolling.get("significant"),
+            "severity_counts": suricata_rolling.get(
+                "severity_counts", {}
+            ),
+            "inbound_no_response": suricata_rolling.get(
+                "inbound_no_response"
+            ),
+            "inbound_with_response": suricata_rolling.get(
+                "inbound_with_response"
+            ),
+            "outbound": suricata_rolling.get("outbound"),
+        },
+        "zeek": {
+            "conn_records": zeek_conn.get("record_count"),
+            "dns_records": zeek_dns.get("record_count"),
+            "notice_records": zeek_notice.get("record_count"),
+            "ssl_records": zeek_ssl.get("record_count"),
+            "notice_types": zeek_notice.get("notice_types", {}),
+        },
+    }
+
+
+def greenbone_evidence():
+    base = {
+        "source": str(GREENBONE_EVIDENCE_FILE),
+        "freshness_threshold_seconds": GREENBONE_FRESHNESS_SECONDS,
+    }
+
+    if not GREENBONE_EVIDENCE_FILE.is_file():
+        return {
+            **base,
+            "status": "missing",
+            "reason": "Greenbone evidence file is missing",
+        }
+
+    try:
+        payload = json.loads(
+            GREENBONE_EVIDENCE_FILE.read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": f"Unable to read valid JSON: {exc}",
+        }
+
+    if not isinstance(payload, dict):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "Greenbone evidence must be a JSON object",
+        }
+
+    required = {
+        "schema_version",
+        "mode",
+        "task_name",
+        "report_id",
+        "collected_at",
+        "severity_counts",
+        "actionable_count",
+        "actionable_findings",
+        "accepted_risk_count",
+    }
+
+    missing = sorted(required - set(payload))
+    if missing:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "Missing required fields: " + ", ".join(missing),
+        }
+
+    if payload["schema_version"] != 1:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "Unsupported Greenbone schema_version: "
+                f"{payload['schema_version']!r}"
+            ),
+        }
+
+    if payload["mode"] != "managed":
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "Unexpected Greenbone evidence mode: "
+                f"{payload['mode']!r}"
+            ),
+        }
+
+    severity_counts = payload["severity_counts"]
+    if not isinstance(severity_counts, dict):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "severity_counts must be an object",
+        }
+
+    required_severities = {
+        "Critical",
+        "High",
+        "Medium",
+        "Low",
+        "Log",
+    }
+
+    missing_severities = sorted(
+        required_severities - set(severity_counts)
+    )
+
+    if missing_severities:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "Missing severity counts: "
+                + ", ".join(missing_severities)
+            ),
+        }
+
+    for severity in required_severities:
+        value = severity_counts[severity]
+
+        if (
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or value < 0
+        ):
+            return {
+                **base,
+                "status": "invalid",
+                "reason": (
+                    f"Invalid {severity} severity count: {value!r}"
+                ),
+            }
+
+    actionable_count = payload["actionable_count"]
+    actionable_findings = payload["actionable_findings"]
+    accepted_risk_count = payload["accepted_risk_count"]
+
+    if (
+        isinstance(actionable_count, bool)
+        or not isinstance(actionable_count, int)
+        or actionable_count < 0
+    ):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "actionable_count must be a non-negative integer",
+        }
+
+    if not isinstance(actionable_findings, list):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "actionable_findings must be a list",
+        }
+
+    if actionable_count != len(actionable_findings):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "actionable_count does not match "
+                "actionable_findings length"
+            ),
+        }
+
+    if (
+        isinstance(accepted_risk_count, bool)
+        or not isinstance(accepted_risk_count, int)
+        or accepted_risk_count < 0
+    ):
+        return {
+            **base,
+            "status": "invalid",
+            "reason": (
+                "accepted_risk_count must be a non-negative integer"
+            ),
+        }
+
+    try:
+        evidence_time = datetime.fromisoformat(
+            str(payload["collected_at"]).replace("Z", "+00:00")
+        )
+    except ValueError:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "collected_at is not a valid ISO-8601 timestamp",
+        }
+
+    if evidence_time.tzinfo is None:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "collected_at must include a timezone",
+        }
+
+    evidence_time = evidence_time.astimezone(timezone.utc)
+    now = datetime.now(timezone.utc)
+    age_seconds = (now - evidence_time).total_seconds()
+
+    if age_seconds < -300:
+        return {
+            **base,
+            "status": "invalid",
+            "reason": "collected_at is unexpectedly in the future",
+            "collected_at": payload["collected_at"],
+            "age_seconds": age_seconds,
+        }
+
+    identity = {
+        **base,
+        "schema_version": payload["schema_version"],
+        "mode": payload["mode"],
+        "task_name": payload["task_name"],
+        "report_id": payload["report_id"],
+        "collected_at": payload["collected_at"],
+        "age_seconds": max(0, age_seconds),
+    }
+
+    if age_seconds > GREENBONE_FRESHNESS_SECONDS:
+        return {
+            **identity,
+            "status": "stale",
+            "reason": (
+                "Greenbone evidence exceeds freshness threshold"
+            ),
+        }
+
+    return {
+        **identity,
+        "status": "ok",
+        "severity_counts": severity_counts,
+        "actionable_count": actionable_count,
+        "actionable_findings": actionable_findings,
+        "accepted_risk_count": accepted_risk_count,
+    }
 
 
 def main():
@@ -241,6 +678,8 @@ def main():
     evidence = {
         "schema_version": 1,
         "collected_at": collected_at,
+        "greenbone": greenbone_evidence(),
+        "network_sensor": sensor_evidence(),
         "loki": {
             "evidence_window_hours": {{ management_report_evidence_hours }},
             "expected_hosts": EXPECTED_HOST_COUNT,

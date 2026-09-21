@@ -59,6 +59,32 @@ These are the current LAN/VPN administration and service endpoints that are expl
 | Proxmox VE — `Proxmox-2` | `https://192.168.2.71:8006/` | Cluster node 2 web UI |
 | BirdNET-Go | `http://192.168.2.220:8080/` | `docker-01` web endpoint |
 
+## API and service integration register
+
+This register records machine-to-machine integrations across the active estate. It covers HTTP/REST APIs, JSON-RPC, SMTP, SSH/SFTP, webhooks and comparable service connections.
+
+Every machine-to-machine integration must have a documented source, destination, purpose, protocol/port, authentication method, secret ownership/location and data direction. Secrets themselves must not be stored in this document or committed to Git.
+
+| Source | Destination | Protocol / port | Purpose | Authentication / secret handling | Direction | Status |
+|---|---|---|---|---|---|---|
+| `monitor-01` | Prometheus on `monitor-01` | HTTP / TCP 9090 | Management-report metrics and patch evidence | Internal service access; no credential recorded in the current collector | Local/internal request | ACTIVE |
+| `monitor-01` | Alertmanager on `monitor-01` | HTTP / TCP 9093 | Active-alert evidence for management reporting | Internal service access; no credential recorded in the current collector | Local/internal request | ACTIVE |
+| `monitor-01` | Loki on `monitor-01` | HTTP / TCP 3100 | Logging and host/job evidence for management reporting | Internal service access; no credential recorded in the current collector | Local/internal request | ACTIVE |
+| `monitor-01` | `zabbix-01` | HTTP JSON-RPC / TCP 8080 | Host inventory and active-problem evidence for management reporting | Zabbix API token; runtime token file managed outside Git | Outbound from `monitor-01` | ACTIVE |
+| Homelab services | `mail-relay-01` | SMTP / TCP 25 | Central internal mail relay | Internal relay policy; upstream Gmail credentials remain on `mail-relay-01` | Outbound to relay | ACTIVE |
+| `mail-relay-01` | Gmail SMTP | SMTP with TLS / TCP 587 | External delivery of homelab email | Protected SMTP/SASL credentials on `mail-relay-01`; not stored in Git | Outbound to Internet | ACTIVE |
+| `greenbone-01` | `monitor-01` | SSH/SFTP | Transfer managed vulnerability evidence into the management-report evidence store | Dedicated restricted `evidence-greenbone` identity/key; implementation complete | Outbound from `greenbone-01` | ACTIVE |
+| `sensor-01` | `monitor-01` | SSH/SFTP | Transfer network-security evidence into the management-report evidence store | Dedicated restricted `evidence-sensor` identity/key; private key remains outside Git; pinned `monitor-01` ED25519 host key | Outbound from `sensor-01` | ACTIVE |
+| TBD | AT API | HTTPS / TCP 443 | Future AT API integration | Authentication and secret location to be defined before implementation | Outbound to Internet | PLANNED |
+
+## Integration governance
+
+The integration register is part of the canonical current-state record and must be updated when an integration is introduced, removed, materially changed, or moved between hosts.
+
+New external API integrations should initially be implemented directly only where the ownership and security boundary remain clear. A dedicated internal API gateway or `api-01` service is not currently justified and must not be represented as deployed. If the number or complexity of external API integrations grows, centralised API management can be reconsidered as a separate architecture decision.
+
+For authenticated integrations, this register records the authentication mechanism and secret ownership/location, but never the credential, token, password or private-key material itself.
+
 ## Retired identities
 
 The following names must not be treated as active production hosts:
@@ -401,8 +427,19 @@ Validated state includes:
 - dedicated capture interface `enx00249b63b38a` up in promiscuous mode;
 - capture gate present;
 - Suricata 8.0.6 active/enabled;
-- Zeek 8.0.10 active;
+- Zeek 8.0.10 active and operational under the IaC-managed `homelab-zeek.service`; ZeekControl reports the standalone process running against `enx00249b63b38a`;
 - current Suricata and Zeek logs observed during the 17 September audit;
+- the network-security evidence collector produces schema version 2 evidence using a 24-hour evidence window on a 15-minute collection interval;
+- evidence is generated locally at `/var/lib/homelab-network-sensor-evidence/evidence.json`;
+- successful collection publishes evidence from `sensor-01` to `monitor-01` over restricted SFTP using the dedicated `evidence-sensor` identity;
+- publication uses pinned SSH host-key validation and an atomic `incoming/.evidence.json.tmp` to `incoming/evidence.json` rename on the receiver;
+- the sensor transfer private key is root-only runtime material and is deliberately not stored in Git;
+- end-to-end publication was proven on 21 September 2026 by matching SHA-256 hashes between the local and received evidence files;
+- the received evidence was validated as schema version 2 with `sensor_host=sensor-01`, and no temporary transfer file remained after publication;
+- the transport Ansible deployment was rerun with `changed=0` and `failed=0`, proving deployment idempotency;
+- transport implementation is captured in commit `873c43dbf5776b8563a7bc6662844a9b068aa532`; the commit is merged into `main`, and the completed local and remote `feature/sensor-evidence-transport` branches have been removed;
+- consumption of the received `sensor-01` evidence by the management-report collector and renderer was functionally proven on 21 September 2026; the `Network Security Sensor` section rendered current schema-version-2 evidence with complete Suricata and Zeek coverage and zero assurance gaps;
+- Zeek health was revalidated on 21 September 2026 using the correct IaC-managed `homelab-zeek.service` and `/opt/zeek/bin/zeekctl status`; `conn.log`, `dns.log` and `http.log` were actively updating, confirming live capture. The earlier `zeek.service` inactive result was caused by checking a non-existent unit name and was not a Zeek outage.
 - Node Exporter, Alloy and Zabbix Agent 2 active;
 - zero failed systemd units.
 
@@ -577,3 +614,33 @@ Outstanding recovery gaps include:
 - protection of `media-01` user media, BirdNET persistent state and controller recovery state.
 
 The suspect WD 4 TB disk must not be the sole trusted backup copy.
+
+### sensor-01 management-report integration — verified 2026-09-21
+
+The passive network-security evidence pipeline is operational end to end:
+
+`sensor-01` -> restricted SFTP evidence transport -> `monitor-01` -> management-report collector -> management-report renderer.
+
+Verified production behaviour:
+
+- sensor evidence schema version: 2
+- sensor identity: `sensor-01`
+- requested evidence window: 24 hours
+- evidence freshness validation: operational
+- Suricata coverage: complete
+- Zeek coverage: complete
+- assurance gaps: 0
+- management-report collector consumption: verified
+- management-report renderer output: verified
+- management-report timer: active and enabled
+- scheduled report time: 06:00
+- collector/renderer functional test performed without invoking the mailer
+- Greenbone scanning was not triggered by the validation
+
+The functional proof on 2026-09-21 successfully rendered a
+`Network Security Sensor` section in the management report containing
+Suricata and Zeek evidence.
+
+The observed event counts are evidence data, not automatically confirmed
+security incidents. Suricata significance/noise classification should be
+reviewed separately before using event counts as incident counts.

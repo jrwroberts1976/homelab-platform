@@ -1,0 +1,11 @@
+[Unit]
+Description=Generate and email Homelab daily management report
+
+[Timer]
+OnCalendar={{ management_report_schedule }}
+RandomizedDelaySec={{ management_report_randomized_delay_seconds }}
+Persistent=true
+Unit=homelab-management-report.service
+
+[Install]
+WantedBy=timers.target

@@ -1,0 +1,546 @@
+#!/usr/bin/env python3
+
+import json
+from datetime import datetime, timezone
+from pathlib import Path
+
+
+EVIDENCE_FILE = Path("{{ management_report_evidence_file }}")
+OUTPUT_DIRECTORY = Path("{{ management_report_output_directory }}")
+
+
+def number(value):
+    if isinstance(value, int) and not isinstance(value, bool):
+        return str(value)
+    return "UNKNOWN"
+
+
+
+def network_sensor_section(data):
+    sensor = data.get("network_sensor")
+
+    lines = [
+        "Network Security Sensor",
+        "-----------------------",
+    ]
+
+    if not isinstance(sensor, dict):
+        lines.extend([
+            "Status: EVIDENCE UNAVAILABLE",
+            "Reason: Network sensor evidence section is absent",
+        ])
+        return lines
+
+    status = sensor.get("status", "unknown")
+
+    if status != "ok":
+        lines.append("Status: EVIDENCE " + str(status).upper())
+        lines.append(
+            "Reason: "
+            + str(sensor.get("reason", "No reason supplied"))
+        )
+
+        if sensor.get("collected_at"):
+            lines.append(
+                "Last evidence: " + str(sensor["collected_at"])
+            )
+
+        return lines
+
+    coverage = sensor.get("coverage", {})
+    suricata = sensor.get("suricata", {})
+    zeek = sensor.get("zeek", {})
+
+    suricata_coverage = coverage.get("suricata", {})
+    zeek_coverage = coverage.get("zeek", {})
+
+    lines.extend([
+        "Status: Evidence current",
+        "Last evidence: "
+        + str(sensor.get("collected_at", "UNKNOWN")),
+        "Evidence window: "
+        + number(sensor.get("requested_window_hours"))
+        + " hours",
+        "Assurance gaps: "
+        + number(sensor.get("assurance_gap_count")),
+        "Suricata coverage: "
+        + str(suricata_coverage.get("status", "UNKNOWN")),
+        "Suricata alerts/events: "
+        + number(suricata.get("total"))
+        + " total | "
+        + number(suricata.get("significant"))
+        + " significant",
+        "Suricata inbound with response: "
+        + number(suricata.get("inbound_with_response"))
+        + " | inbound no response: "
+        + number(suricata.get("inbound_no_response"))
+        + " | outbound: "
+        + number(suricata.get("outbound")),
+        "Zeek coverage: "
+        + str(zeek_coverage.get("status", "UNKNOWN")),
+        "Zeek records: "
+        + number(zeek.get("conn_records"))
+        + " connections | "
+        + number(zeek.get("dns_records"))
+        + " DNS | "
+        + number(zeek.get("ssl_records"))
+        + " SSL | "
+        + number(zeek.get("notice_records"))
+        + " notices",
+    ])
+
+    return lines
+
+
+def greenbone_section(data):
+    g = data.get("greenbone")
+
+    lines = [
+        "Greenbone Vulnerability Management",
+        "----------------------------------",
+    ]
+
+    if not isinstance(g, dict):
+        lines.extend([
+            "Status: EVIDENCE UNAVAILABLE",
+            "Reason: Greenbone evidence section is absent",
+        ])
+        return lines
+
+    status = g.get("status", "unknown")
+
+    if status != "ok":
+        lines.append("Status: EVIDENCE " + str(status).upper())
+        lines.append(
+            "Reason: "
+            + str(g.get("reason", "No reason supplied"))
+        )
+
+        if g.get("collected_at"):
+            lines.append(
+                "Last evidence: " + str(g["collected_at"])
+            )
+
+        return lines
+
+    severity = g.get("severity_counts")
+
+    if not isinstance(severity, dict):
+        lines.extend([
+            "Status: EVIDENCE INVALID",
+            "Reason: severity_counts is unavailable",
+        ])
+        return lines
+
+    lines.extend([
+        (
+            "Critical: "
+            + number(severity.get("Critical"))
+            + " | High: "
+            + number(severity.get("High"))
+            + " | Medium: "
+            + number(severity.get("Medium"))
+            + " | Low: "
+            + number(severity.get("Low"))
+        ),
+        "Informational / Log: " + number(severity.get("Log")),
+        (
+            "Actionable findings: "
+            + number(g.get("actionable_count"))
+        ),
+        (
+            "Accepted risks: "
+            + number(g.get("accepted_risk_count"))
+        ),
+        "Last evidence: " + str(g.get("collected_at", "UNKNOWN")),
+        "Evidence: current",
+        "Status: Scan completed successfully",
+    ])
+
+    return lines
+
+
+def list_length(value):
+    if isinstance(value, list):
+        return len(value)
+    return None
+
+
+def management_summary(data):
+    prometheus = data.get("prometheus", {})
+    zabbix = data.get("zabbix", {})
+    alertmanager = data.get("alertmanager", {})
+    greenbone = data.get("greenbone", {})
+
+    lines = [
+        "Management Summary",
+        "------------------",
+    ]
+
+    expected = prometheus.get("expected_hosts")
+    reporting = prometheus.get("node_exporter_reporting_hosts")
+    patch_reporting = prometheus.get("patch_reporting_hosts")
+    patch_fresh = prometheus.get("patch_fresh_hosts")
+
+    if isinstance(reporting, int) and isinstance(expected, int):
+        lines.append(
+            "Estate monitoring: "
+            + str(reporting)
+            + "/"
+            + str(expected)
+            + " hosts reporting"
+        )
+    else:
+        lines.append("Estate monitoring: UNKNOWN")
+
+    if (
+        isinstance(patch_fresh, int)
+        and isinstance(patch_reporting, int)
+    ):
+        lines.append(
+            "Patch evidence: "
+            + str(patch_fresh)
+            + "/"
+            + str(patch_reporting)
+            + " current"
+        )
+    else:
+        lines.append("Patch evidence: UNKNOWN")
+
+    if (
+        isinstance(greenbone, dict)
+        and greenbone.get("status") == "ok"
+        and isinstance(greenbone.get("actionable_count"), int)
+    ):
+        lines.append(
+            "Security vulnerabilities: "
+            + str(greenbone["actionable_count"])
+            + " actionable"
+        )
+    else:
+        status = "UNKNOWN"
+        if isinstance(greenbone, dict):
+            status = str(
+                greenbone.get("status", "unknown")
+            ).upper()
+
+        lines.append(
+            "Security vulnerabilities: "
+            + "evidence "
+            + status
+        )
+
+    zabbix_count = zabbix.get("active_problem_count")
+    prometheus_count = prometheus.get("firing_alert_count")
+    alertmanager_count = alertmanager.get("active_alert_count")
+
+    counts = [
+        value
+        for value in (
+            zabbix_count,
+            prometheus_count,
+            alertmanager_count,
+        )
+        if isinstance(value, int)
+    ]
+
+    if len(counts) == 3:
+        lines.append(
+            "Active infrastructure problems/alerts: "
+            + str(sum(counts))
+        )
+    else:
+        lines.append(
+            "Active infrastructure problems/alerts: UNKNOWN"
+        )
+
+    return lines
+
+
+def attention_section(data):
+    prometheus = data.get("prometheus", {})
+    zabbix = data.get("zabbix", {})
+    alertmanager = data.get("alertmanager", {})
+
+    zabbix_problems = zabbix.get("active_problems", [])
+    prometheus_alerts = prometheus.get("firing_alerts", [])
+    alertmanager_alerts = alertmanager.get("active_alerts", [])
+
+    lines = [
+        "Attention Required",
+        "------------------",
+    ]
+
+    issue_found = False
+
+    if isinstance(zabbix_problems, list):
+        for problem in zabbix_problems:
+            if not isinstance(problem, dict):
+                continue
+
+            issue_found = True
+
+            hosts = problem.get("hosts", [])
+            if isinstance(hosts, list) and hosts:
+                host = ", ".join(str(x) for x in hosts)
+            else:
+                host = "UNKNOWN HOST"
+
+            name = str(
+                problem.get("name", "Unnamed Zabbix problem")
+            )
+
+            severity = str(
+                problem.get("severity", "unknown")
+            )
+
+            lines.append(
+                "Zabbix: "
+                + host
+                + " - "
+                + name
+                + " (severity "
+                + severity
+                + ")"
+            )
+
+    if isinstance(prometheus_alerts, list):
+        for alert in prometheus_alerts:
+            issue_found = True
+
+            if isinstance(alert, dict):
+                name = (
+                    alert.get("alertname")
+                    or alert.get("name")
+                    or alert.get("labels", {}).get("alertname")
+                    or "Unnamed Prometheus alert"
+                )
+            else:
+                name = str(alert)
+
+            lines.append("Prometheus: " + str(name))
+
+    if isinstance(alertmanager_alerts, list):
+        for alert in alertmanager_alerts:
+            issue_found = True
+
+            if isinstance(alert, dict):
+                labels = alert.get("labels", {})
+                name = (
+                    alert.get("alertname")
+                    or alert.get("name")
+                    or (
+                        labels.get("alertname")
+                        if isinstance(labels, dict)
+                        else None
+                    )
+                    or "Unnamed Alertmanager alert"
+                )
+            else:
+                name = str(alert)
+
+            lines.append("Alertmanager: " + str(name))
+
+    if not issue_found:
+        lines.append("No active infrastructure problems or alerts.")
+
+    return lines
+
+
+def monitoring_section(data):
+    prometheus = data.get("prometheus", {})
+    zabbix = data.get("zabbix", {})
+    alertmanager = data.get("alertmanager", {})
+    loki = data.get("loki", {})
+
+    lines = [
+        "Monitoring and Estate Health",
+        "----------------------------",
+    ]
+
+    if isinstance(prometheus, dict):
+        lines.extend([
+            (
+                "Prometheus expected hosts: "
+                + number(prometheus.get("expected_hosts"))
+            ),
+            (
+                "Node exporter reporting hosts: "
+                + number(
+                    prometheus.get(
+                        "node_exporter_reporting_hosts"
+                    )
+                )
+            ),
+            (
+                "Node exporter UP hosts: "
+                + number(
+                    prometheus.get("node_exporter_up_hosts")
+                )
+            ),
+            (
+                "Patch reporting hosts: "
+                + number(
+                    prometheus.get("patch_reporting_hosts")
+                )
+            ),
+            (
+                "Patch fresh hosts: "
+                + number(prometheus.get("patch_fresh_hosts"))
+            ),
+            (
+                "Prometheus firing alerts: "
+                + number(prometheus.get("firing_alert_count"))
+            ),
+        ])
+
+        missing = prometheus.get("missing_hosts", [])
+
+        if isinstance(missing, list):
+            lines.append(
+                "Prometheus missing hosts: "
+                + (
+                    ", ".join(str(x) for x in missing)
+                    if missing
+                    else "none"
+                )
+            )
+
+    if isinstance(zabbix, dict):
+        lines.extend([
+            (
+                "Zabbix reporting hosts: "
+                + number(zabbix.get("reporting_hosts"))
+            ),
+            (
+                "Zabbix active problems: "
+                + number(zabbix.get("active_problem_count"))
+            ),
+        ])
+
+        missing = zabbix.get("missing_hosts", [])
+
+        if isinstance(missing, list):
+            lines.append(
+                "Zabbix missing hosts: "
+                + (
+                    ", ".join(str(x) for x in missing)
+                    if missing
+                    else "none"
+                )
+            )
+
+    if isinstance(alertmanager, dict):
+        lines.append(
+            "Alertmanager active alerts: "
+            + number(alertmanager.get("active_alert_count"))
+        )
+
+    if isinstance(loki, dict):
+        lines.append(
+            "Loki reporting hosts: "
+            + number(loki.get("reporting_hosts"))
+        )
+
+        missing = loki.get("missing_hosts", [])
+
+        if isinstance(missing, list):
+            lines.append(
+                "Loki missing hosts: "
+                + (
+                    ", ".join(str(x) for x in missing)
+                    if missing
+                    else "none"
+                )
+            )
+
+    return lines
+
+
+def main():
+    if not EVIDENCE_FILE.is_file():
+        raise SystemExit(
+            "Management-report evidence file is missing: "
+            + str(EVIDENCE_FILE)
+        )
+
+    try:
+        data = json.loads(
+            EVIDENCE_FILE.read_text(encoding="utf-8")
+        )
+    except (OSError, UnicodeError, json.JSONDecodeError) as exc:
+        raise SystemExit(
+            "Unable to read management-report evidence: "
+            + str(exc)
+        )
+
+    if not isinstance(data, dict):
+        raise SystemExit(
+            "Management-report evidence must be a JSON object"
+        )
+
+    generated = datetime.now(timezone.utc)
+
+    lines = [
+        "Homelab Daily Management Report",
+        "===============================",
+        "",
+        "Generated: " + generated.isoformat(),
+        (
+            "Evidence collected: "
+            + str(data.get("collected_at", "UNKNOWN"))
+        ),
+        "",
+    ]
+
+    lines.extend(management_summary(data))
+    lines.append("")
+    lines.extend(attention_section(data))
+    lines.append("")
+    lines.extend(greenbone_section(data))
+    lines.append("")
+    lines.extend(network_sensor_section(data))
+    lines.append("")
+    lines.extend(monitoring_section(data))
+    lines.append("")
+
+    report = "\n".join(lines)
+
+    OUTPUT_DIRECTORY.mkdir(
+        parents=True,
+        exist_ok=True,
+        mode=0o750,
+    )
+
+    timestamp = generated.strftime("%Y%m%d-%H%M%S")
+    output = OUTPUT_DIRECTORY / (
+        "management-report-" + timestamp + ".txt"
+    )
+
+    temporary = output.with_suffix(".txt.tmp")
+
+    temporary.write_text(
+        report + "\n",
+        encoding="utf-8",
+    )
+
+    temporary.chmod(0o640)
+    temporary.replace(output)
+
+    latest = OUTPUT_DIRECTORY / "latest.txt"
+    latest_tmp = OUTPUT_DIRECTORY / "latest.txt.tmp"
+
+    latest_tmp.write_text(
+        report + "\n",
+        encoding="utf-8",
+    )
+
+    latest_tmp.chmod(0o640)
+    latest_tmp.replace(latest)
+
+    print(output)
+    print(latest)
+
+
+if __name__ == "__main__":
+    main()

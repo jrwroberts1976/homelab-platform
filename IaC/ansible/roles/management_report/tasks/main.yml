@@ -22,3 +22,115 @@
     owner: root
     group: root
     mode: "0750"
+
+- name: Create specialist evidence producer accounts
+  ansible.builtin.user:
+    name: "{{ item.user }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+  loop: "{{ management_report_evidence_producers }}"
+
+- name: Create specialist evidence sources directory
+  ansible.builtin.file:
+    path: "{{ management_report_evidence_sources_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create specialist evidence chroot directories
+  ansible.builtin.file:
+    path: "{{ management_report_evidence_sources_directory }}/{{ item.name }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop: "{{ management_report_evidence_producers }}"
+
+- name: Create specialist evidence incoming directories
+  ansible.builtin.file:
+    path: "{{ management_report_evidence_sources_directory }}/{{ item.name }}/incoming"
+    state: directory
+    owner: "{{ item.user }}"
+    group: "{{ item.user }}"
+    mode: "0750"
+  loop: "{{ management_report_evidence_producers }}"
+
+- name: Create specialist evidence authorized-keys directory
+  ansible.builtin.file:
+    path: /etc/ssh/authorized_keys
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install specialist evidence authorized keys
+  ansible.builtin.copy:
+    content: "{{ item.public_key }}\n"
+    dest: "/etc/ssh/authorized_keys/{{ item.user }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ management_report_evidence_producers }}"
+  when: item.public_key is defined
+
+- name: Install specialist evidence SSH configuration
+  ansible.builtin.template:
+    src: evidence-producers-sshd.conf.j2
+    dest: /etc/ssh/sshd_config.d/60-homelab-evidence-producers.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/sshd -t -f %s"
+  notify: Reload ssh
+
+
+- name: Install management report renderer
+  ansible.builtin.template:
+    src: management-report-renderer.py.j2
+    dest: /usr/local/sbin/homelab-management-report
+    owner: root
+    group: root
+    mode: "0750"
+
+
+- name: Install management report mailer
+  ansible.builtin.template:
+    src: management-report-mailer.py.j2
+    dest: /usr/local/sbin/homelab-management-report-mailer
+    owner: root
+    group: root
+    mode: "0750"
+
+
+- name: Install management report systemd service
+  ansible.builtin.template:
+    src: homelab-management-report.service.j2
+    dest: /etc/systemd/system/homelab-management-report.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd for management report
+
+- name: Install management report systemd timer
+  ansible.builtin.template:
+    src: homelab-management-report.timer.j2
+    dest: /etc/systemd/system/homelab-management-report.timer
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd for management report
+
+- name: Configure management report timer state
+  ansible.builtin.systemd_service:
+    name: homelab-management-report.timer
+    enabled: "{{ management_report_enable_timer | bool }}"
+    state: >-
+      {{
+        'started'
+        if management_report_enable_timer | bool
+        else 'stopped'
+      }}
+    daemon_reload: true
+  when: not ansible_check_mode
