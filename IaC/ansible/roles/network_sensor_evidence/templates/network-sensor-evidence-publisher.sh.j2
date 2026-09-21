@@ -1,0 +1,60 @@
+#!/bin/sh
+
+set -eu
+
+EVIDENCE="{{ network_sensor_evidence_file }}"
+KEY="{{ network_sensor_evidence_transfer_private_key }}"
+KNOWN_HOSTS="{{ network_sensor_evidence_transfer_known_hosts }}"
+HOST="{{ network_sensor_evidence_publish_host }}"
+USER="{{ network_sensor_evidence_publish_user }}"
+REMOTE="{{ network_sensor_evidence_publish_remote_file }}"
+REMOTE_TMP="incoming/.evidence.json.tmp"
+
+if [ ! -s "$EVIDENCE" ]; then
+    echo "Evidence file missing or empty: $EVIDENCE" >&2
+    exit 1
+fi
+
+if [ ! -r "$KEY" ]; then
+    echo "Transfer private key unavailable: $KEY" >&2
+    exit 1
+fi
+
+if [ ! -r "$KNOWN_HOSTS" ]; then
+    echo "Pinned known_hosts unavailable: $KNOWN_HOSTS" >&2
+    exit 1
+fi
+
+python3 - "$EVIDENCE" <<'PY'
+import json
+import sys
+
+path = sys.argv[1]
+
+with open(path, "r", encoding="utf-8") as handle:
+    data = json.load(handle)
+
+if data.get("schema_version") != 2:
+    raise SystemExit("Unexpected evidence schema_version")
+
+if data.get("sensor_host") != "sensor-01":
+    raise SystemExit("Unexpected sensor_host")
+PY
+
+BATCH="$(mktemp)"
+trap 'rm -f "$BATCH"' EXIT HUP INT TERM
+
+cat > "$BATCH" <<EOF_BATCH
+put $EVIDENCE $REMOTE_TMP
+rename $REMOTE_TMP $REMOTE
+bye
+EOF_BATCH
+
+sftp \
+    -b "$BATCH" \
+    -o BatchMode=yes \
+    -o IdentitiesOnly=yes \
+    -o StrictHostKeyChecking=yes \
+    -o UserKnownHostsFile="$KNOWN_HOSTS" \
+    -i "$KEY" \
+    "$USER@$HOST"

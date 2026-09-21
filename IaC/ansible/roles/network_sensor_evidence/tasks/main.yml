@@ -20,6 +20,100 @@
     cmd: python3 -m py_compile /usr/local/sbin/homelab-network-sensor-evidence
   changed_when: false
 
+- name: Create sensor evidence transfer directory
+  ansible.builtin.file:
+    path: "{{ network_sensor_evidence_transfer_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Check sensor evidence transfer private key
+  ansible.builtin.stat:
+    path: "{{ network_sensor_evidence_transfer_private_key }}"
+  register: network_sensor_evidence_transfer_key
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Require existing sensor evidence transfer private key
+  ansible.builtin.assert:
+    that:
+      - network_sensor_evidence_transfer_key.stat.exists
+      - network_sensor_evidence_transfer_key.stat.isreg
+      - network_sensor_evidence_transfer_key.stat.pw_name == 'root'
+      - network_sensor_evidence_transfer_key.stat.gr_name == 'root'
+      - network_sensor_evidence_transfer_key.stat.mode == '0600'
+    fail_msg: >-
+      Existing root-owned mode 0600 sensor evidence transfer key is required.
+      The role deliberately does not generate or replace this secret key.
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Check sensor evidence transfer public key
+  ansible.builtin.stat:
+    path: "{{ network_sensor_evidence_transfer_public_key }}"
+  register: network_sensor_evidence_transfer_public_key_stat
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Require existing sensor evidence transfer public key
+  ansible.builtin.assert:
+    that:
+      - network_sensor_evidence_transfer_public_key_stat.stat.exists
+      - network_sensor_evidence_transfer_public_key_stat.stat.isreg
+    fail_msg: >-
+      Existing sensor evidence transfer public key is required.
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Verify sensor evidence public/private keypair
+  ansible.builtin.shell:
+    executable: /bin/sh
+    cmd: |
+      PRIVATE={{ network_sensor_evidence_transfer_private_key | quote }}
+      PUBLIC={{ network_sensor_evidence_transfer_public_key | quote }}
+
+      DERIVED="$(mktemp)"
+      STORED="$(mktemp)"
+
+      trap 'rm -f "$DERIVED" "$STORED"' EXIT HUP INT TERM
+
+      ssh-keygen -y -f "$PRIVATE" |
+        awk '{print $1, $2}' > "$DERIVED"
+
+      awk '{print $1, $2}' "$PUBLIC" > "$STORED"
+
+      cmp -s "$DERIVED" "$STORED"
+  changed_when: false
+  no_log: true
+  when: network_sensor_evidence_publish_enabled | bool
+  tags:
+    - sensor_evidence_keypair_test
+
+- name: Install pinned monitor host key
+  ansible.builtin.copy:
+    content: "{{ network_sensor_evidence_publish_host }} {{ network_sensor_evidence_monitor_host_key }}\n"
+    dest: "{{ network_sensor_evidence_transfer_known_hosts }}"
+    owner: root
+    group: root
+    mode: "0600"
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Install sensor evidence publisher
+  ansible.builtin.template:
+    src: network-sensor-evidence-publisher.sh.j2
+    dest: /usr/local/sbin/homelab-network-sensor-evidence-publisher
+    owner: root
+    group: root
+    mode: "0750"
+  when: network_sensor_evidence_publish_enabled | bool
+
+- name: Validate sensor evidence publisher shell syntax
+  ansible.builtin.command:
+    argv:
+      - /bin/sh
+      - -n
+      - /usr/local/sbin/homelab-network-sensor-evidence-publisher
+  changed_when: false
+  when: network_sensor_evidence_publish_enabled | bool
+
 - name: Install network sensor evidence systemd service
   ansible.builtin.template:
     src: homelab-network-sensor-evidence.service.j2

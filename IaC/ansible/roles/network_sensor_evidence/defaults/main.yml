@@ -20,3 +20,20 @@ network_sensor_evidence_collection_minutes: 15
 network_sensor_evidence_retention_hours: 26
 network_sensor_evidence_sample_limit: 10
 network_sensor_evidence_state_file: "/var/lib/homelab-network-sensor-evidence/state.json"
+
+# Secure publication of sensor evidence to monitor-01.
+#
+# The private transfer key is deliberately NOT managed by Git/Ansible.
+# It must already exist on sensor-01 with root-only permissions.
+network_sensor_evidence_publish_enabled: true
+network_sensor_evidence_publish_host: "{{ hostvars['monitor-01']['ansible_host'] }}"
+network_sensor_evidence_publish_user: "evidence-sensor"
+network_sensor_evidence_publish_remote_file: "incoming/evidence.json"
+
+network_sensor_evidence_transfer_directory: "/etc/homelab/evidence-transfer"
+network_sensor_evidence_transfer_private_key: "/etc/homelab/evidence-transfer/sensor-to-monitor"
+network_sensor_evidence_transfer_public_key: "/etc/homelab/evidence-transfer/sensor-to-monitor.pub"
+network_sensor_evidence_transfer_known_hosts: "/etc/homelab/evidence-transfer/known_hosts"
+
+# Pinned monitor-01 ED25519 host key.
+network_sensor_evidence_monitor_host_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJH2QYkVmOSh71farN0ybXrpLgFw4s1ysEDt6AXKi8vh"

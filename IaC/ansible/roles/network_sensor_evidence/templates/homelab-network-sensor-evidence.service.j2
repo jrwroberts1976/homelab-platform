@@ -8,6 +8,9 @@ Type=oneshot
 User=root
 Group=root
 ExecStart=/usr/bin/flock /run/homelab-network-sensor-evidence.lock /usr/local/sbin/homelab-network-sensor-evidence
+{% if network_sensor_evidence_publish_enabled | bool %}
+ExecStartPost=/usr/local/sbin/homelab-network-sensor-evidence-publisher
+{% endif %}
 Nice=10
 
 [Install]
