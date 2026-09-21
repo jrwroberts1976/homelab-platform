@@ -256,6 +256,11 @@ def build_summary(findings):
 def write_evidence(mode, task_name, report_id, counts, actionable, accepted):
     evidence_file = EVIDENCE_FILES[mode]
 
+    non_log_actionable = [
+        finding for finding in actionable
+        if finding["severity"] != "Log"
+    ]
+
     evidence = {
         "schema_version": 1,
         "collected_at": datetime.now(timezone.utc).isoformat(),
@@ -263,12 +268,9 @@ def write_evidence(mode, task_name, report_id, counts, actionable, accepted):
         "task_name": task_name,
         "report_id": report_id,
         "severity_counts": counts,
-        "actionable_count": len(actionable),
+        "actionable_count": len(non_log_actionable),
         "accepted_risk_count": len(accepted),
-        "actionable_findings": [
-            finding for finding in actionable
-            if finding["severity"] != "Log"
-        ],
+        "actionable_findings": non_log_actionable,
     }
 
     evidence_file.parent.mkdir(mode=0o750, parents=True, exist_ok=True)
