@@ -16,6 +16,17 @@ network_sensor_evidence_noise_signatures:
   - "SURICATA STREAM Packet with invalid ack"
   - "SURICATA STREAM SHUTDOWN RST invalid ack"
 
+# Narrowly scoped, validated expected activity.
+# Raw Suricata alerts remain untouched; these are excluded only from
+# management evidence significance classification.
+network_sensor_evidence_expected_activity:
+  - signature_id: 2003068
+    src_ip: "192.168.2.48"
+    dest_ip: "20.26.156.215"
+    dest_port: 22
+    proto: "TCP"
+    reason: "admin-01 GitHub SSH"
+
 network_sensor_evidence_collection_minutes: 15
 network_sensor_evidence_retention_hours: 26
 network_sensor_evidence_sample_limit: 10
