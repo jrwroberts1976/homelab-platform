@@ -623,3 +623,68 @@
         path: "{{ greenbone_scanning_gmp_config }}"
         state: absent
       no_log: true
+
+- name: Create Greenbone evidence transfer directory
+  ansible.builtin.file:
+    path: "{{ greenbone_scanning_evidence_transfer_directory }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+  when: greenbone_scanning_allow_deploy | bool
+
+- name: Install pinned monitor-01 ED25519 host key
+  ansible.builtin.copy:
+    content: >-
+      {{ greenbone_scanning_evidence_destination_host }}
+      {{ greenbone_scanning_monitor_ed25519_host_key }}
+    dest: "{{ greenbone_scanning_evidence_known_hosts }}"
+    owner: root
+    group: root
+    mode: "0644"
+  when: greenbone_scanning_allow_deploy | bool
+
+- name: Install Greenbone evidence publisher
+  ansible.builtin.template:
+    src: homelab-greenbone-publish-evidence.py.j2
+    dest: "{{ greenbone_scanning_evidence_publisher }}"
+    owner: root
+    group: root
+    mode: "0750"
+  when: greenbone_scanning_allow_deploy | bool
+
+
+- name: Install Greenbone managed scan systemd service
+  ansible.builtin.template:
+    src: homelab-greenbone-managed-scan.service.j2
+    dest: /etc/systemd/system/homelab-greenbone-managed-scan.service
+    owner: root
+    group: root
+    mode: "0644"
+  when: greenbone_scanning_allow_deploy | bool
+  notify: Reload systemd for Greenbone scanning
+
+- name: Install Greenbone managed scan systemd timer
+  ansible.builtin.template:
+    src: homelab-greenbone-managed-scan.timer.j2
+    dest: /etc/systemd/system/homelab-greenbone-managed-scan.timer
+    owner: root
+    group: root
+    mode: "0644"
+  when: greenbone_scanning_allow_deploy | bool
+  notify: Reload systemd for Greenbone scanning
+
+- name: Configure Greenbone managed scan timer state
+  ansible.builtin.systemd_service:
+    name: homelab-greenbone-managed-scan.timer
+    enabled: "{{ greenbone_scanning_enable_timers | bool }}"
+    state: >-
+      {{
+        'started'
+        if greenbone_scanning_enable_timers | bool
+        else 'stopped'
+      }}
+    daemon_reload: true
+  when:
+    - greenbone_scanning_allow_deploy | bool
+    - not ansible_check_mode

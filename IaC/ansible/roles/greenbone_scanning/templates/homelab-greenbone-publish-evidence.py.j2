@@ -1,0 +1,227 @@
+#!/usr/bin/env python3
+
+import hashlib
+import json
+import subprocess
+import sys
+import tempfile
+from pathlib import Path
+
+
+SOURCE = Path(
+    "{{ greenbone_scanning_managed_evidence_file }}"
+)
+
+KEY = Path(
+    "{{ greenbone_scanning_evidence_transfer_key }}"
+)
+
+KNOWN_HOSTS = Path(
+    "{{ greenbone_scanning_evidence_known_hosts }}"
+)
+
+HOST = "{{ greenbone_scanning_evidence_destination_host }}"
+USER = "{{ greenbone_scanning_evidence_destination_user }}"
+DESTINATION = "{{ greenbone_scanning_evidence_destination_file }}"
+TEMP_DESTINATION = DESTINATION + ".upload"
+
+
+REQUIRED_FIELDS = {
+    "schema_version",
+    "mode",
+    "task_name",
+    "report_id",
+    "collected_at",
+    "severity_counts",
+    "actionable_count",
+    "actionable_findings",
+    "accepted_risk_count",
+}
+
+SEVERITIES = {
+    "Critical",
+    "High",
+    "Medium",
+    "Low",
+    "Log",
+}
+
+
+def fail(message):
+    print("ERROR: " + message, file=sys.stderr)
+    raise SystemExit(1)
+
+
+def validate():
+    if not SOURCE.is_file():
+        fail("managed Greenbone evidence is missing")
+
+    try:
+        data = json.loads(
+            SOURCE.read_text(encoding="utf-8")
+        )
+    except Exception as exc:
+        fail("managed evidence is invalid JSON: " + str(exc))
+
+    if not isinstance(data, dict):
+        fail("managed evidence must be a JSON object")
+
+    missing = sorted(REQUIRED_FIELDS - set(data))
+
+    if missing:
+        fail(
+            "managed evidence is missing fields: "
+            + ", ".join(missing)
+        )
+
+    if data.get("schema_version") != 1:
+        fail("unsupported evidence schema version")
+
+    if data.get("mode") != "managed":
+        fail("evidence mode is not managed")
+
+    counts = data.get("severity_counts")
+
+    if not isinstance(counts, dict):
+        fail("severity_counts is not an object")
+
+    if not SEVERITIES.issubset(counts):
+        fail("severity_counts is incomplete")
+
+    for severity in SEVERITIES:
+        value = counts.get(severity)
+
+        if (
+            not isinstance(value, int)
+            or isinstance(value, bool)
+            or value < 0
+        ):
+            fail(
+                "invalid severity count for "
+                + severity
+            )
+
+    findings = data.get("actionable_findings")
+    actionable = data.get("actionable_count")
+
+    if not isinstance(findings, list):
+        fail("actionable_findings is not a list")
+
+    if (
+        not isinstance(actionable, int)
+        or isinstance(actionable, bool)
+        or actionable < 0
+    ):
+        fail("actionable_count is invalid")
+
+    if actionable != len(findings):
+        fail(
+            "actionable_count does not match "
+            "actionable_findings"
+        )
+
+    accepted = data.get("accepted_risk_count")
+
+    if (
+        not isinstance(accepted, int)
+        or isinstance(accepted, bool)
+        or accepted < 0
+    ):
+        fail("accepted_risk_count is invalid")
+
+    return data
+
+
+def sha256(path):
+    digest = hashlib.sha256()
+
+    with path.open("rb") as handle:
+        for block in iter(
+            lambda: handle.read(65536),
+            b"",
+        ):
+            digest.update(block)
+
+    return digest.hexdigest()
+
+
+def run_sftp(batch):
+    command = [
+        "sftp",
+        "-q",
+        "-b",
+        batch,
+        "-i",
+        str(KEY),
+        "-o",
+        "BatchMode=yes",
+        "-o",
+        "IdentitiesOnly=yes",
+        "-o",
+        "StrictHostKeyChecking=yes",
+        "-o",
+        "UserKnownHostsFile=" + str(KNOWN_HOSTS),
+        USER + "@" + HOST,
+    ]
+
+    return subprocess.run(
+        command,
+        check=False,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+    )
+
+
+def main():
+    data = validate()
+
+    if not KEY.is_file():
+        fail("evidence transfer private key is missing")
+
+    if not KNOWN_HOSTS.is_file():
+        fail("pinned known_hosts file is missing")
+
+    source_hash = sha256(SOURCE)
+
+    with tempfile.NamedTemporaryFile(
+        mode="w",
+        encoding="utf-8",
+        prefix="greenbone-sftp-",
+        delete=False,
+    ) as handle:
+        batch_path = Path(handle.name)
+
+        handle.write(
+            "put "
+            + str(SOURCE)
+            + " "
+            + TEMP_DESTINATION
+            + "\n"
+        )
+        handle.write(
+            "rename "
+            + TEMP_DESTINATION
+            + " "
+            + DESTINATION
+            + "\n"
+        )
+
+    try:
+        result = run_sftp(str(batch_path))
+    finally:
+        batch_path.unlink(missing_ok=True)
+
+    if result.returncode != 0:
+        fail(
+            "SFTP publication failed: "
+            + result.stderr.strip()
+        )
+
+    print("GREENBONE_EVIDENCE_PUBLICATION=PASS")
+    print("report_id=" + str(data["report_id"]))
+    print("source_sha256=" + source_hash)
+
+
+if __name__ == "__main__":
+    main()

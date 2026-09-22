@@ -1,0 +1,11 @@
+[Unit]
+Description=Run Homelab Greenbone managed infrastructure scan daily
+
+[Timer]
+OnCalendar={{ greenbone_scanning_managed_schedule }}
+RandomizedDelaySec={{ greenbone_scanning_managed_randomized_delay_seconds }}
+Persistent=true
+Unit=homelab-greenbone-managed-scan.service
+
+[Install]
+WantedBy=timers.target
