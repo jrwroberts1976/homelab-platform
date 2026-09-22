@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Compact incremental network-security evidence collector for sensor-01."""
-import gzip, ipaddress, json, os, socket, time
+import gzip, ipaddress, json, os, socket, subprocess, time
 from collections import Counter
 from datetime import datetime, timezone
 from pathlib import Path
@@ -16,6 +16,14 @@ EVIDENCE_FILE=Path({{ network_sensor_evidence_file | to_json }})
 NETWORKS=[ipaddress.ip_network(x) for x in {{ network_sensor_evidence_internal_networks | to_json }}]
 NOISE=set({{ network_sensor_evidence_noise_signatures | to_json }})
 EXPECTED={{ network_sensor_evidence_expected_activity | default([]) | to_json }}
+
+CAPTURE_INTERFACE={{ network_sensor_evidence_capture_interface | to_json }}
+SURICATA_STATS=Path({{ network_sensor_evidence_suricata_stats_log | to_json }})
+ZEEK_CAPTURE_LOSS=Path({{ network_sensor_evidence_zeek_capture_loss_log | to_json }})
+SURICATA_SERVICE={{ network_sensor_evidence_suricata_service | to_json }}
+ZEEK_SERVICE={{ network_sensor_evidence_zeek_service | to_json }}
+SURICATA_DROP_WARN={{ network_sensor_evidence_suricata_drop_warn_percent | float }}
+ZEEK_LOSS_WARN={{ network_sensor_evidence_zeek_loss_warn_percent | float }}
 
 def expected(e,a):
     sid=a.get("signature_id")
@@ -145,6 +153,195 @@ def zeek(name,cutoff,now,keep=False):
     out={"record_count":count,"oldest_event":iso(old) if old else None,"newest_event":iso(new) if new else None,"files_failed":failed}
     if name=="notice":out.update({"notice_types":dict(types),"samples":samples})
     return out
+
+def service_active(name):
+    try:
+        r=subprocess.run(
+            ["systemctl","is-active",name],
+            stdout=subprocess.PIPE,
+            stderr=subprocess.DEVNULL,
+            text=True,
+            timeout=5,
+            check=False,
+        )
+        return r.stdout.strip()=="active"
+    except (OSError,subprocess.SubprocessError):
+        return None
+
+def interface_health(name):
+    out={
+        "interface":name or None,
+        "present":False,
+        "up":None,
+        "carrier":None,
+        "promiscuous":None,
+        "rx_packets":None,
+        "rx_errors":None,
+        "rx_dropped":None,
+    }
+    if not name:return out
+    base=Path("/sys/class/net")/name
+    if not base.exists():return out
+    out["present"]=True
+    try:
+        flags=int((base/"flags").read_text().strip(),0)
+        out["up"]=bool(flags & 0x1)
+        out["promiscuous"]=bool(flags & 0x100)
+    except (OSError,ValueError):
+        pass
+    try:
+        out["carrier"]=(base/"carrier").read_text().strip()=="1"
+    except OSError:
+        pass
+    for key,filename in (
+        ("rx_packets","rx_packets"),
+        ("rx_errors","rx_errors"),
+        ("rx_dropped","rx_dropped"),
+    ):
+        try:
+            out[key]=int((base/"statistics"/filename).read_text().strip())
+        except (OSError,ValueError):
+            pass
+    return out
+
+def latest_suricata_stats():
+    wanted={
+        "capture.kernel_packets":"kernel_packets",
+        "capture.kernel_drops":"kernel_drops",
+        "decoder.invalid":"decoder_invalid",
+        "memcap.pressure":"memcap_pressure",
+    }
+    out={v:None for v in wanted.values()}
+    if not SURICATA_STATS.is_file():return out
+    try:
+        with SURICATA_STATS.open("rb") as f:
+            f.seek(0,2)
+            size=f.tell()
+            f.seek(max(0,size-262144))
+            if f.tell():
+                f.readline()
+            lines=f.read().decode("utf-8",errors="replace").splitlines()
+    except OSError:
+        return out
+    for line in reversed(lines):
+        for source,target in wanted.items():
+            if out[target] is not None or not line.lstrip().startswith(source):
+                continue
+            parts=line.split("|")
+            if len(parts)<3:continue
+            try:out[target]=int(parts[-1].strip())
+            except ValueError:pass
+        if all(v is not None for v in out.values()):break
+    packets=out["kernel_packets"]
+    drops=out["kernel_drops"]
+    out["drop_percent"]=(
+        round((drops/packets)*100,6)
+        if isinstance(packets,int) and packets>0 and isinstance(drops,int)
+        else None
+    )
+    return out
+
+def latest_zeek_capture_loss():
+    out={
+        "percent_lost":None,
+        "max_percent_lost":None,
+        "timestamp":None,
+        "gaps":None,
+        "acks":None,
+        "samples_considered":0,
+    }
+    if not ZEEK_CAPTURE_LOSS.is_file():return out
+    try:
+        lines=ZEEK_CAPTURE_LOSS.read_text(
+            encoding="utf-8",errors="replace"
+        ).splitlines()
+    except OSError:
+        return out
+
+    cutoff=time.time()-HOURS*3600
+    samples=[]
+
+    for line in lines:
+        try:r=json.loads(line)
+        except json.JSONDecodeError:continue
+        ts=r.get("ts")
+        value=r.get("percent_lost")
+        if not isinstance(ts,(int,float)) or ts<cutoff:
+            continue
+        if not isinstance(value,(int,float)):
+            continue
+        samples.append(r)
+
+    if not samples:return out
+
+    latest=max(samples,key=lambda r:r["ts"])
+    out["percent_lost"]=float(latest["percent_lost"])
+    out["max_percent_lost"]=max(float(r["percent_lost"]) for r in samples)
+    out["timestamp"]=iso(latest["ts"])
+    out["gaps"]=latest.get("gaps")
+    out["acks"]=latest.get("acks")
+    out["samples_considered"]=len(samples)
+    return out
+
+def collect_capture_health():
+    nic=interface_health(CAPTURE_INTERFACE)
+    suricata=latest_suricata_stats()
+    zeek_loss=latest_zeek_capture_loss()
+    services={
+        "suricata_active":service_active(SURICATA_SERVICE),
+        "zeek_active":service_active(ZEEK_SERVICE),
+    }
+
+    reasons=[]
+
+    if not nic["present"]:
+        reasons.append("capture_interface_missing")
+    else:
+        if nic["up"] is False:reasons.append("capture_interface_down")
+        if nic["carrier"] is False:reasons.append("capture_interface_no_carrier")
+        if nic["promiscuous"] is False:reasons.append("capture_interface_not_promiscuous")
+
+    if services["suricata_active"] is False:
+        reasons.append("suricata_service_inactive")
+    if services["zeek_active"] is False:
+        reasons.append("zeek_service_inactive")
+
+    sd=suricata.get("drop_percent")
+    if isinstance(sd,(int,float)) and sd>SURICATA_DROP_WARN:
+        reasons.append("suricata_kernel_drop_threshold_exceeded")
+
+    zl=zeek_loss.get("max_percent_lost")
+    if isinstance(zl,(int,float)) and zl>ZEEK_LOSS_WARN:
+        reasons.append("zeek_capture_loss_threshold_exceeded")
+
+    unknown=(
+        not nic["present"]
+        or services["suricata_active"] is None
+        or services["zeek_active"] is None
+        or sd is None
+        or zl is None
+    )
+
+    if reasons:
+        status="degraded"
+    elif unknown:
+        status="unknown"
+    else:
+        status="healthy"
+
+    return {
+        "status":status,
+        "reasons":reasons,
+        "thresholds":{
+            "suricata_drop_warn_percent":SURICATA_DROP_WARN,
+            "zeek_loss_warn_percent":ZEEK_LOSS_WARN,
+        },
+        "interface":nic,
+        "services":services,
+        "suricata":suricata,
+        "zeek":zeek_loss,
+    }
+
 def main():
     now=time.time();cutoff=now-HOURS*3600;STATE_DIR.mkdir(parents=True,exist_ok=True);os.chmod(STATE_DIR,0o750)
     s=load()
@@ -164,6 +361,7 @@ def main():
     if run.get("rotation_detected"):gaps.append("Suricata active-log rotation was detected; the incremental collector does not backfill the prior rotated file.")
     evidence={"schema_version":2,"collected_at":iso(now),"sensor_host":socket.gethostname(),"requested_window_hours":HOURS,
       "window_start":iso(cutoff),"window_end":iso(now),"coverage":coverage,"assurance_gaps":gaps,
-      "suricata":{"collection_run":run,"rolling":roll},"zeek":z}
+      "suricata":{"collection_run":run,"rolling":roll},"zeek":z,
+      "capture_health":collect_capture_health()}
     atomic(STATE_FILE,s);atomic(EVIDENCE_FILE,evidence)
 if __name__=="__main__":main()

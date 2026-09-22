@@ -50,6 +50,13 @@ def network_sensor_section(data):
     coverage = sensor.get("coverage", {})
     suricata = sensor.get("suricata", {})
     zeek = sensor.get("zeek", {})
+    capture = sensor.get("capture_health")
+    capture = capture if isinstance(capture, dict) else {}
+
+    capture_interface = capture.get("interface", {})
+    capture_services = capture.get("services", {})
+    capture_suricata = capture.get("suricata", {})
+    capture_zeek = capture.get("zeek", {})
 
     suricata_coverage = coverage.get("suricata", {})
     zeek_coverage = coverage.get("zeek", {})
@@ -88,6 +95,47 @@ def network_sensor_section(data):
         + number(zeek.get("notice_records"))
         + " notices",
     ])
+
+    if capture:
+        lines.extend([
+            "Capture health: "
+            + str(capture.get("status", "UNKNOWN")).upper(),
+            "Capture interface: "
+            + str(capture_interface.get("interface", "UNKNOWN"))
+            + " | carrier: "
+            + str(capture_interface.get("carrier", "UNKNOWN"))
+            + " | promiscuous: "
+            + str(capture_interface.get("promiscuous", "UNKNOWN")),
+            "Capture NIC counters: "
+            + str(capture_interface.get("rx_packets", "UNKNOWN"))
+            + " RX packets | "
+            + str(capture_interface.get("rx_errors", "UNKNOWN"))
+            + " RX errors | "
+            + str(capture_interface.get("rx_dropped", "UNKNOWN"))
+            + " RX dropped",
+            "IDS services: Suricata "
+            + ("ACTIVE" if capture_services.get("suricata_active") is True else str(capture_services.get("suricata_active", "UNKNOWN")).upper())
+            + " | Zeek "
+            + ("ACTIVE" if capture_services.get("zeek_active") is True else str(capture_services.get("zeek_active", "UNKNOWN")).upper()),
+            "Suricata capture loss: "
+            + str(capture_suricata.get("drop_percent", "UNKNOWN"))
+            + "% | kernel packets: "
+            + str(capture_suricata.get("kernel_packets", "UNKNOWN"))
+            + " | kernel drops: "
+            + str(capture_suricata.get("kernel_drops", "UNKNOWN")),
+            "Zeek capture loss: latest "
+            + str(capture_zeek.get("percent_lost", "UNKNOWN"))
+            + "% | 24h max "
+            + str(capture_zeek.get("max_percent_lost", "UNKNOWN"))
+            + "% | samples: "
+            + str(capture_zeek.get("samples_considered", "UNKNOWN")),
+        ])
+
+        reasons = capture.get("reasons")
+        if isinstance(reasons, list) and reasons:
+            lines.append(
+                "Capture health reasons: " + ", ".join(str(x) for x in reasons)
+            )
 
     return lines
 
