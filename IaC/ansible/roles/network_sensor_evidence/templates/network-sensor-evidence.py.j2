@@ -15,6 +15,18 @@ STATE_FILE=Path({{ network_sensor_evidence_state_file | to_json }})
 EVIDENCE_FILE=Path({{ network_sensor_evidence_file | to_json }})
 NETWORKS=[ipaddress.ip_network(x) for x in {{ network_sensor_evidence_internal_networks | to_json }}]
 NOISE=set({{ network_sensor_evidence_noise_signatures | to_json }})
+EXPECTED={{ network_sensor_evidence_expected_activity | default([]) | to_json }}
+
+def expected(e,a):
+    sid=a.get("signature_id")
+    for rule in EXPECTED:
+        if rule.get("signature_id") is not None and sid != rule["signature_id"]: continue
+        if rule.get("src_ip") is not None and e.get("src_ip") != rule["src_ip"]: continue
+        if rule.get("dest_ip") is not None and e.get("dest_ip") != rule["dest_ip"]: continue
+        if rule.get("dest_port") is not None and e.get("dest_port") != rule["dest_port"]: continue
+        if rule.get("proto") is not None and str(e.get("proto") or "").upper() != str(rule["proto"]).upper(): continue
+        return True
+    return False
 
 def iso(t): return datetime.fromtimestamp(t,timezone.utc).isoformat()
 def hour(t): return datetime.fromtimestamp(t,timezone.utc).strftime("%Y-%m-%dT%H:00:00Z")
@@ -26,7 +38,7 @@ def parse_ts(x):
     try: return datetime.fromisoformat(x).timestamp()
     except (TypeError,ValueError): return None
 def bucket():
-    return {"total":0,"noise":0,"significant":0,"severity":{},"category":{},"signature":{},
+    return {"total":0,"noise":0,"expected":0,"significant":0,"severity":{},"category":{},"signature":{},
             "inbound_no_response":0,"inbound_with_response":0,"outbound":0,
             "outbound_dest":{},"samples":{"severity_1":[],"inbound_with_response":[],
             "inbound_no_response":[],"outbound":[]}}
@@ -75,6 +87,7 @@ def collect_suricata(s,now):
             alerts+=1;b=s["hourly"].setdefault(hour(t),bucket());b["total"]+=1
             sig=a.get("signature") or "unknown"
             if sig in NOISE:b["noise"]+=1;continue
+            if expected(e,a):b["expected"]+=1;continue
             b["significant"]+=1;inc(b["severity"],a.get("severity"));inc(b["category"],a.get("category") or "unknown");inc(b["signature"],sig)
             x=summary(e,a)
             if a.get("severity")==1:sample(b["samples"]["severity_1"],x)
@@ -101,6 +114,7 @@ def aggregate(s,cutoff,now):
         if t+3600<cutoff or t>now:continue
         hours.append(k);b=s["hourly"][k]
         for n in ("total","noise","significant","inbound_no_response","inbound_with_response","outbound"):totals[n]+=b[n]
+        totals["expected"]+=int(b.get("expected",0))
         sev.update({x:int(y) for x,y in b["severity"].items()});cat.update({x:int(y) for x,y in b["category"].items()})
         sig.update({x:int(y) for x,y in b["signature"].items()});dest.update({x:int(y) for x,y in b["outbound_dest"].items()})
         for typ in samples:
