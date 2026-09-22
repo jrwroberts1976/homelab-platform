@@ -28,6 +28,22 @@ It is intended to help a reader understand **what a term means, why it appears o
 | Loki | Central log store queried by Grafana | `monitor-01` | Expected |
 | Blackbox Exporter | Tests services from the outside, for example HTTP or ICMP reachability | `monitor-01` | Expected |
 | QDevice / QNetd | Supplies an external vote to help a two-node Proxmox cluster maintain safe quorum | `admin-01` and the Proxmox cluster | Expected |
+| Alertmanager | Routes and groups monitoring alerts | `monitor-01` | Expected |
+| Node Exporter | Exposes Linux host metrics to Prometheus | Managed Linux hosts | Expected |
+| Zabbix | Agent-based infrastructure and service monitoring | `zabbix-01` and managed hosts | Expected |
+| Komodo | Docker application/container operations control plane | `komodo-01` | Expected |
+| Docker | Runs application containers from images | Docker-managed hosts | Expected |
+| Nextcloud | Self-hosted cloud application | `cloud-01` | Expected |
+| PostgreSQL | Relational database backing Nextcloud | `cloud-01` | Expected |
+| Redis | Cache/locking data store supporting Nextcloud | `cloud-01` | Expected |
+| Home Assistant | Home-automation platform | `home-01` | Expected |
+| BirdNET-Go | Bird-call analysis application | `docker-01` | Expected |
+| Postfix | Central internal SMTP mail relay | `mail-relay-01` | Expected |
+| NFS | Network file storage used for Proxmox backups | `media-01` | Expected |
+| Proxmox VE | Virtualisation platform hosting VMs and LXCs | `PROXMOX`, `Proxmox-2` | Expected |
+| Corosync / Kronosnet | Cluster membership and transport | Proxmox cluster | Expected |
+| Chrony | Keeps host clocks synchronised | Managed Linux estate | Expected |
+| Network Host Collector | Discovers/enriches network-host inventory | `Proxmox-2` | Expected |
 
 ---
 
@@ -492,6 +508,349 @@ DNS hierarchy
 ```
 
 ---
+
+
+## Alertmanager
+
+**What it is**
+
+Alertmanager receives alerts from Prometheus-compatible monitoring rules and decides how those alerts should be grouped, suppressed and delivered.
+
+**Why it matters here**
+
+Alertmanager runs on `monitor-01` as part of the central monitoring stack.
+
+A simple way to think about the monitoring flow is:
+
+```text
+Target / exporter
+      |
+      v
+Prometheus
+      |
+      | alert rule fires
+      v
+Alertmanager
+      |
+      v
+notification / operational response
+```
+
+Prometheus decides that a condition matches an alert rule; Alertmanager handles what happens to that alert afterwards.
+
+---
+
+## Node Exporter
+
+**What it is**
+
+Node Exporter exposes Linux host metrics in a format Prometheus can collect.
+
+Typical measurements include:
+
+- CPU;
+- memory;
+- filesystem space;
+- load;
+- network-interface statistics;
+- operating-system counters.
+
+**Why it matters here**
+
+It provides host-level telemetry for managed Linux systems. Prometheus collects the measurements and Grafana displays them.
+
+Node Exporter is therefore a **metrics source**, not a dashboard and not an alerting system.
+
+---
+
+## Zabbix
+
+**What it is**
+
+Zabbix is a monitoring platform that can collect system and application information, track availability and raise problems when defined conditions are met.
+
+**How it is used here**
+
+The dedicated `zabbix-01` service monitors the managed Linux estate using Zabbix Agent 2.
+
+This overlaps with some Prometheus monitoring, but the products have different strengths. In this environment they provide complementary monitoring rather than meaning that every measurement must exist in both systems.
+
+A Zabbix **problem** means a configured trigger condition has been met. It does not automatically mean a host has failed completely.
+
+---
+
+## Komodo
+
+**What it is**
+
+Komodo is the control plane used for Docker application and container operations.
+
+**How it is used here**
+
+`komodo-01` is the commissioned Komodo control-plane host.
+
+The intended operational model is that routine Docker application deployment, version management and rollback ownership move toward Komodo as managed Docker hosts are onboarded.
+
+Komodo manages workloads; it is not itself the container runtime.
+
+---
+
+## Docker
+
+**What it is**
+
+Docker is a container platform used to package and run applications with their dependencies.
+
+A Docker **container** is an application workload running from an image.
+
+Useful distinctions are:
+
+```text
+Image      = packaged application/template
+Container  = running instance of an image
+Volume     = persistent application data
+Compose    = definition of a multi-container application
+```
+
+**Why it matters here**
+
+Docker is used by several homelab services, including the BirdNET-Go host and container-managed application platforms.
+
+Docker containers are different from Proxmox LXC containers: both use containerisation concepts, but they operate at different layers and are managed differently.
+
+---
+
+## Nextcloud
+
+**What it is**
+
+Nextcloud is the self-hosted cloud application running on `cloud-01`.
+
+It provides the user-facing cloud service while its supporting components provide database, cache and storage functions.
+
+**How it fits together here**
+
+```text
+User
+  |
+  v
+Nextcloud
+  |
+  +----> PostgreSQL  (persistent application database)
+  |
+  +----> Redis       (cache / locking / performance support)
+  |
+  +----> data disk   (user files)
+```
+
+A healthy Nextcloud web page therefore does not by itself prove that every supporting component or recovery path is healthy.
+
+---
+
+## PostgreSQL
+
+**What it is**
+
+PostgreSQL is a relational database system.
+
+**Why it matters here**
+
+It stores Nextcloud's structured application data on `cloud-01`.
+
+Examples of database content include application configuration, user/application metadata and references to stored files.
+
+The database is a critical part of application recovery. Restoring only user files without the corresponding application/database state may not constitute a complete Nextcloud recovery.
+
+---
+
+## Redis
+
+**What it is**
+
+Redis is an in-memory data store commonly used for caching, coordination and locking.
+
+**Why it matters here**
+
+Nextcloud uses Redis on `cloud-01` to improve application behaviour and support locking/caching functions.
+
+Redis is a supporting component rather than the primary store for Nextcloud user files.
+
+---
+
+## Home Assistant
+
+**What it is**
+
+Home Assistant is the home-automation platform running on `home-01`.
+
+It provides a central place to integrate devices, sensors, automations and dashboards.
+
+**How it is deployed here**
+
+`home-01` runs Home Assistant OS as a Proxmox virtual machine.
+
+Home Assistant OS provides the appliance-style operating environment; Home Assistant Core is the application that implements the automation platform.
+
+A Home Assistant integration is a software connection to a device, protocol or external service. An integration appearing unavailable does not necessarily mean the whole Home Assistant VM is down.
+
+---
+
+## BirdNET-Go
+
+**What it is**
+
+BirdNET-Go analyses audio to identify bird calls using machine-learning models.
+
+**How it is used here**
+
+BirdNET-Go runs on `docker-01`, the Raspberry Pi 4 Docker host.
+
+It is an application workload rather than part of the core network path, so a BirdNET failure should not affect DNS, routing, Proxmox quorum or general Internet access.
+
+---
+
+## Postfix / Mail Relay
+
+**What it is**
+
+Postfix is a mail-transfer agent.
+
+**How it is used here**
+
+`mail-relay-01` provides the central internal SMTP relay for homelab services.
+
+Instead of every application independently storing external mail credentials, services can submit mail to the internal relay, which then handles onward delivery.
+
+Simplified:
+
+```text
+Homelab service
+      |
+      | SMTP
+      v
+mail-relay-01 / Postfix
+      |
+      | authenticated TLS SMTP
+      v
+external mail provider
+```
+
+This gives the estate a clearer ownership point for outbound email configuration and troubleshooting.
+
+---
+
+## SMTP — Simple Mail Transfer Protocol
+
+**What it is**
+
+SMTP is the protocol used to transfer email between systems.
+
+In this estate it is used by homelab applications to submit notifications to `mail-relay-01`, and by the relay for onward external delivery.
+
+An SMTP connection in the logs is therefore normally expected when a service is sending a notification or report.
+
+---
+
+## NFS — Network File System
+
+**What it is**
+
+NFS allows a system to access files stored on another machine over the network.
+
+**How it is used here**
+
+`media-01` provides the primary Proxmox guest-backup target using NFS.
+
+The Proxmox nodes write backup archives across the LAN to that storage.
+
+This distinction matters during recovery: an NFS backup target is **separate storage**, but it is not the same thing as shared live VM storage or automatic high availability.
+
+---
+
+## Proxmox VE
+
+**What it is**
+
+Proxmox Virtual Environment is the virtualisation platform hosting the main server estate.
+
+It manages:
+
+- virtual machines;
+- LXC containers;
+- storage;
+- backups;
+- cluster membership;
+- networking;
+- migration and lifecycle operations.
+
+**How it is used here**
+
+The production platform has two Proxmox nodes: `PROXMOX` and `Proxmox-2`.
+
+Being in a Proxmox cluster allows coordinated management and cluster services. It does **not** by itself mean every guest can automatically restart on the other node, because guest disks currently remain on node-local storage.
+
+---
+
+## Corosync / Kronosnet
+
+**What it is**
+
+Corosync provides cluster membership and messaging. Kronosnet provides the network transport used by modern Corosync clusters.
+
+**How it is used here**
+
+The two Proxmox nodes use:
+
+- a preferred direct point-to-point Corosync link;
+- the normal management LAN as a fallback link;
+- `admin-01` as the external QDevice/QNetd vote.
+
+Corosync health is about the cluster control plane. It should not be confused with application health inside the VMs and containers.
+
+---
+
+## Chrony
+
+**What it is**
+
+Chrony keeps system clocks synchronised using NTP-compatible time sources.
+
+**Why it matters here**
+
+Accurate time is important for:
+
+- log correlation;
+- TLS certificates;
+- monitoring;
+- cluster behaviour;
+- authentication;
+- incident investigation.
+
+If clocks drift between hosts, two log entries from the same event can appear to have happened at different times, making troubleshooting much harder.
+
+---
+
+## Network Host Collector
+
+**What it is**
+
+The Network Host Collector is the homelab's inventory/discovery process for observed network devices.
+
+**How it is used here**
+
+The active collector runs on `Proxmox-2` and maintains current network-host inventory used for discovery, enrichment and operational visibility.
+
+Its role is to help answer questions such as:
+
+- what devices are present;
+- which addresses they use;
+- whether a device is newly observed;
+- and how an observed device relates to the documented estate.
+
+Discovery data is useful operational evidence, but the canonical infrastructure identity/address authority remains `IaC/inventory/estate.json`.
+
+---
+
 
 ## OpenVPN
 
