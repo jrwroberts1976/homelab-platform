@@ -280,6 +280,8 @@ def sensor_evidence():
     zeek_dns = zeek.get("dns")
     zeek_notice = zeek.get("notice")
     zeek_ssl = zeek.get("ssl")
+    capture_health = payload.get("capture_health")
+
 
     if not isinstance(suricata_rolling, dict):
         return {
@@ -328,6 +330,7 @@ def sensor_evidence():
             "ssl_records": zeek_ssl.get("record_count"),
             "notice_types": zeek_notice.get("notice_types", {}),
         },
+        "capture_health": capture_health if isinstance(capture_health, dict) else None,
     }
 
 

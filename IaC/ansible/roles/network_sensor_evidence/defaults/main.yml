@@ -4,6 +4,19 @@ network_sensor_evidence_hours: 24
 network_sensor_evidence_suricata_log: "/var/log/suricata/eve.json"
 network_sensor_evidence_zeek_log_directory: "/opt/zeek/logs"
 
+# Capture-health evidence. These measurements describe the quality of the
+# passive observation path; they do not classify security events.
+network_sensor_evidence_capture_interface: "{{ network_sensor_capture_interface | default('') }}"
+network_sensor_evidence_suricata_stats_log: "/var/log/suricata/stats.log"
+network_sensor_evidence_zeek_capture_loss_log: "/opt/zeek/logs/current/capture_loss.log"
+network_sensor_evidence_suricata_service: "suricata.service"
+network_sensor_evidence_zeek_service: "homelab-zeek.service"
+
+# Conservative initial degradation thresholds. Capture health is reported
+# separately from alert significance.
+network_sensor_evidence_suricata_drop_warn_percent: 0.1
+network_sensor_evidence_zeek_loss_warn_percent: 0.5
+
 network_sensor_evidence_state_directory: "/var/lib/homelab-network-sensor-evidence"
 network_sensor_evidence_file: "/var/lib/homelab-network-sensor-evidence/evidence.json"
 
