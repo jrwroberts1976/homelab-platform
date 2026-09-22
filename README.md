@@ -13,6 +13,7 @@ The main current-state references are:
 - [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md)
 - [VPN Remote-Access Design and Implementation Record](docs/network/VPN-REMOTE-ACCESS-DESIGN.md)
 - [Network Terms & Reference](docs/network/TERMS-AND-REFERENCE.md)
+- [Installed Solutions Catalogue](docs/architecture/INSTALLED-SOLUTIONS-CATALOGUE.md)
 - [Proxmox Cluster Implementation Record](docs/architecture/PROXMOX-CLUSTER-REBUILD-PLAN.md)
 - [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
 - [Migration Tracker](docs/migrations/MIGRATION-TRACKER.md)
