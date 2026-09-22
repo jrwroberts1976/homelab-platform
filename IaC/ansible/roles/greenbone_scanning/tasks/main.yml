@@ -633,6 +633,26 @@
     mode: "0700"
   when: greenbone_scanning_allow_deploy | bool
 
+- name: Check Greenbone evidence transfer private key
+  ansible.builtin.stat:
+    path: "{{ greenbone_scanning_evidence_transfer_key }}"
+  register: greenbone_scanning_transfer_key
+  when: greenbone_scanning_allow_deploy | bool
+
+- name: Require existing Greenbone evidence transfer private key
+  ansible.builtin.assert:
+    that:
+      - greenbone_scanning_transfer_key.stat.exists
+      - greenbone_scanning_transfer_key.stat.isreg
+      - greenbone_scanning_transfer_key.stat.pw_name == 'root'
+      - greenbone_scanning_transfer_key.stat.gr_name == 'root'
+      - greenbone_scanning_transfer_key.stat.mode == '0600'
+    fail_msg: >-
+      An existing root-owned mode 0600 Greenbone evidence transfer
+      private key is required. This role deliberately does not
+      generate or replace the key.
+  when: greenbone_scanning_allow_deploy | bool
+
 - name: Install pinned monitor-01 ED25519 host key
   ansible.builtin.copy:
     content: >-

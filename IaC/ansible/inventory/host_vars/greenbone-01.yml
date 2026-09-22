@@ -4,3 +4,9 @@
 komodo_periphery_host_mounts:
   - /opt/greenbone-community/compose.yaml:/etc/komodo/stacks/greenbone-community/compose.yaml:ro
   - /opt/greenbone-community/compose.override.yaml:/etc/komodo/stacks/greenbone-community/compose.override.yaml:ro
+
+# Production Greenbone managed scanning.
+# The role defaults remain disabled for other environments.
+# The existing production timer runs daily at 02:00.
+greenbone_scanning_allow_deploy: true
+greenbone_scanning_enable_timers: true
