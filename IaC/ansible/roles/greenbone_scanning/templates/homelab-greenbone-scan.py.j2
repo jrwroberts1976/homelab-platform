@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import fcntl
 import json
 import os
 import subprocess
@@ -26,6 +27,8 @@ MAIL_TO = "{{ greenbone_scanning_mail_to }}"
 
 POLL_SECONDS = {{ greenbone_scanning_poll_seconds }}
 SCAN_TIMEOUT_SECONDS = {{ greenbone_scanning_scan_timeout_seconds }}
+EVIDENCE_PUBLISHER = "{{ greenbone_scanning_evidence_publisher }}"
+SCAN_LOCK_FILE = "/run/lock/homelab-greenbone-scan.lock"
 
 TASKS = {
     "managed": {
@@ -117,6 +120,52 @@ def find_task_id(task_name):
         )
 
     return matches[0]
+
+
+
+def require_task_not_running(task_id, task_name):
+    root = ET.fromstring(
+        gmp(
+            f'<get_tasks task_id="{task_id}" '
+            'details="1"/>'
+        )
+    )
+
+    tasks = [
+        task
+        for task in root.findall(".//task")
+        if task.get("id") == task_id
+    ]
+
+    if not tasks:
+        raise RuntimeError(
+            f"Greenbone task {task_name} "
+            f"({task_id}) was not returned"
+        )
+
+    status = tasks[-1].findtext(
+        "status",
+        "",
+    ).strip()
+
+    active_states = {
+        "Requested",
+        "Queued",
+        "Running",
+        "Stop Requested",
+    }
+
+    print(
+        f"Greenbone task state: "
+        f"{task_name}={status or 'unknown'}",
+        flush=True,
+    )
+
+    if status in active_states:
+        raise RuntimeError(
+            f"Greenbone task {task_name} "
+            f"is already active with status {status}"
+        )
 
 
 def start_scan(task_id):
@@ -284,6 +333,28 @@ def write_evidence(mode, task_name, report_id, counts, actionable, accepted):
     os.replace(temporary_file, evidence_file)
 
 
+
+def publish_managed_evidence():
+    result = subprocess.run(
+        [EVIDENCE_PUBLISHER],
+        text=True,
+        capture_output=True,
+        check=False,
+        timeout=120,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            "Greenbone evidence publication failed: "
+            + result.stderr.strip()
+        )
+
+    output = result.stdout.strip()
+
+    if output:
+        print(output, flush=True)
+
+
 def format_finding(finding):
     return (
         f'{finding["severity"]} {finding["score"]:.1f} | '
@@ -377,6 +448,10 @@ def run_scan(mode):
         print(f"Starting Greenbone task: {task['name']}", flush=True)
 
         task_id = find_task_id(task["name"])
+        require_task_not_running(
+            task_id,
+            task["name"],
+        )
         report_id = start_scan(task_id)
         print(f"Report ID: {report_id}", flush=True)
 
@@ -394,6 +469,9 @@ def run_scan(mode):
             actionable,
             accepted,
         )
+
+        if mode == "managed":
+            publish_managed_evidence()
 
         body = build_email(
             task["name"],
@@ -454,7 +532,26 @@ def main():
             GMP_CONFIG.unlink(missing_ok=True)
         return
 
-    run_scan(args.mode)
+    lock_path = Path(SCAN_LOCK_FILE)
+    lock_path.parent.mkdir(
+        mode=0o755,
+        parents=True,
+        exist_ok=True,
+    )
+
+    with lock_path.open("w") as lock_handle:
+        try:
+            fcntl.flock(
+                lock_handle.fileno(),
+                fcntl.LOCK_EX | fcntl.LOCK_NB,
+            )
+        except BlockingIOError:
+            raise RuntimeError(
+                "another homelab Greenbone scan "
+                "runner is already active"
+            )
+
+        run_scan(args.mode)
 
 
 if __name__ == "__main__":

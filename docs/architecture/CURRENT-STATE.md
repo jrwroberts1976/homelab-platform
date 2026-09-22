@@ -77,6 +77,22 @@ Every machine-to-machine integration must have a documented source, destination,
 | `sensor-01` | `monitor-01` | SSH/SFTP | Transfer network-security evidence into the management-report evidence store | Dedicated restricted `evidence-sensor` identity/key; private key remains outside Git; pinned `monitor-01` ED25519 host key | Outbound from `sensor-01` | ACTIVE |
 | TBD | AT API | HTTPS / TCP 443 | Future AT API integration | Authentication and secret location to be defined before implementation | Outbound to Internet | PLANNED |
 
+#### Automated vulnerability reporting
+
+The Greenbone managed-infrastructure vulnerability workflow is automated through systemd and the management-report pipeline.
+
+- `greenbone-01` runs the managed infrastructure Greenbone scan daily at **02:00 local time** using `homelab-greenbone-managed-scan.timer`.
+- The scan runner uses both a local `flock` guard and a Greenbone task-state guard to prevent overlapping managed scans.
+- Successful managed scans generate schema-validated evidence under `/var/lib/homelab-greenbone-scanning/managed.json`.
+- `greenbone-01` publishes the evidence to `monitor-01` using a dedicated SSH/SFTP evidence account with a pinned `monitor-01` ED25519 host key.
+- `monitor-01` validates Greenbone evidence schema and freshness. Missing, invalid or stale evidence is reported as an evidence problem and is not interpreted as zero vulnerabilities.
+- `monitor-01` runs `homelab-management-report.timer` daily at **06:00 local time**.
+- The management-report service executes the collector, renderer and mailer sequentially.
+- Reports are written beneath `/var/lib/homelab-management-report/reports/`, with the current report available as `latest.txt`.
+- Completed reports are submitted to `mail-relay-01` over SMTP for delivery.
+- The Greenbone evidence freshness threshold is **30 hours**.
+- Both timers use deterministic schedules with no randomized delay and are persistent across downtime.
+
 ## Integration governance
 
 The integration register is part of the canonical current-state record and must be updated when an integration is introduced, removed, materially changed, or moved between hosts.

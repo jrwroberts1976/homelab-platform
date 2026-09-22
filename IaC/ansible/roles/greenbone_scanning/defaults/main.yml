@@ -57,3 +57,20 @@ greenbone_scanning_runner_gmp_config: /run/greenbone-scanning/runner-gvm-tools.c
 greenbone_scanning_evidence_directory: /var/lib/homelab-greenbone-scanning
 greenbone_scanning_managed_evidence_file: /var/lib/homelab-greenbone-scanning/managed.json
 greenbone_scanning_full_lan_evidence_file: /var/lib/homelab-greenbone-scanning/full-lan.json
+
+# Secure publication of managed Greenbone evidence to monitor-01.
+greenbone_scanning_evidence_publisher: /usr/local/sbin/homelab-greenbone-publish-evidence
+greenbone_scanning_evidence_transfer_directory: /etc/homelab/evidence-transfer
+greenbone_scanning_evidence_transfer_key: /etc/homelab/evidence-transfer/greenbone-to-monitor
+greenbone_scanning_evidence_known_hosts: /etc/homelab/evidence-transfer/known_hosts
+greenbone_scanning_evidence_destination_host: "192.168.2.52"
+greenbone_scanning_evidence_destination_user: "evidence-greenbone"
+greenbone_scanning_evidence_destination_file: "incoming/managed.json"
+
+# Pinned monitor-01 ED25519 host key, verified through the trusted
+# Ansible management channel on 21 September 2026.
+greenbone_scanning_monitor_ed25519_host_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIJH2QYkVmOSh71farN0ybXrpLgFw4s1ysEDt6AXKi8vh"
+
+# Automated managed-infrastructure scan scheduling.
+greenbone_scanning_managed_schedule: "*-*-* 02:00:00"
+greenbone_scanning_managed_randomized_delay_seconds: 0

@@ -1,0 +1,12 @@
+[Unit]
+Description=Homelab Greenbone managed infrastructure scan
+After=docker.service network-online.target
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart={{ greenbone_scanning_runner }} managed
+TimeoutStartSec={{ greenbone_scanning_scan_timeout_seconds + 900 }}
