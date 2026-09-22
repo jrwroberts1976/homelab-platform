@@ -45,6 +45,7 @@ It is intended to help a reader understand **what a term means, why it appears o
 | Chrony | Keeps host clocks synchronised | Managed Linux estate | Expected |
 | Network Host Collector | Discovers/enriches network-host inventory | `Proxmox-2` | Expected |
 | Jinja / Jinja2 | Template language used to generate configuration files from variables | Ansible roles/templates throughout the IaC | Expected |
+| JSON | Structured text format using objects, arrays and key/value pairs | `estate.json`, Suricata `eve.json`, APIs and automation data | Expected |
 
 ---
 
@@ -1047,6 +1048,225 @@ prometheus.yml.j2
 ```
 
 These are templates that Ansible turns into the real configuration files deployed to the relevant systems.
+
+---
+
+
+
+## JSON — JavaScript Object Notation
+
+**What it is**
+
+JSON is a structured text format used to represent data in a way that both people and software can read.
+
+Despite the name, JSON is not limited to JavaScript. It is widely used by APIs, applications, monitoring tools and automation systems.
+
+A simple JSON document looks like this:
+
+```json
+{
+  "name": "sensor-01",
+  "address": "192.168.2.55",
+  "state": "active",
+  "managed_by_ansible": true
+}
+```
+
+This example contains **key/value pairs**:
+
+- `"name"` is a key and `"sensor-01"` is its value;
+- `"address"` contains a string;
+- `"managed_by_ansible"` contains the Boolean value `true`.
+
+**Common JSON data types**
+
+JSON can contain:
+
+```json
+{
+  "string": "monitor-01",
+  "number": 52,
+  "boolean": true,
+  "nothing": null,
+  "array": ["Prometheus", "Grafana", "Loki"],
+  "object": {
+    "address": "192.168.2.52",
+    "port": 3000
+  }
+}
+```
+
+The main structures are:
+
+- **object** — `{ ... }`, a collection of named key/value pairs;
+- **array** — `[ ... ]`, an ordered list of values;
+- **string** — text enclosed in double quotes;
+- **number** — a numeric value;
+- **Boolean** — `true` or `false`;
+- **null** — explicitly represents no value.
+
+**Where JSON is used in this homelab**
+
+### Estate inventory
+
+The canonical machine-readable identity/address inventory is:
+
+```text
+IaC/inventory/estate.json
+```
+
+It records data such as host names, addresses, roles and whether an asset is active.
+
+A simplified entry looks like:
+
+```json
+{
+  "name": "dns-01",
+  "address": "192.168.2.51",
+  "state": "active",
+  "role": "Pi-hole and Unbound"
+}
+```
+
+This is useful because automation can read the same source that humans can inspect.
+
+### Suricata
+
+Suricata's primary structured event log is:
+
+```text
+/var/log/suricata/eve.json
+```
+
+A Suricata JSON event can contain fields describing things such as:
+
+- timestamp;
+- source and destination IP addresses;
+- ports;
+- detected protocol;
+- alert/signature information;
+- DNS, TLS, HTTP or flow metadata.
+
+This structured format makes it much easier for tools such as Alloy, Loki, scripts and dashboards to process security events reliably.
+
+### APIs and automation
+
+Many APIs exchange JSON.
+
+For example, an API response might look conceptually like:
+
+```json
+{
+  "status": "healthy",
+  "host": "monitor-01",
+  "services": [
+    "Prometheus",
+    "Grafana",
+    "Loki"
+  ]
+}
+```
+
+Automation can then select individual fields instead of trying to extract information from human-formatted text.
+
+**JSON compared with YAML**
+
+Both are commonly used in infrastructure automation.
+
+JSON is usually more explicit:
+
+```json
+{
+  "host": "zabbix-01",
+  "port": 8080
+}
+```
+
+The equivalent YAML might be:
+
+```yaml
+host: zabbix-01
+port: 8080
+```
+
+In this repository:
+
+- JSON is particularly useful for machine-readable inventories, events and API data;
+- YAML is commonly used for Ansible, configuration and workflow definitions;
+- Jinja templates can generate configuration from variables stored in these kinds of structured formats.
+
+**JSON compared with Jinja**
+
+They solve different problems.
+
+- **JSON describes data.**
+- **Jinja generates text/configuration from data.**
+
+For example:
+
+```text
+JSON / YAML variables
+        |
+        v
+Jinja template
+        |
+        v
+rendered configuration
+```
+
+**Important syntax rules**
+
+JSON is strict.
+
+Valid JSON requires:
+
+- double quotes around object keys;
+- double quotes around string values;
+- commas between items;
+- no trailing comma after the final item;
+- lowercase `true`, `false` and `null`.
+
+For example, this is valid:
+
+```json
+{
+  "host": "greenbone-01",
+  "active": true
+}
+```
+
+This is **not** valid JSON:
+
+```text
+{
+  host: 'greenbone-01',
+  active: True,
+}
+```
+
+**Working with JSON from the command line**
+
+The `jq` utility is commonly used to query and transform JSON.
+
+For example:
+
+```bash
+jq '.assets[] | {name, address, role}' IaC/inventory/estate.json
+```
+
+Conceptually, this asks:
+
+> For every asset, show me its name, address and role.
+
+That makes JSON particularly useful for IaC validation, inventory checks and automation.
+
+**Is JSON a service or protocol?**
+
+No.
+
+JSON is a **data format**. It does not listen on a network port.
+
+A network service may send or receive JSON over HTTP/HTTPS, but JSON itself is simply the structure of the data being exchanged.
 
 ---
 
