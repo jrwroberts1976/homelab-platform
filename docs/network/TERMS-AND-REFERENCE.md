@@ -44,6 +44,7 @@ It is intended to help a reader understand **what a term means, why it appears o
 | Corosync / Kronosnet | Cluster membership and transport | Proxmox cluster | Expected |
 | Chrony | Keeps host clocks synchronised | Managed Linux estate | Expected |
 | Network Host Collector | Discovers/enriches network-host inventory | `Proxmox-2` | Expected |
+| Jinja / Jinja2 | Template language used to generate configuration files from variables | Ansible roles/templates throughout the IaC | Expected |
 
 ---
 
@@ -951,6 +952,104 @@ This is different from `sensor-01`:
 Knowing that distinction helps explain why Greenbone traffic can look like scanning: scanning is its intended job.
 
 ---
+
+
+## Jinja / Jinja2
+
+**What it is**
+
+Jinja is a **template language**. It allows a configuration file to contain placeholders, expressions and simple logic that are filled in when automation runs.
+
+You will most often see Jinja in this repository inside **Ansible template files**, usually with a `.j2` extension.
+
+For example:
+
+```jinja2
+server {{ zabbix_server_address }}
+ListenPort={{ zabbix_agent_port }}
+```
+
+The values inside `{{ ... }}` are variables. When Ansible renders the template, it replaces those placeholders with the values defined for the relevant host or environment.
+
+A rendered result might become:
+
+```text
+server 192.168.2.59
+ListenPort=10050
+```
+
+**Common Jinja syntax**
+
+```jinja2
+{{ variable }}
+```
+
+Outputs the value of a variable.
+
+```jinja2
+{% if feature_enabled %}
+...
+{% endif %}
+```
+
+Adds conditional logic.
+
+```jinja2
+{% for host in monitoring_targets %}
+...
+{% endfor %}
+```
+
+Repeats part of a template for each item in a list.
+
+**Why it is useful here**
+
+Jinja allows one Ansible role to generate configuration for many systems without maintaining a separate hand-written file for every host.
+
+For example, the same template can be used for several servers while changing only:
+
+- IP addresses;
+- ports;
+- hostnames;
+- enabled features;
+- paths;
+- lists of monitoring targets.
+
+This supports the homelab's IaC approach because the **template describes the common configuration structure** and inventory/variable files describe **what is different for each host**.
+
+A useful mental model is:
+
+```text
+Ansible variables
+       +
+Jinja template (.j2)
+       |
+       v
+Rendered configuration file
+       |
+       v
+Service configuration on the target host
+```
+
+**Is Jinja a service running on the network?**
+
+No.
+
+Jinja does not normally listen on a port and is not a daemon. It is a rendering engine used during configuration/deployment.
+
+In this repository you may encounter files such as:
+
+```text
+docker-compose.yml.j2
+main.cf.j2
+config.alloy.j2
+prometheus.yml.j2
+```
+
+These are templates that Ansible turns into the real configuration files deployed to the relevant systems.
+
+---
+
 
 ## Common interpretation rule
 
