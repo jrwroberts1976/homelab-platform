@@ -10,6 +10,10 @@ Group=root
 
 ExecStart=/usr/local/sbin/homelab-management-report-collector
 ExecStart=/usr/local/sbin/homelab-management-report
+{% if management_report_ai_enabled | bool %}
+# A failed optional AI step must not prevent factual email delivery.
+ExecStart=-/usr/local/sbin/homelab-management-report-ai --evidence {{ management_report_evidence_file }} --factual {{ management_report_output_directory }}/latest.txt --output {{ management_report_ai_output_file }} --api-key-file {{ management_report_ai_key_file }} --model {{ management_report_ai_model }}
+{% endif %}
 ExecStart=/usr/local/sbin/homelab-management-report-mailer
 
 TimeoutStartSec=900
