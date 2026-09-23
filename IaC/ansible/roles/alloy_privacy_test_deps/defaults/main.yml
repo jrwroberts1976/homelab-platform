@@ -1,0 +1,5 @@
+---
+alloy_privacy_test_venv: /opt/homelab/alloy-privacy-test/venv
+alloy_privacy_test_packages:
+  - python-snappy
+  - protobuf
