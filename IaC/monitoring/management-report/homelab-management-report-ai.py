@@ -31,9 +31,9 @@ def safe_summary(evidence):
     for source, allowed in fields.items():
         value = evidence.get(source)
         if not isinstance(value, dict):
-            result[source] = {"status": "unavailable"}
+            result[source] = {"assessment": "not_assessed"}
             continue
-        entry = {}
+        entry = {"assessment": "reported"}
         for key in allowed:
             item = value.get(key)
             if key == "severity_counts" and isinstance(item, dict):
@@ -71,7 +71,7 @@ def generate(summary, api_key, model, request_post=requests.post):
         "max_output_tokens": 550,
         "instructions": (
             "Write a concise homelab management briefing in plain text. "
-            "Use only the supplied aggregate facts. Do not invent incidents, trends, "
+             "Use only the supplied aggregate facts. A source marked not_assessed was omitted from the input, NOT confirmed unavailable. Never describe it as down, unavailable, or unhealthy. Do not invent incidents, trends, "
             "causes or fixes. No overnight change is known without prior-day data. "
             "Clearly label any suggested follow-up as a suggestion. "
             "Do not repeat all counts: the factual report follows. "
