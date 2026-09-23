@@ -662,3 +662,31 @@ Suricata and Zeek evidence.
 The observed event counts are evidence data, not automatically confirmed
 security incidents. Suricata significance/noise classification should be
 reviewed separately before using event counts as incident counts.
+
+## Whole-platform end-of-day checklist — 2026-09-23
+
+This is a **status checkpoint**, not a claim of fresh live checks on every service tonight. The underlying service acceptance dates and evidence are in the relevant sections above; the `docker-01` logging deployment was live-verified on 23 September.
+
+### Commissioned / proven
+
+- [x] Two-node Proxmox cluster, dual Corosync links and external QDevice quorum (guest disks remain node-local; no automatic storage HA).
+- [x] Dual Pi-hole/Unbound DNS with DNSSEC and managed local-record parity.
+- [x] ASUS OpenVPN remote-administration path accepted from an external laptop.
+- [x] Zabbix active-agent estate (15 managed Linux hosts), plus Prometheus/Grafana/Alertmanager/Loki monitoring platform.
+- [x] Komodo Core and Periphery on four intended Docker application hosts; existing monitoring, Nextcloud, Greenbone and BirdNET workloads imported/declared without unplanned recreation during adoption.
+- [x] Greenbone commissioned and managed scan evidence produced.
+- [x] Suricata/Zeek sensor evidence transported and rendered in the 06:00 management-report pipeline.
+- [x] Nextcloud, Home Assistant, BirdNET-Go, mail relay and media host commissioned.
+- [x] `docker-01` BirdNET-Go log recovery and bounded rotation; scoped Alloy Docker deployment, live BirdNET-Go Loki stream and Komodo privacy-stage drops verified.
+
+### Open work, grouped by outcome
+
+- [ ] **Backup and restore:** obtain first unattended CT104 and VM204 backup proof; perform representative QEMU VM restore, application-consistent Nextcloud/PostgreSQL recovery and deeper Home Assistant recovery; establish an independent secondary backup copy; protect media, BirdNET persistent data and controller recovery state.
+- [ ] **Storage/HA decision:** explicitly decide whether to add replication/shared storage for guest failover. Current cluster quorum is operational but node-local disks do not provide automatic guest HA.
+- [ ] **Komodo hardening:** decide CT104 Proxmox protection and HTTPS; preserve host-only credentials; verify Core/Periphery recovery and ordinary-event log delivery from quiet `docker-01` Periphery.
+- [ ] **Estate-wide logging (Step 9):** complete source-level last-event freshness/filtering, review selected Proxmox backup/network-change and Zabbix/PostgreSQL diagnostic sources, assess high-volume nginx/MongoDB retention, and separately assess HAOS. Review and merge outstanding audit-branch IaC only after reconciliation. See [Alloy/Loki audit](ALLOY-LOKI-LOG-INVENTORY.md).
+- [ ] **Management reporting:** integrate Pi-hole 24-hour aggregates and Greenbone managed-scan evidence into the morning report; maintain distinction between security event counts and verified incidents.
+- [ ] **Service completeness:** Home Assistant external monitoring; Kodi's three missing IaC-managed add-ons; reconcile Nextcloud Redis configuration drift without disrupting production.
+- [ ] **Network/maintenance:** check VPN DDNS/router replacement and client re-enrolment procedure; reconcile Network Host Collector timer defaults with live state; retain approved privacy boundaries and avoid indiscriminate `/var/log` collection.
+
+**Next session:** start with quiet Komodo Periphery Loki verification, then source-level logging reconciliation. Treat backup/recovery proof as the next major cross-platform assurance milestone. Do not represent this checklist as a fresh estate-wide health scan.
