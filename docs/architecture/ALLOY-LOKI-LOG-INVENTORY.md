@@ -97,3 +97,26 @@ Read-only Docker inspection completed on `greenbone-01`, `komodo-01`, `docker-01
 | `docker-01` | `birdnet-go`, `komodo-periphery-periphery-1` (2) | Both | Installed Alloy config is journal-only; Docker log collection not enabled. Review privacy/volume and enable Docker pipeline through IaC if approved. |
 
 **Next read-only check:** obtain per-container `docker logs --since 24h` counts without exposing log lines, confirm Alloy Docker discovery on Greenbone/Komodo and verify whether the quiet/missing streams have events. If the local logs exist but Loki has no matching stream, investigate ingestion; if no local logs, mark source idle rather than broken. Avoid printing Docker inspect environment or raw logs.
+
+## Docker local-log counts and /var/log scope decision — 2026-09-23
+
+Operator sampled `docker logs --since 24h` with line counts (stderr included in count; no raw contents printed):
+
+| Host | Running container | Local lines in 24h | Prior Loki observation | Assessment |
+|---|---|---:|---|---|
+| greenbone-01 | komodo-periphery-periphery-1 | 5 | present | delivered previously; freshness to verify |
+| greenbone-01 | greenbone-community-edition-nginx-1 | 33077 | present | high-volume source; check retention/volume |
+| greenbone-01 | greenbone-community-edition-gsad-1 | 2 | present | low-volume |
+| greenbone-01 | greenbone-community-edition-gvmd-1 | 6 | present | low-volume |
+| greenbone-01 | greenbone-community-edition-pg-gvm-1 | 48 | present | low-volume |
+| greenbone-01 | greenbone-community-edition-ospd-openvas-1 | 5 | present | low-volume |
+| greenbone-01 | greenbone-community-edition-openvasd-1 | 24 | present | low-volume |
+| greenbone-01 | greenbone-community-edition-redis-server-1 | 0 | absent | idle locally; absence from Loki is not a demonstrated ingestion fault |
+| komodo-01 | komodo-mongo-1 | 68975 | present | high-volume source; check retention/volume |
+| komodo-01 | komodo-core-1 | 0 | absent | idle locally; absence from Loki is not a demonstrated ingestion fault |
+| docker-01 | komodo-periphery-periphery-1 | 5 | absent | **collection gap:** Alloy journal-only on docker-01 |
+| docker-01 | birdnet-go | 2 | absent | **collection gap:** Alloy journal-only on docker-01 |
+
+**User-requested expanded scope:** audit **all `/var/log` entries across the active managed Linux hosts**, then add appropriate text-file logs to Alloy/Loki. Do not glob `/var/log/**` blindly: excludes must cover Pi-hole raw DNS logs (retain event-only pipeline), sensitive authentication/application logs where privacy is not approved, binary files (`wtmp`, `btmp`, `lastlog`, journals), duplicate journal-derived files, temporary/rotated/compressed files and high-volume sources requiring an explicit budget. For each host/path record existence, file type, size, read access by Alloy, rotation policy, privacy classification, desired labels and last Loki event. Use per-host allowlists or explicit reviewed path patterns. Do not silently change permissions or grant broad access to sensitive logs. Existing dedicated router and Suricata/Zeek pipelines must not be duplicated. **Status: inventory and design pending; no broad `/var/log` deployment claimed.**
+
+The next safe read-only operator step is a metadata-only `/var/log` file inventory (no log contents) across `alloy_hosts`, followed by review of privacy, volume and duplication before IaC rollout. `admin-01` needs local `sudo` for its own metadata inspection.
