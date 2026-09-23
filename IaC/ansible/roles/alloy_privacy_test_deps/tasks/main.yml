@@ -21,11 +21,14 @@
     cmd: "python3 -m venv {{ alloy_privacy_test_venv }}"
     creates: "{{ alloy_privacy_test_venv }}/bin/python"
 
+# Avoid ansible.builtin.pip: it imports 'packaging' in the remote system
+# Python, which is intentionally minimal on the DNS resolvers.
 - name: Install isolated Loki payload decoding dependencies
-  ansible.builtin.pip:
-    name: "{{ alloy_privacy_test_packages }}"
-    virtualenv: "{{ alloy_privacy_test_venv }}"
-    extra_args: "--only-binary=:all:"
+  ansible.builtin.command:
+    argv: "{{ [alloy_privacy_test_venv ~ '/bin/python', '-m', 'pip', 'install', '--only-binary=:all:'] + alloy_privacy_test_packages }}"
+  register: alloy_privacy_test_pip
+  changed_when: "'Successfully installed' in alloy_privacy_test_pip.stdout"
+  when: not ansible_check_mode
 
 - name: Verify isolated Snappy and Protobuf imports
   ansible.builtin.command:
@@ -34,3 +37,4 @@
       - -c
       - 'import snappy, google.protobuf; print("Alloy privacy test dependencies: OK")'
   changed_when: false
+  when: not ansible_check_mode
