@@ -1,0 +1,10 @@
+---
+# Opt-in test tooling only. Does not change production Alloy configuration.
+# Run: ansible-playbook playbooks/alloy-privacy-test-deps.yml --limit dns-01
+- name: Prepare isolated Alloy privacy-test dependencies
+  hosts: dns_alloy_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+  roles:
+    - role: alloy_privacy_test_deps
