@@ -95,6 +95,22 @@
     mode: "0750"
 
 
+- name: Install optional management report AI generator
+  ansible.builtin.copy:
+    src: homelab-management-report-ai.py
+    dest: /usr/local/sbin/homelab-management-report-ai
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Create optional AI credential directory (key managed separately)
+  ansible.builtin.file:
+    path: /etc/homelab-management-report
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
 - name: Install management report mailer
   ansible.builtin.template:
     src: management-report-mailer.py.j2
