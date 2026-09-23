@@ -8,6 +8,7 @@
 - Work in priority order unless James explicitly reprioritises.
 - Update this file whenever James closes, adds, reprioritises or changes the scope of a project. Keep status, estimate and evidence links current.
 - Verify live state before marking implementation complete; record the relevant PR, issue, test or run evidence.
+- **Completion-email rule (2026-09-23):** After each individual step in the agreed 20-step delivery plan is verified and closed, email James a short completion notice using the established homelab reporting address or his confirmed email destination. Include the step number/name, outcome, evidence/test results, relevant GitHub link, outstanding caveats and next step. Record email delivery status in the closure note; if sending fails, keep the email action outstanding and report the failure rather than claiming notification succeeded. This is an event-driven workflow when steps are closed, not a daily digest. Do not send an email merely because a checklist item was discussed or planned.
 - Keep accepted risks and deliberately deferred work out of the active implementation queue.
 - Do not silently reopen completed work based on stale historical plans.
 - Estimates below are **hands-on engineering effort**, excluding observation time and unexpected failures.
@@ -39,6 +40,10 @@
 | Home Assistant | Operational; standard Home Assistant backup accepted as sufficient. | CLOSED. Do not add extra whole-VM restore/monitoring work without new request. |
 | Jenkins | Already removed. | CLOSED. |
 | CT104 / VM204 unattended backups | Successful 2026-09-23 PROXMOX scheduled backup email included both. | Do not list first unattended proof as pending. |
+
+## Step closure and email notification
+
+Each of the 20 agreed delivery steps requires: (1) implementation or verification evidence, (2) a GitHub closure/update with a reference, and (3) an individual completion email to James. Send one email per closed step, even when multiple steps close in one session. Confirm the recipient address from the established reporting setup before the first send. If a step closes outside a session with ChatGPT, automatic notification requires a separately implemented GitHub/event-driven workflow; this register alone does not send mail.
 
 ## Daily management email: AI acceptance criteria
 
