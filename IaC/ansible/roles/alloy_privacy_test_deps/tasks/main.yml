@@ -25,7 +25,7 @@
   ansible.builtin.pip:
     name: "{{ alloy_privacy_test_packages }}"
     virtualenv: "{{ alloy_privacy_test_venv }}"
-    extra_args: --only-binary=:all:
+    extra_args: "--only-binary=:all:"
 
 - name: Verify isolated Snappy and Protobuf imports
   ansible.builtin.command:
