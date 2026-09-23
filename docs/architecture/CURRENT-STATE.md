@@ -554,6 +554,8 @@ BirdNET-Go remained running and healthy throughout Periphery commissioning. It i
 
 Alloy, Node Exporter and Zabbix Agent 2 remain active.
 
+**2026-09-23 live logging update:** BirdNET-Go was safely recreated with Docker `json-file` rotation (`10m` × 3); its prior malformed log was backed up privately. Post-change application health, USB microphone, live audio (125 sampled events), and new Docker log integrity (68 valid, zero invalid records) passed. The Ansible Alloy deployment on `docker-01` completed with 50 OK / 3 changed / 0 failed; installed Alloy is active and ready. Docker discovery is allowlisted to `birdnet-go` and `komodo-periphery-periphery-1`, with a pre-Loki Komodo key-rotation privacy filter. A 15-minute Loki query confirmed BirdNET-Go delivery and no unexpected Docker streams; the privacy-stage counter recorded 15 drops, with zero matching key-rotation messages returned by the sampled Loki query. Komodo Periphery was running but locally idle during that 15-minute window; verify its delivery on a normal future event. The broader [Alloy/Loki estate audit](ALLOY-LOKI-LOG-INVENTORY.md) remains open. Docker socket access for Alloy is root-equivalent and must remain a reviewed exception.
+
 The former TestServer workload estate <!-- historical --> must not be silently reintroduced. Komodo management does not change the host's deliberately narrow BirdNET-Go workload role.
 
 ## Home automation
