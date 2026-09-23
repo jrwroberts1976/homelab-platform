@@ -52,3 +52,28 @@ The 15 managed Linux systems below were observed in Loki within a 15-minute wind
 ## Follow-up
 
 Complete the per-host matrix from live evidence, then add a concise summary/link to CURRENT-STATE.md. Pi-hole 24-hour aggregate counts in the 06:00 management report remain a **separate outstanding integration**, not verified by successful Loki ingestion.
+
+## First live audit — operator evidence, 2026-09-23
+
+Read-only Ansible Alloy inspection and Loki `/series` query (`{host=~".+"}`, 24-hour window) returned **15 distinct hosts and 28 distinct host/job/source/container/service combinations**. This is stream presence over 24 hours, **not per-stream freshness or complete application log coverage**. Host-side Alloy inspection succeeded for 12 of 13 hosts in `alloy_hosts`; `admin-01` failed due to missing sudo password. `monitor-01` and `sensor-01` were not shown in that Ansible group output and require separate deployed configuration inspection.
+
+| Host | Live configured Alloy sources (where inspected) | Loki sources observed over 24h | Gap / next check |
+|---|---|---|---|
+| `admin-01` | NOT ASSESSED (Ansible sudo password missing) | systemd-journal | Inspect local config without exposing secrets. |
+| `dns-01` | journal; Pi-hole sanitised file | journal; Pi-hole | Check per-stream freshness. |
+| `dns-02` | journal; Pi-hole sanitised file | journal; Pi-hole | Check per-stream freshness. |
+| `monitor-01` | NOT ASSESSED in this Ansible group | router-syslog (`network-infrastructure`) | No journal stream observed in this 24h result; inspect live Alloy/other shippers. |
+| `cloud-01` | journal | journal | Check whether application logs require additional collection. |
+| `mail-relay-01` | journal | journal | Check Postfix event coverage/freshness. |
+| `sensor-01` | NOT ASSESSED in this Ansible group | Suricata and Zeek (`network-security`) | No journal stream observed in this 24h result; inspect live Alloy/other shippers; separate SFTP aggregate evidence is not raw Loki coverage. |
+| `edge-01` | journal | journal | Check freshness; no NPM/cloudflared assumed. |
+| `greenbone-01` | journal; Docker discovery | journal; Docker: gsad, two ephemeral gvm-tools, gvmd, nginx, openvasd, ospd-openvas, pg-gvm, Komodo Periphery | Verify expected active containers and freshness; ephemeral streams can be historical. |
+| `komodo-01` | journal; Docker discovery | journal; Docker: mongo | Komodo Core container stream not observed in this 24h result; investigate logging driver/activity. |
+| `zabbix-01` | journal | journal | Check application logs and freshness. |
+| `PROXMOX` | journal | journal | Check freshness. |
+| `Proxmox-2` | journal | journal | Check freshness. |
+| `media-01` | journal | journal | Check freshness. |
+| `docker-01` | journal only | journal only | BirdNET-Go and Komodo Periphery Docker logs not observed; determine whether Docker log collection should be enabled after privacy review. |
+| `home-01` | NOT ASSESSED (HAOS, outside managed Linux baseline) | none in this query | Separate supported HAOS logging assessment; not counted in 15 Linux hosts. |
+
+**Totals:** 13 systemd-journal hosts; 2 Pi-hole hosts; 2 Docker hosts; router syslog on monitor-01; Suricata and Zeek on sensor-01. **Known gaps to investigate:** absent journal streams on monitor-01/sensor-01 in queried window; missing docker-01 container streams; only MongoDB Docker stream on komodo-01; admin-01 sudo access for audit. Do not change production or treat missing streams as outages without checking configuration and source activity.
