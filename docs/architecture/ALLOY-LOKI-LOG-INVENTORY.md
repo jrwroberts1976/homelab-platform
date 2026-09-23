@@ -167,3 +167,27 @@ The Ansible `alloy_hosts` run returned twelve hosts successfully; `admin-01` fai
 ## Specialist Loki stream observation — 2026-09-23
 
 Operator ran Loki `/loki/api/v1/series` with `match[]={host=~"monitor-01|sensor-01"}` and `since=1h`. The returned result had **19 streams**: **1** router-syslog stream on `monitor-01` (`/var/log/homelab/router/rt-ac86u.log`, `job=network-infrastructure`) and **18** network-security streams on `sensor-01` (Suricata `eve.json` plus **17** Zeek files under `/opt/zeek/spool/zeek/`: ocsp, telemetry, analyzer, stats, weird, files, quic, capture_loss, conn, ssh, ssl, http, x509, dns, ntp, notice, dhcp). This establishes events within the queried one-hour interval, not per-stream last-event timestamps, continuous delivery or comprehensive application coverage. Avoid duplicating specialist pipelines. **Specialist one-hour presence: verified; precise freshness and ingestion filters: still to verify.**
+
+## End-of-day checkpoint — 2026-09-23: docker-01 remediation deployed
+
+**Production operator evidence, not just IaC:** BirdNET-Go was recreated from its Ansible-managed Compose template with Docker `json-file` rotation (`max-size=10m`, `max-file=3`). The previous malformed Docker log was copied to a restricted root-only backup before recreation. Afterward BirdNET-Go was running and healthy, with zero restarts, HTTP 302, the configured USB microphone present, 125 matching live-audio events in an 8-second sample, and 68 valid / zero invalid records in its new Docker log. This closes the BirdNET-Go log recovery.
+
+The scoped Alloy playbook ran successfully on `docker-01` (50 OK, 3 changed, 0 failed). Installed configuration validated; Alloy was active and ready; BirdNET-Go remained healthy. Docker ingestion is restricted by name to `birdnet-go` and `komodo-periphery-periphery-1`; Komodo key-rotation messages are filtered before Loki export. A 15-minute Loki query showed the `birdnet-go` stream and no unexpected container names. It returned zero matching exported Komodo key-rotation messages. Alloy's `loki.process.docker_01_privacy` `match_stage` counter reported **15 dropped lines**, confirming that the filter has acted; this counter alone does not establish which exact messages were dropped.
+
+Komodo Periphery was running with `json-file` logging but produced **zero local lines in the sampled 15-minute window**, so its own end-to-end Loki delivery remains **pending an ordinary future event**. Do not inject artificial key-rotation messages or expose keys to prove this. Docker-socket membership granted to Alloy is root-equivalent access and remains an explicit security consideration.
+
+**Checklist at close of day:**
+- [x] Metadata-only `/var/log` inventory across all 15 managed Linux hosts, including specialist monitor and sensor.
+- [x] Verify specialist router, Suricata and Zeek streams present in Loki over one hour; avoid duplicate ingestion.
+- [x] Recover BirdNET-Go Docker logging and enable bounded rotation.
+- [x] Deploy and validate scoped `docker-01` Alloy Docker collection; verify BirdNET-Go in Loki.
+- [x] Observe Komodo privacy-stage drops (15) and zero matching exported messages in sampled Loki window.
+- [ ] Verify Komodo Periphery delivery when a normal log event occurs.
+- [ ] Complete exact last-event freshness and filtering checks for remaining host/job/source streams; historical presence is not sufficient.
+- [ ] Review narrow Proxmox backup/network-change and Zabbix/PostgreSQL event-only file candidates; approve privacy, volume, access and rotation before any rollout.
+- [ ] Review high-volume Greenbone nginx and Komodo MongoDB retention/volume; quiet Redis and Komodo Core are not presumed broken.
+- [ ] Assess `home-01` HAOS logging separately; outside the 15-host Linux baseline.
+- [ ] Integrate Pi-hole 24-hour aggregates into the 06:00 management report (separate reporting work).
+- [ ] Review/merge the audit branch and reconcile canonical deployment documentation; do not treat an unmerged branch as production truth.
+
+**Step 9 remains IN PROGRESS:** `docker-01` remediation is operationally complete with one quiet-source verification pending. Estate-wide source-by-source audit and selected file-source design remain open.
