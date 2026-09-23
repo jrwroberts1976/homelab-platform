@@ -37,3 +37,8 @@ alloy_host_label: "{{ inventory_hostname }}"
 alloy_host_role: linux-host
 alloy_journal_job: systemd-journal
 alloy_journal_source: journal
+
+# Opt-in Pi-hole query-event ingestion. Raw domains/client IPs must never
+# leave the resolver; only allowlisted event names reach Loki.
+alloy_pihole_logs_enabled: false
+alloy_pihole_log_path: "/var/log/pihole/pihole.log"
