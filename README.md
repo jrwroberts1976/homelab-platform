@@ -8,6 +8,7 @@ The platform is now operating from the Git-managed `homelab-platform` model rath
 
 The main current-state references are:
 
+- [Homelab Building Blocks](docs/architecture/BUILDING-BLOCKS.md)
 - [Current-State Architecture](docs/architecture/CURRENT-STATE.md)
 - [Target-State Architecture](docs/architecture/TARGET-STATE.md)
 - [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md)
