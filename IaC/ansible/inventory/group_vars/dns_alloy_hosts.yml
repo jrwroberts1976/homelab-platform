@@ -2,3 +2,6 @@
 # DNS Alloy profile layered on the shared alloy_hosts contract.
 alloy_host_role: dns-resolver
 alloy_require_proxmox: false
+
+# Pi-hole file events use the existing Alloy -> Loki writer.
+alloy_pihole_logs_enabled: true
