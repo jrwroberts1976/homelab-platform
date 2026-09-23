@@ -86,6 +86,46 @@ loki.source.docker "containers" {
 }
 
 {% endif %}
+{% if alloy_pihole_logs_enabled | bool %}
+// Pi-hole privacy boundary: only fixed event names may leave this host.
+// Do not forward raw query lines or attach client/domain labels.
+local.file_match "pihole" {
+  path_targets = [{
+    __path__    = "{{ alloy_pihole_log_path }}",
+    job         = "pihole",
+    hostname    = "{{ alloy_host_label }}",
+    host        = "{{ alloy_host_label }}",
+    role        = "{{ alloy_host_role }}",
+    environment = "{{ alloy_environment }}",
+    source      = "pihole-event",
+  }]
+}
+
+loki.source.file "pihole" {
+  targets    = local.file_match.pihole.targets
+  forward_to = [loki.process.pihole_event_only.receiver]
+}
+
+loki.process "pihole_event_only" {
+  forward_to = [loki.write.homelab.receiver]
+
+  // Fail closed: discard any line not matching the allowlisted event types.
+  // Match only the event token and its expected following structural field.
+  stage.match {
+    selector = "{job=\\\"pihole\\\"} !~ \\" (query\\\\[[A-Za-z0-9]+\\\\] .* from |gravity blocked .* is |regex blocked .* is |exactly blocked .* is |forwarded .* to |reply .* is )\\""
+    action   = "drop"
+  }
+
+  // Replace the entire line with a bounded event token before Loki export.
+  stage.regex {
+    expression = "^.* (?P<event>query\\\\[[A-Za-z0-9]+\\\\]|gravity blocked|regex blocked|exactly blocked|forwarded|reply) .*$"
+  }
+  stage.output {
+    source = "event"
+  }
+}
+{% endif %}
+
 loki.write "homelab" {
   endpoint {
     url = "{{ alloy_loki_endpoint }}"
