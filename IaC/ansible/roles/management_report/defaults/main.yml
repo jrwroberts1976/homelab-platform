@@ -58,3 +58,9 @@ management_report_mail_to: "jrwroberts1976@gmail.com"
 management_report_enable_timer: true
 management_report_schedule: "*-*-* 06:00:00"
 management_report_randomized_delay_seconds: 0
+
+# AI is opt-in; existing 06:00 factual reporting is unchanged until approved.
+management_report_ai_enabled: false
+management_report_ai_model: "gpt-4.1-mini"
+management_report_ai_key_file: "/etc/homelab-management-report/openai-api-key"
+management_report_ai_output_file: "{{ management_report_output_directory }}/ai-latest.txt"
