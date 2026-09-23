@@ -112,13 +112,13 @@ loki.process "pihole_event_only" {
   // Fail closed: discard any line not matching the allowlisted event types.
   // Match only the event token and its expected following structural field.
   stage.match {
-    selector = "{job=\\\"pihole\\\"} !~ \\" (query\\\\[[A-Za-z0-9]+\\\\] .* from |gravity blocked .* is |regex blocked .* is |exactly blocked .* is |forwarded .* to |reply .* is )\\""
+    selector = "{job=\"pihole\"} !~ \" (query\\[[A-Za-z0-9]+\\] .* from |gravity blocked .* is |regex blocked .* is |exactly blocked .* is |forwarded .* to |reply .* is )\""
     action   = "drop"
   }
 
   // Replace the entire line with a bounded event token before Loki export.
   stage.regex {
-    expression = "^.* (?P<event>query\\\\[[A-Za-z0-9]+\\\\]|gravity blocked|regex blocked|exactly blocked|forwarded|reply) .*$"
+    expression = "^.* (?P<event>query\\[[A-Za-z0-9]+\\]|gravity blocked|regex blocked|exactly blocked|forwarded|reply) .*$"
   }
   stage.output {
     source = "event"
