@@ -29,6 +29,12 @@
 
 **Sequence:** Finish #1, then #2, then #3, then the new documentation audit #4, then Vaultwarden #5. Optional/deferred items are not automatic commitments.
 
+
+## Delivery step progress
+
+- **Step 1/20 — Review 2026-09-23 06:00 management email: VERIFIED.** Delivered at 06:00 BST; 15/15 hosts and patch evidence current, zero active infrastructure alerts, zero actionable Greenbone vulnerabilities, 10 informational findings. Greenbone evidence timestamp 2026-09-23 02:44:57 UTC matches latest completed scan report (report ID `b0be6d8e-8420-4010-b09f-524254daa374`). Suricata/Zeek evidence marked current and coverage complete. Evidence: [management email](https://mail.google.com/mail/u/?authuser=jrwroberts1976%40gmail.com#all/1a0cca2c0b180d5c), [Greenbone scan email](https://mail.google.com/mail/u/?authuser=jrwroberts1976%40gmail.com#all/1a0cc27071b87607). **Closure email: pending confirmation of delivery.**
+- **Step 2/20 — Verify reporting pipeline: IN PROGRESS.** Email receipt proves this morning's report generation and SMTP delivery; latest scan data and sensor evidence are fresh. Still requires read-only inspection of report timer/service logs, Greenbone evidence transfer logs, and stale/missing-evidence fallback tests. Do not mark complete from email alone.
+
 ## Completed and accepted decisions
 
 | Area | Decision | Backlog treatment |
