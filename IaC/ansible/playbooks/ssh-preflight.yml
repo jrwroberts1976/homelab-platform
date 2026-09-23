@@ -1,0 +1,21 @@
+---
+# Read-only SSH authentication preflight. Run from admin-01 before deployments.
+# Uses the inventory's ansible_user and ansible_ssh_private_key_file.
+- name: Verify inventory SSH key authentication without password prompts
+  hosts: all:!admin-01
+  gather_facts: false
+  become: false
+  strategy: linear
+  vars:
+    ansible_ssh_common_args: "-o BatchMode=yes -o NumberOfPasswordPrompts=0 -o ConnectTimeout=8"
+    ansible_ssh_retries: 1
+  tasks:
+    - name: Verify configured account accepts the configured SSH key
+      ansible.builtin.raw: 'id -un'
+      register: ssh_preflight
+      changed_when: false
+      check_mode: false
+
+    - name: Show verified login identity
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: SSH key login OK as {{ ssh_preflight.stdout | trim }}"
