@@ -16,7 +16,7 @@
 
 | # | Project | Status | Estimated effort | Remaining outcome |
 |---|---|---|---|---|
-| 1 | Greenbone and morning management report | CURRENT FOCUS | **1–2 hours** | Verify latest completed Greenbone scan in 06:00 report, stale/missing evidence handling and unattended end-to-end delivery. Existing scanning, transfer and email are operational. See issue #127. |
+| 1 | Greenbone and AI-assisted morning management report | CURRENT FOCUS | **1–2 hours for existing verification; AI addition to be estimated after reviewing current report code** | Verify latest completed Greenbone scan in 06:00 report, stale/missing evidence handling and unattended end-to-end delivery. Add AI-assisted interpretation of the collected security, monitoring, patch and backup evidence to produce a concise management summary with priorities, overnight changes and recommended follow-up. Keep all numeric results deterministic and source-linked; distinguish confirmed facts from AI interpretation, flag missing/stale evidence, minimise sensitive inputs and fall back to the existing factual report if AI is unavailable. Existing scanning, transfer and email are operational. See issue #127. |
 | 2 | Security and monitoring integration | NEXT | **2–4 hours** | Audit existing Suricata, Zeek, CrowdSec, Pi-hole, Zabbix and Loki signals; connect only demonstrated missing actionable evidence to the management report; avoid duplicate collectors and noisy alerts. |
 | 3 | Grafana dashboards and AI host intelligence | PLANNED | **4–7 days** | Estate overview and automatically provisioned node-specific pages; new discovered hosts appear automatically; show only relevant panels and available telemetry. Use all accessible inventory, discovery, network, DNS, router, switch, Proxmox, Komodo, Prometheus, Zabbix, Alloy/Loki, Suricata, Zeek, CrowdSec, Greenbone, backup, patch and service-health evidence. Produce evidence-linked AI descriptions distinguishing confirmed facts from inferred roles, with confidence and version history. Refresh existing hosts **weekly**; first analyse new hosts **one hour after identification**. Never treat unavailable telemetry as healthy or transmit secrets to AI. |
 | 4 | Homelab documentation audit | PLANNED | **1–2 days (provisional)** | Read-only audit of the live estate against `IaC/inventory/estate.json`, `CURRENT-STATE.md`, service runbooks, target-state plans and monitoring/discovery evidence. Verify active host identities, VMIDs, addresses, roles, installed services, ports, backups, monitoring and retired assets; record discrepancies with evidence and update authoritative docs through reviewed changes. Do not silently change live infrastructure or reopen accepted risks. |\n| 5 | Password manager (Vaultwarden candidate) | PLANNED | **1–2 days** | Reconcile earlier Vaultwarden / dedicated `vault-01` plan with repository's older 'product not selected' wording before provisioning. HTTPS, MFA, protected off-host backups, tested restore and emergency access. |
@@ -39,6 +39,14 @@
 | Home Assistant | Operational; standard Home Assistant backup accepted as sufficient. | CLOSED. Do not add extra whole-VM restore/monitoring work without new request. |
 | Jenkins | Already removed. | CLOSED. |
 | CT104 / VM204 unattended backups | Successful 2026-09-23 PROXMOX scheduled backup email included both. | Do not list first unattended proof as pending. |
+
+## Daily management email: AI acceptance criteria
+
+1. Build the existing factual report from authoritative Greenbone, Suricata/Zeek, CrowdSec, Pi-hole, Zabbix/Prometheus, Loki, patch and backup evidence where available. Do not fabricate a missing feed.
+2. Give AI only a bounded, sanitised evidence summary to draft the executive overview, meaningful overnight changes, priority issues and suggested follow-up. Preserve exact source-derived counts, timestamps, freshness and statuses outside AI control.
+3. Clearly distinguish verified observations from interpretation; never declare an unverified event, cause or fix as fact. Include references or timestamps for the underlying evidence and disclose gaps.
+4. If the AI service times out or fails, send the original factual 06:00 email rather than skipping delivery. Record AI generation status and test this fallback.
+5. Validate the next unattended delivery and revise the effort estimate after reviewing the existing report generator. Do not treat this specification as deployed.
 
 ## Dashboard / AI acceptance criteria
 
