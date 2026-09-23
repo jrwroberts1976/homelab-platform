@@ -123,6 +123,13 @@ loki.process "pihole_event_only" {
   stage.output {
     source = "event"
   }
+
+  // Final privacy gate: stage.regex may fail to extract on unexpected input.
+  // Only an exact allowlisted event token may pass to the Loki writer.
+  stage.match {
+    selector = "{job=\"pihole\"} !~ \"^(query\\[[A-Za-z0-9]+\\]|gravity blocked|regex blocked|exactly blocked|forwarded|reply)$\""
+    action   = "drop"
+  }
 }
 {% endif %}
 
