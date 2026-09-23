@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import smtplib
+import hashlib
 from email.message import EmailMessage
 from pathlib import Path
 
@@ -8,6 +9,11 @@ from pathlib import Path
 REPORT = Path(
     "{{ management_report_output_directory }}/latest.txt"
 )
+
+AI_ENABLED = {{ 'True' if management_report_ai_enabled | bool else 'False' }}
+AI_REPORT = Path("{{ management_report_ai_output_file }}")
+AI_PREFIX = "AI Management Briefing (interpretation; verify against facts below)\\n"
+FACTUAL_HEADING = "\\n\\nVerified factual report\\n=======================\\n"
 
 SMTP_HOST = "{{ management_report_mail_host }}"
 SMTP_PORT = {{ management_report_mail_port }}
@@ -27,6 +33,23 @@ def main():
 
     if not body.strip():
         raise SystemExit("Management report is empty")
+
+    if AI_ENABLED and AI_REPORT.is_file():
+        # Require exact factual bytes and a file created after the current renderer.
+        # Reject previous-day AI text, partial files, and factual-only fallback.
+        try:
+            candidate = AI_REPORT.read_text(encoding="utf-8")
+            if (
+                AI_REPORT.stat().st_mtime_ns >= REPORT.stat().st_mtime_ns
+                and candidate.startswith(AI_PREFIX)
+                and candidate.endswith(FACTUAL_HEADING + body)
+            ):
+                body = candidate
+                print("AI_BRIEFING_MAIL=INCLUDED")
+            else:
+                print("AI_BRIEFING_MAIL=FACTUAL_FALLBACK")
+        except OSError:
+            print("AI_BRIEFING_MAIL=FACTUAL_FALLBACK")
 
     message = EmailMessage()
     message["From"] = MAIL_FROM
