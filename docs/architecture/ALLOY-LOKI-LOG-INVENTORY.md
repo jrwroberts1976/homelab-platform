@@ -152,3 +152,14 @@ The Ansible `alloy_hosts` run returned twelve hosts successfully; `admin-01` fai
 5. Audit specialist `monitor-01` and `sensor-01` metadata separately and verify current Loki source-level freshness before closing Step 9.
 
 **Step 9 status:** metadata review complete for the thirteen Ansible-group hosts (twelve remote, one local); specialist hosts and live per-source validation outstanding. No production deployment or ingestion validation is claimed.
+
+## Specialist /var/log inventory — 2026-09-23
+
+**Evidence:** [monitor-01 and sensor-01 metadata inventory](https://github.com/jrwroberts1976/homelab-platform/blob/audit/alloy-log-inventory/docs/architecture/evidence/alloy-specialist-inventory-20260923.txt), commit `bebb866`. Both Ansible audits completed with `rc=0`; both Alloy services were `active` and `enabled`. The component-name grep is deliberately incomplete: it cannot establish source definitions, forwarding or live stream freshness.
+
+| Host | Files | Alloy-readable | Notable metadata | Decision |
+|---|---:|---:|---|---|
+| `monitor-01` | 25 | 22 | Router log 149,685 B; syslog 9,105,868 B; auth.log 1,311,377 B; config grep saw `loki.write "local"` | Keep specialist router pipeline; verify last event in Loki. Do not ingest raw auth/syslog wholesale or duplicate journal. |
+| `sensor-01` | 23 | 21 | Suricata eve.json 3,683,594,752 B; stats.log 345,807,191 B; fast.log 24,857,483 B; config grep saw Suricata and Zeek processing components | Maintain filtered specialist pipelines; verify source-level freshness. Do not add an unfiltered Suricata glob or duplicate fast.log alerts. |
+
+**Estate metadata coverage:** 15/15 managed Linux hosts inventoried (12 remote baseline, admin-01 local sudo, 2 specialist). This does **not** prove application ingestion or source-level freshness. The confirmed `docker-01` Docker logging gap remains open; review privacy, log volume and Docker socket privilege before enabling.
