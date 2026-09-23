@@ -42,6 +42,14 @@ class BriefingTests(unittest.TestCase):
         self.assertIn("AI Management Briefing", self.output.read_text())
         self.assertIn("FACTUAL REPORT", self.output.read_text())
 
+    def test_omitted_sources_are_not_assessed(self):
+        summary = ai.safe_summary(json.loads(self.evidence.read_text()))
+        self.assertEqual(summary["zabbix"]["assessment"], "not_assessed")
+        self.assertEqual(summary["alertmanager"]["assessment"], "not_assessed")
+        self.assertEqual(summary["loki"]["assessment"], "not_assessed")
+        self.assertEqual(summary["network_sensor"]["assessment"], "not_assessed")
+        self.assertEqual(summary["greenbone"]["assessment"], "reported")
+
     def test_api_failure_falls_back(self):
         def fail(*args):
             raise ai.requests.Timeout("offline")
