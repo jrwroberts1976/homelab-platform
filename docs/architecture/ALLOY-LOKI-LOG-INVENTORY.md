@@ -120,3 +120,35 @@ Operator sampled `docker logs --since 24h` with line counts (stderr included in 
 **User-requested expanded scope:** audit **all `/var/log` entries across the active managed Linux hosts**, then add appropriate text-file logs to Alloy/Loki. Do not glob `/var/log/**` blindly: excludes must cover Pi-hole raw DNS logs (retain event-only pipeline), sensitive authentication/application logs where privacy is not approved, binary files (`wtmp`, `btmp`, `lastlog`, journals), duplicate journal-derived files, temporary/rotated/compressed files and high-volume sources requiring an explicit budget. For each host/path record existence, file type, size, read access by Alloy, rotation policy, privacy classification, desired labels and last Loki event. Use per-host allowlists or explicit reviewed path patterns. Do not silently change permissions or grant broad access to sensitive logs. Existing dedicated router and Suricata/Zeek pipelines must not be duplicated. **Status: inventory and design pending; no broad `/var/log` deployment claimed.**
 
 The next safe read-only operator step is a metadata-only `/var/log` file inventory (no log contents) across `alloy_hosts`, followed by review of privacy, volume and duplication before IaC rollout. `admin-01` needs local `sudo` for its own metadata inspection.
+
+
+## Estate /var/log metadata inventory — 2026-09-23
+
+**Evidence:** [raw metadata inventory on audit branch](../../docs/architecture/evidence/alloy-var-log-inventory-20260923.txt) (branch \`audit/alloy-log-inventory\`, commit \`6f84d50\`). The branch must be reviewed before merging; the repository is private, but file paths and task filenames reveal internal topology and account names. No log bodies, configuration contents or credentials were collected. This is a point-in-time file inventory, **not** proof of active writes, Alloy readability, rotation health, Loki freshness or successful ingestion.
+
+The Ansible \`alloy_hosts\` run returned twelve hosts successfully; \`admin-01\` failed remote privilege escalation and was inspected locally with sudo (17 files). The combined file has 871 lines including wrappers and separators. \`monitor-01\` and \`sensor-01\` have specialist configurations and were not scanned by this run. \`home-01\` is HAOS and outside the managed Linux baseline.
+
+| Host | Files inventoried | Candidate sources or findings | Review outcome |
+|---|---:|---|---|
+| \`PROXMOX\` | 444 | Network-host JSONL (984 B), backup \`vzdump\` logs, Proxmox proxy access log (~6.5 MB), firewall log, package logs | Network-change JSONL and current backup job outcome worth evaluating; do not tail historical per-task logs or raw access data by default. |
+| \`Proxmox-2\` | 206 | Network-host JSONL (~302 kB), \`vzdump\` logs, proxy access log (~6.4 MB), package logs | Same restrictions as PROXMOX; existing collector/report coverage must be checked before duplication. |
+| \`media-01\` | 43 | Samba logs including client-specific names/IP filenames, Kodi/desktop context, Zabbix agent | Privacy review essential; use journal/metrics unless an actionable Samba failure signal is demonstrably missing. |
+| \`cloud-01\` | 19 | Cloud-init and unattended-upgrades text logs, package logs | Avoid duplicating existing patch-report metrics or historical provisioning output. No Nextcloud app log observed under /var/log; check authoritative application storage separately. |
+| \`docker-01\` | 19 | Mostly journal, package, boot/desktop and Zabbix logs | **Docker logs are outside /var/log:** prior audit confirmed local BirdNET-Go (2) and Periphery (5) lines/24h absent from Loki. Enable only after privacy review and scoped labels/filters. |
+| \`greenbone-01\` | 18 | Package and unattended-upgrades text logs | Existing Docker discovery observes seven active sources; Redis emitted zero local lines in the sampled window. High-volume nginx source requires cost/retention review. |
+| \`zabbix-01\` | 17 | \`zabbix_server.log\` (~129 kB), PostgreSQL (~368 kB), nginx access (~9 MB), nginx error (~613 kB), PHP-FPM | Candidate application diagnostics, but protect request/client data and database content; avoid raw nginx access ingestion pending explicit approval. |
+| \`admin-01\` | 17 | Zabbix agent (~188 kB), provisioning/desktop logs | Local sudo audit complete; remote Ansible become remains an operational access issue, not proof of Alloy failure. |
+| \`dns-01\` | 16 | Raw Pi-hole query log (~11.8 MB), FTL, updateGravity | **Do not forward raw DNS**. Preserve verified event-only Pi-hole pipeline; examine sanitized FTL/update outcome only if needed. |
+| \`dns-02\` | 16 | Raw Pi-hole query log (~1.5 MB), FTL, updateGravity | Same privacy restriction as dns-01. |
+| \`edge-01\` | 11 | Journal, package logs, idle empty syslog | No independent file source needed based on metadata alone. |
+| \`mail-relay-01\` | 12 | Journal, package logs, idle empty syslog | Validate Postfix events in journal before adding any raw mail logs; protect addresses and message metadata. |
+| \`komodo-01\` | 12 | Journal, package logs, idle empty syslog | Docker discovery present; Komodo Core had zero local log lines in prior sample, so absence from Loki is not a demonstrated fault. |
+
+**Conservative source decisions:**
+1. Do **not** recursively ingest \`/var/log\`: exclude binary journal/utmp files, rotated and historical files, Proxmox task trees, raw Pi-hole, proxy access files, Samba client-specific logs, sensitive mail/authentication data and duplicate journal-derived files.
+2. Before a file-tail rollout, establish active-event frequency, logrotate behavior, read permissions for the \`alloy\` account, existing journal or aggregate coverage, data minimization, labels, retention and Loki freshness.
+3. Prioritize the demonstrated \`docker-01\` gap with narrowly scoped, event-sanitized collection of BirdNET-Go and Komodo Periphery. Membership in the Docker group exposes privileged socket access; review the security implications before enabling the generic Docker source.
+4. Next evaluate narrow, useful file/event coverage for the two Proxmox backup outcome streams, network-host change JSONL, Zabbix server failures and PostgreSQL errors; raw proxy and DB logs must not be copied without a separate privacy review.
+5. Audit specialist \`monitor-01\` and \`sensor-01\` metadata separately and verify current Loki source-level freshness before closing Step 9.
+
+**Step 9 status:** metadata review complete for the thirteen Ansible-group hosts (twelve remote, one local); specialist hosts and live per-source validation outstanding. No production deployment or ingestion validation is claimed.
