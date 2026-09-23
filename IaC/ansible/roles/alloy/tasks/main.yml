@@ -93,6 +93,29 @@
     append: true
   notify: Restart alloy
 
+- name: Verify Pi-hole log is present before enabling its Alloy pipeline
+  ansible.builtin.stat:
+    path: "{{ alloy_pihole_log_path }}"
+  register: alloy_pihole_log
+  when: alloy_pihole_logs_enabled | bool
+
+- name: Require the expected Pi-hole log
+  ansible.builtin.assert:
+    that:
+      - alloy_pihole_log.stat.exists
+      - alloy_pihole_log.stat.isreg
+    fail_msg: "Pi-hole logging is enabled but the expected log is absent."
+  when: alloy_pihole_logs_enabled | bool
+
+- name: Grant Alloy least-privilege Pi-hole log access
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - pihole
+    append: true
+  notify: Restart alloy
+  when: alloy_pihole_logs_enabled | bool
+
 - name: Ensure Alloy has Docker log access
   ansible.builtin.user:
     name: alloy
@@ -101,6 +124,19 @@
     append: true
   notify: Restart alloy
   when: alloy_docker_logs_enabled | bool
+
+- name: Verify Alloy can read the Pi-hole log without elevated privileges
+  ansible.builtin.command:
+    argv:
+      - runuser
+      - -u
+      - alloy
+      - --
+      - test
+      - -r
+      - "{{ alloy_pihole_log_path }}"
+  changed_when: false
+  when: alloy_pihole_logs_enabled | bool
 
 - name: Verify Docker socket exists for Alloy
   ansible.builtin.stat:
