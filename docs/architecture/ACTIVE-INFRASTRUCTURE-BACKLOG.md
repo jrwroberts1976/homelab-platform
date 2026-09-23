@@ -77,3 +77,6 @@ Each of the 20 agreed delivery steps requires: (1) implementation or verificatio
 ## Maintenance note
 
 Historical `README.md`, `TARGET-STATE.md` and `MIGRATION-TRACKER.md` may still mention work now completed or risk-accepted. Reconcile those separately against this latest user-approved register and the live current-state authority. This file does **not** itself prove a service change.
+
+
+Operator note (2026-09-23): `ssh PROXMOX` lands in an environment where `sudo` is not installed; invoke `pct` directly on PROXMOX, without `sudo`. `admin-01` ED25519 key fingerprint `SHA256:VOH5XAOThB2VgKa4OQl4HB07hTVw4jghOXyAi4O0zxU` is offered to `james@komodo-01` but rejected; read-only CT104 authorized_keys and permissions audit pending.
