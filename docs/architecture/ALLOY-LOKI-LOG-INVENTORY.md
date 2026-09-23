@@ -85,3 +85,15 @@ Read-only live config inspection showed **monitor-01 Alloy active** with dedicat
 A bounded 24-hour Loki query, `limit=1000` per host, showed most recent event ages at query time: `monitor-01` router syslog 4.8 min; `sensor-01` Suricata 0–0.1 min and Zeek 0–0.5 min across multiple label sets; `docker-01` journal newest 0.2 min (a second journal label set 96.2 min); `komodo-01` MongoDB 0.0 min and journal 0.3 min (another label set 7.7 min); `dns-01` Pi-hole 0.1 min and journal 0.4 min; `dns-02` Pi-hole 0.5 min and journal 0.4 min. These are **sampled returned streams**: query-wide limit can omit quieter streams, so do not claim exhaustive 24h source coverage. `admin-01` Alloy active but local config requires elevated access; earlier Ansible become failed with missing sudo password.
 
 **Next reconciliation:** read-only inspect `docker-01` live Docker logging drivers/container list and Komodo Core logging driver/activity, then review Alloy Docker discovery enablement and privacy before proposing changes. Confirm source coverage/freshness for remaining hosts via per-stream queries. Home Assistant OS remains separately not assessed. Pi-hole aggregate integration into morning report remains outstanding.
+
+## Docker logging-driver and container-state audit — operator evidence, 2026-09-23
+
+Read-only Docker inspection completed on `greenbone-01`, `komodo-01`, `docker-01`: **all three daemon defaults and every listed container use `json-file`**. No incompatible logging driver explains absent Loki streams. Container status is point-in-time; a running container may not have emitted logs in the queried 24h window.
+
+| Host | Running containers | Running containers not observed by name in prior 24h Loki `/series` | Explanation / action |
+|---|---|---|---|
+| `greenbone-01` | `gsad`, `gvmd`, `nginx`, `openvasd`, `ospd-openvas`, `pg-gvm`, `redis-server`, `komodo-periphery` (8) | `greenbone-community-edition-redis-server-1` | Docker Alloy source configured and seven other running container names observed; check whether Redis emitted logs and whether discovery includes it. Two ephemeral `gvm-tools-run-*` Loki streams are historical and are not current running containers. |
+| `komodo-01` | `komodo-core-1`, `komodo-mongo-1` (2) | `komodo-core-1` | Docker Alloy source configured; MongoDB live. Check Core local log activity and Docker discovery/relabel before treating as ingestion fault. |
+| `docker-01` | `birdnet-go`, `komodo-periphery-periphery-1` (2) | Both | Installed Alloy config is journal-only; Docker log collection not enabled. Review privacy/volume and enable Docker pipeline through IaC if approved. |
+
+**Next read-only check:** obtain per-container `docker logs --since 24h` counts without exposing log lines, confirm Alloy Docker discovery on Greenbone/Komodo and verify whether the quiet/missing streams have events. If the local logs exist but Loki has no matching stream, investigate ingestion; if no local logs, mark source idle rather than broken. Avoid printing Docker inspect environment or raw logs.
