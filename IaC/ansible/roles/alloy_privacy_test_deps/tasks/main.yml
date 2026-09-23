@@ -1,0 +1,36 @@
+---
+- name: Ensure Debian Python virtual-environment support is present
+  ansible.builtin.apt:
+    name:
+      - python3.13-venv
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+  when: ansible_facts['os_family'] == 'Debian'
+
+- name: Create dedicated privacy-test directory
+  ansible.builtin.file:
+    path: "{{ alloy_privacy_test_venv | dirname }}"
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+
+- name: Create disposable Python virtual environment
+  ansible.builtin.command:
+    cmd: "python3 -m venv {{ alloy_privacy_test_venv }}"
+    creates: "{{ alloy_privacy_test_venv }}/bin/python"
+
+- name: Install isolated Loki payload decoding dependencies
+  ansible.builtin.pip:
+    name: "{{ alloy_privacy_test_packages }}"
+    virtualenv: "{{ alloy_privacy_test_venv }}"
+    extra_args: --only-binary=:all:
+
+- name: Verify isolated Snappy and Protobuf imports
+  ansible.builtin.command:
+    argv:
+      - "{{ alloy_privacy_test_venv }}/bin/python"
+      - -c
+      - 'import snappy, google.protobuf; print("Alloy privacy test dependencies: OK")'
+  changed_when: false
