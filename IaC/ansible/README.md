@@ -16,6 +16,20 @@ ansible all --list-hosts
 
 `ansible.cfg` enables host-key checking and uses `inventory/hosts.yml` plus the local `roles/` directory. Unknown or changed SSH host keys must be validated rather than bypassed during normal operation.
 
+## Passwordless SSH preflight
+
+Before deploying from `admin-01`, verify the inventory's configured SSH account and private key without permitting password fallback:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible
+ansible-playbook --syntax-check playbooks/ssh-preflight.yml
+ansible-playbook playbooks/ssh-preflight.yml
+```
+
+The read-only playbook tests all remote Ansible inventory hosts, excluding the local controller `admin-01`. It runs `id -un` using each host's `ansible_user` and `ansible_ssh_private_key_file`, with SSH BatchMode and host-key checking retained. Any unreachable host is a failed preflight; review the login identity, configured key, `authorized_keys`, permissions and verified host key before running deployment playbooks. This verifies login only, **not** sudo/become permissions. Do not copy keys, enable password authentication, or turn off host-key checking to make the test pass.
+
+For example, `komodo-01` is configured as `root` using `~/.ssh/proxmox-automation`; manually testing `james@komodo-01` with `id_ed25519` does not exercise the IaC connection.
+
 ## Current inventory groups
 
 | Group | Current members | Purpose |
