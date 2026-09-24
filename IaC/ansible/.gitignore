@@ -1,0 +1,3 @@
+# Controller-side OS identification evidence; never commit operational host facts.
+.local/state/homelab-os-facts/
+homelab-os-facts/
