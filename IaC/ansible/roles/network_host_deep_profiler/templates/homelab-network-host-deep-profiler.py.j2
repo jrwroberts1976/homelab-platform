@@ -103,6 +103,68 @@ def ip_sort(value):
         return (999, 999, 999, 999)
 
 
+SCAN_COOLDOWN_SECONDS = 24 * 60 * 60
+
+
+def scan_due(record, now, cooldown=SCAN_COOLDOWN_SECONDS):
+    last_attempt = int(record.get("last_attempt", 0) or 0)
+
+    if last_attempt <= 0:
+        return True
+
+    return now - last_attempt >= cooldown
+
+
+def persist_profiles(state, profiles):
+    state["profiles"] = profiles
+    save_atomic(
+        STATE_FILE,
+        json.dumps(state, indent=2, sort_keys=True) + "\n",
+        0o600,
+    )
+
+
+def merge_scan_evidence(
+    previous_profile,
+    tcp,
+    udp,
+    udp_error,
+    now,
+):
+    """Merge successful scans without replacing failed UDP evidence."""
+    previous = previous_profile or {}
+
+    result = {
+        "tcp": tcp,
+        "tcp_scanned_at": now,
+        "errors": {},
+    }
+
+    if udp_error:
+        result["errors"]["udp"] = str(udp_error)
+
+        if "udp" in previous:
+            result["udp"] = previous["udp"]
+            result["udp_scanned_at"] = previous.get(
+                "udp_scanned_at",
+                previous.get("scanned_at"),
+            )
+            result["udp_evidence_stale"] = True
+        else:
+            result["udp"] = {
+                "os_matches": [],
+                "ports": [],
+            }
+            result["udp_scanned_at"] = None
+            result["udp_evidence_stale"] = False
+    else:
+        result["udp"] = udp
+        result["udp_scanned_at"] = now
+        result["udp_evidence_stale"] = False
+
+    return result
+
+
 def run_nmap(args, timeout=1800):
     result = subprocess.run(
         ["nmap", *args],
@@ -122,7 +184,10 @@ def run_nmap(args, timeout=1800):
     return result.stdout
 
 
-def fresh_arp_presence(ip):
+def fresh_arp_presence(ip, expected_mac):
+    if not ip or not normalise_mac(expected_mac):
+        return False
+
     xml = run_nmap(
         [
             "-sn",
@@ -142,24 +207,63 @@ def fresh_arp_presence(ip):
     for host in root.findall("host"):
         status = host.find("status")
 
+        if status is None or status.get("state") != "up":
+            continue
+
+        addresses = {
+            item.get("addrtype"): item.get("addr", "")
+            for item in host.findall("address")
+        }
+
         if (
-            status is not None
-            and status.get("state") == "up"
+            addresses.get("ipv4") == ip
+            and normalise_mac(addresses.get("mac"))
+            == normalise_mac(expected_mac)
         ):
             return True
 
     return False
 
 
-def parse_host(xml):
+def validate_scan_xml(xml, expected_ip):
     root = ET.fromstring(xml)
-    host = root.find("host")
 
-    if host is None:
-        return {
-            "os_matches": [],
-            "ports": [],
-        }
+    if root.tag != "nmaprun":
+        raise ValueError("Unexpected Nmap XML root")
+
+    finished = root.find("./runstats/finished")
+
+    if finished is None or finished.get("exit") != "success":
+        raise ValueError("Nmap scan did not finish successfully")
+
+    matches = []
+
+    for host in root.findall("host"):
+        addresses = [
+            address.get("addr", "")
+            for address in host.findall("address")
+            if address.get("addrtype") == "ipv4"
+        ]
+
+        if expected_ip in addresses:
+            matches.append(host)
+
+    if len(matches) != 1:
+        raise ValueError(
+            "Expected exactly one host matching " + expected_ip
+        )
+
+    host = matches[0]
+    status = host.find("status")
+
+    if status is None or status.get("state") != "up":
+        raise ValueError("Target host is not marked up")
+
+    return host
+
+
+def parse_host(xml, expected_ip):
+    host = validate_scan_xml(xml, expected_ip)
 
     os_matches = []
 
@@ -305,7 +409,7 @@ def deep_tcp_scan(ip):
         ip,
     ])
 
-    return parse_host(xml)
+    return parse_host(xml, ip)
 
 
 def deep_udp_scan(ip):
@@ -327,7 +431,7 @@ def deep_udp_scan(ip):
         ip,
     ])
 
-    return parse_host(xml)
+    return parse_host(xml, ip)
 
 
 def prom_escape(value):
@@ -365,10 +469,14 @@ def write_metrics(profiles):
             + "} 1"
         )
 
-        if record.get("status") != "complete":
+        if record.get("status") not in ("complete", "partial"):
             continue
 
         profile = record.get("profile", {})
+
+        # A partial profile can still contain valid TCP evidence.
+        if not isinstance(profile.get("tcp"), dict):
+            continue
 
         tcp_ports = [
             item
@@ -392,6 +500,9 @@ def write_metrics(profiles):
             + "} "
             + str(len(tcp_ports))
         )
+
+        if record.get("status") != "complete":
+            continue
 
         metrics.append(
             "homelab_network_host_deep_profile_last_success_seconds{"
@@ -569,7 +680,7 @@ pending = sorted(
     [
         (mac, record)
         for mac, record in profiles.items()
-        if record.get("status") == "pending"
+        if record.get("status") in ("pending", "partial")
     ],
     key=lambda item: int(
         item[1].get(
@@ -606,20 +717,25 @@ for mac, record in pending:
     ):
         continue
 
+    if not scan_due(record, NOW):
+        continue
+
     record["last_presence_check"] = NOW
 
     try:
-        live = fresh_arp_presence(ip)
+        live = fresh_arp_presence(ip, mac)
     except Exception as exc:
         record["last_error"] = (
             "presence_check: " + str(exc)
         )
+        persist_profiles(state, profiles)
         continue
 
     if not live:
         record["last_error"] = (
             "fresh_arp_presence_failed"
         )
+        persist_profiles(state, profiles)
 
         print(
             json.dumps({
@@ -641,55 +757,143 @@ for mac, record in pending:
 
     record["last_attempt"] = NOW
     record["last_error"] = ""
+    profiles_started += 1
 
-    errors = {}
+    # Persist before Nmap: a crash must not bypass the cooldown.
+    persist_profiles(state, profiles)
 
-    try:
-        tcp = deep_tcp_scan(ip)
-    except Exception as exc:
-        record["last_error"] = (
-            "tcp_scan: " + str(exc)
-        )
+    previous_profile = record.get("profile", {})
 
-        print(
-            json.dumps({
-                "event": "deep_profile_failed",
-                "mac": mac,
-                "ip": ip,
-                "error": record["last_error"],
-            }),
-            flush=True,
-        )
+    # Reuse TCP evidence only for a partial profile at the same IP.
+    udp_only = (
+        record.get("status") == "partial"
+        and isinstance(previous_profile, dict)
+        and isinstance(previous_profile.get("tcp"), dict)
+        and previous_profile.get("tcp_scanned_at") is not None
+        and record.get("profiled_ip") == ip
+    )
 
-        continue
+    if udp_only:
+        tcp = previous_profile["tcp"]
+    else:
+        try:
+            tcp = deep_tcp_scan(ip)
+        except Exception as exc:
+            record["last_error"] = (
+                "tcp_scan: " + str(exc)
+            )
+
+            persist_profiles(state, profiles)
+
+            print(
+                json.dumps({
+                    "event": "deep_profile_failed",
+                    "mac": mac,
+                    "ip": ip,
+                    "error": record["last_error"],
+                }),
+                flush=True,
+            )
+
+            continue
+
+    udp_error = None
 
     try:
         udp = deep_udp_scan(ip)
     except Exception as exc:
-        udp = {
-            "os_matches": [],
-            "ports": [],
-        }
+        udp = None
+        udp_error = str(exc)
 
-        errors["udp"] = str(exc)
+    # Evidence from a previous IP must not appear current.
+    previous_ip = record.get("profiled_ip", "")
+    ip_changed = bool(previous_ip and previous_ip != ip)
+
+    merge_previous = (
+        {}
+        if ip_changed
+        else previous_profile
+    )
+
+    merged_profile = merge_scan_evidence(
+        merge_previous,
+        tcp,
+        udp,
+        udp_error,
+        NOW,
+    )
+
+    # Retain at most five historical UDP observations per MAC.
+    # Accept the older single-entry format during migration.
+    history = []
+
+    if isinstance(previous_profile, dict):
+        existing = previous_profile.get("historical_udp_entries", [])
+
+        if isinstance(existing, list):
+            history = [
+                entry
+                for entry in existing
+                if isinstance(entry, dict)
+            ]
+
+        legacy = previous_profile.get("historical_udp")
+
+        if isinstance(legacy, dict) and legacy not in history:
+            history.append(legacy)
+
+        if ip_changed:
+            previous_udp = previous_profile.get("udp")
+            previous_udp_time = previous_profile.get(
+                "udp_scanned_at",
+                previous_profile.get("scanned_at"),
+            )
+
+            # Empty results from failed scans are not observations.
+            if (
+                isinstance(previous_udp, dict)
+                and previous_udp_time is not None
+            ):
+                entry = {
+                    "ip": previous_ip,
+                    "evidence": previous_udp,
+                    "scanned_at": previous_udp_time,
+                }
+
+                if entry not in history:
+                    history.append(entry)
+
+    if history:
+        merged_profile["historical_udp_entries"] = history[-5:]
+
+    if udp_only:
+        merged_profile["tcp_scanned_at"] = (
+            previous_profile["tcp_scanned_at"]
+        )
+
+    partial = bool(merged_profile["errors"])
 
     record.update({
-        "status": "complete",
+        "status": "partial" if partial else "complete",
         "profiled_at": NOW,
         "profiled_ip": ip,
-        "last_error": "",
-        "profile": {
-            "tcp": tcp,
-            "udp": udp,
-            "errors": errors,
-        },
+        "last_error": (
+            "udp_scan: " + merged_profile["errors"]["udp"]
+            if partial else ""
+        ),
+        "profile": merged_profile,
     })
 
-    profiles_started += 1
+    # Persist completed evidence before processing another device.
+    persist_profiles(state, profiles)
 
     print(
         json.dumps({
-            "event": "deep_profile_complete",
+            "event": (
+                "deep_profile_partial"
+                if partial
+                else "deep_profile_complete"
+            ),
             "mac": mac,
             "ip": ip,
             "hostname": record.get(
@@ -700,9 +904,9 @@ for mac, record in pending:
                 tcp.get("ports", [])
             ),
             "udp_interesting_ports": len(
-                udp.get("ports", [])
+                merged_profile["udp"].get("ports", [])
             ),
-            "partial": bool(errors),
+            "partial": bool(merged_profile["errors"]),
         }),
         flush=True,
     )
@@ -735,6 +939,11 @@ print(
             1
             for item in profiles.values()
             if item.get("status") == "complete"
+        ),
+        "partial": sum(
+            1
+            for item in profiles.values()
+            if item.get("status") == "partial"
         ),
         "baseline": sum(
             1

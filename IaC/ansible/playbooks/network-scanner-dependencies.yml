@@ -1,0 +1,8 @@
+---
+- name: Provision network scanner on monitor-01
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: network_scanner_dependencies

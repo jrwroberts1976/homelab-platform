@@ -1,0 +1,48 @@
+IP,Canonical name,Role,Nmap MAC,Router MAC,Router hostname,Router online,Router last seen,Open TCP ports,Identified services,Evidence status
+192.168.2.1,asus-router,"Router, DHCP, AiMesh controller and OpenVPN remote-access endpoint",24:4B:FE:5E:CC:C8,,,,,22,22: ssh Dropbear sshd,SCAN ONLY
+192.168.2.6,,,,58:02:05:FD:E1:8B,LAPTOP-SRR7CFCE,1,2026-09-24T13:25:41,,,ROUTER ONLY / UNCONFIRMED
+192.168.2.7,,,00:1C:2B:5A:6D:FD,00:1C:2B:5A:6D:FD,myHivehub,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.8,,,,94:3A:91:CD:4C:51,,0,2026-09-24T12:19:41,,,ROUTER ONLY / UNCONFIRMED
+192.168.2.16,hp-procurve-2510g-24,Core managed switch and SPAN source,00:9C:02:45:39:00,00:9C:02:45:39:00,,1,2026-09-24T13:25:41,"23,80",23: telnet; 80: http eHTTP 2.0,SCAN + ROUTER
+192.168.2.17,,,A4:77:33:5F:94:FE,A4:77:33:5F:94:FE,Google-Home,1,2026-09-24T13:25:41,"8008,8009,8443",8008: http; 8009: ajp13; 8443: https-alt,SCAN + ROUTER
+192.168.2.29,,,20:23:51:DC:EF:05,20:23:51:DC:EF:05,H100,1,2026-09-24T13:25:41,80,80: http,SCAN + ROUTER
+192.168.2.30,,,C4:82:E1:F2:F9:9F,C4:82:E1:F2:F9:9F,wlan0,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.48,admin-01,"Raspberry Pi 3 administration, SSH jump, IaC controller and Corosync QNetd host",B8:27:EB:E8:36:CD,B8:27:EB:E8:36:CD,admin-01,1,2026-09-24T13:25:41,"22,111,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 111: rpcbind; 9100: jetdirect,SCAN + ROUTER
+192.168.2.49,,,78:8C:B5:38:16:83,78:8C:B5:38:16:83,KC420WS,1,2026-09-24T13:25:41,9999,9999: abyss,SCAN + ROUTER
+192.168.2.50,dns-02,"Pi-hole and Unbound, CT100 on PROXMOX",BC:24:11:35:3B:11,BC:24:11:35:3B:11,,1,2026-09-24T13:25:41,"22,53,80,443,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 53: domain dnsmasq 2.93; 80: webdav; 443: webdav; 9100: jetdirect,SCAN + ROUTER
+192.168.2.51,dns-01,"Pi-hole and Unbound, CT101 on Proxmox-2",BC:24:11:C3:75:BA,BC:24:11:C3:75:BA,,1,2026-09-24T13:25:41,"22,53,80,443,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 53: domain dnsmasq 2.93; 80: webdav; 443: webdav; 9100: jetdirect,SCAN + ROUTER
+192.168.2.52,monitor-01,"Prometheus, Grafana, Alertmanager, Blackbox and Loki, VM202 on Proxmox-2",,BC:24:11:0B:16:A2,,1,2026-09-24T13:25:41,,,CANONICAL / SCANNER SELF
+192.168.2.53,cloud-01,"Production Nextcloud, PostgreSQL and Redis, VM200 on PROXMOX",BC:24:11:E9:49:60,BC:24:11:E9:49:60,,1,2026-09-24T13:25:41,"22,8080,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 8080: http Apache httpd 2.4.68; 9100: jetdirect,SCAN + ROUTER
+192.168.2.54,mail-relay-01,"Internal Postfix SMTP relay, CT102 on PROXMOX",BC:24:11:A5:CB:28,BC:24:11:A5:CB:28,,1,2026-09-24T13:25:41,"22,25,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 25: smtp Postfix smtpd; 9100: jetdirect,SCAN + ROUTER
+192.168.2.55,sensor-01,"Suricata and Zeek passive network sensor, VM201 on PROXMOX",BC:24:11:3B:B9:E4,BC:24:11:3B:B9:E4,,1,2026-09-24T13:25:41,"22,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 9100: jetdirect,SCAN + ROUTER
+192.168.2.56,edge-01,"Reserved edge LXC, CT103 on Proxmox-2; cloudflared not deployed",BC:24:11:8D:1B:C1,BC:24:11:8D:1B:C1,,1,2026-09-24T13:25:41,"22,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 9100: jetdirect,SCAN + ROUTER
+192.168.2.57,greenbone-01,"Greenbone Community vulnerability scanner, VM203 on Proxmox-2",BC:24:11:26:25:D1,BC:24:11:26:25:D1,,1,2026-09-24T13:25:41,"22,443,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 443: http nginx 1.30.4; 9100: jetdirect,SCAN + ROUTER
+192.168.2.58,komodo-01,"Komodo container-management control-plane host, CT104 on PROXMOX; Docker, MongoDB and Komodo Core commissioned; application backup and isolated restore validated; Proxmox backup scheduled with manual backup/integrity proof; first unattended run and protection remain pending",02:00:00:00:01:04,02:00:00:00:01:04,,1,2026-09-24T13:25:41,"22,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 9100: jetdirect,SCAN + ROUTER
+192.168.2.59,zabbix-01,"Zabbix monitoring platform, CT105 on PROXMOX; PostgreSQL, TimescaleDB, Zabbix Server, Agent 2 and Nginx active; unattended nightly backup observed on 2026-09-17",02:00:00:00:01:05,02:00:00:00:01:05,,1,2026-09-24T13:25:41,"22,80,8080,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 80: http nginx; 8080: http nginx; 9100: jetdirect,SCAN + ROUTER
+192.168.2.60,home-01,"Home Assistant OS 18.2, VM204 on PROXMOX; Home Assistant Core 2026.9.2; 2 vCPU, 4096 MiB RAM, 32 GiB vm-ssd; fixed MAC 02:00:00:00:02:04; native backup and manual Proxmox backup/integrity proof complete; first unattended scheduled backup and external monitoring remain pending",02:00:00:00:02:04,02:00:00:00:02:04,homeassistant,1,2026-09-24T13:25:41,"80,111",80: http aiohttp 3.14.3; 111: rpcbind,SCAN + ROUTER
+192.168.2.70,PROXMOX,Proxmox VE cluster node 1 and cluster anchor,80:E8:2C:1C:55:D2,80:E8:2C:1C:55:D2,,1,2026-09-24T13:25:41,"22,111,3128,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 111: rpcbind; 3128: http Proxmox Virtual Environment REST API 3.0; 9100: jetdirect,SCAN + ROUTER
+192.168.2.71,Proxmox-2,Proxmox VE cluster node 2 and Network Host Collector host,00:1A:9F:0C:30:3B,00:1A:9F:0C:30:3B,,1,2026-09-24T13:25:41,"22,111,3128,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 111: rpcbind; 3128: http Proxmox Virtual Environment REST API 3.0; 9100: jetdirect,SCAN + ROUTER
+192.168.2.76,,,68:FF:7B:1B:1E:AB,68:FF:7B:1B:1E:AB,,1,2026-09-24T13:25:41,9999,9999: abyss,SCAN + ROUTER
+192.168.2.78,,,3C:52:A1:86:BC:56,3C:52:A1:86:BC:56,TC65,1,2026-09-24T13:25:41,"443,554",443: https; 554: rtsp,SCAN + ROUTER
+192.168.2.90,,,3C:64:CF:87:AE:EA,3C:64:CF:87:AE:EA,TC40,1,2026-09-24T13:25:41,"443,554",443: https; 554: rtsp,SCAN + ROUTER
+192.168.2.91,,,68:FF:7B:1B:33:C0,68:FF:7B:1B:33:C0,,1,2026-09-24T13:25:41,9999,9999: abyss,SCAN + ROUTER
+192.168.2.92,,,60:83:E7:F4:0B:2E,60:83:E7:F4:0B:2E,P110,1,2026-09-24T13:25:41,80,80: http,SCAN + ROUTER
+192.168.2.95,,,60:83:E7:F3:C1:92,60:83:E7:F3:C1:92,P110,1,2026-09-24T13:25:41,80,80: http,SCAN + ROUTER
+192.168.2.123,,,,,,0,2026-09-24T12:19:41,,,ROUTER ONLY / UNCONFIRMED
+192.168.2.128,,,5C:E9:31:18:C1:4A,5C:E9:31:18:C1:4A,TC40,1,2026-09-24T13:25:41,"443,554,8443",443: https; 554: rtsp; 8443: https-alt,SCAN + ROUTER
+192.168.2.130,,,14:7F:67:6D:E5:98,14:7F:67:6D:E5:98,LGwebOSTV,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.144,,,,24:4B:FE:5E:CC:C8,,0,2026-09-24T12:19:41,,,ROUTER ONLY / UNCONFIRMED
+192.168.2.155,,,,D4:E9:F4:63:28:7C,XS0B-iR_5B10EC,1,2026-09-24T13:25:41,,,ROUTER ONLY / UNCONFIRMED
+192.168.2.167,,,F8:17:2D:64:CA:04,F8:17:2D:64:CA:04,wlan0,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.181,asus-aimesh-181,Wireless mesh node,04:D4:C4:B8:52:28,04:D4:C4:B8:52:28,RT-AC86U-5228,1,2026-09-24T13:25:41,"22,80,8443",22: ssh Dropbear sshd; 80: http; 8443: https-alt,SCAN + ROUTER
+192.168.2.183,,,24:B2:B9:30:F8:55,24:B2:B9:30:F8:55,James-LT,1,2026-09-24T13:25:41,"445,8080",445: microsoft-ds; 8080: http-proxy,SCAN + ROUTER
+192.168.2.195,media-01,Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target,2C:CF:67:30:BE:1F,2C:CF:67:30:BE:1F,media-01,1,2026-09-24T13:25:41,"22,445,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 445: netbios-ssn Samba smbd 4; 9100: jetdirect,SCAN + ROUTER
+192.168.2.206,,,16:C1:05:AD:4B:8A,16:C1:05:AD:4B:8A,james-s-A13,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.218,asus-aimesh-218,Wireless mesh node,04:D4:C4:C1:62:38,04:D4:C4:C1:62:38,RT-AC86U-6238,1,2026-09-24T13:25:41,"22,80,8443",22: ssh Dropbear sshd; 80: http; 8443: https-alt,SCAN + ROUTER
+192.168.2.219,,,EC:91:61:9C:A4:45,EC:91:61:9C:A4:45,APL-PF5F6D28,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.220,docker-01,Raspberry Pi 4 BirdNET-Go Docker host,D8:3A:DD:5A:51:44,D8:3A:DD:5A:51:44,docker-01,1,2026-09-24T13:25:41,"22,111,8080,9100",22: ssh OpenSSH 10.0p2 Debian 7+deb13u4; 111: rpcbind; 8080: http Golang net/http server; 9100: jetdirect,SCAN + ROUTER
+192.168.2.224,,,,92:FF:53:0A:16:E9,POCO-C75,1,2026-09-24T13:25:41,,,ROUTER ONLY / UNCONFIRMED
+192.168.2.233,,,68:FF:7B:1B:2D:07,68:FF:7B:1B:2D:07,HS100,1,2026-09-24T13:25:41,9999,9999: abyss,SCAN + ROUTER
+192.168.2.234,,,5C:34:00:50:DF:B3,5C:34:00:50:DF:B3,,1,2026-09-24T13:25:41,,,SCAN + ROUTER
+192.168.2.249,,,F0:EF:86:35:BC:55,F0:EF:86:35:BC:55,Google-Home-Mini,1,2026-09-24T13:25:41,"8008,8009,8443",8008: http; 8009: ajp13; 8443: https-alt,SCAN + ROUTER
+192.168.2.252,,,40:ED:00:7C:7B:80,40:ED:00:7C:7B:80,L510,1,2026-09-24T13:25:41,80,80: http,SCAN + ROUTER
