@@ -580,10 +580,6 @@ def pihole_evidence():
                     raise ValueError("Loki returned non-success status")
                 results = payload.get("data", {}).get("result", [])
                 if not results:
-                    # An empty matching result is not proof of zero events.
-                    if key == "gravity_block_events_24h" and host_data["events_24h"] is not None:
-                        host_data[key] = 0
-                        continue
                     raise ValueError("No Loki data for " + key)
                 value = float(results[0]["value"][1])
                 if not value.is_integer() or value < 0:
