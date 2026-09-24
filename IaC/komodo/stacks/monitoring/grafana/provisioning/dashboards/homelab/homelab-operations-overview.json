@@ -2,7 +2,7 @@
   "id": null,
   "uid": "homelab-operations",
   "title": "Homelab — Home",
-  "description": "At-a-glance alert, exporter, ICMP, patch and device exceptions. Use Hosts or Network & Security for investigation.",
+  "description": "Six at-a-glance health indicators. No empty alert-detail table; investigate firing alerts in Grafana Alerting.",
   "tags": [
     "homelab",
     "operations",
@@ -70,7 +70,7 @@
       "id": 1,
       "type": "stat",
       "title": "Firing Alerts",
-      "description": "",
+      "description": "Zero means Prometheus currently reports no firing alerts; check alert-rule evaluation and Prometheus health separately.",
       "gridPos": {
         "x": 0,
         "y": 0,
@@ -84,7 +84,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(ALERTS{alertstate=\"firing\"})",
+          "expr": "sum(ALERTS{alertstate=\"firing\"}) or vector(0)",
           "instant": true,
           "range": false
         }
@@ -308,46 +308,6 @@
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto"
-      }
-    },
-    {
-      "id": 13,
-      "type": "table",
-      "title": "Alerts needing attention",
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 24,
-        "h": 9
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "ALERTS{alertstate=\"firing\"}",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
       }
     },
     {
