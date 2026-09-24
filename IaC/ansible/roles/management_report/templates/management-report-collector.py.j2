@@ -556,6 +556,53 @@ def greenbone_evidence():
     }
 
 
+
+def pihole_evidence():
+    """Privacy-safe Loki event counts; never fetch individual DNS queries."""
+    hosts = {}
+    for host in ("dns-01", "dns-02"):
+        selector = '{job="pihole",source="pihole-event",hostname="' + host + '"}'
+        host_data = {"status": "unavailable", "events_24h": None,
+                     "gravity_block_events_24h": None, "recent_events_15m": None}
+        try:
+            for key, expression in (
+                ("events_24h", "sum(count_over_time(" + selector + "[24h]))"),
+                ("gravity_block_events_24h", "sum(count_over_time(" + selector + ' |= "gravity blocked"[24h]))'),
+                ("recent_events_15m", "sum(count_over_time(" + selector + "[15m]))"),
+            ):
+                response = requests.get(
+                    f"{LOKI_URL}/loki/api/v1/query",
+                    params={"query": expression}, timeout=15,
+                )
+                response.raise_for_status()
+                payload = response.json()
+                if payload.get("status") != "success":
+                    raise ValueError("Loki returned non-success status")
+                results = payload.get("data", {}).get("result", [])
+                if not results:
+                    raise ValueError("No Loki data for " + key)
+                value = float(results[0]["value"][1])
+                if not value.is_integer() or value < 0:
+                    raise ValueError("Invalid count for " + key)
+                host_data[key] = int(value)
+            host_data["status"] = (
+                "ok" if host_data["recent_events_15m"] > 0 else "stale"
+            )
+        except (requests.RequestException, ValueError, KeyError, IndexError, TypeError) as exc:
+            host_data["status"] = "unavailable"
+            host_data["reason"] = str(exc)
+        hosts[host] = host_data
+    return {
+        "source": "Loki pihole-event streams",
+        "collected_at": datetime.now(timezone.utc).isoformat(),
+        "window_hours": 24,
+        "freshness_window_minutes": 15,
+        "metric_note": "Log event counts, not unique DNS queries or Pi-hole API totals",
+        "hosts": hosts,
+        "status": "ok" if all(h["status"] == "ok" for h in hosts.values()) else "partial",
+    }
+
+
 def main():
     collected_at = datetime.now(timezone.utc).isoformat()
 
@@ -683,6 +730,7 @@ def main():
         "collected_at": collected_at,
         "greenbone": greenbone_evidence(),
         "network_sensor": sensor_evidence(),
+        "pihole": pihole_evidence(),
         "loki": {
             "evidence_window_hours": {{ management_report_evidence_hours }},
             "expected_hosts": EXPECTED_HOST_COUNT,
