@@ -48,6 +48,34 @@
       delegate_to: localhost
       become: false
 
+    - name: Check for an earlier verified OS record on the controller
+      ansible.builtin.stat:
+        path: "{{ linux_os_facts_store }}/{{ inventory_hostname }}.json"
+      register: previous_os_file
+      delegate_to: localhost
+      become: false
+
+    - name: Read the previous OS record when present
+      ansible.builtin.slurp:
+        src: "{{ linux_os_facts_store }}/{{ inventory_hostname }}.json"
+      register: previous_os_data
+      when: previous_os_file.stat.exists
+      delegate_to: localhost
+      become: false
+
+    - name: Determine whether the OS or kernel has changed
+      ansible.builtin.set_fact:
+        previous_os: "{{ (previous_os_data.content | b64decode | from_json) if previous_os_file.stat.exists else {} }}"
+        current_os_signature: "{{ [ansible_facts.distribution, ansible_facts.distribution_version, ansible_facts.kernel, ansible_facts.architecture] }}"
+
+    - name: Report OS change separately from evidence refresh
+      ansible.builtin.debug:
+        msg:
+          host: "{{ inventory_hostname }}"
+          os_changed: "{{ previous_os_file.stat.exists and ([previous_os.os_name | default(''), previous_os.os_version | default(''), previous_os.kernel | default(''), previous_os.architecture | default('')] != current_os_signature) }}"
+          first_observation: "{{ not previous_os_file.stat.exists }}"
+          evidence_refreshed: true
+
     - name: Save directly verified OS evidence on the controller
       ansible.builtin.copy:
         dest: "{{ linux_os_facts_store }}/{{ inventory_hostname }}.json"
