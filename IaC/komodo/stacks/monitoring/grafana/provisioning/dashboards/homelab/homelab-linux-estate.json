@@ -604,7 +604,7 @@
         "x": 0,
         "y": 37,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -664,7 +664,7 @@
         "x": 12,
         "y": 37,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -706,9 +706,9 @@
       "title": "Updates Available",
       "gridPos": {
         "x": 0,
-        "y": 42,
+        "y": 43,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -750,9 +750,9 @@
       "title": "Security Updates",
       "gridPos": {
         "x": 12,
-        "y": 42,
+        "y": 43,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -794,9 +794,9 @@
       "title": "Patch Check Age",
       "gridPos": {
         "x": 0,
-        "y": 47,
+        "y": 49,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -838,9 +838,9 @@
       "title": "Unattended Upgrades Enabled",
       "gridPos": {
         "x": 12,
-        "y": 47,
+        "y": 49,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -882,9 +882,9 @@
       "title": "Unattended Upgrades Active",
       "gridPos": {
         "x": 0,
-        "y": 52,
+        "y": 55,
         "w": 12,
-        "h": 5
+        "h": 7
       },
       "datasource": {
         "type": "prometheus",
@@ -926,7 +926,7 @@
       "title": "Operating System Identity",
       "gridPos": {
         "x": 12,
-        "y": 50,
+        "y": 55,
         "w": 12,
         "h": 7
       },
@@ -967,7 +967,7 @@
       "title": "Kernel / System Identity",
       "gridPos": {
         "x": 0,
-        "y": 57,
+        "y": 62,
         "w": 12,
         "h": 7
       },
@@ -1008,9 +1008,9 @@
       "title": "Service / Network Probe State",
       "gridPos": {
         "x": 12,
-        "y": 58,
+        "y": 62,
         "w": 12,
-        "h": 6
+        "h": 7
       },
       "datasource": {
         "type": "prometheus",
@@ -1050,7 +1050,7 @@
       "title": "24h Availability",
       "gridPos": {
         "x": 0,
-        "y": 64,
+        "y": 69,
         "w": 12,
         "h": 6
       },
@@ -1092,9 +1092,9 @@
       "title": "Loki Heartbeat Present",
       "gridPos": {
         "x": 12,
-        "y": 65,
+        "y": 69,
         "w": 12,
-        "h": 5
+        "h": 6
       },
       "datasource": {
         "type": "prometheus",
@@ -1136,7 +1136,7 @@
       "title": "Failed systemd Units",
       "gridPos": {
         "x": 0,
-        "y": 70,
+        "y": 75,
         "w": 12,
         "h": 8
       },
@@ -1177,7 +1177,7 @@
       "title": "System Journal Volume",
       "gridPos": {
         "x": 12,
-        "y": 70,
+        "y": 75,
         "w": 12,
         "h": 8
       },
@@ -1219,7 +1219,7 @@
       "title": "Recent Errors / Failures",
       "gridPos": {
         "x": 0,
-        "y": 78,
+        "y": 83,
         "w": 12,
         "h": 10
       },
@@ -1252,7 +1252,7 @@
       "title": "Recent Journal",
       "gridPos": {
         "x": 12,
-        "y": 78,
+        "y": 83,
         "w": 12,
         "h": 10
       },
