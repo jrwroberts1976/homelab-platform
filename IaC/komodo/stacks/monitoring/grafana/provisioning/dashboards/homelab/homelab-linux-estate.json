@@ -2,7 +2,7 @@
   "id": null,
   "uid": "homelab-linux-estate",
   "title": "Homelab — Hosts",
-  "description": "Focused Linux health and resource usage. Select one host for detailed graphs. Patch counts are on Patch & Software; deeper diagnostics remain in Node Detail.",
+  "description": "Single-node health and resource diagnostics. Select exactly one host; estate-wide health belongs on Home and patch totals on Patch & Software.",
   "tags": [
     "homelab",
     "linux",
@@ -32,12 +32,12 @@
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
-        "includeAll": true,
-        "multi": true,
-        "allValue": ".*",
+        "includeAll": false,
+        "multi": false,
         "current": {
-          "text": "All",
-          "value": "$__all"
+          "selected": true,
+          "text": "monitor-01",
+          "value": "monitor-01"
         },
         "sort": 1
       }
