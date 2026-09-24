@@ -235,7 +235,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_host_first_seen_seconds > time() - 86400)",
+          "expr": "count(homelab_network_host_first_seen_seconds > time() - 86400) or vector(0)",
           "instant": true,
           "range": false
         }
@@ -421,6 +421,32 @@
           "options": {
             "mode": "columns"
           }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "instance": false,
+              "job": true,
+              "target": true,
+              "target_name": true,
+              "hostname": true,
+              "Value": true,
+              "Value #A": true,
+              "__name__": true
+            },
+            "indexByName": {
+              "instance": 0,
+              "ip": 1,
+              "os": 2
+            },
+            "renameByName": {
+              "instance": "Hostname",
+              "ip": "IP",
+              "os": "Operating System"
+            }
+          }
         }
       ],
       "fieldConfig": {
@@ -449,7 +475,8 @@
       "options": {
         "showHeader": true,
         "cellHeight": "sm"
-      }
+      },
+      "description": "Show hostname from instance, IP and operating system when an OS label is supplied by the discovery exporter. Hide exporter job/target, duplicate hostname and raw metric value."
     },
     {
       "id": 8,
