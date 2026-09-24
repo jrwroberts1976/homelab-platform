@@ -1,8 +1,8 @@
 {
   "id": null,
   "uid": "homelab-network-hosts",
-  "title": "Homelab \u2014 Network Hosts",
-  "description": "Network inventory, lifecycle, latency, enrichment and one-time deep profiling.",
+  "title": "Homelab — Network Hosts",
+  "description": "Network discovery overview: inventory, online/offline state, discovery latency, last-seen freshness, deep-profile ports, enrichment health and lifecycle events. Switch port telemetry remains on Physical Network & Switch.",
   "tags": [
     "homelab",
     "network",
@@ -23,7 +23,32 @@
   "annotations": {
     "list": []
   },
-  "links": [],
+  "links": [
+    {
+      "title": "Home",
+      "type": "link",
+      "url": "/d/homelab-operations",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Device Detail",
+      "type": "link",
+      "url": "/d/homelab-network-device-detail",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": true
+    },
+    {
+      "title": "Physical Network",
+      "type": "link",
+      "url": "/d/homelab-physical-network",
+      "targetBlank": false,
+      "includeVars": false,
+      "keepTime": true
+    }
+  ],
   "panels": [
     {
       "id": 1,
@@ -34,7 +59,7 @@
         "x": 0,
         "y": 0,
         "w": 4,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -87,7 +112,7 @@
         "x": 4,
         "y": 0,
         "w": 4,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -140,7 +165,7 @@
         "x": 8,
         "y": 0,
         "w": 4,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -195,13 +220,13 @@
     {
       "id": 4,
       "type": "stat",
-      "title": "First Seen <24h",
+      "title": "New in 24h",
       "description": "",
       "gridPos": {
         "x": 12,
         "y": 0,
         "w": 4,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -254,7 +279,7 @@
         "x": 16,
         "y": 0,
         "w": 4,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -315,7 +340,7 @@
         "x": 20,
         "y": 0,
         "w": 4,
-        "h": 4
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -370,10 +395,10 @@
     {
       "id": 7,
       "type": "table",
-      "title": "Host Inventory \u2014 Identity",
+      "title": "Host Inventory",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 5,
         "w": 24,
         "h": 10
       },
@@ -400,7 +425,26 @@
       ],
       "fieldConfig": {
         "defaults": {},
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "ip"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "Open device details",
+                    "url": "/d/homelab-network-device-detail?var-device=${__value.raw}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "options": {
         "showHeader": true,
@@ -413,9 +457,9 @@
       "title": "Discovery Latency",
       "gridPos": {
         "x": 0,
-        "y": 14,
+        "y": 15,
         "w": 12,
-        "h": 8
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -451,12 +495,12 @@
     {
       "id": 9,
       "type": "timeseries",
-      "title": "Seconds Since Last Seen",
+      "title": "Time Since Last Seen",
       "gridPos": {
         "x": 12,
-        "y": 14,
+        "y": 15,
         "w": 12,
-        "h": 8
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -495,9 +539,9 @@
       "title": "Offline Hosts",
       "gridPos": {
         "x": 0,
-        "y": 22,
+        "y": 33,
         "w": 12,
-        "h": 8
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -535,9 +579,9 @@
       "title": "Enriched Open Ports",
       "gridPos": {
         "x": 12,
-        "y": 22,
+        "y": 33,
         "w": 12,
-        "h": 8
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -572,12 +616,12 @@
     {
       "id": 12,
       "type": "timeseries",
-      "title": "Deep Profile Open TCP Ports",
+      "title": "Open TCP Ports",
       "gridPos": {
         "x": 0,
-        "y": 30,
+        "y": 24,
         "w": 12,
-        "h": 8
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -613,12 +657,12 @@
     {
       "id": 13,
       "type": "timeseries",
-      "title": "Enrichment Component Success",
+      "title": "Enrichment Health",
       "gridPos": {
         "x": 12,
-        "y": 30,
+        "y": 24,
         "w": 12,
-        "h": 8
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -654,12 +698,12 @@
     {
       "id": 14,
       "type": "logs",
-      "title": "Recent Network Host Lifecycle Events",
+      "title": "Recent Network Events",
       "gridPos": {
         "x": 0,
-        "y": 38,
+        "y": 42,
         "w": 24,
-        "h": 9
+        "h": 10
       },
       "datasource": {
         "type": "loki",
