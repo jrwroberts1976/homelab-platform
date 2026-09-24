@@ -244,6 +244,12 @@
   loop: "{{ monitoring_grafana_production_dashboard_files }}"
   register: monitoring_grafana_legacy_dashboard_files_result
 
+- name: Remove retired Patch & Software dashboard JSON
+  ansible.builtin.file:
+    path: "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab/homelab-patch-estate.json"
+    state: absent
+  register: monitoring_grafana_retired_patch_result
+
 - name: Validate reviewed Grafana dashboard JSON
   ansible.builtin.command:
     argv:
@@ -348,6 +354,7 @@
     or monitoring_grafana_dashboard_files_result.changed
     or monitoring_grafana_production_dashboard_files_result.changed
     or monitoring_grafana_legacy_dashboard_files_result.changed
+    or monitoring_grafana_retired_patch_result.changed
   changed_when: true
 
 - name: Validate Alertmanager configuration
