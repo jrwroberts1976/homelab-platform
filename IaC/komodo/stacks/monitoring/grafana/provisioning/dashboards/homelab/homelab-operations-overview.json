@@ -1,8 +1,8 @@
 {
   "id": null,
   "uid": "homelab-operations",
-  "title": "Homelab \u2014 Operations Overview",
-  "description": "Single-page operational view of availability, alerts, resource pressure, network hosts and observability health.",
+  "title": "Homelab — Home",
+  "description": "Six at-a-glance health indicators. No empty alert-detail table; investigate firing alerts in Grafana Alerting.",
   "tags": [
     "homelab",
     "operations",
@@ -23,17 +23,58 @@
   "annotations": {
     "list": []
   },
-  "links": [],
+  "links": [
+    {
+      "title": "Hosts",
+      "type": "link",
+      "url": "/d/homelab-linux-estate",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Network Hosts",
+      "type": "link",
+      "url": "/d/homelab-network-hosts",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Security Events",
+      "type": "link",
+      "url": "/d/homelab-security",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Service Availability",
+      "type": "link",
+      "url": "/d/homelab-availability",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Patch Details",
+      "type": "link",
+      "url": "/d/homelab-patching",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    }
+  ],
   "panels": [
     {
       "id": 1,
       "type": "stat",
       "title": "Firing Alerts",
-      "description": "",
+      "description": "Zero means Prometheus currently reports no firing alerts; check alert-rule evaluation and Prometheus health separately.",
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "datasource": {
@@ -43,7 +84,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(ALERTS{alertstate=\"firing\"})",
+          "expr": "sum(ALERTS{alertstate=\"firing\"}) or vector(0)",
           "instant": true,
           "range": false
         }
@@ -87,120 +128,14 @@
       }
     },
     {
-      "id": 2,
-      "type": "stat",
-      "title": "Node Exporters Up",
-      "description": "",
-      "gridPos": {
-        "x": 6,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(up{job=\"node-exporter\"})",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "id": 3,
-      "type": "stat",
-      "title": "Network Hosts Online",
-      "description": "",
-      "gridPos": {
-        "x": 12,
-        "y": 0,
-        "w": 6,
-        "h": 4
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(homelab_network_host_up)",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      }
-    },
-    {
       "id": 4,
       "type": "stat",
       "title": "Updates Available",
       "description": "",
       "gridPos": {
-        "x": 18,
+        "x": 8,
         "y": 0,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "datasource": {
@@ -259,9 +194,9 @@
       "title": "Reboots Required",
       "description": "",
       "gridPos": {
-        "x": 0,
-        "y": 4,
-        "w": 6,
+        "x": 16,
+        "y": 0,
+        "w": 8,
         "h": 4
       },
       "datasource": {
@@ -320,9 +255,9 @@
       "title": "Unapproved Devices",
       "description": "",
       "gridPos": {
-        "x": 6,
+        "x": 0,
         "y": 4,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "datasource": {
@@ -376,14 +311,13 @@
       }
     },
     {
-      "id": 7,
+      "id": 14,
       "type": "stat",
-      "title": "Alloy Heartbeats Present",
-      "description": "",
+      "title": "Node Exporters Down",
       "gridPos": {
-        "x": 12,
+        "x": 8,
         "y": 4,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "datasource": {
@@ -393,7 +327,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(homelab_loki_heartbeat_present)",
+          "expr": "count(up{job=\"node-exporter\"} == 0) or vector(0)",
           "instant": true,
           "range": false
         }
@@ -401,12 +335,17 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "No telemetry",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
               }
             ]
           }
@@ -424,19 +363,18 @@
         "orientation": "auto",
         "textMode": "auto",
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
-      "id": 8,
+      "id": 15,
       "type": "stat",
-      "title": "ICMP Targets Reachable",
-      "description": "",
+      "title": "ICMP Probes Failing",
       "gridPos": {
-        "x": 18,
+        "x": 16,
         "y": 4,
-        "w": 6,
+        "w": 8,
         "h": 4
       },
       "datasource": {
@@ -446,7 +384,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(probe_success{job=\"blackbox-icmp\"})",
+          "expr": "count(probe_success{job=\"blackbox-icmp\"} == 0) or vector(0)",
           "instant": true,
           "range": false
         }
@@ -454,12 +392,17 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "No telemetry",
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "red",
+                "value": 1
               }
             ]
           }
@@ -477,212 +420,8 @@
         "orientation": "auto",
         "textMode": "auto",
         "colorMode": "background",
-        "graphMode": "area",
+        "graphMode": "none",
         "justifyMode": "auto"
-      }
-    },
-    {
-      "id": 9,
-      "type": "timeseries",
-      "title": "CPU Usage by Host",
-      "gridPos": {
-        "x": 0,
-        "y": 8,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "100 - (avg by(target_name) (rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\"}[5m])) * 100)",
-          "legendFormat": "{{target_name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "Memory Usage by Host",
-      "gridPos": {
-        "x": 12,
-        "y": 8,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes{job=\"node-exporter\"} / node_memory_MemTotal_bytes{job=\"node-exporter\"})",
-          "legendFormat": "{{target_name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 11,
-      "type": "timeseries",
-      "title": "Infrastructure Probe Duration",
-      "gridPos": {
-        "x": 0,
-        "y": 16,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "probe_duration_seconds{job=~\"blackbox-icmp|blackbox-dns-tcp|blackbox-pve-https\"}",
-          "legendFormat": "{{job}} / {{target_name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 12,
-      "type": "timeseries",
-      "title": "Alloy / Loki Heartbeat Age",
-      "gridPos": {
-        "x": 12,
-        "y": 16,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_loki_heartbeat_age_seconds",
-          "legendFormat": "{{source_host}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 13,
-      "type": "table",
-      "title": "Firing Alert Detail",
-      "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 24,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "ALERTS{alertstate=\"firing\"}",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
       }
     }
   ]
