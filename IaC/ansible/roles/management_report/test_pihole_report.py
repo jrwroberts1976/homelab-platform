@@ -14,7 +14,10 @@ TEMPLATES = HERE / "templates"
 
 def load_template(name, substitutions):
     source = (TEMPLATES / name).read_text()
-    rendered = Environment(undefined=StrictUndefined).from_string(source).render(**substitutions)
+    environment = Environment(undefined=StrictUndefined)
+    # Ansible provides to_json; plain Jinja2 in unit tests does not.
+    environment.filters["to_json"] = json.dumps
+    rendered = environment.from_string(source).render(**substitutions)
     with tempfile.NamedTemporaryFile(mode="w", suffix=".py", delete=False) as tmp:
         tmp.write(rendered)
         path = Path(tmp.name)
