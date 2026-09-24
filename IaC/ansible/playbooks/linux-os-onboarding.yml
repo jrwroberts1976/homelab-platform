@@ -1,0 +1,75 @@
+---
+# Opt-in, read-only OS onboarding. Run with --limit <approved inventory host>.
+# No changes on the managed host; facts are saved only on the controller.
+- name: Record directly observed Linux OS facts during onboarding
+  hosts: all
+  gather_facts: true
+  become: false
+  serial: 1
+  vars:
+    linux_os_facts_store: "{{ lookup('env', 'HOME') }}/.local/state/homelab-os-facts"
+  pre_tasks:
+    - name: Require an explicit onboarding target
+      ansible.builtin.assert:
+        that:
+          - ansible_limit is defined
+          - ansible_limit | length > 0
+          - ansible_limit != 'all'
+        fail_msg: "Specify one approved Linux host with --limit HOST; never run implicitly estate-wide."
+      run_once: true
+
+    - name: Refuse non-Linux or unidentified hosts
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.system == 'Linux'
+          - ansible_facts.hostname | lower == inventory_hostname | lower
+        fail_msg: "Linux and exact inventory hostname identity must be confirmed before recording verified OS facts."
+
+  tasks:
+    - name: Read the host's authoritative OS release file
+      ansible.builtin.slurp:
+        src: /etc/os-release
+      register: linux_os_release
+      changed_when: false
+
+    - name: Require distribution identification
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution | default('') | length > 0
+          - ansible_facts.distribution_version | default('') | length > 0
+          - "'ID=' in (linux_os_release.content | b64decode)"
+        fail_msg: "OS release facts are missing or incomplete; do not mark this host verified."
+
+    - name: Create private evidence directory on the Ansible controller
+      ansible.builtin.file:
+        path: "{{ linux_os_facts_store }}"
+        state: directory
+        mode: '0700'
+      delegate_to: localhost
+      become: false
+
+    - name: Save directly verified OS evidence on the controller
+      ansible.builtin.copy:
+        dest: "{{ linux_os_facts_store }}/{{ inventory_hostname }}.json"
+        mode: '0600'
+        content: "{{ evidence_record | to_nice_json }}\n"
+      vars:
+        evidence_record:
+          schema_version: 1
+          inventory_hostname: "{{ inventory_hostname }}"
+          observed_hostname: "{{ ansible_facts.hostname }}"
+          inventory_ip: "{{ ansible_host | default('') }}"
+          os_name: "{{ ansible_facts.distribution }}"
+          os_version: "{{ ansible_facts.distribution_version }}"
+          os_family: "{{ ansible_facts.os_family }}"
+          kernel: "{{ ansible_facts.kernel }}"
+          architecture: "{{ ansible_facts.architecture }}"
+          os_release_text: "{{ linux_os_release.content | b64decode }}"
+          source: direct_ansible
+          classification: verified
+          confidence_percent: 100
+          confidence_method: rule_based_not_probability
+          observed_at: "{{ now(utc=true, fmt='%Y-%m-%dT%H:%M:%SZ') }}"
+          identity_validation: inventory_hostname_matches_remote_hostname
+      delegate_to: localhost
+      become: false
