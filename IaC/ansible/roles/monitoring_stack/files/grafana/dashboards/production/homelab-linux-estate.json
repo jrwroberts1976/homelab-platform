@@ -79,9 +79,9 @@
       "title": "Node Exporters Up",
       "description": "",
       "gridPos": {
-        "x": 0,
+        "x": 16,
         "y": 0,
-        "w": 6,
+        "w": 4,
         "h": 5
       },
       "datasource": {
@@ -132,9 +132,9 @@
       "title": "Average CPU",
       "description": "",
       "gridPos": {
-        "x": 6,
+        "x": 0,
         "y": 0,
-        "w": 6,
+        "w": 4,
         "h": 5
       },
       "datasource": {
@@ -185,9 +185,9 @@
       "title": "Average Memory Used",
       "description": "",
       "gridPos": {
-        "x": 12,
+        "x": 4,
         "y": 0,
-        "w": 6,
+        "w": 4,
         "h": 5
       },
       "datasource": {
@@ -360,9 +360,9 @@
       "type": "stat",
       "title": "Failed systemd Units",
       "gridPos": {
-        "x": 18,
+        "x": 20,
         "y": 0,
-        "w": 6,
+        "w": 4,
         "h": 5
       },
       "datasource": {
@@ -428,9 +428,9 @@
       "title": "Security Updates",
       "description": "No data means patch telemetry is missing; do not interpret it as zero.",
       "gridPos": {
-        "x": 0,
-        "y": 24,
-        "w": 12,
+        "x": 8,
+        "y": 0,
+        "w": 4,
         "h": 5
       },
       "datasource": {
@@ -486,8 +486,8 @@
       "description": "No data means patch telemetry is missing; do not interpret it as zero.",
       "gridPos": {
         "x": 12,
-        "y": 24,
-        "w": 12,
+        "y": 0,
+        "w": 4,
         "h": 5
       },
       "datasource": {
