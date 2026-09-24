@@ -427,24 +427,24 @@
           "options": {
             "excludeByName": {
               "Time": true,
-              "instance": false,
+              "instance": true,
               "job": true,
               "target": true,
               "target_name": true,
-              "hostname": true,
+              "hostname": false,
               "Value": true,
               "Value #A": true,
               "__name__": true
             },
             "indexByName": {
-              "instance": 0,
               "ip": 1,
-              "os": 2
+              "os": 2,
+              "hostname": 0
             },
             "renameByName": {
-              "instance": "Hostname",
               "ip": "IP",
-              "os": "Operating System"
+              "os": "Operating System",
+              "hostname": "Hostname"
             }
           }
         }
@@ -476,7 +476,7 @@
         "showHeader": true,
         "cellHeight": "sm"
       },
-      "description": "Show hostname from instance, IP and operating system when an OS label is supplied by the discovery exporter. Hide exporter job/target, duplicate hostname and raw metric value."
+      "description": "Show hostname from the hostname label, IP and operating system when available. Hide instance, exporter job/target and raw metric value."
     },
     {
       "id": 8,
