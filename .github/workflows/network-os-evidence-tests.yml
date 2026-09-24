@@ -1,0 +1,23 @@
+name: Network OS evidence tests
+on:
+  pull_request:
+    paths:
+      - 'IaC/ansible/roles/network_host_os_evidence/**'
+      - '.github/workflows/network-os-evidence-tests.yml'
+  push:
+    branches:
+      - feature/network-os-evidence
+    paths:
+      - 'IaC/ansible/roles/network_host_os_evidence/**'
+      - '.github/workflows/network-os-evidence-tests.yml'
+permissions:
+  contents: read
+jobs:
+  offline-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Compile Python sources
+        run: python3 -m compileall -q IaC/ansible/roles/network_host_os_evidence
+      - name: Run offline unit tests
+        run: python3 -m unittest discover -v -s IaC/ansible/roles/network_host_os_evidence/tests
