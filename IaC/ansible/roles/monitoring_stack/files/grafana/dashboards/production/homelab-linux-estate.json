@@ -79,9 +79,9 @@
       "title": "Node Exporters Up",
       "description": "",
       "gridPos": {
-        "x": 16,
+        "x": 18,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 5
       },
       "datasource": {
@@ -360,9 +360,9 @@
       "type": "stat",
       "title": "Failed systemd Units",
       "gridPos": {
-        "x": 20,
+        "x": 21,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 5
       },
       "datasource": {
@@ -428,9 +428,9 @@
       "title": "Security Updates",
       "description": "No data means patch telemetry is missing; do not interpret it as zero.",
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 5
       },
       "datasource": {
@@ -482,12 +482,12 @@
     {
       "id": 26,
       "type": "stat",
-      "title": "Last Successful Patch Check Age",
-      "description": "No data means patch telemetry is missing; do not interpret it as zero.",
+      "title": "Last Patch Check",
+      "description": "Time since the selected host's last successful patch check. No data means telemetry is missing.",
       "gridPos": {
-        "x": 12,
+        "x": 15,
         "y": 0,
-        "w": 4,
+        "w": 3,
         "h": 5
       },
       "datasource": {
@@ -519,6 +519,63 @@
               {
                 "color": "red",
                 "value": 86400
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 27,
+      "type": "stat",
+      "title": "Total Updates",
+      "description": "Total available package updates on the selected host. No data means telemetry is missing.",
+      "gridPos": {
+        "x": 8,
+        "y": 0,
+        "w": 4,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(homelab_updates_available{target_name=~\"$host\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
           }
