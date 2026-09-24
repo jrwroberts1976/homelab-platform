@@ -34,3 +34,22 @@ Status: design and Phase 1 Nmap evidence export in this PR. No deployment or add
 - Do not change existing collector timers or default deploy gates as part of OS classification.
 - Tests: no-match, multiple matches, service-only hints, conflicting local/Nmap results, stale IP/MAC reuse, malformed state, metric escaping, idempotent writes and no new scans.
 - Deploy only after backup of `inventory.json`, `deep-profiles.json` and textfile metrics, with read-only metric verification and rollback.
+
+## Phase 3a — passive update-traffic evidence (design; disabled by default)
+- Consume **metadata only** from existing Pi-hole DNS query logs and Zeek DNS/connection logs, if those logs are already collected and authorised. The existing Zeek IaC enables JSON logs and MAC metadata in conn.log; verify DNS log collection, Loki labels, retention and resolver attribution on live systems before writing an ingestion adapter.
+- Do not assume every DNS query identifies the actual originating device: a shared resolver, NAT, proxy, container or cached lookup can misattribute it. Match observed source IP to the discovery inventory's IP/MAC identity **at the observation timestamp**. Mark unattributed/shared-resolver observations unusable for per-device classification.
+- Use a version-controlled, reviewable domain-indicator registry with exact/suffix boundaries and attribution limits. Illustrative indicators: `security.ubuntu.com` and `archive.ubuntu.com` (Ubuntu repositories); `deb.debian.org` and `security.debian.org` (Debian repositories); `windowsupdate.com` and `update.microsoft.com` (Microsoft update infrastructure); `swcdn.apple.com` and `mesu.apple.com` (Apple update infrastructure). Generic `dl.google.com` is **not** proof of Android. A query indicates contact with a service, not that an update was installed or that the device runs the vendor's OS.
+- Only score an update-domain indicator when corroborated by a second independent evidence family (local facts, Nmap OS fingerprint, service CPE or an authoritative inventory record). Repeated DNS queries alone are not independent corroboration. Keep per-device evidence counts, first/last seen and originating sensor, not full browsing histories.
+- Prefer bounded aggregation (e.g. 7-day rolling window) and short raw-event retention according to the existing logging policy. Never store URLs, HTTP bodies, credentials or personal browsing history for OS identification. Treat TLS SNI/Zeek connection metadata as optional and potentially absent with ECH/DoH.
+- AI consumes **aggregated, minimised** signals (e.g. `ubuntu_update_seen=true`, `nmap_family=Linux`, counts and freshness), never raw DNS logs. No external AI transfer of host identifiers or network logs without explicit opt-in and a documented processor/privacy decision.
+- Conflicts (e.g. Windows local facts plus Ubuntu repository traffic) should explain a likely VM/container/package-download possibility and request review, **not** overwrite verified OS.
+
+### Passive evidence acceptance tests
+1. Ubuntu update domain + Nmap Linux match -> Ubuntu *candidate*, never verified.
+2. Microsoft update domain alone -> unknown OS; no Windows claim.
+3. Generic Google download domain -> no Android inference.
+4. Shared DNS resolver IP -> discard for device attribution.
+5. DHCP IP reassignment within evidence window -> avoid transferring evidence to new MAC.
+6. Repeated lookups from one sensor -> do not inflate independent-source confidence.
+7. Conflicting locally verified OS -> retain verified fact and flag conflict.
+8. Missing DNS/Zeek telemetry -> pipeline remains functional with Nmap/local evidence.
