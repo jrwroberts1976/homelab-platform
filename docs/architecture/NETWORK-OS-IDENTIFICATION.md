@@ -1,5 +1,7 @@
 # Network host OS identification — staged design
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 Status: design and Phase 1 Nmap evidence export in this PR. No deployment or additional scans authorised by this change.
 
 ## Existing capabilities (verified in repository)
