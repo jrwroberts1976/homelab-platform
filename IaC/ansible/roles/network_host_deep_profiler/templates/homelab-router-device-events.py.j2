@@ -1,0 +1,323 @@
+#!/usr/bin/env python3
+"""Parse ASUS router DHCP acknowledgements."""
+
+import ipaddress
+import re
+
+DHCP_ACK = re.compile(
+    r"\bdnsmasq-dhcp\[\d+\]:\s+DHCPACK\([^)]+\)\s+"
+    r"(?P<ip>\S+)\s+"
+    r"(?P<mac>(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})"
+    r"(?:\s+(?P<hostname>\S+))?"
+)
+
+
+def parse_dhcp_ack(line):
+    match = DHCP_ACK.search(line)
+    if not match:
+        return None
+
+    try:
+        ip = ipaddress.ip_address(match.group("ip"))
+    except ValueError:
+        return None
+    if ip.version != 4:
+        return None
+
+    return {
+        "mac": match.group("mac").lower(),
+        "ip": str(ip),
+        "hostname": match.group("hostname") or "",
+    }
+
+
+def apply_dhcp_ack(devices, event, now):
+    """Update MAC-keyed records; return True only for a new device."""
+    mac = event["mac"]
+    record = devices.get(mac)
+
+    if record is None:
+        devices[mac] = {
+            "status": "pending",
+            "discovered_at": now,
+            "first_known": now,
+            "last_inventory_seen": now,
+            "last_ip": event["ip"],
+            "hostname": event["hostname"],
+            "attempt_count": 0,
+            "last_presence_check": 0,
+            "last_error": "",
+        }
+        return True
+
+    previous_ip = record.get("last_ip", "")
+    if previous_ip and previous_ip != event["ip"]:
+        history = record.setdefault("previous_ips", [])
+        if previous_ip not in history:
+            history.append(previous_ip)
+
+    record["last_ip"] = event["ip"]
+    record["last_inventory_seen"] = now
+
+    if event["hostname"]:
+        record["hostname"] = event["hostname"]
+
+    return False
+
+
+def save_devices(path, devices, cursor=None):
+    """Atomically persist MAC-keyed device records."""
+    import json
+    import os
+    import tempfile
+    from pathlib import Path
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, temporary = tempfile.mkstemp(
+        prefix=".router-devices-", dir=path.parent
+    )
+    try:
+        with os.fdopen(fd, "w") as output:
+            json.dump(
+                {"schema_version": 1, "devices": devices, "cursor": cursor},
+                output,
+                indent=2,
+                sort_keys=True,
+            )
+            output.flush()
+            os.fsync(output.fileno())
+        os.chmod(temporary, 0o600)
+        os.replace(temporary, path)
+    finally:
+        if os.path.exists(temporary):
+            os.unlink(temporary)
+
+
+def load_devices(path):
+    """Load persistent records without silently discarding corrupt state."""
+    import json
+    from pathlib import Path
+
+    path = Path(path)
+    if not path.exists():
+        return {}
+
+    with path.open() as source:
+        state = json.load(source)
+
+    if state.get("schema_version") != 1:
+        raise ValueError("Unsupported router device state version")
+
+    if not isinstance(state.get("devices"), dict):
+        raise ValueError("Invalid router device state")
+
+    return state["devices"]
+
+
+def load_checkpoint(path):
+    """Restore devices and the last processed log position."""
+    import json
+    from pathlib import Path
+
+    devices = load_devices(path)
+    if not Path(path).exists():
+        return devices, None
+
+    with open(path) as source:
+        cursor = json.load(source).get("cursor")
+
+    if cursor is not None:
+        if not isinstance(cursor, dict):
+            raise ValueError("Invalid log cursor")
+        for field in ("inode", "offset"):
+            if type(cursor.get(field)) is not int or cursor[field] < 0:
+                raise ValueError("Invalid log cursor")
+
+    return devices, cursor
+
+
+def consume_complete_lines(stream, state_path, devices, offset, now):
+    """Process complete syslog lines and checkpoint each one."""
+    import os
+
+    stream.seek(offset)
+    inode = os.fstat(stream.fileno()).st_ino
+    new_devices = 0
+    processed = 0
+
+    while True:
+        line_start = stream.tell()
+        line = stream.readline()
+
+        if not line:
+            break
+        if not line.endswith(b"\n"):
+            stream.seek(line_start)
+            break
+
+        event = parse_dhcp_ack(line.decode("utf-8", errors="replace"))
+        if event and apply_dhcp_ack(devices, event, now):
+            new_devices += 1
+
+        save_devices(
+            state_path, devices,
+            {"inode": inode, "offset": stream.tell()}
+        )
+        processed += 1
+
+    return new_devices, processed
+
+
+def locate_resume_log(log_path, cursor):
+    """Find the log containing our saved checkpoint."""
+    from pathlib import Path
+
+    current = Path(log_path)
+    rotated = Path(f"{log_path}.1")
+
+    if cursor is None:
+        return current, 0, False
+
+    for path, is_rotated in ((current, False), (rotated, True)):
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            continue
+
+        if stat.st_ino == cursor["inode"]:
+            if cursor["offset"] > stat.st_size:
+                raise RuntimeError("Checkpoint exceeds log file size")
+            return path, cursor["offset"], is_rotated
+
+    raise RuntimeError(
+        "Checkpoint log inode not found; manual recovery required"
+    )
+
+
+def process_log_once(log_path, state_path, now):
+    """Resume reading, including across a single log rotation."""
+    import os
+    from pathlib import Path
+
+    devices, cursor = load_checkpoint(state_path)
+    source, offset, rotated = locate_resume_log(log_path, cursor)
+
+    with source.open("rb") as stream:
+        inode = os.fstat(stream.fileno()).st_ino
+        if cursor is not None and inode != cursor["inode"]:
+            raise RuntimeError("Log changed while locating checkpoint")
+
+        new_count, processed = consume_complete_lines(
+            stream, state_path, devices, offset, now
+        )
+
+        if rotated:
+            position = stream.tell()
+            stream.seek(0, os.SEEK_END)
+            if position != stream.tell():
+                raise RuntimeError("Incomplete entry in rotated log")
+
+    if rotated:
+        with Path(log_path).open("rb") as stream:
+            new_inode = os.fstat(stream.fileno()).st_ino
+            if new_inode == inode:
+                raise RuntimeError("New log has not been created")
+            save_devices(
+                state_path, devices,
+                {"inode": new_inode, "offset": 0}
+            )
+            added, read = consume_complete_lines(
+                stream, state_path, devices, 0, now
+            )
+            new_count += added
+            processed += read
+
+    return new_count, processed
+
+
+def bootstrap_existing(log_path, state_path, now):
+    """Baseline existing DHCP devices without queuing historical scans."""
+    import os
+    from pathlib import Path
+
+    current = Path(log_path)
+    state = Path(state_path)
+    if state.exists():
+        raise FileExistsError("Existing checkpoint must not be overwritten")
+
+    devices = {}
+    for source in (Path(f"{log_path}.1"), current):
+        if not source.exists():
+            if source == current:
+                raise FileNotFoundError(source)
+            continue
+
+        with source.open("rb") as stream:
+            while True:
+                position = stream.tell()
+                line = stream.readline()
+                if not line:
+                    break
+                if not line.endswith(b"\n"):
+                    if source != current:
+                        raise RuntimeError("Incomplete rotated baseline log")
+                    stream.seek(position)
+                    break
+                event = parse_dhcp_ack(line.decode("utf-8", errors="replace"))
+                if event and apply_dhcp_ack(devices, event, now):
+                    devices[event["mac"]]["status"] = "baseline"
+
+            if source == current:
+                save_devices(state, devices, {
+                    "inode": os.fstat(stream.fileno()).st_ino,
+                    "offset": stream.tell(),
+                })
+
+    return len(devices)
+
+
+def main():
+    """Run the router event collector without initiating scans."""
+    import argparse
+    import fcntl
+    import os
+    import time
+    from pathlib import Path
+
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--log", required=True)
+    parser.add_argument("--state", required=True)
+    parser.add_argument("--poll-seconds", type=float, default=2.0)
+    parser.add_argument("--once", action="store_true")
+    args = parser.parse_args()
+    if args.poll_seconds < 1:
+        parser.error("--poll-seconds must be at least 1")
+
+    os.umask(0o077)
+    state = Path(args.state)
+    state.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+
+    with open(str(state) + ".lock", "a+") as lock:
+        fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)
+        while True:
+            if not state.exists():
+                count = bootstrap_existing(args.log, state, time.time())
+                print(f"BASELINE: {count} known devices", flush=True)
+            else:
+                new, processed = process_log_once(
+                    args.log, state, time.time()
+                )
+                if processed:
+                    print(
+                        f"EVENTS: {processed} processed, {new} new devices",
+                        flush=True,
+                    )
+            if args.once:
+                return
+            time.sleep(args.poll_seconds)
+
+
+if __name__ == "__main__":
+    main()

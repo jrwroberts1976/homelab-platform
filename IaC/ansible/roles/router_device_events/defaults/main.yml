@@ -1,0 +1,11 @@
+---
+router_device_events_expected_hostname: monitor-01
+router_device_events_user: router-events
+router_device_events_log: /var/log/homelab/router/rt-ac86u.log
+router_device_events_state_dir: /var/lib/homelab-router-device-events
+router_device_events_state: "{{ router_device_events_state_dir }}/devices.json"
+router_device_events_script: /usr/local/sbin/homelab-router-device-events
+router_device_events_service: homelab-router-device-events.service
+router_device_events_poll_seconds: 2
+router_device_events_allow_deploy: false
+router_device_events_enable_service: false

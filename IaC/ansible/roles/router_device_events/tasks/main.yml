@@ -1,0 +1,58 @@
+---
+- name: Validate collector deployment
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == router_device_events_expected_hostname
+      - ansible_facts.os_family == "Debian"
+      - router_device_events_allow_deploy | bool or ansible_check_mode
+    fail_msg: "Deployment requires monitor-01 and explicit approval."
+
+- name: Create collector primary group
+  ansible.builtin.group:
+    name: "{{ router_device_events_user }}"
+    system: true
+    state: present
+
+- name: Create dedicated collector account
+  ansible.builtin.user:
+    name: "{{ router_device_events_user }}"
+    group: "{{ router_device_events_user }}"
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+    groups:
+      - adm
+    append: true
+    state: present
+
+- name: Create private persistent state directory
+  ansible.builtin.file:
+    path: "{{ router_device_events_state_dir }}"
+    state: directory
+    owner: "{{ router_device_events_user }}"
+    group: "{{ router_device_events_user }}"
+    mode: "0700"
+
+- name: Install router device collector
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../roles/network_host_deep_profiler/templates/homelab-router-device-events.py.j2"
+    dest: "{{ router_device_events_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install collector systemd unit
+  ansible.builtin.template:
+    src: homelab-router-device-events.service.j2
+    dest: "/etc/systemd/system/{{ router_device_events_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure collector service
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: "{{ router_device_events_service }}"
+    daemon_reload: true
+    enabled: "{{ router_device_events_enable_service | bool }}"
+    state: "{{ 'started' if router_device_events_enable_service | bool else 'stopped' }}"
