@@ -521,6 +521,7 @@ def evidence_provenance_section(data):
     for label, key in (
         ("Greenbone", "greenbone"),
         ("Network sensor", "network_sensor"),
+        ("Pi-hole", "pihole"),
     ):
         source = data.get(key)
         if not isinstance(source, dict):
@@ -532,6 +533,30 @@ def evidence_provenance_section(data):
         lines.append(label + " timestamp: " + str(source.get("collected_at", "UNKNOWN")))
         if key == "greenbone" and source.get("report_id"):
             lines.append("Greenbone report ID: " + str(source["report_id"]))
+    return lines
+
+
+
+def pihole_section(data):
+    lines = ["Pi-hole DNS Security (24-hour Loki event evidence)",
+             "------------------------------------------------"]
+    evidence = data.get("pihole")
+    if not isinstance(evidence, dict):
+        return lines + ["Status: EVIDENCE UNAVAILABLE"]
+    lines.append("Evidence collected: " + str(evidence.get("collected_at", "UNKNOWN")))
+    lines.append("Counts are log events, not unique DNS queries or Pi-hole API totals.")
+    hosts = evidence.get("hosts", {})
+    for host in ("dns-01", "dns-02"):
+        item = hosts.get(host, {}) if isinstance(hosts, dict) else {}
+        status = item.get("status", "unavailable")
+        lines.append(host + ": " + str(status).upper())
+        if status == "ok":
+            lines.append("  Events: " + number(item.get("events_24h"))
+                         + " | Gravity-blocked events: "
+                         + number(item.get("gravity_block_events_24h")))
+        else:
+            lines.append("  Counts not verified; reason: "
+                         + str(item.get("reason", "No events in the last 15 minutes or missing evidence")))
     return lines
 
 
@@ -578,6 +603,8 @@ def main():
     lines.extend(greenbone_section(data))
     lines.append("")
     lines.extend(network_sensor_section(data))
+    lines.append("")
+    lines.extend(pihole_section(data))
     lines.append("")
     lines.extend(monitoring_section(data))
     lines.append("")
