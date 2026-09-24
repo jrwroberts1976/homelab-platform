@@ -56,14 +56,6 @@
       "targetBlank": false
     },
     {
-      "title": "Patch & Software",
-      "type": "link",
-      "url": "/d/homelab-patching",
-      "keepTime": true,
-      "includeVars": false,
-      "targetBlank": false
-    },
-    {
       "title": "Node Detail",
       "type": "link",
       "url": "/d/homelab-node-detail",
