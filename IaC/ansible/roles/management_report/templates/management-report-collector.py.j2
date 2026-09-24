@@ -603,6 +603,7 @@ def pihole_evidence():
         "freshness_window_minutes": 15,
         "metric_note": "Log event counts, not unique DNS queries or Pi-hole API totals",
         "hosts": hosts,
+        "status": "ok" if all(h["status"] == "ok" for h in hosts.values()) else "partial",
     }
 
 
