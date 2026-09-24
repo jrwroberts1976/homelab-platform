@@ -102,6 +102,40 @@ class PiHoleReportTests(unittest.TestCase):
         self.assertTrue(all('source="pihole-event"' in q for q in queries))
         self.assertTrue(all('job="pihole"' in q for q in queries))
 
+    def test_collector_missing_gravity_is_not_zero(self):
+        collector = load_template("management-report-collector.py.j2", {
+            "management_report_prometheus_url": "http://prometheus",
+            "management_report_alertmanager_url": "http://alertmanager",
+            "management_report_loki_url": "http://loki",
+            "management_report_zabbix_url": "http://zabbix",
+            "management_report_zabbix_token_file": "/tmp/zabbix-token",
+            "management_report_expected_hosts": ["dns-01", "dns-02"],
+            "management_report_patch_freshness_minutes": 90,
+            "management_report_evidence_hours": 24,
+            "management_report_evidence_file": "/tmp/evidence.json",
+            "management_report_greenbone_evidence_file": "/tmp/greenbone.json",
+            "management_report_greenbone_freshness_hours": 30,
+            "management_report_sensor_evidence_file": "/tmp/sensor.json",
+            "management_report_sensor_freshness_minutes": 45,
+        })
+
+        def respond(url, params, timeout):
+            query = params["query"]
+            response = Mock()
+            response.json.return_value = {
+                "status": "success",
+                "data": {"result": [] if "gravity blocked" in query else [
+                    {"value": [0, "100"]}]},
+            }
+            return response
+
+        with patch.object(collector.requests, "get", side_effect=respond):
+            result = collector.pihole_evidence()
+        self.assertEqual(result["status"], "partial")
+        for host in ("dns-01", "dns-02"):
+            self.assertEqual(result["hosts"][host]["status"], "unavailable")
+            self.assertIsNone(result["hosts"][host]["gravity_block_events_24h"])
+
     def test_missing_evidence(self):
         renderer = load_template("management-report-renderer.py.j2", {
             "management_report_evidence_file": "/tmp/evidence.json",
