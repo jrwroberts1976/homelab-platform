@@ -11,3 +11,15 @@ providers:
     options:
       path: /etc/grafana/provisioning/dashboards/homelab
       foldersFromFilesStructure: false
+
+  - name: Homelab Production
+    orgId: 1
+    folder: Production Dashboards
+    folderUid: homelab-production
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/production
+      foldersFromFilesStructure: false

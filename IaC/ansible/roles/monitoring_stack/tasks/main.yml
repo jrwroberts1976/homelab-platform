@@ -79,6 +79,7 @@
     - "{{ monitoring_root }}/grafana/provisioning/datasources"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab"
+    - "{{ monitoring_root }}/grafana/provisioning/dashboards/production"
 
 - name: Ensure monitor node-exporter textfile directory exists
   ansible.builtin.file:
@@ -226,6 +227,33 @@
   loop: "{{ monitoring_grafana_dashboard_files }}"
   register: monitoring_grafana_dashboard_files_result
 
+- name: Install reviewed Grafana dashboards in production directory
+  ansible.builtin.copy:
+    src: "grafana/dashboards/production/{{ item }}"
+    dest: "{{ monitoring_root }}/grafana/provisioning/dashboards/production/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop: "{{ monitoring_grafana_production_dashboard_files }}"
+  register: monitoring_grafana_production_dashboard_files_result
+
+- name: Remove legacy copies of reviewed dashboards from Homelab provider
+  ansible.builtin.file:
+    path: "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab/{{ item }}"
+    state: absent
+  loop: "{{ monitoring_grafana_production_dashboard_files }}"
+  register: monitoring_grafana_legacy_dashboard_files_result
+
+- name: Validate reviewed Grafana dashboard JSON
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - json.tool
+      - "{{ monitoring_root }}/grafana/provisioning/dashboards/production/{{ item }}"
+  loop: "{{ monitoring_grafana_production_dashboard_files }}"
+  changed_when: false
+
 - name: Validate provisioned Grafana dashboard JSON
   ansible.builtin.command:
     argv:
@@ -318,6 +346,8 @@
   when: >-
     monitoring_grafana_dashboard_provider.changed
     or monitoring_grafana_dashboard_files_result.changed
+    or monitoring_grafana_production_dashboard_files_result.changed
+    or monitoring_grafana_legacy_dashboard_files_result.changed
   changed_when: true
 
 - name: Validate Alertmanager configuration
