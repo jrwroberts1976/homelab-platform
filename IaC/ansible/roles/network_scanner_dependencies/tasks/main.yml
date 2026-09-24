@@ -1,0 +1,22 @@
+---
+- name: Validate network scanner host
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == "monitor-01"
+      - ansible_facts.hostname == "monitor-01"
+      - ansible_facts.distribution == "Debian"
+      - "'eth0' in ansible_facts.interfaces"
+    fail_msg: Refusing to install scanner dependencies on an unexpected host.
+
+- name: Require explicit deployment approval
+  ansible.builtin.assert:
+    that:
+      - network_scanner_dependencies_allow_deploy | bool or ansible_check_mode
+
+- name: Install network scanner dependencies
+  ansible.builtin.apt:
+    name:
+      - nmap
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
