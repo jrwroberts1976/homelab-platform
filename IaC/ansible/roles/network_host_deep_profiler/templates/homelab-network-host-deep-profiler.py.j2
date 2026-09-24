@@ -347,6 +347,8 @@ def write_metrics(profiles):
         "# TYPE homelab_network_host_deep_profile_open_tcp_ports_total gauge",
         "# HELP homelab_network_host_deep_profile_last_success_seconds Unix timestamp of the completed one-time profile.",
         "# TYPE homelab_network_host_deep_profile_last_success_seconds gauge",
+        "# HELP homelab_network_host_os_info Nmap OS fingerprint evidence; accuracy is Nmap reported match accuracy, not independently verified confidence.",
+        "# TYPE homelab_network_host_os_info gauge",
     ]
 
     for mac in sorted(profiles):
@@ -392,6 +394,25 @@ def write_metrics(profiles):
             + "} "
             + str(len(tcp_ports))
         )
+
+        # Export the best available Nmap match as evidence, not a verified OS.
+        # Baseline hosts without completed scans intentionally have no OS label.
+        matches = profile.get("tcp", {}).get("os_matches", [])
+        if matches:
+            best = matches[0]
+            classes = best.get("classes", [])
+            family = classes[0].get("os_family", "") if classes else ""
+            generation = classes[0].get("os_generation", "") if classes else ""
+            metrics.append(
+                "homelab_network_host_os_info{"
+                + info_labels
+                + ',os="' + prom_escape(best.get("name", "")) + '"'
+                + ',os_family="' + prom_escape(family) + '"'
+                + ',os_generation="' + prom_escape(generation) + '"'
+                + ',source="nmap"'
+                + ',accuracy="' + prom_escape(best.get("accuracy", "")) + '"'
+                + "} 1"
+            )
 
         metrics.append(
             "homelab_network_host_deep_profile_last_success_seconds{"
