@@ -319,10 +319,10 @@
       "type": "timeseries",
       "title": "Filesystem Utilisation",
       "gridPos": {
-        "x": 0,
+        "x": 12,
         "y": 14,
-        "w": 24,
-        "h": 10
+        "w": 12,
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -353,7 +353,8 @@
           "mode": "multi",
           "sort": "desc"
         }
-      }
+      },
+      "description": "Filesystem utilisation for the selected host."
     },
     {
       "id": 24,
@@ -596,6 +597,48 @@
         "graphMode": "none",
         "justifyMode": "auto"
       }
+    },
+    {
+      "id": 28,
+      "type": "timeseries",
+      "title": "Swap Usage",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_memory_SwapFree_bytes{target_name=~\"$host\"} / node_memory_SwapTotal_bytes{target_name=~\"$host\"})",
+          "legendFormat": "{{target_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Swap used as a percentage of total configured swap on the selected host; hosts without swap show no data."
     }
   ]
 }
