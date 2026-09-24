@@ -1,8 +1,8 @@
 {
   "id": null,
   "uid": "homelab-linux-estate",
-  "title": "Homelab — Linux Estate & Host Detail",
-  "description": "Estate-wide Linux resource comparisons and host-specific diagnostics in one dashboard. Select one host for detail or All for comparisons. Missing telemetry is not equivalent to zero.",
+  "title": "Homelab — Hosts",
+  "description": "Choose a host to inspect its health, resources, uptime, patching and failed services. Detailed network, journal and hardware diagnostics remain in Node Detail.",
   "tags": [
     "homelab",
     "linux",
@@ -48,16 +48,24 @@
   },
   "links": [
     {
-      "title": "Operations Overview",
-      "type": "dashboards",
+      "title": "Home",
+      "type": "link",
       "url": "/d/homelab-operations",
       "keepTime": true,
       "includeVars": false,
       "targetBlank": false
     },
     {
-      "title": "Patch & Software",
-      "type": "dashboards",
+      "title": "Node Detail",
+      "type": "link",
+      "url": "/d/homelab-node-detail",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Patch Details",
+      "type": "link",
       "url": "/d/homelab-patching",
       "keepTime": true,
       "includeVars": false,
@@ -65,7 +73,7 @@
     },
     {
       "title": "Logs & Observability",
-      "type": "dashboards",
+      "type": "link",
       "url": "/d/homelab-observability",
       "keepTime": true,
       "includeVars": false,
@@ -376,59 +384,13 @@
       }
     },
     {
-      "id": 7,
-      "type": "timeseries",
-      "title": "Load Average",
-      "gridPos": {
-        "x": 0,
-        "y": 12,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "node_load1{target_name=~\"$host\"}",
-          "legendFormat": "{{target_name}} load1"
-        },
-        {
-          "refId": "B",
-          "expr": "node_load5{target_name=~\"$host\"}",
-          "legendFormat": "{{target_name}} load5"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
       "id": 8,
       "type": "timeseries",
       "title": "Filesystem Utilisation",
       "gridPos": {
-        "x": 12,
+        "x": 0,
         "y": 12,
-        "w": 12,
+        "w": 24,
         "h": 8
       },
       "datasource": {
@@ -463,208 +425,14 @@
       }
     },
     {
-      "id": 9,
-      "type": "timeseries",
-      "title": "Network Throughput",
-      "gridPos": {
-        "x": 0,
-        "y": 20,
-        "w": 24,
-        "h": 9
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "rate(node_network_receive_bytes_total{target_name=~\"$host\",device!~\"lo|veth.*|docker.*\"}[5m]) * 8",
-          "legendFormat": "RX {{target_name}} {{device}}"
-        },
-        {
-          "refId": "B",
-          "expr": "rate(node_network_transmit_bytes_total{target_name=~\"$host\",device!~\"lo|veth.*|docker.*\"}[5m]) * 8",
-          "legendFormat": "TX {{target_name}} {{device}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "bps"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 10,
-      "type": "timeseries",
-      "title": "Disk Throughput",
-      "gridPos": {
-        "x": 0,
-        "y": 29,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "rate(node_disk_read_bytes_total{target_name=~\"$host\"}[5m])",
-          "legendFormat": "Read {{target_name}} {{device}}"
-        },
-        {
-          "refId": "B",
-          "expr": "rate(node_disk_written_bytes_total{target_name=~\"$host\"}[5m])",
-          "legendFormat": "Write {{target_name}} {{device}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "Bps"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 11,
-      "type": "timeseries",
-      "title": "Hardware Temperatures",
-      "gridPos": {
-        "x": 12,
-        "y": 29,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "node_hwmon_temp_celsius{target_name=~\"$host\"}",
-          "legendFormat": "{{target_name}} {{chip}} {{sensor}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "celsius"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      }
-    },
-    {
-      "id": 12,
-      "type": "stat",
-      "title": "Reboot Required",
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts.",
-      "gridPos": {
-        "x": 0,
-        "y": 37,
-        "w": 12,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_reboot_required{target_name=~\"$host\"}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              },
-              {
-                "color": "yellow",
-                "value": 1
-              },
-              {
-                "color": "red",
-                "value": 2
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      }
-    },
-    {
       "id": 13,
       "type": "stat",
       "title": "Uptime",
       "gridPos": {
-        "x": 12,
-        "y": 37,
-        "w": 12,
-        "h": 6
+        "x": 0,
+        "y": 20,
+        "w": 8,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -705,10 +473,10 @@
       "type": "stat",
       "title": "Updates Available",
       "gridPos": {
-        "x": 0,
-        "y": 43,
-        "w": 12,
-        "h": 6
+        "x": 8,
+        "y": 20,
+        "w": 8,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -749,10 +517,10 @@
       "type": "stat",
       "title": "Security Updates",
       "gridPos": {
-        "x": 12,
-        "y": 43,
-        "w": 12,
-        "h": 6
+        "x": 16,
+        "y": 20,
+        "w": 8,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -789,355 +557,13 @@
       "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
     },
     {
-      "id": 16,
-      "type": "stat",
-      "title": "Patch Check Age",
-      "gridPos": {
-        "x": 0,
-        "y": 49,
-        "w": 12,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "time() - homelab_patch_last_success_timestamp_seconds{target_name=~\"$host\"}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "s"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 17,
-      "type": "stat",
-      "title": "Unattended Upgrades Enabled",
-      "gridPos": {
-        "x": 12,
-        "y": 49,
-        "w": 12,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_unattended_upgrades_enabled{target_name=~\"$host\"}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 18,
-      "type": "stat",
-      "title": "Unattended Upgrades Active",
-      "gridPos": {
-        "x": 0,
-        "y": 55,
-        "w": 12,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_unattended_upgrades_active{target_name=~\"$host\"}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 19,
-      "type": "table",
-      "title": "Operating System Identity",
-      "gridPos": {
-        "x": 12,
-        "y": 55,
-        "w": 12,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "node_os_info{target_name=~\"$host\"}",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 20,
-      "type": "table",
-      "title": "Kernel / System Identity",
-      "gridPos": {
-        "x": 0,
-        "y": 62,
-        "w": 12,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "node_uname_info{target_name=~\"$host\"}",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {},
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 21,
-      "type": "timeseries",
-      "title": "Service / Network Probe State",
-      "gridPos": {
-        "x": 12,
-        "y": 62,
-        "w": 12,
-        "h": 7
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "probe_success{target_name=~\"$host\"}",
-          "legendFormat": "{{job}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 22,
-      "type": "timeseries",
-      "title": "24h Availability",
-      "gridPos": {
-        "x": 0,
-        "y": 69,
-        "w": 12,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "avg_over_time(probe_success{target_name=~\"$host\"}[24h]) * 100",
-          "legendFormat": "{{job}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 23,
-      "type": "stat",
-      "title": "Loki Heartbeat Present",
-      "gridPos": {
-        "x": 12,
-        "y": 69,
-        "w": 12,
-        "h": 6
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_loki_heartbeat_present{source_host=~\"$host\"}",
-          "instant": true,
-          "range": false
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "area",
-        "justifyMode": "auto"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
       "id": 24,
       "type": "table",
       "title": "Failed systemd Units",
       "gridPos": {
         "x": 0,
-        "y": 75,
-        "w": 12,
+        "y": 24,
+        "w": 24,
         "h": 8
       },
       "datasource": {
@@ -1168,114 +594,6 @@
       "options": {
         "showHeader": true,
         "cellHeight": "sm"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 25,
-      "type": "timeseries",
-      "title": "System Journal Volume",
-      "gridPos": {
-        "x": 12,
-        "y": 75,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "sum(count_over_time({job=\"systemd-journal\",host=~\"$host\"}[5m]))",
-          "queryType": "range"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short"
-        },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "table",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "multi",
-          "sort": "desc"
-        }
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 26,
-      "type": "logs",
-      "title": "Recent Errors / Failures",
-      "gridPos": {
-        "x": 0,
-        "y": 83,
-        "w": 12,
-        "h": 10
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{job=\"systemd-journal\",host=~\"$host\"} |~ \"(?i)error|failed|failure|critical|panic\"",
-          "queryType": "range"
-        }
-      ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
-      },
-      "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
-    },
-    {
-      "id": 27,
-      "type": "logs",
-      "title": "Recent Journal",
-      "gridPos": {
-        "x": 12,
-        "y": 83,
-        "w": 12,
-        "h": 10
-      },
-      "datasource": {
-        "type": "loki",
-        "uid": "loki"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "{job=\"systemd-journal\",host=~\"$host\"}",
-          "queryType": "range"
-        }
-      ],
-      "options": {
-        "showTime": true,
-        "showLabels": false,
-        "showCommonLabels": false,
-        "wrapLogMessage": true,
-        "prettifyLogMessage": false,
-        "enableLogDetails": true,
-        "dedupStrategy": "none",
-        "sortOrder": "Descending"
       },
       "description": "Select a single host for meaningful host-specific results; All displays data across matching hosts."
     }
