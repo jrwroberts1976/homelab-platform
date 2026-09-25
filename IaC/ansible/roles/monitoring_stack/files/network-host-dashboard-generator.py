@@ -66,7 +66,151 @@ def query_cards():
     return cards
 
 
-def profile(template, key, metric):
+
+# A panel is included only if its underlying data was recorded in the same
+# 24-hour window as the default Grafana time range. A legitimate zero (for
+# example 0 security updates) still counts as data.
+AVAILABILITY_QUERIES = {
+    "cpu": 'node_cpu_seconds_total{job="node-exporter",mode="idle"}',
+    "memory": 'node_memory_MemAvailable_bytes{job="node-exporter"}',
+    "memory_total": 'node_memory_MemTotal_bytes{job="node-exporter"}',
+    "network": 'node_network_receive_bytes_total{job="node-exporter",device!~"lo|veth.*|docker.*|br-.*|virbr.*|cni.*|flannel.*|tun.*|tap.*"}',
+    "filesystem": 'node_filesystem_avail_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs"}',
+    "filesystem_size": 'node_filesystem_size_bytes{job="node-exporter",fstype!~"tmpfs|devtmpfs|overlay|squashfs"}',
+    "updates": 'homelab_updates_available',
+    "security_updates": 'homelab_security_updates_available',
+    "disk": 'node_disk_read_bytes_total{job="node-exporter",device!~"loop.*|ram.*"}',
+    "load": 'node_load1{job="node-exporter"}',
+    "os": 'node_os_info',
+}
+
+
+def query_vector(expr):
+    """Run an instant PromQL query without mutating Prometheus."""
+    with urlopen(PROMETHEUS + "?" + urlencode({"query": expr}),
+                 timeout=20) as response:
+        payload = json.load(response)
+    if payload.get("status") != "success":
+        raise ValueError("Prometheus did not return metric availability")
+    return payload.get("data", {}).get("result", [])
+
+
+def collect_availability():
+    """Batch data presence by hostname, avoiding queries for every device."""
+    available = {name: set() for name in AVAILABILITY_QUERIES}
+    for name, selector in AVAILABILITY_QUERIES.items():
+        expr = "count by(target_name) (present_over_time(%s[24h]))" % selector
+        for series in query_vector(expr):
+            hostname = series.get("metric", {}).get("target_name")
+            if hostname and float(series.get("value", [0, "0"])[1]) > 0:
+                available[name].add(hostname)
+    port_keys = {
+        s.get("metric", {}).get("device_key", "")
+        for s in query_vector(
+            'homelab_network_device_card_port_info{target_name="monitor-01"}')
+    }
+    last_seen_keys = {
+        s.get("metric", {}).get("device_key", "")
+        for s in query_vector(
+            'homelab_network_device_card_last_seen_seconds{target_name="monitor-01"}')
+    }
+    presence_keys = {
+        s.get("metric", {}).get("device_key", "")
+        for s in query_vector(
+            'homelab_network_device_card_online{target_name="monitor-01"}')
+    }
+    return available, port_keys, last_seen_keys, presence_keys
+
+
+def select_panel_ids(key, metric, availability):
+    metrics, port_keys, last_seen_keys, presence_keys = availability
+    host = metric.get("hostname", "")
+    present = lambda name: host in metrics[name]
+    # Keep a zero-valued update/security metric if it was observed.
+    selected = {14}  # Host identity and OS are present for every inventory item.
+    if present("cpu"):
+        selected.update((1, 5))
+    if present("memory") and present("memory_total"):
+        selected.update((2, 6))
+    if present("updates"):
+        selected.add(3)
+    if present("security_updates"):
+        selected.add(4)
+    if present("network"):
+        selected.add(7)
+    if present("filesystem") and present("filesystem_size"):
+        selected.add(8)
+    if key in presence_keys and metric.get("status") in ("Online", "Offline"):
+        selected.update((9, 17))
+    if key in last_seen_keys:
+        selected.add(10)
+    if key in port_keys:
+        selected.update((11, 15))
+    if metric.get("dns_hint", "").strip():
+        selected.add(16)
+    if present("disk"):
+        selected.add(18)
+    if present("load"):
+        selected.add(19)
+    if present("os"):
+        selected.add(20)
+    # Panel 12 (Linux exporter available), text 13 and optional log panel 21
+    # add clutter or cannot be proven to contain real data; omit them.
+    return selected
+
+
+def compact_panels(template_panels, selected):
+    """Remove absent panels and reflow without giant holes or empty rows."""
+    panels = {p["id"]: copy.deepcopy(p) for p in template_panels}
+    missing = selected - panels.keys()
+    if missing:
+        raise ValueError("Host template missing panels: %r" % sorted(missing))
+    chosen = []
+    top_order = (1, 2, 3, 4, 9, 10, 11)
+    current_y = 0
+    stats = [panels[i] for i in top_order if i in selected]
+    for start in range(0, len(stats), 4):
+        row = stats[start:start + 4]
+        width = 24 // len(row)
+        for index, panel in enumerate(row):
+            panel["gridPos"] = {
+                "x": index * width,
+                "y": current_y,
+                "w": 24 - index * width if index == len(row) - 1 else width,
+                "h": 4,
+            }
+            chosen.append(panel)
+        current_y += 4
+    # Grafana-like charts first, then actionable inventory/evidence tables.
+    def add_row(ids, height):
+        nonlocal current_y
+        row = [panels[i] for i in ids if i in selected]
+        if not row:
+            return
+        width = 24 // len(row)
+        for index, panel in enumerate(row):
+            panel["gridPos"] = {
+                "x": index * width, "y": current_y,
+                "w": 24 - index * width if index == len(row) - 1 else width,
+                "h": height,
+            }
+            chosen.append(panel)
+        current_y += height
+
+    add_row((5, 6), 8)
+    add_row((7, 8), 8)
+    add_row((14,), 6)
+    add_row((15,), 7)
+    add_row((16,), 6)
+    add_row((17,), 7)
+    add_row((18, 19), 8)
+    add_row((20,), 6)
+    if len(chosen) != len(selected):
+        raise ValueError("Internal panel layout lost requested data panels")
+    return chosen
+
+
+def profile(template, key, metric, availability=None):
     result = copy.deepcopy(template)
     result["id"] = None
     result["uid"] = uid_for(key)
@@ -78,7 +222,10 @@ def profile(template, key, metric):
         "Automatically generated from MAC/IP evidence. Current identity, "
         "OS source, DNS hints and observed open ports refresh from Prometheus."
     )
-    result["version"] = 1
+    result["version"] = 2
+    if availability is not None:
+        result["panels"] = compact_panels(
+            result["panels"], select_panel_ids(key, metric, availability))
     result["tags"] = sorted(set(
         result.get("tags", []) + ["generated-network-host"]))
     variables = result.get("templating", {}).get("list", [])
@@ -127,6 +274,7 @@ def atomic_write(path, text):
 
 def run():
     cards = query_cards()
+    availability = collect_availability()
     template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
     if template.get("uid") != "homelab-mac-device-detail":
         raise ValueError("Unexpected Grafana profile template")
@@ -143,7 +291,7 @@ def run():
     changed = 0
     for key, metric in sorted(cards.items()):
         body = json.dumps(
-            profile(template, key, metric),
+            profile(template, key, metric, availability),
             indent=2, ensure_ascii=False) + "\n"
         if atomic_write(OUTPUT_DIR / (uid_for(key) + ".json"), body):
             changed += 1
@@ -152,7 +300,7 @@ def run():
         if path.name not in expected:
             path.unlink()
             stale += 1
-    print("Generated %d MAC-linked Grafana dashboards; changed=%d stale=%d" %
+    print("Generated %d data-only host dashboards; changed=%d stale=%d" %
           (len(cards), changed, stale))
 
 
