@@ -12,7 +12,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -501,6 +501,24 @@
               {
                 "id": "custom.width",
                 "value": 240
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "IP"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View individual device dashboard",
+                    "url": "/d/homelab-network-device-detail/homelab-network-device-detail?var-device=${__data.fields[\"IP\"]}",
+                    "targetBlank": false
+                  }
+                ]
               }
             ]
           }
