@@ -89,6 +89,70 @@
     group: root
     mode: "0755"
 
+- name: Create protected network inventory configuration directory
+  ansible.builtin.file:
+    path: /etc/homelab
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install canonical estate for network device OS identification
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../inventory/estate.json"
+    dest: /etc/homelab/network-estate.json
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install dated and minimised DNS device evidence
+  ansible.builtin.copy:
+    src: "{{ playbook_dir }}/../../monitoring/network-device-dns-hints.json"
+    dest: /etc/homelab/network-device-dns-hints.json
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install evidence-qualified network inventory exporter
+  ansible.builtin.copy:
+    src: network-device-inventory-exporter.py
+    dest: /usr/local/sbin/homelab-network-device-inventory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Validate network inventory exporter Python syntax
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - py_compile
+      - /usr/local/sbin/homelab-network-device-inventory
+  changed_when: false
+
+- name: Install network inventory publishing service
+  ansible.builtin.copy:
+    src: homelab-network-device-inventory.service
+    dest: /etc/systemd/system/homelab-network-device-inventory.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install network inventory publishing timer
+  ansible.builtin.copy:
+    src: homelab-network-device-inventory.timer
+    dest: /etc/systemd/system/homelab-network-device-inventory.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable network inventory publishing timer
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    name: homelab-network-device-inventory.timer
+    enabled: true
+    state: started
+
 - name: Install Loki heartbeat freshness collector
   ansible.builtin.template:
     src: loki-heartbeat-metrics.py.j2
@@ -442,6 +506,25 @@
   until: monitoring_prometheus_ready.status == 200
   retries: 30
   delay: 2
+
+- name: Publish initial consolidated network inventory
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - /usr/local/sbin/homelab-network-device-inventory
+  register: monitoring_network_inventory_first_run
+  changed_when: false
+  failed_when: monitoring_network_inventory_first_run.rc != 0
+
+- name: Confirm consolidated inventory metric file is populated
+  ansible.builtin.command:
+    argv:
+      - grep
+      - -m
+      - "1"
+      - "homelab_network_device_inventory_info"
+      - /var/lib/prometheus/node-exporter/homelab_network_devices.prom
+  changed_when: false
 
 - name: Reload Prometheus configuration
   ansible.builtin.uri:
