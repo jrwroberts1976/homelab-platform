@@ -5,6 +5,7 @@ on:
     branches:
       - feature/network-all-hosts-grafana
       - feature/grafana-network-host-tiles
+      - feature/hostname-first-grafana-hosts
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
@@ -73,11 +74,36 @@ jobs:
               assert "/etc/grafana/provisioning/dashboards/network-hosts" in provider
 
           overview = json.loads((base / "files/grafana/dashboards/homelab-network-host-tiles.json").read_text())
-          tile = next(p for p in overview["panels"] if p["title"].startswith("All network devices"))
-          assert tile["type"] == "stat"
-          assert any("dashboard_uid" in link["url"]
-                     for link in tile["fieldConfig"]["defaults"]["links"])
-          assert tile["options"]["reduceOptions"]["values"]
+          detail = json.loads((base / "files/grafana/dashboards/homelab-mac-device-detail.json").read_text())
+          assert overview["title"] == "Homelab — Network Hosts"
+          assert detail["title"] == "Homelab — Host Detail"
+          expected_top = ["Average CPU", "Average Memory Used",
+                          "Total Updates", "Security Updates"]
+          expected_charts = ["CPU Usage", "Memory Usage",
+                             "Network Throughput", "Filesystem Utilisation"]
+          for dashboard in (overview, detail):
+              panels = sorted(dashboard["panels"],
+                              key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]))
+              top = [p["title"] for p in panels if p["gridPos"]["y"] == 0]
+              assert top == expected_top, top
+              charts = [p["title"] for p in panels if p["type"] == "timeseries"]
+              assert all(item in charts for item in expected_charts), charts
+              assert not any(p["type"] == "stat" and p["gridPos"]["h"] > 6
+                             for p in dashboard["panels"])
+              assert any("Observed open ports" in p["title"]
+                         for p in dashboard["panels"])
+              assert any("operating system" in p["title"].lower()
+                         for p in dashboard["panels"])
+              assert dashboard["templating"]["list"][0]["name"] == "host"
+              assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
+              hidden = dashboard["templating"]["list"][1:]
+              assert all(p["hide"] == 2 for p in hidden)
+              assert "MAC" not in dashboard["title"]
+              assert "tiles" not in dashboard["title"].lower()
+          assert "Host directory" in next(
+              p["title"] for p in overview["panels"]
+              if p["title"].startswith("Host directory"))
+          assert len(detail["panels"]) > len(overview["panels"])
           exporter = (base / "files/network-device-inventory-exporter.py").read_text()
           assert "homelab_network_device_card_info" in exporter
           assert "device_key = \"mac:\"" in exporter
