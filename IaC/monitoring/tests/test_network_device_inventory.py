@@ -116,6 +116,37 @@ class InventoryTests(unittest.TestCase):
         self.assertIn('device_key="mac:aa:bb:cc:dd:ee:ff"', cards[0])
         self.assertIn('ip="192.168.2.88"', cards[0])
 
+    def test_display_hostname_and_ip_fallback_never_mac(self):
+        def host(ip, mac, hostname):
+            return {
+                "ip": ip, "mac": mac, "hostname": hostname,
+                "vendor": "Generic Manufacturer", "kind": "network",
+                "role": "", "os": "Unknown", "os_evidence": "unknown",
+                "os_source": "Not determined", "dns_hint": "",
+                "dns_observed": "", "online": True, "last_seen": 999,
+                "ports": {}, "scan_timed_out": True
+            }
+
+        records = {
+            "192.168.2.6": host(
+                "192.168.2.6", "aa:bb:cc:00:00:01", "laptop"),
+            "192.168.2.7": host(
+                "192.168.2.7", "aa:bb:cc:00:00:02", "laptop"),
+            "192.168.2.8": host(
+                "192.168.2.8", "aa:bb:cc:00:00:03", ""),
+        }
+        metrics = inventory.render(records)
+        cards = [line for line in metrics.splitlines()
+                 if line.startswith("homelab_network_device_card_info{")]
+        self.assertEqual(len(cards), 3)
+        self.assertTrue(any('hostname="laptop (192.168.2.6)"' in x
+                            for x in cards))
+        self.assertTrue(any('hostname="laptop (192.168.2.7)"' in x
+                            for x in cards))
+        self.assertTrue(any('hostname="192.168.2.8"' in x
+                            for x in cards))
+        self.assertFalse(any('hostname="aa:bb' in x for x in cards))
+
     def test_prometheus_labels_escape(self):
         self.assertEqual(inventory.esc('foo\n"bar"'),
                          'foo \\"bar\\"')
