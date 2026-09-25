@@ -79,6 +79,7 @@
     - "{{ monitoring_root }}/grafana/provisioning/datasources"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab"
+    - "{{ monitoring_root }}/grafana/provisioning/dashboards/network-hosts"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/production"
 
 - name: Ensure monitor node-exporter textfile directory exists
@@ -128,6 +129,31 @@
       - -m
       - py_compile
       - /usr/local/sbin/homelab-network-device-inventory
+  changed_when: false
+
+- name: Install Grafana MAC-linked host dashboard template
+  ansible.builtin.copy:
+    src: grafana/dashboards/homelab-mac-device-detail.json
+    dest: /etc/homelab/network-host-template.json
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install MAC-linked Grafana dashboard generator
+  ansible.builtin.copy:
+    src: network-host-dashboard-generator.py
+    dest: /usr/local/sbin/homelab-network-host-dashboards
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Validate MAC-linked dashboard generator syntax
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - py_compile
+      - /usr/local/sbin/homelab-network-host-dashboards
   changed_when: false
 
 - name: Install network inventory publishing service
@@ -574,6 +600,36 @@
     - monitoring_grafana_health.json.database == "ok"
   retries: 30
   delay: 2
+
+- name: Wait for Prometheus to scrape MAC-linked device metrics
+  ansible.builtin.uri:
+    url: 'http://127.0.0.1:9090/api/v1/query?query=homelab_network_device_card_info%7Btarget_name%3D%22monitor-01%22%7D'
+    status_code: 200
+    return_content: true
+  register: monitoring_mac_device_metric
+  until:
+    - monitoring_mac_device_metric.status == 200
+    - monitoring_mac_device_metric.json.status == "success"
+    - monitoring_mac_device_metric.json.data.result | length >= 10
+  retries: 20
+  delay: 5
+  changed_when: false
+
+- name: Generate a dedicated Grafana dashboard for each retained MAC
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/python3
+      - /usr/local/sbin/homelab-network-host-dashboards
+  register: monitoring_mac_dashboards_generated
+  changed_when: "'changed=0' not in monitoring_mac_dashboards_generated.stdout"
+
+- name: Inspect generated MAC-backed Grafana dashboard files
+  ansible.builtin.find:
+    paths: "{{ monitoring_root }}/grafana/provisioning/dashboards/network-hosts"
+    patterns: 'net-host-*.json'
+    file_type: file
+  register: monitoring_mac_dashboard_files
+  failed_when: monitoring_mac_dashboard_files.matched < 10
 
 - name: Verify provisioned Grafana dashboards
   ansible.builtin.uri:
