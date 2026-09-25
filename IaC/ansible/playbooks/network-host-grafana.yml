@@ -69,7 +69,7 @@
 
     - name: Install MAC-linked Grafana profile template
       ansible.builtin.copy:
-        src: "{{ dashboards_src }}/homelab-mac-device-detail.json"
+        src: "{{ monitoring_role_files }}/host-profile-template.json"
         dest: /etc/homelab/network-host-template.json
         owner: root
         group: root
