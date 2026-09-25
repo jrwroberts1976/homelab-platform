@@ -1,0 +1,178 @@
+---
+# Focused rollout: Grafana dashboards and the existing node_exporter textfile
+# publisher only. Does not update or recreate the other monitoring containers.
+- name: Deploy MAC-linked network host Grafana dashboards
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+
+  vars:
+    grafana_root: /opt/monitoring
+    dashboards_src: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards"
+    monitoring_role_files: "{{ playbook_dir }}/../roles/monitoring_stack/files"
+    dashboards_live: "{{ grafana_root }}/grafana/provisioning/dashboards"
+
+  tasks:
+    - name: Verify this is the canonical monitor-01
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+        fail_msg: "Refusing to deploy host dashboards to an unexpected host."
+
+    - name: Verify existing monitoring platform and node exporter
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ grafana_root }}/docker-compose.yml"
+        - /var/lib/prometheus/node-exporter
+        - /var/lib/asus-network-inventory
+      register: network_dashboard_prereqs
+
+    - name: Require existing monitoring platform; never bootstrap it implicitly
+      ansible.builtin.assert:
+        that:
+          - "network_dashboard_prereqs.results | selectattr('stat.exists', 'equalto', false) | list | length == 0"
+
+    - name: Create private evidence directory and Grafana host folder
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: /etc/homelab, mode: '0750'}
+        - {path: "{{ dashboards_live }}/network-hosts", mode: '0755'}
+
+    - name: Install documented infrastructure and minimal DNS hints
+      ansible.builtin.copy:
+        src: "{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - {src: "{{ playbook_dir }}/../../inventory/estate.json", dest: /etc/homelab/network-estate.json}
+        - {src: "{{ playbook_dir }}/../../monitoring/network-device-dns-hints.json", dest: /etc/homelab/network-device-dns-hints.json}
+
+    - name: Install the correlated network inventory exporter and dashboard generator
+      ansible.builtin.copy:
+        src: "{{ monitoring_role_files }}/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0750'
+      loop:
+        - {src: network-device-inventory-exporter.py, dest: /usr/local/sbin/homelab-network-device-inventory}
+        - {src: network-host-dashboard-generator.py, dest: /usr/local/sbin/homelab-network-host-dashboards}
+
+    - name: Install MAC-linked Grafana profile template
+      ansible.builtin.copy:
+        src: "{{ dashboards_src }}/homelab-mac-device-detail.json"
+        dest: /etc/homelab/network-host-template.json
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install only the two new native Grafana dashboards
+      ansible.builtin.copy:
+        src: "{{ dashboards_src }}/{{ item }}"
+        dest: "{{ dashboards_live }}/homelab/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - homelab-network-host-tiles.json
+        - homelab-mac-device-detail.json
+
+    - name: Reconcile Grafana's file provider, retaining existing providers
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/monitoring_stack/templates/grafana-dashboard-provider.yml.j2"
+        dest: "{{ grafana_root }}/grafana/provisioning/dashboards/homelab.yml"
+        owner: root
+        group: root
+        mode: '0644'
+      register: network_dashboard_provider
+
+    - name: Install and enable the five-minute inventory refresh
+      ansible.builtin.copy:
+        src: "{{ monitoring_role_files }}/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - homelab-network-device-inventory.service
+        - homelab-network-device-inventory.timer
+
+    - name: Enable the refresh timer
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+        name: homelab-network-device-inventory.timer
+        enabled: true
+        state: started
+
+    - name: Publish the first MAC-backed evidence snapshot
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-device-inventory]
+      changed_when: false
+
+    - name: Wait for Prometheus to scrape the new device-card series
+      ansible.builtin.uri:
+        url: 'http://127.0.0.1:9090/api/v1/query?query=homelab_network_device_card_info%7Btarget_name%3D%22monitor-01%22%7D'
+        status_code: 200
+        return_content: true
+      register: network_dashboard_prometheus
+      until:
+        - network_dashboard_prometheus.status == 200
+        - network_dashboard_prometheus.json.status == "success"
+        - network_dashboard_prometheus.json.data.result | length >= 10
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Generate native Grafana dashboards for all retained MACs
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-dashboards]
+      register: network_dashboard_generation
+      changed_when: "'changed=0' not in network_dashboard_generation.stdout"
+
+    - name: Check generated host dashboard files
+      ansible.builtin.find:
+        paths: "{{ dashboards_live }}/network-hosts"
+        patterns: 'net-host-*.json'
+        file_type: file
+      register: network_dashboard_files
+      failed_when: network_dashboard_files.matched < 10
+
+    - name: Restart only Grafana if provider configuration changed
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --project-directory
+          - "{{ grafana_root }}"
+          - restart
+          - grafana
+      when: network_dashboard_provider.changed
+
+    - name: Check Grafana API health
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+        return_content: true
+      register: network_dashboard_grafana_health
+      until:
+        - network_dashboard_grafana_health.status == 200
+        - network_dashboard_grafana_health.json.database == "ok"
+      retries: 15
+      delay: 2
+      changed_when: false
+
+    - name: Show host dashboard deployment
+      ansible.builtin.debug:
+        msg: >-
+          Created {{ network_dashboard_files.matched }} MAC-linked dashboard files;
+          open http://192.168.2.52:3000/d/homelab-network-host-tiles/homelab-network-host-tiles
