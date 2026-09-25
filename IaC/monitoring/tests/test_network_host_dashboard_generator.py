@@ -54,14 +54,11 @@ class GeneratorTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             template = root / "template.json"
-            template.write_text(json.dumps({
-                "uid": "homelab-mac-device-detail",
-                "id": None,
-                "templating": {"list": [
-                    {"name": "host", "type": "query"},
-                    {"name": "device", "type": "query"}
-                ]}
-            }))
+            template.write_text(
+                (Path(__file__).resolve().parents[2] /
+                 "ansible/roles/monitoring_stack/files/host-profile-template.json"
+                 ).read_text()
+            )
             generated = root / "generated"
             cards = {}
             for i in range(10):
@@ -74,7 +71,11 @@ class GeneratorTests(unittest.TestCase):
                 }
             with patch.object(generator, "TEMPLATE", template), \
                  patch.object(generator, "OUTPUT_DIR", generated), \
-                 patch.object(generator, "query_cards", return_value=cards):
+                 patch.object(generator, "query_cards", return_value=cards), \
+                 patch.object(generator, "collect_availability",
+                              return_value=(
+                                  {n: set() for n in generator.AVAILABILITY_QUERIES},
+                                  set(), set(), set())):
                 generator.run()
                 before = sorted(x.name for x in generated.glob("net-host-*.json"))
                 self.assertEqual(len(before), 10)
