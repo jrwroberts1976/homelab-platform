@@ -274,7 +274,6 @@ def atomic_write(path, text):
 
 def run():
     cards = query_cards()
-    availability = collect_availability()
     template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
     if template.get("uid") != "homelab-mac-device-detail":
         raise ValueError("Unexpected Grafana profile template")
@@ -288,6 +287,7 @@ def run():
     # to delete all per-host dashboards.
     if old_files and len(cards) < len(old_files) * 0.80:
         raise ValueError("Inventory dropped sharply; retaining last good dashboards")
+    availability = collect_availability()
     changed = 0
     for key, metric in sorted(cards.items()):
         body = json.dumps(
