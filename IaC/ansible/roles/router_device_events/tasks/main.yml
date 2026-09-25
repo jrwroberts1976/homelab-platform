@@ -13,6 +13,12 @@
     system: true
     state: present
 
+- name: Create inventory reader group
+  ansible.builtin.group:
+    name: "{{ router_device_events_inventory_group }}"
+    system: true
+    state: present
+
 - name: Create dedicated collector account
   ansible.builtin.user:
     name: "{{ router_device_events_user }}"
@@ -30,8 +36,21 @@
     path: "{{ router_device_events_state_dir }}"
     state: directory
     owner: "{{ router_device_events_user }}"
-    group: "{{ router_device_events_user }}"
-    mode: "0700"
+    group: "{{ router_device_events_inventory_group }}"
+    mode: "2750"
+
+- name: Check existing collector inventory
+  ansible.builtin.stat:
+    path: "{{ router_device_events_state }}"
+  register: router_device_events_existing_state
+
+- name: Grant group read access to existing inventory
+  when: router_device_events_existing_state.stat.exists
+  ansible.builtin.file:
+    path: "{{ router_device_events_state }}"
+    owner: "{{ router_device_events_user }}"
+    group: "{{ router_device_events_inventory_group }}"
+    mode: "0640"
 
 - name: Install router device collector
   ansible.builtin.copy:
@@ -40,6 +59,7 @@
     owner: root
     group: root
     mode: "0755"
+  register: router_device_events_script_install
 
 - name: Install collector systemd unit
   ansible.builtin.template:
@@ -56,3 +76,12 @@
     daemon_reload: true
     enabled: "{{ router_device_events_enable_service | bool }}"
     state: "{{ 'started' if router_device_events_enable_service | bool else 'stopped' }}"
+
+- name: Restart collector after script update
+  when:
+    - router_device_events_enable_service | bool
+    - not ansible_check_mode
+    - router_device_events_script_install is changed
+  ansible.builtin.systemd:
+    name: "{{ router_device_events_service }}"
+    state: restarted

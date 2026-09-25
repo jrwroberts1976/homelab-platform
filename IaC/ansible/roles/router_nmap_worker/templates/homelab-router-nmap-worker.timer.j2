@@ -1,0 +1,11 @@
+[Unit]
+Description=Check for new LAN devices awaiting Nmap profiling
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=2min
+AccuracySec=30s
+Unit=homelab-router-nmap-worker.service
+
+[Install]
+WantedBy=timers.target

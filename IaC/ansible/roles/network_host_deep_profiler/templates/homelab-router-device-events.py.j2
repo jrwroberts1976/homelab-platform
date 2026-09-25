@@ -88,7 +88,7 @@ def save_devices(path, devices, cursor=None):
             )
             output.flush()
             os.fsync(output.fileno())
-        os.chmod(temporary, 0o600)
+        os.chmod(temporary, 0o640)
         os.replace(temporary, path)
     finally:
         if os.path.exists(temporary):

@@ -1,6 +1,7 @@
 ---
 router_device_events_expected_hostname: monitor-01
 router_device_events_user: router-events
+router_device_events_inventory_group: router-device-inventory
 router_device_events_log: /var/log/homelab/router/rt-ac86u.log
 router_device_events_state_dir: /var/lib/homelab-router-device-events
 router_device_events_state: "{{ router_device_events_state_dir }}/devices.json"

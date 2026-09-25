@@ -1,0 +1,96 @@
+---
+- name: Validate Nmap worker deployment safeguards
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == router_nmap_worker_expected_hostname
+      - ansible_facts.os_family == "Debian"
+      - router_nmap_worker_allow_deploy | bool or ansible_check_mode
+      - >-
+        not (router_nmap_worker_enable_timer | bool)
+        or (router_nmap_worker_allow_live_scans | bool)
+    fail_msg: "Worker deployment or activation safeguards not satisfied."
+
+- name: Create root-owned worker application directory
+  ansible.builtin.file:
+    path: /usr/local/lib/homelab-router-nmap-worker
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create private persistent worker state directory
+  ansible.builtin.file:
+    path: "{{ router_nmap_worker_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install Nmap worker Python modules
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "/usr/local/lib/homelab-router-nmap-worker/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - device_queue.py
+    - presence.py
+    - target_guard.py
+    - worker.py
+    - worker_state.py
+    - worker_lock.py
+    - scan_evidence.py
+    - scan_runner.py
+    - profile_cycle.py
+    - device_mailer.py
+    - notification_state.py
+    - notification_delivery.py
+
+- name: Install protected worker configuration
+  ansible.builtin.template:
+    src: worker-config.json.j2
+    dest: /etc/homelab-router-nmap-worker.json
+    owner: root
+    group: root
+    mode: "0600"
+
+- name: Install guarded worker entry point
+  ansible.builtin.copy:
+    src: worker_main.py
+    dest: /usr/local/lib/homelab-router-nmap-worker/worker_main.py
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Nmap worker systemd service
+  ansible.builtin.template:
+    src: homelab-router-nmap-worker.service.j2
+    dest: /etc/systemd/system/homelab-router-nmap-worker.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Nmap worker systemd timer
+  ansible.builtin.template:
+    src: homelab-router-nmap-worker.timer.j2
+    dest: /etc/systemd/system/homelab-router-nmap-worker.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure worker timer
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: homelab-router-nmap-worker.timer
+    daemon_reload: true
+    enabled: "{{ router_nmap_worker_enable_timer | bool }}"
+    state: "{{ 'started' if router_nmap_worker_enable_timer | bool else 'stopped' }}"
+
+- name: Stop worker when live scanning is not approved
+  when:
+    - not ansible_check_mode
+    - not router_nmap_worker_allow_live_scans | bool
+  ansible.builtin.systemd:
+    name: homelab-router-nmap-worker.service
+    state: stopped

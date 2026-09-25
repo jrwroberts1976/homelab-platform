@@ -1,0 +1,14 @@
+{{ {
+    "allow_live_scans": router_nmap_worker_allow_live_scans | bool,
+    "expected_hostname": router_nmap_worker_expected_hostname,
+    "network": router_nmap_worker_network,
+    "interface": router_nmap_worker_interface,
+    "collector_state": router_nmap_worker_collector_state,
+    "profile_state": router_nmap_worker_profile_state,
+    "lock_path": router_nmap_worker_lock,
+    "cooldown_seconds": router_nmap_worker_cooldown_seconds | int,
+    "mail_host": router_nmap_worker_mail_host,
+    "mail_port": router_nmap_worker_mail_port | int,
+    "mail_from": router_nmap_worker_mail_from,
+    "mail_to": router_nmap_worker_mail_to
+} | to_nice_json }}

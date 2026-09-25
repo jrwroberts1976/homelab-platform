@@ -1,0 +1,24 @@
+---
+router_nmap_worker_expected_hostname: monitor-01
+router_nmap_worker_interface: eth0
+router_nmap_worker_network: 192.168.2.0/24
+
+router_nmap_worker_collector_state: /var/lib/homelab-router-device-events/devices.json
+router_nmap_worker_state_dir: /var/lib/homelab-router-nmap-worker
+router_nmap_worker_profile_state: "{{ router_nmap_worker_state_dir }}/profiles.json"
+router_nmap_worker_lock: "{{ router_nmap_worker_state_dir }}/worker.lock"
+
+router_nmap_worker_cooldown_seconds: 86400
+
+# All three safeguards must be explicitly reviewed before activation.
+router_nmap_worker_allow_deploy: false
+router_nmap_worker_enable_timer: false
+router_nmap_worker_allow_live_scans: false
+
+# First-seen device notifications
+router_nmap_worker_mail_host: mail-relay-01
+router_nmap_worker_mail_port: 25
+router_nmap_worker_mail_from: device-alert@jameshouse
+router_nmap_worker_mail_to: jrwroberts1976@gmail.com
+
+router_nmap_worker_inventory_group: router-device-inventory
