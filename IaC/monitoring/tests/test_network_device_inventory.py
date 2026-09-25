@@ -87,10 +87,34 @@ class InventoryTests(unittest.TestCase):
 
         metrics = inventory.render(hosts)
         self.assertIn("homelab_network_device_inventory_info", metrics)
+        self.assertIn('homelab_network_device_card_info{device_key="mac:02:00:00:00:02:02"', metrics)
+        self.assertIn('homelab_network_device_card_online{device_key="mac:02:00:00:00:02:02"', metrics)
+        self.assertIn('homelab_network_device_card_port_info{device_key="mac:02:00:00:00:02:02"', metrics)
         self.assertIn("No open ports evidenced", metrics)
         self.assertIn("Not assessed (scan timed out)", metrics)
         self.assertNotIn('homelab_network_device_open_ports_total{ip="192.168.2.252"} 0',
                          metrics)
+
+    def test_mac_card_is_unique_across_ip_changes(self):
+        from copy import deepcopy
+        template = {
+            "ip": "192.168.2.51", "mac": "aa:bb:cc:dd:ee:ff",
+            "hostname": "dns-01", "vendor": "", "kind": "lxc",
+            "role": "DNS", "os": "Linux", "os_evidence": "documented",
+            "os_source": "IaC", "dns_hint": "", "dns_observed": "",
+            "online": False, "last_seen": 123, "ports": {},
+            "scan_timed_out": False
+        }
+        moved = deepcopy(template)
+        moved.update(ip="192.168.2.88", online=True, last_seen=456)
+        metrics = inventory.render({
+            template["ip"]: template, moved["ip"]: moved
+        })
+        cards = [line for line in metrics.splitlines()
+                 if line.startswith("homelab_network_device_card_info{")]
+        self.assertEqual(len(cards), 1)
+        self.assertIn('device_key="mac:aa:bb:cc:dd:ee:ff"', cards[0])
+        self.assertIn('ip="192.168.2.88"', cards[0])
 
     def test_prometheus_labels_escape(self):
         self.assertEqual(inventory.esc('foo\n"bar"'),
