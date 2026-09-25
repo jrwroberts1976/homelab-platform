@@ -106,6 +106,8 @@ monitoring_alert_email_from: "jrwroberts1976@gmail.com"
 monitoring_alert_smtp_smarthost: "192.168.2.54:25"
 
 monitoring_grafana_dashboard_files:
+  - "homelab-network-host-tiles.json"
+  - "homelab-mac-device-detail.json"
   - "homelab-all-network-devices.json"
   - "homelab-network-hosts.json"
   - "homelab-physical-network.json"
@@ -120,6 +122,8 @@ monitoring_grafana_production_dashboard_files:
   - "homelab-linux-estate.json"
 
 monitoring_grafana_dashboard_uids:
+  - "homelab-network-host-tiles"
+  - "homelab-mac-device-detail"
   - "homelab-all-network-devices"
   - "homelab-operations"
   - "homelab-network-hosts"

@@ -5,6 +5,7 @@ Source precedence: documented OS > dated DNS inference > Nmap OS guess.
 Port results are observations from limited scans, never proof other ports are shut.
 Read-only inputs: Prometheus, the router asset DB, curated IaC, Nmap baselines.
 """
+import hashlib
 import ipaddress
 import json
 import os
@@ -260,6 +261,14 @@ def render(hosts):
         "# TYPE homelab_network_device_open_ports_total gauge",
         "# HELP homelab_network_device_inventory_last_run_seconds Last successful source-correlation run.",
         "# TYPE homelab_network_device_inventory_last_run_seconds gauge",
+        "# HELP homelab_network_device_card_info One current MAC-keyed identity, or an IP fallback when MAC is unavailable.",
+        "# TYPE homelab_network_device_card_info gauge",
+        "# HELP homelab_network_device_card_online Current device presence by stable device key; -1 unknown.",
+        "# TYPE homelab_network_device_card_online gauge",
+        "# HELP homelab_network_device_card_last_seen_seconds Last known observation of the MAC-keyed device.",
+        "# TYPE homelab_network_device_card_last_seen_seconds gauge",
+        "# HELP homelab_network_device_card_port_info Positively observed open service port for the device's current known address.",
+        "# TYPE homelab_network_device_card_port_info gauge",
     ]
     for ip in sorted(hosts, key=lambda s: ipaddress.ip_address(s)):
         h = hosts[ip]
@@ -301,6 +310,105 @@ def render(hosts):
                       "observed": p["observed"]}
             lines.append("homelab_network_device_open_port_info{" +
                          labels(fields) + "} 1")
+    # The card view follows each device by MAC instead of creating another tile
+    # when its IP changes. A documented host without an observed MAC retains
+    # a clearly marked IP fallback until a MAC can be correlated.
+    cards = {}
+    valid_mac = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
+    for ip, h in hosts.items():
+        mac = str(h.get("mac") or "").strip().lower().replace("-", ":")
+        device_key = "mac:" + mac if valid_mac.fullmatch(mac) else "ip:" + ip
+        old = cards.get(device_key)
+        freshness = (
+            1 if h.get("online") is True else 0,
+            int(h.get("last_seen") or 0),
+            1 if h.get("os_evidence") == "documented" else 0,
+        )
+        if old is None or freshness > old[0]:
+            cards[device_key] = (freshness, h)
+
+    for device_key in sorted(cards):
+        h = cards[device_key][1]
+        ip = h["ip"]
+        mac = (str(h.get("mac") or "").strip().lower()
+               .replace("-", ":"))
+        if not valid_mac.fullmatch(mac):
+            mac = ""
+        display_name = h.get("hostname") or h.get("vendor") or ip
+        dashboard_uid = (
+            "net-host-" + hashlib.sha256(
+                device_key.encode("utf-8")).hexdigest()[:12]
+        )
+        ports = sorted(
+            h["ports"].values(),
+            key=lambda p: (p["protocol"], p["port"]),
+        )
+        summary = ", ".join(
+            "%s/%s %s" % (p["port"], p["protocol"],
+                         p["service"] or "unknown")
+            for p in ports
+        )[:480]
+        if not ports:
+            summary = (
+                "Not assessed (scan timed out)" if h["scan_timed_out"]
+                else "No open ports evidenced"
+            )
+        status = (
+            "Unknown" if h["online"] is None
+            else "Online" if h["online"] else "Offline"
+        )
+        common = {
+            "device_key": device_key,
+            "ip": ip,
+            "mac": mac,
+            "hostname": display_name,
+            "os": h["os"],
+            "os_evidence": h["os_evidence"],
+            "dashboard_uid": dashboard_uid,
+        }
+        info = {
+            **common,
+            "vendor": h["vendor"],
+            "role": h["role"],
+            "kind": h["kind"],
+            "os_source": h["os_source"],
+            "dns_hint": h["dns_hint"],
+            "dns_observed": h["dns_observed"],
+            "observed_open_ports": summary,
+            "status": status,
+        }
+        lines.append(
+            "homelab_network_device_card_info{" +
+            labels(info) + "} 1"
+        )
+        lines.append(
+            "homelab_network_device_card_online{" +
+            labels(common) + "} " +
+            str(-1 if h["online"] is None else int(h["online"]))
+        )
+        if h["last_seen"]:
+            lines.append(
+                "homelab_network_device_card_last_seen_seconds{" +
+                labels({"device_key": device_key}) + "} " +
+                str(int(h["last_seen"]))
+            )
+        for port in ports:
+            fields = {
+                "device_key": device_key,
+                "ip": ip,
+                "port": port["port"],
+                "protocol": port["protocol"],
+                "service": port["service"],
+                "product": port["product"],
+                "version": port["version"],
+                "source": port["source"],
+                "observed": port["observed"],
+            }
+            lines.append(
+                "homelab_network_device_card_port_info{" +
+                labels(fields) + "} 1"
+            )
+
     lines.append("homelab_network_device_inventory_last_run_seconds %d" %
                  int(time.time()))
     return "\n".join(lines) + "\n"
