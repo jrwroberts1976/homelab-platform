@@ -5,6 +5,7 @@ Source precedence: documented OS > dated DNS inference > Nmap OS guess.
 Port results are observations from limited scans, never proof other ports are shut.
 Read-only inputs: Prometheus, the router asset DB, curated IaC, Nmap baselines.
 """
+from collections import Counter
 import hashlib
 import ipaddress
 import json
@@ -327,6 +328,11 @@ def render(hosts):
         if old is None or freshness > old[0]:
             cards[device_key] = (freshness, h)
 
+    name_counts = Counter(
+        (entry[1].get("hostname") or "").strip().casefold()
+        for entry in cards.values()
+        if (entry[1].get("hostname") or "").strip()
+    )
     for device_key in sorted(cards):
         h = cards[device_key][1]
         ip = h["ip"]
@@ -334,7 +340,12 @@ def render(hosts):
                .replace("-", ":"))
         if not valid_mac.fullmatch(mac):
             mac = ""
-        display_name = h.get("hostname") or h.get("vendor") or ip
+        # User-facing Grafana names are hostnames. Fall back to IP rather
+        # than raw MAC or generic vendor if DHCP/reverse DNS cannot name it.
+        name = (h.get("hostname") or "").strip()
+        display_name = name or ip
+        if name and name_counts[name.casefold()] > 1:
+            display_name = "%s (%s)" % (name, ip)
         dashboard_uid = (
             "net-host-" + hashlib.sha256(
                 device_key.encode("utf-8")).hexdigest()[:12]

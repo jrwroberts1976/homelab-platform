@@ -1,19 +1,18 @@
 {
   "id": null,
   "uid": "homelab-mac-device-detail",
-  "title": "Homelab — Device Profile (MAC-linked)",
-  "description": "Native Grafana profile follows device identity by MAC even after DHCP address changes.",
+  "title": "Homelab — Host Detail",
+  "description": "Per-host Grafana dashboard matching the Production Hosts layout, with OS evidence, open ports, DNS clues and Linux charts when available. Host selection by hostname.",
   "tags": [
     "homelab",
+    "hosts",
     "network",
-    "device",
-    "mac",
-    "os",
+    "operating-system",
     "ports"
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 5,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -23,18 +22,41 @@
   "templating": {
     "list": [
       {
-        "name": "device",
-        "label": "Device identity (MAC / IP fallback)",
+        "name": "host",
+        "label": "Host",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(homelab_network_device_card_info, device_key)",
+          "query": "label_values(homelab_network_device_card_info, hostname)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "selected": true,
+          "text": "monitor-01",
+          "value": "monitor-01"
+        },
+        "sort": 1
+      },
+      {
+        "name": "device",
+        "label": "Internal device identity",
+        "hide": 2,
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(homelab_network_device_card_info{hostname=\"$host\"}, device_key)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
         "includeAll": false,
         "multi": false,
         "current": {
@@ -46,18 +68,18 @@
       },
       {
         "name": "node_host",
-        "label": "Linux host mapping",
+        "label": "Linux metrics hostname",
+        "hide": 2,
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(homelab_network_device_card_info{device_key=\"$device\"}, hostname)",
+          "query": "label_values(homelab_network_device_card_info{hostname=\"$host\"}, hostname)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 2,
-        "hide": 2,
         "includeAll": false,
         "multi": false,
         "current": {
@@ -74,20 +96,450 @@
   },
   "links": [
     {
-      "title": "All network hosts",
+      "title": "Home",
       "type": "link",
-      "url": "/d/homelab-network-host-tiles/homelab-network-host-tiles",
+      "url": "/d/homelab-operations",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Hosts",
+      "type": "link",
+      "url": "/d/homelab-network-host-tiles?var-host=$host",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Host Detail",
+      "type": "link",
+      "url": "/d/homelab-mac-device-detail?var-host=$host",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Linux Node Detail",
+      "type": "link",
+      "url": "/d/homelab-node-detail?var-host=$host",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Logs",
+      "type": "link",
+      "url": "/d/homelab-observability",
+      "keepTime": true,
+      "includeVars": false,
       "targetBlank": false
     }
   ],
   "panels": [
     {
       "id": 1,
-      "title": "Presence",
       "type": "stat",
+      "title": "Average CPU",
+      "description": "",
       "gridPos": {
         "x": 0,
         "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\",target_name=\"$node_host\"}[5m])) * 100)",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Average Memory Used",
+      "description": "",
+      "gridPos": {
+        "x": 6,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "avg(100 * (1 - node_memory_MemAvailable_bytes{target_name=\"$node_host\"} / node_memory_MemTotal_bytes{target_name=\"$node_host\"}))",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "background",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total Updates",
+      "description": "Total available package updates on the selected host. No data means telemetry is missing.",
+      "gridPos": {
+        "x": 12,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(homelab_updates_available{target_name=\"$node_host\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Security Updates",
+      "description": "No data means patch telemetry is missing; do not interpret it as zero.",
+      "gridPos": {
+        "x": 18,
+        "y": 0,
+        "w": 6,
+        "h": 5
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(homelab_security_updates_available{target_name=\"$node_host\"})",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
+              }
+            ]
+          },
+          "noValue": "No telemetry"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "CPU Usage",
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 - (avg by(target_name) (rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\",target_name=\"$node_host\"}[5m])) * 100)",
+          "legendFormat": "{{target_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 6,
+      "type": "timeseries",
+      "title": "Memory Usage",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{target_name=\"$node_host\"} / node_memory_MemTotal_bytes{target_name=\"$node_host\"})",
+          "legendFormat": "{{target_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Network Throughput",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (target_name) (rate(node_network_receive_bytes_total{target_name=\"$node_host\",device!~\"lo|veth.*|docker.*|br-.*|virbr.*|cni.*|flannel.*|tun.*|tap.*\"}[5m]))",
+          "legendFormat": "{{target_name}} receive"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (target_name) (rate(node_network_transmit_bytes_total{target_name=\"$node_host\",device!~\"lo|veth.*|docker.*|br-.*|virbr.*|cni.*|flannel.*|tun.*|tap.*\"}[5m]))",
+          "legendFormat": "{{target_name}} transmit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Inbound and outbound network throughput for the selected host, excluding loopback and virtual interfaces."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Filesystem Utilisation",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_filesystem_avail_bytes{target_name=\"$node_host\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{target_name=\"$node_host\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs\"})",
+          "legendFormat": "{{target_name}} {{mountpoint}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Filesystem utilisation for the selected host."
+    },
+    {
+      "id": 9,
+      "title": "Network status",
+      "type": "stat",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
         "w": 6,
         "h": 4
       },
@@ -107,20 +559,21 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "Unknown",
           "mappings": [
             {
               "type": "value",
               "options": {
                 "0": {
-                  "text": "OFFLINE",
+                  "text": "Offline",
                   "color": "red"
                 },
                 "1": {
-                  "text": "ONLINE",
+                  "text": "Online",
                   "color": "green"
                 },
                 "-1": {
-                  "text": "UNKNOWN",
+                  "text": "Unknown",
                   "color": "gray"
                 }
               }
@@ -148,18 +601,18 @@
         },
         "orientation": "auto",
         "textMode": "auto",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
-      "id": 2,
+      "id": 10,
       "title": "Last seen",
       "type": "stat",
       "gridPos": {
         "x": 6,
-        "y": 0,
+        "y": 23,
         "w": 6,
         "h": 4
       },
@@ -179,6 +632,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "dateTimeAsIso",
+          "noValue": "Not recorded",
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -201,18 +656,18 @@
         },
         "orientation": "auto",
         "textMode": "auto",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
-      "id": 3,
+      "id": 11,
       "title": "Observed open ports",
       "type": "stat",
       "gridPos": {
         "x": 12,
-        "y": 0,
+        "y": 23,
         "w": 6,
         "h": 4
       },
@@ -232,6 +687,8 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "Not assessed",
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -254,18 +711,18 @@
         },
         "orientation": "auto",
         "textMode": "auto",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
-      "id": 4,
-      "title": "Linux exporter available",
+      "id": 12,
+      "title": "Linux telemetry",
       "type": "stat",
       "gridPos": {
         "x": 18,
-        "y": 0,
+        "y": 23,
         "w": 6,
         "h": 4
       },
@@ -285,16 +742,17 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
+          "noValue": "Not available",
           "mappings": [
             {
               "type": "value",
               "options": {
                 "0": {
-                  "text": "DOWN",
+                  "text": "Down",
                   "color": "red"
                 },
                 "1": {
-                  "text": "UP",
+                  "text": "Available",
                   "color": "green"
                 }
               }
@@ -322,36 +780,36 @@
         },
         "orientation": "auto",
         "textMode": "auto",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
-      "id": 5,
-      "title": "How to interpret this device profile",
       "type": "text",
+      "id": 13,
+      "title": "Data availability and identification evidence",
       "gridPos": {
         "x": 0,
-        "y": 4,
+        "y": 27,
         "w": 24,
         "h": 3
       },
       "options": {
         "mode": "markdown",
-        "content": "This native Grafana profile follows the **device MAC**, not a fixed DHCP address. Current IP, hostname, OS and ports come from the latest correlated inventory. **Documented OS** is distinct from DNS/Nmap inference. Ports are **observed open** in limited scans; missing records do not establish that a port is closed. DNS evidence is currently a dated snapshot, not live browsing telemetry."
+        "content": "**Device selection uses hostnames, not MAC addresses.** Devices without a known hostname display their current IP. The collector still uses MAC internally to keep device history when DHCP addresses change. OS classifications marked inferred come from DNS/Nmap clues; unknown ports or timed-out scans are **not** evidence that all ports are closed. CPU, memory, patch and filesystem graphs require Node Exporter and are unavailable for many phones, cameras and smart-home devices. DNS hints currently use a dated 18–25 September snapshot, not continuous DNS analysis."
       }
     },
     {
-      "id": 6,
-      "title": "Device identity, operating system and DNS clues",
+      "id": 14,
+      "title": "Host identity and operating system",
       "type": "table",
-      "description": "One row for this stable device identity.",
+      "description": "A single selected hostname. No MAC addresses are displayed; stable identity is maintained behind the scenes.",
       "gridPos": {
         "x": 0,
-        "y": 7,
+        "y": 30,
         "w": 24,
-        "h": 10
+        "h": 8
       },
       "datasource": {
         "type": "prometheus",
@@ -380,38 +838,47 @@
               "Time": true,
               "Value": true,
               "__name__": true,
-              "job": true,
               "instance": true,
-              "target_name": true
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "version": true,
+              "source": true,
+              "observed": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
             },
             "indexByName": {
               "hostname": 0,
               "ip": 1,
-              "mac": 2,
-              "vendor": 3,
-              "kind": 4,
-              "status": 5,
-              "os": 6,
-              "os_evidence": 7,
-              "os_source": 8,
-              "dns_hint": 9,
-              "dns_observed": 10,
-              "observed_open_ports": 11,
-              "role": 12
+              "status": 2,
+              "kind": 3,
+              "os": 4,
+              "os_evidence": 5,
+              "os_source": 6,
+              "observed_open_ports": 7,
+              "vendor": 8,
+              "role": 9
             },
             "renameByName": {
-              "hostname": "Host",
-              "ip": "Current IP",
-              "mac": "MAC",
-              "vendor": "Vendor",
-              "kind": "Type",
-              "status": "Presence",
-              "os": "OS",
+              "hostname": "Hostname",
+              "ip": "IP address",
+              "status": "Status",
+              "kind": "Device type",
+              "os": "Operating system",
               "os_evidence": "OS evidence",
               "os_source": "OS source",
-              "dns_hint": "DNS clues",
-              "dns_observed": "DNS snapshot",
-              "observed_open_ports": "Ports observed",
+              "observed_open_ports": "Observed open ports",
+              "vendor": "Vendor",
               "role": "Role"
             }
           }
@@ -420,27 +887,28 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "filterable": true,
-            "align": "auto"
+            "align": "auto",
+            "filterable": true
           }
         },
         "overrides": []
       },
       "options": {
         "showHeader": true,
-        "cellHeight": "sm"
+        "cellHeight": "sm",
+        "enablePagination": true
       }
     },
     {
-      "id": 7,
-      "title": "Open ports — positively observed services",
+      "id": 15,
+      "title": "Observed open ports and services",
       "type": "table",
-      "description": "Empty table means no positive scan evidence for this current MAC/IP; scan timeouts are not zero open ports.",
+      "description": "Only confirmed open ports from the available selective scans are shown; no rows means no observed open ports, not all ports closed.",
       "gridPos": {
         "x": 0,
-        "y": 17,
+        "y": 38,
         "w": 24,
-        "h": 10
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -469,29 +937,46 @@
               "Time": true,
               "Value": true,
               "__name__": true,
-              "job": true,
               "instance": true,
-              "target_name": true
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "hostname": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os": true,
+              "os_source": true,
+              "os_evidence": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
             },
             "indexByName": {
-              "protocol": 0,
-              "port": 1,
-              "service": 2,
-              "product": 3,
-              "version": 4,
-              "source": 5,
-              "observed": 6,
-              "ip": 7
+              "ip": 0,
+              "protocol": 1,
+              "port": 2,
+              "service": 3,
+              "product": 4,
+              "version": 5,
+              "source": 6,
+              "observed": 7
             },
             "renameByName": {
+              "ip": "IP address",
               "protocol": "Protocol",
               "port": "Port",
               "service": "Service",
               "product": "Product",
               "version": "Version",
               "source": "Evidence source",
-              "observed": "Baseline date",
-              "ip": "IP at observation"
+              "observed": "Scan date"
             }
           }
         }
@@ -499,26 +984,122 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "filterable": true,
-            "align": "auto"
+            "align": "auto",
+            "filterable": true
           }
         },
         "overrides": []
       },
       "options": {
         "showHeader": true,
-        "cellHeight": "sm"
+        "cellHeight": "sm",
+        "enablePagination": true
       }
     },
     {
-      "id": 8,
-      "title": "Presence history by MAC",
-      "type": "timeseries",
+      "id": 16,
+      "title": "DNS evidence — patching and cloud endpoints",
+      "type": "table",
+      "description": "The DNS classification is a dated observation, not an OS verification.",
       "gridPos": {
         "x": 0,
-        "y": 27,
-        "w": 12,
-        "h": 8
+        "y": 47,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{device_key=\"$device\",dns_hint!=\"\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os_source": true,
+              "observed_open_ports": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "version": true,
+              "source": true,
+              "observed": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
+            },
+            "indexByName": {
+              "hostname": 0,
+              "ip": 1,
+              "dns_hint": 2,
+              "dns_observed": 3,
+              "os": 4,
+              "os_evidence": 5
+            },
+            "renameByName": {
+              "hostname": "Hostname",
+              "ip": "IP",
+              "dns_hint": "DNS evidence",
+              "dns_observed": "Observed",
+              "os": "OS classification",
+              "os_evidence": "Confidence"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Online / offline history",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 24,
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -531,7 +1112,7 @@
           "instant": false,
           "range": true,
           "format": "time_series",
-          "legendFormat": "Presence"
+          "legendFormat": "{{hostname}}"
         }
       ],
       "fieldConfig": {
@@ -544,25 +1125,75 @@
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "lastNotNull"
           ]
         },
         "tooltip": {
-          "mode": "single",
-          "sort": "none"
+          "mode": "single"
         }
       }
     },
     {
-      "id": 9,
-      "title": "CPU usage — Linux with Node Exporter",
+      "id": 18,
       "type": "timeseries",
+      "title": "Disk throughput (Linux hosts)",
+      "gridPos": {
+        "x": 0,
+        "y": 63,
+        "w": 12,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(node_disk_read_bytes_total{target_name=\"$node_host\",device!~\"loop.*|ram.*\"}[5m])",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "legendFormat": "Read"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(node_disk_written_bytes_total{target_name=\"$node_host\",device!~\"loop.*|ram.*\"}[5m])",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "legendFormat": "Write"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi"
+        }
+      }
+    },
+    {
+      "id": 19,
+      "type": "timeseries",
+      "title": "System load (Linux hosts)",
       "gridPos": {
         "x": 12,
-        "y": 27,
+        "y": 63,
         "w": 12,
         "h": 8
       },
@@ -573,89 +1204,58 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 - (avg by(target_name) (rate(node_cpu_seconds_total{job=\"node-exporter\",target_name=\"$node_host\",mode=\"idle\"}[5m])) * 100)",
+          "expr": "node_load1{target_name=\"$node_host\"}",
           "instant": false,
           "range": true,
           "format": "time_series",
-          "legendFormat": "CPU %"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "legendFormat": "1m"
         },
-        "overrides": []
-      },
-      "options": {
-        "legend": {
-          "displayMode": "list",
-          "placement": "bottom",
-          "calcs": [
-            "lastNotNull"
-          ]
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      }
-    },
-    {
-      "id": 10,
-      "title": "Memory utilisation — Linux with Node Exporter",
-      "type": "timeseries",
-      "gridPos": {
-        "x": 0,
-        "y": 35,
-        "w": 12,
-        "h": 8
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
         {
-          "refId": "A",
-          "expr": "100 * (1 - node_memory_MemAvailable_bytes{target_name=\"$node_host\"} / node_memory_MemTotal_bytes{target_name=\"$node_host\"})",
+          "refId": "B",
+          "expr": "node_load5{target_name=\"$node_host\"}",
           "instant": false,
           "range": true,
           "format": "time_series",
-          "legendFormat": "Memory %"
+          "legendFormat": "5m"
+        },
+        {
+          "refId": "C",
+          "expr": "node_load15{target_name=\"$node_host\"}",
+          "instant": false,
+          "range": true,
+          "format": "time_series",
+          "legendFormat": "15m"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100
+          "unit": "short"
         },
         "overrides": []
       },
       "options": {
         "legend": {
-          "displayMode": "list",
+          "displayMode": "table",
           "placement": "bottom",
           "calcs": [
             "lastNotNull"
           ]
         },
         "tooltip": {
-          "mode": "single"
+          "mode": "multi"
         }
       }
     },
     {
-      "id": 11,
-      "title": "Authoritative OS from host exporter, if available",
+      "id": 20,
+      "title": "Live Linux OS and kernel facts",
       "type": "table",
-      "description": "Only populated for a host exporting node_os_info; otherwise refer to the documented/inferred OS above.",
+      "description": "Shows live OS metadata where exported; documented/inferred OS information remains above.",
       "gridPos": {
         "x": 0,
-        "y": 43,
+        "y": 71,
         "w": 24,
-        "h": 6
+        "h": 7
       },
       "datasource": {
         "type": "prometheus",
@@ -684,23 +1284,42 @@
               "Time": true,
               "Value": true,
               "__name__": true,
-              "job": true,
               "instance": true,
-              "target_name": true
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "hostname": true,
+              "ip": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os": true,
+              "os_source": true,
+              "os_evidence": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "source": true,
+              "observed": true
             },
             "indexByName": {
-              "target_name": 0,
-              "name": 1,
+              "name": 0,
+              "pretty_name": 1,
               "version": 2,
-              "id": 3,
-              "pretty_name": 4
+              "id": 3
             },
             "renameByName": {
-              "target_name": "Host",
-              "name": "OS name",
+              "name": "Distribution",
+              "pretty_name": "OS release",
               "version": "Version",
-              "id": "Distribution ID",
-              "pretty_name": "OS release"
+              "id": "Distribution ID"
             }
           }
         }
@@ -708,88 +1327,51 @@
       "fieldConfig": {
         "defaults": {
           "custom": {
-            "filterable": true,
-            "align": "auto"
+            "align": "auto",
+            "filterable": true
           }
         },
         "overrides": []
       },
       "options": {
         "showHeader": true,
-        "cellHeight": "sm"
+        "cellHeight": "sm",
+        "enablePagination": true
       }
     },
     {
-      "id": 12,
-      "title": "Kernel/system identity, if available",
-      "type": "table",
-      "description": "Shows live Linux system facts where Node Exporter is deployed.",
+      "id": 21,
+      "type": "logs",
+      "title": "Recent host logs (when collected)",
       "gridPos": {
         "x": 0,
-        "y": 49,
+        "y": 78,
         "w": 24,
-        "h": 6
+        "h": 9
       },
       "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
+        "type": "loki",
+        "uid": "loki"
       },
       "targets": [
         {
           "refId": "A",
-          "expr": "node_uname_info{target_name=\"$node_host\"}",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": true,
-              "__name__": true,
-              "job": true,
-              "instance": true,
-              "target_name": true
-            },
-            "indexByName": {
-              "target_name": 0,
-              "sysname": 1,
-              "release": 2,
-              "machine": 3,
-              "nodename": 4
-            },
-            "renameByName": {
-              "target_name": "Host",
-              "sysname": "Kernel family",
-              "release": "Kernel release",
-              "machine": "Architecture",
-              "nodename": "Hostname"
-            }
+          "expr": "{host=\"$node_host\"}",
+          "queryType": "range",
+          "datasource": {
+            "type": "loki",
+            "uid": "loki"
           }
         }
       ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "filterable": true,
-            "align": "auto"
-          }
-        },
-        "overrides": []
-      },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm"
+        "showTime": true,
+        "showLabels": false,
+        "showCommonLabels": false,
+        "wrapLogMessage": true,
+        "prettifyLogMessage": false,
+        "enableLogDetails": true,
+        "sortOrder": "Descending"
       }
     }
   ]

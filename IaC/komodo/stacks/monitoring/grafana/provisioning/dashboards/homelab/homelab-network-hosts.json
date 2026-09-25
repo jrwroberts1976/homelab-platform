@@ -1,8 +1,8 @@
 {
   "id": null,
   "uid": "homelab-network-hosts",
-  "title": "Homelab \u2014 Network Hosts",
-  "description": "Network inventory, lifecycle, latency, enrichment and one-time deep profiling.",
+  "title": "Homelab — Network Discovery",
+  "description": "Existing network discovery overview: inventory totals, online/offline history, enrichment, deep profiling and lifecycle events. For hostname-selected CPU/memory/OS/ports, use Homelab — Network Hosts.",
   "tags": [
     "homelab",
     "network",
@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -370,7 +370,7 @@
     {
       "id": 7,
       "type": "table",
-      "title": "Host Inventory \u2014 Identity",
+      "title": "Host Inventory — Identity",
       "gridPos": {
         "x": 0,
         "y": 4,

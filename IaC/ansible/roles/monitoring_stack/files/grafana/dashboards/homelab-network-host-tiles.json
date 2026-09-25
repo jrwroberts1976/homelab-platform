@@ -1,19 +1,18 @@
 {
   "id": null,
   "uid": "homelab-network-host-tiles",
-  "title": "Homelab — Network Hosts | Device Tiles",
-  "description": "Native Grafana overview: one status tile per MAC-addressed LAN device, OS evidence, observed open ports and click-through to the MAC-keyed profile.",
+  "title": "Homelab — Network Hosts",
+  "description": "Hostname-selected network-wide Grafana dashboard matching Production Hosts charts and showing OS, observed ports and DNS clues.",
   "tags": [
     "homelab",
+    "hosts",
     "network",
-    "devices",
-    "mac",
-    "ports",
-    "os"
+    "operating-system",
+    "ports"
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 5,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -23,25 +22,70 @@
   "templating": {
     "list": [
       {
-        "name": "device",
-        "label": "Device MAC / IP",
+        "name": "host",
+        "label": "Host",
         "type": "query",
         "datasource": {
           "type": "prometheus",
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(homelab_network_device_card_info, device_key)",
+          "query": "label_values(homelab_network_device_card_info, hostname)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
-        "includeAll": true,
-        "allValue": ".*",
-        "multi": true,
+        "includeAll": false,
+        "multi": false,
         "current": {
           "selected": true,
-          "text": "All",
-          "value": "$__all"
+          "text": "monitor-01",
+          "value": "monitor-01"
+        },
+        "sort": 1
+      },
+      {
+        "name": "device",
+        "label": "Internal device identity",
+        "hide": 2,
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(homelab_network_device_card_info{hostname=\"$host\"}, device_key)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
+        },
+        "sort": 1
+      },
+      {
+        "name": "node_host",
+        "label": "Linux metrics hostname",
+        "hide": 2,
+        "type": "query",
+        "datasource": {
+          "type": "prometheus",
+          "uid": "prometheus"
+        },
+        "query": {
+          "query": "label_values(homelab_network_device_card_info{hostname=\"$host\"}, hostname)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 2,
+        "includeAll": false,
+        "multi": false,
+        "current": {
+          "selected": false,
+          "text": "",
+          "value": ""
         },
         "sort": 1
       }
@@ -50,17 +94,59 @@
   "annotations": {
     "list": []
   },
-  "links": [],
+  "links": [
+    {
+      "title": "Home",
+      "type": "link",
+      "url": "/d/homelab-operations",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Hosts",
+      "type": "link",
+      "url": "/d/homelab-network-host-tiles?var-host=$host",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Host Detail",
+      "type": "link",
+      "url": "/d/homelab-mac-device-detail?var-host=$host",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Linux Node Detail",
+      "type": "link",
+      "url": "/d/homelab-node-detail?var-host=$host",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Logs",
+      "type": "link",
+      "url": "/d/homelab-observability",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    }
+  ],
   "panels": [
     {
       "id": 1,
-      "title": "Known devices",
       "type": "stat",
+      "title": "Average CPU",
+      "description": "",
       "gridPos": {
         "x": 0,
         "y": 0,
-        "w": 4,
-        "h": 4
+        "w": 6,
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -69,15 +155,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_device_card_info) or vector(0)",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\",target_name=\"$node_host\"}[5m])) * 100)",
           "instant": true,
-          "range": false,
-          "format": "time_series"
+          "range": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "percent",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -86,7 +171,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "noValue": "No telemetry"
         },
         "overrides": []
       },
@@ -107,13 +193,14 @@
     },
     {
       "id": 2,
-      "title": "Online",
       "type": "stat",
+      "title": "Average Memory Used",
+      "description": "",
       "gridPos": {
-        "x": 4,
+        "x": 6,
         "y": 0,
-        "w": 4,
-        "h": 4
+        "w": 6,
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -122,15 +209,14 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_device_card_online == 1) or vector(0)",
+          "expr": "avg(100 * (1 - node_memory_MemAvailable_bytes{target_name=\"$node_host\"} / node_memory_MemTotal_bytes{target_name=\"$node_host\"}))",
           "instant": true,
-          "range": false,
-          "format": "time_series"
+          "range": false
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
+          "unit": "percent",
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -139,7 +225,8 @@
                 "value": null
               }
             ]
-          }
+          },
+          "noValue": "No telemetry"
         },
         "overrides": []
       },
@@ -160,13 +247,14 @@
     },
     {
       "id": 3,
-      "title": "Offline",
       "type": "stat",
+      "title": "Total Updates",
+      "description": "Total available package updates on the selected host. No data means telemetry is missing.",
       "gridPos": {
-        "x": 8,
+        "x": 12,
         "y": 0,
-        "w": 4,
-        "h": 4
+        "w": 6,
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -175,10 +263,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_device_card_online == 0) or vector(0)",
+          "expr": "sum(homelab_updates_available{target_name=\"$node_host\"})",
           "instant": true,
-          "range": false,
-          "format": "time_series"
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -190,9 +277,14 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
-          }
+          },
+          "noValue": "No telemetry"
         },
         "overrides": []
       },
@@ -206,20 +298,21 @@
         },
         "orientation": "auto",
         "textMode": "auto",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
       "id": 4,
-      "title": "OS documented",
       "type": "stat",
+      "title": "Security Updates",
+      "description": "No data means patch telemetry is missing; do not interpret it as zero.",
       "gridPos": {
-        "x": 12,
+        "x": 18,
         "y": 0,
-        "w": 4,
-        "h": 4
+        "w": 6,
+        "h": 5
       },
       "datasource": {
         "type": "prometheus",
@@ -228,10 +321,9 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_device_card_info{os_evidence=\"documented\"}) or vector(0)",
+          "expr": "sum(homelab_security_updates_available{target_name=\"$node_host\"})",
           "instant": true,
-          "range": false,
-          "format": "time_series"
+          "range": false
         }
       ],
       "fieldConfig": {
@@ -243,9 +335,14 @@
               {
                 "color": "green",
                 "value": null
+              },
+              {
+                "color": "orange",
+                "value": 1
               }
             ]
-          }
+          },
+          "noValue": "No telemetry"
         },
         "overrides": []
       },
@@ -259,20 +356,20 @@
         },
         "orientation": "auto",
         "textMode": "auto",
-        "colorMode": "background",
+        "colorMode": "value",
         "graphMode": "none",
         "justifyMode": "auto"
       }
     },
     {
       "id": 5,
-      "title": "OS inferred",
-      "type": "stat",
+      "type": "timeseries",
+      "title": "CPU Usage",
       "gridPos": {
-        "x": 16,
-        "y": 0,
-        "w": 4,
-        "h": 4
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 9
       },
       "datasource": {
         "type": "prometheus",
@@ -281,50 +378,169 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_device_card_info{os_evidence=~\"inferred_.*\"}) or vector(0)",
-          "instant": true,
-          "range": false,
-          "format": "time_series"
+          "expr": "100 - (avg by(target_name) (rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\",target_name=\"$node_host\"}[5m])) * 100)",
+          "legendFormat": "{{target_name}}"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
+          "unit": "percent"
         },
         "overrides": []
       },
       "options": {
-        "reduceOptions": {
-          "values": false,
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
           "calcs": [
             "lastNotNull"
-          ],
-          "fields": ""
+          ]
         },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
       }
     },
     {
       "id": 6,
-      "title": "OS unknown",
+      "type": "timeseries",
+      "title": "Memory Usage",
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_memory_MemAvailable_bytes{target_name=\"$node_host\"} / node_memory_MemTotal_bytes{target_name=\"$node_host\"})",
+          "legendFormat": "{{target_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
+    },
+    {
+      "id": 7,
+      "type": "timeseries",
+      "title": "Network Throughput",
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (target_name) (rate(node_network_receive_bytes_total{target_name=\"$node_host\",device!~\"lo|veth.*|docker.*|br-.*|virbr.*|cni.*|flannel.*|tun.*|tap.*\"}[5m]))",
+          "legendFormat": "{{target_name}} receive"
+        },
+        {
+          "refId": "B",
+          "expr": "sum by (target_name) (rate(node_network_transmit_bytes_total{target_name=\"$node_host\",device!~\"lo|veth.*|docker.*|br-.*|virbr.*|cni.*|flannel.*|tun.*|tap.*\"}[5m]))",
+          "legendFormat": "{{target_name}} transmit"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "Bps",
+          "min": 0
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Inbound and outbound network throughput for the selected host, excluding loopback and virtual interfaces."
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Filesystem Utilisation",
+      "gridPos": {
+        "x": 12,
+        "y": 14,
+        "w": 12,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "100 * (1 - node_filesystem_avail_bytes{target_name=\"$node_host\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs\"} / node_filesystem_size_bytes{target_name=\"$node_host\",fstype!~\"tmpfs|devtmpfs|overlay|squashfs\"})",
+          "legendFormat": "{{target_name}} {{mountpoint}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent"
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "table",
+          "placement": "bottom",
+          "calcs": [
+            "lastNotNull"
+          ]
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      },
+      "description": "Filesystem utilisation for the selected host."
+    },
+    {
+      "id": 9,
+      "title": "Network status",
       "type": "stat",
       "gridPos": {
-        "x": 20,
-        "y": 0,
-        "w": 4,
+        "x": 0,
+        "y": 23,
+        "w": 6,
         "h": 4
       },
       "datasource": {
@@ -334,7 +550,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "count(homelab_network_device_card_info{os_evidence=\"unknown\"}) or vector(0)",
+          "expr": "homelab_network_device_card_online{device_key=\"$device\"}",
           "instant": true,
           "range": false,
           "format": "time_series"
@@ -343,105 +559,21 @@
       "fieldConfig": {
         "defaults": {
           "unit": "short",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "value": null
-              }
-            ]
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "auto",
-        "colorMode": "background",
-        "graphMode": "none",
-        "justifyMode": "auto"
-      }
-    },
-    {
-      "id": 7,
-      "type": "text",
-      "title": "Device identity and evidence",
-      "gridPos": {
-        "x": 0,
-        "y": 4,
-        "w": 24,
-        "h": 3
-      },
-      "options": {
-        "mode": "markdown",
-        "content": "**One tile per MAC address** (IP fallback until a MAC is known). Select a tile to open that device's native Grafana profile. **Documented OS** = canonical inventory; **DNS/Nmap OS** = inference only. **Ports** = observed open ports from limited scans; a missing result or timed-out scan is not proof that ports are closed. DNS hints are a dated 18–25 September 2026 snapshot, not continuous DNS telemetry."
-      }
-    },
-    {
-      "id": 8,
-      "type": "stat",
-      "title": "All network devices — click a tile for its host dashboard",
-      "description": "One status tile per known device; Grafana creates tiles directly from MAC-keyed Prometheus series.",
-      "gridPos": {
-        "x": 0,
-        "y": 7,
-        "w": 24,
-        "h": 24
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_network_device_card_online{device_key=~\"$device\"}",
-          "instant": true,
-          "range": false,
-          "format": "time_series",
-          "legendFormat": "{{hostname}} | {{ip}} | {{os}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "short",
-          "min": -1,
-          "max": 1,
-          "decimals": 0,
-          "links": [
-            {
-              "title": "Dedicated MAC-linked host dashboard",
-              "url": "/d/${__field.labels.dashboard_uid}/host",
-              "targetBlank": false
-            },
-            {
-              "title": "Generic device profile",
-              "url": "/d/homelab-mac-device-detail/homelab-mac-device-detail?var-device=${__field.labels.device_key}",
-              "targetBlank": false
-            }
-          ],
+          "noValue": "Unknown",
           "mappings": [
             {
               "type": "value",
               "options": {
                 "0": {
-                  "text": "OFFLINE",
+                  "text": "Offline",
                   "color": "red"
                 },
                 "1": {
-                  "text": "ONLINE",
+                  "text": "Online",
                   "color": "green"
                 },
                 "-1": {
-                  "text": "UNKNOWN",
+                  "text": "Unknown",
                   "color": "gray"
                 }
               }
@@ -451,16 +583,8 @@
             "mode": "absolute",
             "steps": [
               {
-                "color": "gray",
-                "value": null
-              },
-              {
-                "color": "red",
-                "value": 0
-              },
-              {
                 "color": "green",
-                "value": 1
+                "value": null
               }
             ]
           }
@@ -469,116 +593,28 @@
       },
       "options": {
         "reduceOptions": {
-          "values": true,
+          "values": false,
           "calcs": [
             "lastNotNull"
           ],
           "fields": ""
         },
-        "orientation": "horizontal",
-        "textMode": "value_and_name",
-        "colorMode": "background",
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
         "graphMode": "none",
-        "justifyMode": "auto",
-        "wideLayout": false
-      }
-    },
-    {
-      "id": 9,
-      "title": "All hosts — OS identity, source, MAC and observed ports",
-      "type": "table",
-      "description": "Each row represents one device; no data about open ports means no positive evidence, not no open ports.",
-      "gridPos": {
-        "x": 0,
-        "y": 31,
-        "w": 24,
-        "h": 16
-      },
-      "datasource": {
-        "type": "prometheus",
-        "uid": "prometheus"
-      },
-      "targets": [
-        {
-          "refId": "A",
-          "expr": "homelab_network_device_card_info{device_key=~\"$device\"}",
-          "instant": true,
-          "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": true,
-              "__name__": true,
-              "instance": true,
-              "job": true,
-              "target_name": true
-            },
-            "indexByName": {
-              "hostname": 0,
-              "ip": 1,
-              "mac": 2,
-              "status": 3,
-              "os": 4,
-              "os_evidence": 5,
-              "os_source": 6,
-              "observed_open_ports": 7,
-              "vendor": 8,
-              "role": 9,
-              "device_key": 10
-            },
-            "renameByName": {
-              "hostname": "Hostname",
-              "ip": "IP",
-              "mac": "MAC",
-              "status": "Status",
-              "os": "Operating system",
-              "os_evidence": "OS evidence",
-              "os_source": "OS source",
-              "observed_open_ports": "Observed open ports",
-              "vendor": "Vendor",
-              "role": "Role",
-              "device_key": "Device ID"
-            }
-          }
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "custom": {
-            "align": "auto",
-            "filterable": true
-          }
-        },
-        "overrides": []
-      },
-      "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "enablePagination": true
+        "justifyMode": "auto"
       }
     },
     {
       "id": 10,
-      "title": "Observed open ports — per-device protocol and service",
-      "type": "table",
-      "description": "Open port evidence from selected port scans and successfully completed Nmap results; not a complete port inventory.",
+      "title": "Last seen",
+      "type": "stat",
       "gridPos": {
-        "x": 0,
-        "y": 47,
-        "w": 24,
-        "h": 11
+        "x": 6,
+        "y": 23,
+        "w": 6,
+        "h": 4
       },
       "datasource": {
         "type": "prometheus",
@@ -587,78 +623,191 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_device_card_port_info{device_key=~\"$device\"}",
+          "expr": "homelab_network_device_card_last_seen_seconds{device_key=\"$device\"} * 1000",
           "instant": true,
           "range": false,
-          "format": "table"
-        }
-      ],
-      "transformations": [
-        {
-          "id": "labelsToFields",
-          "options": {
-            "mode": "columns"
-          }
-        },
-        {
-          "id": "organize",
-          "options": {
-            "excludeByName": {
-              "Time": true,
-              "Value": true,
-              "__name__": true,
-              "instance": true,
-              "job": true,
-              "target_name": true
-            },
-            "indexByName": {
-              "ip": 0,
-              "protocol": 1,
-              "port": 2,
-              "service": 3,
-              "product": 4,
-              "version": 5,
-              "source": 6,
-              "observed": 7,
-              "device_key": 8
-            },
-            "renameByName": {
-              "ip": "IP",
-              "protocol": "Protocol",
-              "port": "Port",
-              "service": "Service",
-              "product": "Product",
-              "version": "Version",
-              "source": "Source",
-              "observed": "Observed on",
-              "device_key": "Device ID"
-            }
-          }
+          "format": "time_series"
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "custom": {
-            "align": "auto",
-            "filterable": true
+          "unit": "dateTimeAsIso",
+          "noValue": "Not recorded",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
           }
         },
         "overrides": []
       },
       "options": {
-        "showHeader": true,
-        "cellHeight": "sm",
-        "enablePagination": true
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
       }
     },
     {
       "id": 11,
-      "title": "DNS evidence — dated clues, not authoritative OS",
-      "type": "table",
-      "description": "Evidence is the existing seven-day DNS snapshot, not a live Pi-hole feed.",
+      "title": "Observed open ports",
+      "type": "stat",
+      "gridPos": {
+        "x": 12,
+        "y": 23,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(homelab_network_device_card_port_info{device_key=\"$device\"})",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Not assessed",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 12,
+      "title": "Linux telemetry",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 23,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "up{job=\"node-exporter\",target_name=\"$node_host\"}",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "noValue": "Not available",
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": {
+                  "text": "Down",
+                  "color": "red"
+                },
+                "1": {
+                  "text": "Available",
+                  "color": "green"
+                }
+              }
+            }
+          ],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "type": "text",
+      "id": 13,
+      "title": "Data availability and identification evidence",
       "gridPos": {
         "x": 0,
-        "y": 58,
+        "y": 27,
+        "w": 24,
+        "h": 3
+      },
+      "options": {
+        "mode": "markdown",
+        "content": "**Device selection uses hostnames, not MAC addresses.** Devices without a known hostname display their current IP. The collector still uses MAC internally to keep device history when DHCP addresses change. OS classifications marked inferred come from DNS/Nmap clues; unknown ports or timed-out scans are **not** evidence that all ports are closed. CPU, memory, patch and filesystem graphs require Node Exporter and are unavailable for many phones, cameras and smart-home devices. DNS hints currently use a dated 18–25 September snapshot, not continuous DNS analysis."
+      }
+    },
+    {
+      "id": 14,
+      "title": "Host identity and operating system",
+      "type": "table",
+      "description": "A single selected hostname. No MAC addresses are displayed; stable identity is maintained behind the scenes.",
+      "gridPos": {
+        "x": 0,
+        "y": 30,
         "w": 24,
         "h": 8
       },
@@ -669,7 +818,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_device_card_info{dns_hint!=\"\" ,device_key=~\"$device\"}",
+          "expr": "homelab_network_device_card_info{device_key=\"$device\"}",
           "instant": true,
           "range": false,
           "format": "table"
@@ -691,23 +840,46 @@
               "__name__": true,
               "instance": true,
               "job": true,
-              "target_name": true
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "version": true,
+              "source": true,
+              "observed": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
             },
             "indexByName": {
               "hostname": 0,
               "ip": 1,
-              "dns_hint": 2,
-              "dns_observed": 3,
+              "status": 2,
+              "kind": 3,
               "os": 4,
-              "os_evidence": 5
+              "os_evidence": 5,
+              "os_source": 6,
+              "observed_open_ports": 7,
+              "vendor": 8,
+              "role": 9
             },
             "renameByName": {
-              "hostname": "Host",
-              "ip": "IP",
-              "dns_hint": "DNS clue",
-              "dns_observed": "Snapshot date",
-              "os": "Current classification",
-              "os_evidence": "Evidence level"
+              "hostname": "Hostname",
+              "ip": "IP address",
+              "status": "Status",
+              "kind": "Device type",
+              "os": "Operating system",
+              "os_evidence": "OS evidence",
+              "os_source": "OS source",
+              "observed_open_ports": "Observed open ports",
+              "vendor": "Vendor",
+              "role": "Role"
             }
           }
         }
@@ -728,12 +900,13 @@
       }
     },
     {
-      "id": 12,
-      "title": "Presence history — stable device key",
-      "type": "timeseries",
+      "id": 15,
+      "title": "Observed open ports and services",
+      "type": "table",
+      "description": "Only confirmed open ports from the available selective scans are shown; no rows means no observed open ports, not all ports closed.",
       "gridPos": {
         "x": 0,
-        "y": 66,
+        "y": 38,
         "w": 24,
         "h": 9
       },
@@ -744,11 +917,202 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_device_card_online{device_key=~\"$device\"}",
+          "expr": "homelab_network_device_card_port_info{device_key=\"$device\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "hostname": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os": true,
+              "os_source": true,
+              "os_evidence": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
+            },
+            "indexByName": {
+              "ip": 0,
+              "protocol": 1,
+              "port": 2,
+              "service": 3,
+              "product": 4,
+              "version": 5,
+              "source": 6,
+              "observed": 7
+            },
+            "renameByName": {
+              "ip": "IP address",
+              "protocol": "Protocol",
+              "port": "Port",
+              "service": "Service",
+              "product": "Product",
+              "version": "Version",
+              "source": "Evidence source",
+              "observed": "Scan date"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
+      }
+    },
+    {
+      "id": 16,
+      "title": "DNS evidence — patching and cloud endpoints",
+      "type": "table",
+      "description": "The DNS classification is a dated observation, not an OS verification.",
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{device_key=\"$device\",dns_hint!=\"\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os_source": true,
+              "observed_open_ports": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "version": true,
+              "source": true,
+              "observed": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
+            },
+            "indexByName": {
+              "hostname": 0,
+              "ip": 1,
+              "dns_hint": 2,
+              "dns_observed": 3,
+              "os": 4,
+              "os_evidence": 5
+            },
+            "renameByName": {
+              "hostname": "Hostname",
+              "ip": "IP",
+              "dns_hint": "DNS evidence",
+              "dns_observed": "Observed",
+              "os": "OS classification",
+              "os_evidence": "Confidence"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
+      }
+    },
+    {
+      "id": 17,
+      "type": "timeseries",
+      "title": "Online / offline history",
+      "gridPos": {
+        "x": 0,
+        "y": 54,
+        "w": 24,
+        "h": 9
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_online{device_key=\"$device\"}",
           "instant": false,
           "range": true,
           "format": "time_series",
-          "legendFormat": "{{hostname}} / {{device_key}}"
+          "legendFormat": "{{hostname}}"
         }
       ],
       "fieldConfig": {
@@ -768,20 +1132,20 @@
           ]
         },
         "tooltip": {
-          "mode": "multi",
-          "sort": "none"
+          "mode": "single"
         }
       }
     },
     {
-      "id": 13,
-      "title": "Last successful inventory publication",
-      "type": "stat",
+      "id": 18,
+      "title": "Host directory — select a hostname to investigate",
+      "type": "table",
+      "description": "Inventory of every retained device. Choose a hostname from the Host dropdown, or follow its link to open its profile.",
       "gridPos": {
         "x": 0,
-        "y": 75,
-        "w": 8,
-        "h": 4
+        "y": 63,
+        "w": 24,
+        "h": 13
       },
       "datasource": {
         "type": "prometheus",
@@ -790,31 +1154,101 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_device_inventory_last_run_seconds * 1000",
+          "expr": "homelab_network_device_card_info",
           "instant": true,
           "range": false,
-          "format": "time_series"
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "vendor": true,
+              "role": true,
+              "os_source": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "version": true,
+              "source": true,
+              "observed": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
+            },
+            "indexByName": {
+              "hostname": 0,
+              "ip": 1,
+              "status": 2,
+              "os": 3,
+              "os_evidence": 4,
+              "observed_open_ports": 5,
+              "kind": 6
+            },
+            "renameByName": {
+              "hostname": "Hostname",
+              "ip": "IP address",
+              "status": "Presence",
+              "os": "OS",
+              "os_evidence": "Evidence",
+              "observed_open_ports": "Observed open ports",
+              "kind": "Device type"
+            }
+          }
         }
       ],
       "fieldConfig": {
         "defaults": {
-          "unit": "dateTimeAsIso"
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Hostname"
+            },
+            "properties": [
+              {
+                "id": "links",
+                "value": [
+                  {
+                    "title": "View host profile",
+                    "url": "/d/homelab-mac-device-detail?var-host=${__data.fields[\"Hostname\"]}",
+                    "targetBlank": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
       },
       "options": {
-        "reduceOptions": {
-          "values": false,
-          "calcs": [
-            "lastNotNull"
-          ],
-          "fields": ""
-        },
-        "orientation": "auto",
-        "textMode": "value",
-        "colorMode": "none",
-        "graphMode": "none",
-        "justifyMode": "auto"
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
       }
     }
   ]
