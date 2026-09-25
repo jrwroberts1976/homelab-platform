@@ -28,6 +28,8 @@ class GeneratorTests(unittest.TestCase):
     def test_profile_is_constant_mac_link(self):
         original = {"uid": "homelab-mac-device-detail", "id": 123,
                     "templating": {"list": [
+                        {"name": "host", "type": "query",
+                         "query": "label_values(fake,hostname)"},
                         {"name": "device", "type": "query",
                          "query": "label_values(fake, device)"},
                         {"name": "node_host", "type": "query",
@@ -39,7 +41,12 @@ class GeneratorTests(unittest.TestCase):
         })
         self.assertEqual(dashboard["uid"], generator.uid_for(key))
         self.assertEqual(dashboard["templating"]["list"][0]["type"], "constant")
-        self.assertEqual(dashboard["templating"]["list"][0]["current"]["value"], key)
+        self.assertEqual(dashboard["templating"]["list"][0]["current"]["value"], "dns-01")
+        self.assertEqual(dashboard["templating"]["list"][0]["label"], "Host")
+        self.assertEqual(dashboard["templating"]["list"][1]["current"]["value"], key)
+        self.assertEqual(dashboard["templating"]["list"][1]["hide"], 2)
+        self.assertEqual(dashboard["title"], "Homelab — dns-01")
+        self.assertNotIn("aa:bb", dashboard["title"])
         self.assertEqual(original["templating"]["list"][0]["type"], "query")
         self.assertEqual(dashboard["id"], None)
 
@@ -50,7 +57,10 @@ class GeneratorTests(unittest.TestCase):
             template.write_text(json.dumps({
                 "uid": "homelab-mac-device-detail",
                 "id": None,
-                "templating": {"list": [{"name": "device", "type": "query"}]}
+                "templating": {"list": [
+                    {"name": "host", "type": "query"},
+                    {"name": "device", "type": "query"}
+                ]}
             }))
             generated = root / "generated"
             cards = {}
@@ -76,8 +86,27 @@ class GeneratorTests(unittest.TestCase):
                 self.assertEqual(before, after)
                 record = json.loads(
                     (generated / (generator.uid_for(key) + ".json")).read_text())
-                self.assertIn("renamed-host", record["title"])
+                self.assertEqual(record["title"], "Homelab — renamed-host")
+                self.assertEqual(record["templating"]["list"][0]["current"]["value"],
+                                 "renamed-host")
                 self.assertEqual(record["uid"], generator.uid_for(key))
+
+    def test_unnamed_device_uses_ip_instead_of_mac(self):
+        key = "mac:de:ad:be:ef:00:01"
+        template = {
+            "uid": "homelab-mac-device-detail",
+            "templating": {"list": [
+                {"name": "host"},
+                {"name": "device"}
+            ]}
+        }
+        dashboard = generator.profile(template, key, {
+            "hostname": "", "ip": "192.168.2.224"
+        })
+        self.assertEqual(dashboard["title"], "Homelab — 192.168.2.224")
+        self.assertNotIn("de:ad", dashboard["title"])
+        self.assertEqual(dashboard["templating"]["list"][0]["current"]["text"],
+                         "192.168.2.224")
 
     def test_generator_refuses_partial_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
