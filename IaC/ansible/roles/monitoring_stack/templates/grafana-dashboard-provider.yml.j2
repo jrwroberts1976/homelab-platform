@@ -23,3 +23,16 @@ providers:
     options:
       path: /etc/grafana/provisioning/dashboards/production
       foldersFromFilesStructure: false
+
+  # Files generated from the stable device MAC, using a root-level folder.
+  - name: Network Hosts
+    orgId: 1
+    folder: Network Hosts
+    folderUid: homelab-generated-network-hosts
+    type: file
+    disableDeletion: false
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/network-hosts
+      foldersFromFilesStructure: false
