@@ -6,6 +6,7 @@ on:
       - feature/network-all-hosts-grafana
       - feature/grafana-network-host-tiles
       - feature/hostname-first-grafana-hosts
+      - feature/host-dashboards-data-only
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
@@ -54,7 +55,8 @@ jobs:
               assert dashboard["uid"] == uid, (path, dashboard["uid"])
               ids = [panel["id"] for panel in dashboard["panels"]]
               assert len(ids) == len(set(ids))
-              assert len(ids) >= 10
+              assert len(ids) >= (2 if uid == "homelab-mac-device-detail" else
+                                 3 if uid == "homelab-network-host-tiles" else 10)
               assert all(0 <= p["gridPos"]["x"] and
                          p["gridPos"]["x"] + p["gridPos"]["w"] <= 24
                          for p in dashboard["panels"])
@@ -82,25 +84,30 @@ jobs:
                           "Total Updates", "Security Updates"]
           expected_charts = ["CPU Usage", "Memory Usage",
                              "Network Throughput", "Filesystem Utilisation"]
+          full_template = json.loads(
+              (base / "files/host-profile-template.json").read_text())
+          assert full_template["uid"] == "homelab-mac-device-detail"
+          assert len(full_template["panels"]) >= 20
+          top = sorted(
+              (p for p in full_template["panels"] if p["gridPos"]["y"] == 0),
+              key=lambda p: p["gridPos"]["x"])
+          assert [p["title"] for p in top] == expected_top
+          assert all(name in [p["title"] for p in full_template["panels"]]
+                     for name in expected_charts)
           for dashboard in (overview, detail):
-              panels = sorted(dashboard["panels"],
-                              key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]))
-              top = [p["title"] for p in panels if p["gridPos"]["y"] == 0]
-              assert top == expected_top, top
-              charts = [p["title"] for p in panels if p["type"] == "timeseries"]
-              assert all(item in charts for item in expected_charts), charts
-              assert not any(p["type"] == "stat" and p["gridPos"]["h"] > 6
-                             for p in dashboard["panels"])
-              assert any("Observed open ports" in p["title"]
-                         for p in dashboard["panels"])
-              assert any("operating system" in p["title"].lower()
-                         for p in dashboard["panels"])
               assert dashboard["templating"]["list"][0]["name"] == "host"
               assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
-              hidden = dashboard["templating"]["list"][1:]
-              assert all(p["hide"] == 2 for p in hidden)
+              assert any("profile_uid" == p["name"] and p["hide"] == 2
+                         for p in dashboard["templating"]["list"])
+              assert any("profile_uid" in link["url"]
+                         for link in dashboard["links"])
+              assert not any(p["type"] in ("timeseries", "logs")
+                             for p in dashboard["panels"])
+              assert not any(p["title"] == "No telemetry" or
+                             "CPU" in p["title"] or
+                             "Memory" in p["title"]
+                             for p in dashboard["panels"])
               assert "MAC" not in dashboard["title"]
-              assert "tiles" not in dashboard["title"].lower()
               for panel in dashboard["panels"]:
                   if panel["type"] != "table":
                       continue
@@ -109,10 +116,17 @@ jobs:
                   for internal in ("mac", "device_key", "dashboard_uid"):
                       assert organize["excludeByName"].get(internal), (
                           panel["title"], internal)
-          assert "Host directory" in next(
-              p["title"] for p in overview["panels"]
-              if p["title"].startswith("Host directory"))
-          assert len(detail["panels"]) > len(overview["panels"])
+          assert any("Network directory" in p["title"]
+                     for p in overview["panels"])
+          assert len(detail["panels"]) < len(overview["panels"])
+          generator = (base / "files/network-host-dashboard-generator.py").read_text()
+          assert "collect_availability" in generator
+          assert "compact_panels" in generator
+          assert "present_over_time" in generator
+          focused = Path("IaC/ansible/playbooks/network-host-grafana.yml").read_text()
+          monitoring_tasks = (base / "tasks/main.yml").read_text()
+          for provisioner in (focused, monitoring_tasks):
+              assert "host-profile-template.json" in provisioner
           exporter = (base / "files/network-device-inventory-exporter.py").read_text()
           assert "homelab_network_device_card_info" in exporter
           assert "device_key = \"mac:\"" in exporter
