@@ -70,9 +70,10 @@ def profile(template, key, metric):
     result = copy.deepcopy(template)
     result["id"] = None
     result["uid"] = uid_for(key)
-    name = (metric.get("hostname") or metric.get("ip") or key).strip()[:75]
-    suffix = key[4:].replace(":", "")[-6:]
-    result["title"] = "Network Hosts — %s [%s]" % (name, suffix)
+    name = (metric.get("hostname") or metric.get("ip") or "").strip()[:85]
+    if not name:
+        raise ValueError("Device has no human-readable hostname or IP")
+    result["title"] = "Homelab — %s" % name
     result["description"] = (
         "Automatically generated from MAC/IP evidence. Current identity, "
         "OS source, DNS hints and observed open ports refresh from Prometheus."
@@ -86,12 +87,23 @@ def profile(template, key, metric):
         raise ValueError("Profile template lacks device variable")
     device.clear()
     device.update({
-        "name": "device", "label": "MAC-linked device",
+        "name": "device", "label": "Internal identity",
         "type": "constant", "query": key,
         "hide": 2, "current": {
             "selected": True, "text": key, "value": key
         }
     })
+    # The user's header and variable display the hostname, never a MAC.
+    host = next((v for v in variables if v.get("name") == "host"), None)
+    if host is not None:
+        host.clear()
+        host.update({
+            "name": "host", "label": "Host",
+            "type": "constant", "query": name,
+            "hide": 0, "current": {
+                "selected": True, "text": name, "value": name
+            }
+        })
     return result
 
 
