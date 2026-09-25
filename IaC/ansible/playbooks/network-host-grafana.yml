@@ -27,7 +27,6 @@
       loop:
         - "{{ grafana_root }}/docker-compose.yml"
         - /var/lib/prometheus/node-exporter
-        - /var/lib/asus-network-inventory
       register: network_dashboard_prereqs
 
     - name: Require existing monitoring platform; never bootstrap it implicitly
