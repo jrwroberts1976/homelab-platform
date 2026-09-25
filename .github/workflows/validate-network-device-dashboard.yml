@@ -1,0 +1,73 @@
+name: Validate network inventory dashboard
+
+on:
+  push:
+    branches:
+      - feature/network-all-hosts-grafana
+  pull_request:
+    paths:
+      - "IaC/ansible/roles/monitoring_stack/**"
+      - "IaC/monitoring/**"
+
+jobs:
+  validate-dashboard:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout changes
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install validation dependency
+        run: python3 -m pip install "PyYAML==6.0.2"
+
+      - name: Validate exporter syntax and unit tests
+        run: |
+          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py
+          python3 -m unittest discover -s IaC/monitoring/tests -p 'test_network_device_inventory.py' -v
+
+      - name: Verify Grafana dashboard and Ansible registration
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          import yaml
+
+          base = Path("IaC/ansible/roles/monitoring_stack")
+          defaults = yaml.safe_load((base / "defaults/main.yml").read_text())
+          tasks = yaml.safe_load((base / "tasks/main.yml").read_text())
+          for path, uid in [
+              ("homelab-all-network-devices.json", "homelab-all-network-devices"),
+              ("homelab-network-device-detail.json", "homelab-network-device-detail"),
+          ]:
+              dashboard = json.loads((base / "files/grafana/dashboards" / path).read_text())
+              assert dashboard["uid"] == uid, (path, dashboard["uid"])
+              ids = [panel["id"] for panel in dashboard["panels"]]
+              assert len(ids) == len(set(ids))
+              assert len(ids) >= 10
+              assert all(0 <= p["gridPos"]["x"] and
+                         p["gridPos"]["x"] + p["gridPos"]["w"] <= 24
+                         for p in dashboard["panels"])
+              assert path in defaults["monitoring_grafana_dashboard_files"]
+              assert uid in defaults["monitoring_grafana_dashboard_uids"]
+
+          steps = [task["name"] for task in tasks]
+          for required in [
+              "Install canonical estate for network device OS identification",
+              "Install dated and minimised DNS device evidence",
+              "Install evidence-qualified network inventory exporter",
+              "Publish initial consolidated network inventory",
+          ]:
+              assert required in steps, required
+
+          hints = json.loads(Path(
+              "IaC/monitoring/network-device-dns-hints.json").read_text())
+          assert hints["schema_version"] == 1
+          assert "192.168.2.183" in hints["devices"]
+          print("Dashboard JSON, Ansible YAML, deployment steps and evidence: PASS")
+          PY
