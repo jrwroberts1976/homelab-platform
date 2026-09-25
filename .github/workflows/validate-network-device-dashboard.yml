@@ -4,10 +4,12 @@ on:
   push:
     branches:
       - feature/network-all-hosts-grafana
+      - feature/grafana-network-host-tiles
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
       - "IaC/monitoring/**"
+      - "IaC/komodo/stacks/monitoring/grafana/**"
 
 jobs:
   validate-dashboard:
@@ -28,8 +30,8 @@ jobs:
 
       - name: Validate exporter syntax and unit tests
         run: |
-          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py
-          python3 -m unittest discover -s IaC/monitoring/tests -p 'test_network_device_inventory.py' -v
+          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py
+          python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
 
       - name: Verify Grafana dashboard and Ansible registration
         run: |
@@ -44,6 +46,8 @@ jobs:
           for path, uid in [
               ("homelab-all-network-devices.json", "homelab-all-network-devices"),
               ("homelab-network-device-detail.json", "homelab-network-device-detail"),
+              ("homelab-network-host-tiles.json", "homelab-network-host-tiles"),
+              ("homelab-mac-device-detail.json", "homelab-mac-device-detail"),
           ]:
               dashboard = json.loads((base / "files/grafana/dashboards" / path).read_text())
               assert dashboard["uid"] == uid, (path, dashboard["uid"])
@@ -56,12 +60,36 @@ jobs:
               assert path in defaults["monitoring_grafana_dashboard_files"]
               assert uid in defaults["monitoring_grafana_dashboard_uids"]
 
+          for name in ("homelab-network-host-tiles.json",
+                       "homelab-mac-device-detail.json"):
+              native = (base / "files/grafana/dashboards" / name).read_text()
+              komodo = (Path("IaC/komodo/stacks/monitoring/grafana")
+                        / "provisioning/dashboards/homelab" / name).read_text()
+              assert json.loads(native) == json.loads(komodo), name
+          native_provider = (base / "templates/grafana-dashboard-provider.yml.j2").read_text()
+          komodo_provider = Path("IaC/komodo/stacks/monitoring/grafana/provisioning/dashboards/homelab.yml").read_text()
+          for provider in (native_provider, komodo_provider):
+              assert "homelab-generated-network-hosts" in provider
+              assert "/etc/grafana/provisioning/dashboards/network-hosts" in provider
+
+          overview = json.loads((base / "files/grafana/dashboards/homelab-network-host-tiles.json").read_text())
+          tile = next(p for p in overview["panels"] if p["title"].startswith("All network devices"))
+          assert tile["type"] == "stat"
+          assert any("dashboard_uid" in link["url"]
+                     for link in tile["fieldConfig"]["defaults"]["links"])
+          assert tile["options"]["reduceOptions"]["values"]
+          exporter = (base / "files/network-device-inventory-exporter.py").read_text()
+          assert "homelab_network_device_card_info" in exporter
+          assert "device_key = \"mac:\"" in exporter
+
           steps = [task["name"] for task in tasks]
           for required in [
               "Install canonical estate for network device OS identification",
               "Install dated and minimised DNS device evidence",
               "Install evidence-qualified network inventory exporter",
               "Publish initial consolidated network inventory",
+              "Install MAC-linked Grafana dashboard generator",
+              "Generate a dedicated Grafana dashboard for each retained MAC",
           ]:
               assert required in steps, required
 
