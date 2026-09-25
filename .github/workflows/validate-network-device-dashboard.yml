@@ -82,6 +82,22 @@ jobs:
           assert "homelab_network_device_card_info" in exporter
           assert "device_key = \"mac:\"" in exporter
 
+          focused_playbook = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-grafana.yml").read_text())
+          assert len(focused_playbook) == 1
+          rollout = focused_playbook[0]
+          assert rollout["hosts"] == "monitoring_hosts"
+          rollout_steps = [step["name"] for step in rollout["tasks"]]
+          for required in [
+              "Install only the two new native Grafana dashboards",
+              "Generate native Grafana dashboards for all retained MACs",
+              "Restart only Grafana if provider configuration changed",
+          ]:
+              assert required in rollout_steps, required
+          assert not any("Reconcile monitoring containers" in name
+                         or "Pull pinned monitoring images" in name
+                         for name in rollout_steps)
+
           steps = [task["name"] for task in tasks]
           for required in [
               "Install canonical estate for network device OS identification",
