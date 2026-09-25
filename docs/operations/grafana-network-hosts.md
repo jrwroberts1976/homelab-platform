@@ -1,67 +1,75 @@
-# Grafana network hosts — hostname-first operational view
+# Grafana network hosts — data-only dashboards
 
-The native Grafana **Homelab — Network Hosts** dashboard uses the layout of
-the existing Production **Homelab — Hosts** view: a **Host** dropdown, four
-compact CPU/memory/patch status panels, CPU and memory graphs, then network
-and filesystem graphs. Below those are the selected device's network presence,
-OS classification and evidence, positively observed open ports, DNS clues and
-a browsable directory of other hosts.
+## Visible dashboards
 
-## URLs
+**Homelab — Network Hosts** is now a compact selector and device directory.
+**Homelab — Host Detail** is an intentionally minimal, hostname-selected
+record showing status, operating-system identification, port summary and
+available DNS evidence. Neither shared dashboard displays blank Linux CPU,
+memory, patch or filesystem panels for a device like a router or smart camera.
 
-- Network Hosts (hostname selector):
-  `http://192.168.2.52:3000/d/homelab-network-host-tiles`
-- Generic Host Detail (hostname selector):
-  `http://192.168.2.52:3000/d/homelab-mac-device-detail`
-- Automatically generated per-device dashboards: Grafana's **Network Hosts**
-  folder. Each dashboard's visible title is `Homelab — <hostname>`.
+The **Full Host Dashboard** navigation link on either shared dashboard
+resolves the currently selected hostname's stable generated Grafana dashboard
+UID. All dashboards show hostnames, or the IP address when a hostname is
+unknown; MAC addresses remain hidden internal identity keys so DHCP address
+changes do not create duplicate per-device dashboards.
 
-The *visible* identity is the hostname, with IP fallback where there is no
-reliable hostname. Duplicate friendly hostnames are disambiguated with the IP.
-MAC addresses remain **internal stable keys** for the collection pipeline and
-the generated dashboard UID, so an IP change doesn't create a new device page.
-They are hidden from host selectors, titles and the main data tables.
+## Individual host pages: include data only
 
-## Telemetry and evidence limitations
+The **Network Hosts** Grafana folder contains automatically generated
+per-device dashboards. The five-minute generator checks Prometheus for the
+device's *recorded data during the default last-24-hour window* and publishes
+only the relevant panels:
 
-- CPU, memory, network throughput, filesystem and patch panels reuse the
-  deployed Linux Node Exporter metrics. Phones, IoT appliances and other
-  unmanaged hosts generally show **No telemetry** in these panels rather
-  than fake zeros or invented performance data.
-- OS is marked as **documented** from the canonical estate or explicitly
-  **inferred_dns** / **inferred_nmap** where there is only supporting evidence.
-  DNS hints are the 18–25 September 2026 snapshot, **not** continuous DNS
-  collection. AI-assisted ongoing classification is not deployed by this
-  dashboard change.
-- Open ports are **positively observed open** services from limited scans.
-  Missing data, Nmap timeouts and unscanned hosts do **not** mean closed ports.
-- The 5-minute textfile publisher maintains both the older inventory metrics
-  and the MAC-keyed `homelab_network_device_card_*` metrics. The dashboard
-  generator uses those to create and refresh individual native Grafana JSON
-  dashboards. It doesn't perform a new LAN scan.
+- Always: hostname, current IP, known OS/evidence and the observed-port summary.
+- If observed: online state/history and last-seen time.
+- If measured: observed-open-port count and the actual per-port service table.
+- If present: concise DNS evidence. The currently curated DNS clues were
+  observed 18–25 September 2026, not continuously collected.
+- If the host exports real Linux telemetry: only the measured CPU, memory,
+  network, filesystem, disk, load and patching panels for which Prometheus
+  contains samples. A *genuine zero updates* reading counts as data.
+- Live OS facts only when exported.
 
-## Git-owned deployment
+The generator does not create a large **ONLINE** tile or insert placeholder
+graphs and text banners. It rearranges the existing compact Grafana panels
+without leaving blank rows. For a typical router, this should give a short
+status/evidence/ports page; for an actively monitored Linux host, the familiar
+Production Hosts charts remain available.
 
-The Ansible and Komodo static JSON copies are deliberately mirrored:
+Missing Nmap records, timed-out scans or empty port evidence are **unknown**,
+never proofs of closed ports. DNS and Nmap operating-system guesses remain
+separate from documented operating-system facts. Linux data is checked via
+Prometheus, not inferred from a hostname or DNS traffic.
+
+## Change control and deployment
+
+The shared dashboard JSON is mirrored in the Ansible and Komodo trees:
 
 - `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/`
 - `IaC/komodo/stacks/monitoring/grafana/provisioning/dashboards/homelab/`
 
-For the existing `monitor-01` deployment, the focused rollout only installs
-the dashboard files, publisher, generator and Grafana provider, rather than
-reconciling the whole Docker monitoring stack:
+The full auto-generated profile template is stored separately in
+`IaC/ansible/roles/monitoring_stack/files/host-profile-template.json`.
+It is **not** provisioned as a static dashboard; the generator chooses and
+lays out real-data panels from it for each device.
+
+The focused deployment playbook copies only the two compact static dashboards,
+the full generator template and existing exporter/generator scripts. It
+doesn't redeploy Prometheus or the other monitoring containers:
 
 ```bash
 cd /home/james/projects/homelab-platform
 git fetch origin main
 cd IaC/ansible
-ansible-playbook -i inventory/hosts.yml playbooks/network-host-grafana.yml --syntax-check
-ansible-playbook -i inventory/hosts.yml playbooks/network-host-grafana.yml
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/network-host-grafana.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/network-host-grafana.yml
 ```
 
-When applying from a deployment worktree instead, run this from that worktree's
-`IaC/ansible` directory. A successful rollout should create at least ten
-`net-host-*.json` files in the **Network Hosts** provisioning directory.
-If Grafana remains on the older layout after a deploy, verify the dashboard
-UID and file-provider polling or Grafana restart before editing dashboards
-through the UI.
+Verify `homelab_network_device_card_info` on monitor-01's Prometheus,
+then open **Homelab — Network Hosts** and a few generated host pages,
+including a Linux host and an unmanaged router. Generated JSON files live
+under `/opt/monitoring/grafana/provisioning/dashboards/network-hosts/`.
+Grafana's file provider checks for changed JSON every 30 seconds.
