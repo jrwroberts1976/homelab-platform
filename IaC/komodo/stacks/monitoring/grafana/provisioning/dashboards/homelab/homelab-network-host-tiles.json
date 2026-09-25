@@ -13,7 +13,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -418,7 +418,12 @@
           "decimals": 0,
           "links": [
             {
-              "title": "Open this device's Grafana dashboard",
+              "title": "Dedicated MAC-linked host dashboard",
+              "url": "/d/${__field.labels.dashboard_uid}/host",
+              "targetBlank": false
+            },
+            {
+              "title": "Generic device profile",
               "url": "/d/homelab-mac-device-detail/homelab-mac-device-detail?var-device=${__field.labels.device_key}",
               "targetBlank": false
             }
