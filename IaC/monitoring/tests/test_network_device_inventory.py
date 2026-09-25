@@ -1,0 +1,101 @@
+"""Offline smoke tests for the production LAN inventory exporter.
+
+Run: python3 -m unittest discover -s IaC/monitoring/tests -p 'test_network_device_inventory.py'
+No access to live Prometheus, router or Pi-hole required.
+"""
+import importlib.util
+import unittest
+from pathlib import Path
+from unittest.mock import patch
+
+SOURCE = (Path(__file__).resolve().parents[2] /
+          "ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py")
+spec = importlib.util.spec_from_file_location("network_device_inventory", SOURCE)
+inventory = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(inventory)
+
+
+class InventoryTests(unittest.TestCase):
+    def test_only_expected_lan_addresses(self):
+        self.assertEqual(inventory.lan_ip("192.168.2.49"), "192.168.2.49")
+        self.assertIsNone(inventory.lan_ip("10.10.10.1"))
+        self.assertIsNone(inventory.lan_ip("192.168.2.invalid"))
+
+    def test_authoritative_os_and_incomplete_scan_handling(self):
+        estate = {"assets": [
+            {"name": "monitor-01", "address": "192.168.2.52", "state": "active",
+             "managed_by_ansible": True, "document_label": "monitor-01",
+             "role": "Monitoring", "kind": "vm"},
+            {"name": "home-01", "address": "192.168.2.60", "state": "active",
+             "managed_by_ansible": False, "document_label": "home-01",
+             "role": "Home Assistant", "kind": "vm"}]}
+        dns = {"observed_on": "2026-09-25", "devices": {
+            "192.168.2.52": {"os_hint": "Windows (DNS indication)"},
+            "192.168.2.183": {
+                "os_hint": "Windows (DNS indication)",
+                "dns_hint": "Windows Update / Microsoft delivery"},
+            "192.168.2.252": {"dns_hint": "TP-Link Cloud"}}}
+        nmap = {
+            "192.168.2.52": {
+                "scan_status": "up",
+                "os_matches": [{"name": "Linux 5.0-6.2", "accuracy_percent": 97}],
+                "ports": [{"state": "open", "port": 22,
+                           "protocol": "tcp", "service": "ssh"}]},
+            "192.168.2.183": {
+                "scan_status": "up",
+                "os_matches": [{"name": "Linux 2.6", "accuracy_percent": 50}],
+                "ports": []},
+            "192.168.2.252": {
+                "scan_status": "up",
+                "os_matches": [],
+                "ports": []}}
+        query_results = {
+            "homelab_network_host_info": [
+                {"metric": {"ip": "192.168.2.52", "hostname": "monitor-01",
+                            "mac": "02:00:00:00:02:02"}}],
+            "asus_network_asset_info": [
+                {"metric": {"ip": "192.168.2.252", "hostname": "light-bulb"}}],
+            "homelab_network_host_up": [
+                {"metric": {"ip": "192.168.2.52"}, "value": [0, "1"]}],
+            "asus_network_asset_up": [],
+            "homelab_network_host_last_seen_seconds": [],
+            "asus_network_asset_last_seen_seconds": [],
+            "homelab_network_host_enrichment_port_info": [
+                {"metric": {"ip": "192.168.2.52", "protocol": "tcp",
+                            "port": "9100", "service": "node_exporter",
+                            "product": "", "version": ""}}]}
+        def mocked_json(path):
+            return estate if path == inventory.ESTATE else dns
+        with patch.object(inventory, "load_json", side_effect=mocked_json), \
+             patch.object(inventory, "prometheus",
+                          side_effect=lambda expr: query_results[expr]), \
+             patch.object(inventory, "router_inventory", return_value=[]), \
+             patch.object(inventory, "latest_baseline",
+                          return_value=(nmap, {"192.168.2.252"},
+                                        "20260925T142938Z")):
+            hosts = inventory.populate()
+
+        self.assertEqual(hosts["192.168.2.52"]["os"], "Linux (IaC-managed)")
+        self.assertEqual(hosts["192.168.2.52"]["os_evidence"], "documented")
+        self.assertEqual(hosts["192.168.2.60"]["os"], "Home Assistant OS 18.2")
+        self.assertEqual(hosts["192.168.2.183"]["os_evidence"], "inferred_dns")
+        self.assertTrue(hosts["192.168.2.252"]["scan_timed_out"])
+        self.assertEqual(hosts["192.168.2.252"]["os"], "Unknown")
+        self.assertEqual(len(hosts["192.168.2.52"]["ports"]), 2)
+        self.assertEqual(hosts["192.168.2.52"]["ports"][("tcp", 9100)]["service"],
+                         "node_exporter")
+
+        metrics = inventory.render(hosts)
+        self.assertIn("homelab_network_device_inventory_info", metrics)
+        self.assertIn("No open ports evidenced", metrics)
+        self.assertIn("Not assessed (scan timed out)", metrics)
+        self.assertNotIn('homelab_network_device_open_ports_total{ip="192.168.2.252"} 0',
+                         metrics)
+
+    def test_prometheus_labels_escape(self):
+        self.assertEqual(inventory.esc('foo\n"bar"'),
+                         'foo \\"bar\\"')
+
+
+if __name__ == "__main__":
+    unittest.main()
