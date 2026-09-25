@@ -1,0 +1,40 @@
+{
+  "schema_version": 1,
+  "source": "Minimised Pi-hole dns-01/dns-02 observations, 2026-09-18 to 2026-09-25; DNS is indicative, not authoritative OS verification.",
+  "observed_on": "2026-09-25",
+  "devices": {
+    "192.168.2.6": {
+      "os_hint": "Windows (DNS indication)",
+      "dns_hint": "Windows Update / Microsoft delivery"
+    },
+    "192.168.2.183": {
+      "os_hint": "Windows (DNS indication)",
+      "dns_hint": "Windows Update / Microsoft delivery"
+    },
+    "192.168.2.219": {
+      "os_hint": "Windows (DNS indication)",
+      "dns_hint": "Windows Update / Microsoft delivery"
+    },
+    "192.168.2.7": {
+      "dns_hint": "AWS IoT / Kinesis; Hive cloud ecosystem"
+    },
+    "192.168.2.49": {
+      "dns_hint": "TP-Link Cloud; high query volume, not proof of successful connection"
+    },
+    "192.168.2.78": {
+      "dns_hint": "TP-Link Cloud / STUN"
+    },
+    "192.168.2.90": {
+      "dns_hint": "TP-Link Cloud / STUN"
+    },
+    "192.168.2.128": {
+      "dns_hint": "TP-Link Cloud / STUN"
+    },
+    "192.168.2.206": {
+      "dns_hint": "TP-Link Tapo + Google Home services (likely mobile apps)"
+    },
+    "192.168.2.224": {
+      "dns_hint": "Google Home services (not proof of device OS)"
+    }
+  }
+}
