@@ -1,0 +1,183 @@
+---
+# READ-ONLY preflight for migrating network discovery, Nmap deep profiling,
+# OS evidence publication and dashboards to monitor-01.
+# This playbook does NOT install packages, move state, enable timers, launch
+# Nmap, alter Grafana, or stop the current Proxmox-2 collector.
+- name: Inspect existing network discovery state on Proxmox-2
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify historical data source, not a new scan target
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Inspect state and evidence files without reading their contents to logs
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+      loop:
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/deep-profiles.json
+        - /var/lib/homelab-network-hosts/enrichment.json
+        - /var/lib/prometheus/node-exporter/homelab_network_hosts.prom
+        - /var/lib/prometheus/node-exporter/homelab_network_host_enrichment.prom
+      register: migration_source_files
+
+    - name: Count retained historical profiles and recorded OS evidence
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - |
+            import json
+            from collections import Counter
+            from pathlib import Path
+            root = Path('/var/lib/homelab-network-hosts')
+            path = root / 'deep-profiles.json'
+            if not path.is_file():
+                raise SystemExit('Deep-profile state missing: stop preflight')
+            state = json.loads(path.read_text())
+            records = state.get('profiles')
+            if not isinstance(records, dict):
+                raise SystemExit('Invalid deep-profile schema: stop preflight')
+            statuses = Counter(r.get('status', 'unknown')
+                               for r in records.values()
+                               if isinstance(r, dict))
+            tcp_records = [
+                r for r in records.values()
+                if isinstance(r, dict) and
+                isinstance((r.get('profile') or {}).get('tcp'), dict)]
+            with_matches = [
+                r for r in tcp_records
+                if r['profile']['tcp'].get('os_matches')]
+            result = {
+                'total': len(records),
+                'states': dict(statuses),
+                'tcp_records': len(tcp_records),
+                'os_match_records': len(with_matches),
+                'tcp_timestamp_records': sum(
+                    bool(r['profile'].get('tcp_scanned_at'))
+                    for r in tcp_records),
+                'legacy_timestamp_records': sum(bool(
+                    r['profile'].get('scanned_at') or
+                    r.get('profiled_at')) for r in tcp_records),
+                'inventory_records': len(json.loads(
+                    (root / 'inventory.json').read_text()))
+                if (root / 'inventory.json').is_file() else None,
+            }
+            print(json.dumps(result, sort_keys=True))
+      register: migration_source_summary
+      changed_when: false
+
+    - name: Inspect existing source timer status (read-only)
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/systemctl
+          - is-enabled
+          - "{{ item }}"
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+      register: migration_source_timers
+      failed_when: false
+      changed_when: false
+
+    - name: Summarise historical evidence without revealing private device identities
+      ansible.builtin.debug:
+        msg:
+          - "Source evidence: {{ migration_source_summary.stdout | from_json }}"
+          - "Available state files: {{ migration_source_files.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+          - "Timer states: {{ migration_source_timers.results | map(attribute='item') | zip(migration_source_timers.results | map(attribute='stdout')) | list }}"
+          - "No source service or file was modified."
+
+- name: Validate monitor-01 as the sole future discovery and OS-investigation owner
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify correct VM and a usable LAN interface
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface in ansible_facts.interfaces
+          - ansible_facts.default_ipv4.interface != 'vmbr0'
+        fail_msg: >-
+          Refusing to plan scanning on an unexpected VM or LAN interface.
+          The Proxmox bridge vmbr0 is not the monitoring VM's scan interface.
+
+    - name: Identify monitor-01 route to the ASUS gateway
+      ansible.builtin.command:
+        argv: [/usr/sbin/ip, -4, route, get, '192.168.2.1']
+      register: migration_gateway_route
+      changed_when: false
+
+    - name: Confirm ASUS gateway uses monitor-01's expected interface
+      ansible.builtin.assert:
+        that:
+          - "'dev ' ~ ansible_facts.default_ipv4.interface in migration_gateway_route.stdout"
+          - "'src 192.168.2.52' in migration_gateway_route.stdout"
+        fail_msg: >-
+          The gateway route does not use the expected monitor-01 LAN interface.
+          Do not deploy ARP discovery or Nmap on this interface yet.
+
+    - name: Inspect existing monitoring, Node Exporter and migration destinations
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /opt/monitoring/docker-compose.yml
+        - /var/lib/prometheus/node-exporter
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/deep-profiles.json
+        - /var/lib/homelab-network-hosts/enrichment.json
+        - /usr/local/sbin/homelab-network-os-evidence
+      register: migration_target_files
+
+    - name: Require existing monitoring stack and node-exporter textfile directory
+      ansible.builtin.assert:
+        that:
+          - migration_target_files.results[0].stat.exists
+          - migration_target_files.results[1].stat.isdir | default(false)
+        fail_msg: >-
+          The existing monitoring Compose stack or Node Exporter textfile
+          directory is absent. No migration or installation is safe.
+
+    - name: Check if Nmap is already available (no package changes)
+      ansible.builtin.command:
+        argv: [/usr/bin/nmap, --version]
+      register: migration_nmap_version
+      failed_when: false
+      changed_when: false
+
+    - name: Inspect existing target timer state (read-only)
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/systemctl
+          - is-enabled
+          - "{{ item }}"
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-network-device-inventory.timer
+        - homelab-network-host-dashboards.timer
+      register: migration_target_timers
+      failed_when: false
+      changed_when: false
+
+    - name: Summarise target prerequisites and required one-time state transfer
+      ansible.builtin.debug:
+        msg:
+          - "monitor-01 interface: {{ ansible_facts.default_ipv4.interface }}"
+          - "LAN route: {{ migration_gateway_route.stdout }}"
+          - "Nmap installed: {{ migration_nmap_version.rc == 0 }}"
+          - "Existing state files: {{ migration_target_files.results | selectattr('stat.exists') | map(attribute='item') | list }}"
+          - "Timer states: {{ migration_target_timers.results | map(attribute='item') | zip(migration_target_timers.results | map(attribute='stdout')) | list }}"
+          - "Only after validation: securely copy old inventory, profiler and enrichment state; install monitor-01 collectors with scanning timers disabled; verify evidence and per-host dashboards; then perform an explicit single-owner cutover."
+          - "No host, Docker container, state file, service or scan changed."
