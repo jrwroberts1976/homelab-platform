@@ -136,9 +136,11 @@ provisioned Grafana dashboards in the web UI.
 
 ## Saved Nmap OS fingerprints (optional, no-scan evidence integration)
 
-**This section describes the focused integration added in the Nmap evidence
-PR, not proof of a live deployment.** The existing deep-profiler scan timer
-remains disabled unless explicitly enabled in its separate deployment.
+The read-only Nmap fingerprint publisher and monitor-01 correlation were
+deployed on 2026-09-26. The deep-profiler scan timer is **not** enabled by
+this integration. The first deployment exported 0 matches because the older
+saved profile records do not contain the newer per-TCP `tcp_scanned_at`
+field—not because no OS fingerprints were collected.
 
 Proxmox-2 stores root-only, MAC-keyed completed/partial scan results in
 `/var/lib/homelab-network-hosts/deep-profiles.json`. The standalone
@@ -158,13 +160,14 @@ are not silently overwritten by Nmap guesses.
 The individual host generator adds the panel
 **Nmap OS fingerprint — inferred evidence** *only* if a correlated match
 exists. It displays the raw Nmap match, Nmap-reported match accuracy,
-OS family, generation, vendor, CPE (when supplied), the saved scan's UTC
-time, complete/partial scan status and a bounded summary of positively
-observed open TCP services. Do not interpret Nmap's reported accuracy as a
+OS family, generation, vendor, CPE (when supplied), the best available
+**recorded evidence time and its basis**, complete/partial scan status
+and a bounded summary of positively observed open TCP services. Do not interpret Nmap's reported accuracy as a
 probability of correctness; retained guesses always remain `inferred_nmap`.
 
-If there is no saved fingerprint, a scan timed out, or the current MAC/IP
-does not match the saved identity, the fingerprint panel does not appear.
+If there is no saved fingerprint, the saved time is explicitly invalid,
+a scan timed out, or the current MAC/IP does not match the saved identity,
+the fingerprint panel does not appear.
 An absent panel is not proof that an OS is unknown or that a host has no
 open ports. The "OS to investigate" counter continues to include unknown
 and inferred OS identifications until independently documented.
@@ -192,9 +195,10 @@ The second installs the updated monitor-01 correlation and dashboard
 generator, waits for Prometheus scrapes, regenerates host pages, and
 restarts Grafana only when the dashboard assets actually change. It
 reports both the exported fingerprint count and the count that matched
-current MAC/IP identities. If the first count is zero, there is no
-saved OS match to show yet; the playbook must not invent one or launch
-a new scan.
+current MAC/IP identities. An exported count of zero does **not** prove
+that no OS fingerprint was collected: inspect the read-only profile state
+and check legacy schemas or missing identity fields before proposing
+another scan. The playbook must not invent timestamps or launch new scans.
 
 To inspect read-only export status on Proxmox-2:
 
@@ -204,3 +208,36 @@ journalctl -u homelab-network-os-evidence.service -n 25 --no-pager
 grep -c '^homelab_network_host_os_fingerprint_info{' \
   /var/lib/prometheus/node-exporter/homelab_network_os_fingerprints.prom
 ```
+
+### Legacy OS profile timestamps and recovered evidence
+
+On 2026-09-26, a read-only check of the existing Proxmox-2 profile state
+found **49 device records**: 35 baseline, 13 complete and 1 pending.
+Thirteen records contained TCP scan data, **eight contained Nmap OS
+matches**, and none contained the newer `profile.tcp_scanned_at` field.
+The original exporter inadvertently dropped all eight when enforcing that
+new timestamp, so the first integration published zero matches despite
+usable historical OS evidence.
+
+The compatible exporter reads **existing timestamps only**, in order:
+`profile.tcp_scanned_at` (exact TCP scan time),
+`profile.scanned_at` (older recorded scan time), then
+`record.profiled_at` (profile completion, **not an exact TCP scan time**).
+The per-host Grafana table now shows **Time source** so those distinctions
+are visible. When none of those recorded timestamps exists but the Nmap
+match, source MAC and scanned IP are valid, the table explicitly says
+**Not recorded / Unknown** instead of discarding the match or inventing a
+date. Malformed or future recorded dates are rejected unless a separate,
+valid recorded timestamp exists.
+
+This change recovers up to eight existing Nmap OS matches; the final count
+actually shown in Grafana may be lower if some saved records do not match
+both the device's **current MAC and scanned IP**. IP reassignment is not
+assumed safe. Nmap match confidence remains the tool's own reported score,
+never an independently verified probability or an OS confirmation.
+
+For the compatibility rollout use the separate worktree
+`/var/tmp/network-host-os-legacy-time-fix` to avoid colliding with the
+already deployed `/var/tmp/network-host-os-evidence` worktree. Check out
+the merged commit from `origin/main` and rerun only the focused playbook
+`IaC/ansible/playbooks/network-host-os-fingerprints.yml`.
