@@ -43,7 +43,7 @@ It is intended to help a reader understand **what a term means, why it appears o
 | Proxmox VE | Virtualisation platform hosting VMs and LXCs | `PROXMOX`, `Proxmox-2` | Expected |
 | Corosync / Kronosnet | Cluster membership and transport | Proxmox cluster | Expected |
 | Chrony | Keeps host clocks synchronised | Managed Linux estate | Expected |
-| Network Host Collector | Discovers/enriches network-host inventory | `Proxmox-2` | Expected |
+| Network Host Collector | Discovers the MAC/IP network inventory; planned move to central `monitor-01` | `Proxmox-2` as of 26 Sep preflight | Expected; migration staged only after live validation |
 | Jinja / Jinja2 | Template language used to generate configuration files from variables | Ansible roles/templates throughout the IaC | Expected |
 | JSON | Structured text format using objects, arrays and key/value pairs | `estate.json`, Suricata `eve.json`, APIs and automation data | Expected |
 
@@ -840,7 +840,7 @@ The Network Host Collector is the homelab's inventory/discovery process for obse
 
 **How it is used here**
 
-The active collector runs on `Proxmox-2` and maintains current network-host inventory used for discovery, enrichment and operational visibility.
+As of the verified 26 September preflight, the active collector and enricher run on `Proxmox-2`, while the deep profiler is installed but its scan timer is disabled. `monitor-01` already hosts Prometheus, Grafana and 50 per-host dashboards. The intended migration makes it the single discovery/OS-investigation owner **only after** preserving existing evidence, resolving Proxmox guest lookup and first-seen notifications, and completing a deliberate cutover.
 
 Its role is to help answer questions such as:
 
