@@ -156,6 +156,22 @@
       - /usr/local/sbin/homelab-network-host-dashboards
   changed_when: false
 
+- name: Install independent Grafana host dashboard generator service
+  ansible.builtin.copy:
+    src: homelab-network-host-dashboards.service
+    dest: /etc/systemd/system/homelab-network-host-dashboards.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install independent Grafana host dashboard generator timer
+  ansible.builtin.copy:
+    src: homelab-network-host-dashboards.timer
+    dest: /etc/systemd/system/homelab-network-host-dashboards.timer
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Install network inventory publishing service
   ansible.builtin.copy:
     src: homelab-network-device-inventory.service
