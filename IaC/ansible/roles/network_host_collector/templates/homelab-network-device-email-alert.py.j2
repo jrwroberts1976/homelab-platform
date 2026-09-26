@@ -15,7 +15,8 @@ SMTP_HOST = "{{ network_host_collector_alert_smtp_host }}"
 SMTP_PORT = {{ network_host_collector_alert_smtp_port }}
 MAIL_FROM = "{{ network_host_collector_alert_from }}"
 MAIL_TO = os.environ.get("NETWORK_DEVICE_ALERT_TO", "").strip()
-COLLECTOR_HOST = "Proxmox-2"
+# Preserve the source default; monitor-01 opts in only during isolated staging.
+COLLECTOR_HOST = {{ network_host_collector_expected_hostname | to_json }}
 NOW = int(time.time())
 
 
