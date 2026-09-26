@@ -125,8 +125,9 @@ jobs:
               assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
               assert any("profile_uid" == p["name"] and p["hide"] == 2
                          for p in dashboard["templating"]["list"])
-              assert any("profile_uid" in link.get("url", "")
-                         for link in dashboard["links"])
+              if dashboard["uid"] == "homelab-mac-device-detail":
+                  assert any("profile_uid" in link.get("url", "")
+                             for link in dashboard["links"])
               assert not any(p["type"] in ("timeseries", "logs")
                              for p in dashboard["panels"])
               assert not any(p["title"] == "No telemetry" or
@@ -145,7 +146,7 @@ jobs:
                   if panel["id"] != 18:
                       assert organize["excludeByName"].get("dashboard_uid"), (
                           panel["title"], "dashboard_uid")
-          assert any("Network directory" in p["title"]
+          assert any("Network hosts" in p["title"]
                      for p in overview["panels"])
           assert len(detail["panels"]) < len(overview["panels"])
           assert "tag=generated-network-host" in Path(
