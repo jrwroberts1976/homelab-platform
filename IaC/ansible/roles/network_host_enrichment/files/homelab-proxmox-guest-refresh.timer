@@ -1,0 +1,14 @@
+[Unit]
+Description=Periodic trusted read-only Proxmox guest identity refresh
+# This timer is deliberately DISABLED until verified single-owner cutover.
+
+[Timer]
+Unit=homelab-proxmox-guest-refresh.service
+OnBootSec=20min
+OnUnitInactiveSec=6h
+RandomizedDelaySec=10min
+AccuracySec=1min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
