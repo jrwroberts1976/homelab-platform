@@ -344,7 +344,7 @@ exact SHA-256 hashes. The four staged scanner, enrichment and
 OS-publisher timers stayed disabled. No Grafana, notification registry
 or original Proxmox-2 collector was changed. **Do not rerun Gate 2f.**
 
-### Gate 2g: stage disabled snapshot-refresh units (prepared; not yet run)
+### Gate 2g: disabled snapshot-refresh units (PASSED 26 September 2026)
 
 `playbooks/network-host-monitor01-refresh-units-stage.yml` is a
 separate, one-time, monitor-01-only staging gate. It refuses changed
@@ -367,18 +367,39 @@ No refresh is executed, no Nmap is started and no alerts or Grafana
 sources are changed. Do not rerun this stage if it partially installs
 any files; inspect installed units and original hashes first.
 
+**Verified live result:** Gate 2g returned `monitor-01: 35 OK /
+5 changed / 0 failed`. The new six-hour refresh timer and all four
+preexisting staged worker timers remain disabled and inactive; the
+inactive enrichment service is guarded by the cutover approval marker
+and a successful trusted refresh dependency. No Nmap scan, refresh run,
+email notification, Grafana modification or source collector change
+occurred. **Do not rerun this one-shot staging playbook.**
+
+### Gate 2h: first-seen notification readiness (prepared; not yet run)
+
+`playbooks/network-host-monitor01-firstseen-preflight.yml` is
+**read-only on both hosts**. On Proxmox-2 it verifies the existing
+root-only `alerts.env` and `alerted-macs.json`, the installed notifier
+and original collector post-hook, and reports only aggregate baseline,
+alerted, new-device and pending-online counts. It confirms the source
+collector's timer is still enabled; it **does not** print the recipient
+or individual MACs and does not send a test email.
+
+On monitor-01 it verifies that no target alerts.env, alert registry,
+notifier or cutover approval marker was prematurely created, that all
+**five** staged discovery and refresh timers remain disabled/inactive,
+that the inactive enrichment service has its cutover-marker/refresh
+safety dependencies, and that internal SMTP relay `192.168.2.54:25`
+accepts one TCP connection without sending mail. It neither copies
+credentials nor mutates state. A failure blocks the final source stop;
+investigate any outstanding first-seen notifications before transfer.
+
 The first-seen alert registry/configuration still resides with the
 production source on Proxmox-2. Preserve it and perform the final
 stop-and-delta-sync before granting cutover approval and enabling
 monitor-01 discovery.
 
-**Known follow-ups before Gate 3:** the old enrichment worker derives
-Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
-locally; migrate that lookup to an authorised read-only source before
-enabling the new enrichment schedule. The existing first-seen email
-configuration and alert registry must also be reconciled; the staged
-monitor-01 collector deliberately has **notifications disabled**.
-Do not stop the source alerting path until the destination is verified.
+**Known follow-ups before Gate 3:** the inactive monitor-01 enricher now uses the protected, refreshed cluster-wide Proxmox guest MAC snapshot; do not revert it to the Proxmox-2 local `/etc/pve` lookup. The first-seen email configuration and alert registry still require protected final synchronisation and a disabled target notifier deployment, with duplicate-message prevention verified before enabling target alerts. The staged monitor-01 collector deliberately has **notifications disabled**. Do not stop the source alerting path until the complete destination is verified.
 
 **26 September staging outcome:** the source snapshot was retained at
 `/var/backups/homelab-network-migration/20260926T095635`. The staging
