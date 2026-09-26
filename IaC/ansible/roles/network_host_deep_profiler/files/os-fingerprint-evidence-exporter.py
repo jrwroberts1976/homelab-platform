@@ -37,6 +37,40 @@ def accuracy(value):
     return result if 0 <= result <= 100 else -1
 
 
+def evidence_time(profile, record):
+    """Use a recorded TCP date, older scan date, then profile completion.
+
+    A legacy profile-completion date is not claimed to be the exact instant
+    of the TCP scan. Records with no trustworthy date may still supply an
+    explicitly undated OS guess: don't discard an otherwise valid Nmap result.
+    Never substitute the file's mtime, the current time, or last_attempt.
+    """
+    now = int(datetime.now(timezone.utc).timestamp())
+    invalid_recorded_time = False
+    for basis, candidate in (
+            ("TCP scan", profile.get("tcp_scanned_at")),
+            ("Legacy scan", profile.get("scanned_at")),
+            ("Profile completion", record.get("profiled_at"))):
+        if candidate in (None, "", 0, "0"):
+            continue
+        try:
+            stamp = int(float(candidate))
+            if not 1577836800 <= stamp <= now + 300:
+                invalid_recorded_time = True
+                continue
+            observed = datetime.fromtimestamp(stamp, timezone.utc).strftime(
+                "%Y-%m-%d %H:%M UTC")
+            return stamp, observed, basis
+        except (TypeError, ValueError, OverflowError, OSError):
+            invalid_recorded_time = True
+    # Missing legacy metadata is not grounds for discarding a valid recorded
+    # fingerprint. Explicitly malformed/future dates are, unless a valid
+    # lower-priority recorded timestamp exists.
+    if invalid_recorded_time:
+        return None, "", "Invalid timestamp"
+    return None, "Not recorded", "Unknown"
+
+
 def evidence(state):
     if not isinstance(state, dict) or not isinstance(state.get("profiles"), dict):
         raise ValueError("Invalid deep-profile JSON; preserve previous published evidence")
@@ -64,14 +98,8 @@ def evidence(state):
         if not valid:
             continue
         score, match = max(valid, key=lambda item: item[0])
-        try:
-            scanned = int(profile.get("tcp_scanned_at") or 0)
-            # Skip missing, pre-2020, or future dates instead of inventing recency.
-            if not 1577836800 <= scanned <= int(datetime.now(timezone.utc).timestamp()) + 300:
-                continue
-            observed = datetime.fromtimestamp(scanned, timezone.utc).strftime(
-                "%Y-%m-%d %H:%M UTC")
-        except (TypeError, ValueError, OverflowError):
+        scanned, observed, time_basis = evidence_time(profile, record)
+        if not observed:
             continue
         classes = match.get("classes") or []
         primary = next((c for c in classes if isinstance(c, dict)), {})
@@ -106,6 +134,7 @@ def evidence(state):
             "nmap_device_type": str(primary.get("type") or "")[:60],
             "nmap_cpe": first_cpe[:120],
             "nmap_scanned_at": observed,
+            "nmap_time_basis": time_basis,
             "nmap_services": "; ".join(services)[:360],
             "nmap_scan_status": str(record["status"]),
             "scanned": scanned,
@@ -117,17 +146,18 @@ def render(results):
     lines = [
         "# HELP homelab_network_host_os_fingerprint_info Existing Nmap OS evidence keyed by MAC and scanned IP; a match is an inference, never proof.",
         "# TYPE homelab_network_host_os_fingerprint_info gauge",
-        "# HELP homelab_network_host_os_fingerprint_scan_timestamp_seconds Timestamp of the recorded TCP fingerprint scan.",
+        "# HELP homelab_network_host_os_fingerprint_scan_timestamp_seconds Best available recorded time for this OS fingerprint; see nmap_time_basis for whether it is the TCP scan time or only profile completion.",
         "# TYPE homelab_network_host_os_fingerprint_scan_timestamp_seconds gauge",
     ]
     for rec in results:
         fields = {k: v for k, v in rec.items() if k != "scanned"}
         # The inventory exporter will match BOTH MAC and observed IP.
         lines.append("homelab_network_host_os_fingerprint_info{" + labels(fields) + "} 1")
-        lines.append(
-            "homelab_network_host_os_fingerprint_scan_timestamp_seconds{" +
-            labels({k: rec[k] for k in ("mac", "profiled_ip")}) +
-            "} " + str(rec["scanned"]))
+        if rec["scanned"] is not None:
+            lines.append(
+                "homelab_network_host_os_fingerprint_scan_timestamp_seconds{" +
+                labels({k: rec[k] for k in ("mac", "profiled_ip")}) +
+                "} " + str(rec["scanned"]))
     return "\n".join(lines) + "\n"
 
 

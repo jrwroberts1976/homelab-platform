@@ -197,6 +197,54 @@ class GeneratorTests(unittest.TestCase):
                 for y in sorted({p["gridPos"]["y"] for p in panels}))
         )
 
+    def test_nmap_fingerprint_only_when_exact_os_unresolved(self):
+        template_path = (Path(__file__).resolve().parents[2] /
+                         "ansible/roles/monitoring_stack/files/"
+                         "host-profile-template.json")
+        template = json.loads(template_path.read_text())
+        self.assertIn(22, {p["id"] for p in template["panels"]})
+        key = "mac:aa:bb:cc:dd:ee:ff"
+        metrics = {name: set() for name in generator.AVAILABILITY_QUERIES}
+        availability = (metrics, set(), set(), set())
+
+        cases = (
+            # A clearly documented exact platform needs no guessed OS panel.
+            ("Home Assistant OS 18.2", "documented", False, False),
+            ("Proxmox VE / Debian", "documented", False, False),
+            # IaC-managed Linux alone doesn't identify distro or OS version.
+            ("Linux (IaC-managed)", "documented", False, True),
+            ("Unknown", "unknown", False, True),
+            ("Windows (DNS hint)", "inferred_dns", False, True),
+            ("Linux 5.0-6.2", "inferred_nmap", False, True),
+            # Live OS release metadata takes precedence over guesses.
+            ("Unknown", "unknown", True, False),
+            ("Linux (IaC-managed)", "documented", True, False),
+        )
+        for os_name, evidence, has_live_os, expected in cases:
+            with self.subTest(os=os_name, evidence=evidence,
+                              live=has_live_os):
+                if has_live_os:
+                    metrics["os"].add("test-host")
+                else:
+                    metrics["os"].discard("test-host")
+                metric = {"hostname": "test-host", "ip": "192.168.2.55",
+                          "os": os_name, "os_evidence": evidence,
+                          "nmap_name": "Reported Nmap fingerprint",
+                          "nmap_scanned_at": "Not recorded",
+                          "status": "Online"}
+                chosen = generator.select_panel_ids(key, metric, availability)
+                self.assertEqual(22 in chosen, expected)
+                dashboard = generator.profile(template, key, metric, availability)
+                self.assertEqual(22 in {p["id"] for p in dashboard["panels"]},
+                                 expected)
+                self.assertIn(14, chosen)
+
+        # Never show an empty fingerprint panel on an unidentified host.
+        missing = {"hostname": "test-host", "os": "Unknown",
+                   "os_evidence": "unknown", "nmap_name": ""}
+        metrics["os"].clear()
+        self.assertNotIn(22, generator.select_panel_ids(key, missing, availability))
+
     def test_no_observed_ports_does_not_make_fake_zero_panel(self):
         key = "ip:192.168.2.206"
         metrics = {name: set() for name in generator.AVAILABILITY_QUERIES}

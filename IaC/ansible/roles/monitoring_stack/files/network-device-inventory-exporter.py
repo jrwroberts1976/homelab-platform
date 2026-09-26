@@ -113,6 +113,7 @@ def populate():
                              nmap_family="", nmap_generation="",
                              nmap_vendor="", nmap_device_type="",
                              nmap_cpe="", nmap_scanned_at="",
+                              nmap_time_basis="",
                              nmap_services="", nmap_scan_status="")
         return hosts[ip]
 
@@ -268,13 +269,18 @@ def populate():
         observed = (m.get("nmap_scanned_at") or "").strip()
         if not match_name or not observed:
             continue
-        # If Prometheus briefly retains two series, prefer the newest scan.
-        if observed <= h["nmap_scanned_at"]:
+        # Prometheus may briefly retain older series. Prefer a dated
+        # fingerprint to an undated one, then the newest recorded date.
+        current_date = (h["nmap_scanned_at"]
+                        if h["nmap_scanned_at"] != "Not recorded" else "")
+        incoming_date = observed if observed != "Not recorded" else ""
+        if h["nmap_name"] and incoming_date <= current_date:
             continue
         for field in (
                 "nmap_name", "nmap_accuracy", "nmap_family",
                 "nmap_generation", "nmap_vendor", "nmap_device_type",
-                "nmap_cpe", "nmap_scanned_at", "nmap_services",
+                "nmap_cpe", "nmap_scanned_at", "nmap_time_basis",
+                "nmap_services",
                 "nmap_scan_status"):
             h[field] = m.get(field) or ""
         # Keep documented and DNS-derived OS values even if Nmap disagrees.
@@ -283,7 +289,11 @@ def populate():
                 or h["os_source"].startswith("Nmap guess ")):
             h.update(
                 os=match_name,
-                os_source="Deep Nmap fingerprint " + observed,
+                os_source=(
+                    "Deep Nmap fingerprint " + observed
+                    if incoming_date else
+                    "Deep Nmap fingerprint (date not recorded)"
+                ),
                 os_evidence="inferred_nmap",
             )
 
@@ -432,7 +442,8 @@ def render(hosts):
             **{name: h.get(name, "") for name in (
                 "nmap_name", "nmap_accuracy", "nmap_family",
                 "nmap_generation", "nmap_vendor", "nmap_device_type",
-                "nmap_cpe", "nmap_scanned_at", "nmap_services",
+                "nmap_cpe", "nmap_scanned_at", "nmap_time_basis",
+                "nmap_services",
                 "nmap_scan_status")},
         }
         lines.append(

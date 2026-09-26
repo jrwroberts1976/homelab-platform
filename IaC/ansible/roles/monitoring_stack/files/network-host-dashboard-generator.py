@@ -122,6 +122,22 @@ def collect_availability():
     return available, port_keys, last_seen_keys, presence_keys
 
 
+def os_requires_fingerprint(metric, live_os_available):
+    """Identify only hosts whose OS is not already known from stronger data.
+
+    A documented *specific* OS or live OS-release information is sufficient
+    for this dashboard; Nmap remains an optional clue for unknown/inferred
+    hosts and for generic inventory entries such as 'Linux (IaC-managed)'.
+    'Documented' alone is not proof that a distribution/version is known.
+    """
+    if live_os_available:
+        return False
+    if metric.get("os_evidence") != "documented":
+        return True
+    documented = (metric.get("os") or "").strip().casefold()
+    return documented in ("", "unknown", "linux", "linux (iac-managed)")
+
+
 def select_panel_ids(key, metric, availability):
     metrics, port_keys, last_seen_keys, presence_keys = availability
     host = metric.get("hostname", "")
@@ -148,8 +164,9 @@ def select_panel_ids(key, metric, availability):
         selected.update((11, 15))
     if metric.get("dns_hint", "").strip():
         selected.add(16)
-    if metric.get("nmap_name", "").strip():
-        selected.add(22)  # Only real, MAC/IP-correlated deep Nmap fingerprints.
+    if (metric.get("nmap_name", "").strip()
+            and os_requires_fingerprint(metric, present("os"))):
+        selected.add(22)  # Only when OS identification needs investigation.
     if present("disk"):
         selected.add(18)
     if present("load"):
@@ -224,8 +241,8 @@ def profile(template, key, metric, availability=None):
     result["description"] = (
         "Automatically generated from MAC/IP evidence. Current identity, "
         "OS source, DNS hints, observed ports and correlated saved Nmap "
-        "fingerprints refresh from Prometheus; fingerprints are inferred, "
-        "not verified OS facts."
+        "fingerprints refresh from Prometheus when the OS is unresolved; "
+        "documented specific or live OS facts take precedence."
     )
     result["version"] = 2
     if availability is not None:

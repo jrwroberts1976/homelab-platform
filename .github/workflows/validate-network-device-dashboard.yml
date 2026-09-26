@@ -10,6 +10,7 @@ on:
       - fix/grafana-host-panels-per-device
       - feature/restore-network-hosts-data-driven
       - feature/grafana-nmap-os-fingerprint-evidence
+      - fix/legacy-nmap-profile-timestamps
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
@@ -102,10 +103,14 @@ jobs:
           nmap_panel = next(p for p in full_template["panels"] if p["id"] == 22)
           assert nmap_panel["type"] == "table"
           assert 'nmap_name!=""' in nmap_panel["targets"][0]["expr"]
+          assert nmap_panel["transformations"][1]["options"]["renameByName"]["nmap_time_basis"] == "Time source"
           evidence_source = Path(
               "IaC/ansible/roles/network_host_deep_profiler/files/"
               "os-fingerprint-evidence-exporter.py").read_text()
           assert "subprocess" not in evidence_source
+          assert "evidence_time" in evidence_source
+          assert "Profile completion" in evidence_source
+          assert "Not recorded" in evidence_source
           assert 'homelab_network_host_os_fingerprint_info' in evidence_source
           assert 'read_text(encoding="utf-8")' in evidence_source
           focused_nmap = yaml.safe_load(Path(
