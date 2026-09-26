@@ -375,7 +375,7 @@ and a successful trusted refresh dependency. No Nmap scan, refresh run,
 email notification, Grafana modification or source collector change
 occurred. **Do not rerun this one-shot staging playbook.**
 
-### Gate 2h: first-seen notification readiness (prepared; not yet run)
+### Gate 2h: first-seen notification readiness (PASSED 26 September 2026)
 
 `playbooks/network-host-monitor01-firstseen-preflight.yml` is
 **read-only on both hosts**. On Proxmox-2 it verifies the existing
@@ -393,6 +393,42 @@ safety dependencies, and that internal SMTP relay `192.168.2.54:25`
 accepts one TCP connection without sending mail. It neither copies
 credentials nor mutates state. A failure blocks the final source stop;
 investigate any outstanding first-seen notifications before transfer.
+
+**Verified live result:** Gate 2h returned `Proxmox-2: 9 OK /
+0 changed / 0 failed` and `monitor-01: 11 OK / 0 changed /
+0 failed`. The source notifier, protected registry/configuration
+and scheduled collector passed validation. Monitor-01 had no first-seen
+config, registry, notifier or cutover marker; all five timers were
+disabled/inactive; SMTP TCP/25 was reachable without sending mail;
+the staged enrichment cutover/refresh safeguards passed. The supplied
+output did not include the source's aggregate registry or pending
+online first-seen counts. Retrieve the source preflight's
+`Report source readiness using aggregate counts only` task output
+before authorising the final source stop.
+
+### Gate 2i: stage inactive first-seen notifier code (prepared; not yet run)
+
+`playbooks/network-host-monitor01-firstseen-notifier-stage.yml`
+runs on **monitor-01 only**. It parameterises the notifier's collector
+identity (the default remains `Proxmox-2` for the active source)
+and installs the destination script as root-owned, mode 0750,
+without executing it. The gate requires the destination recipient,
+MAC registry, notifier and cutover marker all absent, five target
+timers disabled/inactive and the collector service inactive and
+unwired for any notifier. It confirms the rendered script has
+`COLLECTOR_HOST = "monitor-01"` and valid Python syntax, but
+**never imports or runs it**; doing so before importing the original
+MAC registry could seed a second baseline. Source registry and SMTP
+recipient remain untouched on Proxmox-2. SHA-256 checks require
+all four protected monitor-01 state files unchanged.
+
+After Gate 2i, keep the destination notifier disconnected from
+`ExecStartPost` and retain the source as the sole first-seen
+alert owner. Only following a deliberate stop of source collector,
+enricher and evidence timers and waiting for running jobs to finish
+may the final protected source registry/configuration and all
+three fresh JSON datasets be copied and verified on monitor-01.
+Do not use a stale snapshot of the first-seen registry.
 
 The first-seen alert registry/configuration still resides with the
 production source on Proxmox-2. Preserve it and perform the final
