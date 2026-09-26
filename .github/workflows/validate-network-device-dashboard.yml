@@ -29,8 +29,14 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install validation dependency
-        run: python3 -m pip install "PyYAML==6.0.2"
+      - name: Install validation dependencies
+        run: python3 -m pip install "PyYAML==6.0.2" "ansible-core>=2.19,<2.20"
+
+      - name: Validate focused Ansible dashboard deployment syntax
+        run: |
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-grafana.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
