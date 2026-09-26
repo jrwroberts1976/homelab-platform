@@ -230,6 +230,26 @@ match, source MAC and scanned IP are valid, the table explicitly says
 date. Malformed or future recorded dates are rejected unless a separate,
 valid recorded timestamp exists.
 
+### Do not fingerprint a device whose exact OS is already established
+
+Nmap is optional investigation evidence, **not a requirement for every
+device**. A host with a specifically documented OS (for example,
+Home Assistant OS or Proxmox VE) or available live `node_os_info`
+OS-release metadata does **not** get a fingerprint panel even when an old
+Nmap match exists. The previously recorded evidence remains available
+internally for troubleshooting; no additional scan is scheduled.
+
+An unknown or inferred OS may receive the optional Nmap panel when a saved
+MAC/IP-correlated fingerprint exists. A generic canonical entry such as
+`Linux (IaC-managed)` is *not* a confirmed distribution or version, so it
+can still benefit from a saved fingerprint **unless live OS-release metadata
+is available**. A Nmap match never overrides a specifically documented
+OS and is never presented as 100% proof of an operating system.
+
+The network-wide 'Documented OS' statistic reports the **source category**,
+not guaranteed version-level certainty: generic IaC-managed Linux is still
+documented as a Linux host, while its exact distribution may remain unknown.
+
 This change recovers up to eight existing Nmap OS matches; the final count
 actually shown in Grafana may be lower if some saved records do not match
 both the device's **current MAC and scanned IP**. IP reassignment is not
