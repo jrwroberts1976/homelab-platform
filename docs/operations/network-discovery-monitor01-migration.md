@@ -219,7 +219,7 @@ with one NIC apiece. Do **not** rerun the non-overwrite Gate 2 staging
 playbook. A successful gate does **not** enable the scan workers or
 switch the production Grafana source.
 
-### Gate 2c: staged read-only Proxmox MAC discovery (not yet run)
+### Gate 2c: verified read-only Proxmox MAC discovery (PASSED)
 
 With trusted TLS proven, use
 `playbooks/network-host-monitor01-proxmox-guests-check.yml` to install
@@ -233,12 +233,38 @@ its owning node. It parses QEMU and LXC NIC MACs, excludes reusable
 templates, refuses ambiguous/colliding live MAC identities, and prints
 **aggregate counts only**, not token data or private MACs.
 
-The preflight does **not** modify current inventory, deep profiles,
+The preflight did **not** modify current inventory, deep profiles,
 enrichment, first-seen alert state, existing Grafana source or
-production services. The new script's ability to match the actual
-live guest MACs must be verified before integrating it as an explicit
-`monitor-01` enrichment source. It is not an enrichment worker and
-will not execute any Nmap or service scans.
+production services. The **26 September 2026 live Gate 2c run passed**:
+`monitor-01: 15 OK / 1 changed / 0 failed`. It verified all four
+new worker timers **disabled and inactive**, used the trusted cluster
+CA to inspect **all 13** resource configurations (**9 on PROXMOX,
+4 on Proxmox-2**), identified **11 running guests**, excluded
+**two templates** and found **11 unique non-template guest MACs**.
+The isolated probe executable was installed; **no Nmap ran**, and no
+production state, alert registry or inventory was rewritten.
+
+### Gate 2d: prepare a separate protected guest MAC snapshot (not yet run)
+
+The new
+`playbooks/network-host-monitor01-proxmox-snapshot.yml`
+requires the proven Gate 2c baseline and uses the same strictly verified
+TLS credentials to compare the fresh 11 guest MACs against the **saved
+LAN inventory**. It publishes a **separate, new root-only**
+`/var/lib/homelab-network-hosts/proxmox-guests.json` containing
+MAC-keyed guest identities only after a no-write dry-run passes.
+It never overwrites an existing file, never touches the three original
+staged JSON files, does not modify production Grafana, and refuses
+to run with any of the four new timers active. Output consists only
+of counts and a checksum; token secrets and raw MAC data stay local.
+**Do not rerun this one-shot gate if a partial execution has created
+the new snapshot.**
+
+This new snapshot is a *candidate enrichment input*, not a production
+integration. After verifying the actual LAN MAC overlap, the future
+enricher can explicitly opt in to reading it while the historic
+Proxmox-2 local-file lookup remains the untouched default. Neither
+service scanning nor worker timer activation occurs at Gate 2d.
 
 
 **Known follow-ups before Gate 3:** the old enrichment worker derives
