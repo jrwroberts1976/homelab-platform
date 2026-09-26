@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Proposed: make monitor-01 the sole network-discovery and OS-investigation host
 
 **Status: migration preflight only. Not the live deployment truth.**
