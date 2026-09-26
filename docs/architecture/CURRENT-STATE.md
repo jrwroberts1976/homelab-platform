@@ -480,6 +480,20 @@ The intended single-owner move to `monitor-01` passed **read-only preflight and 
 
 Follow the [monitor-01 network discovery migration](../operations/network-discovery-monitor01-migration.md) for the tested preflight, guarded state preservation, staging and later cutover. Staging was verified complete on 26 September 2026 (`Proxmox-2`: 14 OK, 2 changed; `monitor-01`: 54 OK, 16 changed; zero failed). The source's active collector, enricher and read-only exporter timers remain unchanged. The final cutover, including an up-to-date delta sync, Proxmox guest identity lookup and first-seen notification migration, is **not yet performed**. Never describe the staged monitor-01 workers as active network scanners. The timestamped root-only source snapshot is retained at `/var/backups/homelab-network-migration/20260926T095635`.
 
+**26 September Proxmox guest identity follow-up:** the Proxmox-2
+`/etc/pve/qemu-server` and `/etc/pve/lxc` directories are local-node
+symlinks, not empty directories. A read-only `find -L` verified two
+local QEMU VM and two local LXC configurations. The Proxmox cluster
+resource inventory exposed 13 guest/resource records across both
+nodes (six running LXCs, five running VMs and two stopped templates).
+The source enricher currently uses local `/etc/pve` guest definitions;
+the monitor-01 migration must use an authorised, read-only
+cluster-wide guest/NIC lookup to preserve MAC-based Proxmox identities.
+The source `alerts.env` and `alerted-macs.json` files are present,
+root-owned and mode 0600; their live contents have **not** been moved
+to monitor-01. No guest lookup, email alert path, scanner timer or
+production inventory publisher has yet been cut over.
+
 ## Edge host
 
 `edge-01` is a running Debian 13 LXC, CT103 on `Proxmox-2`, at `192.168.2.56`.
