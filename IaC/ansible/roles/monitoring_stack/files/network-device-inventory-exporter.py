@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Publish a privacy-minimised, evidence-qualified, MAC/IP network inventory.
 
-Source precedence: documented OS > dated DNS inference > Nmap OS guess.
+Source precedence: documented OS > dated DNS inference > saved deep Nmap OS match > old baseline Nmap guess.
 Port results are observations from limited scans, never proof other ports are shut.
 Read-only inputs: Prometheus, the router asset DB, curated IaC, Nmap baselines.
 """
@@ -108,7 +108,12 @@ def populate():
                              os_source="Not determined",
                              os_evidence="unknown", dns_hint="",
                              dns_observed="", online=None, last_seen=0,
-                             ports={}, scan_timed_out=False)
+                             ports={}, scan_timed_out=False,
+                             nmap_name="", nmap_accuracy="",
+                             nmap_family="", nmap_generation="",
+                             nmap_vendor="", nmap_device_type="",
+                             nmap_cpe="", nmap_scanned_at="",
+                             nmap_services="", nmap_scan_status="")
         return hosts[ip]
 
     # Documented infrastructure is included even when temporarily offline.
@@ -244,6 +249,43 @@ def populate():
             "product": m.get("product") or "",
             "version": m.get("version") or "",
             "source": "Selected-port enrichment", "observed": ""}
+
+    # Saved deep-profiler results are exported separately on Proxmox-2.
+    # Correlate BOTH the source MAC and the IP at scan time. An IP can be
+    # reused by a different device; a former owner's guess must never leak
+    # onto a new device's dashboard. Do not initiate or request scans here.
+    for result in prometheus(
+            'homelab_network_host_os_fingerprint_info{target_name="Proxmox-2"}'):
+        m = result.get("metric", {})
+        ip = lan_ip(m.get("profiled_ip"))
+        h = hosts.get(ip) if ip else None
+        source_mac = str(m.get("mac") or "").strip().lower().replace("-", ":")
+        current_mac = (str(h.get("mac") or "").strip().lower()
+                       .replace("-", ":")) if h else ""
+        if h is None or not current_mac or current_mac != source_mac:
+            continue
+        match_name = (m.get("nmap_name") or "").strip()
+        observed = (m.get("nmap_scanned_at") or "").strip()
+        if not match_name or not observed:
+            continue
+        # If Prometheus briefly retains two series, prefer the newest scan.
+        if observed <= h["nmap_scanned_at"]:
+            continue
+        for field in (
+                "nmap_name", "nmap_accuracy", "nmap_family",
+                "nmap_generation", "nmap_vendor", "nmap_device_type",
+                "nmap_cpe", "nmap_scanned_at", "nmap_services",
+                "nmap_scan_status"):
+            h[field] = m.get(field) or ""
+        # Keep documented and DNS-derived OS values even if Nmap disagrees.
+        # The separate OS fingerprint table always preserves the raw guess.
+        if (h["os_evidence"] == "unknown"
+                or h["os_source"].startswith("Nmap guess ")):
+            h.update(
+                os=match_name,
+                os_source="Deep Nmap fingerprint " + observed,
+                os_evidence="inferred_nmap",
+            )
 
     return hosts
 
@@ -387,6 +429,11 @@ def render(hosts):
             "dns_observed": h["dns_observed"],
             "observed_open_ports": summary,
             "status": status,
+            **{name: h[name] for name in (
+                "nmap_name", "nmap_accuracy", "nmap_family",
+                "nmap_generation", "nmap_vendor", "nmap_device_type",
+                "nmap_cpe", "nmap_scanned_at", "nmap_services",
+                "nmap_scan_status")},
         }
         lines.append(
             "homelab_network_device_card_info{" +
