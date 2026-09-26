@@ -85,7 +85,10 @@ These results are the migration baseline, **not** evidence that scanner
 ownership has changed. The September 24 quick TCP/ARP baseline run on
 monitor-01 is separate from Proxmox-2's saved deep-profiler state.
 
-## Gate 2: stage without starting new scans
+## Gate 2: completed — protected staging without starting new scans
+
+**Historical staging commands below are retained for audit only. Do not
+rerun them against the now-populated monitor-01 target.**
 
 Use `IaC/ansible/playbooks/network-host-monitor01-stage.yml`, introduced
 in the staging PR. It has two gated plays:
