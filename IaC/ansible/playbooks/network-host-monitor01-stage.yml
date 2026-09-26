@@ -1,0 +1,326 @@
+---
+# Gate 2: preserve source state and stage the collector, enrichment worker,
+# deep profiler and saved-OS publisher ONLY on monitor-01.
+#
+# No nmap invocation, no active discovery/enrichment/deep profiler timers,
+# no changes to the current Proxmox-2 timers, no Grafana changes.
+# Run only after network-host-monitor01-preflight.yml succeeds.
+- name: Preserve live Proxmox-2 network evidence in a root-only snapshot
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  vars:
+    state_root: /var/lib/homelab-network-hosts
+    evidence_files:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+    migration_snapshot_dir: >-
+      /var/backups/homelab-network-migration/{{ ansible_date_time.iso8601_basic_short }}
+  tasks:
+    - name: Require the existing source host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Check source evidence before snapshot
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ evidence_files }}"
+      register: migration_before
+
+    - name: Do not begin migration with absent, symlinked, or invalid source files
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.size | int > 0
+          - item.stat.checksum is defined
+      loop: "{{ migration_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require a fresh protected backup destination for this run
+      ansible.builtin.stat:
+        path: "{{ migration_snapshot_dir }}"
+      register: migration_existing_snapshot
+
+    - name: Never overwrite a previous snapshot
+      ansible.builtin.assert:
+        that:
+          - not migration_existing_snapshot.stat.exists
+        fail_msg: >-
+          Snapshot destination already exists. Preserve it; rerun at
+          a new timestamp instead of overwriting an earlier backup.
+
+    - name: Create private backup directory on historical source
+      ansible.builtin.file:
+        path: "{{ migration_snapshot_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Copy three original JSON files into protected immutable migration snapshot
+      ansible.builtin.copy:
+        src: "{{ state_root }}/{{ item }}"
+        dest: "{{ migration_snapshot_dir }}/{{ item }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      loop: "{{ evidence_files }}"
+      no_log: true
+
+    - name: Hash the preserved source snapshot
+      ansible.builtin.stat:
+        path: "{{ migration_snapshot_dir }}/{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ evidence_files }}"
+      register: migration_saved_hashes
+
+    - name: Hash original evidence again to detect concurrent collector writes
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ evidence_files }}"
+      register: migration_after
+
+    - name: Verify snapshot is byte-identical and source did not change mid-copy
+      ansible.builtin.assert:
+        that:
+          - migration_before.results[item].stat.checksum == migration_saved_hashes.results[item].stat.checksum
+          - migration_after.results[item].stat.checksum == migration_saved_hashes.results[item].stat.checksum
+        fail_msg: >-
+          Source changed during backup or snapshot hash mismatched.
+          Keep the root-only snapshot but STOP; retry a new run before
+          transferring any evidence to monitor-01.
+      loop: "{{ range(0, evidence_files | length) | list }}"
+      loop_control:
+        label: "{{ evidence_files[item] }}"
+
+    - name: Read protected snapshot into the encrypted SSH/Ansible transport only
+      ansible.builtin.slurp:
+        src: "{{ migration_snapshot_dir }}/{{ item }}"
+      loop: "{{ evidence_files }}"
+      register: migration_snapshot_bytes
+      no_log: true
+
+    - name: Validate preserved JSON before transfer (no raw host identities in logs)
+      ansible.builtin.assert:
+        that:
+          - >-
+            (migration_snapshot_bytes.results[0].content | b64decode | from_json)
+            is mapping
+          - >-
+            (migration_snapshot_bytes.results[1].content | b64decode | from_json).profiles
+            is mapping
+          - >-
+            (migration_snapshot_bytes.results[2].content | b64decode | from_json).hosts
+            is mapping
+        fail_msg: Invalid snapshot structure; stop migration.
+      no_log: true
+
+    - name: Report protected source snapshot without exporting its contents
+      ansible.builtin.debug:
+        msg:
+          - "Backup retained on Proxmox-2 at {{ migration_snapshot_dir }}"
+          - "Evidence copied and SHA-256 matched: {{ evidence_files }}"
+          - "Existing collector/enricher/deep-profile timers left unchanged."
+
+- name: Stage preserved evidence and disabled workers on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    migration_files:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+    state_root: /var/lib/homelab-network-hosts
+    publisher_src: "{{ playbook_dir }}/../roles/network_host_deep_profiler/files"
+  tasks:
+    - name: Require precisely the commissioned monitor-01 VM and eth0 interface
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - "'eth0' in ansible_facts.interfaces"
+
+    - name: Verify monitor-01 default LAN route is unchanged
+      ansible.builtin.command:
+        argv: [/usr/sbin/ip, -4, route, get, '192.168.2.1']
+      register: stage_route
+      changed_when: false
+      failed_when: >-
+        stage_route.rc != 0 or
+        'dev eth0' not in stage_route.stdout or
+        'src 192.168.2.52' not in stage_route.stdout
+
+    - name: Check for target state collisions and existing node-exporter textfile directory
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ state_root }}/inventory.json"
+        - "{{ state_root }}/deep-profiles.json"
+        - "{{ state_root }}/enrichment.json"
+        - /var/lib/prometheus/node-exporter
+        - /opt/monitoring/docker-compose.yml
+      register: migration_stage_target
+
+    - name: Refuse to overwrite an existing monitor-01 discovery state
+      ansible.builtin.assert:
+        that:
+          - not migration_stage_target.results[0].stat.exists
+          - not migration_stage_target.results[1].stat.exists
+          - not migration_stage_target.results[2].stat.exists
+          - migration_stage_target.results[3].stat.isdir | default(false)
+          - migration_stage_target.results[4].stat.isreg | default(false)
+        fail_msg: >-
+          Target data already present or monitoring prerequisites missing.
+          Do not rerun blindly; reconcile the existing state with the
+          protected source snapshot and use the recovery procedure.
+
+    - name: Create monitor-01 inventory state and event directories
+      ansible.builtin.file:
+        path: "{{ item.path }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {path: /var/lib/homelab-network-hosts, mode: '0755'}
+        - {path: /var/log/homelab-network-hosts, mode: '0755'}
+
+    - name: Transfer saved evidence only over the already authenticated Ansible connection
+      ansible.builtin.copy:
+        content: >-
+          {{ hostvars['Proxmox-2'].migration_snapshot_bytes.results[copy_idx].content | b64decode }}
+        dest: "{{ state_root }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      loop: "{{ migration_files }}"
+      loop_control:
+        index_var: copy_idx
+      no_log: true
+
+    - name: Hash installed target state
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ migration_files }}"
+      register: migration_target_hashes
+
+    - name: Require exact SHA-256 match with Proxmox-2's protected snapshot
+      ansible.builtin.assert:
+        that:
+          - >-
+            migration_target_hashes.results[item].stat.checksum ==
+            hostvars['Proxmox-2'].migration_saved_hashes.results[item].stat.checksum
+        fail_msg: >-
+          Target evidence checksum mismatch. Stop; all new scanning timers
+          remain disabled and Proxmox-2 continues production discovery.
+      loop: "{{ range(0, migration_files | length) | list }}"
+      loop_control:
+        label: "{{ migration_files[item] }}"
+
+    - name: Install collector on monitor-01 but do not enable or start scans
+      ansible.builtin.import_role:
+        name: network_host_collector
+      vars:
+        network_host_collector_expected_hostname: monitor-01
+        network_host_collector_expected_ipv4: '192.168.2.52'
+        network_host_collector_interface: eth0
+        network_host_collector_allow_deploy: true
+        network_host_collector_enable_timer: false
+        # Source email notification configuration and alert registry have
+        # not yet been migrated. Do not fake alerting coverage.
+        network_host_collector_alert_enabled: false
+
+    - name: Install enrichment worker on monitor-01 with timer disabled
+      ansible.builtin.import_role:
+        name: network_host_enrichment
+      vars:
+        network_host_enrichment_expected_hostname: monitor-01
+        network_host_enrichment_expected_ipv4: '192.168.2.52'
+        network_host_enrichment_allow_deploy: true
+        network_host_enrichment_enable_timer: false
+
+    - name: Install deep Nmap worker with VM's eth0 and timer disabled
+      ansible.builtin.import_role:
+        name: network_host_deep_profiler
+      vars:
+        network_host_deep_profiler_expected_hostname: monitor-01
+        network_host_deep_profiler_expected_ipv4: '192.168.2.52'
+        network_host_deep_profiler_interface: eth0
+        network_host_deep_profiler_allow_deploy: true
+        network_host_deep_profiler_enable_timer: false
+
+    - name: Install read-only legacy-compatible OS evidence exporter
+      ansible.builtin.copy:
+        src: "{{ publisher_src }}/os-fingerprint-evidence-exporter.py"
+        dest: /usr/local/sbin/homelab-network-os-evidence
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Stage evidence-only publisher service and timer
+      ansible.builtin.copy:
+        src: "{{ publisher_src }}/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - homelab-network-os-evidence.service
+        - homelab-network-os-evidence.timer
+
+    - name: Export saved OS evidence without running Nmap
+      ansible.builtin.systemd_service:
+        name: homelab-network-os-evidence.service
+        daemon_reload: true
+        state: started
+
+    - name: Keep publisher timer stopped until the final one-owner cutover
+      ansible.builtin.systemd_service:
+        name: homelab-network-os-evidence.timer
+        enabled: false
+        state: stopped
+
+    - name: Read locally generated Nmap metric without printing private labels
+      ansible.builtin.slurp:
+        src: /var/lib/prometheus/node-exporter/homelab_network_os_fingerprints.prom
+      register: migration_staged_metrics
+      no_log: true
+
+    - name: Count exported real OS fingerprints
+      ansible.builtin.set_fact:
+        migration_staged_os_matches: >-
+          {{ (migration_staged_metrics.content | b64decode |
+               regex_findall('(?m)^homelab_network_host_os_fingerprint_info\\{'))
+             | length }}
+
+    - name: Require expected historical OS matches before a later cutover
+      ansible.builtin.assert:
+        that:
+          - migration_staged_os_matches | int == 8
+        fail_msg: >-
+          Existing snapshot had eight Nmap OS-match records, but
+          the legacy-compatible exporter recovered a different count.
+          No scans have started. Investigate malformed or ineligible
+          historical records before proceeding to cutover.
+
+    - name: Summarise staged target and deliberately unchanged live service ownership
+      ansible.builtin.debug:
+        msg:
+          - "monitor-01 staged existing inventory, deep profiles and enrichment; all three checksums match the protected Proxmox-2 snapshot."
+          - "Recovered existing Nmap OS fingerprints: {{ migration_staged_os_matches }}."
+          - "New collector/enrichment/deep-profile/evidence timers are disabled on monitor-01."
+          - "Existing Proxmox-2 collector, enricher and read-only publisher continue unchanged."
+          - "Existing monitor-01 production inventory and 50 Grafana host dashboards have NOT been switched."
+          - "Next gate: validate source alerting and Proxmox local guest-enrichment dependencies, then perform deliberate single-owner cutover."
