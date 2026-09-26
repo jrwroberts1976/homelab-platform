@@ -220,18 +220,22 @@
           - -p
           - After
           - -p
-          - Conditions
-          - -p
           - DropInPaths
       changed_when: false
       register: resolved_enricher
+
+    - name: Inspect the exact loaded enrichment unit and its safe cutover condition
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, cat, "{{ enricher_service }}"]
+      changed_when: false
+      register: loaded_enricher_unit
 
     - name: Require direct refresh dependency and absent-until-cutover approval marker
       ansible.builtin.assert:
         that:
           - refresh_service in resolved_enricher.stdout
           - staged_dropin in resolved_enricher.stdout
-          - approval_marker in resolved_enricher.stdout
+          - "'ConditionPathExists=' ~ approval_marker in loaded_enricher_unit.stdout"
           - "'Requires=' in resolved_enricher.stdout"
           - "'After=' in resolved_enricher.stdout"
 
