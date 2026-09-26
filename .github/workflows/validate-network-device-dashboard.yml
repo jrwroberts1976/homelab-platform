@@ -23,6 +23,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-tls.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-guests-check.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-snapshot.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-proxmox-identity-stage.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -61,10 +62,12 @@ jobs:
             playbooks/network-host-monitor01-proxmox-guests-check.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-snapshot.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-proxmox-identity-stage.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
-          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py
+          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py
           python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
 
       - name: Verify Grafana dashboard and Ansible registration
@@ -166,6 +169,27 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 2e must only change an inert staged worker executable.
+          # Its no-scan --identity-check path must exit before port probes.
+          identity_gate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-proxmox-identity-stage.yml").read_text())
+          assert len(identity_gate) == 1
+          assert identity_gate[0]["hosts"] == "monitoring_hosts"
+          gate_steps = identity_gate[0]["tasks"]
+          assert not any("ansible.builtin.systemd_service" in t or
+                         "ansible.builtin.import_role" in t
+                         for t in [str(item) for item in gate_steps])
+          assert "--identity-check" in str(identity_gate)
+          assert "proxmox-guests.json" in str(identity_gate)
+          default_source = yaml.safe_load(Path(
+              "IaC/ansible/roles/network_host_enrichment/defaults/main.yml").read_text())
+          assert default_source["network_host_enrichment_proxmox_source"] == "local"
+          worker = Path(
+              "IaC/ansible/roles/network_host_enrichment/templates/homelab-network-host-enricher.py.j2").read_text()
+          assert worker.index('if len(sys.argv) != 1:') < worker.index(
+              "scan_services(online_ips)")
+          assert "proxmox_by_mac, _proxmox_counts = selected_proxmox_identity_by_mac(inventory)" in worker
+
           # Gate 2d creates only a separate root-only guest-MAC map.
           # It may not touch the three staged JSON files, source systems,
           # worker services or the Grafana production inventory.

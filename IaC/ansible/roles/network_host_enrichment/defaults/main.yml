@@ -36,6 +36,14 @@ network_host_enrichment_ports:
 network_host_enrichment_tls_ports:
   "443,8443,9443"
 
+# Existing Proxmox-2 behaviour remains the default. Only the isolated
+# monitor-01 opt-in gate uses its protected, no-overwrite guest snapshot.
+network_host_enrichment_proxmox_source: local
+network_host_enrichment_proxmox_snapshot_file:
+  "{{ network_host_enrichment_state_dir }}/proxmox-guests.json"
+network_host_enrichment_proxmox_max_age_seconds: 172800
+network_host_enrichment_helper_dir: /usr/local/lib/homelab-network-hosts
+
 # Deployment and periodic execution are separately gated.
 network_host_enrichment_allow_deploy: false
 network_host_enrichment_enable_timer: false

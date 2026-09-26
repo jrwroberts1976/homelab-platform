@@ -5,6 +5,7 @@ import json
 import os
 import re
 import socket
+import sys
 import subprocess
 import tempfile
 import time
@@ -20,6 +21,13 @@ METRIC_FILE = Path("{{ network_host_enrichment_metrics }}")
 
 SERVICE_PORTS = "{{ network_host_enrichment_ports }}"
 TLS_PORTS = "{{ network_host_enrichment_tls_ports }}"
+
+# No live API credential is needed during normal enrichment. A separate
+# safeguarded publisher is responsible for refreshing the guest map.
+PROXMOX_SOURCE = {{ network_host_enrichment_proxmox_source | to_json }}
+PROXMOX_SNAPSHOT_FILE = Path({{ network_host_enrichment_proxmox_snapshot_file | to_json }})
+PROXMOX_MAX_AGE = {{ network_host_enrichment_proxmox_max_age_seconds | int }}
+PROXMOX_HELPER_DIR = Path({{ network_host_enrichment_helper_dir | to_json }})
 
 NOW = int(time.time())
 
@@ -357,6 +365,21 @@ def proxmox_identity_by_mac():
     return identities
 
 
+def selected_proxmox_identity_by_mac(inventory):
+    if PROXMOX_SOURCE == "local":
+        return proxmox_identity_by_mac(), None
+    if PROXMOX_SOURCE == "snapshot":
+        # The shared, validated loader also powers the no-scan identity
+        # check. Keep the same fail-closed parsing in actual enrichment.
+        sys.path.insert(0, str(PROXMOX_HELPER_DIR))
+        from proxmox_guest_identity import load_snapshot
+        return load_snapshot(
+            PROXMOX_SNAPSHOT_FILE, inventory,
+            max_age_seconds=PROXMOX_MAX_AGE,
+        )
+    raise RuntimeError("Unknown Proxmox enrichment source")
+
+
 def prom_escape(value):
     return (
         str(value)
@@ -366,7 +389,22 @@ def prom_escape(value):
     )
 
 
+# --identity-check is an explicit read-only path: it exits before Nmap,
+# scanning, metric publication and enrichment JSON state mutation.
+if len(sys.argv) != 1:
+    if sys.argv[1:] != ["--identity-check"] or PROXMOX_SOURCE != "snapshot":
+        raise SystemExit("Unknown or unavailable no-scan identity-check mode")
+    check_inventory = load_json(INVENTORY_FILE)
+    _, counts = selected_proxmox_identity_by_mac(check_inventory)
+    print(json.dumps({"event": "staged_proxmox_identity_check", **counts},
+                     sort_keys=True), flush=True)
+    raise SystemExit(0)
+
 inventory = load_json(INVENTORY_FILE)
+
+# Refuse missing, malformed, stale or mismatched snapshot *before* any
+# ordinary Nmap service/TLS probe can run.
+proxmox_by_mac, _proxmox_counts = selected_proxmox_identity_by_mac(inventory)
 
 previous = load_json(
     ENRICHMENT_FILE,
@@ -411,8 +449,6 @@ except Exception as exc:
         for ip in online_ips
     }
     scan_errors["tls"] = str(exc)
-
-proxmox_by_mac = proxmox_identity_by_mac()
 
 hosts = {}
 

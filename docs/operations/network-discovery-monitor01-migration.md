@@ -260,13 +260,39 @@ of counts and a checksum; token secrets and raw MAC data stay local.
 **Do not rerun this one-shot gate if a partial execution has created
 the new snapshot.**
 
-**Verified live outcome:** the Gate 2d playbook returned `monitor-01: 18 OK / 2 changed / 0 failed` on 26 September 2026. The publisher and protected snapshot creation steps completed without task failures. The final printed MAC-overlap count was not supplied with the recap; independently read back only aggregate counts before configuring the next enrichment gate. **Do not rerun Gate 2d**, because the protected guest-map file already exists.
+**Verified live outcome:** the Gate 2d playbook returned `monitor-01: 18 OK / 2 changed / 0 failed` on 26 September 2026. The publisher and protected snapshot creation steps completed without task failures. The independent root-only aggregate read-back subsequently verified **11 guest MACs, 49 saved LAN devices, 11 matches, zero unmatched** and snapshot mode **0600**. **Do not rerun Gate 2d**, because the protected guest-map file already exists.
 
-This new snapshot is a *candidate enrichment input*, not a production
-integration. After verifying the actual LAN MAC overlap, the future
-enricher can explicitly opt in to reading it while the historic
-Proxmox-2 local-file lookup remains the untouched default. Neither
-service scanning nor worker timer activation occurs at Gate 2d.
+The verified new snapshot is a *candidate enrichment input*, not a
+production integration. The original Proxmox-2 `/etc/pve` local-file
+lookup remains the role's default. Neither service scanning nor
+worker timer activation occurred at Gate 2d.
+
+### Gate 2e: opt in the inactive monitor-01 worker (prepared; not yet run)
+
+`playbooks/network-host-monitor01-proxmox-identity-stage.yml` has a
+one-time guarded install for **monitor-01 only**. It requires all four
+staged worker timers disabled/inactive and the existing enrichment
+service inactive. It verifies and protects the SHA-256 of original
+`inventory.json`, `deep-profiles.json`, `enrichment.json` and
+`proxmox-guests.json`, retains a private rollback copy of the
+original inert worker executable, then installs a strict root-only
+snapshot reader. The worker's source is set to `snapshot` for this
+staged VM only; the existing role default remains `local` on PVE2.
+
+The gate runs `--identity-check` on the newly installed script.
+That mode exits **before all Nmap/service/TLS probes**, before writing
+inventory, enrichment, Prometheus metrics or guest state, and without
+any Proxmox API credential. It must report the known 11-of-11 matched
+MAC baseline and zero unmatched and verify all four original state
+file hashes stayed identical. It **does not** start the enrichment
+service, systemd timers, discovery, Grafana or first-seen notifier.
+
+Snapshot age is currently limited to 48 hours to prevent use of
+stale Proxmox ownership metadata. If the protected candidate snapshot
+is older, the check will fail closed; establish a separate protected
+API snapshot refresh path before enabling periodic enrichment.
+**Do not rerun this one-time gate after a partial installation**:
+the script and rollback file are collision-protected.
 
 
 **Known follow-ups before Gate 3:** the old enrichment worker derives
