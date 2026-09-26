@@ -17,6 +17,7 @@ from pathlib import Path
 import runpy
 import ssl
 import stat
+import sys
 import tempfile
 import time
 
@@ -26,6 +27,7 @@ SNAPSHOT = Path("/var/lib/homelab-network-hosts/proxmox-guests.json")
 INVENTORY = Path("/var/lib/homelab-network-hosts/inventory.json")
 BACKUP_DIR = Path("/var/backups/homelab-network-migration/proxmox-guest-snapshots")
 STALE_RECOVERY_SECONDS = 365 * 24 * 3600
+sys.dont_write_bytecode = True
 
 
 def require_regular(path, owner_uid=0, mode=0o600):
@@ -88,7 +90,13 @@ def backup_previous(path, backup_dir, raw, owner_uid=0):
             handle.write(raw)
             handle.flush()
             os.fsync(handle.fileno())
-        os.fsync(os.open(str(backup_dir), os.O_RDONLY | os.O_DIRECTORY))
+        directory_fd = os.open(
+            str(backup_dir), os.O_RDONLY | os.O_DIRECTORY,
+        )
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     except BaseException:
         # Retain incomplete backup for investigation rather than overwrite it.
         raise
