@@ -2,7 +2,8 @@
 - name: Validate network host enrichment target
   ansible.builtin.assert:
     that:
-      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.hostname == network_host_enrichment_expected_hostname
+      - ansible_facts.default_ipv4.address == network_host_enrichment_expected_ipv4
       - ansible_facts.distribution == "Debian"
     fail_msg: >-
       Refusing to deploy network host enrichment to an
