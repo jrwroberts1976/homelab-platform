@@ -148,6 +148,8 @@ def select_panel_ids(key, metric, availability):
         selected.update((11, 15))
     if metric.get("dns_hint", "").strip():
         selected.add(16)
+    if metric.get("nmap_name", "").strip():
+        selected.add(22)  # Only real, MAC/IP-correlated deep Nmap fingerprints.
     if present("disk"):
         selected.add(18)
     if present("load"):
@@ -200,6 +202,7 @@ def compact_panels(template_panels, selected):
     add_row((5, 6), 8)
     add_row((7, 8), 8)
     add_row((14,), 6)
+    add_row((22,), 8)
     add_row((15,), 7)
     add_row((16,), 6)
     add_row((17,), 7)
@@ -220,7 +223,9 @@ def profile(template, key, metric, availability=None):
     result["title"] = "Homelab — %s" % name
     result["description"] = (
         "Automatically generated from MAC/IP evidence. Current identity, "
-        "OS source, DNS hints and observed open ports refresh from Prometheus."
+        "OS source, DNS hints, observed ports and correlated saved Nmap "
+        "fingerprints refresh from Prometheus; fingerprints are inferred, "
+        "not verified OS facts."
     )
     result["version"] = 2
     if availability is not None:
