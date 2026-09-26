@@ -429,7 +429,7 @@ def render(hosts):
             "dns_observed": h["dns_observed"],
             "observed_open_ports": summary,
             "status": status,
-            **{name: h[name] for name in (
+            **{name: h.get(name, "") for name in (
                 "nmap_name", "nmap_accuracy", "nmap_family",
                 "nmap_generation", "nmap_vendor", "nmap_device_type",
                 "nmap_cpe", "nmap_scanned_at", "nmap_services",
