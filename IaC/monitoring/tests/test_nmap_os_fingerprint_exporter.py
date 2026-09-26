@@ -90,6 +90,54 @@ class FingerprintExporterTests(unittest.TestCase):
                     exporter.main()
                 self.assertEqual(out.read_text(), "last-good-data")
 
+    def test_legacy_profile_completion_date_recovers_existing_matches(self):
+        # Existing Proxmox-2 state has OS matches but none of the new
+        # profile['tcp_scanned_at'] fields. Do not throw away valid evidence.
+        done = int(time.time()) - 3600
+        record = self.record(profiled_at=done)
+        record["profile"].pop("tcp_scanned_at")
+        result = exporter.evidence({
+            "profiles": {"aa:bb:cc:dd:ee:ff": record}})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["nmap_name"], "Linux 5.X")
+        self.assertEqual(result[0]["scanned"], done)
+        self.assertEqual(result[0]["nmap_time_basis"], "Profile completion")
+        self.assertIn('nmap_time_basis="Profile completion"',
+                      exporter.render(result))
+
+    def test_legacy_nested_scan_timestamp_has_precedence(self):
+        done = int(time.time()) - 3600
+        record = self.record(profiled_at=done + 120)
+        record["profile"].pop("tcp_scanned_at")
+        record["profile"]["scanned_at"] = done
+        result = exporter.evidence({
+            "profiles": {"aa:bb:cc:dd:ee:ff": record}})
+        self.assertEqual(result[0]["scanned"], done)
+        self.assertEqual(result[0]["nmap_time_basis"], "Legacy scan")
+
+    def test_undated_legacy_match_is_explicit_not_discarded_or_backdated(self):
+        record = self.record()
+        record["profile"].pop("tcp_scanned_at")
+        result = exporter.evidence({
+            "profiles": {"aa:bb:cc:dd:ee:ff": record}})
+        self.assertEqual(len(result), 1)
+        self.assertEqual(result[0]["nmap_scanned_at"], "Not recorded")
+        self.assertEqual(result[0]["nmap_time_basis"], "Unknown")
+        self.assertIsNone(result[0]["scanned"])
+        metrics = exporter.render(result)
+        self.assertIn('nmap_scanned_at="Not recorded"', metrics)
+        self.assertFalse(any(
+            line.startswith("homelab_network_host_os_fingerprint_scan_timestamp_seconds{")
+            for line in metrics.splitlines()))
+
+    def test_explicit_invalid_legacy_timestamps_cannot_fake_recency(self):
+        record = self.record(profiled_at=int(time.time()) + 86400)
+        record["profile"].pop("tcp_scanned_at")
+        self.assertEqual(exporter.evidence({
+            "profiles": {"aa:bb:cc:dd:ee:ff": record}}), [])
+        self.assertFalse(exporter.evidence_time(
+            {"tcp_scanned_at": "nonsense"}, {"profiled_at": None})[1])
+
     def test_no_scan_capability_in_evidence_exporter(self):
         source = SOURCE.read_text()
         self.assertNotIn("subprocess", source)
