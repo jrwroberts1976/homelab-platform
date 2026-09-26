@@ -247,10 +247,33 @@ def profile(template, key, metric, availability=None):
         host.update({
             "name": "host", "label": "Host",
             "type": "constant", "query": name,
-            "hide": 0, "current": {
+            "hide": 2, "current": {
                 "selected": True, "text": name, "value": name
             }
         })
+    # Native Grafana dashboard-link dropdown navigates to the *actual*
+    # per-host JSON. A single variable-driven dashboard cannot reflow its
+    # panels when the selected host changes. All generated pages have the
+    # generated-network-host tag, so the selector displays friendly titles.
+    result["links"] = [
+        {
+            "title": "Choose host",
+            "type": "dashboards",
+            "tags": ["generated-network-host"],
+            "asDropdown": True,
+            "includeVars": False,
+            "keepTime": True,
+            "targetBlank": False,
+        },
+        {
+            "title": "All Hosts",
+            "type": "link",
+            "url": "/d/homelab-network-host-tiles",
+            "includeVars": False,
+            "keepTime": True,
+            "targetBlank": False,
+        },
+    ]
     return result
 
 
