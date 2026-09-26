@@ -244,7 +244,7 @@ CA to inspect **all 13** resource configurations (**9 on PROXMOX,
 The isolated probe executable was installed; **no Nmap ran**, and no
 production state, alert registry or inventory was rewritten.
 
-### Gate 2d: prepare a separate protected guest MAC snapshot (not yet run)
+### Gate 2d: protected guest MAC snapshot (PASSED 26 September 2026)
 
 The new
 `playbooks/network-host-monitor01-proxmox-snapshot.yml`
@@ -259,6 +259,8 @@ to run with any of the four new timers active. Output consists only
 of counts and a checksum; token secrets and raw MAC data stay local.
 **Do not rerun this one-shot gate if a partial execution has created
 the new snapshot.**
+
+**Verified live outcome:** the Gate 2d playbook returned `monitor-01: 18 OK / 2 changed / 0 failed` on 26 September 2026. The publisher and protected snapshot creation steps completed without task failures. The final printed MAC-overlap count was not supplied with the recap; independently read back only aggregate counts before configuring the next enrichment gate. **Do not rerun Gate 2d**, because the protected guest-map file already exists.
 
 This new snapshot is a *candidate enrichment input*, not a production
 integration. After verifying the actual LAN MAC overlap, the future
