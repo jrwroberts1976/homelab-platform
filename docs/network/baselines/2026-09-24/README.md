@@ -4,7 +4,7 @@
 
 - Canonical identity and addressing: `IaC/inventory/estate.json` (validated 17 September 2026).
 - Architecture and service roles: `docs/architecture/CURRENT-STATE.md`.
-- Nmap observations collected from `monitor-01` (`192.168.2.52`).
+- Nmap observations collected from `monitor-01` (`192.168.2.52`) for **this dated quick-scan baseline**. These are separate from the earlier, MAC-keyed deep-profiler records still held by `Proxmox-2` at the 26 September migration preflight; those records include eight OS matches.
 - ASUS router DHCP/ARP collector database on `monitor-01`.
 
 `consolidated-inventory.csv` is an observational snapshot, not deployment authority.
@@ -41,8 +41,7 @@ where both Nmap and the router supplied a MAC.
 - ARP discovery covered `192.168.2.0/24`.
 - The successful quick TCP scan covered Nmap's top 100 TCP ports.
 - Service detection covered 16 selected TCP ports.
-- The initial combined TCP/OS scan timed out and provides no reliable
-  OS fingerprint evidence.
+- The initial combined TCP/OS scan **in this 24 September baseline** timed out and provides no reliable OS fingerprint evidence from that specific run. This does **not** invalidate the eight separately recorded historical deep-profiler OS matches on `Proxmox-2`; those remain inferred, not confirmed OS identification.
 - No comprehensive TCP-port scan or UDP service scan was completed.
 - Router online status is not independent proof of current reachability.
 - Nmap service names marked uncertain are hints, not verified identities.

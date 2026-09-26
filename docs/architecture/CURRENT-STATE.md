@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
-This document records the validated current homelab estate through 18 September 2026.
+This document records the validated homelab baseline from 17–18 September 2026, with explicitly dated subsequent validations through 26 September 2026. Proposed migrations are never described as completed until checked live.
 
 It describes what is live now. Historical host identities and earlier migration assumptions remain useful evidence, but they are not current deployment authority.
 
@@ -463,7 +463,7 @@ The capture adapter remains dedicated to passive monitoring and must not be repu
 
 ## Network host discovery
 
-The current Network Host Collector is deployed on `Proxmox-2` only.
+As of the **26 September 2026 read-only migration preflight**, the active Network Host Collector and selective enricher still run on `Proxmox-2`, not `monitor-01`. Their systemd timers are enabled. The deep-profiler timer is **disabled**; its earlier enablement in the 14 September close-out is historical. The read-only OS fingerprint evidence exporter timer is enabled on `Proxmox-2`.
 
 The 17 September audit confirmed the collector timer enabled/active, with fresh `inventory.json` and Prometheus textfile metrics generated at approximately 12:23. The collector service is `Type=oneshot`, so it is expected to be inactive between timer executions.
 
@@ -472,7 +472,13 @@ The obsolete collector installation on `PROXMOX` was removed.
 The ASUS RT-AC86U at `192.168.2.1` is also an approved network-observation source for future DHCP/ARP inventory collection. The router runs Dropbear SSH and its privileged account is named `james` (UID 0) rather than `root`. Automated access from `monitor-01` uses the dedicated ED25519 private key `/root/.ssh/id_ed25519_asus_inventory`; the corresponding public key is authorised on the router. The router's ED25519 host key is pinned in `monitor-01`'s `/root/.ssh/known_hosts`. Do not change the SSH target user to `root`, and do not change ownership of `/root/.ssh` on this firmware: `james` is the UID-0 account and owns the directory by design. The dedicated monitor key was validated on 19 September 2026 with a successful non-interactive SSH test. Router DHCP leases are available from `/var/lib/misc/dnsmasq.leases`, and the router ARP table is available from `/proc/net/arp`.
 
 
-Current IaC defaults set `network_host_collector_enable_timer: false`, while validated live state has the timer enabled. Verify whether an intentional inventory/extra-var override exists before changing either side.
+Current IaC role defaults keep scanner timers disabled unless explicitly activated; the source's live collector/enricher timers are enabled by the previously commissioned deployment. Do not allow a generic role re-run to silently change live timer ownership.
+
+The 26 September **Gate 1 preflight passed without mutations** on both hosts: the source inventory held **49 devices**, with **35 baseline / 13 complete / 1 pending** deep-profiler records; **13** contained TCP scan data, **eight** had recorded Nmap OS matches, and none had the newer `tcp_scanned_at` field (all 13 had legacy time records). The existing five-minute Nmap fingerprint exporter initially emitted zero matches because it expected the newer timestamp; the backward-compatible fix is merged but its live deployment is not yet verified.
+
+The intended single-owner move to `monitor-01` has passed only **read-only preflight**. Its verified LAN interface is `eth0`, and its gateway route is `192.168.2.1 dev eth0 src 192.168.2.52`; Nmap is already installed. The three target network-host state files and discovery/deep-profile services were not installed at preflight. The 50 Grafana per-host dashboard files and the seven-panel `Homelab — Network Hosts` overview are already running from `monitor-01`; their inventory/OS correlation and dashboard-generation timers are enabled. New staging and single-owner cutover must preserve those UIDs and must not run simultaneous scanners.
+
+Follow the [monitor-01 network discovery migration](../operations/network-discovery-monitor01-migration.md) for the tested preflight, guarded state preservation, staging and later cutover. Staging has not yet been reported as installed; do not treat it as the current deployment authority.
 
 ## Edge host
 

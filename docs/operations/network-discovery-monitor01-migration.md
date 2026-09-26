@@ -1,7 +1,9 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Proposed: make monitor-01 the sole network-discovery and OS-investigation host
 
-**Status: migration preflight only. Not the live deployment truth.**
+**Status as of 26 September 2026: Gate 1 preflight passed on both hosts;
+Gate 2 staging playbook prepared but not yet deployed. The production
+collector and enricher still run on Proxmox-2.**
 The authoritative present-tense inventory remains
 [`docs/architecture/CURRENT-STATE.md`](../architecture/CURRENT-STATE.md)
 until the live handover has been verified. Current collector and saved
@@ -12,15 +14,17 @@ monitor-01. The goal is to make **monitor-01** own the entire pipeline.
 ## Target architecture
 
 ```text
-ASUS DHCP/ARP inventory ----                              monitor-01 (VM 202)            [network discovery and targeted Nmap]
-   |                           /
-   +-- collector (5 min) ------/
-   +-- targeted service/OS investigation (separately controlled timer)
-   +-- preserved MAC-keyed inventory.json, deep-profiles.json, enrichment.json
-   +-- read-only saved OS-fingerprint publisher (5 min)
-   +-- existing Node Exporter textfile directory
-   +-- existing Prometheus + Grafana
-   +-- existing data-only per-host dashboard generator (5 min)
+                       monitor-01 (VM202, eth0, 192.168.2.52)
+ASUS DHCP/ARP hints ──>  network discovery and controlled Nmap profiling
+                        │
+                        ├── MAC-keyed inventory / preserved deep-profile state
+                        ├── targeted service/TLS enrichment
+                        ├── read-only saved OS-fingerprint publisher
+                        ├── existing Node Exporter → Prometheus
+                        └── existing Grafana and 50 individual host pages
+
+admin-01: Ansible deployment controller only
+Proxmox-2: historic source / protected migration snapshot only after cutover
 ```
 
 After the **verified** cutover, Proxmox-2 remains an ordinary monitored
@@ -58,48 +62,104 @@ Existing access from monitor-01 to the ASUS router uses the already
 commissioned router-only SSH key; do **not** copy the Proxmox host's SSH
 secrets or change the router account.
 
-Expected evidence from the 2026-09-26 diagnostic was **49 records**,
-**13 completed profiles**, **8 Nmap OS-match records** and no
-`tcp_scanned_at` values. These are historical counts, not a gate requiring
-the network to stay frozen. Use the preflight's *actual* result before
-building the transfer plan.
+**Gate 1 actually completed on 26 September 2026, unchanged on both
+hosts** (`Proxmox-2: 6 ok / 0 changed`, `monitor-01: 9 ok / 0 changed`):
 
-## Gate 2: stage preserved state (only after the preflight passes)
+| Preflight finding | Verified result |
+|---|---|
+| Proxmox-2 current inventory | 49 device records |
+| Deep profiles | 35 baseline, 13 complete, 1 pending |
+| Existing TCP evidence | 13 profiles, 8 with Nmap OS matches |
+| Evidence time | 0 newer TCP-scan timestamps; 13 legacy timestamp records |
+| Proxmox-2 collector / enrichment timers | Enabled |
+| Proxmox-2 deep profiler timer | Disabled |
+| Proxmox-2 read-only Nmap evidence publisher | Enabled |
+| monitor-01 gateway route | `192.168.2.1 dev eth0 src 192.168.2.52` |
+| monitor-01 Nmap | Already installed |
+| monitor-01 discovery, enrichment, profiler, OS-publisher timers | Not installed yet |
+| monitor-01 inventory and dashboard timers | Enabled |
+| Existing target migration state files | None (three root-only files may be staged) |
 
-1. Back up and hash Proxmox-2's original `inventory.json`,
-   `deep-profiles.json` and `enrichment.json`; never edit their original
-   contents. Confirm their schema, owner, permissions and source SHA-256.
-2. Check for existing similarly named files on monitor-01 and refuse to
-   overwrite them. Transfer through an encrypted, controlled connection
-   from admin-01 or a short-lived restricted account. Preserve root-only
-   permissions and the MAC-keyed identity. Do not commit host identifiers
-   or exported JSON to GitHub.
-3. Install the existing collector, enricher, deep-profiler and OS-evidence
-   publisher from IaC on **monitor-01 only**, using the preflight-discovered
-   interface in place of `vmbr0`. Keep *all new scan timers disabled*.
-4. Run the **read-only** OS evidence exporter on monitor-01 against the
-   copied state, verify the eight available Nmap matches (or explain any
-   invalid records), then update the monitor-01 inventory exporter to query
-   its **local** metric series rather than `target_name="Proxmox-2"`.
-   Continue strict current MAC + scanned IP correlation, documented OS
-   precedence and no fingerprint panel for specifically known OS.
-5. Rebuild host dashboards and verify the live Grafana API still indexes
-   the 50 current device pages, preserving their MAC-based UIDs. Verify
-   at least one previously unidentified device's conditional Nmap panel;
-   a missing panel for a known OS is expected.
+These results are the migration baseline, **not** evidence that scanner
+ownership has changed. The September 24 quick TCP/ARP baseline run on
+monitor-01 is separate from Proxmox-2's saved deep-profiler state.
+
+## Gate 2: stage without starting new scans
+
+Use `IaC/ansible/playbooks/network-host-monitor01-stage.yml`, introduced
+in the staging PR. It has two gated plays:
+
+1. On **Proxmox-2**, make a root-only timestamped snapshot under
+   `/var/backups/homelab-network-migration/`, check SHA-256 of all
+   three files both before and after copying, and reject concurrent
+   changes. The live collector and enricher keep running.
+2. Transfer that snapshot to **monitor-01** only through the existing
+   encrypted Ansible connection, explicitly refusing pre-existing
+   target files. Verify matching SHA-256 for inventory, deep profiles
+   and enrichment state.
+3. Install the three existing worker roles against monitor-01's verified
+   `eth0` NIC, with **all scan timers disabled**. Install the compatible
+   read-only Nmap fingerprint exporter and run it once. Its timer is
+   **also disabled** until the single-owner cutover. The staging play
+   expects the eight historical OS matches found by Gate 1.
+4. Do **not** update live Grafana, replace its existing inventory
+   publisher, change Proxmox-2 schedules or start any new scans in
+   the staging play. The 50 generated host pages remain on monitor-01.
+
+Run from admin-01 after merging the staging PR, in a **fresh worktree**,
+not `/var/tmp/network-monitor01-preflight` or earlier OS worktrees:
+
+```bash
+REPO=/home/james/projects/homelab-platform
+DEPLOY=/var/tmp/network-monitor01-stage
+git -C "$REPO" fetch origin main
+git -C "$REPO" worktree add --detach "$DEPLOY" origin/main
+cd "$DEPLOY/IaC/ansible"
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/network-host-monitor01-stage.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/network-host-monitor01-stage.yml
+```
+
+**If any checksum changes or a target file is already present, STOP.**
+Snapshots remain protected, and the original source continues serving
+production. Do not automatically rerun after a partial transfer; inspect
+the target hashes against the saved source snapshot.
+
+**Known follow-ups before Gate 3:** the old enrichment worker derives
+Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
+locally; migrate that lookup to an authorised read-only source before
+enabling the new enrichment schedule. The existing first-seen email
+configuration and alert registry must also be reconciled; the staged
+monitor-01 collector deliberately has **notifications disabled**.
+Do not stop the source alerting path until the destination is verified.
 
 ## Gate 3: deliberate single-owner cutover (not part of preflight)
 
-- Record active Proxmox-2 collector and enrichment timer states and the
-  last successful collection. Stop the old timers and wait for any running
-  job to finish. Keep a protected rollback copy of all prior evidence.
+- Record active Proxmox-2 collector, enrichment and notification
+  states and their last successful collection. Stop **the old collector,
+  enricher and old read-only OS-publisher timers** and wait for currently
+  running jobs to finish. Preserve their previous enabled/disabled states
+  as rollback data.
+- **Final delta sync is mandatory:** the initial staged snapshot may be
+  hours old, because the source collector and enricher remain active
+  during Gate 2. After stopping the old jobs, take one *final* protected
+  source snapshot of inventory, deep-profile and enrichment JSON, plus
+  first-seen alert registry/configuration (if present). Back up the
+  staged target files before replacing them, validate JSON schema and
+  SHA-256 for both sides, then regenerate the read-only fingerprint
+  metric on monitor-01. Do not use a stale Gate 2 snapshot as the
+  production state.
 - Verify the virtual NIC can perform LAN-local ARP discovery with its
   source address and the approved target/rate limits. Enable
   **monitor-01** collector first and verify new MAC-keyed inventory,
   presence history, Prometheus target labels and Grafana identities.
-- Enable selective enrichment only after collector validation; enable
-  deep profiling only as a separate explicit decision. Limit it to
-  one recently seen device per run and retain existing cooldowns.
+- Enable selective enrichment only after collector validation **and**
+  replacing the old host-local `/etc/pve` Proxmox guest lookup; transfer
+  the first-seen email configuration/registry before disabling source
+  notifications. Enable deep profiling only as a separate explicit
+  decision. Limit it to one recently seen device per run and retain
+  existing cooldowns.
 - Disable Proxmox-2's obsolete per-device evidence timer and retire only
   its **network discovery** `.prom` files after monitor-01 is stable;
   do not remove ordinary Proxmox node-exporter metrics.

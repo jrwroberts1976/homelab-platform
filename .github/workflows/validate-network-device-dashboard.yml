@@ -12,12 +12,17 @@ on:
       - feature/grafana-nmap-os-fingerprint-evidence
       - fix/legacy-nmap-profile-timestamps
       - plan/move-network-discovery-to-monitor-01
+      - feature/stage-network-discovery-on-monitor01
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
       - "IaC/monitoring/**"
       - "IaC/komodo/stacks/monitoring/grafana/**"
       - "IaC/ansible/playbooks/network-host-monitor01-preflight.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-stage.yml"
+      - "IaC/ansible/roles/network_host_collector/**"
+      - "IaC/ansible/roles/network_host_enrichment/**"
+      - "IaC/ansible/roles/network_host_deep_profiler/**"
 
 jobs:
   validate-dashboard:
@@ -45,6 +50,8 @@ jobs:
             playbooks/network-host-os-fingerprints.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-stage.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -126,6 +133,37 @@ jobs:
           assert not any("systemd_service" in t or "copy:" in t or "template:" in t
                          for play in monitor_migration for t in
                          [str(item) for item in play["tasks"]])
+          staged = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-stage.yml").read_text())
+          assert [p["hosts"] for p in staged] == ["Proxmox-2", "monitoring_hosts"]
+          source_actions = staged[0]["tasks"]
+          assert not any("systemd_service" in x or "import_role" in x
+                         for x in source_actions)
+          target_actions = staged[1]["tasks"]
+          role_calls = [x for x in target_actions if "ansible.builtin.import_role" in x]
+          assert {x["ansible.builtin.import_role"]["name"] for x in role_calls} == {
+              "network_host_collector", "network_host_enrichment",
+              "network_host_deep_profiler"}
+          for call in role_calls:
+              settings = call["vars"]
+              role = call["ansible.builtin.import_role"]["name"]
+              assert settings[role + "_expected_hostname"] == "monitor-01"
+              assert settings[role + "_expected_ipv4"] == "192.168.2.52"
+              assert settings[role + "_enable_timer"] is False
+          assert "inventory.json" in staged[0]["vars"]["evidence_files"]
+          assert "deep-profiles.json" in staged[0]["vars"]["evidence_files"]
+          assert "enrichment.json" in staged[0]["vars"]["evidence_files"]
+          assert not any("restart" in x["name"].lower()
+                         or "enable new" in x["name"].lower()
+                         for x in target_actions)
+          assert "eth0" in str(target_actions)
+          assert "Proxmox-2" in str(staged)
+          for role in ("network_host_collector", "network_host_enrichment",
+                       "network_host_deep_profiler"):
+              root = Path("IaC/ansible/roles") / role
+              defaults = yaml.safe_load((root / "defaults/main.yml").read_text())
+              assert defaults[role + "_expected_hostname"] == "Proxmox-2"
+              assert defaults[role + "_expected_ipv4"] == "192.168.2.71"
           assert focused_nmap[0]["hosts"] == "Proxmox-2"
           assert focused_nmap[1]["hosts"] == "monitoring_hosts"
           assert not any("deep-profiler.timer" in str(t)

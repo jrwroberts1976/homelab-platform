@@ -2,7 +2,8 @@
 - name: Validate deep profiler target
   ansible.builtin.assert:
     that:
-      - ansible_facts.hostname == "Proxmox-2"
+      - ansible_facts.hostname == network_host_deep_profiler_expected_hostname
+      - ansible_facts.default_ipv4.address == network_host_deep_profiler_expected_ipv4
       - ansible_facts.distribution == "Debian"
       - network_host_deep_profiler_interface in ansible_facts.interfaces
     fail_msg: >-

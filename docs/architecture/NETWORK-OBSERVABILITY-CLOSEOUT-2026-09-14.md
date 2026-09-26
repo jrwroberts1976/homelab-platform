@@ -1,6 +1,6 @@
 # Network Observability Close-Out — 14 September 2026
 
-This note records the live validation used to close the current Network Hosts enrichment and HP ProCurve telemetry development work.
+**Historical validation, 14 September 2026 — not current timer authority.** This note records the live validation used at that time to close Network Hosts enrichment and HP ProCurve telemetry development. On 26 September a new read-only preflight established that the `Proxmox-2` collector and enricher timers are enabled but the deep-profiler timer is **disabled**. Migration to `monitor-01` has passed preflight only; see [the guarded migration runbook](../operations/network-discovery-monitor01-migration.md) and [current state](CURRENT-STATE.md).
 
 ## Network Hosts platform
 
@@ -45,7 +45,7 @@ The production playbook now encodes the timer as desired state while the reusabl
 - `homelab-network-host-deep-profiler.timer` enabled and active.
 - deep-profile state and Prometheus metrics continued to update during validation.
 
-The active Network Hosts pipeline is therefore:
+The pipeline **observed on 14 September** was:
 
 ```text
 periodic discovery
