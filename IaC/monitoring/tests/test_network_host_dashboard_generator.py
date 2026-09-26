@@ -43,6 +43,12 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(dashboard["templating"]["list"][0]["type"], "constant")
         self.assertEqual(dashboard["templating"]["list"][0]["current"]["value"], "dns-01")
         self.assertEqual(dashboard["templating"]["list"][0]["label"], "Host")
+        self.assertEqual(dashboard["templating"]["list"][0]["hide"], 2)
+        switch = next(link for link in dashboard["links"]
+                      if link["title"] == "Choose host")
+        self.assertEqual(switch["type"], "dashboards")
+        self.assertEqual(switch["tags"], ["generated-network-host"])
+        self.assertTrue(switch["asDropdown"])
         self.assertEqual(dashboard["templating"]["list"][1]["current"]["value"], key)
         self.assertEqual(dashboard["templating"]["list"][1]["hide"], 2)
         self.assertEqual(dashboard["title"], "Homelab — dns-01")
@@ -147,6 +153,9 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual([p["gridPos"]["y"] for p in profile["panels"][:3]],
                          [0, 0, 0])
         self.assertNotIn("No telemetry", json.dumps(profile))
+        self.assertTrue({1, 2, 3, 4, 5, 6, 7, 8}.isdisjoint(chosen))
+        self.assertTrue(all(not p["title"].startswith("Average")
+                            for p in profile["panels"]))
         self.assertTrue(all(p["type"] != "text" for p in profile["panels"]))
         self.assertTrue(all(p["gridPos"]["y"] <= 30 for p in profile["panels"]))
 
