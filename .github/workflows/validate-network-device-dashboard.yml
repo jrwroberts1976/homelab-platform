@@ -27,6 +27,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-refresh-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-refresh-units-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-preflight.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-stage.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -73,6 +74,8 @@ jobs:
             playbooks/network-host-monitor01-refresh-units-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-firstseen-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-firstseen-notifier-stage.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -178,6 +181,28 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 2i installs only an inert script on monitor-01,
+          # preserving all protected MAC registries and disabling timers.
+          inert_notifier = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-stage.yml").read_text())
+          assert len(inert_notifier) == 1
+          assert inert_notifier[0]["hosts"] == "monitoring_hosts"
+          notifier_repr = str(inert_notifier)
+          assert "network_host_collector_expected_hostname" in notifier_repr
+          assert "monitor-01" in notifier_repr
+          assert "network_host_collector_alert_enabled" in notifier_repr
+          assert "alerted-macs.json" in notifier_repr
+          assert "alerts.env" in notifier_repr
+          assert "ExecStartPost=" in notifier_repr
+          assert "homelab-proxmox-guest-refresh.timer" in notifier_repr
+          assert "network-discovery-cutover-approved" in notifier_repr
+          assert not any(
+              "ansible.builtin.systemd_service" in step
+              or "ansible.builtin.import_role" in step
+              or "ansible.builtin.copy" in step
+              for step in [str(t) for t in inert_notifier[0]["tasks"]]
+          )
+
           # Gate 2h is strictly read-only; the production first-seen
           # notifier and recipient must stay on source until final cutover.
           alert_gate = yaml.safe_load(Path(
