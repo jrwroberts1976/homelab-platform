@@ -318,7 +318,22 @@ three preserved JSON files remain byte-identical. It neither runs Nmap
 nor enables any worker timer, starts enrichment, changes production
 Grafana or touches the active Proxmox-2 collector/notifier.
 
-**Gate 2f has not yet run. Do not rerun it after a partial execution**;
+**26 September first Gate 2f attempt stopped safely at the pre-mutation
+hash gate** (`monitor-01: 8 OK / 0 changed / 1 failed`). The
+controller's Ansible `lookup('file', publisher_source)` used default
+trailing-whitespace trimming, so it hashed fewer source bytes than
+`ansible.builtin.copy` originally installed. The publisher's
+reviewed Git file has not changed since Gate 2d and ends in a newline.
+The same issue would affect the helper comparison. The repaired gate
+uses `lookup('file', ..., rstrip=False)` for both and CI explicitly
+checks both expressions. No refresher, backup directory, service or
+timer was installed by the failed attempt. Retry only the reviewed
+corrected Gate 2f playbook from a fresh post-fix commit, retaining the
+original no-overwrite prerequisites. If either corrected hash still
+differs, stop and inspect the target rather than bypassing the guard.
+
+**Gate 2f has not yet completed successfully. Do not rerun after any
+subsequent partial installation**;
 inspect the installed refresher, original snapshot and backup directory
 first. A separately reviewed periodic refresh service and dependency
 for enrichment are still necessary before the final cutover.

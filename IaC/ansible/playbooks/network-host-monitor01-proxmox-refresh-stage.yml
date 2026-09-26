@@ -104,10 +104,10 @@
           - refresh_prerequisites.results[1].stat.isreg | default(false)
           - refresh_prerequisites.results[1].stat.pw_name == 'root'
           - refresh_prerequisites.results[2].stat.isreg | default(false)
-          - refresh_prerequisites.results[2].stat.checksum == (lookup('file', publisher_source) | hash('sha256'))
+          - refresh_prerequisites.results[2].stat.checksum == (lookup('file', publisher_source, rstrip=False) | hash('sha256'))
           - refresh_prerequisites.results[2].stat.mode == '0750'
           - refresh_prerequisites.results[3].stat.isreg | default(false)
-          - refresh_prerequisites.results[3].stat.checksum == (lookup('file', helper_source) | hash('sha256'))
+          - refresh_prerequisites.results[3].stat.checksum == (lookup('file', helper_source, rstrip=False) | hash('sha256'))
           - refresh_prerequisites.results[3].stat.mode == '0644'
           - refresh_prerequisites.results[4].stat.isreg | default(false)
           - refresh_prerequisites.results[4].stat.pw_name == 'root'
