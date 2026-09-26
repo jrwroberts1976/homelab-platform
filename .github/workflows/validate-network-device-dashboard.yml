@@ -25,6 +25,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-snapshot.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-identity-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-refresh-stage.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-refresh-units-stage.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -67,6 +68,8 @@ jobs:
             playbooks/network-host-monitor01-proxmox-identity-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-refresh-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-refresh-units-stage.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -172,6 +175,26 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # The staged refresh unit is inert and enrichment additionally
+          # requires an explicit, absent-until-cutover approval marker.
+          unit_gate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-refresh-units-stage.yml").read_text())
+          assert len(unit_gate) == 1
+          assert unit_gate[0]["hosts"] == "monitoring_hosts"
+          gate_repr = str(unit_gate)
+          assert "ConditionPathExists=" in Path(
+              "IaC/ansible/roles/network_host_enrichment/files/20-proxmox-guest-refresh.conf").read_text()
+          assert "network-discovery-cutover-approved" in gate_repr
+          assert "homelab-proxmox-guest-refresh.timer" in gate_repr
+          assert "homelab-network-host-collector.timer" in gate_repr
+          assert "lookup('file', refresh_files_root" in gate_repr
+          assert "rstrip=False" in gate_repr
+          assert not any(
+              "ansible.builtin.systemd_service" in task
+              and "daemon_reload" not in task
+              for task in [str(item) for item in unit_gate[0]["tasks"]]
+          )
+
           # Gate 2f performs only a protected API snapshot refresh,
           # with SHA-preserved original state and no service/timer changes.
           refresh_gate = yaml.safe_load(Path(

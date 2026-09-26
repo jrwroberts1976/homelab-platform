@@ -1,0 +1,12 @@
+#!/bin/bash
+# Installed only on monitor-01, root-only, never records token data.
+# This wrapper is run by the disabled-until-cutover refresh service.
+set -euo pipefail
+set +x
+set +H
+umask 077
+source /etc/homelab-network-hosts/proxmox-api.env
+: "${PVE_TOKEN_ID:?Missing protected Proxmox API token ID}"
+: "${PVE_TOKEN_SECRET:?Missing protected Proxmox API token secret}"
+export PVE_TOKEN_ID PVE_TOKEN_SECRET
+exec /usr/bin/python3 /usr/local/sbin/homelab-proxmox-guest-mac-refresh --refresh

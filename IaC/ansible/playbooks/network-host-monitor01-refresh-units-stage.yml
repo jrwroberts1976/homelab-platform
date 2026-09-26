@@ -1,0 +1,338 @@
+---
+# Gate 2g: stage ONLY disabled trusted-API refresh systemd units on monitor-01.
+# The existing enrichment service remains inactive and cannot execute
+# (ConditionPathExists=cutover approval marker, which this gate rejects).
+# The enrichment timer and the new refresh timer remain disabled.
+# DO NOT re-run Gate 2, 2d, 2e or 2f one-shot migration playbooks.
+- name: Stage but do not activate protected Proxmox guest refresh scheduling
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    refresh_files_root: "{{ playbook_dir }}/../roles/network_host_enrichment/files"
+    units_root: /etc/systemd/system
+    refresh_exec: /usr/local/sbin/homelab-proxmox-guest-refresh-wrapper
+    refresh_service: homelab-proxmox-guest-refresh.service
+    refresh_timer: homelab-proxmox-guest-refresh.timer
+    enricher_service: homelab-network-host-enricher.service
+    staged_dropin_dir: /etc/systemd/system/homelab-network-host-enricher.service.d
+    staged_dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+    approval_marker: /etc/homelab-network-hosts/network-discovery-cutover-approved
+    state_dir: /var/lib/homelab-network-hosts
+    backup_dir: /var/backups/homelab-network-migration/proxmox-guest-snapshots
+    protected_files:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - proxmox-guests.json
+    inactive_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+  tasks:
+    - name: Refuse a different host or unexpected network interface
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Require four original source files and capture SHA-256 before staging
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ protected_files }}"
+      register: guard_before
+
+    - name: Require all protected data files root-owned and mode 0600
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - item.stat.size | int > 0
+      loop: "{{ guard_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require all existing staged timers disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ inactive_timers }}"
+      register: staged_enabled_before
+      changed_when: false
+      failed_when: false
+
+    - name: Require all existing staged timers inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ inactive_timers }}"
+      register: staged_active_before
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse staging if any discovery or enrichment worker is scheduled
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ staged_enabled_before.results | zip(staged_active_before.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Inspect existing enrichment service state without starting it
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ enricher_service }}"]
+      changed_when: false
+      failed_when: false
+      register: enricher_before
+
+    - name: Reject an already-running enrichment worker
+      ansible.builtin.assert:
+        that:
+          - enricher_before.stdout == 'inactive'
+
+    - name: Check trust prerequisites and protected previous-refresh backup
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - /etc/homelab-network-hosts/proxmox-api.env
+        - /etc/homelab-network-hosts/proxmox-ca.pem
+        - /usr/local/sbin/homelab-proxmox-guest-mac-refresh
+        - /usr/local/sbin/homelab-proxmox-guest-mac-snapshot
+        - /usr/local/lib/homelab-network-hosts/proxmox_guest_identity.py
+        - "{{ backup_dir }}"
+        - "{{ approval_marker }}"
+        - "{{ refresh_exec }}"
+        - "{{ units_root }}/{{ refresh_service }}"
+        - "{{ units_root }}/{{ refresh_timer }}"
+        - "{{ staged_dropin }}"
+      register: refresh_unit_prerequisites
+
+    - name: Require live-verified refresh components, protected token and no previous partial deployment
+      ansible.builtin.assert:
+        that:
+          - refresh_unit_prerequisites.results[0].stat.isreg | default(false)
+          - refresh_unit_prerequisites.results[0].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[0].stat.mode == '0600'
+          - refresh_unit_prerequisites.results[1].stat.isreg | default(false)
+          - refresh_unit_prerequisites.results[1].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[2].stat.isreg | default(false)
+          - refresh_unit_prerequisites.results[2].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[2].stat.mode == '0750'
+          - refresh_unit_prerequisites.results[2].stat.checksum == (lookup('file', refresh_files_root ~ '/proxmox-guest-mac-refresh.py', rstrip=False) | hash('sha256'))
+          - refresh_unit_prerequisites.results[3].stat.isreg | default(false)
+          - refresh_unit_prerequisites.results[3].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[3].stat.mode == '0750'
+          - refresh_unit_prerequisites.results[3].stat.checksum == (lookup('file', refresh_files_root ~ '/proxmox-guest-mac-snapshot.py', rstrip=False) | hash('sha256'))
+          - refresh_unit_prerequisites.results[4].stat.isreg | default(false)
+          - refresh_unit_prerequisites.results[4].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[4].stat.mode == '0644'
+          - refresh_unit_prerequisites.results[4].stat.checksum == (lookup('file', refresh_files_root ~ '/proxmox_guest_identity.py', rstrip=False) | hash('sha256'))
+          - refresh_unit_prerequisites.results[5].stat.isdir | default(false)
+          - refresh_unit_prerequisites.results[5].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[5].stat.mode == '0700'
+          - not refresh_unit_prerequisites.results[6].stat.exists
+          - not refresh_unit_prerequisites.results[7].stat.exists
+          - not refresh_unit_prerequisites.results[8].stat.exists
+          - not refresh_unit_prerequisites.results[9].stat.exists
+          - not refresh_unit_prerequisites.results[10].stat.exists
+        fail_msg: >-
+          Required protected Gate 2f files are absent/changed, the cutover
+          approval marker exists, or Gate 2g was partially installed.
+          Do not overwrite unknown units or start any timer.
+
+    - name: Verify the opt-in worker sees all saved guests without scanning
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-enricher, --identity-check]
+      changed_when: false
+      no_log: true
+      register: pre_unit_identity
+
+    - name: Require the same eleven-of-eleven matched baseline
+      ansible.builtin.assert:
+        that:
+          - (pre_unit_identity.stdout | from_json).matched_guest_macs | int == 11
+          - (pre_unit_identity.stdout | from_json).saved_lan_devices | int == 49
+          - (pre_unit_identity.stdout | from_json).unmatched_guest_macs | int == 0
+          - (pre_unit_identity.stdout | from_json).snapshot_age_seconds | int < 172800
+
+    - name: Install root-only shell wrapper without exporting token through a systemd unit
+      ansible.builtin.copy:
+        src: "{{ refresh_files_root }}/homelab-proxmox-guest-refresh-wrapper"
+        dest: "{{ refresh_exec }}"
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Validate wrapper syntax without reading token or running API call
+      ansible.builtin.command:
+        argv: [/bin/bash, -n, "{{ refresh_exec }}"]
+      changed_when: false
+
+    - name: Install separate, inactive guest refresh systemd service
+      ansible.builtin.copy:
+        src: "{{ refresh_files_root }}/homelab-proxmox-guest-refresh.service"
+        dest: "{{ units_root }}/{{ refresh_service }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install separate, disabled guest refresh timer
+      ansible.builtin.copy:
+        src: "{{ refresh_files_root }}/homelab-proxmox-guest-refresh.timer"
+        dest: "{{ units_root }}/{{ refresh_timer }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create a scoped drop-in directory only for the staged monitor-01 enricher
+      ansible.builtin.file:
+        path: "{{ staged_dropin_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Add cutover-marker guard and required refresh dependency, without starting worker
+      ansible.builtin.copy:
+        src: "{{ refresh_files_root }}/20-proxmox-guest-refresh.conf"
+        dest: "{{ staged_dropin }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload unit definitions only, leaving all services and timers inactive
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Inspect resolved enricher dependencies and cutover condition
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/systemctl
+          - show
+          - "{{ enricher_service }}"
+          - -p
+          - Requires
+          - -p
+          - After
+          - -p
+          - DropInPaths
+      changed_when: false
+      register: resolved_enricher
+
+    - name: Inspect the exact loaded enrichment unit and its safe cutover condition
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, cat, "{{ enricher_service }}"]
+      changed_when: false
+      register: loaded_enricher_unit
+
+    - name: Require direct refresh dependency and absent-until-cutover approval marker
+      ansible.builtin.assert:
+        that:
+          - refresh_service in resolved_enricher.stdout
+          - staged_dropin in resolved_enricher.stdout
+          - "'ConditionPathExists=' ~ approval_marker in loaded_enricher_unit.stdout"
+          - "'Requires=' in resolved_enricher.stdout"
+          - "'After=' in resolved_enricher.stdout"
+
+    - name: Verify new refresh service and timer are inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop:
+        - "{{ refresh_service }}"
+        - "{{ refresh_timer }}"
+        - "{{ enricher_service }}"
+      register: new_units_inactive
+      changed_when: false
+      failed_when: false
+
+    - name: Require all three staged services and timers still inactive
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+      loop: "{{ new_units_inactive.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify new refresh timer remains disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ refresh_timer }}"]
+      register: new_refresh_timer_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse to leave any new timer enabled
+      ansible.builtin.assert:
+        that:
+          - new_refresh_timer_enabled.stdout == 'disabled'
+
+    - name: Confirm original staged worker timers remain disabled and inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ inactive_timers }}"
+      changed_when: false
+      failed_when: false
+      register: staged_enabled_after
+
+    - name: Confirm original staged worker timers remain inactive after daemon reload
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ inactive_timers }}"
+      changed_when: false
+      failed_when: false
+      register: staged_active_after
+
+    - name: Require original four worker timer states unchanged
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ staged_enabled_after.results | zip(staged_active_after.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Hash all four protected state files again
+      ansible.builtin.stat:
+        path: "{{ state_dir }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ protected_files }}"
+      register: guard_after
+
+    - name: Require no staged JSON state changed during unit-only deployment
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1].stat.checksum
+          - item[0].stat.mode == item[1].stat.mode
+        fail_msg: Protected state changed unexpectedly during disabled unit staging.
+      loop: "{{ guard_before.results | zip(guard_after.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Verify cutover marker is still absent
+      ansible.builtin.stat:
+        path: "{{ approval_marker }}"
+        follow: false
+      register: marker_after
+
+    - name: Require staging did not authorize enrichment or scanner activation
+      ansible.builtin.assert:
+        that:
+          - not marker_after.stat.exists
+
+    - name: Summarize only inactive staged systemd integration
+      ansible.builtin.debug:
+        msg:
+          - "Verified refresh service: {{ refresh_service }} (inactive)"
+          - "Verified refresh timer: {{ refresh_timer }} (disabled and inactive)"
+          - "Inactive enrichment requires the trusted refresh and explicit absent cutover marker."
+          - "All four existing monitor-01 worker timers remain disabled and inactive."
+          - "All four protected JSON files remain byte-identical; no scans, API refresh runs, alerts or Grafana changes."
+          - "Next: controlled first-seen alert state reconciliation and final source stop/delta sync before granting cutover marker."

@@ -297,7 +297,7 @@ the script and rollback file are collision-protected.
 Gate 2e **passed live** with `monitor-01: 27 OK / 5 changed / 0 failed`. The no-scan identity check matched all **11** guest MACs against the **49** preserved LAN devices, with zero unmatched and a 1,800-second-old snapshot. All four protected JSON files remained unchanged, the original inactive worker was backed up, all four target timers stayed disabled, and no source collector, Grafana dashboard or notification was altered. Do not rerun the one-shot Gate 2e.
 
 
-### Gate 2f: safeguarded guest snapshot refresh (prepared, not yet run)
+### Gate 2f: safeguarded guest snapshot refresh (PASSED 26 September 2026)
 
 The new `playbooks/network-host-monitor01-proxmox-refresh-stage.yml`
 is a separate, one-time test for safely updating the existing
@@ -332,11 +332,45 @@ corrected Gate 2f playbook from a fresh post-fix commit, retaining the
 original no-overwrite prerequisites. If either corrected hash still
 differs, stop and inspect the target rather than bypassing the guard.
 
-**Gate 2f has not yet completed successfully. Do not rerun after any
-subsequent partial installation**;
-inspect the installed refresher, original snapshot and backup directory
-first. A separately reviewed periodic refresh service and dependency
-for enrichment are still necessary before the final cutover.
+The **corrected Gate 2f live deployment PASSED**:
+`monitor-01: 24 OK / 3 changed / 0 failed`. Authenticated strict-TLS
+APIs refreshed **11** Proxmox MAC identities and matched **all 11**
+against the **49** saved LAN records. The prior guest snapshot is
+protected in the root-only SHA-256-named backup
+(`baccc1106114302d1ab5cc116716d39eeeb08e15faa23921b9a0423d234c97e0`).
+The new snapshot is root-owned mode 0600 and was **three seconds old**
+at validation. All three original migration JSON files retained their
+exact SHA-256 hashes. The four staged scanner, enrichment and
+OS-publisher timers stayed disabled. No Grafana, notification registry
+or original Proxmox-2 collector was changed. **Do not rerun Gate 2f.**
+
+### Gate 2g: stage disabled snapshot-refresh units (prepared; not yet run)
+
+`playbooks/network-host-monitor01-refresh-units-stage.yml` is a
+separate, one-time, monitor-01-only staging gate. It refuses changed
+reviewed publisher, reader or refresher hashes; pre-existing units,
+wrapper or approval marker; active/inactive worker mismatches; or
+protected dataset changes. It installs an isolated root-only Bash
+wrapper that sources the existing root-only token **inside the process**,
+a hardened `homelab-proxmox-guest-refresh.service`, a
+`homelab-proxmox-guest-refresh.timer` that remains **disabled**,
+and a scoped drop-in on the inactive enrichment service.
+
+The drop-in requires a successful trusted-API guest refresh to finish
+*before* future enrichment starts and has
+`ConditionPathExists=/etc/homelab-network-hosts/network-discovery-cutover-approved`.
+The approval file must **not** exist during staging; it is reserved
+for a later controlled cutover after stopping the source and final
+state reconciliation. The gate reloads unit definitions only and
+verifies all new and original timers remain disabled/inactive.
+No refresh is executed, no Nmap is started and no alerts or Grafana
+sources are changed. Do not rerun this stage if it partially installs
+any files; inspect installed units and original hashes first.
+
+The first-seen alert registry/configuration still resides with the
+production source on Proxmox-2. Preserve it and perform the final
+stop-and-delta-sync before granting cutover approval and enabling
+monitor-01 discovery.
 
 **Known follow-ups before Gate 3:** the old enrichment worker derives
 Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read

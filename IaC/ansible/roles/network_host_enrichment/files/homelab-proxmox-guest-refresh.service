@@ -1,0 +1,19 @@
+[Unit]
+Description=Refresh protected Proxmox guest identities via trusted read-only API
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+ExecStart=/usr/local/sbin/homelab-proxmox-guest-refresh-wrapper
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/homelab-network-hosts
+ReadWritePaths=/var/backups/homelab-network-migration/proxmox-guest-snapshots
+Environment=PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=10min
