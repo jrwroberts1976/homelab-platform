@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 from pathlib import Path
+import runpy
 import tempfile
 import time
 import unittest
@@ -77,6 +78,17 @@ class RefreshTests(unittest.TestCase):
             self.path, self.inventory, self.backups, candidate,
             now=self.now, owner_uid=os.getuid(),
         )
+
+    def test_deployed_extensionless_publisher_can_be_loaded(self):
+        with tempfile.TemporaryDirectory() as directory:
+            publisher = Path(directory) / "homelab-proxmox-guest-mac-snapshot"
+            publisher.write_bytes(
+                (FILE_DIR / "proxmox-guest-mac-snapshot.py").read_bytes()
+            )
+            module = runpy.run_path(str(publisher), run_name="pve_publisher")
+            self.assertIn("collect", module)
+            self.assertIn("fetch_api", module)
+            self.assertIn("inspect_inventory", module)
 
     def test_preserves_original_backup_and_atomically_replaces(self):
         changed = self.updated()
