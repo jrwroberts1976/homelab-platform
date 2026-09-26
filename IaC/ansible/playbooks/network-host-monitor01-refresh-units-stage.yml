@@ -130,8 +130,11 @@
           - refresh_unit_prerequisites.results[3].stat.isreg | default(false)
           - refresh_unit_prerequisites.results[3].stat.pw_name == 'root'
           - refresh_unit_prerequisites.results[3].stat.mode == '0750'
+          - refresh_unit_prerequisites.results[3].stat.checksum == (lookup('file', refresh_files_root ~ '/proxmox-guest-mac-snapshot.py', rstrip=False) | hash('sha256'))
           - refresh_unit_prerequisites.results[4].stat.isreg | default(false)
           - refresh_unit_prerequisites.results[4].stat.pw_name == 'root'
+          - refresh_unit_prerequisites.results[4].stat.mode == '0644'
+          - refresh_unit_prerequisites.results[4].stat.checksum == (lookup('file', refresh_files_root ~ '/proxmox_guest_identity.py', rstrip=False) | hash('sha256'))
           - refresh_unit_prerequisites.results[5].stat.isdir | default(false)
           - refresh_unit_prerequisites.results[5].stat.pw_name == 'root'
           - refresh_unit_prerequisites.results[5].stat.mode == '0700'
