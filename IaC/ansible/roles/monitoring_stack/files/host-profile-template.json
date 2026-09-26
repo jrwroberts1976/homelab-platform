@@ -12,7 +12,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 5,
+  "version": 6,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -855,7 +855,17 @@
               "observed": true,
               "name": true,
               "pretty_name": true,
-              "id": true
+              "id": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
             },
             "indexByName": {
               "hostname": 0,
@@ -956,7 +966,17 @@
               "observed_open_ports": true,
               "name": true,
               "pretty_name": true,
-              "id": true
+              "id": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
             },
             "indexByName": {
               "ip": 0,
@@ -1055,7 +1075,17 @@
               "observed": true,
               "name": true,
               "pretty_name": true,
-              "id": true
+              "id": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
             },
             "indexByName": {
               "hostname": 0,
@@ -1307,7 +1337,17 @@
               "service": true,
               "product": true,
               "source": true,
-              "observed": true
+              "observed": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
             },
             "indexByName": {
               "name": 0,
@@ -1372,6 +1412,115 @@
         "prettifyLogMessage": false,
         "enableLogDetails": true,
         "sortOrder": "Descending"
+      }
+    },
+    {
+      "id": 22,
+      "title": "Nmap OS fingerprint — inferred evidence",
+      "type": "table",
+      "description": "Only shown when a saved deep-profiler scan matches this host's current MAC AND scanned IP. Nmap-reported match accuracy is not a probability or confirmation. Service banners are limited to previously observed open TCP ports. Documented OS identity takes precedence.",
+      "gridPos": {
+        "x": 0,
+        "y": 78,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{device_key=\"$device\",nmap_name!=\"\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "hostname": true,
+              "ip": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os": true,
+              "os_source": true,
+              "os_evidence": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "port": true,
+              "protocol": true,
+              "service": true,
+              "product": true,
+              "version": true,
+              "source": true,
+              "observed": true,
+              "name": true,
+              "pretty_name": true,
+              "id": true
+            },
+            "indexByName": {
+              "nmap_name": 0,
+              "nmap_accuracy": 1,
+              "nmap_family": 2,
+              "nmap_generation": 3,
+              "nmap_vendor": 4,
+              "nmap_device_type": 5,
+              "nmap_cpe": 6,
+              "nmap_scanned_at": 7,
+              "nmap_scan_status": 8,
+              "nmap_services": 9
+            },
+            "renameByName": {
+              "nmap_name": "Nmap OS match",
+              "nmap_accuracy": "Nmap-reported accuracy",
+              "nmap_family": "OS family",
+              "nmap_generation": "Generation",
+              "nmap_vendor": "OS vendor",
+              "nmap_device_type": "Device type",
+              "nmap_cpe": "CPE",
+              "nmap_scanned_at": "Scan date (UTC)",
+              "nmap_scan_status": "Profile status",
+              "nmap_services": "Observed TCP services"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
       }
     }
   ]
