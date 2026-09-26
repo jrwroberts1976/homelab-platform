@@ -6,6 +6,8 @@ The normal control point is `admin-01` (`192.168.2.48`). Terraform describes sup
 
 Machine identity, addressing and lifecycle state are authoritative in `IaC/inventory/estate.json`. The Ansible inventory describes management/configuration scope and must agree with that canonical estate.
 
+**Network discovery placement (verified 26 September):** the collector, saved deep profiles and first-seen notifications remain on Proxmox-2 for now. The monitor-01 preflight passed (`eth0`, Nmap available, no colliding state files). See the [migration runbook](../docs/operations/network-discovery-monitor01-migration.md) for guarded staging and the later single-owner cutover. Do not enable source and target scanning at the same time.
+
 ## Operating rules
 
 - New Terraform, Ansible and deployment automation belongs under `IaC/`.
@@ -64,7 +66,7 @@ As of 17 September 2026 the production Ansible inventory covers the following 15
 | `komodo-01` | `192.168.2.58` | Komodo control plane CT104 on `PROXMOX` |
 | `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform CT105 on `PROXMOX` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 / NTP |
-| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / NTP / Network Host Collector |
+| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / NTP / **current** Network Host Collector until verified migration |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / primary Proxmox NFS backup target |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
 
