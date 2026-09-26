@@ -102,6 +102,19 @@ jobs:
           nmap_panel = next(p for p in full_template["panels"] if p["id"] == 22)
           assert nmap_panel["type"] == "table"
           assert 'nmap_name!=""' in nmap_panel["targets"][0]["expr"]
+          evidence_source = Path(
+              "IaC/ansible/roles/network_host_deep_profiler/files/"
+              "os-fingerprint-evidence-exporter.py").read_text()
+          assert "subprocess" not in evidence_source
+          assert 'homelab_network_host_os_fingerprint_info' in evidence_source
+          assert 'read_text(encoding="utf-8")' in evidence_source
+          focused_nmap = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-os-fingerprints.yml").read_text())
+          assert len(focused_nmap) == 2
+          assert focused_nmap[0]["hosts"] == "Proxmox-2"
+          assert focused_nmap[1]["hosts"] == "monitoring_hosts"
+          assert not any("deep-profiler.timer" in str(t)
+                         for play in focused_nmap for t in play["tasks"])
           top = sorted(
               (p for p in full_template["panels"] if p["gridPos"]["y"] == 0),
               key=lambda p: p["gridPos"]["x"])
@@ -168,6 +181,9 @@ jobs:
           assert "compact_panels" in generator
           assert "present_over_time" in generator
           assert '"title": "Choose host"' in generator
+          assert "selected.add(22)" in generator
+          assert "add_row((22,)" in generator
+          assert "nmap_name" in (base / "files/network-device-inventory-exporter.py").read_text()
           inventory_service = (base / "files/homelab-network-device-inventory.service").read_text()
           assert "ProtectSystem=strict" in inventory_service
           assert "ReadWritePaths=/var/lib/prometheus/node-exporter" in inventory_service
@@ -194,7 +210,7 @@ jobs:
           for required in [
               "Install only the two new native Grafana dashboards",
               "Generate native Grafana dashboards for all retained MACs",
-              "Restart only Grafana if provider configuration changed",
+              "Restart only Grafana if provisioned JSON or provider configuration changed",
               "Install independent per-host Grafana generator service and timer",
               "Enable independent per-host dashboard refresh",
               "Confirm Grafana sees the rebuilt dashboard file inside its actual container",
