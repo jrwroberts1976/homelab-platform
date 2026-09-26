@@ -101,7 +101,7 @@ jobs:
           assert len(full_template["panels"]) >= 22
           nmap_panel = next(p for p in full_template["panels"] if p["id"] == 22)
           assert nmap_panel["type"] == "table"
-          assert "nmap_name!=\\"\\"" in nmap_panel["targets"][0]["expr"]
+          assert 'nmap_name!=""' in nmap_panel["targets"][0]["expr"]
           top = sorted(
               (p for p in full_template["panels"] if p["gridPos"]["y"] == 0),
               key=lambda p: p["gridPos"]["x"])
