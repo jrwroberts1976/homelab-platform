@@ -46,19 +46,28 @@ def evidence_time(profile, record):
     Never substitute the file's mtime, the current time, or last_attempt.
     """
     now = int(datetime.now(timezone.utc).timestamp())
+    invalid_recorded_time = False
     for basis, candidate in (
             ("TCP scan", profile.get("tcp_scanned_at")),
             ("Legacy scan", profile.get("scanned_at")),
             ("Profile completion", record.get("profiled_at"))):
+        if candidate in (None, "", 0, "0"):
+            continue
         try:
             stamp = int(float(candidate))
             if not 1577836800 <= stamp <= now + 300:
+                invalid_recorded_time = True
                 continue
             observed = datetime.fromtimestamp(stamp, timezone.utc).strftime(
                 "%Y-%m-%d %H:%M UTC")
             return stamp, observed, basis
         except (TypeError, ValueError, OverflowError, OSError):
-            continue
+            invalid_recorded_time = True
+    # Missing legacy metadata is not grounds for discarding a valid recorded
+    # fingerprint. Explicitly malformed/future dates are, unless a valid
+    # lower-priority recorded timestamp exists.
+    if invalid_recorded_time:
+        return None, "", "Invalid timestamp"
     return None, "Not recorded", "Unknown"
 
 
@@ -90,6 +99,8 @@ def evidence(state):
             continue
         score, match = max(valid, key=lambda item: item[0])
         scanned, observed, time_basis = evidence_time(profile, record)
+        if not observed:
+            continue
         classes = match.get("classes") or []
         primary = next((c for c in classes if isinstance(c, dict)), {})
         cpes = primary.get("cpe") or []
