@@ -1,0 +1,251 @@
+---
+# Gate 2e: modify only the inert, staged monitor-01 enrichment executable
+# to opt in to a protected Proxmox guest snapshot. --identity-check exits
+# BEFORE Nmap, state writes, evidence publishing and any service activation.
+# Do not re-run Gate 2 staging or Gate 2d snapshot publication.
+- name: Install and dry-run opt-in Proxmox guest identity on staged monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    state_root: /var/lib/homelab-network-hosts
+    helper_dir: /usr/local/lib/homelab-network-hosts
+    helper_src: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/files/proxmox_guest_identity.py
+    helper_dest: /usr/local/lib/homelab-network-hosts/proxmox_guest_identity.py
+    worker_src: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/templates/homelab-network-host-enricher.py.j2
+    worker_dest: /usr/local/sbin/homelab-network-host-enricher
+    worker_backup: /var/backups/homelab-network-migration/monitor01-enricher-pre-guest-snapshot.py
+    staged_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    staged_originals:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - proxmox-guests.json
+  tasks:
+    - name: Require the correct VM, address and real LAN interface
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Inspect four preserved state files with checksums
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ staged_originals }}"
+      register: identity_before
+
+    - name: Require root-owned, mode-0600, non-symlinked preserved state
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - not (item.stat.islnk | default(false))
+          - item.stat.size | int > 0
+        fail_msg: >-
+          Original inventory/profiles/enrichment or protected guest snapshot
+          is missing or has invalid metadata. Refuse to modify the worker.
+      loop: "{{ identity_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Confirm all staged timers are disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: identity_timer_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Confirm all staged timers are inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: identity_timer_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse any overlapping scheduled target scanning or OS publication
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ identity_timer_enabled.results | zip(identity_timer_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Require the staged enrichment service is not executing
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-enricher.service]
+      register: identity_service_active
+      changed_when: false
+      failed_when: false
+
+    - name: Never replace a currently running enrichment executable
+      ansible.builtin.assert:
+        that:
+          - identity_service_active.stdout == 'inactive'
+
+    - name: Inspect existing staged executable, helper and backup destinations
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ worker_dest }}"
+        - "{{ helper_dest }}"
+        - "{{ worker_backup }}"
+      register: identity_destinations
+
+    - name: Require original executable and one-time new helper/backup paths
+      ansible.builtin.assert:
+        that:
+          - identity_destinations.results[0].stat.isreg | default(false)
+          - identity_destinations.results[0].stat.pw_name == 'root'
+          - not (identity_destinations.results[0].stat.islnk | default(false))
+          - not identity_destinations.results[1].stat.exists
+          - not identity_destinations.results[2].stat.exists
+        fail_msg: >-
+          Unexpected worker version or previous partial Gate 2e attempt.
+          Investigate existing helper and backup instead of rerunning.
+
+    - name: Read existing staged worker only to check its legacy identity
+      ansible.builtin.slurp:
+        src: "{{ worker_dest }}"
+      register: original_worker_bytes
+      no_log: true
+
+    - name: Refuse an unknown or already migrated worker version
+      ansible.builtin.assert:
+        that:
+          - "'def proxmox_identity_by_mac():' in (original_worker_bytes.content | b64decode)"
+          - "'/etc/pve/qemu-server/*.conf' in (original_worker_bytes.content | b64decode)"
+          - "'PROXMOX_SOURCE' not in (original_worker_bytes.content | b64decode)"
+        fail_msg: >-
+          The existing installed worker differs from the known legacy
+          staging version. Stop and inspect it before replacing anything.
+
+    - name: Create private one-time worker rollback directory
+      ansible.builtin.file:
+        path: /var/backups/homelab-network-migration
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve original inactive worker for rollback
+      ansible.builtin.copy:
+        src: "{{ worker_dest }}"
+        dest: "{{ worker_backup }}"
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Make root-owned directory for shared read-only snapshot validation
+      ansible.builtin.file:
+        path: "{{ helper_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install only the deterministic guest identity snapshot reader
+      ansible.builtin.copy:
+        src: "{{ helper_src }}"
+        dest: "{{ helper_dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Load existing safe enricher defaults without starting the role
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../roles/network_host_enrichment/defaults/main.yml"
+
+    - name: Explicitly opt in ONLY this staged monitor-01 worker to saved guest identities
+      ansible.builtin.set_fact:
+        network_host_enrichment_proxmox_source: snapshot
+        network_host_enrichment_enable_timer: false
+
+    - name: Refuse to deploy anything other than a snapshot reader
+      ansible.builtin.assert:
+        that:
+          - network_host_enrichment_proxmox_source == 'snapshot'
+          - not (network_host_enrichment_enable_timer | bool)
+          - network_host_enrichment_proxmox_snapshot_file == state_root ~ '/proxmox-guests.json'
+
+    - name: Install opt-in worker executable only, without touching systemd units
+      ansible.builtin.template:
+        src: "{{ worker_src }}"
+        dest: "{{ worker_dest }}"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Check syntax of the shared helper and the rendered worker
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - >-
+            import ast,pathlib;
+            [ast.parse(pathlib.Path(p).read_text())
+             for p in ['{{ helper_dest }}','{{ worker_dest }}']]
+      changed_when: false
+
+    - name: Run only the no-scan identity-check command
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, "{{ worker_dest }}", --identity-check]
+      register: identity_check
+      changed_when: false
+      no_log: true
+
+    - name: Require all eleven guest identities map onto staged network inventory
+      ansible.builtin.assert:
+        that:
+          - (identity_check.stdout | from_json).event == 'staged_proxmox_identity_check'
+          - (identity_check.stdout | from_json).snapshot_guest_macs | int == 11
+          - (identity_check.stdout | from_json).saved_lan_devices | int == 49
+          - (identity_check.stdout | from_json).matched_guest_macs | int == 11
+          - (identity_check.stdout | from_json).unmatched_guest_macs | int == 0
+          - (identity_check.stdout | from_json).snapshot_age_seconds | int < 172800
+
+    - name: Check all four protected source datasets remain byte-identical
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ staged_originals }}"
+      register: identity_after
+
+    - name: Verify no discovery, profile, enrichment or guest-map file was changed
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1].stat.checksum
+          - item[0].stat.mode == item[1].stat.mode
+        fail_msg: >-
+          A protected staged data file changed unexpectedly. Refuse further
+          deployment and inspect this run without starting any timer.
+      loop: "{{ identity_before.results | zip(identity_after.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Report only aggregate verified guest matching and no-scan rollout
+      ansible.builtin.debug:
+        msg:
+          - "Snapshot identity check: {{ identity_check.stdout | from_json }}"
+          - "Original inert worker backup: {{ worker_backup }}"
+          - "The four protected state files are unchanged and all four staged timers were disabled."
+          - "No Nmap, no inventory rewrite, no Grafana changes and no Proxmox-2 collector changes."
+          - "A separate authenticated snapshot refresh strategy is needed before enabling periodic enrichment."
