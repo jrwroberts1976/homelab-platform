@@ -1,0 +1,18 @@
+[Unit]
+Description=Rebuild data-only Grafana host dashboards from current Prometheus evidence
+Documentation=https://github.com/jrwroberts1976/homelab-platform/blob/main/docs/operations/grafana-network-hosts.md
+Wants=network-online.target
+After=network-online.target docker.service
+ConditionPathExists=/etc/homelab/network-host-template.json
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/sbin/homelab-network-host-dashboards
+Nice=10
+NoNewPrivileges=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/opt/monitoring/grafana/provisioning/dashboards/network-hosts
+TimeoutStartSec=150
