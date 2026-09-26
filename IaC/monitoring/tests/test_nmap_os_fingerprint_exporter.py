@@ -138,6 +138,31 @@ class FingerprintExporterTests(unittest.TestCase):
         self.assertFalse(exporter.evidence_time(
             {"tcp_scanned_at": "nonsense"}, {"profiled_at": None})[1])
 
+    def test_recreates_eight_legacy_matches_from_49_record_inventory(self):
+        # Regress the observed Proxmox-2 count without copying device IDs.
+        now = int(time.time()) - 7200
+        records = {}
+        for n in range(35):
+            records[f"02:00:00:01:00:{n:02x}"] = {"status": "baseline"}
+        for n in range(13):
+            tcp = {
+                "os_matches": (
+                    [{"name": "Linux / embedded", "accuracy": "92"}]
+                    if n < 8 else []),
+                "ports": []}
+            records[f"02:00:00:02:00:{n:02x}"] = {
+                "status": "complete", "profiled_ip":
+                    f"192.168.2.{110+n}",
+                "profiled_at": now,
+                "profile": {"tcp": tcp},
+            }
+        records["02:00:00:03:00:00"] = {"status": "pending"}
+        results = exporter.evidence({"profiles": records})
+        self.assertEqual(len(records), 49)
+        self.assertEqual(len(results), 8)
+        self.assertTrue(all(r["nmap_time_basis"] == "Profile completion"
+                            for r in results))
+
     def test_no_scan_capability_in_evidence_exporter(self):
         source = SOURCE.read_text()
         self.assertNotIn("subprocess", source)
