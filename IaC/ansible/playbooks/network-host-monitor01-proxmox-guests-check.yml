@@ -1,0 +1,161 @@
+---
+# Gate 2c: install ONLY a read-only, no-state-write Proxmox guest/MAC
+# preflight, then validate it over the independently verified cluster CA.
+# Source workers/timers, destination scanner timers and Grafana unchanged.
+- name: Prove cluster-wide Proxmox guest MAC access without network scans
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    pve_probe_script: /usr/local/sbin/homelab-proxmox-guest-preflight
+    pve_probe_src: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/files/proxmox-guest-preflight.py
+    pve_token_file: /etc/homelab-network-hosts/proxmox-api.env
+    pve_ca_file: /etc/homelab-network-hosts/proxmox-ca.pem
+    new_worker_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+  tasks:
+    - name: Require only the commissioned monitor-01 VM
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Check existing root-only token and independently verified public CA
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ pve_token_file }}"
+        - "{{ pve_ca_file }}"
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/deep-profiles.json
+        - /var/lib/homelab-network-hosts/enrichment.json
+      register: pve_guest_prerequisites
+
+    - name: Require protected credentials and intact staged JSON files
+      ansible.builtin.assert:
+        that:
+          - pve_guest_prerequisites.results[0].stat.isreg | default(false)
+          - pve_guest_prerequisites.results[0].stat.pw_name == 'root'
+          - pve_guest_prerequisites.results[0].stat.mode == '0600'
+          - not (pve_guest_prerequisites.results[0].stat.islnk | default(false))
+          - pve_guest_prerequisites.results[1].stat.isreg | default(false)
+          - not (pve_guest_prerequisites.results[1].stat.islnk | default(false))
+          - pve_guest_prerequisites.results[1].stat.pw_name == 'root'
+          - >-
+            pve_guest_prerequisites.results[2:5]
+            | map(attribute='stat')
+            | selectattr('isreg', 'equalto', true)
+            | list | length == 3
+
+    - name: Check all new timers are still disabled and inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ new_worker_timers }}"
+      register: guest_timer_enabled
+      failed_when: false
+      changed_when: false
+
+    - name: Confirm all new worker timer schedules are inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ new_worker_timers }}"
+      register: guest_timer_active
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse to inspect guest identities with live destination scan workers
+      ansible.builtin.assert:
+        that:
+          - item | length == 2
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+        fail_msg: >-
+          A monitor-01 worker timer is not disabled and inactive.
+          Investigate scheduling before the read-only guest inspection.
+      loop: "{{ guest_timer_enabled.results | zip(guest_timer_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Inspect pre-existing guest probe destination and source checksum
+      ansible.builtin.stat:
+        path: "{{ pve_probe_script }}"
+        follow: false
+        checksum_algorithm: sha256
+      register: pve_existing_probe
+
+    - name: Refuse an existing conflicting guest probe
+      ansible.builtin.assert:
+        that:
+          - >-
+            not pve_existing_probe.stat.exists or (
+              pve_existing_probe.stat.isreg | default(false) and
+              not (pve_existing_probe.stat.islnk | default(false)) and
+              pve_existing_probe.stat.checksum ==
+                (lookup('file', pve_probe_src) | hash('sha256'))
+            )
+        fail_msg: >-
+          Guest probe script already exists with different bytes. Stop:
+          reconcile it before attempting to replace an unknown executable.
+
+    - name: Install the isolated no-write Proxmox guest inspection script
+      ansible.builtin.copy:
+        src: "{{ pve_probe_src }}"
+        dest: "{{ pve_probe_script }}"
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Verify syntax of installed guest inspection script
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, -c,
+               "import ast, pathlib; ast.parse(pathlib.Path('{{ pve_probe_script }}').read_text())"]
+      changed_when: false
+
+    - name: Inspect the full cluster guest list using verified TLS only
+      ansible.builtin.shell: |
+        set -euo pipefail
+        set +x
+        set -a
+        source /etc/homelab-network-hosts/proxmox-api.env
+        set +a
+        /usr/bin/python3 /usr/local/sbin/homelab-proxmox-guest-preflight --check
+      args:
+        executable: /bin/bash
+      no_log: true
+      register: guest_mac_preflight
+      changed_when: false
+
+    - name: Parse only aggregate guest discovery counts
+      ansible.builtin.set_fact:
+        guest_mac_summary: "{{ guest_mac_preflight.stdout | from_json }}"
+      no_log: true
+
+    - name: Require cross-node guest evidence without exposing guest MACs
+      ansible.builtin.assert:
+        that:
+          - guest_mac_summary.event == 'proxmox_guest_preflight'
+          - guest_mac_summary.strict_tls | bool
+          - not guest_mac_summary.writes | bool
+          - guest_mac_summary.cluster_resources | int >= 4
+          - guest_mac_summary.guest_configs_checked | int == guest_mac_summary.cluster_resources | int
+          - guest_mac_summary.configs_per_node['PROXMOX'] | int >= 1
+          - guest_mac_summary.configs_per_node['Proxmox-2'] | int >= 1
+          - guest_mac_summary.unique_guest_macs | int >= 2
+
+    - name: Report read-only cluster-wide guest evidence, no secrets or MAC labels
+      ansible.builtin.debug:
+        msg:
+          - "Trusted API cluster guest resources: {{ guest_mac_summary.cluster_resources }}"
+          - "Read-only guest configurations inspected: {{ guest_mac_summary.guest_configs_checked }}"
+          - "Running guests: {{ guest_mac_summary.running_guests }}; templates excluded: {{ guest_mac_summary.templates_excluded }}"
+          - "Unique running/non-template guest MACs: {{ guest_mac_summary.unique_guest_macs }}"
+          - "By cluster node: {{ guest_mac_summary.configs_per_node }}"
+          - "No scan ran, no inventory/registry was written, all four new timers remain disabled."
+          - "Next: review the MAC mapping and integrate an opt-in, saved read-only lookup before cutover."
