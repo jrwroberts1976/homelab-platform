@@ -1,0 +1,243 @@
+---
+# Gate 2i: install ONLY an inert target notifier executable, never the
+# first-seen recipient or MAC registry. Source PVE2 continues alerting.
+# No test email, no notifier execution, no service/timer wiring or scan.
+# Single use: refuse a target script or any partly migrated alert state.
+- name: Stage an inert first-seen notifier on monitor-01 without transferring alert state
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    source_template: >-
+      {{ playbook_dir }}/../roles/network_host_collector/templates/homelab-network-device-email-alert.py.j2
+    source_defaults: >-
+      {{ playbook_dir }}/../roles/network_host_collector/defaults/main.yml
+    target_notifier: /usr/local/sbin/homelab-network-device-email-alert
+    target_collector_unit: /etc/systemd/system/homelab-network-host-collector.service
+    approval_marker: /etc/homelab-network-hosts/network-discovery-cutover-approved
+    staged_state_dir: /var/lib/homelab-network-hosts
+    protected_state:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - proxmox-guests.json
+    staged_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+  tasks:
+    - name: Require only monitor-01 with its commissioned LAN interface
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Verify protected source snapshots before staging notifier code
+      ansible.builtin.stat:
+        path: "{{ staged_state_dir }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ protected_state }}"
+      register: notifier_state_before
+
+    - name: Require all staged data remains root-owned, mode 0600 and intact
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - item.stat.size | int > 0
+          - not (item.stat.islnk | default(false))
+      loop: "{{ notifier_state_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Inspect target recipient, MAC registry, notifier, approval and collector unit
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab-network-hosts/alerts.env
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - "{{ target_notifier }}"
+        - "{{ approval_marker }}"
+        - "{{ target_collector_unit }}"
+      register: notifier_target_paths
+
+    - name: Refuse existing target alert state or an unexpected collector unit
+      ansible.builtin.assert:
+        that:
+          - not notifier_target_paths.results[0].stat.exists
+          - not notifier_target_paths.results[1].stat.exists
+          - not notifier_target_paths.results[2].stat.exists
+          - not notifier_target_paths.results[3].stat.exists
+          - notifier_target_paths.results[4].stat.isreg | default(false)
+          - notifier_target_paths.results[4].stat.pw_name == 'root'
+        fail_msg: >-
+          Target alerts, notifier or cutover marker are already present,
+          or collector unit is unexpected. Stop, do not overwrite or
+          run the notifier: the source still owns first-seen alerts.
+
+    - name: Read target collector unit without changing its alert wiring
+      ansible.builtin.slurp:
+        src: "{{ target_collector_unit }}"
+      register: target_collector_unit_bytes
+      no_log: true
+
+    - name: Refuse target collector if it already invokes any alert notifier
+      ansible.builtin.assert:
+        that:
+          - "'ExecStartPost=' not in (target_collector_unit_bytes.content | b64decode)"
+          - "'EnvironmentFile=' not in (target_collector_unit_bytes.content | b64decode)"
+        fail_msg: >-
+          Target collector already has email post-hook or environment.
+          Investigate before staging: duplicate first-seen alerts are unsafe.
+
+    - name: Check five target worker and refresh timers remain disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: notifier_timer_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Check five target worker and refresh timers remain inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: notifier_timer_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse overlapping target discovery, refresh or notification work
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ notifier_timer_enabled.results | zip(notifier_timer_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Check target collector is not running
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-collector.service]
+      register: notifier_collector_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse to modify notification code during a live target collection
+      ansible.builtin.assert:
+        that:
+          - notifier_collector_active.stdout == 'inactive'
+
+    - name: Load original collector defaults without running a collector role
+      ansible.builtin.include_vars:
+        file: "{{ source_defaults }}"
+
+    - name: Render ONLY the monitor-01 notifier identity for isolated staging
+      ansible.builtin.set_fact:
+        network_host_collector_expected_hostname: monitor-01
+        network_host_collector_alert_enabled: false
+        network_host_collector_enable_timer: false
+
+    - name: Keep all timer and notifier enablement off by construction
+      ansible.builtin.assert:
+        that:
+          - network_host_collector_expected_hostname == 'monitor-01'
+          - not (network_host_collector_alert_enabled | bool)
+          - not (network_host_collector_enable_timer | bool)
+          - network_host_collector_alert_registry == staged_state_dir ~ '/alerted-macs.json'
+          - network_host_collector_alert_environment == '/etc/homelab-network-hosts/alerts.env'
+
+    - name: Install inert, root-owned notifier executable only
+      ansible.builtin.template:
+        src: "{{ source_template }}"
+        dest: "{{ target_notifier }}"
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Verify Python syntax and collector identity without running notifier or importing it
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import ast,pathlib;
+            t=ast.parse(pathlib.Path('{{ target_notifier }}').read_text());
+            h=[n.value.value for n in t.body
+              if isinstance(n,ast.Assign)
+              and any(isinstance(x,ast.Name) and x.id=='COLLECTOR_HOST'
+                      for x in n.targets)
+              and isinstance(n.value,ast.Constant)];
+            assert h==['monitor-01'], 'Wrong staged notifier identity';
+            print('Monitor-01 notifier syntax and identity verified; not executed')
+      register: rendered_notifier_verified
+      changed_when: false
+
+    - name: Verify collector unit, target registry, secret environment and cutover marker are still untouched
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ target_collector_unit }}"
+        - /etc/homelab-network-hosts/alerts.env
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - "{{ approval_marker }}"
+        - "{{ target_notifier }}"
+      register: notifier_final_paths
+
+    - name: Require no destination notification path became active
+      ansible.builtin.assert:
+        that:
+          - not notifier_final_paths.results[1].stat.exists
+          - not notifier_final_paths.results[2].stat.exists
+          - not notifier_final_paths.results[3].stat.exists
+          - notifier_final_paths.results[4].stat.isreg | default(false)
+          - notifier_final_paths.results[4].stat.pw_name == 'root'
+          - notifier_final_paths.results[4].stat.mode == '0750'
+
+    - name: Verify collector service text unchanged and not linked to staged notifier
+      ansible.builtin.slurp:
+        src: "{{ target_collector_unit }}"
+      register: target_collector_after
+      no_log: true
+
+    - name: Refuse any unexpected target collector alert hook
+      ansible.builtin.assert:
+        that:
+          - target_collector_after.content == target_collector_unit_bytes.content
+
+    - name: Hash four protected files again after installing only notifier code
+      ansible.builtin.stat:
+        path: "{{ staged_state_dir }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ protected_state }}"
+      register: notifier_state_after
+
+    - name: Require all protected saved data remains byte-identical
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1].stat.checksum
+          - item[0].stat.mode == item[1].stat.mode
+      loop: "{{ notifier_state_before.results | zip(notifier_state_after.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Report inert notifier staging without any recipient or MAC
+      ansible.builtin.debug:
+        msg:
+          - "{{ rendered_notifier_verified.stdout }}"
+          - "Installed inert root-owned notifier: {{ target_notifier }}"
+          - "Target recipient, alert registry and cutover marker remain absent."
+          - "Existing collector unit unchanged, with no ExecStartPost or EnvironmentFile."
+          - "All five target timers were confirmed disabled/inactive; no scan, email or notifier execution."
+          - "Four protected stage JSON files remain byte-identical."
+          - "Source Proxmox-2 continues to own collector and first-seen notifications."
+          - "Next: confirm source pending-online first-seen count, stop source, final delta sync, and transfer protected registry/config before linking target notifier."
