@@ -639,6 +639,23 @@
   register: monitoring_mac_dashboards_generated
   changed_when: "'changed=0' not in monitoring_mac_dashboards_generated.stdout"
 
+- name: Enable independent per-device Grafana regeneration timer
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    name: homelab-network-host-dashboards.timer
+    enabled: true
+    state: started
+
+- name: Verify independent generator timer is active
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - homelab-network-host-dashboards.timer
+  register: monitoring_per_host_timer_active
+  changed_when: false
+  failed_when: monitoring_per_host_timer_active.stdout.strip() != 'active'
+
 - name: Inspect generated MAC-backed Grafana dashboard files
   ansible.builtin.find:
     paths: "{{ monitoring_root }}/grafana/provisioning/dashboards/network-hosts"
