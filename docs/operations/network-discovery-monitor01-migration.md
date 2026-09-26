@@ -267,7 +267,7 @@ production integration. The original Proxmox-2 `/etc/pve` local-file
 lookup remains the role's default. Neither service scanning nor
 worker timer activation occurred at Gate 2d.
 
-### Gate 2e: opt in the inactive monitor-01 worker (prepared; not yet run)
+### Gate 2e: opt in the inactive monitor-01 worker (PASSED 26 September 2026)
 
 `playbooks/network-host-monitor01-proxmox-identity-stage.yml` has a
 one-time guarded install for **monitor-01 only**. It requires all four
@@ -293,6 +293,8 @@ is older, the check will fail closed; establish a separate protected
 API snapshot refresh path before enabling periodic enrichment.
 **Do not rerun this one-time gate after a partial installation**:
 the script and rollback file are collision-protected.
+
+Gate 2e **passed live** with `monitor-01: 27 OK / 5 changed / 0 failed`. The no-scan identity check matched all **11** guest MACs against the **49** preserved LAN devices, with zero unmatched and a 1,800-second-old snapshot. All four protected JSON files remained unchanged, the original inactive worker was backed up, all four target timers stayed disabled, and no source collector, Grafana dashboard or notification was altered. Do not rerun the one-shot Gate 2e.
 
 
 **Known follow-ups before Gate 3:** the old enrichment worker derives
