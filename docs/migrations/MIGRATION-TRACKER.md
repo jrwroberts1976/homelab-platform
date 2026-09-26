@@ -2,7 +2,7 @@
 
 This tracker records the controlled migration from the former consolidated/legacy homelab layout into the current `homelab-platform` operating model.
 
-**Network discovery migration is IN PROGRESS, not complete.** See the [verified preflight and gated staging plan](../operations/network-discovery-monitor01-migration.md).
+**Network discovery migration is IN PROGRESS: read-only preflight and protected staging passed on 26 September; the single-owner cutover is NOT complete.** See the [verified preflight and gated staging plan](../operations/network-discovery-monitor01-migration.md).
 
 ## Safety boundary
 

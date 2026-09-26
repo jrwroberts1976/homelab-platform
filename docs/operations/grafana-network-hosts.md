@@ -7,7 +7,7 @@ still run on `Proxmox-2`. Its deep-profiler scan timer is disabled; the
 first read-only fingerprint exporter was installed there but exported zero
 matches because of older scan timestamps. A newer exporter can recover up
 to eight saved OS matches, but that fix has not yet been verified live.
-Do not assume the planned monitor-01 scan-worker migration has happened.
+The 26 September staging run transferred all three JSON files and recovered eight historical Nmap fingerprints locally on monitor-01, but all four staged timers are still disabled. The production inventory exporter still queries the Proxmox-2 metric; no individual host page has yet been switched to the staged OS evidence. Do not assume the single-owner cutover has happened.
 See [the verified preflight and staged migration](network-discovery-monitor01-migration.md).
 The legacy Proxmox-2 fingerprint deployment instructions below are retained
 as historical context and **must not be rerun for the migration**.
