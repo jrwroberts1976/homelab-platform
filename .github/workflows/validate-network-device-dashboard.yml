@@ -24,6 +24,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-guests-check.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-snapshot.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-identity-stage.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-proxmox-refresh-stage.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -64,10 +65,12 @@ jobs:
             playbooks/network-host-monitor01-proxmox-snapshot.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-identity-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-proxmox-refresh-stage.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
-          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py
+          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py
           python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
 
       - name: Verify Grafana dashboard and Ansible registration
@@ -169,6 +172,28 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 2f performs only a protected API snapshot refresh,
+          # with SHA-preserved original state and no service/timer changes.
+          refresh_gate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-proxmox-refresh-stage.yml").read_text())
+          assert len(refresh_gate) == 1
+          assert refresh_gate[0]["hosts"] == "monitoring_hosts"
+          refresh_tasks = refresh_gate[0]["tasks"]
+          assert not any("ansible.builtin.systemd_service" in t or
+                         "ansible.builtin.import_role" in t
+                         for t in [str(item) for item in refresh_tasks])
+          assert "--check" in str(refresh_gate)
+          assert "--refresh" in str(refresh_gate)
+          assert "proxmox-guests." in str(refresh_gate)
+          assert "homelab-network-host-collector.timer" in str(refresh_gate)
+          refresher = Path(
+              "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py").read_text()
+          assert "ssl.create_default_context(cafile=module" in refresher
+          assert "_create_unverified_context" not in refresher
+          assert "os.replace(tmp, path)" in refresher
+          assert "backup_previous(" in refresher
+          assert "subprocess" not in refresher
+
           # Gate 2e must only change an inert staged worker executable.
           # Its no-scan --identity-check path must exit before port probes.
           identity_gate = yaml.safe_load(Path(

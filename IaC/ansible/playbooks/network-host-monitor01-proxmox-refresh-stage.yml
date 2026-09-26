@@ -1,0 +1,275 @@
+---
+# Gate 2f: prove safe *one-time* refresh of the already-installed, private
+# Proxmox guest-MAC mapping without starting any network discovery, Nmap,
+# enrichment or systemd timer. The original three migration JSONs must
+# remain byte-identical. Source Proxmox-2 is not targeted or changed.
+#
+# One-shot only: a conflicting installed script/backup directory causes
+# a hard stop. Do not rerun on partial failure: reconcile first.
+- name: Stage and verify safe Proxmox guest-MAC snapshot refresh on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    refresh_source: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py
+    publisher_source: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/files/proxmox-guest-mac-snapshot.py
+    helper_source: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/files/proxmox_guest_identity.py
+    refresh_dest: /usr/local/sbin/homelab-proxmox-guest-mac-refresh
+    publisher_dest: /usr/local/sbin/homelab-proxmox-guest-mac-snapshot
+    helper_dest: /usr/local/lib/homelab-network-hosts/proxmox_guest_identity.py
+    worker_dest: /usr/local/sbin/homelab-network-host-enricher
+    state_root: /var/lib/homelab-network-hosts
+    guest_snapshot: /var/lib/homelab-network-hosts/proxmox-guests.json
+    backup_dir: /var/backups/homelab-network-migration/proxmox-guest-snapshots
+    staged_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    original_evidence:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+  tasks:
+    - name: Require only the commissioned monitor-01 VM and eth0
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Verify all four staged worker timers are disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: refresh_timers_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Verify all four staged worker timers are inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: refresh_timers_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse any active or enabled destination worker schedule
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ refresh_timers_enabled.results | zip(refresh_timers_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Check the enrichment service is not running
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-enricher.service]
+      register: refresh_enricher_state
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse refresh if the staged enrichment worker is running
+      ansible.builtin.assert:
+        that:
+          - refresh_enricher_state.stdout == 'inactive'
+
+    - name: Check root-only token, authenticated CA, known API publisher, snapshot reader and worker
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - /etc/homelab-network-hosts/proxmox-api.env
+        - /etc/homelab-network-hosts/proxmox-ca.pem
+        - "{{ publisher_dest }}"
+        - "{{ helper_dest }}"
+        - "{{ worker_dest }}"
+        - "{{ guest_snapshot }}"
+        - "{{ refresh_dest }}"
+        - "{{ backup_dir }}"
+      register: refresh_prerequisites
+
+    - name: Require the protected token, public CA and expected installed tools
+      ansible.builtin.assert:
+        that:
+          - refresh_prerequisites.results[0].stat.isreg | default(false)
+          - refresh_prerequisites.results[0].stat.pw_name == 'root'
+          - refresh_prerequisites.results[0].stat.mode == '0600'
+          - refresh_prerequisites.results[1].stat.isreg | default(false)
+          - refresh_prerequisites.results[1].stat.pw_name == 'root'
+          - refresh_prerequisites.results[2].stat.isreg | default(false)
+          - refresh_prerequisites.results[2].stat.checksum == (lookup('file', publisher_source) | hash('sha256'))
+          - refresh_prerequisites.results[2].stat.mode == '0750'
+          - refresh_prerequisites.results[3].stat.isreg | default(false)
+          - refresh_prerequisites.results[3].stat.checksum == (lookup('file', helper_source) | hash('sha256'))
+          - refresh_prerequisites.results[3].stat.mode == '0644'
+          - refresh_prerequisites.results[4].stat.isreg | default(false)
+          - refresh_prerequisites.results[4].stat.pw_name == 'root'
+          - refresh_prerequisites.results[5].stat.isreg | default(false)
+          - refresh_prerequisites.results[5].stat.pw_name == 'root'
+          - refresh_prerequisites.results[5].stat.mode == '0600'
+          - not refresh_prerequisites.results[6].stat.exists
+          - not refresh_prerequisites.results[7].stat.exists
+        fail_msg: >-
+          Trusted original tools/snapshot missing or a previous refresh
+          attempt exists. Stop; do not replace anything automatically.
+
+    - name: Record SHA-256 of all original staged JSON evidence
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ original_evidence }}"
+      register: refresh_state_before
+
+    - name: Require all original evidence is a protected regular file
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.mode == '0600'
+          - item.stat.pw_name == 'root'
+          - not (item.stat.islnk | default(false))
+        fail_msg: Protected staged evidence changed unexpectedly; stop.
+      loop: "{{ refresh_state_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Create protected first-refresh backup directory
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Install only the isolated trusted-API guest snapshot refresher
+      ansible.builtin.copy:
+        src: "{{ refresh_source }}"
+        dest: "{{ refresh_dest }}"
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Parse installed refresher without running any API operation
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "import ast,pathlib; ast.parse(pathlib.Path('{{ refresh_dest }}').read_text())"
+      changed_when: false
+
+    - name: Perform read-only authenticated TLS refresh preflight
+      ansible.builtin.shell: |
+        set -euo pipefail
+        set +x
+        set -a
+        source /etc/homelab-network-hosts/proxmox-api.env
+        set +a
+        /usr/bin/python3 /usr/local/sbin/homelab-proxmox-guest-mac-refresh --check
+      args:
+        executable: /bin/bash
+      register: refresh_preview
+      changed_when: false
+      no_log: true
+
+    - name: Require the eleven-guest identity baseline before first refresh
+      ansible.builtin.assert:
+        that:
+          - (refresh_preview.stdout | from_json).event == 'proxmox_guest_refresh_preflight'
+          - (refresh_preview.stdout | from_json).strict_tls | bool
+          - not (refresh_preview.stdout | from_json).snapshot_updated | bool
+          - (refresh_preview.stdout | from_json).previous_guest_macs | int == 11
+          - (refresh_preview.stdout | from_json).candidate_guest_macs | int == 11
+          - (refresh_preview.stdout | from_json).candidate_matched_lan_macs | int == 11
+        fail_msg: >-
+          Read-only API baseline changed since the eleven-of-eleven
+          matching test. Review guest additions/migrations before refresh.
+
+    - name: Atomically refresh only the guest map after first protecting its original
+      ansible.builtin.shell: |
+        set -euo pipefail
+        set +x
+        set -a
+        source /etc/homelab-network-hosts/proxmox-api.env
+        set +a
+        /usr/bin/python3 /usr/local/sbin/homelab-proxmox-guest-mac-refresh --refresh
+      args:
+        executable: /bin/bash
+      register: refresh_result
+      changed_when: true
+      no_log: true
+
+    - name: Check the updated guest map and its original snapshot backup
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ guest_snapshot }}"
+        - "{{ backup_dir }}/proxmox-guests.{{ refresh_prerequisites.results[5].stat.checksum }}.json"
+      register: refresh_committed
+
+    - name: Require current file is protected and old snapshot was backed up exactly
+      ansible.builtin.assert:
+        that:
+          - refresh_committed.results[0].stat.isreg | default(false)
+          - refresh_committed.results[0].stat.mode == '0600'
+          - refresh_committed.results[0].stat.pw_name == 'root'
+          - refresh_committed.results[1].stat.isreg | default(false)
+          - refresh_committed.results[1].stat.mode == '0600'
+          - refresh_committed.results[1].stat.pw_name == 'root'
+          - refresh_committed.results[1].stat.checksum == refresh_prerequisites.results[5].stat.checksum
+          - (refresh_result.stdout | from_json).snapshot_updated | bool
+          - (refresh_result.stdout | from_json).backup_verified | bool
+          - (refresh_result.stdout | from_json).refreshed_guest_macs | int == 11
+          - (refresh_result.stdout | from_json).matched_lan_macs | int == 11
+          - (refresh_result.stdout | from_json).unmatched_lan_macs | int == 0
+
+    - name: Verify updated opt-in worker still matches protected guest map without scanning
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, "{{ worker_dest }}", --identity-check]
+      register: refresh_identity_check
+      changed_when: false
+      no_log: true
+
+    - name: Require all guest matches survive trusted API snapshot refresh
+      ansible.builtin.assert:
+        that:
+          - (refresh_identity_check.stdout | from_json).matched_guest_macs | int == 11
+          - (refresh_identity_check.stdout | from_json).unmatched_guest_macs | int == 0
+          - (refresh_identity_check.stdout | from_json).snapshot_age_seconds | int < 180
+
+    - name: Hash the three original staged JSON files again
+      ansible.builtin.stat:
+        path: "{{ state_root }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ original_evidence }}"
+      register: refresh_state_after
+
+    - name: Require inventory, profiles and enrichment remain byte-identical
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1].stat.checksum
+          - item[0].stat.mode == item[1].stat.mode
+        fail_msg: An original source evidence file changed during isolated API refresh.
+      loop: "{{ refresh_state_before.results | zip(refresh_state_after.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Report only safe snapshot-refresh counts and rollback hash
+      ansible.builtin.debug:
+        msg:
+          - "Guest snapshot refreshed from authenticated Proxmox API: {{ (refresh_result.stdout | from_json).refreshed_guest_macs }} MACs."
+          - "Still associated with saved LAN inventory: {{ (refresh_result.stdout | from_json).matched_lan_macs }} matched, {{ (refresh_result.stdout | from_json).unmatched_lan_macs }} unmatched."
+          - "Prior snapshot protected in {{ backup_dir }}; old SHA-256: {{ refresh_prerequisites.results[5].stat.checksum }}."
+          - "Current snapshot root-owned mode 0600; age: {{ (refresh_identity_check.stdout | from_json).snapshot_age_seconds }} seconds."
+          - "Three original migration evidence JSONs remain SHA-256 identical."
+          - "All staged scanner/enricher/evidence timers remain disabled; no Grafana, email registry or source collector changes."
+          - "Next gate: integrate a disabled refresh unit and verify its scheduling dependency before the controlled cutover."

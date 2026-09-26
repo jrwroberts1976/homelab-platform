@@ -267,7 +267,7 @@ production integration. The original Proxmox-2 `/etc/pve` local-file
 lookup remains the role's default. Neither service scanning nor
 worker timer activation occurred at Gate 2d.
 
-### Gate 2e: opt in the inactive monitor-01 worker (prepared; not yet run)
+### Gate 2e: opt in the inactive monitor-01 worker (PASSED 26 September 2026)
 
 `playbooks/network-host-monitor01-proxmox-identity-stage.yml` has a
 one-time guarded install for **monitor-01 only**. It requires all four
@@ -294,6 +294,34 @@ API snapshot refresh path before enabling periodic enrichment.
 **Do not rerun this one-time gate after a partial installation**:
 the script and rollback file are collision-protected.
 
+Gate 2e **passed live** with `monitor-01: 27 OK / 5 changed / 0 failed`. The no-scan identity check matched all **11** guest MACs against the **49** preserved LAN devices, with zero unmatched and a 1,800-second-old snapshot. All four protected JSON files remained unchanged, the original inactive worker was backed up, all four target timers stayed disabled, and no source collector, Grafana dashboard or notification was altered. Do not rerun the one-shot Gate 2e.
+
+
+### Gate 2f: safeguarded guest snapshot refresh (prepared, not yet run)
+
+The new `playbooks/network-host-monitor01-proxmox-refresh-stage.yml`
+is a separate, one-time test for safely updating the existing
+`proxmox-guests.json`. It requires all four staged timers disabled and
+the enricher inactive. It checks installed API publisher/reader source
+hashes, protected token and verified CA, performs an authenticated
+strict-TLS no-write dry run and requires the previously established
+11-of-11 guest/LAN association.
+
+The refresher uses an exclusive lock, checks both Proxmox API nodes and
+guest NIC configurations, validates all new identities, and refuses
+unexpected large visibility reductions. Before atomic replacement of
+the guest map, it saves the original bytes under a SHA-256 filename in
+a root-only backup directory. On API or validation failure the original
+snapshot remains intact. The gate verifies that the inactive
+`--identity-check` still reports all 11 matches and that the other
+three preserved JSON files remain byte-identical. It neither runs Nmap
+nor enables any worker timer, starts enrichment, changes production
+Grafana or touches the active Proxmox-2 collector/notifier.
+
+**Gate 2f has not yet run. Do not rerun it after a partial execution**;
+inspect the installed refresher, original snapshot and backup directory
+first. A separately reviewed periodic refresh service and dependency
+for enrichment are still necessary before the final cutover.
 
 **Known follow-ups before Gate 3:** the old enrichment worker derives
 Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
