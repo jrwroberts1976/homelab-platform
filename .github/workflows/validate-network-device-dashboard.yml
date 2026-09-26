@@ -21,6 +21,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-preflight.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-tls.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-proxmox-guests-check.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -55,6 +56,8 @@ jobs:
             playbooks/network-host-monitor01-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-proxmox-guests-check.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -160,6 +163,27 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          guest_gate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-proxmox-guests-check.yml").read_text())
+          assert len(guest_gate) == 1
+          assert guest_gate[0]["hosts"] == "monitoring_hosts"
+          guest_steps = guest_gate[0]["tasks"]
+          assert all(not any(k in task for k in (
+              "ansible.builtin.systemd_service",
+              "ansible.builtin.import_role",
+              "ansible.builtin.template"
+          )) for task in guest_steps)
+          guest_code = Path(
+              "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-preflight.py").read_text()
+          assert "ssl.create_default_context(cafile=CA_FILE)" in guest_code
+          assert "_create_unverified_context" not in guest_code
+          assert "subprocess" not in guest_code
+          assert "--check" in guest_code
+          assert "run_nmap" not in guest_code
+          assert "proxmox-api.env" in str(guest_gate)
+          assert "proxmox-ca.pem" in str(guest_gate)
+          assert "disabled" in str(guest_gate)
+
           # TLS trust gate must compare two SSH-retrieved public CA files,
           # verify HTTPS with CA + IP SAN and never change live timers.
           trust = yaml.safe_load(Path(
