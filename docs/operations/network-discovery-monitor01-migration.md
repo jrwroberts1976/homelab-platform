@@ -162,6 +162,26 @@ last-alert state is ready; protect the original files and synchronise
 their current contents only at the final cutover. Verify a single
 intentional test notification before disabling the old alert path.
 
+### Read-only Proxmox API authentication verified (26 September 2026)
+
+From `monitor-01`, a dedicated privilege-separated Proxmox token was
+accepted by **both** Proxmox API endpoints (`192.168.2.70:8006` and
+`192.168.2.71:8006`). Authenticated cluster resource requests returned
+**HTTP 200 and 13 visible resources from each endpoint**. Individual
+read-only configuration requests for `cloud-01` (QEMU VM 200 on
+`PROXMOX`) and `dns-01` (LXC 101 on `Proxmox-2`) both returned
+**HTTP 200 and one network interface**. The access issue was resolved by
+assigning the required `VM.Audit` permission at `/vms` to both the
+user and its privilege-separated token.
+
+The manually stored token is on `monitor-01`, outside Git and not yet
+wired into the staged enricher. All tests to date bypassed TLS certificate
+validation for diagnosis; **certificate trust and hostname/IP matching
+still require verification before production integration**. No service
+or timer has been activated. Do not expose token values in playbooks,
+GitHub, logs or troubleshooting output. The old enricher remains active
+on `Proxmox-2` and still reads host-local guest configuration.
+
 **Known follow-ups before Gate 3:** the old enrichment worker derives
 Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
 locally; migrate that lookup to an authorised read-only source before
