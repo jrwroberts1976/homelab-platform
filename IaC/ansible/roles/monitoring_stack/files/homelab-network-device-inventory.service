@@ -8,13 +8,9 @@ Type=oneshot
 User=root
 Group=root
 ExecStart=/usr/bin/python3 /usr/local/sbin/homelab-network-device-inventory
-# Run after publication; Grafana host files update when Prometheus has scraped the new series.
-# A failed generator must never stop publication of the base network inventory.
-ExecStartPost=-/usr/bin/python3 /usr/local/sbin/homelab-network-host-dashboards
+# Dashboard generation runs in its own timer after the Prometheus scrape.
 Nice=10
 NoNewPrivileges=true
 ProtectHome=true
 ProtectSystem=strict
-# The post-publish dashboard generator must be able to replace the generated
-# Grafana JSON on the host; without this, ProtectSystem=strict blocks updates.
-ReadWritePaths=/var/lib/prometheus/node-exporter /opt/monitoring/grafana/provisioning/dashboards/network-hosts
+ReadWritePaths=/var/lib/prometheus/node-exporter
