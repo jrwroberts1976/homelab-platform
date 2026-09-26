@@ -7,6 +7,7 @@ on:
       - feature/grafana-network-host-tiles
       - feature/hostname-first-grafana-hosts
       - feature/host-dashboards-data-only
+      - fix/grafana-host-panels-per-device
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
@@ -95,11 +96,16 @@ jobs:
           assert all(name in [p["title"] for p in full_template["panels"]]
                      for name in expected_charts)
           for dashboard in (overview, detail):
+              host_picker = next(link for link in dashboard["links"]
+                                 if link["title"] == "Choose host dashboard")
+              assert host_picker["type"] == "dashboards"
+              assert host_picker["asDropdown"]
+              assert host_picker["tags"] == ["generated-network-host"]
               assert dashboard["templating"]["list"][0]["name"] == "host"
               assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
               assert any("profile_uid" == p["name"] and p["hide"] == 2
                          for p in dashboard["templating"]["list"])
-              assert any("profile_uid" in link["url"]
+              assert any("profile_uid" in link.get("url", "")
                          for link in dashboard["links"])
               assert not any(p["type"] in ("timeseries", "logs")
                              for p in dashboard["panels"])
@@ -123,6 +129,10 @@ jobs:
           assert "collect_availability" in generator
           assert "compact_panels" in generator
           assert "present_over_time" in generator
+          assert '"title": "Choose host"' in generator
+          host_service = (base / "files/homelab-network-device-inventory.service").read_text()
+          assert "ProtectSystem=strict" in host_service
+          assert "ReadWritePaths=/var/lib/prometheus/node-exporter /opt/monitoring/grafana/provisioning/dashboards/network-hosts" in host_service
           focused = Path("IaC/ansible/playbooks/network-host-grafana.yml").read_text()
           monitoring_tasks = (base / "tasks/main.yml").read_text()
           for provisioner in (focused, monitoring_tasks):
