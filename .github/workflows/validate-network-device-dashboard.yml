@@ -105,7 +105,7 @@ jobs:
               assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
               assert any("profile_uid" == p["name"] and p["hide"] == 2
                          for p in dashboard["templating"]["list"])
-              assert any("profile_uid" in link["url"]
+              assert any("profile_uid" in link.get("url", "")
                          for link in dashboard["links"])
               assert not any(p["type"] in ("timeseries", "logs")
                              for p in dashboard["panels"])
