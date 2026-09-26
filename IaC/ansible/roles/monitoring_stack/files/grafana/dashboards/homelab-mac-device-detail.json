@@ -281,7 +281,8 @@
               "nmap_cpe": true,
               "nmap_scanned_at": true,
               "nmap_services": true,
-              "nmap_scan_status": true
+              "nmap_scan_status": true,
+              "nmap_time_basis": true
             },
             "indexByName": {
               "hostname": 0,
