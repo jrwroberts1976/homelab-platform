@@ -1,0 +1,199 @@
+---
+# Gate 2d: publish a NEW root-only, cluster-wide guest MAC snapshot to
+# monitor-01. This is an isolated data file, not a production enrichment
+# activation. Does not touch the existing three migration JSON files.
+# NEVER starts Nmap, worker services or timers, or changes Proxmox-2.
+- name: Preserve guest identities in a separate protected monitor-01 snapshot
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    guest_publisher_src: >-
+      {{ playbook_dir }}/../roles/network_host_enrichment/files/proxmox-guest-mac-snapshot.py
+    guest_publisher_dest: /usr/local/sbin/homelab-proxmox-guest-mac-snapshot
+    guest_snapshot_dest: /var/lib/homelab-network-hosts/proxmox-guests.json
+    guest_state_root: /var/lib/homelab-network-hosts
+    guest_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+  tasks:
+    - name: Refuse any host other than the commissioned monitor VM
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Inspect protected token, authenticated public CA and original staged data
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab-network-hosts/proxmox-api.env
+        - /etc/homelab-network-hosts/proxmox-ca.pem
+        - "{{ guest_state_root }}/inventory.json"
+        - "{{ guest_state_root }}/deep-profiles.json"
+        - "{{ guest_state_root }}/enrichment.json"
+      register: guest_prerequisites
+
+    - name: Require protected token, verified CA and untouched original stage inputs
+      ansible.builtin.assert:
+        that:
+          - guest_prerequisites.results[0].stat.isreg | default(false)
+          - guest_prerequisites.results[0].stat.pw_name == 'root'
+          - guest_prerequisites.results[0].stat.mode == '0600'
+          - guest_prerequisites.results[1].stat.isreg | default(false)
+          - guest_prerequisites.results[1].stat.pw_name == 'root'
+          - >-
+            guest_prerequisites.results[2:5]
+            | map(attribute='stat')
+            | selectattr('isreg', 'equalto', true)
+            | list | length == 3
+          - >-
+            guest_prerequisites.results[2:5]
+            | map(attribute='stat')
+            | selectattr('mode', 'equalto', '0600')
+            | list | length == 3
+
+    - name: Verify all four staged worker timers are still disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ guest_timers }}"
+      register: guest_timer_enabled
+      failed_when: false
+      changed_when: false
+
+    - name: Verify all four staged worker timers remain inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ guest_timers }}"
+      register: guest_timer_active
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse any overlapping monitor-01 scanner or evidence schedule
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ guest_timer_enabled.results | zip(guest_timer_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Check for existing publisher and protected snapshot collisions
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ guest_publisher_dest }}"
+        - "{{ guest_snapshot_dest }}"
+      register: guest_publisher_existing
+
+    - name: Never replace an existing publisher or guest snapshot
+      ansible.builtin.assert:
+        that:
+          - not guest_publisher_existing.results[0].stat.exists
+          - not guest_publisher_existing.results[1].stat.exists
+        fail_msg: >-
+          Publisher or guest MAC snapshot already exists. Do not rerun after
+          a partial attempt: verify its hashes and protected state first.
+
+    - name: Install only the isolated root-owned guest snapshot publisher
+      ansible.builtin.copy:
+        src: "{{ guest_publisher_src }}"
+        dest: "{{ guest_publisher_dest }}"
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Parse the installed publisher without creating Python bytecode
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "import ast,pathlib; ast.parse(pathlib.Path('{{ guest_publisher_dest }}').read_text())"
+      changed_when: false
+
+    - name: Dry-run verified TLS guest lookup and staged MAC correlation
+      ansible.builtin.shell: |
+        set -euo pipefail
+        set +x
+        set -a
+        source /etc/homelab-network-hosts/proxmox-api.env
+        set +a
+        /usr/bin/python3 /usr/local/sbin/homelab-proxmox-guest-mac-snapshot --check
+      args:
+        executable: /bin/bash
+      register: guest_dryrun
+      changed_when: false
+      no_log: true
+
+    - name: Require Gate 2c baseline before creating a new state file
+      ansible.builtin.assert:
+        that:
+          - (guest_dryrun.stdout | from_json).strict_tls | bool
+          - (guest_dryrun.stdout | from_json).cluster_resources | int == 13
+          - (guest_dryrun.stdout | from_json).configs_checked | int == 13
+          - (guest_dryrun.stdout | from_json).running_guests | int == 11
+          - (guest_dryrun.stdout | from_json).templates_excluded | int == 2
+          - (guest_dryrun.stdout | from_json).unique_guest_macs | int == 11
+          - (guest_dryrun.stdout | from_json).matches_staged_mac_inventory | int >= 1
+          - (guest_dryrun.stdout | from_json).per_node_configs['PROXMOX'] | int == 9
+          - (guest_dryrun.stdout | from_json).per_node_configs['Proxmox-2'] | int == 4
+        fail_msg: >-
+          Cluster guest evidence changed since Gate 2c or no longer agrees
+          with staged MACs. Review counts first; do not create a snapshot.
+
+    - name: Publish once to a new root-only Proxmox guest map, without changing saved discovery data
+      ansible.builtin.shell: |
+        set -euo pipefail
+        set +x
+        set -a
+        source /etc/homelab-network-hosts/proxmox-api.env
+        set +a
+        /usr/bin/python3 /usr/local/sbin/homelab-proxmox-guest-mac-snapshot --publish
+      args:
+        executable: /bin/bash
+      register: guest_published
+      changed_when: true
+      no_log: true
+
+    - name: Verify the newly published snapshot's root-only metadata
+      ansible.builtin.stat:
+        path: "{{ guest_snapshot_dest }}"
+        follow: false
+        checksum_algorithm: sha256
+      register: guest_published_file
+
+    - name: Refuse unexpected snapshot type or permissions
+      ansible.builtin.assert:
+        that:
+          - guest_published_file.stat.isreg | default(false)
+          - guest_published_file.stat.pw_name == 'root'
+          - guest_published_file.stat.mode == '0600'
+          - guest_published_file.stat.size | int > 0
+          - (guest_published.stdout | from_json).snapshot_created | bool
+
+    - name: Validate the new snapshot without any API token or API call
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - "{{ guest_publisher_dest }}"
+          - --verify
+      register: guest_verified
+      changed_when: false
+
+    - name: Report only verified counts and checksum, never MACs or tokens
+      ansible.builtin.debug:
+        msg:
+          - "New protected Proxmox guest map: {{ guest_snapshot_dest }}"
+          - "Trusted API resources/configurations: {{ (guest_published.stdout | from_json).cluster_resources }} / {{ (guest_published.stdout | from_json).configs_checked }}"
+          - "Running guest MACs: {{ (guest_published.stdout | from_json).unique_guest_macs }}"
+          - "Overlap with protected staged LAN inventory: {{ (guest_published.stdout | from_json).matches_staged_mac_inventory }}"
+          - "SHA-256: {{ guest_published_file.stat.checksum }}"
+          - "Local no-token verification: {{ guest_verified.stdout | from_json }}"
+          - "Four destination worker timers still disabled and no source scanner changed."
+          - "Next: opt-in staged enrichment to consume this mapping without starting Nmap."

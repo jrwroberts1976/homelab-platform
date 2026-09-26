@@ -22,6 +22,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-tls.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-guests-check.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-proxmox-snapshot.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -58,6 +59,8 @@ jobs:
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-guests-check.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-proxmox-snapshot.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -163,6 +166,28 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 2d creates only a separate root-only guest-MAC map.
+          # It may not touch the three staged JSON files, source systems,
+          # worker services or the Grafana production inventory.
+          snapshot_gate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-proxmox-snapshot.yml").read_text())
+          assert len(snapshot_gate) == 1
+          assert snapshot_gate[0]["hosts"] == "monitoring_hosts"
+          snapshot_steps = snapshot_gate[0]["tasks"]
+          assert not any("ansible.builtin.systemd_service" in t or
+                         "ansible.builtin.import_role" in t or
+                         "ansible.builtin.template" in t
+                         for t in [str(item) for item in snapshot_steps])
+          snapshot_code = Path(
+              "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-snapshot.py").read_text()
+          assert "ssl.create_default_context(cafile=CA_PATH)" in snapshot_code
+          assert "subprocess" not in snapshot_code
+          assert "_create_unverified_context" not in snapshot_code
+          assert "os.link(temp_path, path)" in snapshot_code
+          assert "proxmox-guests.json" in str(snapshot_gate)
+          assert "--publish" in str(snapshot_gate)
+          assert "homelab-network-host-collector.timer" in str(snapshot_gate)
+
           guest_gate = yaml.safe_load(Path(
               "IaC/ansible/playbooks/network-host-monitor01-proxmox-guests-check.yml").read_text())
           assert len(guest_gate) == 1
