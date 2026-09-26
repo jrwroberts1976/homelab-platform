@@ -494,6 +494,18 @@ root-owned and mode 0600; their live contents have **not** been moved
 to monitor-01. No guest lookup, email alert path, scanner timer or
 production inventory publisher has yet been cut over.
 
+**26 September verified API trust gate:** both Proxmox cluster nodes provided
+byte-identical public cluster CA certificates over authenticated Ansible SSH.
+The CA is now installed on `monitor-01`. Strict HTTPS certificate-chain and
+endpoint-IP verification **passed**, with read-only token access to 13 cluster
+resources from each node and the NIC configuration of the sample VM and
+container. This proves protected API access only, **not** that the legacy
+`/etc/pve` guest lookup has been replaced in the staged enrichment worker.
+A separate no-write cluster-wide guest MAC preflight is prepared but has
+not yet run. The Proxmox-2 collector, enricher and first-seen notifier
+remain production owners; all four staged monitor-01 worker timers remain
+disabled. Grafana's production source and per-host UIDs are unchanged.
+
 ## Edge host
 
 `edge-01` is a running Debian 13 LXC, CT103 on `Proxmox-2`, at `192.168.2.56`.
