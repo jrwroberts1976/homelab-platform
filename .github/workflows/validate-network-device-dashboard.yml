@@ -26,6 +26,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-identity-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-proxmox-refresh-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-refresh-units-stage.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-firstseen-preflight.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -70,6 +71,8 @@ jobs:
             playbooks/network-host-monitor01-proxmox-refresh-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-refresh-units-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-firstseen-preflight.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -175,6 +178,32 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 2h is strictly read-only; the production first-seen
+          # notifier and recipient must stay on source until final cutover.
+          alert_gate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-firstseen-preflight.yml").read_text())
+          assert [play["hosts"] for play in alert_gate] == [
+              "Proxmox-2", "monitoring_hosts"]
+          alert_repr = str(alert_gate)
+          assert "alerted-macs.json" in alert_repr
+          assert "alerts.env" in alert_repr
+          assert "192.168.2.54" in alert_repr
+          assert "homelab-proxmox-guest-refresh.timer" in alert_repr
+          assert "network-discovery-cutover-approved" in alert_repr
+          for play in alert_gate:
+              for step in play["tasks"]:
+                  assert not any(key in step for key in [
+                      "ansible.builtin.copy",
+                      "ansible.builtin.file",
+                      "ansible.builtin.template",
+                      "ansible.builtin.systemd_service",
+                      "ansible.builtin.script",
+                      "ansible.builtin.apt",
+                  ])
+          assert "smtp.sendmail" not in alert_repr
+          assert "--test-email" in alert_repr
+          assert "no_log" in alert_repr
+
           # The staged refresh unit is inert and enrichment additionally
           # requires an explicit, absent-until-cutover approval marker.
           unit_gate = yaml.safe_load(Path(

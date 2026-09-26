@@ -1,0 +1,260 @@
+---
+# Gate 2h: read-only first-seen notifier readiness; no service, timer,
+# inventory or alert-registry changes. Never sends email or runs Nmap.
+# Run this BEFORE stopping the Proxmox-2 production collector/notifier.
+- name: Inspect the active Proxmox-2 first-seen notifier and registry
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require the original production collector node
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Inspect source alert environment, registry, inventory, script and collector unit
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab-network-hosts/alerts.env
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /usr/local/sbin/homelab-network-device-email-alert
+        - /etc/systemd/system/homelab-network-host-collector.service
+      register: source_alert_files
+
+    - name: Require all existing first-seen state and an installed source notifier
+      ansible.builtin.assert:
+        that:
+          - (source_alert_files.results | map(attribute='stat') | selectattr('isreg', 'equalto', true) | list | length) == 5
+          - source_alert_files.results[0].stat.pw_name == 'root'
+          - source_alert_files.results[0].stat.mode == '0600'
+          - source_alert_files.results[1].stat.pw_name == 'root'
+          - source_alert_files.results[1].stat.mode == '0600'
+          - source_alert_files.results[2].stat.pw_name == 'root'
+          - source_alert_files.results[3].stat.pw_name == 'root'
+          - source_alert_files.results[4].stat.pw_name == 'root'
+
+    - name: Inspect the source notifier in memory without exposing configuration or device identities
+      ansible.builtin.shell: |
+        python3 -B - <<'PY'
+        import json
+        import pathlib
+
+        state = pathlib.Path("/var/lib/homelab-network-hosts")
+        registry = json.loads((state / "alerted-macs.json").read_text())
+        inventory = json.loads((state / "inventory.json").read_text())
+        env_text = pathlib.Path("/etc/homelab-network-hosts/alerts.env").read_text()
+        unit = pathlib.Path(
+            "/etc/systemd/system/homelab-network-host-collector.service"
+        ).read_text()
+        script = pathlib.Path(
+            "/usr/local/sbin/homelab-network-device-email-alert"
+        ).read_text()
+        if not isinstance(registry, dict) or registry.get("version") != 1:
+            raise ValueError("Unexpected source alert registry schema")
+        known = registry.get("devices")
+        if not isinstance(known, dict):
+            raise ValueError("Missing first-seen MAC registry")
+        if not isinstance(inventory, dict) or len(inventory) < 40:
+            raise ValueError("Source inventory is unexpectedly incomplete")
+        recipients = [
+            line.partition("=")[2].strip().strip("'\"")
+            for line in env_text.splitlines()
+            if line.strip().startswith("NETWORK_DEVICE_ALERT_TO=")
+        ]
+        recipient_present = len(recipients) == 1 and bool(recipients[0])
+        unit_has_alert_post = (
+            "ExecStartPost=-/usr/local/sbin/homelab-network-device-email-alert"
+            in unit
+        )
+        unit_has_env = (
+            "EnvironmentFile=-/etc/homelab-network-hosts/alerts.env"
+            in unit
+        )
+        if not recipient_present or not unit_has_alert_post or not unit_has_env:
+            raise ValueError("Existing source notifier wiring is incomplete")
+        if "--test-email" not in script or "COLLECTOR_HOST" not in script:
+            raise ValueError("Unexpected installed notifier script")
+
+        known_macs = set(known)
+        inventory_macs = {
+            str(entry.get("mac") or "").strip().lower()
+            for entry in inventory.values()
+            if isinstance(entry, dict) and entry.get("mac")
+        }
+        new_online_macs = {
+            str(entry.get("mac") or "").strip().lower()
+            for entry in inventory.values()
+            if isinstance(entry, dict) and entry.get("online") is True
+            and entry.get("mac")
+        } - known_macs
+        statuses = [
+            str(entry.get("status", ""))
+            for entry in known.values()
+            if isinstance(entry, dict)
+        ]
+        result = {
+            "event": "firstseen_source_preflight",
+            "inventory_records": len(inventory),
+            "inventory_unique_macs": len(inventory_macs),
+            "registry_macs": len(known_macs),
+            "baseline_entries": statuses.count("baseline"),
+            "alerted_entries": statuses.count("alerted"),
+            "other_registry_entries": len(known_macs) - len(statuses)
+              + len(statuses) - statuses.count("baseline") - statuses.count("alerted"),
+            "inventory_macs_missing_registry": len(inventory_macs - known_macs),
+            "pending_online_firstseen": len(new_online_macs),
+            "recipient_configured": recipient_present,
+            "source_notifier_wired": unit_has_alert_post and unit_has_env,
+            "source_notifier_script_installed": True,
+        }
+        print(json.dumps(result, sort_keys=True))
+        PY
+      args:
+        executable: /bin/bash
+      register: firstseen_source_raw
+      changed_when: false
+      no_log: true
+
+    - name: Parse only aggregate source readiness counts
+      ansible.builtin.set_fact:
+        firstseen_source: "{{ firstseen_source_raw.stdout | from_json }}"
+      no_log: true
+
+    - name: Check production source timers without stopping them
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-os-evidence.timer
+      changed_when: false
+      failed_when: false
+      register: firstseen_source_timers
+
+    - name: Confirm original source still owns scheduled discovery
+      ansible.builtin.assert:
+        that:
+          - firstseen_source.recipient_configured | bool
+          - firstseen_source.source_notifier_wired | bool
+          - firstseen_source.registry_macs | int >= 1
+          - firstseen_source_timers.results[0].stdout == 'enabled'
+        fail_msg: >-
+          Original first-seen alerting or its collector schedule is not
+          healthy. Do not stop Proxmox-2 or initiate the cutover.
+
+    - name: Report source readiness using aggregate counts only
+      ansible.builtin.debug:
+        msg:
+          - "Source alert registry: {{ firstseen_source.registry_macs }} unique MACs."
+          - "Alert states: {{ firstseen_source.baseline_entries }} baseline, {{ firstseen_source.alerted_entries }} alerted, {{ firstseen_source.other_registry_entries }} other."
+          - "Source inventory: {{ firstseen_source.inventory_records }} devices / {{ firstseen_source.inventory_unique_macs }} distinct MACs."
+          - "Inventory MACs not in registry: {{ firstseen_source.inventory_macs_missing_registry }}; pending online first-seen: {{ firstseen_source.pending_online_firstseen }}."
+          - "Recipient and collector post-hook configured; no email sent and no source service changed."
+          - "Source timer states: {{ firstseen_source_timers.results | map(attribute='stdout') | list }}."
+
+- name: Inspect staged monitor-01 alert collision and SMTP connectivity only
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    staged_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+  tasks:
+    - name: Require monitor-01 and its expected LAN NIC
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Inspect target notifier paths and cutover approval marker
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab-network-hosts/alerts.env
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - /usr/local/sbin/homelab-network-device-email-alert
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+      register: target_alert_collisions
+
+    - name: Refuse any existing target notifier/registry or prematurely approved cutover
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists
+        fail_msg: >-
+          Monitor-01 already contains notifier state or a cutover marker.
+          Investigate before any copy: duplicate first-seen alerts are unsafe.
+      loop: "{{ target_alert_collisions.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require all five target worker and guest refresh timers disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: target_timer_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Require all five target worker and guest refresh timers inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ staged_timers }}"
+      register: target_timer_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse overlapping discovery/alert pipelines
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ target_timer_enabled.results | zip(target_timer_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Check internal SMTP relay TCP reachability without sending mail
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import socket;
+            conn=socket.create_connection(('192.168.2.54',25),timeout=5);
+            conn.close();
+            print('Internal SMTP relay TCP/25 reachable; no mail sent')
+      changed_when: false
+      register: smtp_probe
+
+    - name: Verify staged alert guard and trusted guest refresh dependency are present
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, cat, homelab-network-host-enricher.service]
+      changed_when: false
+      register: staged_enrichment_unit
+
+    - name: Refuse missing cutover approval guard or guest refresh dependency
+      ansible.builtin.assert:
+        that:
+          - "'ConditionPathExists=/etc/homelab-network-hosts/network-discovery-cutover-approved' in staged_enrichment_unit.stdout"
+          - "'Requires=homelab-proxmox-guest-refresh.service' in staged_enrichment_unit.stdout"
+
+    - name: Report destination readiness without changing any alerting
+      ansible.builtin.debug:
+        msg:
+          - "Destination first-seen config, MAC registry, notifier and cutover marker: absent by design."
+          - "All five staged discovery/refresh timers: disabled and inactive."
+          - "{{ smtp_probe.stdout }}"
+          - "Staged enrichment retains the explicit approval marker and trusted refresh requirement."
+          - "Next: parameterize the notifier for monitor-01; stage it disabled. Transfer source registry/recipient only after source stop and protected final delta sync."
