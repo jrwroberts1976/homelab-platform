@@ -43,7 +43,9 @@ def fake_fetch(*, duplicate=False, config_failure=False, inconsistent=False):
             if inconsistent and node == "Proxmox-2":
                 return guests[:-1]
             return guests
-        _, _, _, host, kind, vmid, _ = endpoint.split("/")
+        _, _, host, kind, vmid, action = endpoint.split("/")
+        if action != "config":
+            raise ValueError("unexpected endpoint")
         return configs[(host, kind, int(vmid))]
 
     return fetch
