@@ -301,9 +301,9 @@
     - name: Count exported real OS fingerprints
       ansible.builtin.set_fact:
         migration_staged_os_matches: >-
-          {{ (migration_staged_metrics.content | b64decode |
-               regex_findall('(?m)^homelab_network_host_os_fingerprint_info\\{'))
-             | length }}
+          {{ (migration_staged_metrics.content | b64decode).splitlines()
+             | select('match', '^homelab_network_host_os_fingerprint_info')
+             | list | length }}
 
     - name: Require expected historical OS matches before a later cutover
       ansible.builtin.assert:
