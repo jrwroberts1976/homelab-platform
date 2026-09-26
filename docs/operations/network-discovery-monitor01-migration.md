@@ -175,9 +175,10 @@ assigning the required `VM.Audit` permission at `/vms` to both the
 user and its privilege-separated token.
 
 The manually stored token is on `monitor-01`, outside Git and not yet
-wired into the staged enricher. All tests to date bypassed TLS certificate
-validation for diagnosis; **certificate trust and hostname/IP matching
-still require verification before production integration**. No service
+wired into the staged enricher. Initial token diagnostics bypassed TLS;
+subsequent Gate 2b successfully verified the certificate chain and
+both requested API IP addresses using the independently authenticated
+PVE cluster CA. No service
 or timer has been activated. Do not expose token values in playbooks,
 GitHub, logs or troubleshooting output. The old enricher remains active
 on `Proxmox-2` and still reads host-local guest configuration.
@@ -206,11 +207,39 @@ existing root-only `proxmox-api.env` credential only in monitor-01
 memory. It requests both cluster inventories and two sample guest
 configurations but never outputs token data or raw guest records.
 
-The CA and strict-TLS playbook is **prepared, not yet validated on
-live hosts**. Run it from a fresh reviewed post-merge worktree after
-syntax checks. Do **not** rerun the non-overwrite Gate 2 staging
+The CA and strict-TLS playbook **PASSED on live hosts on
+26 September 2026**, with `PROXMOX: 9 OK / 0 changed`,
+`Proxmox-2: 9 OK / 0 changed`, and `monitor-01: 10 OK / 1 changed`;
+zero failed or unreachable. Both independently retrieved CA hashes
+matched, and monitor-01 now has the public CA at
+`/etc/homelab-network-hosts/proxmox-ca.pem`. Its strict-TLS API
+checks returned HTTP 200 with 13 visible resources on **each** PVE
+node; the cloud-01 VM and dns-01 LXC config checks returned HTTP 200
+with one NIC apiece. Do **not** rerun the non-overwrite Gate 2 staging
 playbook. A successful gate does **not** enable the scan workers or
 switch the production Grafana source.
+
+### Gate 2c: staged read-only Proxmox MAC discovery (not yet run)
+
+With trusted TLS proven, use
+`playbooks/network-host-monitor01-proxmox-guests-check.yml` to install
+and execute **only** a no-write guest MAC preflight on monitor-01.
+The gate verifies the three preserved original JSON files and the
+root-only API token, confirms all four new worker timers are still
+disabled/inactive, and uses the verified local cluster CA for all API
+requests. It reads and reconciles the resource lists from both PVE
+nodes and then reads *each guest's actual network configuration* on
+its owning node. It parses QEMU and LXC NIC MACs, excludes reusable
+templates, refuses ambiguous/colliding live MAC identities, and prints
+**aggregate counts only**, not token data or private MACs.
+
+The preflight does **not** modify current inventory, deep profiles,
+enrichment, first-seen alert state, existing Grafana source or
+production services. The new script's ability to match the actual
+live guest MACs must be verified before integrating it as an explicit
+`monitor-01` enrichment source. It is not an enrichment worker and
+will not execute any Nmap or service scans.
+
 
 **Known follow-ups before Gate 3:** the old enrichment worker derives
 Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
