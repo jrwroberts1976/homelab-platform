@@ -1,0 +1,15 @@
+[Unit]
+Description=Export saved Nmap OS fingerprints for per-host Grafana dashboards (NO scans)
+ConditionPathExists=/var/lib/homelab-network-hosts/deep-profiles.json
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart=/usr/bin/python3 /usr/local/sbin/homelab-network-os-evidence
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/var/lib/prometheus/node-exporter
+TimeoutStartSec=30
