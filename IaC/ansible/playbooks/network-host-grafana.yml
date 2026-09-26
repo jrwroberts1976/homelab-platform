@@ -106,6 +106,17 @@
         - homelab-network-device-inventory.service
         - homelab-network-device-inventory.timer
 
+    - name: Install independent per-host Grafana generator service and timer
+      ansible.builtin.copy:
+        src: "{{ monitoring_role_files }}/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - homelab-network-host-dashboards.service
+        - homelab-network-host-dashboards.timer
+
     - name: Enable the refresh timer
       ansible.builtin.systemd_service:
         daemon_reload: true
@@ -138,6 +149,13 @@
       register: network_dashboard_generation
       changed_when: "'changed=0' not in network_dashboard_generation.stdout"
 
+    - name: Enable independent per-host dashboard refresh
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+        name: homelab-network-host-dashboards.timer
+        enabled: true
+        state: started
+
     - name: Check generated host dashboard files
       ansible.builtin.find:
         paths: "{{ dashboards_live }}/network-hosts"
@@ -169,6 +187,91 @@
       retries: 15
       delay: 2
       changed_when: false
+
+    - name: Confirm Grafana sees the rebuilt dashboard file inside its actual container
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --project-directory
+          - "{{ grafana_root }}"
+          - exec
+          - -T
+          - grafana
+          - cat
+          - /etc/grafana/provisioning/dashboards/homelab/homelab-network-host-tiles.json
+      register: live_grafana_dashboard_file
+      changed_when: false
+      failed_when: >-
+        live_grafana_dashboard_file.rc != 0
+        or (live_grafana_dashboard_file.stdout | from_json).panels | length != 7
+
+    - name: Confirm Grafana sees the per-device JSON folder
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - --project-directory
+          - "{{ grafana_root }}"
+          - exec
+          - -T
+          - grafana
+          - ls
+          - /etc/grafana/provisioning/dashboards/network-hosts
+      register: live_grafana_generated_files
+      changed_when: false
+      failed_when: >-
+        live_grafana_generated_files.rc != 0
+        or (live_grafana_generated_files.stdout_lines
+            | select('match', '^net-host-.*[.]json$') | list | length) < 10
+
+    - name: Read existing protected runtime Grafana admin password
+      ansible.builtin.slurp:
+        src: "{{ grafana_root }}/.env"
+      register: live_grafana_runtime_env
+      no_log: true
+
+    - name: Extract existing Grafana API credential
+      ansible.builtin.set_fact:
+        dashboard_deploy_grafana_password: >-
+          {{ (live_grafana_runtime_env.content | b64decode
+             | regex_findall('(?m)^GF_SECURITY_ADMIN_PASSWORD=(.*)$')) | first }}
+      no_log: true
+
+    - name: Verify Grafana API is serving the rebuilt seven-panel hostname directory
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/dashboards/uid/homelab-network-host-tiles
+        url_username: admin
+        url_password: "{{ dashboard_deploy_grafana_password }}"
+        force_basic_auth: true
+        status_code: 200
+        return_content: true
+      register: live_hostname_dashboard
+      until:
+        - live_hostname_dashboard.status == 200
+        - live_hostname_dashboard.json.dashboard.panels | length == 7
+        - live_hostname_dashboard.json.dashboard.title == 'Homelab — Network Hosts'
+      retries: 20
+      delay: 3
+      changed_when: false
+      no_log: true
+
+    - name: Verify Grafana API has indexed individual generated host dashboards
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/search?tag=generated-network-host
+        url_username: admin
+        url_password: "{{ dashboard_deploy_grafana_password }}"
+        force_basic_auth: true
+        status_code: 200
+        return_content: true
+      register: live_generated_host_index
+      until:
+        - live_generated_host_index.status == 200
+        - live_generated_host_index.json | length >= 10
+      retries: 20
+      delay: 3
+      changed_when: false
+      no_log: true
 
     - name: Show host dashboard deployment
       ansible.builtin.debug:

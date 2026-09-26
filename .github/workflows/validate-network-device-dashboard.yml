@@ -8,6 +8,7 @@ on:
       - feature/hostname-first-grafana-hosts
       - feature/host-dashboards-data-only
       - fix/grafana-host-panels-per-device
+      - feature/restore-network-hosts-data-driven
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
@@ -28,8 +29,14 @@ jobs:
         with:
           python-version: "3.13"
 
-      - name: Install validation dependency
-        run: python3 -m pip install "PyYAML==6.0.2"
+      - name: Install validation dependencies
+        run: python3 -m pip install "PyYAML==6.0.2" "ansible-core>=2.19,<2.20"
+
+      - name: Validate focused Ansible dashboard deployment syntax
+        run: |
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-grafana.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -95,6 +102,25 @@ jobs:
           assert [p["title"] for p in top] == expected_top
           assert all(name in [p["title"] for p in full_template["panels"]]
                      for name in expected_charts)
+          assert len(overview["panels"]) == 7
+          assert [p["title"] for p in overview["panels"][:4]] == [
+              "Known devices", "Online", "Documented OS", "OS to investigate"
+          ]
+          assert any("Network hosts" in p["title"] for p in overview["panels"])
+          directory = next(p for p in overview["panels"]
+                           if p["title"].startswith("Network hosts"))
+          opening = next(v for v in directory["fieldConfig"]["overrides"]
+                         if v["matcher"]["options"] == "Open host")
+          link = next(prop["value"][0] for prop in opening["properties"]
+                      if prop["id"] == "links")
+          assert link["url"] == "/d/${__value.raw}"
+          directory_fields = next(
+              t["options"] for t in directory["transformations"]
+              if t["id"] == "organize"
+          )
+          assert directory_fields["renameByName"]["dashboard_uid"] == "Open host"
+          assert "dashboard_uid" not in directory_fields["excludeByName"]
+
           for dashboard in (overview, detail):
               host_picker = next(link for link in dashboard["links"]
                                  if link["title"] == "Choose host dashboard")
@@ -105,8 +131,9 @@ jobs:
               assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
               assert any("profile_uid" == p["name"] and p["hide"] == 2
                          for p in dashboard["templating"]["list"])
-              assert any("profile_uid" in link.get("url", "")
-                         for link in dashboard["links"])
+              if dashboard["uid"] == "homelab-mac-device-detail":
+                  assert any("profile_uid" in link.get("url", "")
+                             for link in dashboard["links"])
               assert not any(p["type"] in ("timeseries", "logs")
                              for p in dashboard["panels"])
               assert not any(p["title"] == "No telemetry" or
@@ -119,20 +146,31 @@ jobs:
                       continue
                   organize = next(t["options"] for t in panel["transformations"]
                                   if t["id"] == "organize")
-                  for internal in ("mac", "device_key", "dashboard_uid"):
+                  for internal in ("mac", "device_key"):
                       assert organize["excludeByName"].get(internal), (
                           panel["title"], internal)
-          assert any("Network directory" in p["title"]
+                  if panel["id"] != 18:
+                      assert organize["excludeByName"].get("dashboard_uid"), (
+                          panel["title"], "dashboard_uid")
+          assert any("Network hosts" in p["title"]
                      for p in overview["panels"])
           assert len(detail["panels"]) < len(overview["panels"])
+          assert "tag=generated-network-host" in Path(
+              "IaC/ansible/playbooks/network-host-grafana.yml").read_text()
           generator = (base / "files/network-host-dashboard-generator.py").read_text()
           assert "collect_availability" in generator
           assert "compact_panels" in generator
           assert "present_over_time" in generator
           assert '"title": "Choose host"' in generator
-          host_service = (base / "files/homelab-network-device-inventory.service").read_text()
+          inventory_service = (base / "files/homelab-network-device-inventory.service").read_text()
+          assert "ProtectSystem=strict" in inventory_service
+          assert "ReadWritePaths=/var/lib/prometheus/node-exporter" in inventory_service
+          assert "ExecStartPost=" not in inventory_service
+          host_service = (base / "files/homelab-network-host-dashboards.service").read_text()
+          host_timer = (base / "files/homelab-network-host-dashboards.timer").read_text()
           assert "ProtectSystem=strict" in host_service
-          assert "ReadWritePaths=/var/lib/prometheus/node-exporter /opt/monitoring/grafana/provisioning/dashboards/network-hosts" in host_service
+          assert "ReadWritePaths=/opt/monitoring/grafana/provisioning/dashboards/network-hosts" in host_service
+          assert "OnUnitActiveSec=5min" in host_timer
           focused = Path("IaC/ansible/playbooks/network-host-grafana.yml").read_text()
           monitoring_tasks = (base / "tasks/main.yml").read_text()
           for provisioner in (focused, monitoring_tasks):
@@ -151,6 +189,11 @@ jobs:
               "Install only the two new native Grafana dashboards",
               "Generate native Grafana dashboards for all retained MACs",
               "Restart only Grafana if provider configuration changed",
+              "Install independent per-host Grafana generator service and timer",
+              "Enable independent per-host dashboard refresh",
+              "Confirm Grafana sees the rebuilt dashboard file inside its actual container",
+              "Verify Grafana API is serving the rebuilt seven-panel hostname directory",
+              "Verify Grafana API has indexed individual generated host dashboards",
           ]:
               assert required in rollout_steps, required
           assert not any("Reconcile monitoring containers" in name
@@ -165,6 +208,9 @@ jobs:
               "Publish initial consolidated network inventory",
               "Install MAC-linked Grafana dashboard generator",
               "Generate a dedicated Grafana dashboard for each retained MAC",
+              "Install independent Grafana host dashboard generator service",
+              "Install independent Grafana host dashboard generator timer",
+              "Enable independent per-device Grafana regeneration timer",
           ]:
               assert required in steps, required
 

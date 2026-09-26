@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh per-host Grafana dashboards after network inventory collection
+
+[Timer]
+OnActiveSec=2min
+OnUnitActiveSec=5min
+AccuracySec=30s
+Unit=homelab-network-host-dashboards.service
+
+[Install]
+WantedBy=timers.target
