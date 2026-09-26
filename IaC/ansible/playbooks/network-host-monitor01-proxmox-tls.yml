@@ -1,0 +1,219 @@
+---
+# Gate 2b: establish verified, cluster-wide, read-only Proxmox API access
+# from monitor-01. NEVER runs Nmap, starts timers, or changes source services.
+# Transport the PUBLIC PVE cluster CA only through the existing authorised
+# Ansible SSH connections to both Proxmox nodes, compare it independently,
+# then test strict TLS chain + IP SAN + the existing root-only API token.
+- name: Independently inspect the public PVE cluster CA on both nodes
+  hosts: proxmox_hosts
+  become: true
+  gather_facts: true
+  vars:
+    pve_ca_path: /etc/pve/pve-root-ca.pem
+    expected_pve_ipv4:
+      PROXMOX: '192.168.2.70'
+      Proxmox-2: '192.168.2.71'
+  tasks:
+    - name: Refuse unexpected Proxmox hosts and addresses
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in ['PROXMOX', 'Proxmox-2']
+          - ansible_facts.hostname == inventory_hostname
+          - ansible_facts.default_ipv4.address == expected_pve_ipv4[inventory_hostname]
+
+    - name: Inspect Proxmox cluster CA without dereferencing a replacement symlink
+      ansible.builtin.stat:
+        path: "{{ pve_ca_path }}"
+        follow: false
+        checksum_algorithm: sha256
+      register: pve_ca_file
+
+    - name: Require a real, nonempty CA certificate file
+      ansible.builtin.assert:
+        that:
+          - pve_ca_file.stat.isreg | default(false)
+          - not (pve_ca_file.stat.islnk | default(false))
+          - pve_ca_file.stat.size | default(0) | int > 0
+
+    - name: Check CA validity for at least thirty days
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/openssl
+          - x509
+          - -in
+          - "{{ pve_ca_path }}"
+          - -noout
+          - -checkend
+          - '2592000'
+      register: pve_ca_validity
+      changed_when: false
+
+    - name: Check certificate is a CA and not an ordinary node leaf
+      ansible.builtin.command:
+        argv: [/usr/bin/openssl, x509, -in, "{{ pve_ca_path }}", -noout, -text]
+      register: pve_ca_description
+      changed_when: false
+
+    - name: Refuse certificate without the CA basic constraint
+      ansible.builtin.assert:
+        that:
+          - "'CA:TRUE' in pve_ca_description.stdout"
+
+    - name: Read only the public cluster CA over authenticated Ansible SSH
+      ansible.builtin.slurp:
+        src: "{{ pve_ca_path }}"
+      register: pve_cluster_ca
+      no_log: true
+
+    - name: Report the public CA SHA-256 without disclosing configuration
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} cluster CA SHA-256: {{ pve_ca_file.stat.checksum }}"
+
+- name: Establish trusted Proxmox HTTPS on the staged monitoring VM
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    pve_ca_dest: /etc/homelab-network-hosts/proxmox-ca.pem
+    pve_token_env: /etc/homelab-network-hosts/proxmox-api.env
+    pve_expected_cluster_ca: "{{ hostvars['PROXMOX'].pve_cluster_ca.content | b64decode }}"
+  tasks:
+    - name: Refuse an unexpected monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Require exactly the same public CA from both authenticated source nodes
+      ansible.builtin.assert:
+        that:
+          - hostvars['PROXMOX'].pve_cluster_ca.content == hostvars['Proxmox-2'].pve_cluster_ca.content
+          - "'BEGIN CERTIFICATE' in pve_expected_cluster_ca"
+        fail_msg: >-
+          The two PVE nodes supplied different CA certificates. Stop:
+          never trust a network-presented leaf certificate as the CA.
+
+    - name: Check the pre-existing monitor-01 API token and any CA destination
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ pve_token_env }}"
+        - "{{ pve_ca_dest }}"
+      register: pve_monitor_existing
+
+    - name: Require protected existing token and refuse conflicting CA overwrite
+      ansible.builtin.assert:
+        that:
+          - pve_monitor_existing.results[0].stat.isreg | default(false)
+          - not (pve_monitor_existing.results[0].stat.islnk | default(false))
+          - pve_monitor_existing.results[0].stat.pw_name == 'root'
+          - pve_monitor_existing.results[0].stat.mode == '0600'
+          - >-
+            (not pve_monitor_existing.results[1].stat.exists) or
+            (pve_monitor_existing.results[1].stat.isreg | default(false) and
+             not (pve_monitor_existing.results[1].stat.islnk | default(false)) and
+             pve_monitor_existing.results[1].stat.checksum ==
+               (pve_expected_cluster_ca | hash('sha256')))
+        fail_msg: >-
+          Existing API token is missing/unprotected, or the destination
+          CA conflicts with the independently verified cluster CA.
+          Do not overwrite either file automatically.
+
+    - name: Install only the public authenticated cluster CA
+      ansible.builtin.copy:
+        content: "{{ pve_expected_cluster_ca }}"
+        dest: "{{ pve_ca_dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Verify installed CA hash matches both cluster nodes
+      ansible.builtin.stat:
+        path: "{{ pve_ca_dest }}"
+        checksum_algorithm: sha256
+      register: pve_monitor_ca_stat
+
+    - name: Refuse nonidentical installed CA
+      ansible.builtin.assert:
+        that:
+          - pve_monitor_ca_stat.stat.checksum == hostvars['PROXMOX'].pve_ca_file.stat.checksum
+          - pve_monitor_ca_stat.stat.checksum == hostvars['Proxmox-2'].pve_ca_file.stat.checksum
+
+    - name: Test strict TLS, both cluster queries and two scoped guest configs
+      ansible.builtin.shell: |
+        set -euo pipefail
+        set +x
+        set -a
+        source /etc/homelab-network-hosts/proxmox-api.env
+        set +a
+        python3 - <<'PY'
+        import json
+        import os
+        import ssl
+        import urllib.error
+        import urllib.request
+
+        token_id = os.environ.get("PVE_TOKEN_ID", "")
+        secret = os.environ.get("PVE_TOKEN_SECRET", "")
+        if not token_id or not secret:
+            raise SystemExit("Saved API token ID/secret not available")
+
+        ca = "/etc/homelab-network-hosts/proxmox-ca.pem"
+        # Full CA-chain and requested-IP subjectAltName verification.
+        # NEVER use _create_unverified_context or disable hostname checks.
+        context = ssl.create_default_context(cafile=ca)
+        auth = f"PVEAPIToken={token_id}={secret}"
+
+        tests = [
+            ("PROXMOX cluster", "192.168.2.70",
+             "/cluster/resources?type=vm", "cluster"),
+            ("Proxmox-2 cluster", "192.168.2.71",
+             "/cluster/resources?type=vm", "cluster"),
+            ("cloud-01 VM", "192.168.2.70",
+             "/nodes/PROXMOX/qemu/200/config", "guest"),
+            ("dns-01 container", "192.168.2.71",
+             "/nodes/Proxmox-2/lxc/101/config", "guest"),
+        ]
+        cluster_counts = []
+        for label, address, path, kind in tests:
+            req = urllib.request.Request(
+                f"https://{address}:8006/api2/json{path}",
+                headers={"Authorization": auth},
+            )
+            with urllib.request.urlopen(req, context=context, timeout=10) as response:
+                if response.status != 200:
+                    raise RuntimeError(f"{label}: HTTP {response.status}")
+                data = json.load(response)["data"]
+            if kind == "cluster":
+                count = len(data)
+                if count < 4:
+                    raise RuntimeError(f"{label}: only {count} resources")
+                cluster_counts.append(count)
+                print(f"{label}: trusted TLS + HTTP 200, {count} resources")
+            else:
+                count = sum(
+                    key.startswith("net") and key[3:].isdigit()
+                    for key in data
+                )
+                if count < 1:
+                    raise RuntimeError(f"{label}: no visible network interfaces")
+                print(f"{label}: trusted TLS + HTTP 200, {count} NICs")
+        if cluster_counts[0] != cluster_counts[1]:
+            raise RuntimeError("Cluster resource counts disagree between nodes")
+        PY
+      args:
+        executable: /bin/bash
+      register: pve_trusted_test
+      changed_when: false
+      no_log: true
+
+    - name: Report validated read-only API access without token material
+      ansible.builtin.debug:
+        msg:
+          - "{{ pve_trusted_test.stdout_lines }}"
+          - "Public CA independently matched on both Proxmox nodes and installed on monitor-01."
+          - "TLS certificate chain and endpoint IP identity verified; token is still root-only."
+          - "No inventory was rewritten, no scans started, and no service timers changed."
