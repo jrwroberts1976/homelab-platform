@@ -20,6 +20,7 @@ on:
       - "IaC/komodo/stacks/monitoring/grafana/**"
       - "IaC/ansible/playbooks/network-host-monitor01-preflight.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-stage.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-proxmox-tls.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -52,6 +53,8 @@ jobs:
             playbooks/network-host-monitor01-preflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -157,6 +160,24 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # TLS trust gate must compare two SSH-retrieved public CA files,
+          # verify HTTPS with CA + IP SAN and never change live timers.
+          trust = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-proxmox-tls.yml").read_text())
+          assert [p["hosts"] for p in trust] == [
+              "proxmox_hosts", "monitoring_hosts"]
+          trust_text = str(trust)
+          assert "/etc/pve/pve-root-ca.pem" in trust_text
+          assert "pve_cluster_ca.content ==" in trust_text
+          assert "ssl.create_default_context(cafile=ca)" in trust_text
+          assert "_create_unverified_context" not in trust_text.replace(
+              "NEVER use _create_unverified_context or disable hostname checks.", "")
+          assert "/etc/homelab-network-hosts/proxmox-api.env" in trust_text
+          assert not any("ansible.builtin.systemd_service" in t or
+                         "ansible.builtin.import_role" in t
+                         for p in trust for t in
+                         [str(item) for item in p["tasks"]])
+
           assert "Proxmox-2" in str(staged)
           for role in ("network_host_collector", "network_host_enrichment",
                        "network_host_deep_profiler"):

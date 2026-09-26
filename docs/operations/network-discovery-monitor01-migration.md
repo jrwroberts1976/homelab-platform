@@ -182,6 +182,36 @@ or timer has been activated. Do not expose token values in playbooks,
 GitHub, logs or troubleshooting output. The old enricher remains active
 on `Proxmox-2` and still reads host-local guest configuration.
 
+### TLS certificate evidence and trusted-CA gate (26 September 2026)
+
+Both PVE API nodes served valid-dated node certificates issued by the same
+named PVE Cluster Manager CA. The presented `PROXMOX.jameshouse`
+certificate covers `192.168.2.70`, `PROXMOX` and its FQDN and expires
+7 September 2028; `Proxmox-2.jameshouse` covers `192.168.2.71`,
+`Proxmox-2` and its FQDN and expires 12 September 2028.
+Both hostnames also resolved correctly from monitor-01. These observations
+were made using diagnostic OpenSSL inspection and **do not yet constitute
+verified TLS certificate-chain trust**.
+
+The separate `playbooks/network-host-monitor01-proxmox-tls.yml` gate
+must run **from admin-01**, which already has authorised Ansible SSH
+access to both PVE nodes. It reads each node's public
+`/etc/pve/pve-root-ca.pem` over authenticated SSH, verifies the CA
+basic constraint and expiry, requires both nodes to return **identical
+CA bytes**, then installs the public cluster CA on monitor-01 as
+`/etc/homelab-network-hosts/proxmox-ca.pem`. A preexisting different
+destination CA causes a hard stop. It performs strict Python TLS
+chain and requested-IP SAN verification on **both** nodes, using the
+existing root-only `proxmox-api.env` credential only in monitor-01
+memory. It requests both cluster inventories and two sample guest
+configurations but never outputs token data or raw guest records.
+
+The CA and strict-TLS playbook is **prepared, not yet validated on
+live hosts**. Run it from a fresh reviewed post-merge worktree after
+syntax checks. Do **not** rerun the non-overwrite Gate 2 staging
+playbook. A successful gate does **not** enable the scan workers or
+switch the production Grafana source.
+
 **Known follow-ups before Gate 3:** the old enrichment worker derives
 Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
 locally; migrate that lookup to an authorised read-only source before
