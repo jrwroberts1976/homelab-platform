@@ -223,11 +223,7 @@
       failed_when: >-
         live_grafana_generated_files.rc != 0
         or (live_grafana_generated_files.stdout_lines
-            | select('match', '^net-host-.*[.]json      ansible.builtin.debug:
-        msg: >-
-          Created {{ network_dashboard_files.matched }} MAC-linked dashboard files;
-          open http://192.168.2.52:3000/d/homelab-network-host-tiles/homelab-network-host-tiles
-) | list | length) < 10
+            | select('match', '^net-host-.*[.]json$') | list | length) < 10
 
     - name: Read existing protected runtime Grafana admin password
       ansible.builtin.slurp:
@@ -239,11 +235,7 @@
       ansible.builtin.set_fact:
         dashboard_deploy_grafana_password: >-
           {{ (live_grafana_runtime_env.content | b64decode
-             | regex_findall('(?m)^GF_SECURITY_ADMIN_PASSWORD=(.*)      ansible.builtin.debug:
-        msg: >-
-          Created {{ network_dashboard_files.matched }} MAC-linked dashboard files;
-          open http://192.168.2.52:3000/d/homelab-network-host-tiles/homelab-network-host-tiles
-)) | first }}
+             | regex_findall('(?m)^GF_SECURITY_ADMIN_PASSWORD=(.*)$')) | first }}
       no_log: true
 
     - name: Verify Grafana API is serving the rebuilt seven-panel hostname directory
