@@ -2,8 +2,9 @@
 # Proposed: make monitor-01 the sole network-discovery and OS-investigation host
 
 **Status as of 26 September 2026: Gate 1 preflight passed on both hosts;
-Gate 2 staging playbook prepared but not yet deployed. The production
-collector and enricher still run on Proxmox-2.**
+Gate 2 staged and verified on monitor-01 with matching SHA-256 for all
+three JSON files and eight recovered OS matches. The production collector
+and enricher still run on Proxmox-2; monitor-01 scanning remains disabled.**
 The authoritative present-tense inventory remains
 [`docs/architecture/CURRENT-STATE.md`](../architecture/CURRENT-STATE.md)
 until the live handover has been verified. Current collector and saved
@@ -133,6 +134,15 @@ enabling the new enrichment schedule. The existing first-seen email
 configuration and alert registry must also be reconciled; the staged
 monitor-01 collector deliberately has **notifications disabled**.
 Do not stop the source alerting path until the destination is verified.
+
+**26 September staging outcome:** the source snapshot was retained at
+`/var/backups/homelab-network-migration/20260926T095635`. The staging
+playbook reported 14 OK / 2 changed / 0 failed on Proxmox-2 and 54 OK /
+16 changed / 0 failed on monitor-01. All three target SHA-256 comparisons
+passed; the local read-only exporter recovered eight historical Nmap OS
+matches. The target collector, enricher, deep profiler and OS exporter
+timers remain disabled, while the source collector and enricher continue.
+**Do not rerun the staging playbook:** the target files now exist by design.
 
 ## Gate 3: deliberate single-owner cutover (not part of preflight)
 
