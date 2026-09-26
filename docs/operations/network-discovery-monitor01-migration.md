@@ -130,6 +130,38 @@ Snapshots remain protected, and the original source continues serving
 production. Do not automatically rerun after a partial transfer; inspect
 the target hashes against the saved source snapshot.
 
+### Verified guest identity and first-seen prerequisites (26 September 2026)
+
+The original zero/zero `find` results on Proxmox-2 were misleading:
+`/etc/pve/qemu-server` and `/etc/pve/lxc` are **symlinks**
+into `nodes/Proxmox-2/`, so the initial check without `find -L`
+did not traverse them. The corrected read-only check found **two local
+QEMU VM configurations and two local LXC configurations**. The Proxmox
+cluster resource API reported **13 guests/resources across both nodes**:
+six running LXC containers, five running VMs and two stopped VM
+templates. Only four of the running guests are local to Proxmox-2
+(`dns-01`, `edge-01`, `monitor-01`, `greenbone-01`).
+
+The existing enrichment worker uses host-local `/etc/pve` configuration
+paths. Those symlinks provide *local-node* guest identities; copying
+the worker into monitor-01's VM will not expose either Proxmox node's
+configuration. Gate 3 therefore requires an **authorised, read-only
+cluster-wide Proxmox API** lookup from monitor-01 (or a controlled
+minimised export) that includes guest NIC MAC addresses, VMID, type,
+node and name. Merely reading `/cluster/resources --type vm` is
+insufficient for MAC-based enrichment: per-guest configuration lookup
+and scoped API access must also be proven. Do not mount `/etc/pve`
+on the monitoring VM or copy Proxmox host credentials to it.
+
+The existing source first-seen notification configuration and registry
+were also verified **present, root-owned and mode 0600**:
+`/etc/homelab-network-hosts/alerts.env` and
+`/var/lib/homelab-network-hosts/alerted-macs.json`.
+Their presence does **not** prove monitor-01's recipient, SMTP path or
+last-alert state is ready; protect the original files and synchronise
+their current contents only at the final cutover. Verify a single
+intentional test notification before disabling the old alert path.
+
 **Known follow-ups before Gate 3:** the old enrichment worker derives
 Proxmox guest identities from `/etc/pve`, which monitor-01 cannot read
 locally; migrate that lookup to an authorised read-only source before
