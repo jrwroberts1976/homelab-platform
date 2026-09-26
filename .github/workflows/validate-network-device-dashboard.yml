@@ -185,6 +185,15 @@ jobs:
           assert "--check" in str(refresh_gate)
           assert "--refresh" in str(refresh_gate)
           assert "proxmox-guests." in str(refresh_gate)
+          # Ansible file lookup trims trailing newlines by default.
+          # Deployed copy/src retains all bytes: compare hashes of complete
+          # source files or a valid on-host publisher falsely fails Gate 2f.
+          gate_text = str(refresh_gate)
+          assert "lookup('file', publisher_source, rstrip=False)" in gate_text
+          assert "lookup('file', helper_source, rstrip=False)" in gate_text
+          assert Path(
+              "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-snapshot.py").read_bytes().endswith(b"\\n")
+
           assert "homelab-network-host-collector.timer" in str(refresh_gate)
           refresher = Path(
               "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py").read_text()
