@@ -136,9 +136,20 @@ Do not stop the source alerting path until the destination is verified.
 
 ## Gate 3: deliberate single-owner cutover (not part of preflight)
 
-- Record active Proxmox-2 collector and enrichment timer states and the
-  last successful collection. Stop the old timers and wait for any running
-  job to finish. Keep a protected rollback copy of all prior evidence.
+- Record active Proxmox-2 collector, enrichment and notification
+  states and their last successful collection. Stop **the old collector,
+  enricher and old read-only OS-publisher timers** and wait for currently
+  running jobs to finish. Preserve their previous enabled/disabled states
+  as rollback data.
+- **Final delta sync is mandatory:** the initial staged snapshot may be
+  hours old, because the source collector and enricher remain active
+  during Gate 2. After stopping the old jobs, take one *final* protected
+  source snapshot of inventory, deep-profile and enrichment JSON, plus
+  first-seen alert registry/configuration (if present). Back up the
+  staged target files before replacing them, validate JSON schema and
+  SHA-256 for both sides, then regenerate the read-only fingerprint
+  metric on monitor-01. Do not use a stale Gate 2 snapshot as the
+  production state.
 - Verify the virtual NIC can perform LAN-local ARP discovery with its
   source address and the approved target/rate limits. Enable
   **monitor-01** collector first and verify new MAC-keyed inventory,
