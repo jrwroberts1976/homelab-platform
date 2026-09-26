@@ -2,7 +2,7 @@
   "id": null,
   "uid": "homelab-mac-device-detail",
   "title": "Homelab — Host Detail",
-  "description": "Compact hostname-first view showing only the available device identity, network status, OS and recorded port/DNS evidence. Full automatically generated profiles include only panels with real data.",
+  "description": "Compact hostname-first view showing only the available device identity, network status, OS and recorded port/DNS evidence. Full automatically generated profiles include only panels with real data. Use the Choose host dashboard dropdown to open data-only per-host Grafana pages; unavailable metrics are not displayed on those generated pages.",
   "tags": [
     "homelab",
     "hosts",
@@ -12,7 +12,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 6,
+  "version": 7,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -109,6 +109,17 @@
       "url": "/d/homelab-observability",
       "keepTime": true,
       "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Choose host dashboard",
+      "type": "dashboards",
+      "tags": [
+        "generated-network-host"
+      ],
+      "asDropdown": true,
+      "includeVars": false,
+      "keepTime": true,
       "targetBlank": false
     },
     {
