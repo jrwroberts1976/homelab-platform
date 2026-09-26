@@ -192,7 +192,7 @@ jobs:
           assert "lookup('file', publisher_source, rstrip=False)" in gate_text
           assert "lookup('file', helper_source, rstrip=False)" in gate_text
           assert Path(
-              "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-snapshot.py").read_bytes().endswith(b"\\n")
+              "IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-snapshot.py").read_bytes().endswith(bytes([10]))
 
           assert "homelab-network-host-collector.timer" in str(refresh_gate)
           refresher = Path(
