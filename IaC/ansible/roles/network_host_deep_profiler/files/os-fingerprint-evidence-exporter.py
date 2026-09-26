@@ -24,7 +24,7 @@ def label(value, limit=128):
 
 
 def labels(fields):
-    return ",".join('%s="%s"' % (key, label(value)) for key, value in fields.items())
+    return ",".join('%s="%s"' % (key, label(value, 360 if key == "nmap_services" else 128))\n                    for key, value in fields.items())
 
 
 def accuracy(value):
