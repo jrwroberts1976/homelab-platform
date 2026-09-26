@@ -148,7 +148,7 @@ Pre-cluster restore evidence includes an isolated CT103 restore/boot proof. A re
 
 ### Monitoring and logging
 
-`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki. Native Grafana Alloy is deployed across the managed estate. Router syslog, Network Hosts discovery/enrichment/deep profiling, first-seen notification and HP ProCurve telemetry are operational.
+`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter, Loki, the seven-panel **Network Hosts** directory and 50 individually generated host dashboards. Native Grafana Alloy is deployed across the managed estate. Router syslog and HP ProCurve telemetry are operational. Network discovery, selective enrichment and first-seen notifications are currently run from `Proxmox-2`; saved deep-profile evidence exists, but its scan timer is disabled as verified on 26 September. A guarded migration will centralise those workers on `monitor-01` without starting duplicate scans.
 
 The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/router/rt-ac86u.log` and shipped to Loki by the dedicated Alloy router-syslog pipeline. OpenVPN connection/authentication events are present in that stream.
 
@@ -206,7 +206,7 @@ Home Assistant is no longer a planned reservation: `home-01` is active and commi
 | Zabbix | Server + 15 active-agent hosts reporting | Tune actionable templates/alerts and add service-specific coverage |
 | Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry and `home-01` external availability checks |
 | Komodo / container operations | Komodo Core commissioned; application backup/restore proven | Onboard managed Docker hosts, prove update/rollback ownership, then retire superseded paths |
-| Network Hosts | Discovery/enrichment/deep profiling/notifications/dashboards operational | Continue switch/topology correlation and operational tuning |
+| Network Hosts | Source collector/enricher on `Proxmox-2`, 49 preserved devices and 8 saved Nmap OS-match records; deep-profiler timer disabled; 50 data-driven host pages on `monitor-01` | Stage protected state on `monitor-01` and resolve source-only Proxmox guest lookup/first-seen alerting before deliberate single-owner cutover |
 | Vulnerability management | `greenbone-01` commissioned and protected | Tune hardening/update policy as needed |
 | Remote-access VPN | **FULLY OPERATIONAL** — router-hosted OpenVPN accepted 18 September 2026 for external laptop administration with split tunnelling | Maintain DDNS/router recovery/client re-enrolment documentation; no operational acceptance work remains |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
