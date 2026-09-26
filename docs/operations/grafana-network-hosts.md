@@ -1,5 +1,17 @@
 # Network Hosts — recreated legacy Grafana workflow (2026-09)
 
+**Deployment truth, 26 September 2026:** Grafana, Prometheus, the seven-panel
+Network Hosts overview, the individual host dashboard generator and 50 indexed
+host pages are live on `monitor-01`. The collector and enrichment schedules
+still run on `Proxmox-2`. Its deep-profiler scan timer is disabled; the
+first read-only fingerprint exporter was installed there but exported zero
+matches because of older scan timestamps. A newer exporter can recover up
+to eight saved OS matches, but that fix has not yet been verified live.
+Do not assume the planned monitor-01 scan-worker migration has happened.
+See [the verified preflight and staged migration](network-discovery-monitor01-migration.md).
+The legacy Proxmox-2 fingerprint deployment instructions below are retained
+as historical context and **must not be rerun for the migration**.
+
 This implementation recreates the **behaviour** documented by the retired
 `home-lab-docs/network-discovery-dashboard.md`. The historical generator and
 generated JSON were deleted; this is a new implementation using the present
@@ -136,8 +148,8 @@ provisioned Grafana dashboards in the web UI.
 
 ## Saved Nmap OS fingerprints (optional, no-scan evidence integration)
 
-The read-only Nmap fingerprint publisher and monitor-01 correlation were
-deployed on 2026-09-26. The deep-profiler scan timer is **not** enabled by
+The **first version** of the read-only Nmap fingerprint publisher on
+Proxmox-2 and the monitor-01 correlation were deployed on 2026-09-26. The deep-profiler scan timer is **not** enabled by
 this integration. The first deployment exported 0 matches because the older
 saved profile records do not contain the newer per-TCP `tcp_scanned_at`
 field—not because no OS fingerprints were collected.
@@ -174,7 +186,10 @@ and inferred OS identifications until independently documented.
 
 ### Deploy the read-only Nmap integration
 
-After merging this PR, from `admin-01` check out the **merged** commit
+**Historical Proxmox-2 workflow: do not use for the monitor-01 move.**
+The current migration uses the separate guarded staging and cutover runbook.
+
+After merging this historical integration PR, from `admin-01` check out the **merged** commit
 into a fresh worktree and run:
 
 ```bash
@@ -229,6 +244,14 @@ match, source MAC and scanned IP are valid, the table explicitly says
 **Not recorded / Unknown** instead of discarding the match or inventing a
 date. Malformed or future recorded dates are rejected unless a separate,
 valid recorded timestamp exists.
+
+**Implementation versus live verification:** the compatibility exporter and
+conditional OS-panel suppression passed CI and were merged on 26 September.
+The source preflight proved there are eight saved Nmap OS matches, but it did
+**not** establish that the merged compatibility code has been deployed or that
+any Nmap panel is currently live. The monitor-01 staging gate will publish
+those saved matches locally without initiating new scans; Grafana is switched
+only at the later guarded cutover.
 
 ### Do not fingerprint a device whose exact OS is already established
 
