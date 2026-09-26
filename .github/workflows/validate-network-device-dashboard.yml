@@ -11,11 +11,13 @@ on:
       - feature/restore-network-hosts-data-driven
       - feature/grafana-nmap-os-fingerprint-evidence
       - fix/legacy-nmap-profile-timestamps
+      - plan/move-network-discovery-to-monitor-01
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
       - "IaC/monitoring/**"
       - "IaC/komodo/stacks/monitoring/grafana/**"
+      - "IaC/ansible/playbooks/network-host-monitor01-preflight.yml"
 
 jobs:
   validate-dashboard:
@@ -41,6 +43,8 @@ jobs:
             playbooks/network-host-grafana.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-os-fingerprints.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-preflight.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -116,6 +120,12 @@ jobs:
           focused_nmap = yaml.safe_load(Path(
               "IaC/ansible/playbooks/network-host-os-fingerprints.yml").read_text())
           assert len(focused_nmap) == 2
+          monitor_migration = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-preflight.yml").read_text())
+          assert [p["hosts"] for p in monitor_migration] == ["Proxmox-2", "monitoring_hosts"]
+          assert not any("systemd_service" in t or "copy:" in t or "template:" in t
+                         for play in monitor_migration for t in
+                         [str(item) for item in play["tasks"]])
           assert focused_nmap[0]["hosts"] == "Proxmox-2"
           assert focused_nmap[1]["hosts"] == "monitoring_hosts"
           assert not any("deep-profiler.timer" in str(t)
