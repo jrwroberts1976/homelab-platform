@@ -69,7 +69,8 @@ class InventoryTests(unittest.TestCase):
                             "mac": "02:00:00:00:02:02",
                             "nmap_name": "Linux 6.X", "nmap_accuracy": "95%",
                             "nmap_family": "Linux", "nmap_scanned_at":
-                            "2026-09-25 07:00 UTC", "nmap_services": "22/tcp ssh",
+                            "2026-09-25 07:00 UTC", "nmap_time_basis":
+                            "Profile completion", "nmap_services": "22/tcp ssh",
                             "nmap_scan_status": "partial"}},
                 # An IP-only match is NOT enough: exclude a previous occupant.
                 {"metric": {"profiled_ip": "192.168.2.52",
@@ -91,6 +92,8 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(hosts["192.168.2.52"]["os_evidence"], "documented")
         self.assertEqual(hosts["192.168.2.52"]["nmap_name"], "Linux 6.X")
         self.assertEqual(hosts["192.168.2.52"]["nmap_accuracy"], "95%")
+        self.assertEqual(hosts["192.168.2.52"]["nmap_time_basis"],
+                         "Profile completion")
         self.assertNotEqual(hosts["192.168.2.52"]["nmap_name"], "Windows")
         self.assertEqual(hosts["192.168.2.183"]["nmap_name"], "")
 
