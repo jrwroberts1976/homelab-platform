@@ -43,7 +43,7 @@ class FirstSeenNotifierStageTests(unittest.TestCase):
         self.assertEqual(config["network_host_collector_expected_hostname"], "Proxmox-2")
         hosts, script = render(config["network_host_collector_expected_hostname"])
         self.assertEqual(hosts, ["Proxmox-2"])
-        self.assertIn("ExecStart", script) if False else None  # Never run script.
+        self.assertIn('Collector: {COLLECTOR_HOST}', script)
 
     def test_monitor01_notifier_has_correct_collector_identity(self):
         hosts, script = render("monitor-01")
