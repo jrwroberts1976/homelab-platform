@@ -2,6 +2,8 @@
 
 This tracker records the controlled migration from the former consolidated/legacy homelab layout into the current `homelab-platform` operating model.
 
+**Network discovery migration is IN PROGRESS, not complete.** See the [verified preflight and gated staging plan](../operations/network-discovery-monitor01-migration.md).
+
 ## Safety boundary
 
 - Do not delete a historical repository until its unique useful content has been identified and migrated or deliberately archived.
@@ -167,7 +169,7 @@ The monitoring platform is operational on `monitor-01`, now VM202 on `Proxmox-2`
 
 Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki are live. Native Alloy is active and router syslog is ingested into Loki while retained locally.
 
-Network Hosts discovery, enrichment, one-time deep profiling, first-seen notification and dashboards are operational. HP ProCurve telemetry is also exported into Prometheus/Grafana.
+**26 September 2026 migration update:** network discovery and selective enrichment remain live on `Proxmox-2` with first-seen notifications; its deep profiler has 13 completed records but its scan timer is currently **disabled**. The read-only preflight confirmed 49 inventory records, eight saved Nmap OS matches, and a reachable `monitor-01` with `eth0` and Nmap installed. Grafana on `monitor-01` already serves the seven-panel overview and 50 individual host dashboards. Migration staging is prepared but is not confirmed live; the playbook preserves existing evidence and installs new workers with their scan timers disabled. Do not call the monitoring VM the live scanner until cutover verification. HP ProCurve telemetry remains exported to Prometheus/Grafana.
 
 ## `sensor-01`
 
