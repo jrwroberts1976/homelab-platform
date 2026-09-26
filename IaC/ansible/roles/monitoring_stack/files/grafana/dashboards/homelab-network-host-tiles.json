@@ -478,7 +478,17 @@
               "name": true,
               "pretty_name": true,
               "id": true,
-              "role": true
+              "role": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
             },
             "indexByName": {
               "hostname": 0,
@@ -583,7 +593,17 @@
               "pretty_name": true,
               "id": true,
               "kind": true,
-              "os_evidence": true
+              "os_evidence": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
             },
             "indexByName": {
               "hostname": 0,

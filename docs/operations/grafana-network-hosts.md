@@ -133,3 +133,74 @@ dashboard JSON seen by Grafana with the host-side file and check the live
 `/api/dashboards/uid/homelab-network-host-tiles` response. Do not
 repeatedly rerun the entire monitoring-stack playbook or hand-edit
 provisioned Grafana dashboards in the web UI.
+
+## Saved Nmap OS fingerprints (optional, no-scan evidence integration)
+
+**This section describes the focused integration added in the Nmap evidence
+PR, not proof of a live deployment.** The existing deep-profiler scan timer
+remains disabled unless explicitly enabled in its separate deployment.
+
+Proxmox-2 stores root-only, MAC-keyed completed/partial scan results in
+`/var/lib/homelab-network-hosts/deep-profiles.json`. The standalone
+`homelab-network-os-evidence.service` reads **only that existing JSON**,
+publishes a minimised metric through Proxmox-2 node exporter and runs on an
+independent five-minute timer. **It does not invoke Nmap, enable the scanner,
+run UDP scans, or alter existing scan state.**
+
+On `monitor-01`, the inventory correlator reads the exported
+`homelab_network_host_os_fingerprint_info` metric. A result is eligible
+**only when the recorded scan MAC and scanned IP both match the device's
+current inventory**; an old fingerprint from a reassigned DHCP IP must not
+be attributed to a new device. The oldest baseline scan remains a
+lower-priority clue. Documented OS and previously curated DNS-derived OS
+are not silently overwritten by Nmap guesses.
+
+The individual host generator adds the panel
+**Nmap OS fingerprint — inferred evidence** *only* if a correlated match
+exists. It displays the raw Nmap match, Nmap-reported match accuracy,
+OS family, generation, vendor, CPE (when supplied), the saved scan's UTC
+time, complete/partial scan status and a bounded summary of positively
+observed open TCP services. Do not interpret Nmap's reported accuracy as a
+probability of correctness; retained guesses always remain `inferred_nmap`.
+
+If there is no saved fingerprint, a scan timed out, or the current MAC/IP
+does not match the saved identity, the fingerprint panel does not appear.
+An absent panel is not proof that an OS is unknown or that a host has no
+open ports. The "OS to investigate" counter continues to include unknown
+and inferred OS identifications until independently documented.
+
+### Deploy the read-only Nmap integration
+
+After merging this PR, from `admin-01` check out the **merged** commit
+into a fresh worktree and run:
+
+```bash
+REPO=/home/james/projects/homelab-platform
+DEPLOY=/var/tmp/network-host-os-evidence
+git -C "$REPO" fetch origin main
+git -C "$REPO" worktree add --detach "$DEPLOY" origin/main
+cd "$DEPLOY/IaC/ansible"
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/network-host-os-fingerprints.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/network-host-os-fingerprints.yml
+```
+
+The first play requires the **existing** deep-profile JSON on Proxmox-2,
+publishes current evidence, and enables only the read-only export timer.
+The second installs the updated monitor-01 correlation and dashboard
+generator, waits for Prometheus scrapes, regenerates host pages, and
+restarts Grafana only when the dashboard assets actually change. It
+reports both the exported fingerprint count and the count that matched
+current MAC/IP identities. If the first count is zero, there is no
+saved OS match to show yet; the playbook must not invent one or launch
+a new scan.
+
+To inspect read-only export status on Proxmox-2:
+
+```bash
+systemctl status homelab-network-os-evidence.timer --no-pager
+journalctl -u homelab-network-os-evidence.service -n 25 --no-pager
+grep -c '^homelab_network_host_os_fingerprint_info{' \
+  /var/lib/prometheus/node-exporter/homelab_network_os_fingerprints.prom
+```

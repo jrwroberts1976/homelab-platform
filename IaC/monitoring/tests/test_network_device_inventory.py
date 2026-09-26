@@ -63,7 +63,19 @@ class InventoryTests(unittest.TestCase):
             "homelab_network_host_enrichment_port_info": [
                 {"metric": {"ip": "192.168.2.52", "protocol": "tcp",
                             "port": "9100", "service": "node_exporter",
-                            "product": "", "version": ""}}]}
+                            "product": "", "version": ""}}],
+            'homelab_network_host_os_fingerprint_info{target_name="Proxmox-2"}': [
+                {"metric": {"profiled_ip": "192.168.2.52",
+                            "mac": "02:00:00:00:02:02",
+                            "nmap_name": "Linux 6.X", "nmap_accuracy": "95%",
+                            "nmap_family": "Linux", "nmap_scanned_at":
+                            "2026-09-25 07:00 UTC", "nmap_services": "22/tcp ssh",
+                            "nmap_scan_status": "partial"}},
+                # An IP-only match is NOT enough: exclude a previous occupant.
+                {"metric": {"profiled_ip": "192.168.2.52",
+                            "mac": "de:ad:be:ef:ca:fe",
+                            "nmap_name": "Windows", "nmap_accuracy": "99%",
+                            "nmap_scanned_at": "2026-09-26 07:00 UTC"}}]}
         def mocked_json(path):
             return estate if path == inventory.ESTATE else dns
         with patch.object(inventory, "load_json", side_effect=mocked_json), \
@@ -77,6 +89,11 @@ class InventoryTests(unittest.TestCase):
 
         self.assertEqual(hosts["192.168.2.52"]["os"], "Linux (IaC-managed)")
         self.assertEqual(hosts["192.168.2.52"]["os_evidence"], "documented")
+        self.assertEqual(hosts["192.168.2.52"]["nmap_name"], "Linux 6.X")
+        self.assertEqual(hosts["192.168.2.52"]["nmap_accuracy"], "95%")
+        self.assertNotEqual(hosts["192.168.2.52"]["nmap_name"], "Windows")
+        self.assertEqual(hosts["192.168.2.183"]["nmap_name"], "")
+
         self.assertEqual(hosts["192.168.2.60"]["os"], "Home Assistant OS 18.2")
         self.assertEqual(hosts["192.168.2.183"]["os_evidence"], "inferred_dns")
         self.assertTrue(hosts["192.168.2.252"]["scan_timed_out"])

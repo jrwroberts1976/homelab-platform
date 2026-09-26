@@ -85,6 +85,7 @@
       loop:
         - homelab-network-host-tiles.json
         - homelab-mac-device-detail.json
+      register: network_dashboard_overview
 
     - name: Reconcile Grafana's file provider, retaining existing providers
       ansible.builtin.template:
@@ -164,7 +165,7 @@
       register: network_dashboard_files
       failed_when: network_dashboard_files.matched < 10
 
-    - name: Restart only Grafana if provider configuration changed
+    - name: Restart only Grafana if provisioned JSON or provider configuration changed
       ansible.builtin.command:
         argv:
           - docker
@@ -173,7 +174,10 @@
           - "{{ grafana_root }}"
           - restart
           - grafana
-      when: network_dashboard_provider.changed
+      when: >-
+        network_dashboard_provider.changed or
+        network_dashboard_overview.changed or
+        network_dashboard_generation.changed
 
     - name: Check Grafana API health
       ansible.builtin.uri:
