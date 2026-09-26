@@ -15,4 +15,6 @@ Nice=10
 NoNewPrivileges=true
 ProtectHome=true
 ProtectSystem=strict
-ReadWritePaths=/var/lib/prometheus/node-exporter
+# The post-publish dashboard generator must be able to replace the generated
+# Grafana JSON on the host; without this, ProtectSystem=strict blocks updates.
+ReadWritePaths=/var/lib/prometheus/node-exporter /opt/monitoring/grafana/provisioning/dashboards/network-hosts
