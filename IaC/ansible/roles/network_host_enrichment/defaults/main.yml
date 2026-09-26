@@ -1,4 +1,9 @@
 ---
+# Historical active owner is Proxmox-2 until the monitor-01 cutover is proven.
+# Staging playbooks explicitly override these values, leaving old playbooks safe.
+network_host_enrichment_expected_hostname: "Proxmox-2"
+network_host_enrichment_expected_ipv4: "192.168.2.71"
+
 network_host_enrichment_inventory:
   "/var/lib/homelab-network-hosts/inventory.json"
 
