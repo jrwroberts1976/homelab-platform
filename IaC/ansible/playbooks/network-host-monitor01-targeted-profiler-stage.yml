@@ -1,0 +1,93 @@
+---
+# Deliberately inert deployment: install the bounded existing MAC-keyed worker
+# on monitor-01 while keeping its timer disabled. Never run the legacy full scan.
+# Requires an explicit separate approval at execution time.
+- name: Stage targeted new-MAC profiler without starting scans
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    profiler_script: /usr/local/sbin/homelab-network-host-deep-profiler
+    profiler_backup_root: /var/backups/homelab-targeted-profiler
+  tasks:
+    - name: Require correct owner, explicitly approved stage and no active profiler
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - targeted_profiler_stage_approved | default(false) | bool
+        fail_msg: Refusing targeted-profiler staging without explicit approval.
+
+    - name: Check that the deep-profiler timer is not running
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-deep-profiler.timer]
+      register: target_profiler_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse to overwrite active deep-profiler automation
+      ansible.builtin.assert:
+        that:
+          - target_profiler_timer.stdout != 'active'
+
+    - name: Check installed worker before staging replacement
+      ansible.builtin.stat:
+        path: "{{ profiler_script }}"
+        follow: false
+      register: installed_worker
+
+    - name: Require regular pre-existing worker
+      ansible.builtin.assert:
+        that:
+          - installed_worker.stat.isreg | default(false)
+          - not installed_worker.stat.islnk | default(false)
+
+    - name: Create protected rollback directory
+      ansible.builtin.file:
+        path: "{{ profiler_backup_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve original worker before a staged update
+      ansible.builtin.copy:
+        src: "{{ profiler_script }}"
+        dest: "{{ profiler_backup_root }}/worker-before-targeted-{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+
+    - name: Install bounded worker while leaving its timer disabled
+      ansible.builtin.import_role:
+        name: network_host_deep_profiler
+      vars:
+        network_host_deep_profiler_expected_hostname: monitor-01
+        network_host_deep_profiler_expected_ipv4: '192.168.2.52'
+        network_host_deep_profiler_interface: eth0
+        network_host_deep_profiler_scan_mode: targeted
+        network_host_deep_profiler_allow_deploy: true
+        network_host_deep_profiler_enable_timer: false
+
+    - name: Verify timer remains disabled after staging
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, homelab-network-host-deep-profiler.timer]
+      register: staged_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Require no automatic scans from this stage
+      ansible.builtin.assert:
+        that:
+          - staged_timer.stdout == 'disabled'
+
+    - name: Report inert stage, requiring later independent activation
+      ansible.builtin.debug:
+        msg: >-
+          Staged targeted mode on monitor-01 with a protected old worker copy.
+          Deep-profiler timer is disabled. No Nmap scans have started.
