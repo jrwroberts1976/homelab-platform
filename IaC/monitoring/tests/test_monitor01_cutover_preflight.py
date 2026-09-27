@@ -57,7 +57,7 @@ class ReadOnlyGate3Tests(unittest.TestCase):
                     self.assertNotIn("nmap ", shell)
         self.assertIn("--check", self.code)
         self.assertNotIn("systemctl disable", self.code)
-        self.assertNotIn("network-discovery-cutover-approved\n", self.code)
+        self.assertNotIn("state: touch", self.code)
 
     def test_preserves_legacy_host_and_all_protected_files(self):
         for path in (
