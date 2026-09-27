@@ -406,6 +406,25 @@
           - (identity_after.stdout | from_json).unmatched_guest_macs | int == 0
           - (identity_after.stdout | from_json).snapshot_age_seconds | int < 172800
 
+    - name: Verify all four source timers remain disabled immediately before first target collector cycle
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      delegate_to: Proxmox-2
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+      changed_when: false
+      failed_when: false
+      register: immediately_before_scan_disabled
+
+    - name: Block initial target collector cycle if any source timer was reenabled
+      ansible.builtin.assert:
+        that:
+          - immediately_before_scan_disabled.results | map(attribute='stdout') | unique | list == ['disabled']
+        fail_msg: Source timer resumed; do not run a second network collector.
+
     - name: Run single approved target collector cycle with historic registry already copied
       ansible.builtin.systemd_service:
         name: homelab-network-host-collector.service
