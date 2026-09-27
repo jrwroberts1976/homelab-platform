@@ -400,11 +400,7 @@ investigate any outstanding first-seen notifications before transfer.
 and scheduled collector passed validation. Monitor-01 had no first-seen
 config, registry, notifier or cutover marker; all five timers were
 disabled/inactive; SMTP TCP/25 was reachable without sending mail;
-the staged enrichment cutover/refresh safeguards passed. The supplied
-output did not include the source's aggregate registry or pending
-online first-seen counts. Retrieve the source preflight's
-`Report source readiness using aggregate counts only` task output
-before authorising the final source stop.
+the staged enrichment cutover/refresh safeguards passed. A 27 September 2026 repeat source-only preflight passed: Proxmox-2 9 OK, 0 changed, 0 failed. At that time the source registry had 49 known MACs (40 baseline, 9 alerted, 0 other), while the source inventory had 49 device records and 48 distinct MACs. No inventoried MACs were missing from the registry and there were zero pending online first-seen messages. The three checked source timers were enabled. At final cutover, preserve the entire historical 49-entry alert registry rather than reconstructing it from the smaller current unique-MAC inventory. Recheck the figures after stopping the source because these counts are only a point-in-time measurement.
 
 ### Gate 2i: notifier staging encountered a pre-existing target script (27 September 2026)
 
