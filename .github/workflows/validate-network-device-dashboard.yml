@@ -28,6 +28,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-refresh-units-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-preflight.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-stage.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-verify.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -76,6 +77,8 @@ jobs:
             playbooks/network-host-monitor01-firstseen-preflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-firstseen-notifier-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-firstseen-notifier-verify.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -181,6 +184,30 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 2i-R reconciles a pre-existing notifier using Ansible
+          # template check mode only; it must never replace its bytes,
+          # create a registry, send email or start any scanning timer.
+          notifier_verify = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-verify.yml").read_text())
+          assert len(notifier_verify) == 1
+          assert notifier_verify[0]["hosts"] == "monitoring_hosts"
+          verify_tasks = notifier_verify[0]["tasks"]
+          template_checks = [t for t in verify_tasks if "ansible.builtin.template" in t]
+          assert len(template_checks) == 1
+          assert template_checks[0]["check_mode"] is True
+          assert template_checks[0]["diff"] is False
+          assert template_checks[0]["no_log"] is True
+          assert not any(
+              any(k in t for k in [
+                  "ansible.builtin.copy", "ansible.builtin.file",
+                  "ansible.builtin.systemd_service", "ansible.builtin.apt",
+                  "ansible.builtin.import_role"
+              ]) for t in verify_tasks
+          )
+          assert "not notifier_template_comparison.changed" in str(notifier_verify)
+          assert "alerted-macs.json" in str(notifier_verify)
+          assert "homelab-proxmox-guest-refresh.timer" in str(notifier_verify)
+
           # Gate 2i installs only an inert script on monitor-01,
           # preserving all protected MAC registries and disabling timers.
           inert_notifier = yaml.safe_load(Path(

@@ -406,7 +406,7 @@ online first-seen counts. Retrieve the source preflight's
 `Report source readiness using aggregate counts only` task output
 before authorising the final source stop.
 
-### Gate 2i: stage inactive first-seen notifier code (prepared; not yet run)
+### Gate 2i: notifier staging encountered a pre-existing target script (27 September 2026)
 
 `playbooks/network-host-monitor01-firstseen-notifier-stage.yml`
 runs on **monitor-01 only**. It parameterises the notifier's collector
@@ -421,6 +421,29 @@ unwired for any notifier. It confirms the rendered script has
 MAC registry could seed a second baseline. Source registry and SMTP
 recipient remain untouched on Proxmox-2. SHA-256 checks require
 all four protected monitor-01 state files unchanged.
+
+The first Gate 2i attempt stopped safely with `monitor-01:
+5 OK / 0 changed / 1 failed`: the unexpected existing target notifier
+tripped the deliberate no-overwrite check. A separate read-only audit
+found a regular root-owned mode-0750 script with valid Python syntax,
+`COLLECTOR_HOST = "monitor-01"`, SHA-256
+`c1bef0bf41c6cc2538e6b270f7667a4772b0ba98e3c4f7c54228512f1550d2dd`.
+The target recipient, alert registry and cutover marker were absent,
+and the collector service had no email post-hook or EnvironmentFile.
+These observations establish an **inert** notifier but not its
+installation provenance or exact equality to the reviewed template.
+Do **not** delete, overwrite or execute the existing notifier.
+
+A separate, read-only **Gate 2i-R**, in
+`playbooks/network-host-monitor01-firstseen-notifier-verify.yml`,
+compares the installed bytes to the approved monitor-01 template using
+Ansible `template` in `check_mode`, with `diff: false` and
+`no_log: true`. It must report `changed: false`, also verifying
+file metadata, the absent alert registry/recipient/cutover marker,
+disconnected collector, five inactive/disabled timers and unchanged
+SHA-256 for all four protected JSON files. A changed result **blocks**
+progress and does not overwrite the existing file. Do not rerun
+the old one-shot Gate 2i.
 
 After Gate 2i, keep the destination notifier disconnected from
 `ExecStartPost` and retain the source as the sole first-seen

@@ -1,0 +1,222 @@
+---
+# Gate 2i-R: read-only reconciliation of an unexpectedly preexisting
+# inert notifier. Use after Gate 2i stops at its no-overwrite guard.
+# Never execute the notifier: without the source MAC registry it would
+# seed an incorrect first-seen baseline. Never run Nmap or send mail.
+- name: Verify an existing inert monitor-01 notifier against the reviewed template
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    template_source: >-
+      {{ playbook_dir }}/../roles/network_host_collector/templates/homelab-network-device-email-alert.py.j2
+    defaults_source: >-
+      {{ playbook_dir }}/../roles/network_host_collector/defaults/main.yml
+    notifier_path: /usr/local/sbin/homelab-network-device-email-alert
+    collector_unit_path: /etc/systemd/system/homelab-network-host-collector.service
+    cutover_marker: /etc/homelab-network-hosts/network-discovery-cutover-approved
+    state_path: /var/lib/homelab-network-hosts
+    original_files:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - proxmox-guests.json
+    disabled_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+  tasks:
+    - name: Require the expected monitor-01 VM and Ethernet address
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Inspect existing notifier, missing alert state and collector unit
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ notifier_path }}"
+        - /etc/homelab-network-hosts/alerts.env
+        - "{{ state_path }}/alerted-macs.json"
+        - "{{ cutover_marker }}"
+        - "{{ collector_unit_path }}"
+      register: notifier_state
+
+    - name: Require only the known inactive notifier and collector unit
+      ansible.builtin.assert:
+        that:
+          - notifier_state.results[0].stat.isreg | default(false)
+          - not (notifier_state.results[0].stat.islnk | default(false))
+          - notifier_state.results[0].stat.pw_name == 'root'
+          - notifier_state.results[0].stat.mode == '0750'
+          - not notifier_state.results[1].stat.exists
+          - not notifier_state.results[2].stat.exists
+          - not notifier_state.results[3].stat.exists
+          - notifier_state.results[4].stat.isreg | default(false)
+          - notifier_state.results[4].stat.pw_name == 'root'
+        fail_msg: >-
+          Unexpected destination notifier, first-seen registry, recipient,
+          cutover marker or collector service. Do not run the notifier.
+
+    - name: Inspect five staged timer enablement states
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ disabled_timers }}"
+      changed_when: false
+      failed_when: false
+      register: notifier_timers_enabled
+
+    - name: Inspect five staged timer runtime states
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ disabled_timers }}"
+      changed_when: false
+      failed_when: false
+      register: notifier_timers_active
+
+    - name: Refuse overlap with any scheduled target worker or guest-map refresh
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ notifier_timers_enabled.results | zip(notifier_timers_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Inspect target collector service state without starting it
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-collector.service]
+      register: collector_service_state
+      changed_when: false
+      failed_when: false
+
+    - name: Require collector is inactive
+      ansible.builtin.assert:
+        that:
+          - collector_service_state.stdout == 'inactive'
+
+    - name: Read existing collector unit without displaying any environment
+      ansible.builtin.slurp:
+        src: "{{ collector_unit_path }}"
+      register: collector_unit_original
+      no_log: true
+
+    - name: Refuse any existing notification hook or recipient environment wiring
+      ansible.builtin.assert:
+        that:
+          - "'ExecStartPost=' not in (collector_unit_original.content | b64decode)"
+          - "'EnvironmentFile=' not in (collector_unit_original.content | b64decode)"
+
+    - name: Capture original protected JSON file hashes without reading contents
+      ansible.builtin.stat:
+        path: "{{ state_path }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ original_files }}"
+      register: original_hashes
+
+    - name: Require all original state files remain protected
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - item.stat.size | int > 0
+      loop: "{{ original_hashes.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Load original collector role defaults without running that role
+      ansible.builtin.include_vars:
+        file: "{{ defaults_source }}"
+
+    - name: Set only expected target identity for template comparison
+      ansible.builtin.set_fact:
+        network_host_collector_expected_hostname: monitor-01
+        network_host_collector_alert_enabled: false
+        network_host_collector_enable_timer: false
+
+    - name: Require original collector role retains inactive, safe settings
+      ansible.builtin.assert:
+        that:
+          - network_host_collector_expected_hostname == 'monitor-01'
+          - not (network_host_collector_alert_enabled | bool)
+          - not (network_host_collector_enable_timer | bool)
+          - network_host_collector_alert_environment == '/etc/homelab-network-hosts/alerts.env'
+          - network_host_collector_alert_registry == state_path ~ '/alerted-macs.json'
+
+    - name: Compare installed notifier to exact reviewed template without writing it
+      ansible.builtin.template:
+        src: "{{ template_source }}"
+        dest: "{{ notifier_path }}"
+        owner: root
+        group: root
+        mode: '0750'
+      check_mode: true
+      diff: false
+      no_log: true
+      register: notifier_template_comparison
+
+    - name: Require existing notifier matches reviewed monitor-01 template byte-for-byte
+      ansible.builtin.assert:
+        that:
+          - not notifier_template_comparison.changed
+        fail_msg: >-
+          Existing notifier differs from the reviewed monitor-01 template.
+          No file was overwritten. Stop for explicit reconciliation.
+
+    - name: Confirm installed notifier parses and identifies monitor-01 without executing it
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import ast,pathlib;
+            t=ast.parse(pathlib.Path('{{ notifier_path }}').read_text());
+            h=[n.value.value for n in t.body
+              if isinstance(n,ast.Assign)
+              and any(isinstance(x,ast.Name) and x.id=='COLLECTOR_HOST'
+                      for x in n.targets)
+              and isinstance(n.value,ast.Constant)];
+            assert h==['monitor-01'], 'Unexpected notifier identity';
+            print('Verified inert notifier for monitor-01; script not executed')
+      changed_when: false
+      register: notifier_ast_checked
+
+    - name: Recheck existing notifier and all protected state hashes
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ [notifier_path] + (original_files | map('regex_replace', '^', state_path ~ '/') | list) }}"
+      register: post_checks
+
+    - name: Require check-mode comparison did not alter notifier bytes or protected state
+      ansible.builtin.assert:
+        that:
+          - notifier_state.results[0].stat.checksum == post_checks.results[0].stat.checksum
+          - item[0].stat.checksum == item[1].stat.checksum
+        fail_msg: >-
+          A protected target file changed unexpectedly during read-only
+          notifier verification. Stop before any cutover.
+      loop: "{{ original_hashes.results | zip(post_checks.results[1:]) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Report verified inert notifier only, without MAC or recipient details
+      ansible.builtin.debug:
+        msg:
+          - "{{ notifier_ast_checked.stdout }}"
+          - "Existing notifier matches the reviewed source template without installation changes."
+          - "Collector unit has no email hook or environment; recipient, MAC registry and approval marker remain absent."
+          - "All five staged timers remain disabled/inactive; protected JSON files are byte-identical."
+          - "Production first-seen alerting remains on Proxmox-2 pending final source stop and delta sync."
