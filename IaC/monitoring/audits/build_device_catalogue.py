@@ -76,7 +76,7 @@ def new_notes(name):
 """
 
 
-def render_device(host, asset, facts, notes_rel, scan_time):
+def render_device(host, asset, facts, notes_rel, scan_time, os_result=None):
     ip = host["ip"]
     ports = host.get("open_ports") or []
     discovered_name = ", ".join(host.get("names") or []) or "Not resolved"
@@ -114,6 +114,21 @@ def render_device(host, asset, facts, notes_rel, scan_time):
             )
     else:
         details.append("| No open ports identified in scanned set | — | — | — |")
+    details += ["", "## OS fingerprint evidence", ""]
+    if os_result is None:
+        details.append("No active OS-fingerprint record; status unverified.")
+    elif not os_result.get("result_present", False):
+        details.append("No saved Nmap host result. The earlier discovery may still have seen this device.")
+    elif not os_result.get("matches"):
+        details.append("Nmap scan completed but returned no OS candidates.")
+    else:
+        details.append("Nmap candidates are **inferences, not confirmed OS versions**. "
+                       "Compare with direct installed-state evidence when available.")
+        details += ["", "| Nmap candidate | Reported accuracy |",
+                    "|---|---:|"]
+        for match in os_result["matches"]:
+            details.append(f"| {fenced_text(match.get('name'))} | "
+                           f"{fenced_text(match.get('accuracy'))}% |")
     details += ["", "## Installed-state evidence", ""]
     if facts:
         details += [
@@ -149,6 +164,12 @@ def build(evidence, repo):
     assets = json.loads((repo / "IaC/inventory/estate.json").read_text())["assets"]
     expected = {x["address"]: x for x in assets
                 if x.get("address") and x.get("state") == "active"}
+    fingerprint_file = evidence / "os-fingerprints.json"
+    os_results = {}
+    if fingerprint_file.exists():
+        for record in json.loads(fingerprint_file.read_text()):
+            if record.get("ip"):
+                os_results[record["ip"]] = record
     facts_dir = evidence / "managed-hosts"
     facts = {p.stem: json.loads(p.read_text())
              for p in facts_dir.glob("*.json")} if facts_dir.exists() else {}
@@ -189,7 +210,7 @@ def build(evidence, repo):
         identity = asset["name"] if asset else "Unverified"
         fact = facts.get(asset["name"]) if asset else None
         page.write_text(render_device(
-            host, asset, fact, f"../notes/{slug}.md", report["scan_time"]))
+            host, asset, fact, f"../notes/{slug}.md", report["scan_time"], os_results.get(host["ip"])))
         page.chmod(0o600)
         index.append(
             f"| [{fenced_text(identity if asset else host['ip'])}](devices/{slug}.md) | "
