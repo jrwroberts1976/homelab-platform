@@ -324,13 +324,15 @@
           - installed_guard.stat.mode == '0750'
           - installed_guard.stat.checksum == (lookup('file', guard_source, rstrip=False) | hash('sha256'))
 
-    - name: Verify the historical guard parses without executing it
+    - name: Verify the historical guard parses in memory without executing or writing bytecode
       ansible.builtin.command:
-        argv: [/usr/bin/python3, -B, -m, py_compile, "{{ guard_script }}"]
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "import ast, pathlib, sys; ast.parse(pathlib.Path(sys.argv[1]).read_text())"
+          - "{{ guard_script }}"
       changed_when: false
-      environment:
-        PYTHONPYCACHEPREFIX: /dev/null
-      # py_compile is syntax-only, not actual collector execution.
 
     - name: Create the isolated collector drop-in directory
       ansible.builtin.file:
