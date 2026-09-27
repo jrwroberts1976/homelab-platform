@@ -489,8 +489,10 @@ status, the schemas and protected modes of all **three** source
 evidence JSON files, the **entire historical** first-seen MAC registry,
 and the root-only alert recipient environment. It checks that the
 existing first-seen post-hook is still wired, no currently inventoried
-MAC is missing from the registry and **no online first-seen messages
-remain pending**. It reports only counts and job states, not individual
+MAC is missing from the registry, **no online first-seen messages
+remain pending**, and **no source notifier delivery-error events were
+logged during the preceding 24 hours**. It reads journals only into
+root's process memory and reports aggregate error counts. It reports only counts and job states, not individual
 MACs, SMTP recipients, token values or JSON records. The previous
 49-entry (40 baseline, nine alerted) registry measurement is a
 historical reference **not a hardcoded cutoff**: preserve all records
