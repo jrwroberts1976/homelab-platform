@@ -1,0 +1,307 @@
+---
+# Gate 3e-early: approved rollback ONLY before first target activation.
+# If monitor-01 has ever started the collector with the new notifier,
+# use the separate post-activation registry reconciliation procedure:
+# NEVER restore old source alerts without merging newly delivered MACs.
+# This rollback intentionally leaves target evidence and backups retained.
+- name: Require the target has NEVER been activated or allowed to send new-device emails
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    target_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+  tasks:
+    - name: Require separate production rollback approval
+      ansible.builtin.assert:
+        that:
+          - (gate3_rollback_approval | default('')) == 'APPROVE-PREACTIVATION-RETURN-TO-PROXMOX-2'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Inspect target cutover-approval marker and installed collector post-hook
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+        - /etc/systemd/system/homelab-network-host-collector.service.d/30-network-cutover-firstseen.conf
+        - /usr/local/sbin/homelab-network-firstseen-guard
+      register: target_rollback_collisions
+
+    - name: Refuse early rollback if target activation has ever been attempted
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists
+        fail_msg: >-
+          Target might have delivered first-seen emails. Early rollback
+          is forbidden: stop target, reconcile its historical/new MAC
+          registry with source, and use post-activation recovery.
+      loop: "{{ target_rollback_collisions.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check five target timers remain disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ target_timers }}"
+      register: target_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Check five target timers remain inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ target_timers }}"
+      register: target_inactive
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse source restart while any target timer could produce discoveries
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ target_disabled.results | zip(target_inactive.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Check no target discovery/enrichment/guest-refresh worker still running
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-proxmox-guest-refresh.service
+      register: target_workers_inactive
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse overlapping source restart while target workers are running
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+      loop: "{{ target_workers_inactive.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+- name: Restore saved original Proxmox-2 schedule ONLY if no target first-seen alerts were possible
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_dir: /var/lib/homelab-network-hosts
+    freeze_marker: "{{ source_dir }}/network-discovery-source-frozen.json"
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_workers:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+  tasks:
+    - name: Require exact original host and independent preactivation rollback approval
+      ansible.builtin.assert:
+        that:
+          - (gate3_rollback_approval | default('')) == 'APPROVE-PREACTIVATION-RETURN-TO-PROXMOX-2'
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Read completed source-freeze marker privately
+      ansible.builtin.slurp:
+        src: "{{ freeze_marker }}"
+      register: source_marker_raw
+      no_log: true
+
+    - name: Parse source marker for exact rollback path
+      ansible.builtin.set_fact:
+        rollback_freeze: "{{ source_marker_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require matching root-owned freeze record
+      ansible.builtin.assert:
+        that:
+          - rollback_freeze.event == 'network_discovery_source_frozen'
+          - rollback_freeze.run_id is match('^[0-9]{8}T[0-9]{6}$')
+          - rollback_freeze.snapshot_dir == '/var/backups/homelab-network-migration/gate3-' ~ rollback_freeze.run_id
+
+    - name: Read original timer states saved BEFORE source freeze
+      ansible.builtin.slurp:
+        src: "{{ rollback_freeze.snapshot_dir }}/freeze-intent.json"
+      register: rollback_intent_raw
+      no_log: true
+
+    - name: Parse original timer-state manifest
+      ansible.builtin.set_fact:
+        rollback_intent: "{{ rollback_intent_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require exact one-to-one original timer-state provenance
+      ansible.builtin.assert:
+        that:
+          - rollback_intent.schema_version | int == 1
+          - rollback_intent.event == 'network_discovery_source_freeze_intent'
+          - rollback_intent.run_id == rollback_freeze.run_id
+          - rollback_intent.source_host == 'Proxmox-2'
+          - rollback_intent.timer_names == source_timers
+          - rollback_intent.timer_enabled_before | length == 4
+          - rollback_intent.timer_active_before | length == 4
+          - rollback_intent.timer_enabled_before | difference(['enabled','disabled']) | length == 0
+          - rollback_intent.timer_active_before | difference(['active','inactive']) | length == 0
+          - rollback_intent.timer_enabled_before[0] == 'enabled'
+          - rollback_intent.timer_enabled_before[1] == 'enabled'
+          - rollback_intent.timer_enabled_before[3] == 'enabled'
+
+    - name: Verify source timers remain disabled before any restoration
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Verify source workers remain quiescent before restoration
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_workers }}"
+      register: source_worker_state
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse restoration while any original worker is running or timer enabled
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ source_disabled.results | zip(source_worker_state.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Check retained original source registry still has exact frozen registry hash
+      ansible.builtin.stat:
+        path: "{{ source_dir }}/alerted-macs.json"
+        follow: false
+        checksum_algorithm: sha256
+      register: source_registry_before_restore
+      no_log: true
+
+    - name: Hash exact final source alert snapshot when available
+      ansible.builtin.stat:
+        path: "{{ rollback_freeze.snapshot_dir }}/final/alerted-macs.json"
+        follow: false
+        checksum_algorithm: sha256
+      register: source_registry_snapshot
+      no_log: true
+
+    - name: Refuse rollback if source first-seen data changed after final freeze
+      ansible.builtin.assert:
+        that:
+          - source_registry_before_restore.stat.isreg | default(false)
+          - source_registry_before_restore.stat.pw_name == 'root'
+          - source_registry_before_restore.stat.mode == '0600'
+          - not source_registry_snapshot.stat.exists or source_registry_before_restore.stat.checksum == source_registry_snapshot.stat.checksum
+        fail_msg: >-
+          Source alert registry changed since freeze. Do not restore
+          automatic alerting without historical registry reconciliation.
+
+    - name: Refuse to overwrite an earlier rollback-intent record
+      ansible.builtin.stat:
+        path: "{{ rollback_freeze.snapshot_dir }}/rollback-intent.json"
+        follow: false
+      register: rollback_marker_collision
+
+    - name: Require a fresh rollback attempt
+      ansible.builtin.assert:
+        that:
+          - not rollback_marker_collision.stat.exists
+
+    - name: Save root-only rollback intent before re-enabling any source timer
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': 1,
+              'event': 'network_discovery_early_rollback_intent',
+              'run_id': rollback_freeze.run_id,
+              'source_host': 'Proxmox-2',
+              'target_confirmed_inactive': true,
+              'restored_timer_names': source_timers,
+              'restored_enabled': rollback_intent.timer_enabled_before,
+              'restored_active': rollback_intent.timer_active_before
+            } | to_nice_json
+          }}
+        dest: "{{ rollback_freeze.snapshot_dir }}/rollback-intent.json"
+        force: false
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Restore exact original enablement and active state of each network-only timer
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: "{{ rollback_intent.timer_enabled_before[timer_idx] == 'enabled' }}"
+        state: "{{ 'started' if rollback_intent.timer_active_before[timer_idx] == 'active' else 'stopped' }}"
+      loop: "{{ source_timers }}"
+      loop_control:
+        index_var: timer_idx
+
+    - name: Verify each original source timer's restored enablement
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_restored_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Verify each original source timer's restored active status
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_restored_active
+      changed_when: false
+      failed_when: false
+
+    - name: Require exact original source timer settings after rollback
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == rollback_intent.timer_enabled_before[timer_idx]
+          - item[1].stdout == rollback_intent.timer_active_before[timer_idx]
+      loop: "{{ source_restored_enabled.results | zip(source_restored_active.results) | list }}"
+      loop_control:
+        index_var: timer_idx
+        label: "{{ item[0].item }}"
+
+    - name: Preserve original frozen-marker record in backup before invalidating it
+      ansible.builtin.copy:
+        src: "{{ freeze_marker }}"
+        dest: "{{ rollback_freeze.snapshot_dir }}/source-freeze-before-rollback.json"
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Remove ONLY the now-invalid current source-frozen marker after original ownership restored
+      ansible.builtin.file:
+        path: "{{ freeze_marker }}"
+        state: absent
+
+    - name: Report safe preactivation restoration with both copies of evidence retained
+      ansible.builtin.debug:
+        msg:
+          - "Original Proxmox-2 network timer states restored from root-only saved intent."
+          - "The old source is the sole discovery and first-seen owner again."
+          - "monitor-01 timers stay disabled; target inventory, guest state and alert copies have been retained for reconciliation."
+          - "Original protected source snapshot and rollback evidence retained in {{ rollback_freeze.snapshot_dir }}."
