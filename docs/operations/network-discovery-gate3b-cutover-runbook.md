@@ -89,6 +89,30 @@ The synthetic interruption suite `IaC/monitoring/tests/test_monitor01_interrupti
 
 Before any real change, a reviewer other than the author must sign off the exact commit and the drill evidence, including recovery from a partial freeze where the frozen checksum manifest does not yet exist. **Existing pre-activation recovery requires a completed freeze manifest and intentionally cannot recover a partial source stop automatically; that remains a manual recovery case with separate approval.** Review the best-effort `ExecStartPost=-` semantics: collector service success does not prove SMTP delivery. The cutover owner must check the first-seen journal and relay delivery separately before marking migration accepted.
 
+## Gate 4 execution — whole-network scan and installed-state evidence
+
+Run the 27 September 2026 post-cutover network scan **from monitor-01** and managed-host audit **from admin-01** with the new read-only tools. The network scan explicitly probes the owned LAN `192.168.2.0/24` with Nmap host discovery and a **rate-limited, version-light selected-TCP-port probe**; it does not run NSE scripts, deep profiling, UDP sweeps or scan beyond the owned LAN. Review and obtain authorisation before widening scan scope or performing intensive vulnerability scans. Do not enable the dormant deep-profiler timer or rerun the migration.
+
+Create a separate clean review worktree on `admin-01` at the latest validated Git commit, then from its repository root run:
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 IaC/monitoring/audits/postcutover_network_scan.py
+```
+
+The collector prints `EVIDENCE_DIRECTORY=/var/tmp/homelab-postcutover-audit-...`. Pass **that exact directory** to the following read-only Ansible facts playbook, then generate a conservative evidence-versus-inventory comparison:
+
+```bash
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/postcutover-estate-evidence.yml \
+  -e "audit_output_dir=/var/tmp/homelab-postcutover-audit-REPLACE_WITH_ACTUAL_TIMESTAMP"
+cd ../..
+PYTHONDONTWRITEBYTECODE=1 python3 IaC/monitoring/audits/compare_live_estate.py \
+  /var/tmp/homelab-postcutover-audit-REPLACE_WITH_ACTUAL_TIMESTAMP
+```
+
+The evidence directory is mode 0700 and reports mode 0600; it contains IPs, observed MACs, open/listening ports and installed software versions, so never upload it to public Git. The runbook and JSON summary do **not** automatically rewrite production configuration or claim unknown hosts are down. Review SSH/Ansible recap for unreachable hosts, compare all observed packages, running services, containers, role declarations, ports, Proxmox placement, DNS, monitoring, backup schedules and actual restore evidence. Existing `CURRENT-STATE.md` historical pre-cutover paragraphs are clearly dated; compare against its current verified production section rather than historic plans. Record all gaps and evidence limitations in the Gate 4 drift register and propose a separate reviewed documentation-only PR.
+
 ## Gate 4: post-cutover whole-estate documentation and deployment audit (required)
 
 **Trigger:** perform only after Gate 3 production cutover is complete and monitor-01 discovery, enrichment, first-seen notifications, Prometheus and Grafana are verified stable. Gate 4 is a separate read-only audit; it does not retroactively approve Gate 3 or authorise automatic configuration changes.
