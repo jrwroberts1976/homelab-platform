@@ -441,7 +441,18 @@ SHA-256 for all four protected JSON files. A changed result **blocks**
 progress and does not overwrite the existing file. Do not rerun
 the old one-shot Gate 2i.
 
-After Gate 2i, keep the destination notifier disconnected from
+**Gate 2i-R PASSED on 27 September 2026:** `monitor-01: 22 OK /
+0 changed / 0 failed`. Ansible's check-mode template comparison returned
+`changed: false`, confirming the existing notifier matches the
+reviewed monitor-01 rendering without overwrite or execution.
+The installed script's bytes and all four protected JSON file hashes
+remained unchanged. The target recipient, first-seen registry and
+cutover approval marker remained absent, the target collector still
+had no email hook or recipient environment, and all five staged timers
+remained disabled/inactive. The notifier is verified but intentionally
+**not active**. Its original installation provenance is not established.
+
+Following the verified Gate 2i-R, keep the destination notifier disconnected from
 `ExecStartPost` and retain the source as the sole first-seen
 alert owner. Only following a deliberate stop of source collector,
 enricher and evidence timers and waiting for running jobs to finish
