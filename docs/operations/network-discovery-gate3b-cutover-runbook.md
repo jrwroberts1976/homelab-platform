@@ -111,6 +111,15 @@ PYTHONDONTWRITEBYTECODE=1 python3 IaC/monitoring/audits/compare_live_estate.py \
   /var/tmp/homelab-postcutover-audit-REPLACE_WITH_ACTUAL_TIMESTAMP
 ```
 
+To build one editable Markdown page for **every device returned by the network scan**, run from the repository root after the scan (and rerun after host evidence is collected to enrich the pages):
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 IaC/monitoring/audits/build_device_catalogue.py \
+  /var/tmp/homelab-postcutover-audit-REPLACE_WITH_ACTUAL_TIMESTAMP
+```
+
+Open `<EVIDENCE_DIRECTORY>/device-catalogue/README.md` for the linked device index. Generated evidence pages live in `devices/`, while operator-maintained notes live separately in `notes/`. Re-running the generator **does not overwrite existing notes**. Devices without documented identities are named by observed MAC when available, otherwise by observed IP, and clearly marked unverified. Documented devices not observed are listed separately, not silently declared offline. As with raw scan evidence, never publish this unredacted catalogue in public Git.
+
 The evidence directory is mode 0700 and reports mode 0600; it contains IPs, observed MACs, open/listening ports and installed software versions, so never upload it to public Git. The runbook and JSON summary do **not** automatically rewrite production configuration or claim unknown hosts are down. Review SSH/Ansible recap for unreachable hosts, compare all observed packages, running services, containers, role declarations, ports, Proxmox placement, DNS, monitoring, backup schedules and actual restore evidence. Existing `CURRENT-STATE.md` historical pre-cutover paragraphs are clearly dated; compare against its current verified production section rather than historic plans. Record all gaps and evidence limitations in the Gate 4 drift register and propose a separate reviewed documentation-only PR.
 
 ## Gate 4: post-cutover whole-estate documentation and deployment audit (required)
