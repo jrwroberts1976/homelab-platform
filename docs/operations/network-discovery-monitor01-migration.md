@@ -590,6 +590,56 @@ fails, **leave monitor-01 disabled** and use the explicitly recorded
 source rollback procedure. Never enable both discovery collectors
 or first-seen notifiers concurrently.
 
+### Prepared Gate 3 production playbooks — REVIEW ONLY (not deployed)
+
+The following are separate, manual and independently approval-gated
+operations. The **read-only Gate 3a passed on 27 September 2026**, but
+that is not authority to run any of them. Each proposed mutation
+requires explicit user approval at the relevant hold point; do not
+run the full sequence in one Ansible invocation. All files are
+repository proposals until the particular live gate is approved
+and independently validated.
+
+| Proposed phase | Playbook | Effect and hard stop |
+| --- | --- | --- |
+| **3b — source freeze** | `network-host-monitor01-gate3b-source-freeze.yml` | Reruns Gate 3a first, captures an immutable private **freeze intent** with all four source timer states, disables only old network-discovery timers and waits for source oneshots/notifier hooks to finish naturally. Writes a root-only frozen marker only after drain. A partial failure leaves the source stopped and requires inspected recovery; the destination stays off. |
+| **3c — final protected delta** | `network-host-monitor01-gate3c-final-sync.yml` | Requires a completed matching source-freeze marker, all source jobs stopped and a new source snapshot. Backs up the staged target before copying the three final evidence JSON files, the **entire** historical first-seen registry (not only currently inventoried devices) and protected `alerts.env`. Validates exact SHA-256 and schema, keeps an immutable root-only historical alert-registry anchor for future once-only checks, verifies guest MAC matches and source remained frozen throughout. Leaves every target timer disabled. |
+| **3d — activation** | `network-host-monitor01-gate3d-activate.yml` | Separately verifies original source still frozen, source/target final hashes, no target timer already active and complete alert history. Installs a fail-closed pre-start registry guard, root-only approval marker and collector-only systemd drop-in with mandatory original recipient, then verifies strict-TLS guest refresh before an explicitly approved **single** new discovery/notification cycle. Requires all historic MACs preserved and zero pending online first-seen events before enabling target discovery, guest-refresh, existing-OS publisher and selective-enrichment timers. Expensive deep profiling remains **disabled** pending another decision. Does not regenerate or delete Grafana UIDs. |
+| **3e — early rollback** | `network-host-monitor01-gate3e-preactivation-rollback.yml` | Only if target activation has **never** started, no notifier hook/approval/guard exists and all target timers/services are inactive. After verifying original source registry integrity, restores each source timer to its exact root-only saved pre-freeze state and archives the now-invalid frozen marker. It refuses to run after target might have sent new-device mail. |
+| **3f — post-activation rollback audit** | `network-host-monitor01-gate3f-postactivation-rollback-audit.yml` | **Read-only.** If the new collector was activated, counts target-only alerted MACs, pending online devices and journaled mail errors and checks no previously alerted source MAC was downgraded. Neither stops target nor restarts source. Post-activation rollback requires a separately reviewed protected registry merge and explicit human review before restoring source ownership. |
+
+No approval string is a substitute for the user's actual
+authorisation. The playbooks must be reviewed for source/target drift
+and exercised through syntax/unit validation first. Never run
+source and destination scanners concurrently.
+
+**Critical alert-delivery limitation:** SMTP acceptance and local
+registry persistence are separate operations, not a transaction.
+A crash after the remote SMTP server accepts a message but before the
+local registry is durably updated can lead to an ambiguous delivery.
+Even a clean journal is not conclusive exactly-once proof.
+Post-activation rollback must halt for any uncertain send and
+reconcile the full source/target registries, preserving every
+`alerted` status and every newly registered MAC before source
+notifications restart. A simple restore of the original 49-entry
+source registry would risk repeat messages and is prohibited.
+
+**Do not blindly rerun any partial mutating phase.** A source
+`freeze-intent.json` means timers might be disabled even if the
+final frozen marker was never written. An existing final source
+snapshot, target backup, final-sync marker, guard/drop-in or approval
+marker requires individual reconciliation before another attempt.
+On failure after source freeze, retain source and target JSONs,
+backups, journal evidence and both historical registry versions;
+do not enable either owner until the exact live stage is known.
+
+**Grafana and historical metrics:** after activation, verify the
+MAC-keyed Prometheus inventory, original per-host dashboard UIDs
+and OS-evidence correlation against actual new target samples.
+Do not delete Proxmox-2's ordinary node-exporter series or retire its
+network-only metric files until stable historical continuity is
+demonstrated. The proposed cutover playbooks do not rewrite Grafana.
+
 ## Rollback
 
 If monitor-01 fails either the inventory or OS-correlation checks:
