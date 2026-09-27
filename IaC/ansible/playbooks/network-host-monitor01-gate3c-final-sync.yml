@@ -336,6 +336,26 @@
       loop_control:
         label: "{{ item[0].item }}"
 
+    - name: Check all target worker services inactive before protected state replacement
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-proxmox-guest-refresh.service
+      register: target_worker_before_sync
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse target transfer while an active or failed worker may touch the staged data
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+      loop: "{{ target_worker_before_sync.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
     - name: Require all source-backed staged target files exist with protected mode
       ansible.builtin.stat:
         path: "{{ target_state }}/{{ item }}"
@@ -515,6 +535,33 @@
           - (verified_target_aggregate_secret.stdout | from_json).missing_known_macs | int == 0
       no_log: true
 
+    - name: Preserve a separate root-only copy of the complete frozen alert registry for activation and rollback
+      ansible.builtin.copy:
+        src: "{{ target_state }}/alerted-macs.json"
+        dest: "{{ target_backup }}/final-alerted-macs.json"
+        remote_src: true
+        force: false
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Hash preserved historical registry backup separately
+      ansible.builtin.stat:
+        path: "{{ target_backup }}/final-alerted-macs.json"
+        follow: false
+        checksum_algorithm: sha256
+      register: target_historical_registry_backup
+      no_log: true
+
+    - name: Require preserved registry matches the exact source SHA-256
+      ansible.builtin.assert:
+        that:
+          - target_historical_registry_backup.stat.isreg | default(false)
+          - target_historical_registry_backup.stat.pw_name == 'root'
+          - target_historical_registry_backup.stat.mode == '0600'
+          - target_historical_registry_backup.stat.checksum == source_file_hashes[3].stat.checksum
+
     - name: Verify four staged/updated source JSON plus guest snapshot identities without scanning
       ansible.builtin.command:
         argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-enricher, --identity-check]
@@ -528,6 +575,55 @@
           - (target_guest_verify_raw.stdout | from_json).matched_guest_macs | int >= 1
           - (target_guest_verify_raw.stdout | from_json).unmatched_guest_macs | int == 0
           - (target_guest_verify_raw.stdout | from_json).snapshot_age_seconds | int < 172800
+
+    - name: Verify source has not been manually restarted or changed during destination copy
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      delegate_to: Proxmox-2
+      loop:
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-network-os-evidence.service
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+      register: source_still_frozen_after_copy
+      changed_when: false
+      failed_when: false
+
+    - name: Require no Proxmox-2 worker resumed during protected delta transfer
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+      loop: "{{ source_still_frozen_after_copy.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Rehash all five original source files across SSH after target copy
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      delegate_to: Proxmox-2
+      loop:
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/deep-profiles.json
+        - /var/lib/homelab-network-hosts/enrichment.json
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - /etc/homelab-network-hosts/alerts.env
+      register: source_hashes_after_target_copy
+      no_log: true
+
+    - name: Require source originals were frozen throughout final source-to-target copy
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1].stat.checksum
+        fail_msg: Source changed during target transfer. Stop; do not activate.
+      loop: "{{ source_hashes_after_target_copy.results | zip(source_file_hashes) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
 
     - name: Save root-only post-sync readiness and rollback manifest without activating any service
       ansible.builtin.copy:
