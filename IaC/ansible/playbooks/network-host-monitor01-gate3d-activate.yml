@@ -1,0 +1,565 @@
+---
+# Gate 3d: MUTATING CUTOVER; PROPOSAL ONLY, NOT APPROVED FOR EXECUTION.
+# Must follow independently approved Gate 3b and successful Gate 3c.
+# Never run concurrently with an active Proxmox-2 source.
+# A failure after target marker/drop-in installation requires inspection,
+# NOT an automatic retry. Keep deep profiling disabled separately.
+- name: Reconfirm original source is frozen and the final backup still matches
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_state: /var/lib/homelab-network-hosts
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+    frozen_files:
+      - /var/lib/homelab-network-hosts/inventory.json
+      - /var/lib/homelab-network-hosts/deep-profiles.json
+      - /var/lib/homelab-network-hosts/enrichment.json
+      - /var/lib/homelab-network-hosts/alerted-macs.json
+      - /etc/homelab-network-hosts/alerts.env
+  tasks:
+    - name: Require separate, explicit approval for target activation
+      ansible.builtin.assert:
+        that:
+          - (gate3_activate_approval | default('')) == 'APPROVE-MONITOR-01-NETWORK-DISCOVERY-ACTIVATION'
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Read root-only source-freeze marker without displaying private data
+      ansible.builtin.slurp:
+        src: "{{ source_state }}/network-discovery-source-frozen.json"
+      register: frozen_marker_raw
+      no_log: true
+
+    - name: Parse completed freeze state
+      ansible.builtin.set_fact:
+        final_source_freeze: "{{ frozen_marker_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require the source marker describes a completed original freeze
+      ansible.builtin.assert:
+        that:
+          - final_source_freeze.schema_version | int == 1
+          - final_source_freeze.event == 'network_discovery_source_frozen'
+          - final_source_freeze.source_host == 'Proxmox-2'
+          - final_source_freeze.run_id is match('^[0-9]{8}T[0-9]{6}$')
+          - final_source_freeze.snapshot_dir == '/var/backups/homelab-network-migration/gate3-' ~ final_source_freeze.run_id
+
+    - name: Read frozen final source SHA manifest
+      ansible.builtin.slurp:
+        src: "{{ final_source_freeze.snapshot_dir }}/final/manifest.json"
+      register: frozen_manifest_raw
+      no_log: true
+
+    - name: Parse final backed-up source manifest
+      ansible.builtin.set_fact:
+        final_source_manifest: "{{ frozen_manifest_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require original manifest and freeze share exact run identity
+      ansible.builtin.assert:
+        that:
+          - final_source_manifest.schema_version | int == 1
+          - final_source_manifest.event == 'network_discovery_final_source_snapshot'
+          - final_source_manifest.run_id == final_source_freeze.run_id
+          - final_source_manifest.file_names == ['inventory.json','deep-profiles.json','enrichment.json','alerted-macs.json','alerts.env']
+          - final_source_manifest.sha256 | length == 5
+          - final_source_manifest.historical_registry_count | int >= final_source_freeze.known_registry_count | int
+
+    - name: Require all original source timers still disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: frozen_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Require all original source timers still inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: frozen_active
+      changed_when: false
+      failed_when: false
+
+    - name: Require all original source workers remain drained
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_services }}"
+      register: frozen_workers
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse overlapping collector or deep-profile ownership
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+          - item[2].stdout == 'inactive'
+      loop: "{{ frozen_enabled.results | zip(frozen_active.results, frozen_workers.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Rehash all five original source files after protected final sync
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ frozen_files }}"
+      register: final_original_hashes
+      no_log: true
+
+    - name: Require source state has not changed since final protected freeze
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1]
+          - item[0].stat.mode == '0600'
+        fail_msg: >-
+          Historical source or alert registry changed after final sync.
+          Reconcile it and repeat approved freeze/sync before activation.
+      loop: "{{ final_original_hashes.results | zip(final_source_manifest.sha256) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+- name: Arm and activate monitor-01 once, only after verified source freeze
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source: Proxmox-2
+    frozen: "{{ hostvars[source].final_source_freeze }}"
+    source_manifest: "{{ hostvars[source].final_source_manifest }}"
+    root: /var/lib/homelab-network-hosts
+    approval_file: /etc/homelab-network-hosts/network-discovery-cutover-approved
+    sync_file: "{{ root }}/network-discovery-final-sync.json"
+    guard_script: /usr/local/sbin/homelab-network-firstseen-guard
+    guard_source: "{{ playbook_dir }}/../roles/network_host_collector/files/homelab-network-firstseen-guard.py"
+    hook_source: "{{ playbook_dir }}/../roles/network_host_collector/files/30-network-cutover-firstseen.conf"
+    hook_dir: /etc/systemd/system/homelab-network-host-collector.service.d
+    hook_dest: "{{ hook_dir }}/30-network-cutover-firstseen.conf"
+    target_files:
+      - "{{ root }}/inventory.json"
+      - "{{ root }}/deep-profiles.json"
+      - "{{ root }}/enrichment.json"
+      - "{{ root }}/alerted-macs.json"
+      - /etc/homelab-network-hosts/alerts.env
+    target_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+  tasks:
+    - name: Require separate activation approval and commissioned target
+      ansible.builtin.assert:
+        that:
+          - (gate3_activate_approval | default('')) == 'APPROVE-MONITOR-01-NETWORK-DISCOVERY-ACTIVATION'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Read protected final-sync manifest without disclosing private paths
+      ansible.builtin.slurp:
+        src: "{{ sync_file }}"
+      register: sync_raw
+      no_log: true
+
+    - name: Retain parsed transfer manifest privately
+      ansible.builtin.set_fact:
+        target_final_sync: "{{ sync_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require EXACT final source snapshot and target run identity
+      ansible.builtin.assert:
+        that:
+          - target_final_sync.schema_version | int == 1
+          - target_final_sync.event == 'network_discovery_final_sync_complete'
+          - target_final_sync.source_host == 'Proxmox-2'
+          - target_final_sync.target_host == 'monitor-01'
+          - target_final_sync.run_id == frozen.run_id
+          - target_final_sync.source_snapshot_dir == frozen.snapshot_dir ~ '/final'
+          - target_final_sync.file_names == source_manifest.file_names
+          - target_final_sync.sha256 == source_manifest.sha256
+          - target_final_sync.historical_registry_count | int == source_manifest.historical_registry_count | int
+          - target_final_sync.target_backup_dir == '/var/backups/homelab-network-migration/gate3-target-' ~ frozen.run_id
+
+    - name: Refuse a previously approved or partially configured target activation
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ approval_file }}"
+        - "{{ guard_script }}"
+        - "{{ hook_dest }}"
+      register: activation_collisions
+
+    - name: Stop if approval, guard or collector hook already exists
+      ansible.builtin.assert:
+        that:
+          - not item.stat.exists
+        fail_msg: >-
+          Target activation may already have been attempted; inspect
+          source/target state and registry before any further action.
+      loop: "{{ activation_collisions.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require all five staged target timers disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ target_timers }}"
+      register: target_enabled_before
+      changed_when: false
+      failed_when: false
+
+    - name: Require all five staged target timers inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ target_timers }}"
+      register: target_active_before
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse any premature scheduled target discovery
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ target_enabled_before.results | zip(target_active_before.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Require all five target final state files still identical to frozen source
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ target_files }}"
+      register: target_pre_activation_hashes
+      no_log: true
+
+    - name: Stop if any transferred evidence, recipient or MAC registry changed
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.isreg | default(false)
+          - item[0].stat.pw_name == 'root'
+          - item[0].stat.mode == '0600'
+          - item[0].stat.checksum == item[1]
+      loop: "{{ target_pre_activation_hashes.results | zip(source_manifest.sha256) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Require complete root-only frozen historical MAC registry anchor
+      ansible.builtin.stat:
+        path: "{{ target_final_sync.target_backup_dir }}/final-alerted-macs.json"
+        follow: false
+        checksum_algorithm: sha256
+      register: historical_anchor
+      no_log: true
+
+    - name: Require historical alert registry anchor matches exact frozen source
+      ansible.builtin.assert:
+        that:
+          - historical_anchor.stat.isreg | default(false)
+          - historical_anchor.stat.pw_name == 'root'
+          - historical_anchor.stat.mode == '0600'
+          - historical_anchor.stat.checksum == source_manifest.sha256[3]
+
+    - name: Confirm the original target collector remains inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-collector.service]
+      changed_when: false
+      failed_when: false
+      register: target_collector_before
+
+    - name: Never modify an already running target collector service
+      ansible.builtin.assert:
+        that:
+          - target_collector_before.stdout == 'inactive'
+
+    - name: Require currently staged collector has no first-seen hook or environment
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, cat, homelab-network-host-collector.service]
+      changed_when: false
+      register: target_collector_before_unit
+
+    - name: Refuse duplicate notifier hooks or recipient environments
+      ansible.builtin.assert:
+        that:
+          - "'ExecStartPost=' not in target_collector_before_unit.stdout"
+          - "'EnvironmentFile=' not in target_collector_before_unit.stdout"
+
+    - name: Install root-owned fail-closed first-seen pre-start guard
+      ansible.builtin.copy:
+        src: "{{ guard_source }}"
+        dest: "{{ guard_script }}"
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Verify guard's complete reviewed local bytes and Python syntax
+      ansible.builtin.stat:
+        path: "{{ guard_script }}"
+        follow: false
+        checksum_algorithm: sha256
+      register: installed_guard
+
+    - name: Require an unmodified deployed historical-MAC guard
+      ansible.builtin.assert:
+        that:
+          - installed_guard.stat.pw_name == 'root'
+          - installed_guard.stat.mode == '0750'
+          - installed_guard.stat.checksum == (lookup('file', guard_source, rstrip=False) | hash('sha256'))
+
+    - name: Verify the historical guard parses without executing it
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, -B, -m, py_compile, "{{ guard_script }}"]
+      changed_when: false
+      environment:
+        PYTHONPYCACHEPREFIX: /dev/null
+      # py_compile is syntax-only, not actual collector execution.
+
+    - name: Create the isolated collector drop-in directory
+      ansible.builtin.file:
+        path: "{{ hook_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Add explicit approval condition, mandatory original recipient and historical-MAC guard
+      ansible.builtin.copy:
+        src: "{{ hook_source }}"
+        dest: "{{ hook_dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+        force: false
+
+    - name: Refresh trusted Proxmox guest-map snapshot before any new enrichment/collector activation
+      ansible.builtin.systemd_service:
+        name: homelab-proxmox-guest-refresh.service
+        state: started
+      no_log: true
+
+    - name: Verify refreshed guest identities match the exact current transferred inventory without scanning
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-enricher, --identity-check]
+      changed_when: false
+      register: activation_identity_raw
+      no_log: true
+
+    - name: Refuse mismatched or stale guest identity after refreshed API read
+      ansible.builtin.assert:
+        that:
+          - (activation_identity_raw.stdout | from_json).snapshot_age_seconds | int < 180
+          - (activation_identity_raw.stdout | from_json).matched_guest_macs | int >= 1
+          - (activation_identity_raw.stdout | from_json).unmatched_guest_macs | int == 0
+
+    - name: Reconfirm the source collector/enricher/profiler/publisher never resumed before target activation
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      delegate_to: Proxmox-2
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-network-os-evidence.service
+      register: source_at_activation
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse ANY still running source discovery timer or worker
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+      loop: "{{ source_at_activation.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Write explicit root-only cutover approval marker ONLY after all integrity checks
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': 1,
+              'event': 'network_discovery_cutover_approved',
+              'run_id': frozen.run_id,
+              'source_host': 'Proxmox-2',
+              'target_host': 'monitor-01',
+              'source_frozen': true,
+              'target_final_sync_verified': true
+            } | to_nice_json
+          }}
+        dest: "{{ approval_file }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+
+    - name: Reload only the new collector unit definition without starting it
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Validate loaded collector unit contains approval gate, recipient and historical-MAC guard
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, cat, homelab-network-host-collector.service]
+      register: loaded_target_unit
+      changed_when: false
+
+    - name: Refuse a collector with missing or duplicate first-seen hooks
+      ansible.builtin.assert:
+        that:
+          - "'ConditionPathExists=' ~ approval_file in loaded_target_unit.stdout"
+          - "'EnvironmentFile=/etc/homelab-network-hosts/alerts.env' in loaded_target_unit.stdout"
+          - "'ExecStartPre=' ~ guard_script in loaded_target_unit.stdout"
+          - "'ExecStartPost=-/usr/local/sbin/homelab-network-device-email-alert' in loaded_target_unit.stdout"
+
+    - name: Execute the read-only historical first-seen guard once before any network scan
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, -B, "{{ guard_script }}"]
+      register: historical_guard_report
+      changed_when: false
+      no_log: true
+
+    - name: Require entire historical registry is present and an original recipient is configured
+      ansible.builtin.assert:
+        that:
+          - (historical_guard_report.stdout | from_json).historical_entries | int == source_manifest.historical_registry_count | int
+          - (historical_guard_report.stdout | from_json).recipient_configured | bool
+
+    - name: Run exactly one explicitly approved target collector cycle with the original first-seen registry
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-collector.service
+        state: started
+      no_log: true
+
+    - name: Verify full historical registry and zero pending online alerts after first production target scan
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+
+            state = Path("/var/lib/homelab-network-hosts")
+            inv = json.loads((state / "inventory.json").read_text())
+            registry = json.loads((state / "alerted-macs.json").read_text())
+            baseline = json.loads((
+                Path("/var/backups/homelab-network-migration")
+                / ("gate3-target-" + __import__("sys").argv[1])
+                / "final-alerted-macs.json"
+            ).read_text())
+            known = registry["devices"]
+            original = baseline["devices"]
+            assert original.keys() <= known.keys()
+            assert all(
+                known[mac]["status"] == "alerted"
+                for mac, rec in original.items()
+                if rec.get("status") == "alerted"
+            )
+            pending = {
+                str(rec.get("mac") or "").strip().lower()
+                for rec in inv.values()
+                if isinstance(rec, dict) and rec.get("mac") and rec.get("online") is True
+            } - known.keys()
+            if pending:
+                raise RuntimeError("An online first-seen notification is still pending")
+            print(json.dumps({
+                "historical_registry_entries": len(original),
+                "current_registry_entries": len(known),
+                "pending_online_firstseen": len(pending),
+                "inventory_records": len(inv),
+            }, sort_keys=True))
+          - "{{ frozen.run_id }}"
+      register: initial_target_collector_counts
+      changed_when: false
+      no_log: true
+
+    - name: Require validated one-owner first collector cycle before enabling any periodic work
+      ansible.builtin.assert:
+        that:
+          - (initial_target_collector_counts.stdout | from_json).historical_registry_entries | int == source_manifest.historical_registry_count | int
+          - (initial_target_collector_counts.stdout | from_json).pending_online_firstseen | int == 0
+
+    - name: Enable the target guest-map refresh schedule after verified initial refresh
+      ansible.builtin.systemd_service:
+        name: homelab-proxmox-guest-refresh.timer
+        state: started
+        enabled: true
+
+    - name: Enable ONLY the reviewed target network collector timer
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-collector.timer
+        state: started
+        enabled: true
+
+    - name: Publish retained OS fingerprints on the new target without scanning
+      ansible.builtin.systemd_service:
+        name: homelab-network-os-evidence.service
+        state: started
+
+    - name: Enable the new target OS evidence timer after proof of existing data
+      ansible.builtin.systemd_service:
+        name: homelab-network-os-evidence.timer
+        state: started
+        enabled: true
+
+    - name: Recheck Proxmox guest identity with current inventory before enabling selective enrichment
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-enricher, --identity-check]
+      register: verified_current_identity
+      changed_when: false
+      no_log: true
+
+    - name: Require a valid guest match with no unmatched MACs
+      ansible.builtin.assert:
+        that:
+          - (verified_current_identity.stdout | from_json).matched_guest_macs | int >= 1
+          - (verified_current_identity.stdout | from_json).unmatched_guest_macs | int == 0
+
+    - name: Enable selective enrichment only after proven trusted guest-map dependency
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-enricher.timer
+        state: started
+        enabled: true
+
+    - name: Require expensive deep profiler stays disabled until a later explicit decision
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, homelab-network-host-deep-profiler.timer]
+      changed_when: false
+      failed_when: false
+      register: deep_profiler_stays_off
+
+    - name: Refuse automatic enabling of deep Nmap profiling at cutover
+      ansible.builtin.assert:
+        that:
+          - deep_profiler_stays_off.stdout == 'disabled'
+
+    - name: Report activated source ownership transfer without printing MACs/recipients
+      ansible.builtin.debug:
+        msg:
+          - "Initial monitor-01 discovery verified; historical first-seen registry preserved."
+          - "Target discovery, guest refresh, OS evidence and selective enrichment timers enabled."
+          - "Deep profiler remains disabled; original source Proxmox-2 discovery remains frozen."
+          - "Existing Grafana dashboard UIDs were not regenerated or removed."
+          - "Run separate post-cutover Prometheus/Grafana verification before any source metric retirement."
