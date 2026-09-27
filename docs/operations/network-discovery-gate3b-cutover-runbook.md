@@ -50,7 +50,7 @@ Introduce the target cutover approval marker **only after** verified source quie
 
 ## Engineering deliverables before requesting cutover approval
 
-1. Separate `network-host-monitor01-source-freeze.yml` with root-only rollback metadata, source drain and a post-stop recheck; no destination activation.
+1. **Draft added for review, NOT authorised/executed:** `network-host-monitor01-source-freeze.yml` imports the read-only two-host Gate 3a, requires separate stop approval and change ID, preserves root-only timer/unit rollback evidence, stops only Proxmox-2 network timers, drains existing worker services and records frozen hashes of five source files. Must pass CI and independent code review before any production invocation; if a partial stop fails, the source may remain frozen and requires deliberate recovery.
 2. Separate `network-host-monitor01-final-transfer.yml` with immutable backups, five-file source/target hashes, full registry preservation, guest-map reconciliation, and a hard hold before activation.
 3. Separate `network-host-monitor01-activate.yml` with an explicit second approval gate, source-still-stopped assertion, isolated notifier setup and validated ordered startup.
 4. Separate `network-host-monitor01-rollback.yml`, plus offline sandbox tests for interruption after each hold point. CI must syntax-check and enforce no accidental scan/email/service activation during planning.
