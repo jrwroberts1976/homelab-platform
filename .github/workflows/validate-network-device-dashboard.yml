@@ -35,6 +35,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-activate.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-rollback.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-preactivation-recover.yml"
+      - "IaC/ansible/playbooks/postcutover-estate-evidence.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -97,10 +98,13 @@ jobs:
             playbooks/network-host-monitor01-rollback.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-preactivation-recover.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/postcutover-estate-evidence.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
           python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py
+          python3 -m py_compile IaC/monitoring/audits/postcutover_network_scan.py IaC/monitoring/audits/compare_live_estate.py
           python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
 
       - name: Verify Grafana dashboard and Ansible registration
