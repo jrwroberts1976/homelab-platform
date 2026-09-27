@@ -104,8 +104,10 @@ jobs:
       - name: Validate exporter syntax and unit tests
         run: |
           python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py
-          python3 -m py_compile IaC/monitoring/audits/postcutover_network_scan.py IaC/monitoring/audits/compare_live_estate.py IaC/monitoring/audits/build_device_catalogue.py
+          python3 -m py_compile IaC/monitoring/audits/postcutover_network_scan.py IaC/monitoring/audits/compare_live_estate.py IaC/monitoring/audits/build_device_catalogue.py IaC/monitoring/audits/reconcile_unknown_devices.py
           python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
+          python3 IaC/ansible/roles/network_host_deep_profiler/test_deep_profiler.py
+          python3 IaC/ansible/roles/network_host_deep_profiler/test_worker_recovery.py
 
       - name: Verify Grafana dashboard and Ansible registration
         run: |
