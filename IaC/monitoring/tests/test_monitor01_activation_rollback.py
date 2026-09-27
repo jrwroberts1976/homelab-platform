@@ -65,6 +65,24 @@ class GuardedActivationRollbackTests(unittest.TestCase):
         self.assertNotIn("homelab-network-host-deep-profiler.timer", enabled[0])
         self.assertIn("rollback", self.act_text.lower())
 
+    def test_last_moment_source_timer_guard_precedes_initial_target_scan(self):
+        tasks = self.act[1]["tasks"]
+        names = [task["name"] for task in tasks]
+        source_check = names.index(
+            "Verify all four source timers remain disabled immediately before first target collector cycle")
+        source_assert = names.index(
+            "Block initial target collector cycle if any source timer was reenabled")
+        first_scan = names.index(
+            "Run single approved target collector cycle with historic registry already copied")
+        self.assertEqual(source_assert, source_check + 1)
+        self.assertEqual(first_scan, source_assert + 1)
+        check = tasks[source_check]
+        self.assertEqual(check["delegate_to"], "Proxmox-2")
+        self.assertEqual(len(check["loop"]), 4)
+        self.assertEqual(check["changed_when"], False)
+        guard = str(tasks[source_assert]["ansible.builtin.assert"]["that"])
+        self.assertIn("immediately_before_scan_disabled", guard)
+
     def test_rollback_stops_target_before_any_source_restart(self):
         self.assertEqual([p["hosts"] for p in self.rollback],
                          ["Proxmox-2", "monitoring_hosts", "Proxmox-2"])
