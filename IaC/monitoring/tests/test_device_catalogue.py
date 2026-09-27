@@ -27,6 +27,11 @@ class DeviceCatalogueTests(unittest.TestCase):
                     {"ip": "192.168.2.199", "mac": "02:00:00:00:02:99",
                      "names": [], "open_ports": []}
                 ]}))
+            (evidence / "os-fingerprints.json").write_text(json.dumps([
+                {"ip": "192.168.2.52", "result_present": True,
+                 "matches": [{"name": "Linux candidate", "accuracy": "95"}]},
+                {"ip": "192.168.2.199", "result_present": True, "matches": []}
+            ]))
             directory, count, _ = catalogue.build(evidence, ROOT)
             self.assertEqual(count, 2)
             self.assertTrue((directory / "devices/monitor-01.md").exists())
@@ -39,6 +44,9 @@ class DeviceCatalogueTests(unittest.TestCase):
             self.assertEqual(count2, 2)
             self.assertEqual(notes.read_text(), "Important custom notes\n")
             self.assertIn("9090/tcp", (directory / "devices/monitor-01.md").read_text())
+            self.assertIn("Linux candidate", (directory / "devices/monitor-01.md").read_text())
+            self.assertIn("inferences, not confirmed", (directory / "devices/monitor-01.md").read_text())
+            self.assertIn("no OS candidates", unknown.read_text())
             self.assertIn("Unverified", unknown.read_text())
 
     def test_invalid_identifiers_rejected(self):
