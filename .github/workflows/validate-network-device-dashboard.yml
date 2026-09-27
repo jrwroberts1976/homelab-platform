@@ -30,6 +30,10 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-verify.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-cutover-preflight.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-gate3b-source-freeze.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-gate3c-final-sync.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-gate3d-activate.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-gate3e-preactivation-rollback.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -82,10 +86,18 @@ jobs:
             playbooks/network-host-monitor01-firstseen-notifier-verify.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-cutover-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-gate3b-source-freeze.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-gate3c-final-sync.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-gate3d-activate.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-gate3e-preactivation-rollback.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
-          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py
+          python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/network-device-inventory-exporter.py IaC/ansible/roles/monitoring_stack/files/network-host-dashboard-generator.py IaC/ansible/roles/network_host_deep_profiler/files/os-fingerprint-evidence-exporter.py IaC/ansible/roles/network_host_enrichment/files/proxmox_guest_identity.py IaC/ansible/roles/network_host_enrichment/files/proxmox-guest-mac-refresh.py IaC/ansible/roles/network_host_collector/files/homelab-network-firstseen-guard.py
           python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
 
       - name: Verify Grafana dashboard and Ansible registration
@@ -187,6 +199,33 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Four separately approved and never implicitly chained cutover phases.
+          phase_names = [
+              "gate3b-source-freeze", "gate3c-final-sync",
+              "gate3d-activate", "gate3e-preactivation-rollback"
+          ]
+          for name in phase_names:
+              play = yaml.safe_load(Path(
+                  f"IaC/ansible/playbooks/network-host-monitor01-{name}.yml").read_text())
+              assert play and "APPROVE-" in str(play)
+          freeze = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-gate3b-source-freeze.yml").read_text())
+          assert freeze[0]["import_playbook"] == "network-host-monitor01-cutover-preflight.yml"
+          assert freeze[1]["hosts"] == "Proxmox-2"
+          assert "freeze-intent.json" in str(freeze)
+          sync = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-gate3c-final-sync.yml").read_text())
+          assert [p["hosts"] for p in sync] == ["Proxmox-2", "monitoring_hosts"]
+          assert "final-alerted-macs.json" in str(sync)
+          activate = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-gate3d-activate.yml").read_text())
+          assert [p["hosts"] for p in activate] == ["Proxmox-2", "monitoring_hosts"]
+          assert "homelab-network-host-deep-profiler.timer" in str(activate)
+          rollback = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-gate3e-preactivation-rollback.yml").read_text())
+          assert [p["hosts"] for p in rollback] == ["monitoring_hosts", "Proxmox-2"]
+          assert "Refuse early rollback if target activation has ever been attempted" in str(rollback)
+
           # Gate 3a is a non-mutating two-host inspection only.
           # It cannot stop the source, write recipient/MAC registry,
           # enable a destination timer, run Nmap or activate cutover.
