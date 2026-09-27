@@ -61,8 +61,8 @@ def validate_guest(label, address, report, lab=DEFAULT_LAB):
         raise ValueError("Expected isolated IPv4 address not assigned to guest")
     if any(ipaddress.ip_address(x) in PRODUCTION for x in observed):
         raise ValueError("Guest exposes a production-subnet address")
-    if any(x not in lab and not ipaddress.ip_address(x).is_loopback
-           for x in observed):
+    if any(ipaddress.ip_address(x) not in lab
+           and not ipaddress.ip_address(x).is_loopback for x in observed):
         raise ValueError("Guest exposes an interface outside the lab network")
     routes = json.loads(report["routes"])
     validate_routes(routes, lab)
