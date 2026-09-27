@@ -36,6 +36,11 @@ UDP_PORTS = "{{ network_host_deep_profiler_udp_ports }}"
 
 SAFE_SCRIPTS = "{{ network_host_deep_profiler_scripts }}"
 
+# New-device-only bounded scan is an explicit opt-in; existing deployment stays legacy.
+SCAN_MODE = "{{ network_host_deep_profiler_scan_mode }}"
+if SCAN_MODE not in ("legacy", "targeted"):
+    raise RuntimeError("Invalid network profiler scan mode")
+
 NOW = int(time.time())
 
 
@@ -385,7 +390,21 @@ def parse_host(xml, expected_ip):
     }
 
 
+def targeted_tcp_arguments(ip):
+    return [
+        "-sS", "-sV", "--version-light", "-O", "--osscan-limit",
+        "--max-os-tries", "1", "-Pn", "-n", "-T2",
+        "--max-rate", "100", "--max-retries", "1",
+        "--host-timeout", "150s", "--top-ports", "100",
+        "-oX", "-", ip,
+    ]
+
+
 def deep_tcp_scan(ip):
+    if SCAN_MODE == "targeted":
+        return parse_host(
+            run_nmap(targeted_tcp_arguments(ip), timeout=210), ip
+        )
     xml = run_nmap([
         "-sS",
         "-sV",
@@ -766,7 +785,8 @@ for mac, record in pending:
 
     # Reuse TCP evidence only for a partial profile at the same IP.
     udp_only = (
-        record.get("status") == "partial"
+        SCAN_MODE == "legacy"
+        and record.get("status") == "partial"
         and isinstance(previous_profile, dict)
         and isinstance(previous_profile.get("tcp"), dict)
         and previous_profile.get("tcp_scanned_at") is not None
@@ -799,11 +819,14 @@ for mac, record in pending:
 
     udp_error = None
 
-    try:
-        udp = deep_udp_scan(ip)
-    except Exception as exc:
-        udp = None
-        udp_error = str(exc)
+    if SCAN_MODE == "targeted":
+        udp = {"os_matches": [], "ports": []}
+    else:
+        try:
+            udp = deep_udp_scan(ip)
+        except Exception as exc:
+            udp = None
+            udp_error = str(exc)
 
     # Evidence from a previous IP must not appear current.
     previous_ip = record.get("profiled_ip", "")
