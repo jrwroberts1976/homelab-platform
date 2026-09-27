@@ -20,7 +20,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `admin-01` | `192.168.2.48` | Raspberry Pi 3 administration / SSH jump / IaC controller / Corosync QNetd host | ACTIVE |
 | `dns-02` | `192.168.2.50` | Pi-hole + Unbound, CT 100 on `PROXMOX` | ACTIVE |
 | `dns-01` | `192.168.2.51` | Pi-hole + Unbound, CT 101 on `Proxmox-2` | ACTIVE |
-| `monitor-01` | `192.168.2.52` | Prometheus, Grafana, Alertmanager, Blackbox, Loki and router-log ingestion, VM 202 on `Proxmox-2` | ACTIVE |
+| `monitor-01` | `192.168.2.52` | Central monitoring and active network-discovery owner (collector, enricher, OS evidence, guest refresh and first-seen notifier); VM 202 on `Proxmox-2` | ACTIVE |
 | `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis, VM 200 on `PROXMOX` | ACTIVE |
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT 102 on `PROXMOX` | ACTIVE |
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive network sensor, VM 201 on `PROXMOX` | ACTIVE — CAPTURE OPERATIONAL |
@@ -30,7 +30,7 @@ A detailed reconciliation trail for the 14 September estate snapshot is recorded
 | `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT 105 on `PROXMOX` | ACTIVE — PLATFORM + 15-HOST AGENT ESTATE REPORTING; UNATTENDED BACKUP OBSERVED |
 | `home-01` | `192.168.2.60` | Home Assistant OS 18.2, VM 204 on `PROXMOX` | ACTIVE — HA CORE/SUPERVISOR HEALTHY; PROTECTED; NATIVE + MANUAL VM BACKUP PROVEN |
 | `PROXMOX` | `192.168.2.70` | Proxmox VE cluster node 1 / cluster anchor | ACTIVE — `jameshouse-pve` MEMBER |
-| `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2 / Network Host Collector host | ACTIVE — `jameshouse-pve` MEMBER |
+| `Proxmox-2` | `192.168.2.71` | Proxmox VE cluster node 2; former network-discovery source retained with timers disabled for rollback | ACTIVE — `jameshouse-pve` MEMBER |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target | ACTIVE — CORE WORKLOADS OPERATIONAL; KODI ADD-ON RECONCILIATION OPEN |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host | ACTIVE |
 | ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN remote-access endpoint | ACTIVE |
@@ -209,7 +209,7 @@ Live workload placement:
 | VM | 9000 | Debian cloud template | stopped |
 | VM | 9001 | Debian cloud template with QGA | stopped |
 
-An obsolete earlier Network Host Collector installation was removed from this node. The current collector belongs on `Proxmox-2` only.
+An obsolete Network Host Collector installation was removed from this node. Since the 27 September 2026 cutover, the active network-discovery owner is `monitor-01`, not either Proxmox hypervisor.
 
 ### `Proxmox-2` — `192.168.2.71`
 
@@ -227,7 +227,7 @@ Validated on 17 September 2026:
 - Node Exporter active;
 - Alloy active;
 - Zabbix Agent 2 active;
-- active timer-driven Network Host Collector with fresh inventory under `/var/lib/homelab-network-hosts/inventory.json`.
+- historical Network Host Collector files retained under `/var/lib/homelab-network-hosts/` for guarded rollback; all four source discovery timers disabled/inactive after the 27 September 2026 cutover.
 
 Live guests:
 
@@ -463,6 +463,22 @@ The capture adapter remains dedicated to passive monitoring and must not be repu
 
 ## Network host discovery
 
+### Current verified production state — 27 September 2026, after Gate 3 cutover
+
+**Active owner:** `monitor-01` (`192.168.2.52`, VM202 hosted by `Proxmox-2`). This migration moved the network-discovery workload **off the Proxmox hypervisor OS**, not off the Proxmox cluster: the monitor VM remains hosted on `Proxmox-2`. The former discovery owner `Proxmox-2` (`192.168.2.71`) retains its source files and protected rollback evidence but has all four discovery timers **disabled/inactive**; its cutover marker is absent. The `monitor-01` cutover marker is present.
+
+The approved production cutover `GATE3B_20260927_01` passed its two-host read-only preflight, source freeze, frozen-source SHA-256 verification, five-file protected final transfer and separately approved activation, each with zero Ansible failures. Source freeze: `/var/backups/homelab-network-migration/freeze-20260927T111141`; target pre-transfer backup: `/var/backups/homelab-network-migration/final-transfer-GATE3B_20260927_01`. The root-only source freeze contains five data hashes and eight original systemd unit backups; the exact original files were verified against the recorded hashes before transfer. Retain rollback evidence; do not automatically re-enable source timers or repeat activation.
+
+**Current timer ownership verified live:** on `monitor-01`, the network collector, network enricher, read-only OS evidence publisher and Proxmox guest refresh timers are enabled/active. The deep-profiler timer stays disabled/inactive. On `Proxmox-2`, the collector, enricher, OS publisher and deep-profiler timers are all disabled/inactive; the guest-refresh timer is not installed there. The new collector and all three other target services reported `Result=success` / `ExecMainStatus=0`. The collector last executed at 11:19:41–11:19:49 BST; the exporter and other scheduled jobs also had recent executions and subsequent timers scheduled.
+
+**Historical alert continuity and delivery evidence:** comparison of the original frozen registry with the live target registry found all **49 of 49** historical MAC entries present and unchanged, zero missing/modified entries and **one new entry** with status `alerted` (50 total registry entries at the check). The new notifier journal contained `network_device_alert_sent: 1`, and `mail-relay-01` recorded one successful mail delivery during the reviewed window. These events were not correlated by SMTP message ID; do not overstate recipient inbox delivery.
+
+**Monitoring evidence:** live HTTP health checks passed for Prometheus, Grafana 13.2.1 (database `ok`) and Loki (`ready`). Prometheus queries for the `homelab_network_device_card_info` and `homelab_network_device_card_online` dashboard metrics each returned **49 device series** with newest sample age **0 seconds** at verification. Registry history counts and currently exported device series measure different populations. This confirms datasource freshness, not a separate visual audit of every Grafana host dashboard or every Loki stream.
+
+**Remaining closeout:** visually verify the overview and individual Grafana dashboards and relevant series/labels; optionally correlate the sent event to SMTP relay queue ID if delivery traceability is required. Perform Gate 4's separate whole-estate documentation-versus-live audit. The older staging/pre-cutover paragraphs below are retained as **dated history** and no longer describe current timer ownership.
+
+### Historical pre-cutover evidence (superseded by 27 September 2026 cutover)
+
 As of the **26 September 2026 read-only migration preflight**, the active Network Host Collector and selective enricher still run on `Proxmox-2`, not `monitor-01`. Their systemd timers are enabled. The deep-profiler timer is **disabled**; its earlier enablement in the 14 September close-out is historical. The read-only OS fingerprint evidence exporter timer is enabled on `Proxmox-2`.
 
 The 17 September audit confirmed the collector timer enabled/active, with fresh `inventory.json` and Prometheus textfile metrics generated at approximately 12:23. The collector service is `Type=oneshot`, so it is expected to be inactive between timer executions.
@@ -472,7 +488,7 @@ The obsolete collector installation on `PROXMOX` was removed.
 The ASUS RT-AC86U at `192.168.2.1` is also an approved network-observation source for future DHCP/ARP inventory collection. The router runs Dropbear SSH and its privileged account is named `james` (UID 0) rather than `root`. Automated access from `monitor-01` uses the dedicated ED25519 private key `/root/.ssh/id_ed25519_asus_inventory`; the corresponding public key is authorised on the router. The router's ED25519 host key is pinned in `monitor-01`'s `/root/.ssh/known_hosts`. Do not change the SSH target user to `root`, and do not change ownership of `/root/.ssh` on this firmware: `james` is the UID-0 account and owns the directory by design. The dedicated monitor key was validated on 19 September 2026 with a successful non-interactive SSH test. Router DHCP leases are available from `/var/lib/misc/dnsmasq.leases`, and the router ARP table is available from `/proc/net/arp`.
 
 
-Current IaC role defaults keep scanner timers disabled unless explicitly activated; the source's live collector/enricher timers are enabled by the previously commissioned deployment. Do not allow a generic role re-run to silently change live timer ownership.
+IaC role defaults may keep scanner timers disabled unless explicitly activated. After cutover, do not allow a generic role re-run on either host to silently change verified monitor-01-only timer ownership.
 
 The 26 September **Gate 1 preflight passed without mutations** on both hosts: the source inventory held **49 devices**, with **35 baseline / 13 complete / 1 pending** deep-profiler records; **13** contained TCP scan data, **eight** had recorded Nmap OS matches, and none had the newer `tcp_scanned_at` field (all 13 had legacy time records). The existing five-minute Nmap fingerprint exporter initially emitted zero matches because it expected the newer timestamp; the backward-compatible fix is merged but its live deployment is not yet verified.
 
