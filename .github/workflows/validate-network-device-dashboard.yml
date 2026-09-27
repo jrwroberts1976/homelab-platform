@@ -34,6 +34,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-final-transfer.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-activate.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-rollback.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-preactivation-recover.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -94,6 +95,8 @@ jobs:
             playbooks/network-host-monitor01-activate.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-rollback.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-preactivation-recover.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
