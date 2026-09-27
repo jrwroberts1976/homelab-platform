@@ -21,6 +21,7 @@ def load_functions():
         "fresh_arp_presence",
         "validate_scan_xml",
         "parse_host",
+        "targeted_tcp_arguments",
     }
     selected = [
         node
@@ -130,6 +131,16 @@ class DeepProfilerTests(unittest.TestCase):
                 )
                 if not ip or not mac:
                     self.assertEqual(calls, [])
+
+    def test_targeted_nmap_is_bounded(self):
+        args = self.worker["targeted_tcp_arguments"]("192.168.2.242")
+        self.assertEqual(args[-1], "192.168.2.242")
+        self.assertIn("--top-ports", args)
+        self.assertIn("-O", args)
+        self.assertIn("--host-timeout", args)
+        self.assertNotIn("-p-", args)
+        self.assertNotIn("--script", args)
+        self.assertNotIn("-sU", args)
 
     def test_scan_cooldown(self):
         due = self.worker["scan_due"]
