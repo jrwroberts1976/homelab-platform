@@ -411,13 +411,13 @@
         name: homelab-network-host-collector.service
         state: started
 
-    - name: Require initial target collector and notifier service succeeded
+    - name: Check initial collector service result (not proof of email delivery)
       ansible.builtin.command:
         argv: [/usr/bin/systemctl, show, homelab-network-host-collector.service, -p, Result, -p, ExecMainStatus]
       changed_when: false
       register: initial_collector
 
-    - name: Fail closed on first cycle error
+    - name: Fail closed on first collector cycle error
       ansible.builtin.assert:
         that:
           - "'Result=success' in initial_collector.stdout"
@@ -464,6 +464,7 @@
       ansible.builtin.debug:
         msg:
           - "Activation provisional: monitor-01 collector and periodic refresh/enrichment/OS publication scheduled; source stopped."
-          - "HOLD: inspect first-seen journal, historical alert registry delta and one intentional isolated test email."
+          - "HOLD: ExecStartPost=- ignores notifier exit failure; separately inspect notifier event/journal and relay delivery evidence."
+          - "HOLD: compare historical alert registry before and after the first cycle and perform one intentional isolated test email."
           - "HOLD: verify Prometheus labels and pre-existing Grafana dashboard UIDs and per-host pages."
           - "HOLD: cutover not accepted until post-activation checks and independent whole-estate audit plan."
