@@ -21,8 +21,10 @@ class GuardedCutoverPlanTests(unittest.TestCase):
     def test_freeze_requires_live_two_host_preflight_before_any_mutation(self):
         self.assertEqual(self.freeze[0]["import_playbook"],
                          "network-host-monitor01-cutover-preflight.yml")
-        self.assertEqual(self.freeze[1]["hosts"], "Proxmox-2")
-        tasks = self.freeze[1]["tasks"]
+        self.assertEqual(self.freeze[1]["hosts"], "monitoring_hosts")
+        self.assertEqual(self.freeze[2]["hosts"], "Proxmox-2")
+        self.assertIn("destination_free_bytes", str(self.freeze[1]))
+        tasks = self.freeze[2]["tasks"]
         self.assertIn("gate3_allow_source_freeze", str(tasks[0]))
         self.assertIn("YES_PAUSE_PROXMOX2_NETWORK_DISCOVERY", str(tasks[0]))
         self.assertIn("gate3_transaction", str(tasks[0]))
