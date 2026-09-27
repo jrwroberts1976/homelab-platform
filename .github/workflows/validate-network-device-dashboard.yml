@@ -30,6 +30,9 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-verify.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-cutover-preflight.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-cutover-freeze.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-cutover-transfer.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-cutover-rollback-before-activation.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -82,6 +85,12 @@ jobs:
             playbooks/network-host-monitor01-firstseen-notifier-verify.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-cutover-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-cutover-freeze.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-cutover-transfer.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-cutover-rollback-before-activation.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
