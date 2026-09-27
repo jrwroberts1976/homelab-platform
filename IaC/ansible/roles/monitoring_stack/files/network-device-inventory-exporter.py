@@ -251,12 +251,12 @@ def populate():
             "version": m.get("version") or "",
             "source": "Selected-port enrichment", "observed": ""}
 
-    # Saved deep-profiler results are exported separately on Proxmox-2.
-    # Correlate BOTH the source MAC and the IP at scan time. An IP can be
-    # reused by a different device; a former owner's guess must never leak
-    # onto a new device's dashboard. Do not initiate or request scans here.
+    # Saved fingerprints now originate on monitor-01, the sole current owner.
+    # Never mix in stale Proxmox-2 series retained during cutover. Correlate
+    # BOTH MAC and IP at scan time so recycled addresses cannot inherit an
+    # earlier device's OS guess. This path does not start any network scans.
     for result in prometheus(
-            'homelab_network_host_os_fingerprint_info{target_name="Proxmox-2"}'):
+            'homelab_network_host_os_fingerprint_info{target_name="monitor-01"}'):
         m = result.get("metric", {})
         ip = lan_ip(m.get("profiled_ip"))
         h = hosts.get(ip) if ip else None
