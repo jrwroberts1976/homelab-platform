@@ -94,6 +94,7 @@ def main():
     old_umask = os.umask(0o077)
     try:
         outdir.mkdir(parents=True, mode=0o700)
+        print('DISCOVERY_PHASE=START subnet=' + SUBNET, flush=True)
         discovery, raw = remote_nmap(
             ["-sn", "-PR", "-n", "-oX", "-", SUBNET], args.identity, 240)
         (outdir / "discovery.xml").write_text(raw)
@@ -106,6 +107,7 @@ def main():
         if targets and not args.discovery_only:
             for offset in range(0, len(targets), 24):
                 chunk = targets[offset:offset + 24]
+                print(f'SERVICE_PHASE=START batch={offset//24+1} hosts={len(chunk)}', flush=True)
                 result, raw = remote_nmap(
                     ["-sT", "-sV", "--version-light", "-T2", "-n",
                      "--max-retries", "1", "--max-rate", "100",
