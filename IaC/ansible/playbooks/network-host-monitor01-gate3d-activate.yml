@@ -539,11 +539,21 @@
           - (verified_current_identity.stdout | from_json).matched_guest_macs | int >= 1
           - (verified_current_identity.stdout | from_json).unmatched_guest_macs | int == 0
 
-    - name: Enable selective enrichment only after proven trusted guest-map dependency
-      ansible.builtin.systemd_service:
-        name: homelab-network-host-enricher.timer
-        state: started
-        enabled: true
+    # The staged worker can clear a prior Proxmox identity when an
+    # otherwise online host disappears from a newer guest snapshot.
+    # Do NOT schedule it until a separately reviewed identity-retention
+    # fix is installed and has passed a no-scan data-preservation gate.
+    - name: Require selective enrichment remains off pending separate identity-history proof
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, homelab-network-host-enricher.timer]
+      changed_when: false
+      failed_when: false
+      register: enrichment_remains_disabled
+
+    - name: Refuse premature selective enrichment activation
+      ansible.builtin.assert:
+        that:
+          - enrichment_remains_disabled.stdout == 'disabled'
 
     - name: Require expensive deep profiler stays disabled until a later explicit decision
       ansible.builtin.command:
@@ -561,7 +571,7 @@
       ansible.builtin.debug:
         msg:
           - "Initial monitor-01 discovery verified; historical first-seen registry preserved."
-          - "Target discovery, guest refresh, OS evidence and selective enrichment timers enabled."
+          - "Target collector, trusted guest refresh and OS evidence timers enabled; selective enrichment remains disabled pending separate historical identity retention verification."
           - "Deep profiler remains disabled; original source Proxmox-2 discovery remains frozen."
           - "Existing Grafana dashboard UIDs were not regenerated or removed."
           - "Run separate post-cutover Prometheus/Grafana verification before any source metric retirement."
