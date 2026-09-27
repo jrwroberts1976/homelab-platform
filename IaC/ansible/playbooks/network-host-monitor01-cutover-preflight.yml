@@ -214,6 +214,49 @@
         source_cutover_counts: "{{ source_counts_secret.stdout | from_json }}"
       no_log: true
 
+    - name: Count recent source first-seen delivery errors without displaying journal contents
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            import subprocess
+
+            proc = subprocess.run(
+                ["/usr/bin/journalctl",
+                 "-u", "homelab-network-host-collector.service",
+                 "--since", "24 hours ago",
+                 "--no-pager", "--output=cat"],
+                capture_output=True, text=True, timeout=20,
+                check=False
+            )
+            if proc.returncode != 0:
+                raise RuntimeError("Unable to inspect source first-seen delivery logs")
+            recent_errors = (
+                "network_device_alert_send_failed",
+                "network_device_alert_error",
+                "network_device_alert_recipient_missing",
+            )
+            # Aggregate-only count, never emit raw MACs, hostnames or SMTP data.
+            result = {
+                "window_hours": 24,
+                "observed_notification_failures": sum(
+                    any(name in line for name in recent_errors)
+                    for line in proc.stdout.splitlines()
+                ),
+            }
+            print(json.dumps(result, sort_keys=True))
+      register: source_delivery_audit_secret
+      changed_when: false
+      no_log: true
+
+    - name: Keep only aggregate notification error count
+      ansible.builtin.set_fact:
+        source_delivery_audit: "{{ source_delivery_audit_secret.stdout | from_json }}"
+      no_log: true
+
     - name: Require no outstanding online notifications on current source
       ansible.builtin.assert:
         that:
@@ -221,6 +264,7 @@
           - source_cutover_counts.source_pending_online_alerts | int == 0
           - source_cutover_counts.source_missing_known_macs | int == 0
           - source_cutover_counts.recipient_and_source_hook | bool
+          - source_delivery_audit.observed_notification_failures | int == 0
         fail_msg: >-
           Resolve outstanding source alerts before any future source freeze.
 
@@ -230,6 +274,7 @@
           - "Source registered MACs: {{ source_cutover_counts.source_registry_macs }} ({{ source_cutover_counts.source_baseline }} baseline, {{ source_cutover_counts.source_alerted }} alerted)."
           - "Source inventory: {{ source_cutover_counts.source_inventory_records }} records / {{ source_cutover_counts.source_inventory_distinct_macs }} MACs; pending online alerts: {{ source_cutover_counts.source_pending_online_alerts }}."
           - "Preserved evidence: {{ source_cutover_counts.source_profile_records }} profile records and {{ source_cutover_counts.source_enrichment_records }} enrichment records."
+          - "Observed first-seen delivery errors in prior 24 hours: {{ source_delivery_audit.observed_notification_failures }}."
           - "Latest observed device age (not job success): {{ source_cutover_counts.last_observation_age_seconds }} seconds."
           - "Source timer enablement: {{ source_timer_enabled.results | map(attribute='stdout') | list }}; timer activity: {{ source_timer_active.results | map(attribute='stdout') | list }}."
           - "No source service, notifier, registry or inventory changed."
