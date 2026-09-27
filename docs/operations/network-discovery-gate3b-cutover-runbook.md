@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Gate 3b: reviewed single-owner network-discovery cutover runbook (DRAFT)
 
 **Status:** Planning/review only. This document neither authorises nor executes any production change. Source ownership remains on `Proxmox-2`; `monitor-01` remains inert. Gate 3a passed read-only on 27 September 2026. Consult [current state](../architecture/CURRENT-STATE.md) and [full migration history](network-discovery-monitor01-migration.md).
