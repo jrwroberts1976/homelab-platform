@@ -46,7 +46,7 @@ class PreActivationRecoveryTests(unittest.TestCase):
     def test_all_five_source_files_and_original_unit_hashes_before_restart(self):
         for name in ("inventory.json", "deep-profiles.json", "enrichment.json",
                      "alerted-macs.json", "alerts.env"):
-            self.assertIn(name, self.plays[1]["vars"]["original_files"])
+            self.assertTrue(any(path.endswith("/" + name) for path in self.plays[1]["vars"]["original_files"]))
         steps = [t["name"] for t in self.source]
         restart = steps.index("Restore only originally enabled and active source timers")
         for check in (
