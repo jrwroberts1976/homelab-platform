@@ -88,6 +88,9 @@ class Gate3PhaseContractTests(unittest.TestCase):
             names.index("Enable ONLY the reviewed target network collector timer"),
         )
         self.assertIn("Require expensive deep profiler stays disabled until a later explicit decision", names)
+        self.assertIn("Require selective enrichment remains off pending separate identity-history proof", names)
+        self.assertIn("Refuse premature selective enrichment activation", names)
+        self.assertNotIn("Enable selective enrichment only after proven trusted guest-map dependency", names)
         self.assertNotIn(
             "homelab-network-host-deep-profiler.timer\n        state: started",
             (PLAYBOOKS / "network-host-monitor01-gate3d-activate.yml").read_text(),
