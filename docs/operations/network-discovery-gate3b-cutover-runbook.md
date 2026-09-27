@@ -67,6 +67,20 @@ Introduce the target cutover approval marker **only after** verified source quie
 5. Document the exact reviewed commit, approved operator/maintenance window, expected service state transitions, final evidence and post-cutover current-state update. No post-cutover claim until live verification.
 
 
+## Disposable drill admission — no production side effects
+
+The first executable drill preparation is `IaC/monitoring/drills/monitor01_disposable_preflight.py`. It is **read-only**: it SSHes into two already-created throwaway systemd VMs and checks expected `drill-source` / `drill-target` names, unique machine IDs, distinct lab-only addresses, no default route, no address or route to the production `192.168.2.0/24` network, and working systemd. Its fixed SSH commands collect only hostname, machine ID, interface addresses, routing and systemd version. It never executes migration playbooks, starts/stops services, copies data or sends messages.
+
+Use a dedicated private Proxmox bridge without a physical uplink, no router/NAT, no mail-relay access and no direct LAN NIC on either disposable guest. Suggested lab range: `10.77.77.0/24` with `drill-source=10.77.77.11` and `drill-target=10.77.77.12`, but **do not assume these VMs exist**. Establish a separately approved, isolated controller path from `admin-01`; do not add a default route to the guests. Bootstrap known SSH host keys by separately verifying the VM console fingerprints, and use a disposable test key. Never put real MAC history, production `alerts.env`, production certificates, Proxmox API credentials or working SMTP destinations on test guests.
+
+From the review worktree root:
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 IaC/monitoring/drills/monitor01_disposable_preflight.py \\
+  --source 10.77.77.11 --target 10.77.77.12 \\
+  --user james --identity ~/.ssh/disposable-drill
+```
+Replace the sample addresses/key with actual test-only values after provisioning. If the admission fails, **stop**. The script deliberately does not substitute real hosts into production playbooks: their literal hostname/IP assertions must remain untouched, and an independent approved disposable-only adaptation and actual Ansible failure-injection exercise is still required. Record disposable VM IDs/hostnames, isolation evidence, controller reachability and the admission log before proceeding.
+
 ## Pre-production review and disposable-host evidence
 
 The synthetic interruption suite `IaC/monitoring/tests/test_monitor01_interruption_scenarios.py` passed on 27 September 2026 against synthetic files and modelled state transitions. The last-moment exclusivity regression test also checks that all four Proxmox-2 source timers are rechecked **immediately before** the first active target collector invocation. These tests do not run Ansible against disposable hosts and do not prove live service drain, systemd ordering, SMTP suppression or rollback on a real machine.
