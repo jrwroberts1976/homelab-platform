@@ -93,6 +93,21 @@
         group: root
         mode: '0700'
 
+    - name: Preserve exact pre-freeze timer enablement BEFORE any timer changes
+      ansible.builtin.copy:
+        dest: "{{ freeze_dir }}/prior-timers.json"
+        content: >-
+          {{ {
+             'transaction': gate3_transaction,
+             'phase': 'pre_stop',
+             'prior_timer_enabled': dict(all_timers | zip(source_timer_before.results | map(attribute='stdout') | list))
+          } | to_nice_json }}
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      no_log: true
+
     - name: Stop and disable only four OLD source network-discovery timers
       ansible.builtin.systemd_service:
         name: "{{ item }}"
