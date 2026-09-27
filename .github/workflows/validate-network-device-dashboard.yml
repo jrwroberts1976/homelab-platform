@@ -29,6 +29,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-preflight.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-firstseen-notifier-verify.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-cutover-preflight.yml"
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
@@ -79,6 +80,8 @@ jobs:
             playbooks/network-host-monitor01-firstseen-notifier-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-firstseen-notifier-verify.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-cutover-preflight.yml --syntax-check
 
       - name: Validate exporter syntax and unit tests
         run: |
@@ -184,6 +187,37 @@ jobs:
                          or "enable new" in x["name"].lower()
                          for x in target_actions)
           assert "eth0" in str(target_actions)
+          # Gate 3a is a non-mutating two-host inspection only.
+          # It cannot stop the source, write recipient/MAC registry,
+          # enable a destination timer, run Nmap or activate cutover.
+          gate3a = yaml.safe_load(Path(
+              "IaC/ansible/playbooks/network-host-monitor01-cutover-preflight.yml").read_text())
+          assert [play["hosts"] for play in gate3a] == [
+              "Proxmox-2", "monitoring_hosts"
+          ]
+          for play in gate3a:
+              for task in play["tasks"]:
+                  assert not any(key in task for key in [
+                      "ansible.builtin.copy",
+                      "ansible.builtin.file",
+                      "ansible.builtin.apt",
+                      "ansible.builtin.systemd_service",
+                      "ansible.builtin.import_role",
+                      "ansible.builtin.reboot",
+                  ])
+                  if "ansible.builtin.template" in task:
+                      assert task.get("check_mode") is True
+                      assert task.get("diff") is False
+                      assert task.get("no_log") is True
+                  if "ansible.builtin.shell" in task:
+                      assert task.get("no_log") is True
+                      assert "--refresh" not in str(task)
+                      assert "--test-email" not in str(task)
+          assert "alerted-macs.json" in str(gate3a)
+          assert "network-discovery-cutover-approved" in str(gate3a)
+          assert "homelab-proxmox-guest-refresh.timer" in str(gate3a)
+          assert "snapshot_age_seconds" in str(gate3a)
+
           # Gate 2i-R reconciles a pre-existing notifier using Ansible
           # template check mode only; it must never replace its bytes,
           # create a registry, send email or start any scanning timer.
