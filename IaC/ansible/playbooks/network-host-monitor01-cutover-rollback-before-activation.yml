@@ -50,6 +50,49 @@
           Destination may have been activated. Do not restart source
           before reconciling any target first-seen notifications.
 
+    - name: Privately read original frozen source manifest to detect any destination alert-registry drift
+      ansible.builtin.slurp:
+        src: "/var/backups/homelab-network-migration/gate3-freeze-{{ gate3_transaction }}/manifest.json"
+      delegate_to: Proxmox-2
+      become: true
+      register: rollback_source_manifest_blob
+      no_log: true
+
+    - name: Decode only source transaction SHA-256 metadata for rollback comparison
+      ansible.builtin.set_fact:
+        rollback_source_manifest: "{{ rollback_source_manifest_blob.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require exact source transaction and complete original alert-registry hash
+      ansible.builtin.assert:
+        that:
+          - rollback_source_manifest.transaction == gate3_transaction
+          - rollback_source_manifest.phase == 'source_frozen'
+          - rollback_source_manifest.source_sha256['alerted-macs.json'] | length == 64
+
+    - name: Inspect transferred target MAC registry if final delta copying already began
+      ansible.builtin.stat:
+        path: /var/lib/homelab-network-hosts/alerted-macs.json
+        follow: false
+        checksum_algorithm: sha256
+      register: rollback_target_registry
+      no_log: true
+
+    - name: Refuse any target registry changes suggesting independent notification delivery
+      ansible.builtin.assert:
+        that:
+          - >-
+            not rollback_target_registry.stat.exists or
+            (rollback_target_registry.stat.isreg | default(false)
+             and not (rollback_target_registry.stat.islnk | default(false))
+             and rollback_target_registry.stat.pw_name == 'root'
+             and rollback_target_registry.stat.mode == '0600'
+             and rollback_target_registry.stat.checksum == rollback_source_manifest.source_sha256['alerted-macs.json'])
+        fail_msg: >-
+          Target first-seen registry no longer matches original source
+          freeze. Preserve both registries and reconcile alert delivery
+          manually; never auto-restart source notification ownership.
+
     - name: Check target collector loaded unit for any email hook or recipient
       ansible.builtin.command:
         argv: [/usr/bin/systemctl, cat, homelab-network-host-collector.service]
