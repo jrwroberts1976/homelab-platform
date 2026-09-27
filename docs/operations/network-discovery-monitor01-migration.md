@@ -476,7 +476,7 @@ matches. The target collector, enricher, deep profiler and OS exporter
 timers remain disabled, while the source collector and enricher continue.
 **Do not rerun the staging playbook:** the target files now exist by design.
 
-### Gate 3a: final two-host read-only cutover readiness (prepared; NOT run)
+### Gate 3a: final two-host read-only cutover readiness (PASSED 27 September 2026)
 
 Use `playbooks/network-host-monitor01-cutover-preflight.yml` from
 `admin-01`. This is a separate, non-mutating readiness gate—not an
@@ -522,6 +522,8 @@ copy remain mandatory. If the guest snapshot has become stale,
 refresh it using a *separately approved* protected API procedure
 before rerunning the preflight—do not activate enrichment with a
 stale guest identity map.
+
+**Verified live recap:** `Proxmox-2: 15 OK / 0 changed / 0 failed`; `monitor-01: 27 OK / 0 changed / 0 failed` on 27 September 2026. All mandatory source ownership, first-seen integrity/delivery and destination inactivity, trust, protected state and guest identity assertions passed. The supplied recap does not include new aggregate source inventory or alert-registry counts; prior counts remain historical observations, not frozen cutover totals. No source or target state changed and no cutover was authorised.
 
 **Hold after Gate 3a:** prepare separately reviewed and explicit
 approval-gated source freeze, protected final delta transfer, and
