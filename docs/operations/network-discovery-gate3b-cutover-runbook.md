@@ -35,6 +35,15 @@ Move only the network-host collector, targeted enricher, saved OS-evidence publi
 - Require exact SHA-256 parity for **all five** source/target copied files; schema-parse three datasets and the versioned full alert registry. Assert every source historical registry entry remains identical on target, zero inventoried MACs are absent from the registry, and zero pending-online first-seen events. Revalidate unique, collision-free guest identities against the **new final inventory**, refreshing the separate protected guest map under strict TLS if necessary.
 - Keep all target timers inactive, notifier unwired and cutover marker absent throughout this phase. Validate source is still quiescent before declaring transfer ready. If any check fails, leave target disabled and use the controlled source rollback; do not re-seed alert registry.
 
+
+## Gate 3b pre-activation recovery: interrupted freeze or partial transfer
+
+**Draft added for review (never run as an implicit next step):** `IaC/ansible/playbooks/network-host-monitor01-preactivation-recover.yml`. This distinct emergency path addresses a freeze followed by an interrupted five-file transfer when monitor-01 may have zero, one, or several final files but has **never** been activated. It intentionally does **not** require the target alert registry, recipient or final-transfer backup to exist.
+
+**Only after separate recovery approval:** verify all five target timers disabled and all destination services inactive; approval marker absent; collector unit has no alert post-hook or environment; no notifier process. Then verify the precise source freeze directory/change ID and the original eight systemd unit hashes, all five original frozen dataset/recipient SHA-256 values (including complete historical MAC alert registry), and that source timers and worker services remain inactive. Immediately recheck destination inactivity before restoring only source timers previously enabled and active at freeze. Preserve every partially transferred target file and any backups untouched for later reconciliation. No target restart, scan, notifier execution, deletion or file overwrite occurs during this recovery procedure.
+
+**Out of scope / fail closed:** This path is not appropriate after any destination collector or email attempt, if the target cutover marker or notifier wiring exists, or if the source freeze never completed (e.g. no frozen data checksum manifest or partial timer stop). Such cases require separate manual investigation or the post-activation rollback with reconciled notification history. The usual rollback playbook intentionally refuses to resume source if the historical alert registry diverges.
+
 ## Hold point C: separately approved destination activation
 
 After Hold B passes **and separate activation approval**, confirm source timer/service disablement again. Install/review the target-only notifier unit `ExecStartPost` and protected `EnvironmentFile`, retaining `COLLECTOR_HOST = "monitor-01"` and the copied historical registry. Check its rendered service wiring without executing notifier or dispatching a test email yet.
