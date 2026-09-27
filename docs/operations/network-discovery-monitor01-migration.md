@@ -590,6 +590,105 @@ fails, **leave monitor-01 disabled** and use the explicitly recorded
 source rollback procedure. Never enable both discovery collectors
 or first-seen notifiers concurrently.
 
+### Gate 3b/3c: guarded production freeze and protected final delta (DRAFT; DO NOT RUN)
+
+These are **separate, review-only candidate playbooks** until the
+operator explicitly approves a maintenance window, the rollback plan
+and their final GitHub revision. Gate 3a was verified separately on
+27 September 2026 (`Proxmox-2: 15 OK, 0 changed, 0 failed`;
+`monitor-01: 27 OK, 0 changed, 0 failed`). The detailed target report
+showed 49 saved LAN records, 11 matched Proxmox guest MACs, zero unmatched
+and an authenticated API candidate count of 11. The saved guest-map
+age was **70,006 seconds (~19 hours 27 minutes)** at that check: within
+the enforced 48-hour ceiling, but it must be revalidated or refreshed
+before any future activation. The same report confirmed all five
+destination timers inactive/disabled, no notifier recipient/registry
+or approval marker, intact JSON hashes and reachable internal SMTP
+without transmitting an email. Source production discovery continues.
+
+**Gate 3b:** `playbooks/network-host-monitor01-cutover-freeze.yml`.
+This re-runs both halves of the read-only Gate 3a first. It then
+requires a *specific* transaction ID, explicit source-freeze opt-in
+and separately typed approval token before modifying production.
+It refuses an existing transaction backup directory; records all
+four original Proxmox-2 timer enablement states in root-only
+`prior-timers.json` **before stopping any timer**; disables only the
+four source network-discovery, enrichment, deep-profile and network
+OS-evidence timers; and waits for all already running oneshot services
+and notification post-hooks to finish. Only after proving they are
+all inactive does it revalidate source registry/inventory consistency,
+copy the three final source JSONs plus the entire historical
+`alerted-macs.json` and protected `alerts.env` into a new root-only
+freeze directory, compare all five backups' SHA-256 against the
+unchanged live originals, and create a root-only final
+`manifest.json`. It **does not** alter general Proxmox monitoring,
+start monitor-01 or send any email. If it fails after stopping
+timers, do not blindly rerun: inspect the private pre-stop manifest,
+systemd states and source alert history and arrange recovery.
+
+**Gate 3c:** `playbooks/network-host-monitor01-cutover-transfer.yml`.
+This must run with the *same* transaction ID, a different explicit
+transfer opt-in and approval token. It requires all original
+source network timers still disabled, all source jobs inactive and
+all five **live** source files byte-identical to the final frozen
+source backup/manifest. It reads the protected snapshot solely
+through Ansible's authenticated transport with logging suppressed.
+The target must still have all five timers disabled/inactive, no
+running workers, no notifier post-hook or recipient environment,
+no existing alert registry or cutover marker, and no prior target
+transaction backup. First it creates a private backup of **all
+four** existing target JSONs, including the Proxmox guest map;
+then it copies the three final source JSONs, the **whole**
+historical alert registry and recipient environment as root-owned
+mode 0600. It compares each resulting target SHA-256 with the
+immutable source freeze manifest, independently validates JSON
+shapes, full MAC-registry overlap and source record counts, and
+checks the still-protected Proxmox guest map against the *new*
+inventory. Any failure leaves the **source frozen and target
+inactive**; consult private rollback evidence. It does **not**
+modify the collector unit, authorise cutover, enable timers, run
+Nmap or send email.
+
+**Gate 3r-pre:** `playbooks/network-host-monitor01-cutover-rollback-before-activation.yml`.
+Use only with distinct explicit rollback approval **before** any
+target activation or alert delivery. It rejects any destination
+cutover marker or notifier post-hook, verifies all five target timers
+disabled/inactive and target workers inactive, checks the original
+source registry and evidence still match its frozen transaction
+SHA-256, and then restores **only the previously recorded original
+source timer enablement states**. It keeps any partial target copies
+for protected inspection rather than deleting secrets or overwriting
+historical evidence. It is **not** safe after monitor-01 may have
+sent notifications. If Gate 3b stopped some source timers but did
+not complete the final manifest, inspect the private
+`prior-timers.json` and perform a separate, reviewed recovery;
+this automated rollback intentionally refuses incomplete evidence.
+
+### Gate 3d: later activation and post-activation recovery (NOT IMPLEMENTED)
+
+Prepare and review this phase **only after** the live frozen source
+and byte-exact protected target transfer are validated. Its approval
+gate must prove the source remains stopped, the entire latest
+alert registry was transferred, the destination refresher can
+obtain current Proxmox guest mapping, and the collector unit's
+protected recipient environment and non-optional notifier hook
+can be safely installed *behind the same cutover approval guard*.
+Only then should a separately approved cutover marker be created,
+the target collector run for the first time, and the active
+single-owner registry, device identities, Node Exporter and Grafana
+history be checked. Enable the target collector, guest refresh,
+enrichment and evidence schedules in a controlled order; leave
+deep profiling opt-in. Keep source backup and rollback evidence;
+do not remove its historical registry or old network metrics until
+target validation and dashboard continuity are proven.
+
+**Post-activation rollback differs from pre-activation rollback.**
+Stop/drain the destination and preserve its latest registry and
+email-delivery logs first. Reconcile any *newly alerted target MACs*
+into the source's historical registry before resuming source
+first-seen notifications, or duplicate alerts may be sent. Never
+blindly re-enable Proxmox-2 after target notification delivery.
+
 ## Rollback
 
 If monitor-01 fails either the inventory or OS-correlation checks:
