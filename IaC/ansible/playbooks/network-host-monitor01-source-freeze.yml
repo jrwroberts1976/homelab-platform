@@ -131,7 +131,15 @@
           - not previous_freeze.stat.exists
         fail_msg: Existing or partial freeze found; inspect it and do not rerun blindly.
 
-    - name: Create private source-only rollback evidence directory
+    - name: Create private source-only freeze directory with explicit parent permissions
+      ansible.builtin.file:
+        path: "{{ source_freeze_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Create private rollback unit directory
       ansible.builtin.file:
         path: "{{ source_freeze_dir }}/units"
         state: directory
