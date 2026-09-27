@@ -1,0 +1,228 @@
+---
+# Gate 3f: post-activation ROLLBACK ASSESSMENT ONLY.
+# Never automatically restore the source after monitor-01 could have
+# delivered new first-seen emails. No service/timer/file changes.
+# Source restart needs a separately verified, protected union of its
+# original MAC registry plus every newly alerted target MAC, and
+# human review of ambiguous SMTP acceptance/save failures.
+- name: Confirm original Proxmox-2 first-seen data remains frozen
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  vars:
+    source_dir: /var/lib/homelab-network-hosts
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+  tasks:
+    - name: Require original source and exact host identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Inspect completed source freeze marker in memory
+      ansible.builtin.slurp:
+        src: "{{ source_dir }}/network-discovery-source-frozen.json"
+      register: source_marker_raw
+      no_log: true
+
+    - name: Parse original completed freeze marker
+      ansible.builtin.set_fact:
+        source_freeze_for_rollback: "{{ source_marker_raw.content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require a known preserved source snapshot path and run identity
+      ansible.builtin.assert:
+        that:
+          - source_freeze_for_rollback.event == 'network_discovery_source_frozen'
+          - source_freeze_for_rollback.run_id is match('^[0-9]{8}T[0-9]{6}$')
+          - source_freeze_for_rollback.snapshot_dir == '/var/backups/homelab-network-migration/gate3-' ~ source_freeze_for_rollback.run_id
+
+    - name: Check no legacy source network timer was re-enabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: original_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Check no legacy source network timer is active
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: original_active
+      changed_when: false
+      failed_when: false
+
+    - name: Require original source discovery is still stopped before any reverse sync
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ original_enabled.results | zip(original_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Inspect original source first-seen registry and its final frozen backup
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ source_dir }}/alerted-macs.json"
+        - "{{ source_freeze_for_rollback.snapshot_dir }}/final/alerted-macs.json"
+      register: original_registry_hashes
+      no_log: true
+
+    - name: Refuse reverse reconciliation if the source registry changed after freeze
+      ansible.builtin.assert:
+        that:
+          - original_registry_hashes.results[0].stat.isreg | default(false)
+          - original_registry_hashes.results[0].stat.pw_name == 'root'
+          - original_registry_hashes.results[0].stat.mode == '0600'
+          - original_registry_hashes.results[0].stat.checksum == original_registry_hashes.results[1].stat.checksum
+
+- name: Audit the target's NEW delivered/pending MACs and possible mail errors without writing anything
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    target_state: /var/lib/homelab-network-hosts
+  tasks:
+    - name: Require the correct target after an actual approval-gated activation
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Read root-only activation approval and final-sync manifests
+      ansible.builtin.slurp:
+        src: "{{ item }}"
+      loop:
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+        - "{{ target_state }}/network-discovery-final-sync.json"
+      register: activated_manifests
+      no_log: true
+
+    - name: Parse original target approval and source-backed sync evidence
+      ansible.builtin.set_fact:
+        rollback_approval: "{{ activated_manifests.results[0].content | b64decode | from_json }}"
+        rollback_sync: "{{ activated_manifests.results[1].content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require matching completed target cutover and immutable original history
+      ansible.builtin.assert:
+        that:
+          - rollback_approval.event == 'network_discovery_cutover_approved'
+          - rollback_sync.event == 'network_discovery_final_sync_complete'
+          - rollback_approval.run_id == rollback_sync.run_id
+          - rollback_sync.run_id == hostvars['Proxmox-2'].source_freeze_for_rollback.run_id
+          - rollback_sync.target_backup_dir == '/var/backups/homelab-network-migration/gate3-target-' ~ rollback_sync.run_id
+
+    - name: Check original backed-up historical registry and current target registry protection
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ rollback_sync.target_backup_dir }}/final-alerted-macs.json"
+        - "{{ target_state }}/alerted-macs.json"
+        - "{{ target_state }}/inventory.json"
+      register: postactivation_files
+      no_log: true
+
+    - name: Require all protected alert and inventory sources present and root-only
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+      loop: "{{ postactivation_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require frozen original registry anchor still byte-equal to saved source
+      ansible.builtin.assert:
+        that:
+          - postactivation_files.results[0].stat.checksum == rollback_sync.sha256[3]
+
+    - name: Count newly delivered MAC alerts and pending online devices without listing identities
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            import subprocess
+            import sys
+            from pathlib import Path
+
+            base = Path("/var/lib/homelab-network-hosts")
+            backup = Path(sys.argv[1])
+            current = json.loads((base / "alerted-macs.json").read_text())
+            original = json.loads((backup / "final-alerted-macs.json").read_text())
+            inv = json.loads((base / "inventory.json").read_text())
+            assert current.get("version") == original.get("version") == 1
+            known, frozen = current["devices"], original["devices"]
+            if not isinstance(known, dict) or not isinstance(frozen, dict):
+                raise ValueError("Bad alert registry")
+            if not frozen.keys() <= known.keys():
+                raise ValueError("Original historical registry incomplete on target")
+            downgraded = sum(
+                original_record.get("status") == "alerted"
+                and known[mac].get("status") != "alerted"
+                for mac, original_record in frozen.items()
+            )
+            newly_alerted = sum(
+                record.get("status") == "alerted"
+                for mac, record in known.items() if mac not in frozen
+            )
+            online = {
+                str(rec.get("mac") or "").strip().lower()
+                for rec in inv.values()
+                if isinstance(rec,dict) and rec.get("mac") and rec.get("online") is True
+            }
+            pending = len(online - known.keys())
+            proc = subprocess.run(
+                ["/usr/bin/journalctl", "-u",
+                 "homelab-network-host-collector.service",
+                 "--since", "24 hours ago", "--no-pager", "--output=cat"],
+                capture_output=True, text=True, timeout=20, check=False,
+            )
+            if proc.returncode != 0:
+                raise RuntimeError("Cannot assess target email delivery")
+            failures = sum(
+                any(k in line for k in (
+                    "network_device_alert_send_failed",
+                    "network_device_alert_error",
+                    "network_device_alert_recipient_missing",
+                )) for line in proc.stdout.splitlines()
+            )
+            print(json.dumps({
+                "original_history_count": len(frozen),
+                "current_registry_count": len(known),
+                "new_registered_alerts": newly_alerted,
+                "pending_online_unknown_macs": pending,
+                "downgraded_previous_alerts": downgraded,
+                "observed_delivery_errors_24h": failures,
+                "human_review_required": bool(downgraded or failures or pending),
+            }, sort_keys=True))
+          - "{{ rollback_sync.target_backup_dir }}"
+      changed_when: false
+      register: postactivation_audit_secret
+      no_log: true
+
+    - name: Report aggregate rollback reconciliation requirements only
+      ansible.builtin.debug:
+        msg:
+          - "Original historical MACs: {{ (postactivation_audit_secret.stdout | from_json).original_history_count }}; target registry entries now: {{ (postactivation_audit_secret.stdout | from_json).current_registry_count }}."
+          - "Newly registered alerted MACs on target: {{ (postactivation_audit_secret.stdout | from_json).new_registered_alerts }}; online devices awaiting notification: {{ (postactivation_audit_secret.stdout | from_json).pending_online_unknown_macs }}."
+          - "Previously alerted entries downgraded: {{ (postactivation_audit_secret.stdout | from_json).downgraded_previous_alerts }}; delivery error events over last 24h: {{ (postactivation_audit_secret.stdout | from_json).observed_delivery_errors_24h }}."
+          - "Human review flagged: {{ (postactivation_audit_secret.stdout | from_json).human_review_required }}."
+          - "POST-ACTIVATION ROLLBACK IS NOT AUTOMATIC: stop/drain target, back up both complete registries, reconcile new alerted MACs onto source, review ambiguous SMTP events, then separately approve source restart."
