@@ -44,7 +44,7 @@
         path: "{{ item }}"
         follow: false
         checksum_algorithm: sha256
-      loop: "{{ ['manifest.json'] + transfer_files | map('regex_replace', '^', snap_dir ~ '/') | list }}"
+      loop: "{{ (['manifest.json'] + transfer_files) | map('regex_replace', '^', snap_dir ~ '/') | list }}"
       register: source_frozen_files
       no_log: true
 
@@ -370,7 +370,7 @@
         owner: root
         group: root
         mode: '0600'
-        force: false
+        force: true
       loop: "{{ source_files }}"
       loop_control:
         index_var: copy_idx
