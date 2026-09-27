@@ -1,0 +1,281 @@
+---
+# Gate 3b: MUTATING SOURCE FREEZE. PREPARED FOR REVIEW; DO NOT RUN
+# until user expressly authorises the production cutover.
+# This playbook disables only Proxmox-2 NETWORK DISCOVERY timers.
+# It does not kill oneshots or start any monitor-01 worker.
+# A root-only intent record is saved BEFORE modifying timers.
+- import_playbook: network-host-monitor01-cutover-preflight.yml
+
+- name: Freeze only old Proxmox-2 network-discovery schedules after separate approval
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    state_root: /var/lib/homelab-network-hosts
+    marker: /var/lib/homelab-network-hosts/network-discovery-source-frozen.json
+    backup_root: /var/backups/homelab-network-migration
+    run_id: "{{ ansible_date_time.iso8601_basic_short }}"
+    backup_dir: "{{ backup_root }}/gate3-{{ run_id }}"
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+  tasks:
+    - name: Require the separate, exact production source-freeze approval
+      ansible.builtin.assert:
+        that:
+          - (gate3_freeze_approval | default('')) == 'APPROVE-STOP-PROXMOX-2-NETWORK-DISCOVERY'
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+        fail_msg: >-
+          Gate 3b is an explicit production change. Do not run without
+          specific user approval to stop the old network-discovery jobs.
+
+    - name: Verify source-freeze marker and private backup path do not exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ marker }}"
+        - "{{ backup_dir }}"
+      register: prefreeze_collisions
+
+    - name: Refuse an existing or partially completed source freeze
+      ansible.builtin.assert:
+        that:
+          - not prefreeze_collisions.results[0].stat.exists
+          - not prefreeze_collisions.results[1].stat.exists
+        fail_msg: >-
+          A previous source-freeze marker/backup exists. Review and
+          reconcile the saved intent before any further source changes.
+
+    - name: Require the source discovery timers' current enabled state
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_enabled_before
+      changed_when: false
+      failed_when: false
+
+    - name: Require the source discovery timers' current active state
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_active_before
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse pre-existing source ownership changes
+      ansible.builtin.assert:
+        that:
+          - source_enabled_before.results[0].stdout == 'enabled'
+          - source_enabled_before.results[1].stdout == 'enabled'
+          - source_enabled_before.results[3].stdout == 'enabled'
+          - source_active_before.results[0].stdout == 'active'
+          - source_active_before.results[1].stdout == 'active'
+          - source_active_before.results[3].stdout == 'active'
+
+    - name: Check protected source state and original first-seen registry
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ state_root }}/inventory.json"
+        - "{{ state_root }}/deep-profiles.json"
+        - "{{ state_root }}/enrichment.json"
+        - "{{ state_root }}/alerted-macs.json"
+        - /etc/homelab-network-hosts/alerts.env
+      register: source_before
+      no_log: true
+
+    - name: Reject unprotected original evidence or notifier state
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+        fail_msg: Original protected source file changed; do not freeze.
+      loop: "{{ source_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check every target timer is still disabled before stopping the source
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      delegate_to: monitor-01
+      become: true
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-proxmox-guest-refresh.timer
+      register: target_enabled_before
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse source freeze while a target worker timer is enabled
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'disabled'
+      loop: "{{ target_enabled_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Create new root-only rollback-intent directory before mutating timers
+      ansible.builtin.file:
+        path: "{{ backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve the four original source timer states before any disablement
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': 1,
+              'event': 'network_discovery_source_freeze_intent',
+              'run_id': run_id,
+              'source_host': 'Proxmox-2',
+              'timer_names': source_timers,
+              'timer_enabled_before': source_enabled_before.results | map(attribute='stdout') | list,
+              'timer_active_before': source_active_before.results | map(attribute='stdout') | list,
+              'source_file_sha256_before': source_before.results | map(attribute='stat.checksum') | list
+            } | to_nice_json
+          }}
+        dest: "{{ backup_dir }}/freeze-intent.json"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      no_log: true
+
+    - name: Disable and stop ONLY four legacy network discovery timers
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: false
+        state: stopped
+      loop: "{{ source_timers }}"
+
+    - name: Wait for existing collector, enrichment, profiler and publisher oneshots to finish normally
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_services }}"
+      register: source_workers_drained
+      changed_when: false
+      failed_when: false
+      until: source_workers_drained.stdout == 'inactive'
+      retries: 120
+      delay: 5
+
+    - name: Verify source timers cannot schedule a new network scan
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Verify source timers are also inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: source_inactive
+      changed_when: false
+      failed_when: false
+
+    - name: Require all source timers disabled/inactive and workers drained
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+        fail_msg: >-
+          Source did not quiesce. Keep target disabled. Inspect private
+          freeze-intent.json and live jobs before any rollback or retry.
+      loop: "{{ source_disabled.results | zip(source_inactive.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Require the entire source first-seen registry remains valid after quiescence
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+
+            state = Path("/var/lib/homelab-network-hosts")
+            registry = json.loads((state / "alerted-macs.json").read_text())
+            inventory = json.loads((state / "inventory.json").read_text())
+            assert registry.get("version") == 1
+            known = registry["devices"]
+            assert isinstance(known, dict) and known
+            macs = {
+                str(d.get("mac") or "").lower()
+                for d in inventory.values() if isinstance(d, dict) and d.get("mac")
+            }
+            online = {
+                str(d.get("mac") or "").lower()
+                for d in inventory.values()
+                if isinstance(d, dict) and d.get("mac") and d.get("online") is True
+            }
+            assert macs <= known.keys(), "New inventory MAC lacks historical registry"
+            assert not (online - known.keys()), "Online first-seen messages pending"
+            assert all(
+                isinstance(entry, dict)
+                and entry.get("status") in ("baseline", "alerted")
+                for entry in known.values()
+            )
+            print(json.dumps({
+                "known_registry_count": len(known),
+                "inventoried_unique_macs": len(macs),
+                "pending_online_firstseen": len(online - known.keys()),
+            }))
+      register: source_frozen_counts_secret
+      changed_when: false
+      no_log: true
+
+    - name: Write final root-only frozen marker only after all source workers drained
+      ansible.builtin.copy:
+        content: >-
+          {{
+            {
+              'schema_version': 1,
+              'event': 'network_discovery_source_frozen',
+              'source_host': 'Proxmox-2',
+              'run_id': run_id,
+              'snapshot_dir': backup_dir,
+              'known_registry_count': (source_frozen_counts_secret.stdout | from_json).known_registry_count,
+              'timer_enabled_before': source_enabled_before.results | map(attribute='stdout') | list,
+              'timer_active_before': source_active_before.results | map(attribute='stdout') | list
+            } | to_nice_json
+          }}
+        dest: "{{ marker }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      no_log: true
+
+    - name: Show only safe frozen-source handoff facts
+      ansible.builtin.debug:
+        msg:
+          - "Frozen Proxmox-2's four network discovery timers; all original worker services drained."
+          - "Preserved prior source timer states privately in {{ backup_dir }}/freeze-intent.json."
+          - "Complete historical registry entries at freeze: {{ (source_frozen_counts_secret.stdout | from_json).known_registry_count }}."
+          - "The source remains stopped. monitor-01's collector and notifier were not activated."
+          - "Next gate: protected final source/target delta sync only. Do not run both collectors."
