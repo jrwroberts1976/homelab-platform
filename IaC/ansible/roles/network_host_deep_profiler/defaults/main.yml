@@ -33,6 +33,10 @@ network_host_deep_profiler_interface: "vmbr0"
 # Worker is cheap when there are no pending hosts.
 network_host_deep_profiler_interval: "2min"
 
+# Keep historical full deep scans as the inactive default; opt into bounded scans
+# only via an independently reviewed monitor-01 deployment.
+network_host_deep_profiler_scan_mode: legacy
+
 # Only try ARP for a host V1 has genuinely seen recently.
 network_host_deep_profiler_recent_seen_seconds: 360
 
