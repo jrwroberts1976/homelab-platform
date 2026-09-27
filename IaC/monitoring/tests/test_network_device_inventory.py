@@ -64,7 +64,7 @@ class InventoryTests(unittest.TestCase):
                 {"metric": {"ip": "192.168.2.52", "protocol": "tcp",
                             "port": "9100", "service": "node_exporter",
                             "product": "", "version": ""}}],
-            'homelab_network_host_os_fingerprint_info{target_name="Proxmox-2"}': [
+            'homelab_network_host_os_fingerprint_info{target_name="monitor-01"}': [
                 {"metric": {"profiled_ip": "192.168.2.52",
                             "mac": "02:00:00:00:02:02",
                             "nmap_name": "Linux 6.X", "nmap_accuracy": "95%",
