@@ -441,7 +441,18 @@ SHA-256 for all four protected JSON files. A changed result **blocks**
 progress and does not overwrite the existing file. Do not rerun
 the old one-shot Gate 2i.
 
-After Gate 2i, keep the destination notifier disconnected from
+**Gate 2i-R PASSED on 27 September 2026:** `monitor-01: 22 OK /
+0 changed / 0 failed`. Ansible's check-mode template comparison returned
+`changed: false`, confirming the existing notifier matches the
+reviewed monitor-01 rendering without overwrite or execution.
+The installed script's bytes and all four protected JSON file hashes
+remained unchanged. The target recipient, first-seen registry and
+cutover approval marker remained absent, the target collector still
+had no email hook or recipient environment, and all five staged timers
+remained disabled/inactive. The notifier is verified but intentionally
+**not active**. Its original installation provenance is not established.
+
+Following the verified Gate 2i-R, keep the destination notifier disconnected from
 `ExecStartPost` and retain the source as the sole first-seen
 alert owner. Only following a deliberate stop of source collector,
 enricher and evidence timers and waiting for running jobs to finish
@@ -466,6 +477,58 @@ timers remain disabled, while the source collector and enricher continue.
 **Do not rerun the staging playbook:** the target files now exist by design.
 
 ## Gate 3: deliberate single-owner cutover (not part of preflight)
+
+**Entry status, 27 September 2026:** all staged guest-identity,
+strict-TLS refresh, disabled timer, source first-seen readiness and
+read-only destination notifier-template gates passed. This is *not*
+approval to stop Proxmox-2; Gate 3 requires a separate explicit
+cutover decision and a reviewed stop/sync/activate implementation.
+The last source-only audit reported 49 known MACs (40 baseline and
+nine alerted) with zero pending online messages, but that measurement
+will change if devices join before the source is stopped.
+
+**Hold points for the future cutover:**
+
+1. **Before source stop**, separately check source timer/service
+   states, last successful collector/enricher/notifier cycles, recent
+   email failures, source registry count and target inactivity.
+   Preserve source timer enablement and published metric details as
+   rollback evidence. Do not run the staged destination notifier.
+2. **Stop and freeze production source only with explicit approval.**
+   Disable and stop source collector, selective enrichment, deep
+   profiler (if scheduled) and old network-only OS evidence timers,
+   wait for any active one-shot jobs and their notifier post-hooks to
+   complete, then verify no source timer or service will restart during
+   the transfer. Do not stop unrelated Proxmox monitoring.
+3. **Fresh protected final source snapshot.** Only after the
+   source is quiescent, capture the three original JSON datasets
+   and *entire* historical `alerted-macs.json` and `alerts.env`;
+   keep file owners/modes, original SHA-256 and source backups.
+   Backup the existing staged target JSON and snapshot before any
+   replacement. Never print or commit SMTP recipients, raw MACs,
+   tokens or alert registry contents to Git, Ansible output or
+   world-readable staging files.
+4. **Source-to-target validation before activation.** Compare
+   SHA-256 of the exact final source and target copies, parse all JSON,
+   verify no MAC is lost from the complete historical registry and
+   check inventory/registry intersection and pending-online counts
+   *after* the source freezes. Revalidate protected root-only
+   permissions and the target guest identity mapping against the
+   fresh inventory; refresh guest map with the trusted API if needed.
+   Any mismatch is a stop condition, not permission to re-seed alerts.
+5. **Single-owner activation and rollback gate.** Only after those
+   checks and a separate explicit cutover approval, install the
+   reviewed notifier post-hook and protected recipient environment
+   on the target. Prove source is still stopped, then enable
+   monitor-01's intended collector/guest-refresh/enrichment schedules
+   in the reviewed order; keep deep profiling a separate opt-in.
+   Verify new MAC-keyed discovery, once-only first-seen behaviour,
+   Prometheus labels and existing Grafana host-dashboard UIDs before
+   removing any old network-only series. On failure, disable and
+   drain all target workers *before* resuming source services with
+   their prior state, and preserve both sets of JSON and alert
+   registries for reconciliation.
+
 
 - Record active Proxmox-2 collector, enrichment and notification
   states and their last successful collection. Stop **the old collector,
