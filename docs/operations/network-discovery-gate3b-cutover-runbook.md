@@ -67,6 +67,14 @@ Introduce the target cutover approval marker **only after** verified source quie
 5. Document the exact reviewed commit, approved operator/maintenance window, expected service state transitions, final evidence and post-cutover current-state update. No post-cutover claim until live verification.
 
 
+## Pre-production review and disposable-host evidence
+
+The synthetic interruption suite `IaC/monitoring/tests/test_monitor01_interruption_scenarios.py` passed on 27 September 2026 against synthetic files and modelled state transitions. The last-moment exclusivity regression test also checks that all four Proxmox-2 source timers are rechecked **immediately before** the first active target collector invocation. These tests do not run Ansible against disposable hosts and do not prove live service drain, systemd ordering, SMTP suppression or rollback on a real machine.
+
+**Required independent review and disposable pair drill before production approval:** use two isolated, deliberately non-LAN-connected disposable machines with synthetic MACs and an SMTP sink (never actual production recipients). Exercise the actual approval-gated Ansible phases with mock Proxmox API/guest data and deliberate failures: source stop during a oneshot; each of the five final-file copy boundaries; final SHA mismatch; stale guest map; notification wiring before marker; trusted refresh failure; interrupted initial collector; target alert history changing before rollback; and successful rollback with no new notifications. Collect actual timer/job statuses, private snapshot permissions, checksums, target inactive proof, synthetic notification sink counts, and source restoration evidence. Confirm the executable plays operate correctly with `hosts.yml` inventory mapped ONLY to the disposable pair and refuse accidental production addresses. No live-system manipulation or production-recipient email is permitted during the drill.
+
+Before any real change, a reviewer other than the author must sign off the exact commit and the drill evidence, including recovery from a partial freeze where the frozen checksum manifest does not yet exist. **Existing pre-activation recovery requires a completed freeze manifest and intentionally cannot recover a partial source stop automatically; that remains a manual recovery case with separate approval.** Review the best-effort `ExecStartPost=-` semantics: collector service success does not prove SMTP delivery. The cutover owner must check the first-seen journal and relay delivery separately before marking migration accepted.
+
 ## Gate 4: post-cutover whole-estate documentation and deployment audit (required)
 
 **Trigger:** perform only after Gate 3 production cutover is complete and monitor-01 discovery, enrichment, first-seen notifications, Prometheus and Grafana are verified stable. Gate 4 is a separate read-only audit; it does not retroactively approve Gate 3 or authorise automatic configuration changes.
