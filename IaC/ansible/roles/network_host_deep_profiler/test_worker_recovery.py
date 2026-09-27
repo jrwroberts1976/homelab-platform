@@ -40,6 +40,7 @@ class WorkerRecoveryTests(unittest.TestCase):
 
         source = TEMPLATE.read_text()
         replacements = {
+            "{{ network_host_deep_profiler_scan_mode }}": "legacy",
             "{{ network_host_deep_profiler_inventory }}":
                 str(self.inventory),
             "{{ network_host_deep_profiler_state }}":
