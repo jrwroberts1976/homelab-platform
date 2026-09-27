@@ -33,6 +33,7 @@ on:
       - "IaC/ansible/playbooks/network-host-monitor01-source-freeze.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-final-transfer.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-activate.yml"
+      - "IaC/ansible/playbooks/network-host-monitor01-targeted-profiler-stage.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-rollback.yml"
       - "IaC/ansible/playbooks/network-host-monitor01-preactivation-recover.yml"
       - "IaC/ansible/playbooks/postcutover-estate-evidence.yml"
@@ -68,6 +69,8 @@ jobs:
             playbooks/network-host-monitor01-preflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-monitor01-targeted-profiler-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
