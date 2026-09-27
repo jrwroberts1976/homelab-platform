@@ -476,6 +476,56 @@ matches. The target collector, enricher, deep profiler and OS exporter
 timers remain disabled, while the source collector and enricher continue.
 **Do not rerun the staging playbook:** the target files now exist by design.
 
+### Gate 3a: final two-host read-only cutover readiness (prepared; NOT run)
+
+Use `playbooks/network-host-monitor01-cutover-preflight.yml` from
+`admin-01`. This is a separate, non-mutating readiness gate—not an
+instruction or approval to stop Proxmox-2.
+
+The source play checks the present four timer states without changing
+them; the source collector, enrichment and network-only OS-evidence
+timers must still be enabled/active. It records aggregate service
+status, the schemas and protected modes of all **three** source
+evidence JSON files, the **entire historical** first-seen MAC registry,
+and the root-only alert recipient environment. It checks that the
+existing first-seen post-hook is still wired, no currently inventoried
+MAC is missing from the registry and **no online first-seen messages
+remain pending**. It reports only counts and job states, not individual
+MACs, SMTP recipients, token values or JSON records. The previous
+49-entry (40 baseline, nine alerted) registry measurement is a
+historical reference **not a hardcoded cutoff**: preserve all records
+present at final freeze, including those not in the live inventory.
+
+The destination play requires monitor-01's intended IPv4/interface
+and LAN route, four intact protected staged JSON files, and the
+existing notifier to match the reviewed monitor-01 template in
+**Ansible check mode** without executing it. It rejects any
+premature alert registry, recipient file or cutover marker; requires
+all **five** target timers disabled/inactive and target collection,
+enrichment, deep profiling and guest refresh services inactive;
+verifies the enrichment service's absent-until-cutover approval guard
+and successful-refresh dependency; checks the 48-hour guest-map
+freshness and matches; and performs the existing authenticated
+strict-TLS API refresher's **no-write `--check`**, plus an SMTP
+TCP/25 connection without sending email. Four target source-file
+hashes must be unchanged when the read-only gate finishes.
+
+A pass is evidence that the system remains staged. **Gate 3a does
+not freeze, snapshot, transfer, overwrite, enable, stop or retire
+any service, timer, mail configuration, MAC registry, evidence file,
+Grafana dashboard or time series.** If the source inventory has
+advanced, its live count can differ from the 49-device staged target:
+that delta is exactly why an approved source stop and fresh final
+copy remain mandatory. If the guest snapshot has become stale,
+refresh it using a *separately approved* protected API procedure
+before rerunning the preflight—do not activate enrichment with a
+stale guest identity map.
+
+**Hold after Gate 3a:** prepare separately reviewed and explicit
+approval-gated source freeze, protected final delta transfer, and
+target activation/rollback playbooks. None of those mutating phases
+is included in this PR, and **no production cutover has occurred**.
+
 ## Gate 3: deliberate single-owner cutover (not part of preflight)
 
 **Entry status, 27 September 2026:** all staged guest-identity,
@@ -530,36 +580,11 @@ will change if devices join before the source is stopped.
    registries for reconciliation.
 
 
-- Record active Proxmox-2 collector, enrichment and notification
-  states and their last successful collection. Stop **the old collector,
-  enricher and old read-only OS-publisher timers** and wait for currently
-  running jobs to finish. Preserve their previous enabled/disabled states
-  as rollback data.
-- **Final delta sync is mandatory:** the initial staged snapshot may be
-  hours old, because the source collector and enricher remain active
-  during Gate 2. After stopping the old jobs, take one *final* protected
-  source snapshot of inventory, deep-profile and enrichment JSON, plus
-  first-seen alert registry/configuration (if present). Back up the
-  staged target files before replacing them, validate JSON schema and
-  SHA-256 for both sides, then regenerate the read-only fingerprint
-  metric on monitor-01. Do not use a stale Gate 2 snapshot as the
-  production state.
-- Verify the virtual NIC can perform LAN-local ARP discovery with its
-  source address and the approved target/rate limits. Enable
-  **monitor-01** collector first and verify new MAC-keyed inventory,
-  presence history, Prometheus target labels and Grafana identities.
-- Enable selective enrichment only after collector validation **and**
-  replacing the old host-local `/etc/pve` Proxmox guest lookup; transfer
-  the first-seen email configuration/registry before disabling source
-  notifications. Enable deep profiling only as a separate explicit
-  decision. Limit it to one recently seen device per run and retain
-  existing cooldowns.
-- Disable Proxmox-2's obsolete per-device evidence timer and retire only
-  its **network discovery** `.prom` files after monitor-01 is stable;
-  do not remove ordinary Proxmox node-exporter metrics.
-- Reconcile `docs/architecture/CURRENT-STATE.md`, the three Ansible role
-  inventory targets/defaults and the Grafana runbook **after** live
-  verification. Do not present proposed deployment as already installed.
+The control point between source freeze and target activation is
+mandatory: if the final source/target hash and registry comparison
+fails, **leave monitor-01 disabled** and use the explicitly recorded
+source rollback procedure. Never enable both discovery collectors
+or first-seen notifiers concurrently.
 
 ## Rollback
 
