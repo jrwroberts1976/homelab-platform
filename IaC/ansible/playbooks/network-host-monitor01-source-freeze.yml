@@ -1,0 +1,298 @@
+---
+# Gate 3b: explicitly approved SOURCE FREEZE ONLY.
+# The imported read-only Gate 3a runs first on BOTH hosts. Never bypass it
+# with --limit. This playbook does not transfer files, modify monitor-01,
+# create a cutover marker, change Grafana, run Nmap or send mail.
+- import_playbook: network-host-monitor01-cutover-preflight.yml
+
+- name: Freeze network discovery on Proxmox-2 only after explicit authorisation
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+    source_protected:
+      - /var/lib/homelab-network-hosts/inventory.json
+      - /var/lib/homelab-network-hosts/deep-profiles.json
+      - /var/lib/homelab-network-hosts/enrichment.json
+      - /var/lib/homelab-network-hosts/alerted-macs.json
+      - /etc/homelab-network-hosts/alerts.env
+    source_freeze_root: /var/backups/homelab-network-migration
+    source_freeze_dir: "{{ source_freeze_root }}/freeze-{{ ansible_date_time.iso8601_basic_short }}"
+  tasks:
+    - name: Require an explicit, separately recorded production-stop approval
+      ansible.builtin.assert:
+        that:
+          - cutover_source_stop_approved | default(false) | bool
+          - (cutover_approval_phrase | default('')) == 'STOP_PROXMOX2_DISCOVERY'
+          - (cutover_change_id | default('') | trim | length) >= 4
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+          - hostvars['monitor-01'].target_guest_counts is defined
+          - hostvars['monitor-01'].target_api_check is defined
+          - hostvars['monitor-01'].target_template_check is defined
+          - not hostvars['monitor-01'].target_template_check.changed
+        fail_msg: >-
+          APPROVAL/TWO-HOST-GATE NOT SATISFIED. No source stop authorised.
+          Run without --limit, record a reviewed change and obtain separate
+          explicit production-stop approval. This cannot authorise activation.
+
+    - name: Recheck destination timer and service states immediately before freeze
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      delegate_to: monitor-01
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-proxmox-guest-refresh.timer
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-proxmox-guest-refresh.service
+      register: immediate_target_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse freeze if destination has started any discovery worker
+      ansible.builtin.assert:
+        that:
+          - immediate_target_active.results | map(attribute='stdout') | unique | list == ['inactive']
+        fail_msg: Stop; monitor-01 is no longer inert.
+
+    - name: Verify all source network timer states again before any change
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: original_timer_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Record active source timer states before any change
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: original_timer_active
+      changed_when: false
+      failed_when: false
+
+    - name: Require the three currently scheduled production jobs
+      ansible.builtin.assert:
+        that:
+          - original_timer_enabled.results[0].stdout == 'enabled'
+          - original_timer_enabled.results[1].stdout == 'enabled'
+          - original_timer_enabled.results[3].stdout == 'enabled'
+          - original_timer_active.results[0].stdout == 'active'
+          - original_timer_active.results[1].stdout == 'active'
+          - original_timer_active.results[3].stdout == 'active'
+        fail_msg: Live source state changed since preflight; halt before stop.
+
+    - name: Verify original unit definitions exist as root-owned regular files
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_timers + source_services }}"
+      register: original_units
+      no_log: true
+
+    - name: Refuse unknown, missing or symlinked network units
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+        fail_msg: Unexpected source unit; do not freeze without reconciliation.
+      loop: "{{ original_units.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Refuse collisions with any existing freeze evidence
+      ansible.builtin.stat:
+        path: "{{ source_freeze_dir }}"
+        follow: false
+      register: previous_freeze
+
+    - name: Require a new immutable freeze evidence directory
+      ansible.builtin.assert:
+        that:
+          - not previous_freeze.stat.exists
+        fail_msg: Existing or partial freeze found; inspect it and do not rerun blindly.
+
+    - name: Create private source-only rollback evidence directory
+      ansible.builtin.file:
+        path: "{{ source_freeze_dir }}/units"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve exact installed network systemd units before stopping timers
+      ansible.builtin.copy:
+        src: "/etc/systemd/system/{{ item }}"
+        dest: "{{ source_freeze_dir }}/units/{{ item }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+      loop: "{{ source_timers + source_services }}"
+      no_log: true
+
+    - name: Save rollback timer states, unit hashes and reviewed change identity privately
+      ansible.builtin.copy:
+        dest: "{{ source_freeze_dir }}/rollback-timers.json"
+        content: >-
+          {{ {'schema_version': 1,
+              'source_host': inventory_hostname,
+              'change_id': cutover_change_id,
+              'timers': dict(source_timers | zip(original_timer_enabled.results |
+                         map(attribute='stdout') | list)),
+              'timer_activity': dict(source_timers | zip(original_timer_active.results |
+                                map(attribute='stdout') | list)),
+              'unit_sha256': dict((source_timers + source_services) |
+                             zip(original_units.results |
+                             map(attribute='stat.checksum') | list))}
+             | to_nice_json }}
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Check rollback evidence exists before changing source timers
+      ansible.builtin.stat:
+        path: "{{ source_freeze_dir }}/rollback-timers.json"
+        follow: false
+        checksum_algorithm: sha256
+      register: rollback_manifest
+      no_log: true
+
+    - name: Require protected rollback evidence
+      ansible.builtin.assert:
+        that:
+          - rollback_manifest.stat.isreg | default(false)
+          - rollback_manifest.stat.pw_name == 'root'
+          - rollback_manifest.stat.mode == '0600'
+          - rollback_manifest.stat.size | int > 0
+
+    - name: Disable and stop ONLY original source network discovery timers
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: "{{ source_timers }}"
+
+    - name: Wait for any in-flight collector, enrichment, profiler or publisher job to finish
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_services }}"
+      register: drained_source
+      until: drained_source.stdout == 'inactive'
+      retries: 60
+      delay: 3
+      changed_when: false
+      failed_when: false
+
+    - name: Require every existing network worker and collector post-hook has drained
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+        fail_msg: Source job did not drain. Keep all targets disabled and investigate.
+      loop: "{{ drained_source.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Ensure no detached historical notification process remains
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/pgrep
+          - -f
+          - /usr/local/sbin/homelab-network-device-email-alert
+      register: detached_notifier
+      changed_when: false
+      failed_when: false
+
+    - name: Stop on any potentially detached notifier rather than duplicate alerts
+      ansible.builtin.assert:
+        that:
+          - detached_notifier.rc == 1
+        fail_msg: A notifier process may still be active; source is not fully drained.
+
+    - name: Verify all four source timers stopped and disabled after drain
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: frozen_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Check all four source timer runtime states after drain
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: frozen_active
+      changed_when: false
+      failed_when: false
+
+    - name: Confirm source is quiescent before final protected transfer
+      ansible.builtin.assert:
+        that:
+          - item[0].stdout == 'disabled'
+          - item[1].stdout == 'inactive'
+      loop: "{{ frozen_enabled.results | zip(frozen_active.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Capture final frozen source SHA-256 for all five protected files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_protected }}"
+      register: frozen_source_files
+      no_log: true
+
+    - name: Require all five frozen original files remain protected
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - item.stat.size | int > 0
+        fail_msg: Frozen source data invalid; no transfer or activation permitted.
+      loop: "{{ frozen_source_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Record final frozen data checksums in private source-only evidence
+      ansible.builtin.copy:
+        dest: "{{ source_freeze_dir }}/frozen-source-sha256.json"
+        content: >-
+          {{ dict(source_protected |
+             zip(frozen_source_files.results | map(attribute='stat.checksum') | list))
+             | to_nice_json }}
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Finish with mandatory hold before copying any protected bytes
+      ansible.builtin.debug:
+        msg:
+          - "SOURCE FREEZE COMPLETE ONLY: Proxmox-2 network-discovery timers disabled and services drained."
+          - "Root-only rollback evidence: {{ source_freeze_dir }}"
+          - "No target data, registry or recipient copied. monitor-01 is still inert."
+          - "HOLD: independently verify source first-seen journal and frozen registry before any final transfer."
+          - "HOLD: target activation requires distinct explicit approval after five-file parity."
