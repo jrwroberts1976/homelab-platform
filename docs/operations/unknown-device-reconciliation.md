@@ -1,5 +1,7 @@
 # Selective device identification (staged)
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 ## Scope and safety
 
 The live owner of LAN discovery, enrichment, saved OS evidence and guest identity remains **monitor-01**. Do not enable the legacy deep profiler or restart collectors on Proxmox-2. Only `192.168.2.0/24` is in scope; the Corosync network must not be scanned.
