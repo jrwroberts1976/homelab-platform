@@ -41,4 +41,25 @@ Produce DNS aggregates via a separately approved, **read-only** restricted colle
 5. Publish evidence and an unresolved private Grafana review card. Owner confirmation updates editable notes and, after reviewed Git, canonical inventory; DNS domains and OS guesses never automatically confirm a device. Preserve the review status across reconnects and IP changes when a reliable MAC identity is available.
 6. An optional low-frequency **health check of the queue** may retry previously failed lookups after DNS activity occurs; it must never rescan the whole subnet or re-identify already confirmed devices.
 
-**Deployment status:** The offline reconciler, tests and documentation are staged in this PR. The event consumer, persistent deduplication, restricted SSH DNS summary retrieval, and gated single-device scan are **not yet deployed**. Existing new-device email and collector already work; this PR does not change those live services.
+## Existing profiler reused — staged changes
+
+The repository already contains a MAC-keyed pending queue, first-run baseline,
+fresh ARP verification, persisted partial results, 24-hour retry cooldown, and
+an existing OS evidence exporter. The full-scan profiler remains **disabled**
+on the live monitor-01 host.
+
+The existing profiler template now supports an explicitly selected
+`network_host_deep_profiler_scan_mode: targeted`. This mode runs a bounded
+100-top-TCP-port service/version and Nmap OS scan against one freshly verified
+MAC/IP at a time, with no NSE or UDP scanning. The legacy scan remains the
+inactive default; no existing source host is activated.
+
+A dedicated
+`IaC/ansible/playbooks/network-host-monitor01-targeted-profiler-stage.yml`
+requires separate execution approval, preserves the existing worker under
+`/var/backups/homelab-targeted-profiler/`, installs the targeted variant
+only on monitor-01, and leaves its timer disabled. The new PR CI checks
+existing offline profiler recovery tests, targeted TCP-only tests and Ansible
+syntax. Stage and live activation are distinct actions.
+
+**Deployment status:** The offline reconciler, targeted-mode changes, existing-profiler tests and inert deployment playbook are staged in this PR. The event consumer, persistent deduplication, restricted SSH DNS summary retrieval, and gated single-device scan are **not yet deployed**. Existing new-device email and collector already work; this PR does not change those live services.
