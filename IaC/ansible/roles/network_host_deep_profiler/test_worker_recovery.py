@@ -132,10 +132,11 @@ class WorkerRecoveryTests(unittest.TestCase):
 
         return profile
 
-    def run_worker(self, tcp=None, udp=None, presence=True):
+    def run_worker(self, tcp=None, udp=None, presence=True, mode="legacy"):
         namespace = {"__name__": "__main__"}
         exec(self.definitions, namespace)
         namespace["NOW"] = self.now
+        namespace["SCAN_MODE"] = mode
 
         calls = {"presence": 0, "tcp": 0, "udp": 0}
 
@@ -356,6 +357,19 @@ class WorkerRecoveryTests(unittest.TestCase):
                 "192.168.2.247",
             ],
         )
+
+    def test_targeted_mode_uses_tcp_only_and_preserves_cooldown(self):
+        self.write_inventory()
+        self.write_state(status="pending", ip=NEW_IP)
+        saved, calls, events = self.run_worker(mode="targeted")
+        self.assertEqual(calls, {"presence": 1, "tcp": 1, "udp": 0})
+        record = saved["profiles"][MAC]
+        self.assertEqual(record["status"], "complete")
+        self.assertEqual(record["profile"]["tcp"]["ports"][0]["port"], 443)
+        self.assertEqual(record["profile"]["udp"]["ports"], [])
+        again, repeated_calls, _ = self.run_worker(mode="targeted")
+        self.assertEqual(repeated_calls, {"presence": 0, "tcp": 0, "udp": 0})
+        self.assertEqual(again["profiles"][MAC]["attempt_count"], 2)
 
     def test_presence_failure_does_not_scan(self):
         self.write_inventory()
