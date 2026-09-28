@@ -960,7 +960,8 @@ for mac, record in pending:
             "udp_interesting_ports": len(
                 merged_profile["udp"].get("ports", [])
             ),
-            "partial": bool(merged_profile["errors"]),
+            "partial": partial,
+            "needs_os_identification": missing_os,
         }),
         flush=True,
     )
