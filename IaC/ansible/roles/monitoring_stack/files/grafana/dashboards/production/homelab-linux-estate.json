@@ -744,6 +744,82 @@
         "cellHeight": "sm",
         "enablePagination": false
       }
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Open Ports & Services",
+      "description": "Current open TCP ports and service/version evidence from the targeted Nmap enrichment pipeline.",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_host_enrichment_port_info * on(ip) group_left(hostname) (homelab_network_device_card_info{hostname=\"$host\"} == 1)",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "hostname": true
+            },
+            "indexByName": {
+              "ip": 0,
+              "port": 1,
+              "protocol": 2,
+              "service": 3,
+              "product": 4,
+              "version": 5
+            },
+            "renameByName": {
+              "ip": "IP address",
+              "port": "Port",
+              "protocol": "Protocol",
+              "service": "Service",
+              "product": "Product",
+              "version": "Version"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": false
+      }
     }
   ]
 }
