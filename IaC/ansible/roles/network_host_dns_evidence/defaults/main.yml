@@ -1,0 +1,23 @@
+---
+network_host_dns_evidence_state_dir: /var/lib/homelab-network-hosts
+network_host_dns_evidence_profiles: "{{ network_host_dns_evidence_state_dir }}/deep-profiles.json"
+network_host_dns_evidence_state: "{{ network_host_dns_evidence_state_dir }}/dns-evidence.json"
+network_host_dns_evidence_script: /usr/local/sbin/homelab-network-dns-evidence
+network_host_dns_evidence_service: homelab-network-dns-evidence.service
+network_host_dns_evidence_timer: homelab-network-dns-evidence.timer
+network_host_dns_evidence_interval: 5min
+
+network_host_dns_evidence_key: /root/.ssh/homelab-dns-evidence
+network_host_dns_evidence_known_hosts: /etc/homelab-network-hosts/dns-evidence-known-hosts
+network_host_dns_evidence_remote_user: dns-evidence
+network_host_dns_evidence_servers:
+  - name: dns-01
+    address: 192.168.2.51
+  - name: dns-02
+    address: 192.168.2.50
+
+network_host_dns_evidence_remote_script: /usr/local/sbin/homelab-dns-evidence-query
+network_host_dns_evidence_lookback_days: 7
+network_host_dns_evidence_max_domains: 5
+network_host_dns_evidence_failed_retry_seconds: 3600
+network_host_dns_evidence_enable_timer: false
