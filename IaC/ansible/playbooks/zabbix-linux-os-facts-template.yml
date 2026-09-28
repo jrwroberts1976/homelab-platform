@@ -93,14 +93,27 @@
       changed_when: true
       no_log: true
 
-    - name: Set template group ID
+    - name: Validate template group create response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_group_create.json is defined
+          - zabbix_template_group_create.json.error is not defined
+          - zabbix_template_group_create.json.result is defined
+          - zabbix_template_group_create.json.result.groupids | length == 1
+        fail_msg: >-
+          Zabbix API templategroup.create failed:
+          {{ zabbix_template_group_create.json.error | default('missing result') }}
+      when: (zabbix_template_group_get.json.result | default([])) | length == 0
+
+    - name: Set existing template group ID
       ansible.builtin.set_fact:
-        zabbix_template_group_id: >-
-          {{
-            (zabbix_template_group_get.json.result[0].groupid)
-            if ((zabbix_template_group_get.json.result | default([])) | length > 0)
-            else (zabbix_template_group_create.json.result.groupids[0])
-          }}
+        zabbix_template_group_id: "{{ zabbix_template_group_get.json.result[0].groupid }}"
+      when: (zabbix_template_group_get.json.result | default([])) | length > 0
+
+    - name: Set newly created template group ID
+      ansible.builtin.set_fact:
+        zabbix_template_group_id: "{{ zabbix_template_group_create.json.result.groupids[0] }}"
+      when: (zabbix_template_group_get.json.result | default([])) | length == 0
 
     - name: Read existing Homelab Linux OS Facts template
       ansible.builtin.uri:
@@ -149,14 +162,37 @@
       changed_when: true
       no_log: true
 
-    - name: Set template ID
+    - name: Validate template lookup response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_get.json is defined
+          - zabbix_template_get.json.error is not defined
+          - zabbix_template_get.json.result is defined
+        fail_msg: >-
+          Zabbix API template.get failed:
+          {{ zabbix_template_get.json.error | default('missing result') }}
+
+    - name: Validate template create response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_create.json is defined
+          - zabbix_template_create.json.error is not defined
+          - zabbix_template_create.json.result is defined
+          - zabbix_template_create.json.result.templateids | length == 1
+        fail_msg: >-
+          Zabbix API template.create failed:
+          {{ zabbix_template_create.json.error | default('missing result') }}
+      when: (zabbix_template_get.json.result | default([])) | length == 0
+
+    - name: Set existing template ID
       ansible.builtin.set_fact:
-        zabbix_template_id: >-
-          {{
-            (zabbix_template_get.json.result[0].templateid)
-            if (zabbix_template_get.json.result | length > 0)
-            else (zabbix_template_create.json.result.templateids[0])
-          }}
+        zabbix_template_id: "{{ zabbix_template_get.json.result[0].templateid }}"
+      when: (zabbix_template_get.json.result | default([])) | length > 0
+
+    - name: Set newly created template ID
+      ansible.builtin.set_fact:
+        zabbix_template_id: "{{ zabbix_template_create.json.result.templateids[0] }}"
+      when: (zabbix_template_get.json.result | default([])) | length == 0
 
     - name: Read existing OS facts items
       ansible.builtin.uri:
