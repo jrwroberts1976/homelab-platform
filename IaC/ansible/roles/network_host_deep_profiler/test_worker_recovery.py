@@ -323,8 +323,15 @@ class WorkerRecoveryTests(unittest.TestCase):
             ip = "192.168.2." + str(243 + index)
             self.write_inventory(ip)
 
-            # Each successive change occurs after the scan cooldown.
-            self.now += 90000
+            # First retry is due after 24 hours. Once the profile has
+            # already been retried, incomplete evidence moves to the weekly
+            # cadence. This test is about retaining IP-change history, so
+            # advance past whichever cooldown applies.
+            state = json.loads(self.state.read_text())
+            attempts = int(
+                state["profiles"][MAC].get("attempt_count", 0) or 0
+            )
+            self.now += 90000 if attempts <= 1 else 604900
             self.write_inventory(ip)
 
             saved, calls, events = self.run_worker()
