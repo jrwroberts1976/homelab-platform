@@ -90,9 +90,19 @@
           - -B
           - -c
           - >-
-            import pathlib,sys;
-            text=pathlib.Path('{{ profiler_script }}').read_text();
-            ok='BASELINE_BACKLOG_ENABLED = bool(\\n    0\\n)' in text;
+            import ast,pathlib,sys;
+            tree=ast.parse(pathlib.Path('{{ profiler_script }}').read_text());
+            matches=[n for n in tree.body
+              if isinstance(n,ast.Assign)
+              and any(isinstance(t,ast.Name) and t.id=='BASELINE_BACKLOG_ENABLED'
+                      for t in n.targets)];
+            ok=(len(matches)==1
+              and isinstance(matches[0].value,ast.Call)
+              and isinstance(matches[0].value.func,ast.Name)
+              and matches[0].value.func.id=='bool'
+              and len(matches[0].value.args)==1
+              and isinstance(matches[0].value.args[0],ast.Constant)
+              and matches[0].value.args[0].value==0);
             print('baseline_backlog=disabled' if ok else 'baseline_backlog=unexpected');
             sys.exit(0 if ok else 1)
       register: backlog_guard
