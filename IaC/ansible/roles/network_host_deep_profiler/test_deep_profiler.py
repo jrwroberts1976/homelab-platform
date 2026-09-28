@@ -16,7 +16,9 @@ def load_functions():
     tree = ast.parse(TEMPLATE.read_text())
     names = {
         "normalise_mac",
+        "scan_retry_seconds",
         "scan_due",
+        "tcp_has_os_evidence",
         "merge_scan_evidence",
         "fresh_arp_presence",
         "validate_scan_xml",
@@ -34,7 +36,8 @@ def load_functions():
     namespace = {
         "ET": ET,
         "INTERFACE": "offline-test",
-        "SCAN_COOLDOWN_SECONDS": 86400,
+        "INITIAL_RETRY_SECONDS": 86400,
+        "WEEKLY_RETRY_SECONDS": 604800,
     }
     exec(
         compile(
@@ -142,13 +145,38 @@ class DeepProfilerTests(unittest.TestCase):
         self.assertNotIn("--script", args)
         self.assertNotIn("-sU", args)
 
-    def test_scan_cooldown(self):
+    def test_scan_retry_schedule_is_24h_then_weekly(self):
+        retry = self.worker["scan_retry_seconds"]
         due = self.worker["scan_due"]
+
+        self.assertEqual(retry({"attempt_count": 0}), 86400)
+        self.assertEqual(retry({"attempt_count": 1}), 86400)
+        self.assertEqual(retry({"attempt_count": 2}), 604800)
+
         self.assertTrue(due({}, 100000))
-        self.assertFalse(due({"last_attempt": 1000}, 1001))
-        self.assertFalse(due({"last_attempt": 1000}, 87399))
-        self.assertTrue(due({"last_attempt": 1000}, 87400))
-        self.assertFalse(due({"last_attempt": 200000}, 100000))
+        self.assertFalse(due(
+            {"last_attempt": 1000, "attempt_count": 1}, 87399
+        ))
+        self.assertTrue(due(
+            {"last_attempt": 1000, "attempt_count": 1}, 87400
+        ))
+        self.assertFalse(due(
+            {"last_attempt": 1000, "attempt_count": 2}, 605799
+        ))
+        self.assertTrue(due(
+            {"last_attempt": 1000, "attempt_count": 2}, 605800
+        ))
+        self.assertFalse(due(
+            {"last_attempt": 200000, "attempt_count": 1}, 100000
+        ))
+
+    def test_os_evidence_requires_an_nmap_match(self):
+        has_os = self.worker["tcp_has_os_evidence"]
+        self.assertFalse(has_os({}))
+        self.assertFalse(has_os({"os_matches": []}))
+        self.assertTrue(has_os({
+            "os_matches": [{"name": "Linux 5.x", "accuracy": "95"}]
+        }))
 
     def test_failed_udp_preserves_previous_evidence(self):
         merge = self.worker["merge_scan_evidence"]
