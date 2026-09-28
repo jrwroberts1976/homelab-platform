@@ -40,6 +40,8 @@ on:
       - "IaC/ansible/roles/network_host_collector/**"
       - "IaC/ansible/roles/network_host_enrichment/**"
       - "IaC/ansible/roles/network_host_deep_profiler/**"
+      - "IaC/ansible/roles/network_host_dns_evidence/**"
+      - "IaC/ansible/playbooks/network-host-dns-evidence-stage.yml"
 
 jobs:
   validate-dashboard:
@@ -71,6 +73,8 @@ jobs:
             playbooks/network-host-monitor01-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-targeted-profiler-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-dns-evidence-stage.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
@@ -111,6 +115,7 @@ jobs:
           python3 -m unittest discover -s IaC/monitoring/tests -p 'test_*.py' -v
           python3 IaC/ansible/roles/network_host_deep_profiler/test_deep_profiler.py
           python3 IaC/ansible/roles/network_host_deep_profiler/test_worker_recovery.py
+          python3 IaC/ansible/roles/network_host_dns_evidence/test_dns_evidence.py
 
       - name: Verify Grafana dashboard and Ansible registration
         run: |
