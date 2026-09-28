@@ -1,0 +1,10 @@
+---
+- name: Stage restricted dual-Pi-hole DNS evidence collection
+  hosts: "monitoring_hosts:dns_resolvers"
+  become: true
+  gather_facts: true
+  serial: false
+  vars:
+    network_host_dns_evidence_enable_timer: false
+  roles:
+    - role: network_host_dns_evidence
