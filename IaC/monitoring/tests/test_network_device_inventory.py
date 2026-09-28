@@ -22,7 +22,7 @@ class InventoryTests(unittest.TestCase):
         self.assertIsNone(inventory.lan_ip("192.168.2.invalid"))
 
     def test_router_inventory_uses_immutable_read_only_sqlite(self):
-        with patch.object(inventory.ROUTER_DB, "is_file", return_value=True), \
+        with patch.object(inventory.Path, "is_file", return_value=True), \
              patch.object(inventory.sqlite3, "connect") as connect:
             connection = connect.return_value
             connection.execute.return_value.fetchall.return_value = []
