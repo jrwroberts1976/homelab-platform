@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import hashlib
 import json
 import os
 import subprocess
@@ -30,6 +31,14 @@ RECENT_SEEN_SECONDS = (
 
 MAX_PROFILES_PER_RUN = (
     {{ network_host_deep_profiler_max_profiles_per_run }}
+)
+
+BASELINE_BACKLOG_ENABLED = bool(
+    {{ network_host_deep_profiler_enable_baseline_backlog | bool | int }}
+)
+
+BASELINE_BACKLOG_SPREAD_SECONDS = (
+    {{ network_host_deep_profiler_baseline_backlog_spread_seconds }}
 )
 
 UDP_PORTS = "{{ network_host_deep_profiler_udp_ports }}"
@@ -112,8 +121,19 @@ INITIAL_RETRY_SECONDS = 24 * 60 * 60
 WEEKLY_RETRY_SECONDS = 7 * 24 * 60 * 60
 
 
+def baseline_backlog_due_at(mac, initialized_at, spread_seconds):
+    """Spread grandfathered baseline checks deterministically across a week."""
+    spread = max(1, int(spread_seconds))
+    digest = hashlib.sha256(normalise_mac(mac).encode("ascii")).hexdigest()
+    offset = int(digest[:8], 16) % spread
+    return int(initialized_at) + offset
+
+
 def scan_retry_seconds(record):
-    """Retry once after 24h, then weekly while evidence stays incomplete."""
+    """New hosts retry after 24h once; backlog/incomplete hosts retry weekly."""
+    if record.get("baseline_backlog"):
+        return WEEKLY_RETRY_SECONDS
+
     attempts = int(record.get("attempt_count", 0) or 0)
     return INITIAL_RETRY_SECONDS if attempts <= 1 else WEEKLY_RETRY_SECONDS
 
@@ -710,6 +730,20 @@ for ip in sorted(
     if host.get("vendor"):
         record["vendor"] = host["vendor"]
 
+    if (
+        BASELINE_BACKLOG_ENABLED
+        and record.get("status") == "baseline"
+    ):
+        record["baseline_backlog"] = True
+        record.setdefault(
+            "backlog_due_at",
+            baseline_backlog_due_at(
+                mac,
+                int(state.get("initialized_at", NOW) or NOW),
+                BASELINE_BACKLOG_SPREAD_SECONDS,
+            ),
+        )
+
 
 profiles_started = 0
 
@@ -717,7 +751,14 @@ pending = sorted(
     [
         (mac, record)
         for mac, record in profiles.items()
-        if record.get("status") in ("pending", "partial")
+        if (
+            record.get("status") in ("pending", "partial")
+            or (
+                BASELINE_BACKLOG_ENABLED
+                and record.get("status") == "baseline"
+                and int(record.get("backlog_due_at", 0) or 0) <= NOW
+            )
+        )
     ],
     key=lambda item: int(
         item[1].get(
