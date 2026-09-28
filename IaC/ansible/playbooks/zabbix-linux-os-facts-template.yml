@@ -322,16 +322,27 @@
         body_format: json
         body:
           jsonrpc: "2.0"
-          method: template.massadd
+          method: host.massadd
           params:
+            hosts: "{{ zabbix_template_link_hosts }}"
             templates:
               - templateid: "{{ zabbix_template_id }}"
-            hosts: "{{ zabbix_template_link_hosts }}"
           id: 9
         return_content: true
-      register: zabbix_template_massadd
+      register: zabbix_host_massadd
       changed_when: true
       no_log: true
+
+    - name: Validate host template link response
+      ansible.builtin.assert:
+        that:
+          - zabbix_host_massadd.json is defined
+          - zabbix_host_massadd.json.error is not defined
+          - zabbix_host_massadd.json.result is defined
+          - zabbix_host_massadd.json.result.hostids | length == zabbix_target_hosts | length
+        fail_msg: >-
+          Zabbix API host.massadd failed:
+          {{ zabbix_host_massadd.json.error | default('missing result') }}
 
     - name: Verify template links
       ansible.builtin.uri:
