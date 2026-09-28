@@ -53,6 +53,12 @@ class WorkerRecoveryTests(unittest.TestCase):
                 "3600",
             "{{ network_host_deep_profiler_max_profiles_per_run }}":
                 "1",
+            "{{ network_host_deep_profiler_enable_baseline_backlog }}":
+                "0",
+            "{{ network_host_deep_profiler_enable_baseline_backlog | bool | int }}":
+                "0",
+            "{{ network_host_deep_profiler_baseline_backlog_spread_seconds }}":
+                "604800",
             "{{ network_host_deep_profiler_udp_ports }}":
                 "53",
             "{{ network_host_deep_profiler_scripts }}":
