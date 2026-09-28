@@ -821,6 +821,106 @@
         "cellHeight": "sm",
         "enablePagination": false
       }
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Nmap OS Fingerprint",
+      "description": "Supporting Nmap OS fingerprint evidence. For managed hosts, authoritative OS and kernel facts remain those reported by Zabbix Agent 2; Nmap does not override them.",
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{hostname=\"$host\",nmap_name!=\"\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "hostname": true,
+              "ip": true,
+              "os": true,
+              "architecture": true,
+              "kernel": true,
+              "os_source": true,
+              "os_evidence": true,
+              "nmap_vendor": true,
+              "nmap_cpe": true,
+              "nmap_services": true
+            },
+            "indexByName": {
+              "nmap_name": 0,
+              "nmap_accuracy": 1,
+              "nmap_family": 2,
+              "nmap_generation": 3,
+              "nmap_device_type": 4,
+              "nmap_scanned_at": 5,
+              "nmap_time_basis": 6,
+              "nmap_scan_status": 7
+            },
+            "renameByName": {
+              "nmap_name": "Nmap match",
+              "nmap_accuracy": "Confidence",
+              "nmap_family": "Family",
+              "nmap_generation": "Generation",
+              "nmap_device_type": "Device type",
+              "nmap_scanned_at": "Scanned",
+              "nmap_time_basis": "Time basis",
+              "nmap_scan_status": "Status"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": false
+      }
     }
   ]
 }
