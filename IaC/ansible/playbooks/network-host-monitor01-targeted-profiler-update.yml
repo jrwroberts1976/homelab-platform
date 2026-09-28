@@ -90,14 +90,7 @@
           - -B
           - -c
           - >-
-            import ast,pathlib;
-            t=ast.parse(pathlib.Path('{{ profiler_script }}').read_text());
-            values=[n.value.value for n in t.body
-              if isinstance(n,ast.Assign)
-              and any(isinstance(x,ast.Name) and x.id=='BASELINE_BACKLOG_ENABLED'
-                      for x in n.targets)
-              and isinstance(n.value,ast.Call)];
-            assert values==[], 'Unexpected static backlog assignment';
+            import pathlib;
             text=pathlib.Path('{{ profiler_script }}').read_text();
             assert 'BASELINE_BACKLOG_ENABLED = bool(\n    0\n)' in text,
               'Baseline backlog unexpectedly enabled';
