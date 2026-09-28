@@ -16,6 +16,7 @@ def load_functions():
     tree = ast.parse(TEMPLATE.read_text())
     names = {
         "normalise_mac",
+        "baseline_backlog_due_at",
         "scan_retry_seconds",
         "scan_due",
         "tcp_has_os_evidence",
@@ -34,6 +35,7 @@ def load_functions():
     assert {node.name for node in selected} == names
 
     namespace = {
+        "hashlib": __import__("hashlib"),
         "ET": ET,
         "INTERFACE": "offline-test",
         "INITIAL_RETRY_SECONDS": 86400,
@@ -152,6 +154,10 @@ class DeepProfilerTests(unittest.TestCase):
         self.assertEqual(retry({"attempt_count": 0}), 86400)
         self.assertEqual(retry({"attempt_count": 1}), 86400)
         self.assertEqual(retry({"attempt_count": 2}), 604800)
+        self.assertEqual(
+            retry({"attempt_count": 0, "baseline_backlog": True}),
+            604800,
+        )
 
         self.assertTrue(due({}, 100000))
         self.assertFalse(due(
@@ -169,6 +175,20 @@ class DeepProfilerTests(unittest.TestCase):
         self.assertFalse(due(
             {"last_attempt": 200000, "attempt_count": 1}, 100000
         ))
+
+    def test_baseline_backlog_is_stable_and_spread_within_week(self):
+        schedule = self.worker["baseline_backlog_due_at"]
+        start = 1_000_000
+        first = schedule("02:00:00:00:00:42", start, 604800)
+        again = schedule("02:00:00:00:00:42", start, 604800)
+        other = schedule("02:00:00:00:00:43", start, 604800)
+
+        self.assertEqual(first, again)
+        self.assertGreaterEqual(first, start)
+        self.assertLess(first, start + 604800)
+        self.assertGreaterEqual(other, start)
+        self.assertLess(other, start + 604800)
+        self.assertNotEqual(first, other)
 
     def test_os_evidence_requires_an_nmap_match(self):
         has_os = self.worker["tcp_has_os_evidence"]
