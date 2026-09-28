@@ -301,6 +301,17 @@
           Refusing to link the template because not every zabbix_agents
           inventory host was returned by the Zabbix API.
 
+    - name: Build native Zabbix host link list
+      ansible.builtin.set_fact:
+        zabbix_template_link_hosts: >-
+          {{
+            (zabbix_template_link_hosts | default([]))
+            + [{'hostid': item.hostid}]
+          }}
+      loop: "{{ zabbix_target_hosts_get.json.result }}"
+      loop_control:
+        label: "{{ item.host }}"
+
     - name: Link OS facts template to all managed Zabbix hosts
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
@@ -315,14 +326,7 @@
           params:
             templates:
               - templateid: "{{ zabbix_template_id }}"
-            hosts: >-
-              {{
-                zabbix_target_hosts_get.json.result
-                | map(attribute='hostid')
-                | map('regex_replace', '^(.*)$', '{"hostid":"\\1"}')
-                | map('from_json')
-                | list
-              }}
+            hosts: "{{ zabbix_template_link_hosts }}"
           id: 9
         return_content: true
       register: zabbix_template_massadd
