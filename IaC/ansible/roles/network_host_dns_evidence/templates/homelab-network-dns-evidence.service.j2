@@ -1,0 +1,19 @@
+[Unit]
+Description=Refresh unresolved host DNS evidence from both Pi-hole resolvers
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStart={{ network_host_dns_evidence_script }}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadOnlyPaths=/etc/homelab-network-hosts
+ReadWritePaths={{ network_host_dns_evidence_state_dir }}
+RestrictSUIDSGID=true
+LockPersonality=true
+MemoryDenyWriteExecute=true
