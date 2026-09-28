@@ -763,7 +763,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_host_enrichment_port_info * on(ip) group_left(hostname) (homelab_network_device_card_info{hostname=\"$host\"} == 1)",
+          "expr": "max by (ip, port, protocol, service, product, version) (homelab_network_host_enrichment_port_info * on(ip) group_left(hostname) (homelab_network_device_card_info{hostname=\"$host\"} == 1))",
           "instant": true,
           "range": false,
           "format": "table"
@@ -785,7 +785,8 @@
               "__name__": true,
               "instance": true,
               "job": true,
-              "hostname": true
+              "hostname": true,
+              "target_name": true
             },
             "indexByName": {
               "ip": 0,
