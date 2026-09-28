@@ -80,7 +80,9 @@ ORDER BY c DESC, d.domain ASC
 LIMIT {int(limit)};
 """
     remote = (
-        "sqlite3 -readonly "
+        "sqlite3 -readonly -separator "
+        + shlex.quote("\t")
+        + " "
         + shlex.quote(db_path)
         + " "
         + shlex.quote(sql)
