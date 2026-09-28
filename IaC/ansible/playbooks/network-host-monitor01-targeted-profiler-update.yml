@@ -90,11 +90,11 @@
           - -B
           - -c
           - >-
-            import pathlib;
+            import pathlib,sys;
             text=pathlib.Path('{{ profiler_script }}').read_text();
-            assert 'BASELINE_BACKLOG_ENABLED = bool(\n    0\n)' in text,
-              'Baseline backlog unexpectedly enabled';
-            print('baseline_backlog=disabled')
+            ok='BASELINE_BACKLOG_ENABLED = bool(\\n    0\\n)' in text;
+            print('baseline_backlog=disabled' if ok else 'baseline_backlog=unexpected');
+            sys.exit(0 if ok else 1)
       register: backlog_guard
       changed_when: false
 
