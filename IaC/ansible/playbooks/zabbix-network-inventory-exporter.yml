@@ -10,6 +10,7 @@
     exporter_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/network-device-inventory-exporter.py"
     dashboard_generator_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/network-host-dashboard-generator.py"
     dashboard_template_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/host-profile-template.json"
+    production_dashboard_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
     inventory_metric_file: /var/lib/prometheus/node-exporter/homelab_network_devices.prom
 
   tasks:
@@ -112,6 +113,14 @@
       ansible.builtin.copy:
         src: "{{ dashboard_template_source }}"
         dest: /etc/homelab/network-host-template.json
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install updated production Hosts dashboard
+      ansible.builtin.copy:
+        src: "{{ production_dashboard_source }}"
+        dest: /opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json
         owner: root
         group: root
         mode: "0644"
