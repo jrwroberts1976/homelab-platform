@@ -132,6 +132,8 @@ def os_requires_fingerprint(metric, live_os_available):
     """
     if live_os_available:
         return False
+    if metric.get("os_evidence") == "authoritative":
+        return False
     if metric.get("os_evidence") != "documented":
         return True
     documented = (metric.get("os") or "").strip().casefold()
