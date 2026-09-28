@@ -43,6 +43,11 @@ network_host_deep_profiler_recent_seen_seconds: 360
 # Never launch multiple expensive full scans in one worker run.
 network_host_deep_profiler_max_profiles_per_run: 1
 
+# Existing cutover-baseline hosts stay inert unless a separately reviewed
+# deployment explicitly opts them into the controlled weekly backlog.
+network_host_deep_profiler_enable_baseline_backlog: false
+network_host_deep_profiler_baseline_backlog_spread_seconds: 604800
+
 network_host_deep_profiler_udp_ports:
   "53,67,68,69,123,137,138,161,500,514,1900,4500,5353,5683"
 
