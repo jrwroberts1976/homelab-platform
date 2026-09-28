@@ -17,9 +17,12 @@ import tempfile
 import time
 from pathlib import Path
 from urllib.parse import urlencode
-from urllib.request import urlopen
+from urllib.request import Request, urlopen
 
 PROMETHEUS = "http://127.0.0.1:9090/api/v1/query"
+ZABBIX_API = "http://192.168.2.59:8080/api_jsonrpc.php"
+ZABBIX_TOKEN = Path("/etc/homelab/zabbix-network-inventory.token")
+ZABBIX_MAX_AGE_SECONDS = 3 * 3600
 ESTATE = Path("/etc/homelab/network-estate.json")
 DNS_HINTS = Path("/etc/homelab/network-device-dns-hints.json")
 ROUTER_DB = Path("/var/lib/asus-network-inventory/assets.db")
@@ -57,6 +60,95 @@ def prometheus(expr):
 
 def load_json(path):
     return json.loads(path.read_text(encoding="utf-8"))
+
+
+def zabbix_api(method, params):
+    if not ZABBIX_TOKEN.is_file():
+        return None
+    token = ZABBIX_TOKEN.read_text(encoding="utf-8").strip()
+    if not token:
+        return None
+    body = json.dumps({
+        "jsonrpc": "2.0",
+        "method": method,
+        "params": params,
+        "id": 1,
+    }).encode("utf-8")
+    request = Request(
+        ZABBIX_API,
+        data=body,
+        headers={
+            "Content-Type": "application/json-rpc",
+            "Authorization": "Bearer " + token,
+        },
+        method="POST",
+    )
+    with urlopen(request, timeout=12) as response:
+        payload = json.load(response)
+    if payload.get("error"):
+        raise RuntimeError(
+            "Zabbix API %s failed: %s" % (method, payload["error"])
+        )
+    return payload.get("result", [])
+
+
+def zabbix_os_facts(target_names):
+    """Return fresh authoritative Agent 2 OS facts keyed by Zabbix host name."""
+    hosts = zabbix_api("host.get", {
+        "output": ["hostid", "host"],
+    })
+    if hosts is None:
+        return {}
+    wanted = {
+        item["hostid"]: item["host"]
+        for item in hosts
+        if item.get("host") in target_names
+    }
+    if not wanted:
+        return {}
+
+    items = zabbix_api("item.get", {
+        "hostids": list(wanted),
+        "output": ["hostid", "key_", "lastvalue", "lastclock"],
+        "filter": {
+            "key_": [
+                "system.sw.os[name]",
+                "system.sw.os.get",
+                "system.sw.arch",
+            ],
+        },
+    })
+    now = int(time.time())
+    facts = {}
+    for item in items or []:
+        host_name = wanted.get(item.get("hostid"))
+        if not host_name:
+            continue
+        try:
+            lastclock = int(item.get("lastclock") or 0)
+        except (TypeError, ValueError):
+            lastclock = 0
+        if not lastclock or now - lastclock > ZABBIX_MAX_AGE_SECONDS:
+            continue
+        value = item.get("lastvalue") or ""
+        if not value:
+            continue
+        fact = facts.setdefault(host_name, {"lastclock": 0})
+        fact["lastclock"] = max(fact["lastclock"], lastclock)
+        key = item.get("key_")
+        if key == "system.sw.os[name]":
+            fact["os_name"] = value
+        elif key == "system.sw.arch":
+            fact["architecture"] = value
+        elif key == "system.sw.os.get":
+            try:
+                details = json.loads(value)
+            except json.JSONDecodeError:
+                continue
+            fact["details"] = details
+            fact.setdefault("architecture", details.get("architecture") or "")
+            fact["kernel"] = details.get("kernel") or ""
+    return facts
 
 
 def router_inventory():
@@ -112,7 +204,8 @@ def populate():
             hosts[ip] = dict(ip=ip, mac="", hostname="", vendor="",
                              kind="", role="", os="Unknown",
                              os_source="Not determined",
-                             os_evidence="unknown", dns_hint="",
+                             os_evidence="unknown", architecture="",
+                             kernel="", dns_hint="",
                              dns_observed="", online=None, last_seen=0,
                              ports={}, scan_timed_out=False,
                              nmap_name="", nmap_accuracy="",
@@ -124,6 +217,7 @@ def populate():
         return hosts[ip]
 
     # Documented infrastructure is included even when temporarily offline.
+    estate_hosts = {}
     for asset in estate.get("assets", []):
         if asset.get("state") != "active":
             continue
@@ -134,6 +228,8 @@ def populate():
         h["role"] = asset.get("role") or ""
         h["kind"] = asset.get("kind") or ""
         name = asset.get("name")
+        if name:
+            estate_hosts[name] = h
         if name == "home-01":
             h.update(os="Home Assistant OS 18.2",
                      os_source="Canonical estate (2026-09)",
@@ -146,6 +242,30 @@ def populate():
             h.update(os="Linux (IaC-managed)",
                      os_source="Canonical estate (2026-09)",
                      os_evidence="documented")
+
+    # For managed Linux hosts, prefer fresh Zabbix Agent 2 facts over generic
+    # IaC classification or inferred Nmap/DNS evidence. Proxmox remains
+    # explicitly identified as the platform while using Zabbix for its Debian,
+    # architecture and kernel facts.
+    zabbix_facts = zabbix_os_facts(set(estate_hosts))
+    for name, fact in zabbix_facts.items():
+        h = estate_hosts.get(name)
+        if h is None or not fact.get("os_name"):
+            continue
+        os_name = fact["os_name"]
+        if name in ("PROXMOX", "Proxmox-2"):
+            display_os = "Proxmox VE / " + os_name
+            source = "Canonical estate + Zabbix Agent 2"
+        else:
+            display_os = os_name
+            source = "Zabbix Agent 2"
+        h.update(
+            os=display_os,
+            os_source=source,
+            os_evidence="authoritative",
+            architecture=fact.get("architecture") or "",
+            kernel=fact.get("kernel") or "",
+        )
 
     # Core Nmap discovery and the existing router asset publisher.
     for result in prometheus("homelab_network_host_info"):
@@ -345,7 +465,8 @@ def render(hosts):
                   else "Online" if h["online"] else "Offline")
         info = {key: h[key] for key in
                 ("ip", "mac", "hostname", "vendor", "kind", "role",
-                 "os", "os_source", "os_evidence", "dns_hint", "dns_observed")}
+                 "os", "os_source", "os_evidence", "architecture", "kernel",
+                 "dns_hint", "dns_observed")}
         info.update(status=status, observed_open_ports=summary)
         lines.append("homelab_network_device_inventory_info{" +
                      labels(info) + "} 1")
@@ -433,6 +554,8 @@ def render(hosts):
             "hostname": display_name,
             "os": h["os"],
             "os_evidence": h["os_evidence"],
+            "architecture": h["architecture"],
+            "kernel": h["kernel"],
             "dashboard_uid": dashboard_uid,
         }
         info = {
