@@ -12,7 +12,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 7,
+  "version": 8,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -874,11 +874,13 @@
               "status": 2,
               "kind": 3,
               "os": 4,
-              "os_evidence": 5,
-              "os_source": 6,
-              "observed_open_ports": 7,
-              "vendor": 8,
-              "role": 9
+              "os_evidence": 7,
+              "os_source": 8,
+              "observed_open_ports": 9,
+              "vendor": 10,
+              "role": 11,
+              "architecture": 5,
+              "kernel": 6
             },
             "renameByName": {
               "hostname": "Hostname",
@@ -890,7 +892,9 @@
               "os_source": "OS source",
               "observed_open_ports": "Observed open ports",
               "vendor": "Vendor",
-              "role": "Role"
+              "role": "Role",
+              "architecture": "Architecture",
+              "kernel": "Kernel"
             }
           }
         }
@@ -978,7 +982,9 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "ip": 0,
@@ -1088,7 +1094,9 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "hostname": 0,
@@ -1351,7 +1359,9 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "name": 0,
@@ -1483,7 +1493,9 @@
               "observed": true,
               "name": true,
               "pretty_name": true,
-              "id": true
+              "id": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "nmap_name": 0,
