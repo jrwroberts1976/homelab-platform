@@ -584,6 +584,45 @@ def write_metrics(profiles):
 
 inventory = load_json(INVENTORY_FILE)
 
+
+def current_inventory_by_mac(entries):
+    """Choose one current inventory address per MAC.
+
+    The V1 inventory intentionally retains historical/offline IP records.
+    Deep-profile state is MAC-keyed, so allowing every retained IP to update
+    last_ip makes the final lexicographically sorted address win even when it
+    is stale. Prefer the freshest observation; when timestamps tie, prefer an
+    entry still marked online. Because entries are visited in IP order and
+    equal scores do not replace an existing choice, ties remain deterministic.
+    """
+    selected = {}
+
+    for ip in sorted(entries, key=ip_sort):
+        host = entries[ip]
+        mac = normalise_mac(host.get("mac", ""))
+
+        if not mac:
+            continue
+
+        score = (
+            int(host.get("last_seen", 0) or 0),
+            1 if host.get("online", False) else 0,
+        )
+
+        current = selected.get(mac)
+
+        if current is None or score > current["score"]:
+            selected[mac] = {
+                "ip": ip,
+                "host": host,
+                "score": score,
+            }
+
+    return selected
+
+
+current_inventory = current_inventory_by_mac(inventory)
+
 state = load_json(
     STATE_FILE,
     optional=True,
@@ -596,17 +635,10 @@ state = load_json(
 if state is None:
     profiles = {}
 
-    for ip in sorted(
-        inventory,
-        key=ip_sort,
-    ):
-        host = inventory[ip]
-        mac = normalise_mac(
-            host.get("mac", "")
-        )
-
-        if not mac:
-            continue
+    for mac in sorted(current_inventory):
+        current = current_inventory[mac]
+        ip = current["ip"]
+        host = current["host"]
 
         profiles[mac] = {
             "status": "baseline",
@@ -672,19 +704,13 @@ if not isinstance(profiles, dict):
     )
 
 
-# Reconcile the current V1 inventory into MAC-keyed state.
-for ip in sorted(
-    inventory,
-    key=ip_sort,
-):
-    host = inventory[ip]
-
-    mac = normalise_mac(
-        host.get("mac", "")
-    )
-
-    if not mac:
-        continue
+# Reconcile only the freshest/current V1 inventory address for each MAC.
+# Historical/offline IPs remain in inventory and profile history, but cannot
+# overwrite last_ip merely because they sort later.
+for mac in sorted(current_inventory):
+    current = current_inventory[mac]
+    ip = current["ip"]
+    host = current["host"]
 
     record = profiles.get(mac)
 
