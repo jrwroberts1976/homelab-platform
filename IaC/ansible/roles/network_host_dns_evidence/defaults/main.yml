@@ -7,7 +7,7 @@ network_host_dns_evidence_service: homelab-network-dns-evidence.service
 network_host_dns_evidence_timer: homelab-network-dns-evidence.timer
 network_host_dns_evidence_interval: 5min
 
-network_host_dns_evidence_key: /root/.ssh/homelab-dns-evidence
+network_host_dns_evidence_key: /etc/homelab-network-hosts/dns-evidence-ed25519
 network_host_dns_evidence_known_hosts: /etc/homelab-network-hosts/dns-evidence-known-hosts
 network_host_dns_evidence_remote_user: dns-evidence
 network_host_dns_evidence_servers:
