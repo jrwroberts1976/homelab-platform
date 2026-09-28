@@ -108,16 +108,34 @@ def ip_sort(value):
         return (999, 999, 999, 999)
 
 
-SCAN_COOLDOWN_SECONDS = 24 * 60 * 60
+INITIAL_RETRY_SECONDS = 24 * 60 * 60
+WEEKLY_RETRY_SECONDS = 7 * 24 * 60 * 60
 
 
-def scan_due(record, now, cooldown=SCAN_COOLDOWN_SECONDS):
+def scan_retry_seconds(record):
+    """Retry once after 24h, then weekly while evidence stays incomplete."""
+    attempts = int(record.get("attempt_count", 0) or 0)
+    return INITIAL_RETRY_SECONDS if attempts <= 1 else WEEKLY_RETRY_SECONDS
+
+
+def scan_due(record, now, cooldown=None):
     last_attempt = int(record.get("last_attempt", 0) or 0)
 
     if last_attempt <= 0:
         return True
 
+    if cooldown is None:
+        cooldown = scan_retry_seconds(record)
+
     return now - last_attempt >= cooldown
+
+
+def tcp_has_os_evidence(tcp):
+    return bool(
+        isinstance(tcp, dict)
+        and isinstance(tcp.get("os_matches"), list)
+        and tcp.get("os_matches")
+    )
 
 
 def persist_profiles(state, profiles):
@@ -894,15 +912,28 @@ for mac, record in pending:
             previous_profile["tcp_scanned_at"]
         )
 
-    partial = bool(merged_profile["errors"])
+    missing_os = (
+        SCAN_MODE == "targeted"
+        and not tcp_has_os_evidence(tcp)
+    )
+    partial = bool(merged_profile["errors"]) or missing_os
+
+    if merged_profile["errors"].get("udp"):
+        last_error = "udp_scan: " + merged_profile["errors"]["udp"]
+    elif missing_os:
+        last_error = "os_evidence_missing"
+    else:
+        last_error = ""
 
     record.update({
         "status": "partial" if partial else "complete",
         "profiled_at": NOW,
         "profiled_ip": ip,
-        "last_error": (
-            "udp_scan: " + merged_profile["errors"]["udp"]
-            if partial else ""
+        "last_error": last_error,
+        "needs_os_identification": missing_os,
+        "next_retry_after": (
+            NOW + scan_retry_seconds(record)
+            if partial else 0
         ),
         "profile": merged_profile,
     })
