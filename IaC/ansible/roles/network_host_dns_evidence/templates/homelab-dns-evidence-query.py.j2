@@ -1,0 +1,81 @@
+#!/usr/bin/env python3
+"""Forced-command Pi-hole query returning only minimised per-client evidence."""
+
+import ipaddress
+import json
+import os
+import sqlite3
+import time
+
+DB = "/etc/pihole/pihole-FTL.db"
+LOOKBACK_SECONDS = {{ network_host_dns_evidence_lookback_days }} * 24 * 60 * 60
+MAX_DOMAINS = {{ network_host_dns_evidence_max_domains }}
+LAN = ipaddress.ip_network("192.168.2.0/24")
+
+
+def requested_ip():
+    command = os.environ.get("SSH_ORIGINAL_COMMAND", "").strip().split()
+    if len(command) != 2 or command[0] != "query":
+        raise ValueError("Only 'query <LAN-IP>' is permitted")
+    address = ipaddress.ip_address(command[1])
+    if address not in LAN:
+        raise ValueError("Requested client is outside the permitted LAN")
+    return str(address)
+
+
+def query_summary(ip, now=None):
+    now = int(time.time()) if now is None else int(now)
+    cutoff = now - LOOKBACK_SECONDS
+    uri = "file:" + DB + "?mode=ro"
+
+    with sqlite3.connect(uri, uri=True, timeout=10) as connection:
+        connection.execute("PRAGMA query_only=ON")
+        columns = {
+            row[1]
+            for row in connection.execute("PRAGMA table_info(query_storage)")
+        }
+        required = {"timestamp", "client", "domain"}
+        if not required.issubset(columns):
+            raise RuntimeError("Unexpected Pi-hole query_storage schema")
+
+        total = connection.execute(
+            """
+            SELECT COUNT(*)
+              FROM query_storage AS q
+              JOIN client_by_id AS c ON c.id = q.client
+             WHERE c.ip = ? AND q.timestamp >= ?
+            """,
+            (ip, cutoff),
+        ).fetchone()[0]
+
+        rows = connection.execute(
+            """
+            SELECT d.domain, COUNT(*) AS hits
+              FROM query_storage AS q
+              JOIN client_by_id AS c ON c.id = q.client
+              JOIN domain_by_id AS d ON d.id = q.domain
+             WHERE c.ip = ? AND q.timestamp >= ?
+             GROUP BY d.domain
+             ORDER BY hits DESC, d.domain ASC
+             LIMIT ?
+            """,
+            (ip, cutoff, MAX_DOMAINS),
+        ).fetchall()
+
+    return {
+        "ip": ip,
+        "server": os.uname().nodename,
+        "query_count": int(total),
+        "top_domains": [str(domain) for domain, _ in rows if domain],
+        "lookback_days": LOOKBACK_SECONDS // 86400,
+        "observed_at": now,
+    }
+
+
+def main():
+    ip = requested_ip()
+    print(json.dumps(query_summary(ip), separators=(",", ":"), sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
