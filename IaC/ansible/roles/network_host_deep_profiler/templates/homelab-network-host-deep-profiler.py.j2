@@ -734,12 +734,15 @@ for ip in sorted(
         BASELINE_BACKLOG_ENABLED
         and record.get("status") == "baseline"
     ):
+        backlog_started_at = int(
+            state.setdefault("baseline_backlog_started_at", NOW) or NOW
+        )
         record["baseline_backlog"] = True
         record.setdefault(
             "backlog_due_at",
             baseline_backlog_due_at(
                 mac,
-                int(state.get("initialized_at", NOW) or NOW),
+                backlog_started_at,
                 BASELINE_BACKLOG_SPREAD_SECONDS,
             ),
         )
