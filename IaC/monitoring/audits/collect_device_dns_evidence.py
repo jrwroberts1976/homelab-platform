@@ -63,29 +63,21 @@ def build_remote_query(target_ip, since_epoch, limit, db_path):
     sql = f"""
 PRAGMA query_only=ON;
 .mode tabs
-WITH per_domain AS (
-  SELECT d.domain AS domain, COUNT(*) AS c
-  FROM query_storage q
-  JOIN client_by_id c ON c.id = q.client
-  JOIN domain_by_id d ON d.id = q.domain
-  WHERE c.ip = {json.dumps(target_ip)}
-    AND q.timestamp >= {int(since_epoch)}
-  GROUP BY d.domain
-),
-ranked AS (
-  SELECT domain, c
-  FROM per_domain
-  ORDER BY c DESC, domain ASC
-  LIMIT {int(limit)}
-)
-SELECT 'COUNT', COALESCE((
-  SELECT COUNT(*)
-  FROM query_storage q
-  JOIN client_by_id c ON c.id = q.client
-  WHERE c.ip = {json.dumps(target_ip)}
-    AND q.timestamp >= {int(since_epoch)}
-), 0);
-SELECT 'DOMAIN', domain, c FROM ranked;
+SELECT 'COUNT', COUNT(*)
+FROM query_storage q
+JOIN client_by_id c ON c.id = q.client
+WHERE c.ip = '{target_ip}'
+  AND q.timestamp >= {int(since_epoch)};
+
+SELECT 'DOMAIN', d.domain, COUNT(*) AS c
+FROM query_storage q
+JOIN client_by_id c ON c.id = q.client
+JOIN domain_by_id d ON d.id = q.domain
+WHERE c.ip = '{target_ip}'
+  AND q.timestamp >= {int(since_epoch)}
+GROUP BY d.domain
+ORDER BY c DESC, d.domain ASC
+LIMIT {int(limit)};
 """
     remote = (
         "sqlite3 -readonly "
