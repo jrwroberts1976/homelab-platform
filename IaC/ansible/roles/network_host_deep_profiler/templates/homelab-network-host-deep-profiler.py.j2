@@ -781,11 +781,23 @@ pending = sorted(
         (mac, record)
         for mac, record in profiles.items()
         if (
-            record.get("status") in ("pending", "partial")
-            or (
-                BASELINE_BACKLOG_ENABLED
-                and record.get("status") == "baseline"
-                and int(record.get("backlog_due_at", 0) or 0) <= NOW
+            # Only currently inventoried MACs can become scan targets.
+            # Historical profiles remain preserved but cannot be re-scanned.
+            mac in current_inventory
+            and (
+                record.get("status") in ("pending", "partial")
+                or (
+                    BASELINE_BACKLOG_ENABLED
+                    and record.get("status") == "baseline"
+                    and int(record.get("backlog_due_at", 0) or 0) <= NOW
+                )
+                or (
+                    # A completed identification is not "done forever".
+                    # Re-profile current hosts weekly so TCP ports, services,
+                    # versions and supporting OS evidence stay fresh.
+                    record.get("status") == "complete"
+                    and scan_due(record, NOW, WEEKLY_RETRY_SECONDS)
+                )
             )
         )
     ],
