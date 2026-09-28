@@ -63,6 +63,16 @@
       register: zabbix_template_group_get
       no_log: true
 
+    - name: Validate template group lookup response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_group_get.json is defined
+          - zabbix_template_group_get.json.error is not defined
+          - zabbix_template_group_get.json.result is defined
+        fail_msg: >-
+          Zabbix API templategroup.get failed:
+          {{ zabbix_template_group_get.json.error | default('missing result') }}
+
     - name: Create Homelab template group when absent
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
@@ -79,7 +89,7 @@
           id: 2
         return_content: true
       register: zabbix_template_group_create
-      when: zabbix_template_group_get.json.result | length == 0
+      when: (zabbix_template_group_get.json.result | default([])) | length == 0
       changed_when: true
       no_log: true
 
@@ -88,7 +98,7 @@
         zabbix_template_group_id: >-
           {{
             (zabbix_template_group_get.json.result[0].groupid)
-            if (zabbix_template_group_get.json.result | length > 0)
+            if ((zabbix_template_group_get.json.result | default([])) | length > 0)
             else (zabbix_template_group_create.json.result.groupids[0])
           }}
 
