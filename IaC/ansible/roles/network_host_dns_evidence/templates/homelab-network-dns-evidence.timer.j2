@@ -1,0 +1,12 @@
+[Unit]
+Description=Periodically refresh unresolved host DNS evidence
+
+[Timer]
+OnBootSec=3min
+OnUnitActiveSec={{ network_host_dns_evidence_interval }}
+Persistent=true
+RandomizedDelaySec=20s
+Unit={{ network_host_dns_evidence_service }}
+
+[Install]
+WantedBy=timers.target
