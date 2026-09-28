@@ -62,7 +62,6 @@ def build_remote_query(target_ip, since_epoch, limit, db_path):
     # The query is SELECT-only and sqlite3 is opened read-only.
     sql = f"""
 PRAGMA query_only=ON;
-.mode tabs
 SELECT 'COUNT', COUNT(*)
 FROM query_storage q
 JOIN client_by_id c ON c.id = q.client
