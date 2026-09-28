@@ -62,8 +62,14 @@ def load_json(path):
 def router_inventory():
     if not ROUTER_DB.is_file():
         return []
+    # The collector database uses WAL mode. A normal SQLite mode=ro
+    # connection may still need to create/open -shm state beside the database,
+    # which is intentionally blocked by this exporter's ProtectSystem=strict
+    # sandbox. Current ASUS state already comes from Prometheus; this direct
+    # DB read exists only to preserve checkpointed historical records.
     connection = sqlite3.connect(
-        "file:" + str(ROUTER_DB) + "?mode=ro", uri=True, timeout=8)
+        "file:" + str(ROUTER_DB) + "?mode=ro&immutable=1",
+        uri=True, timeout=8)
     try:
         rows = connection.execute(
             "SELECT ip,mac,hostname,last_seen,online FROM assets"
