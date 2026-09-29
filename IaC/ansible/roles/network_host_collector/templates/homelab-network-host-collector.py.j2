@@ -55,6 +55,40 @@ def reverse_dns(ip):
         return ""
 
 
+def local_interface_identity():
+    """Return the collector host's IPv4 and MAC on the scan interface.
+
+    Nmap does not reliably report the address assigned to the interface it is
+    scanning from, so the collector must explicitly include itself.
+    """
+    payload = json.loads(
+        run([
+            "ip",
+            "-j",
+            "addr",
+            "show",
+            "dev",
+            INTERFACE,
+        ])
+    )
+
+    if not payload:
+        return "", ""
+
+    interface = payload[0]
+    mac = str(interface.get("address") or "").strip().lower()
+
+    for address in interface.get("addr_info", []):
+        if (
+            address.get("family") == "inet"
+            and address.get("scope") == "global"
+            and address.get("local")
+        ):
+            return str(address["local"]).strip(), mac
+
+    return "", mac
+
+
 def load_asus_hostnames():
     """Load bounded DHCP hostname evidence from the ASUS snapshot.
 
@@ -252,6 +286,31 @@ def scan(router_names):
             "hostname": hostname,
             "latency_ms": latency_ms,
         }
+
+    # Nmap can omit the scanner's own interface address from a ping scan.
+    # Explicitly add the local interface so this host cannot age out of the
+    # inventory and be incorrectly marked offline.
+    try:
+        local_ip, local_mac = local_interface_identity()
+
+        if local_ip:
+            existing = found.get(local_ip, {})
+            local_hostname = reverse_dns(local_ip) or socket.gethostname()
+
+            found[local_ip] = {
+                "ip": local_ip,
+                "mac": local_mac or existing.get("mac", ""),
+                "vendor": existing.get("vendor", ""),
+                "hostname": local_hostname,
+                "latency_ms": 0.0,
+            }
+
+    except Exception as exc:
+        emit_event({
+            "event": "local_interface_identity_unavailable",
+            "interface": INTERFACE,
+            "error": str(exc),
+        })
 
     return found
 
