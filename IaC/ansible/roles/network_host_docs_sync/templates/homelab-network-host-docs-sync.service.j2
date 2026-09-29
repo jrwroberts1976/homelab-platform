@@ -1,0 +1,13 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Publish bounded Zeek flow summaries to network host records
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User={{ network_host_docs_sync_user }}
+Group={{ network_host_docs_sync_group }}
+ExecStart={{ network_host_docs_sync_script }}
+WorkingDirectory={{ network_host_docs_sync_repo_path }}
+TimeoutStartSec=180
