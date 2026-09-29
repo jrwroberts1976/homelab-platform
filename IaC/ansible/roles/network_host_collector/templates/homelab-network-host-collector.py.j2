@@ -3,7 +3,6 @@
 import json
 import os
 import socket
-import sqlite3
 import subprocess
 import tempfile
 import time
@@ -16,8 +15,8 @@ INTERFACE = "{{ network_host_collector_interface }}"
 STATE_FILE = Path("{{ network_host_collector_inventory }}")
 EVENT_FILE = Path("{{ network_host_collector_events }}")
 METRIC_FILE = Path("{{ network_host_collector_metrics }}")
-ASUS_INVENTORY_DB = Path(
-    "{{ network_host_collector_asus_inventory_database }}"
+ROUTER_HOSTNAME_SNAPSHOT = Path(
+    "{{ network_host_collector_router_hostname_snapshot }}"
 )
 
 OFFLINE_AFTER = {{ network_host_collector_offline_after_seconds }}
@@ -57,41 +56,39 @@ def reverse_dns(ip):
 
 
 def load_asus_hostnames():
-    """Return bounded DHCP hostname evidence keyed by MAC and IP.
+    """Load bounded DHCP hostname evidence from the ASUS snapshot.
 
-    The ASUS inventory is supporting identity evidence only. If the database
-    is absent, unreadable or temporarily locked, discovery continues without
-    it. Reverse DNS remains higher priority than router DHCP naming.
+    The ASUS collector publishes this file atomically after completing its
+    router/DHCP inventory pass. Discovery never opens the live SQLite/WAL
+    database, avoiding cross-service locking and systemd sandbox issues.
     """
-    if not ASUS_INVENTORY_DB.exists():
+    if not ROUTER_HOSTNAME_SNAPSHOT.exists():
         return {"by_mac": {}, "by_ip": {}}
 
-    by_mac = {}
-    by_ip = {}
-
     try:
-        uri = "file:" + str(ASUS_INVENTORY_DB) + "?mode=ro"
-        con = sqlite3.connect(uri, uri=True, timeout=2)
-        con.row_factory = sqlite3.Row
+        payload = json.loads(ROUTER_HOSTNAME_SNAPSHOT.read_text())
+        if payload.get("schema_version") != 1:
+            raise ValueError("unsupported router hostname snapshot schema")
 
-        rows = con.execute(
-            """
-            SELECT ip, mac, hostname, dhcp_hostname, last_seen
-            FROM assets
-            """
-        ).fetchall()
+        devices = payload.get("devices", {})
+        if not isinstance(devices, dict):
+            raise ValueError("router hostname snapshot devices is not an object")
 
-        con.close()
+        by_mac = {}
+        by_ip = {}
 
-        for row in rows:
-            ip = str(row["ip"] or "").strip()
-            mac = str(row["mac"] or "").strip().lower()
+        for mac, row in devices.items():
+            if not isinstance(row, dict):
+                continue
+
+            mac = str(mac or "").strip().lower()
+            ip = str(row.get("ip") or "").strip()
             hostname = str(
-                row["dhcp_hostname"]
-                or row["hostname"]
+                row.get("dhcp_hostname")
+                or row.get("hostname")
                 or ""
             ).strip()
-            last_seen = int(row["last_seen"] or 0)
+            last_seen = int(row.get("last_seen", 0) or 0)
 
             if not hostname:
                 continue
@@ -101,21 +98,12 @@ def load_asus_hostnames():
                 "last_seen": last_seen,
             }
 
-            if ip:
-                existing = by_ip.get(ip)
-                if (
-                    existing is None
-                    or candidate["last_seen"] >= existing["last_seen"]
-                ):
-                    by_ip[ip] = candidate
-
             if mac:
-                existing = by_mac.get(mac)
-                if (
-                    existing is None
-                    or candidate["last_seen"] >= existing["last_seen"]
-                ):
-                    by_mac[mac] = candidate
+                by_mac[mac] = candidate
+            if ip:
+                by_ip[ip] = candidate
+
+        return {"by_mac": by_mac, "by_ip": by_ip}
 
     except Exception as exc:
         emit_event({
@@ -123,9 +111,6 @@ def load_asus_hostnames():
             "error": str(exc),
         })
         return {"by_mac": {}, "by_ip": {}}
-
-    return {"by_mac": by_mac, "by_ip": by_ip}
-
 
 def router_hostname(router_names, ip, mac):
     if mac:
