@@ -1,0 +1,156 @@
+---
+# Controlled activation of the grandfathered baseline backlog on monitor-01.
+# The targeted profiler is already live; this playbook only opts baseline
+# records into the deterministic one-week backlog while preserving the timer.
+- name: Activate controlled targeted-profiler baseline backlog on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    profiler_script: /usr/local/sbin/homelab-network-host-deep-profiler
+    profiler_state: /var/lib/homelab-network-hosts/deep-profiles.json
+    profiler_inventory: /var/lib/homelab-network-hosts/inventory.json
+    profiler_backup_root: /var/backups/homelab-targeted-profiler
+  tasks:
+    - name: Require correct live target and explicit backlog approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - targeted_profiler_backlog_activation_approved | default(false) | bool
+        fail_msg: Refusing baseline-backlog activation without explicit approval.
+
+    - name: Require profiler timer is already enabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, homelab-network-host-deep-profiler.timer]
+      register: profiler_enabled
+      changed_when: false
+      failed_when: false
+
+    - name: Require profiler timer is already active
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-deep-profiler.timer]
+      register: profiler_active
+      changed_when: false
+      failed_when: false
+
+    - name: Require expected live profiler state
+      ansible.builtin.assert:
+        that:
+          - profiler_enabled.stdout == 'enabled'
+          - profiler_active.stdout == 'active'
+        fail_msg: Live profiler timer is not in the expected enabled/active state.
+
+    - name: Verify retired media-01 Wi-Fi address cannot win current targeting
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import json,sys;
+            d=json.load(open('{{ profiler_inventory }}'));
+            wired=d.get('192.168.2.195',{});
+            wifi=d.get('192.168.2.196',{});
+            ok=(wired.get('online') is True
+                and wired.get('mac')=='2c:cf:67:30:be:1f'
+                and wifi.get('online') is False);
+            print('media01_current_ip_guard=pass' if ok else 'media01_current_ip_guard=fail');
+            sys.exit(0 if ok else 1)
+      register: media01_guard
+      changed_when: false
+
+    - name: Create protected rollback directory
+      ansible.builtin.file:
+        path: "{{ profiler_backup_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve currently installed worker
+      ansible.builtin.copy:
+        src: "{{ profiler_script }}"
+        dest: "{{ profiler_backup_root }}/worker-before-backlog-activation-{{ ansible_date_time.iso8601_basic_short }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+
+    - name: Preserve current profiler state
+      ansible.builtin.copy:
+        src: "{{ profiler_state }}"
+        dest: "{{ profiler_backup_root }}/deep-profiles-before-backlog-activation-{{ ansible_date_time.iso8601_basic_short }}.json"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+
+    - name: Enable targeted baseline backlog and preserve live timer
+      ansible.builtin.import_role:
+        name: network_host_deep_profiler
+      vars:
+        network_host_deep_profiler_expected_hostname: monitor-01
+        network_host_deep_profiler_expected_ipv4: '192.168.2.52'
+        network_host_deep_profiler_interface: eth0
+        network_host_deep_profiler_scan_mode: targeted
+        network_host_deep_profiler_enable_baseline_backlog: true
+        network_host_deep_profiler_allow_deploy: true
+        network_host_deep_profiler_enable_timer: true
+
+    - name: Verify profiler timer remains enabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, homelab-network-host-deep-profiler.timer]
+      register: profiler_enabled_after
+      changed_when: false
+
+    - name: Verify profiler timer remains active
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-deep-profiler.timer]
+      register: profiler_active_after
+      changed_when: false
+
+    - name: Require backlog is enabled in rendered worker
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import ast,pathlib,sys;
+            tree=ast.parse(pathlib.Path('{{ profiler_script }}').read_text());
+            matches=[n for n in tree.body
+              if isinstance(n,ast.Assign)
+              and any(isinstance(t,ast.Name) and t.id=='BASELINE_BACKLOG_ENABLED'
+                      for t in n.targets)];
+            ok=(len(matches)==1
+              and isinstance(matches[0].value,ast.Call)
+              and isinstance(matches[0].value.func,ast.Name)
+              and matches[0].value.func.id=='bool'
+              and len(matches[0].value.args)==1
+              and isinstance(matches[0].value.args[0],ast.Constant)
+              and matches[0].value.args[0].value==1);
+            print('baseline_backlog=enabled' if ok else 'baseline_backlog=unexpected');
+            sys.exit(0 if ok else 1)
+      register: backlog_guard
+      changed_when: false
+
+    - name: Require activation preserved safety state
+      ansible.builtin.assert:
+        that:
+          - media01_guard.stdout == 'media01_current_ip_guard=pass'
+          - profiler_enabled_after.stdout == 'enabled'
+          - profiler_active_after.stdout == 'active'
+          - backlog_guard.stdout == 'baseline_backlog=enabled'
+
+    - name: Report controlled activation
+      ansible.builtin.debug:
+        msg: >-
+          Targeted baseline backlog is enabled on monitor-01. The first worker
+          run anchors baseline_backlog_started_at and spreads grandfathered MACs
+          deterministically across the configured one-week window.

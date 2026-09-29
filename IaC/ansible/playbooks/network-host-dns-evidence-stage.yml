@@ -1,0 +1,20 @@
+---
+# Stage the monitor side first so its dedicated public key exists as a
+# playbook-scoped host fact before either resolver consumes it.
+- name: Stage monitor-side dual-Pi-hole DNS evidence collector
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    network_host_dns_evidence_enable_timer: false
+  roles:
+    - role: network_host_dns_evidence
+
+- name: Stage restricted read-only DNS evidence endpoints
+  hosts: dns_resolvers
+  become: true
+  gather_facts: true
+  vars:
+    network_host_dns_evidence_enable_timer: false
+  roles:
+    - role: network_host_dns_evidence

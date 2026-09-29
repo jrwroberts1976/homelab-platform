@@ -16,11 +16,15 @@ def load_functions():
     tree = ast.parse(TEMPLATE.read_text())
     names = {
         "normalise_mac",
+        "baseline_backlog_due_at",
+        "scan_retry_seconds",
         "scan_due",
+        "tcp_has_os_evidence",
         "merge_scan_evidence",
         "fresh_arp_presence",
         "validate_scan_xml",
         "parse_host",
+        "targeted_tcp_arguments",
     }
     selected = [
         node
@@ -31,9 +35,11 @@ def load_functions():
     assert {node.name for node in selected} == names
 
     namespace = {
+        "hashlib": __import__("hashlib"),
         "ET": ET,
         "INTERFACE": "offline-test",
-        "SCAN_COOLDOWN_SECONDS": 86400,
+        "INITIAL_RETRY_SECONDS": 86400,
+        "WEEKLY_RETRY_SECONDS": 604800,
     }
     exec(
         compile(
@@ -131,13 +137,66 @@ class DeepProfilerTests(unittest.TestCase):
                 if not ip or not mac:
                     self.assertEqual(calls, [])
 
-    def test_scan_cooldown(self):
+    def test_targeted_nmap_is_bounded(self):
+        args = self.worker["targeted_tcp_arguments"]("192.168.2.242")
+        self.assertEqual(args[-1], "192.168.2.242")
+        self.assertIn("--top-ports", args)
+        self.assertIn("-O", args)
+        self.assertIn("--host-timeout", args)
+        self.assertNotIn("-p-", args)
+        self.assertNotIn("--script", args)
+        self.assertNotIn("-sU", args)
+
+    def test_scan_retry_schedule_is_24h_then_weekly(self):
+        retry = self.worker["scan_retry_seconds"]
         due = self.worker["scan_due"]
+
+        self.assertEqual(retry({"attempt_count": 0}), 86400)
+        self.assertEqual(retry({"attempt_count": 1}), 86400)
+        self.assertEqual(retry({"attempt_count": 2}), 604800)
+        self.assertEqual(
+            retry({"attempt_count": 0, "baseline_backlog": True}),
+            604800,
+        )
+
         self.assertTrue(due({}, 100000))
-        self.assertFalse(due({"last_attempt": 1000}, 1001))
-        self.assertFalse(due({"last_attempt": 1000}, 87399))
-        self.assertTrue(due({"last_attempt": 1000}, 87400))
-        self.assertFalse(due({"last_attempt": 200000}, 100000))
+        self.assertFalse(due(
+            {"last_attempt": 1000, "attempt_count": 1}, 87399
+        ))
+        self.assertTrue(due(
+            {"last_attempt": 1000, "attempt_count": 1}, 87400
+        ))
+        self.assertFalse(due(
+            {"last_attempt": 1000, "attempt_count": 2}, 605799
+        ))
+        self.assertTrue(due(
+            {"last_attempt": 1000, "attempt_count": 2}, 605800
+        ))
+        self.assertFalse(due(
+            {"last_attempt": 200000, "attempt_count": 1}, 100000
+        ))
+
+    def test_baseline_backlog_is_stable_and_spread_within_week(self):
+        schedule = self.worker["baseline_backlog_due_at"]
+        start = 1_000_000
+        first = schedule("02:00:00:00:00:42", start, 604800)
+        again = schedule("02:00:00:00:00:42", start, 604800)
+        other = schedule("02:00:00:00:00:43", start, 604800)
+
+        self.assertEqual(first, again)
+        self.assertGreaterEqual(first, start)
+        self.assertLess(first, start + 604800)
+        self.assertGreaterEqual(other, start)
+        self.assertLess(other, start + 604800)
+        self.assertNotEqual(first, other)
+
+    def test_os_evidence_requires_an_nmap_match(self):
+        has_os = self.worker["tcp_has_os_evidence"]
+        self.assertFalse(has_os({}))
+        self.assertFalse(has_os({"os_matches": []}))
+        self.assertTrue(has_os({
+            "os_matches": [{"name": "Linux 5.x", "accuracy": "95"}]
+        }))
 
     def test_failed_udp_preserves_previous_evidence(self):
         merge = self.worker["merge_scan_evidence"]

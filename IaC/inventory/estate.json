@@ -42,7 +42,7 @@
       "address": "192.168.2.52",
       "state": "active",
       "kind": "vm",
-      "role": "Prometheus, Grafana, Alertmanager, Blackbox and Loki, VM202 on Proxmox-2",
+      "role": "Prometheus, Grafana, Alertmanager, Blackbox, Loki and active network discovery (collector, enricher, OS evidence, guest refresh, first-seen notifier), VM202 on Proxmox-2; discovery cutover verified 2026-09-27",
       "managed_by_ansible": true
     },
     {
@@ -132,7 +132,7 @@
       "address": "192.168.2.71",
       "state": "active",
       "kind": "physical",
-      "role": "Proxmox VE cluster node 2 and Network Host Collector host",
+      "role": "Proxmox VE cluster node 2; former network-discovery source, four discovery timers disabled after 2026-09-27 cutover; retained rollback evidence",
       "managed_by_ansible": true
     },
     {

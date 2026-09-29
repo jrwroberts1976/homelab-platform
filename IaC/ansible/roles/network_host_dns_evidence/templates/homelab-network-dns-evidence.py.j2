@@ -1,0 +1,258 @@
+#!/usr/bin/env python3
+"""Refresh and correlate dual-Pi-hole evidence after unresolved Nmap observations."""
+
+import json
+import os
+import subprocess
+import tempfile
+import time
+from pathlib import Path
+
+PROFILES = Path("{{ network_host_dns_evidence_profiles }}")
+STATE = Path("{{ network_host_dns_evidence_state }}")
+KEY = "{{ network_host_dns_evidence_key }}"
+KNOWN_HOSTS = "{{ network_host_dns_evidence_known_hosts }}"
+REMOTE_USER = "{{ network_host_dns_evidence_remote_user }}"
+FAILED_RETRY_SECONDS = {{ network_host_dns_evidence_failed_retry_seconds }}
+SERVERS = {{ network_host_dns_evidence_servers | to_json }}
+NOW = int(time.time())
+EVIDENCE_VERSION = 2
+
+
+def load_json(path, default=None):
+    try:
+        value = json.loads(path.read_text())
+    except FileNotFoundError:
+        if default is not None:
+            return default
+        raise
+    if not isinstance(value, dict):
+        raise RuntimeError("Expected JSON object in " + str(path))
+    return value
+
+
+def save_atomic(path, payload):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix="." + path.name + ".")
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def due_for_dns(record, previous, now):
+    # DNS evidence is useful for device identity even when Nmap already found
+    # an OS family (for example Android -> Amazon Fire TV).  Run once after
+    # each completed deep profile rather than only when OS identification is
+    # unresolved.  Stable MAC correlation in the consumer prevents stale IP
+    # evidence from being attached to a different current device.
+    if record.get("status") != "complete":
+        return False
+
+    profiled_at = int(record.get("profiled_at", 0) or 0)
+    if profiled_at <= 0:
+        return False
+
+    if not isinstance(previous, dict):
+        return True
+
+    if int(previous.get("evidence_version", 0) or 0) < EVIDENCE_VERSION:
+        return True
+
+    checked_at = int(previous.get("checked_at", 0) or 0)
+    if checked_at >= profiled_at and not previous.get("error"):
+        return False
+
+    last_attempt = int(previous.get("last_attempt", 0) or 0)
+    if previous.get("error") and now - last_attempt < FAILED_RETRY_SECONDS:
+        return False
+
+    return True
+
+
+def query_server(server, ip, profiled_at):
+    command = [
+        "/usr/bin/ssh",
+        "-T",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=10",
+        "-o", "StrictHostKeyChecking=yes",
+        "-o", "UserKnownHostsFile=" + KNOWN_HOSTS,
+        "-i", KEY,
+        REMOTE_USER + "@" + server["address"],
+        "query", ip, str(profiled_at),
+    ]
+    result = subprocess.run(
+        command,
+        text=True,
+        stdout=subprocess.PIPE,
+        stderr=subprocess.PIPE,
+        timeout=30,
+        check=False,
+    )
+    if result.returncode != 0:
+        raise RuntimeError(
+            server["name"] + ": " + result.stderr.strip()[:500]
+        )
+
+    payload = json.loads(result.stdout)
+    if payload.get("ip") != ip:
+        raise RuntimeError(server["name"] + ": mismatched client IP")
+    if payload.get("server") != server["name"]:
+        raise RuntimeError(server["name"] + ": unexpected DNS source")
+
+    domains = payload.get("top_domains", [])
+    if not isinstance(domains, list) or len(domains) > 5:
+        raise RuntimeError(server["name"] + ": invalid bounded domain summary")
+
+    signals = payload.get("signals", [])
+    if not isinstance(signals, list) or len(signals) > 8:
+        raise RuntimeError(server["name"] + ": invalid bounded DNS signals")
+    clean_signals = []
+    for signal in signals:
+        if not isinstance(signal, dict):
+            raise RuntimeError(server["name"] + ": invalid DNS signal")
+        examples = signal.get("examples", [])
+        if not isinstance(examples, list) or len(examples) > 3:
+            raise RuntimeError(server["name"] + ": invalid DNS signal examples")
+        clean_signals.append({
+            "id": str(signal.get("id", ""))[:80],
+            "description": str(signal.get("description", ""))[:200],
+            "examples": [str(value)[:255] for value in examples],
+        })
+
+    return {
+        "server": server["name"],
+        "query_count": int(payload.get("query_count", 0)),
+        "top_domains": [str(value) for value in domains],
+        "signals": clean_signals,
+        "lookback_days": int(payload.get("lookback_days", 7)),
+        "observed_at": int(payload.get("observed_at", 0) or 0),
+        "window_start": int(payload.get("window_start", 0) or 0),
+        "window_end": int(payload.get("window_end", 0) or 0),
+    }
+
+
+def correlate(record, servers):
+    signals = {}
+    for server in servers:
+        for signal in server.get("signals", []):
+            signal_id = signal.get("id", "")
+            if signal_id:
+                signals.setdefault(signal_id, signal)
+
+    descriptions = [
+        signals[key].get("description", "")
+        for key in sorted(signals)
+        if signals[key].get("description")
+    ]
+
+    vendor = str(record.get("vendor", "")).lower()
+    tcp = record.get("profile", {}).get("tcp", {})
+    service_text = []
+    for port in tcp.get("ports", []) if isinstance(tcp, dict) else []:
+        service = port.get("service", {}) if isinstance(port, dict) else {}
+        if isinstance(service, dict):
+            service_text.extend([
+                str(service.get("name", "")),
+                str(service.get("product", "")),
+                str(service.get("version", "")),
+                str(service.get("extra_info", "")),
+            ])
+    service_blob = " ".join(service_text).lower()
+
+    device_hint = ""
+    confidence = ""
+    evidence = []
+
+    if "amazon_fire_tv" in signals:
+        evidence.append("DNS: Amazon Fire TV / Amazon Video / Alexa endpoints")
+        if "amazon" in vendor:
+            evidence.append("MAC vendor: Amazon")
+        if "firetv" in service_blob or "fire tv" in service_blob:
+            evidence.append("Nmap service: Amazon FireTV")
+        if len(evidence) >= 2:
+            device_hint = "Amazon Fire TV / Fire TV Stick"
+            confidence = "corroborated"
+        else:
+            confidence = "dns_indication"
+
+    return {
+        "device_hint": device_hint,
+        "dns_hint": "; ".join(descriptions),
+        "confidence": confidence,
+        "evidence": evidence[:5],
+        "signal_ids": sorted(signals),
+    }
+
+
+def refresh(profiles, state, now):
+    records = state.setdefault("devices", {})
+    refreshed = 0
+
+    for mac, record in sorted(profiles.items()):
+        if not isinstance(record, dict):
+            continue
+
+        previous = records.get(mac)
+        if not due_for_dns(record, previous, now):
+            continue
+
+        ip = str(record.get("profiled_ip") or record.get("last_ip") or "")
+        if not ip:
+            continue
+
+        entry = {
+            "ip": ip,
+            "profiled_at": int(record.get("profiled_at", 0) or 0),
+            "last_attempt": now,
+            "checked_at": 0,
+            "servers": [],
+            "error": "",
+            "evidence_version": EVIDENCE_VERSION,
+        }
+
+        try:
+            entry["servers"] = [
+                query_server(server, ip, entry["profiled_at"])
+                for server in SERVERS
+            ]
+            entry.update(correlate(record, entry["servers"]))
+            entry["checked_at"] = now
+        except Exception as exc:
+            entry["error"] = str(exc)
+
+        records[mac] = entry
+        refreshed += 1
+
+    state["schema_version"] = 3
+    state["last_run"] = now
+    return refreshed
+
+
+def main():
+    deep_state = load_json(PROFILES)
+    profiles = deep_state.get("profiles")
+    if not isinstance(profiles, dict):
+        raise RuntimeError("Deep-profile state lacks a profiles object")
+
+    state = load_json(STATE, default={"schema_version": 1, "devices": {}})
+    refreshed = refresh(profiles, state, NOW)
+    save_atomic(STATE, state)
+
+    print(json.dumps({
+        "event": "dns_evidence_refresh_complete",
+        "refreshed": refreshed,
+        "tracked": len(state.get("devices", {})),
+    }, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()

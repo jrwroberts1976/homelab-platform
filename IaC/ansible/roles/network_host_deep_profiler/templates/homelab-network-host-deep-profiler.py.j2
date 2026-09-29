@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import hashlib
 import json
 import os
 import subprocess
@@ -32,9 +33,22 @@ MAX_PROFILES_PER_RUN = (
     {{ network_host_deep_profiler_max_profiles_per_run }}
 )
 
+BASELINE_BACKLOG_ENABLED = bool(
+    {{ network_host_deep_profiler_enable_baseline_backlog | bool | int }}
+)
+
+BASELINE_BACKLOG_SPREAD_SECONDS = (
+    {{ network_host_deep_profiler_baseline_backlog_spread_seconds }}
+)
+
 UDP_PORTS = "{{ network_host_deep_profiler_udp_ports }}"
 
 SAFE_SCRIPTS = "{{ network_host_deep_profiler_scripts }}"
+
+# New-device-only bounded scan is an explicit opt-in; existing deployment stays legacy.
+SCAN_MODE = "{{ network_host_deep_profiler_scan_mode }}"
+if SCAN_MODE not in ("legacy", "targeted"):
+    raise RuntimeError("Invalid network profiler scan mode")
 
 NOW = int(time.time())
 
@@ -103,16 +117,45 @@ def ip_sort(value):
         return (999, 999, 999, 999)
 
 
-SCAN_COOLDOWN_SECONDS = 24 * 60 * 60
+INITIAL_RETRY_SECONDS = 24 * 60 * 60
+WEEKLY_RETRY_SECONDS = 7 * 24 * 60 * 60
 
 
-def scan_due(record, now, cooldown=SCAN_COOLDOWN_SECONDS):
+def baseline_backlog_due_at(mac, initialized_at, spread_seconds):
+    """Spread grandfathered baseline checks deterministically across a week."""
+    spread = max(1, int(spread_seconds))
+    digest = hashlib.sha256(normalise_mac(mac).encode("ascii")).hexdigest()
+    offset = int(digest[:8], 16) % spread
+    return int(initialized_at) + offset
+
+
+def scan_retry_seconds(record):
+    """New hosts retry after 24h once; backlog/incomplete hosts retry weekly."""
+    if record.get("baseline_backlog"):
+        return WEEKLY_RETRY_SECONDS
+
+    attempts = int(record.get("attempt_count", 0) or 0)
+    return INITIAL_RETRY_SECONDS if attempts <= 1 else WEEKLY_RETRY_SECONDS
+
+
+def scan_due(record, now, cooldown=None):
     last_attempt = int(record.get("last_attempt", 0) or 0)
 
     if last_attempt <= 0:
         return True
 
+    if cooldown is None:
+        cooldown = scan_retry_seconds(record)
+
     return now - last_attempt >= cooldown
+
+
+def tcp_has_os_evidence(tcp):
+    return bool(
+        isinstance(tcp, dict)
+        and isinstance(tcp.get("os_matches"), list)
+        and tcp.get("os_matches")
+    )
 
 
 def persist_profiles(state, profiles):
@@ -385,7 +428,21 @@ def parse_host(xml, expected_ip):
     }
 
 
+def targeted_tcp_arguments(ip):
+    return [
+        "-sS", "-sV", "--version-light", "-O", "--osscan-limit",
+        "--max-os-tries", "1", "-Pn", "-n", "-T2",
+        "--max-rate", "100", "--max-retries", "1",
+        "--host-timeout", "150s", "--top-ports", "100",
+        "-oX", "-", ip,
+    ]
+
+
 def deep_tcp_scan(ip):
+    if SCAN_MODE == "targeted":
+        return parse_host(
+            run_nmap(targeted_tcp_arguments(ip), timeout=210), ip
+        )
     xml = run_nmap([
         "-sS",
         "-sV",
@@ -527,6 +584,45 @@ def write_metrics(profiles):
 
 inventory = load_json(INVENTORY_FILE)
 
+
+def current_inventory_by_mac(entries):
+    """Choose one current inventory address per MAC.
+
+    The V1 inventory intentionally retains historical/offline IP records.
+    Deep-profile state is MAC-keyed, so allowing every retained IP to update
+    last_ip makes the final lexicographically sorted address win even when it
+    is stale. Prefer the freshest observation; when timestamps tie, prefer an
+    entry still marked online. Because entries are visited in IP order and
+    equal scores do not replace an existing choice, ties remain deterministic.
+    """
+    selected = {}
+
+    for ip in sorted(entries, key=ip_sort):
+        host = entries[ip]
+        mac = normalise_mac(host.get("mac", ""))
+
+        if not mac:
+            continue
+
+        score = (
+            int(host.get("last_seen", 0) or 0),
+            1 if host.get("online", False) else 0,
+        )
+
+        current = selected.get(mac)
+
+        if current is None or score > current["score"]:
+            selected[mac] = {
+                "ip": ip,
+                "host": host,
+                "score": score,
+            }
+
+    return selected
+
+
+current_inventory = current_inventory_by_mac(inventory)
+
 state = load_json(
     STATE_FILE,
     optional=True,
@@ -539,17 +635,10 @@ state = load_json(
 if state is None:
     profiles = {}
 
-    for ip in sorted(
-        inventory,
-        key=ip_sort,
-    ):
-        host = inventory[ip]
-        mac = normalise_mac(
-            host.get("mac", "")
-        )
-
-        if not mac:
-            continue
+    for mac in sorted(current_inventory):
+        current = current_inventory[mac]
+        ip = current["ip"]
+        host = current["host"]
 
         profiles[mac] = {
             "status": "baseline",
@@ -615,19 +704,13 @@ if not isinstance(profiles, dict):
     )
 
 
-# Reconcile the current V1 inventory into MAC-keyed state.
-for ip in sorted(
-    inventory,
-    key=ip_sort,
-):
-    host = inventory[ip]
-
-    mac = normalise_mac(
-        host.get("mac", "")
-    )
-
-    if not mac:
-        continue
+# Reconcile only the freshest/current V1 inventory address for each MAC.
+# Historical/offline IPs remain in inventory and profile history, but cannot
+# overwrite last_ip merely because they sort later.
+for mac in sorted(current_inventory):
+    current = current_inventory[mac]
+    ip = current["ip"]
+    host = current["host"]
 
     record = profiles.get(mac)
 
@@ -673,6 +756,23 @@ for ip in sorted(
     if host.get("vendor"):
         record["vendor"] = host["vendor"]
 
+    if (
+        BASELINE_BACKLOG_ENABLED
+        and record.get("status") == "baseline"
+    ):
+        backlog_started_at = int(
+            state.setdefault("baseline_backlog_started_at", NOW) or NOW
+        )
+        record["baseline_backlog"] = True
+        record.setdefault(
+            "backlog_due_at",
+            baseline_backlog_due_at(
+                mac,
+                backlog_started_at,
+                BASELINE_BACKLOG_SPREAD_SECONDS,
+            ),
+        )
+
 
 profiles_started = 0
 
@@ -680,7 +780,26 @@ pending = sorted(
     [
         (mac, record)
         for mac, record in profiles.items()
-        if record.get("status") in ("pending", "partial")
+        if (
+            # Only currently inventoried MACs can become scan targets.
+            # Historical profiles remain preserved but cannot be re-scanned.
+            mac in current_inventory
+            and (
+                record.get("status") in ("pending", "partial")
+                or (
+                    BASELINE_BACKLOG_ENABLED
+                    and record.get("status") == "baseline"
+                    and int(record.get("backlog_due_at", 0) or 0) <= NOW
+                )
+                or (
+                    # A completed identification is not "done forever".
+                    # Re-profile current hosts weekly so TCP ports, services,
+                    # versions and supporting OS evidence stay fresh.
+                    record.get("status") == "complete"
+                    and scan_due(record, NOW, WEEKLY_RETRY_SECONDS)
+                )
+            )
+        )
     ],
     key=lambda item: int(
         item[1].get(
@@ -766,7 +885,8 @@ for mac, record in pending:
 
     # Reuse TCP evidence only for a partial profile at the same IP.
     udp_only = (
-        record.get("status") == "partial"
+        SCAN_MODE == "legacy"
+        and record.get("status") == "partial"
         and isinstance(previous_profile, dict)
         and isinstance(previous_profile.get("tcp"), dict)
         and previous_profile.get("tcp_scanned_at") is not None
@@ -799,11 +919,14 @@ for mac, record in pending:
 
     udp_error = None
 
-    try:
-        udp = deep_udp_scan(ip)
-    except Exception as exc:
-        udp = None
-        udp_error = str(exc)
+    if SCAN_MODE == "targeted":
+        udp = {"os_matches": [], "ports": []}
+    else:
+        try:
+            udp = deep_udp_scan(ip)
+        except Exception as exc:
+            udp = None
+            udp_error = str(exc)
 
     # Evidence from a previous IP must not appear current.
     previous_ip = record.get("profiled_ip", "")
@@ -871,15 +994,28 @@ for mac, record in pending:
             previous_profile["tcp_scanned_at"]
         )
 
-    partial = bool(merged_profile["errors"])
+    missing_os = (
+        SCAN_MODE == "targeted"
+        and not tcp_has_os_evidence(tcp)
+    )
+    partial = bool(merged_profile["errors"]) or missing_os
+
+    if merged_profile["errors"].get("udp"):
+        last_error = "udp_scan: " + merged_profile["errors"]["udp"]
+    elif missing_os:
+        last_error = "os_evidence_missing"
+    else:
+        last_error = ""
 
     record.update({
         "status": "partial" if partial else "complete",
         "profiled_at": NOW,
         "profiled_ip": ip,
-        "last_error": (
-            "udp_scan: " + merged_profile["errors"]["udp"]
-            if partial else ""
+        "last_error": last_error,
+        "needs_os_identification": missing_os,
+        "next_retry_after": (
+            NOW + scan_retry_seconds(record)
+            if partial else 0
         ),
         "profile": merged_profile,
     })
@@ -906,7 +1042,8 @@ for mac, record in pending:
             "udp_interesting_ports": len(
                 merged_profile["udp"].get("ports", [])
             ),
-            "partial": bool(merged_profile["errors"]),
+            "partial": partial,
+            "needs_os_identification": missing_os,
         }),
         flush=True,
     )

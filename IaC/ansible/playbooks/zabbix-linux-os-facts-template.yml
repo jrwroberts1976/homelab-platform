@@ -1,0 +1,392 @@
+---
+- name: Ensure Homelab Linux OS Facts template exists and is linked
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+    zabbix_template_group_name: "Templates/Homelab"
+    zabbix_template_name: "Homelab Linux OS Facts"
+    zabbix_template_host: "Homelab Linux OS Facts"
+    zabbix_target_hosts: "{{ groups['zabbix_agents'] | default([]) | list }}"
+    zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+
+  pre_tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - zabbix_linux_os_facts_allow_deploy | default(false) | bool
+        fail_msg: >-
+          Zabbix Linux OS facts deployment is disabled by default.
+          Set zabbix_linux_os_facts_allow_deploy=true explicitly.
+
+    - name: Require runtime API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_api_token | length >= 20
+        fail_msg: >-
+          HOMELAB_ZABBIX_API_TOKEN must be supplied in the environment.
+          Never store the token in Git.
+
+    - name: Require expected target estate
+      ansible.builtin.assert:
+        that:
+          - zabbix_target_hosts | length > 0
+          - "'admin-01' in zabbix_target_hosts"
+          - "'monitor-01' in zabbix_target_hosts"
+          - "'zabbix-01' in zabbix_target_hosts"
+        fail_msg: >-
+          Refusing deployment because the zabbix_agents inventory group
+          does not match the expected managed estate.
+
+  tasks:
+    - name: Read existing Homelab template group
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.get
+          params:
+            output:
+              - groupid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_template_group_name }}"
+          id: 1
+        return_content: true
+      register: zabbix_template_group_get
+      no_log: true
+
+    - name: Validate template group lookup response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_group_get.json is defined
+          - zabbix_template_group_get.json.error is not defined
+          - zabbix_template_group_get.json.result is defined
+        fail_msg: >-
+          Zabbix API templategroup.get failed:
+          {{ zabbix_template_group_get.json.error | default('missing result') }}
+
+    - name: Create Homelab template group when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.create
+          params:
+            name: "{{ zabbix_template_group_name }}"
+          id: 2
+        return_content: true
+      register: zabbix_template_group_create
+      when: (zabbix_template_group_get.json.result | default([])) | length == 0
+      changed_when: true
+      no_log: true
+
+    - name: Validate template group create response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_group_create.json is defined
+          - zabbix_template_group_create.json.error is not defined
+          - zabbix_template_group_create.json.result is defined
+          - zabbix_template_group_create.json.result.groupids | length == 1
+        fail_msg: >-
+          Zabbix API templategroup.create failed:
+          {{ zabbix_template_group_create.json.error | default('missing result') }}
+      when: (zabbix_template_group_get.json.result | default([])) | length == 0
+
+    - name: Set existing template group ID
+      ansible.builtin.set_fact:
+        zabbix_template_group_id: "{{ zabbix_template_group_get.json.result[0].groupid }}"
+      when: (zabbix_template_group_get.json.result | default([])) | length > 0
+
+    - name: Set newly created template group ID
+      ansible.builtin.set_fact:
+        zabbix_template_group_id: "{{ zabbix_template_group_create.json.result.groupids[0] }}"
+      when: (zabbix_template_group_get.json.result | default([])) | length == 0
+
+    - name: Read existing Homelab Linux OS Facts template
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.get
+          params:
+            output:
+              - templateid
+              - host
+              - name
+            filter:
+              host:
+                - "{{ zabbix_template_host }}"
+          id: 3
+        return_content: true
+      register: zabbix_template_get
+      no_log: true
+
+    - name: Create Homelab Linux OS Facts template when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.create
+          params:
+            host: "{{ zabbix_template_host }}"
+            name: "{{ zabbix_template_name }}"
+            groups:
+              - groupid: "{{ zabbix_template_group_id }}"
+          id: 4
+        return_content: true
+      register: zabbix_template_create
+      when: zabbix_template_get.json.result | length == 0
+      changed_when: true
+      no_log: true
+
+    - name: Validate template lookup response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_get.json is defined
+          - zabbix_template_get.json.error is not defined
+          - zabbix_template_get.json.result is defined
+        fail_msg: >-
+          Zabbix API template.get failed:
+          {{ zabbix_template_get.json.error | default('missing result') }}
+
+    - name: Validate template create response
+      ansible.builtin.assert:
+        that:
+          - zabbix_template_create.json is defined
+          - zabbix_template_create.json.error is not defined
+          - zabbix_template_create.json.result is defined
+          - zabbix_template_create.json.result.templateids | length == 1
+        fail_msg: >-
+          Zabbix API template.create failed:
+          {{ zabbix_template_create.json.error | default('missing result') }}
+      when: (zabbix_template_get.json.result | default([])) | length == 0
+
+    - name: Set existing template ID
+      ansible.builtin.set_fact:
+        zabbix_template_id: "{{ zabbix_template_get.json.result[0].templateid }}"
+      when: (zabbix_template_get.json.result | default([])) | length > 0
+
+    - name: Set newly created template ID
+      ansible.builtin.set_fact:
+        zabbix_template_id: "{{ zabbix_template_create.json.result.templateids[0] }}"
+      when: (zabbix_template_get.json.result | default([])) | length == 0
+
+    - name: Read existing OS facts items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ zabbix_template_id }}"
+            output:
+              - itemid
+              - key_
+          id: 5
+        return_content: true
+      register: zabbix_os_items_get
+      no_log: true
+
+    - name: Create friendly operating system name item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Operating system name"
+            key_: "system.sw.os[name]"
+            hostid: "{{ zabbix_template_id }}"
+            type: 7
+            value_type: 1
+            delay: "1h"
+          id: 6
+        return_content: true
+      when: >-
+        'system.sw.os[name]' not in
+        (zabbix_os_items_get.json.result | map(attribute='key_') | list)
+      changed_when: true
+      no_log: true
+
+    - name: Create structured operating system details item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Operating system details"
+            key_: "system.sw.os.get"
+            hostid: "{{ zabbix_template_id }}"
+            type: 7
+            value_type: 4
+            delay: "1h"
+          id: 7
+        return_content: true
+      when: >-
+        'system.sw.os.get' not in
+        (zabbix_os_items_get.json.result | map(attribute='key_') | list)
+      changed_when: true
+      no_log: true
+
+    - name: Read target hosts and current template links
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+            selectParentTemplates:
+              - templateid
+              - name
+          id: 8
+        return_content: true
+      register: zabbix_target_hosts_get
+      no_log: true
+
+    - name: Require all inventory targets to exist in Zabbix
+      ansible.builtin.assert:
+        that:
+          - zabbix_target_hosts_get.json.result | length == zabbix_target_hosts | length
+        fail_msg: >-
+          Refusing to link the template because not every zabbix_agents
+          inventory host was returned by the Zabbix API.
+
+    - name: Build native Zabbix host link list
+      ansible.builtin.set_fact:
+        zabbix_template_link_hosts: >-
+          {{
+            (zabbix_template_link_hosts | default([]))
+            + [{'hostid': item.hostid}]
+          }}
+      loop: "{{ zabbix_target_hosts_get.json.result }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Link OS facts template to all managed Zabbix hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.massadd
+          params:
+            hosts: "{{ zabbix_template_link_hosts }}"
+            templates:
+              - templateid: "{{ zabbix_template_id }}"
+          id: 9
+        return_content: true
+      register: zabbix_host_massadd
+      changed_when: true
+      no_log: true
+
+    - name: Validate host template link response
+      ansible.builtin.assert:
+        that:
+          - zabbix_host_massadd.json is defined
+          - zabbix_host_massadd.json.error is not defined
+          - zabbix_host_massadd.json.result is defined
+          - zabbix_host_massadd.json.result.hostids | length == zabbix_target_hosts | length
+        fail_msg: >-
+          Zabbix API host.massadd failed:
+          {{ zabbix_host_massadd.json.error | default('missing result') }}
+
+    - name: Verify template links
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+            selectParentTemplates:
+              - templateid
+              - name
+          id: 10
+        return_content: true
+      register: zabbix_verify_links
+      no_log: true
+
+    - name: Assert template is linked to every managed Zabbix host
+      ansible.builtin.assert:
+        that:
+          - >-
+            zabbix_template_id in
+            (item.parentTemplates | default([]) | map(attribute='templateid') | list)
+        fail_msg: >-
+          Homelab Linux OS Facts template is not linked to {{ item.host }}.
+      loop: "{{ zabbix_verify_links.json.result }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Report deployment summary
+      ansible.builtin.debug:
+        msg:
+          template: "{{ zabbix_template_name }}"
+          template_id: "{{ zabbix_template_id }}"
+          target_hosts: "{{ zabbix_target_hosts | sort }}"
+          items:
+            - "system.sw.os[name]"
+            - "system.sw.os.get"

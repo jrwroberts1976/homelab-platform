@@ -40,6 +40,7 @@ class WorkerRecoveryTests(unittest.TestCase):
 
         source = TEMPLATE.read_text()
         replacements = {
+            "{{ network_host_deep_profiler_scan_mode }}": "legacy",
             "{{ network_host_deep_profiler_inventory }}":
                 str(self.inventory),
             "{{ network_host_deep_profiler_state }}":
@@ -52,6 +53,10 @@ class WorkerRecoveryTests(unittest.TestCase):
                 "3600",
             "{{ network_host_deep_profiler_max_profiles_per_run }}":
                 "1",
+            "{{ network_host_deep_profiler_enable_baseline_backlog | bool | int }}":
+                "0",
+            "{{ network_host_deep_profiler_baseline_backlog_spread_seconds }}":
+                "604800",
             "{{ network_host_deep_profiler_udp_ports }}":
                 "53",
             "{{ network_host_deep_profiler_scripts }}":
@@ -131,10 +136,11 @@ class WorkerRecoveryTests(unittest.TestCase):
 
         return profile
 
-    def run_worker(self, tcp=None, udp=None, presence=True):
+    def run_worker(self, tcp=None, udp=None, presence=True, mode="legacy"):
         namespace = {"__name__": "__main__"}
         exec(self.definitions, namespace)
         namespace["NOW"] = self.now
+        namespace["SCAN_MODE"] = mode
 
         calls = {"presence": 0, "tcp": 0, "udp": 0}
 
@@ -321,8 +327,15 @@ class WorkerRecoveryTests(unittest.TestCase):
             ip = "192.168.2." + str(243 + index)
             self.write_inventory(ip)
 
-            # Each successive change occurs after the scan cooldown.
-            self.now += 90000
+            # First retry is due after 24 hours. Once the profile has
+            # already been retried, incomplete evidence moves to the weekly
+            # cadence. This test is about retaining IP-change history, so
+            # advance past whichever cooldown applies.
+            state = json.loads(self.state.read_text())
+            attempts = int(
+                state["profiles"][MAC].get("attempt_count", 0) or 0
+            )
+            self.now += 90000 if attempts <= 1 else 604900
             self.write_inventory(ip)
 
             saved, calls, events = self.run_worker()
@@ -355,6 +368,44 @@ class WorkerRecoveryTests(unittest.TestCase):
                 "192.168.2.247",
             ],
         )
+
+    def test_targeted_mode_retries_missing_os_after_24h_then_weekly(self):
+        self.write_inventory()
+        self.write_state(status="pending", ip=NEW_IP)
+
+        state = json.loads(self.state.read_text())
+        state["profiles"][MAC]["attempt_count"] = 0
+        state["profiles"][MAC]["last_attempt"] = self.old_time
+        self.state.write_text(json.dumps(state))
+
+        saved, calls, events = self.run_worker(mode="targeted")
+        self.assertEqual(calls, {"presence": 1, "tcp": 1, "udp": 0})
+        record = saved["profiles"][MAC]
+        self.assertEqual(record["status"], "partial")
+        self.assertEqual(record["last_error"], "os_evidence_missing")
+        self.assertTrue(record["needs_os_identification"])
+        self.assertEqual(record["next_retry_after"], self.now + 86400)
+        self.assertEqual(record["profile"]["tcp"]["ports"][0]["port"], 443)
+        self.assertEqual(record["profile"]["udp"]["ports"], [])
+
+        again, repeated_calls, _ = self.run_worker(mode="targeted")
+        self.assertEqual(repeated_calls, {"presence": 0, "tcp": 0, "udp": 0})
+        self.assertEqual(again["profiles"][MAC]["attempt_count"], 1)
+
+        self.now += 86400
+        self.write_inventory()
+        weekly, retry_calls, _ = self.run_worker(mode="targeted")
+        self.assertEqual(retry_calls, {"presence": 1, "tcp": 1, "udp": 0})
+        record = weekly["profiles"][MAC]
+        self.assertEqual(record["status"], "partial")
+        self.assertEqual(record["attempt_count"], 2)
+        self.assertEqual(record["next_retry_after"], self.now + 604800)
+
+        self.now += 86400
+        self.write_inventory()
+        too_soon, weekly_calls, _ = self.run_worker(mode="targeted")
+        self.assertEqual(weekly_calls, {"presence": 0, "tcp": 0, "udp": 0})
+        self.assertEqual(too_soon["profiles"][MAC]["attempt_count"], 2)
 
     def test_presence_failure_does_not_scan(self):
         self.write_inventory()

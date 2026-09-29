@@ -1,0 +1,313 @@
+---
+# DRAFT Gate 3d rollback for a completed five-file transfer. Explicit approval
+# required. If alerts were sent after activation, stop target but FAIL CLOSED
+# before source restart until a separately reviewed registry reconciliation
+# prevents duplicate first-seen notifications. No automatic overwrite of MACs.
+- name: Validate frozen source recovery record without restarting anything
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_timer_names:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_service_names:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+  tasks:
+    - name: Require separately authorised rollback and exact freeze identity
+      ansible.builtin.assert:
+        that:
+          - cutover_rollback_approved | default(false) | bool
+          - (cutover_rollback_phrase | default('')) == 'ROLLBACK_MONITOR01_TO_PROXMOX2'
+          - cutover_change_id is defined
+          - cutover_change_id is match('^[A-Za-z0-9_-]{4,64}$')
+          - source_freeze_dir is defined
+          - source_freeze_dir is match('^/var/backups/homelab-network-migration/freeze-[0-9]{8}T[0-9]{6}$')
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+
+    - name: Privately load reviewed original timer states and frozen five-file hashes
+      ansible.builtin.slurp:
+        src: "{{ source_freeze_dir }}/{{ item }}"
+      loop:
+        - rollback-timers.json
+        - frozen-source-sha256.json
+      register: rollback_source_manifests
+      no_log: true
+
+    - name: Retain rollback metadata without exposing source devices
+      ansible.builtin.set_fact:
+        previous_source: "{{ rollback_source_manifests.results[0].content | b64decode | from_json }}"
+        previous_source_sha: "{{ rollback_source_manifests.results[1].content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require exact prior change and four recorded timer states
+      ansible.builtin.assert:
+        that:
+          - previous_source.schema_version | int == 1
+          - previous_source.source_host == 'Proxmox-2'
+          - previous_source.change_id == cutover_change_id
+          - previous_source.timers.keys() | list | sort == source_timer_names | sort
+          - previous_source.unit_sha256.keys() | list | sort == (source_timer_names + source_service_names) | sort
+          - previous_source_sha['/var/lib/homelab-network-hosts/alerted-macs.json'] is defined
+
+    - name: Check all original network unit files still match frozen rollback metadata
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_timer_names + source_service_names }}"
+      register: rollback_unit_hashes
+      no_log: true
+
+    - name: Refuse changed original systemd units pending investigation
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - item.stat.checksum == previous_source.unit_sha256[item.item]
+      loop: "{{ rollback_unit_hashes.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Refuse rollback if source discovery has already restarted
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timer_names + source_service_names }}"
+      register: rollback_source_initial_state
+      changed_when: false
+      failed_when: false
+
+    - name: Require original source inactive before stopping new owner
+      ansible.builtin.assert:
+        that:
+          - rollback_source_initial_state.results | map(attribute='stdout') | unique | list == ['inactive']
+
+- name: Stop and preserve monitor-01 discovery before source can resume
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    target_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+    target_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+      - homelab-proxmox-guest-refresh.service
+    alert_file: /var/lib/homelab-network-hosts/alerted-macs.json
+    marker: /etc/homelab-network-hosts/network-discovery-cutover-approved
+    rollback_dir: "/var/backups/homelab-network-migration/rollback-{{ cutover_change_id }}"
+  tasks:
+    - name: Require target host and same authorised rollback change
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - cutover_rollback_approved | default(false) | bool
+          - (cutover_rollback_phrase | default('')) == 'ROLLBACK_MONITOR01_TO_PROXMOX2'
+          - hostvars['Proxmox-2'].previous_source.change_id == cutover_change_id
+
+    - name: Refuse an existing or partially attempted rollback
+      ansible.builtin.stat:
+        path: "{{ rollback_dir }}"
+        follow: false
+      register: existing_rollback
+
+    - name: Never overwrite earlier rollback evidence
+      ansible.builtin.assert:
+        that:
+          - not existing_rollback.stat.exists
+
+    - name: Stop and disable all five destination network timers first
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+      loop: "{{ target_timers }}"
+
+    - name: Wait for target jobs and all attached notifier post-hooks to finish
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ target_services }}"
+      register: draining_target
+      until: draining_target.stdout == 'inactive'
+      retries: 60
+      delay: 3
+      changed_when: false
+      failed_when: false
+
+    - name: Require target services fully drained before restoring old owner
+      ansible.builtin.assert:
+        that:
+          - item.stdout == 'inactive'
+        fail_msg: In-flight target work remains. Do not resume Proxmox-2.
+      loop: "{{ draining_target.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Check no detached target first-seen notifier survives
+      ansible.builtin.command:
+        argv: [/usr/bin/pgrep, -f, /usr/local/sbin/homelab-network-device-email-alert]
+      register: rollback_notifier_process
+      changed_when: false
+      failed_when: false
+
+    - name: Require no still-running notifier
+      ansible.builtin.assert:
+        that:
+          - rollback_notifier_process.rc == 1
+
+    - name: Create root-only target rollback evidence directory
+      ansible.builtin.file:
+        path: "{{ rollback_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve complete final target registry after worker drain
+      ansible.builtin.copy:
+        src: "{{ alert_file }}"
+        dest: "{{ rollback_dir }}/alerted-macs.json"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      no_log: true
+
+    - name: Record current target alert registry digest without revealing MACs
+      ansible.builtin.stat:
+        path: "{{ rollback_dir }}/alerted-macs.json"
+        follow: false
+        checksum_algorithm: sha256
+      register: rollback_target_registry
+      no_log: true
+
+    - name: Refuse source notifier restart if any first-seen history diverged after transfer
+      ansible.builtin.assert:
+        that:
+          - rollback_target_registry.stat.isreg | default(false)
+          - rollback_target_registry.stat.mode == '0600'
+          - rollback_target_registry.stat.checksum == hostvars['Proxmox-2'].previous_source_sha['/var/lib/homelab-network-hosts/alerted-macs.json']
+        fail_msg: >-
+          Source remains STOPPED. Target alert history changed after transfer.
+          Reconcile complete delivered notification state with source under
+          a separately reviewed procedure before restarting the source notifier.
+
+    - name: Require all five new timers remain inactive before old owner restoration
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ target_timers + target_services }}"
+      register: target_verified_off
+      changed_when: false
+      failed_when: false
+
+    - name: Require destination fully stopped before releasing source
+      ansible.builtin.assert:
+        that:
+          - target_verified_off.results | map(attribute='stdout') | unique | list == ['inactive']
+
+    - name: Remove target enrichment approval marker only during reviewed rollback
+      ansible.builtin.file:
+        path: "{{ marker }}"
+        state: absent
+
+    - name: Confirm marker removed and rollback remains inactive
+      ansible.builtin.stat:
+        path: "{{ marker }}"
+        follow: false
+      register: removed_marker
+
+    - name: Refuse simultaneous target and source ownership
+      ansible.builtin.assert:
+        that:
+          - not removed_marker.stat.exists
+
+- name: Restore exact original Proxmox-2 schedule after target is safely stopped
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+  tasks:
+    - name: Require proven target drain and unchanged complete registry from previous play
+      ansible.builtin.assert:
+        that:
+          - hostvars['monitor-01'].target_verified_off is defined
+          - hostvars['monitor-01'].removed_marker.stat.exists == false
+          - hostvars['monitor-01'].rollback_target_registry.stat.checksum == previous_source_sha['/var/lib/homelab-network-hosts/alerted-macs.json']
+          - previous_source.change_id == cutover_change_id
+
+    - name: Confirm all five target discovery timers remain disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      delegate_to: monitor-01
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-proxmox-guest-refresh.timer
+      register: target_still_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Require no active or enabled destination ownership
+      ansible.builtin.assert:
+        that:
+          - target_still_disabled.results | map(attribute='stdout') | unique | list == ['disabled']
+
+    - name: Restore only timers originally enabled and active at freeze
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop: "{{ source_timers }}"
+      when:
+        - previous_source.timers[item] == 'enabled'
+        - previous_source.timer_activity[item] == 'active'
+
+    - name: Verify originally disabled source timers remain disabled and inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: final_source_enablement
+      changed_when: false
+      failed_when: false
+
+    - name: Require exact pre-cutover timer enablement recovered
+      ansible.builtin.assert:
+        that:
+          - item.stdout == previous_source.timers[item.item]
+        fail_msg: Rollback schedule diverged from recorded pre-cutover state.
+      loop: "{{ final_source_enablement.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Report rollback only after source state matches its recorded pre-cutover schedule
+      ansible.builtin.debug:
+        msg:
+          - "Rollback schedule restored to Proxmox-2; all monitor-01 workers stopped."
+          - "Complete alert registry preserved and byte-identical: no unreviewed re-seeding."
+          - "HOLD: confirm source collector/notifier output, Grafana continuity, and preserved target recovery evidence."

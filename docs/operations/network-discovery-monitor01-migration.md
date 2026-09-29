@@ -1,16 +1,9 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
-# Proposed: make monitor-01 the sole network-discovery and OS-investigation host
+# monitor-01 network-discovery migration — production cutover complete
 
-**Status as of 26 September 2026: Gate 1 preflight passed on both hosts;
-Gate 2 staged and verified on monitor-01 with matching SHA-256 for all
-three JSON files and eight recovered OS matches. The production collector
-and enricher still run on Proxmox-2; monitor-01 scanning remains disabled.**
-The authoritative present-tense inventory remains
-[`docs/architecture/CURRENT-STATE.md`](../architecture/CURRENT-STATE.md)
-until the live handover has been verified. Current collector and saved
-deep-profile data are still on Proxmox-2. Grafana, Prometheus, OS
-correlation and generated individual host dashboards already run on
-monitor-01. The goal is to make **monitor-01** own the entire pipeline.
+**Current status, 27 September 2026:** approved Gate 3 source freeze, protected final transfer and monitor-01 activation all completed successfully. The former Proxmox-2 collector, enricher, OS publisher and deep-profiler timers are disabled/inactive. monitor-01 owns the active collector, enricher, OS publisher, Proxmox guest refresh and first-seen notifier; its deep-profiler remains disabled. The monitor-01 collector and all three other active worker services reported successful executions. All 49 historical MAC alert entries survived unchanged, one new alerted device was recorded and one `network_device_alert_sent` event appeared. Prometheus's network-host card metrics each returned 49 fresh device series (newest sample age 0 seconds), and Prometheus/Grafana/Loki health endpoints passed. The one relay delivery has not been correlated by SMTP message ID; the individual Grafana dashboard visual audit and whole-estate Gate 4 audit remain open.
+
+The [canonical current state](../architecture/CURRENT-STATE.md) contains the authoritative post-cutover record. This page retains earlier Gate 1/2 material as historical staging evidence rather than current ownership instructions. The freeze is retained at `/var/backups/homelab-network-migration/freeze-20260927T111141`; the production change ID is `GATE3B_20260927_01`. `monitor-01` remains VM202 hosted on Proxmox-2: the discovery workload moved off the hypervisor OS, not off the virtualisation cluster.
 
 ## Target architecture
 

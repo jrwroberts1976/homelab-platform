@@ -1,0 +1,94 @@
+---
+# Gate 4 read-only installed-state evidence. Writes JSON files ONLY on admin-01
+# in the operator-provided private directory. No changes to target machines.
+# Does not read credentials, application databases, file bodies or SSH keys.
+- name: Collect host-by-host deployed-state evidence for documentation comparison
+  hosts: all
+  become: true
+  gather_facts: true
+  ignore_unreachable: true
+  vars:
+    output_root: "{{ audit_output_dir | default('') }}"
+  tasks:
+    - name: Require explicit private output path for this run
+      ansible.builtin.assert:
+        that:
+          - output_root is match('^/var/tmp/homelab-postcutover-audit-[0-9]{8}T[0-9]{6}[+][0-9]{4}$')
+        fail_msg: Supply an existing private scan output directory.
+      delegate_to: localhost
+      become: false
+
+    - name: Inspect listening TCP and UDP ports without altering firewall
+      ansible.builtin.command:
+        argv: [/usr/bin/ss, -H, -lntup]
+      register: audit_listeners
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect enabled systemd unit files
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, list-unit-files, --no-pager, --no-legend, --plain]
+      register: audit_unit_files
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect running and failed systemd services
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, list-units, --type=service, --all, --no-pager, --no-legend, --plain]
+      register: audit_services
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect installed Debian packages and versions
+      ansible.builtin.command:
+        argv: [/usr/bin/dpkg-query, -W, "-f=${binary:Package} ${Version}\n"]
+      register: audit_packages
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect running Docker containers where Docker exists
+      ansible.builtin.command:
+        argv: [/usr/bin/docker, container, ls, --no-trunc, --format, "table {{ '{{' }}.Names{{ '}}' }}\\t{{ '{{' }}.Image{{ '}}' }}\\t{{ '{{' }}.Ports{{ '}}' }}"]
+      register: audit_docker
+      changed_when: false
+      failed_when: false
+
+    - name: Ensure local report directory exists with restricted permissions
+      ansible.builtin.file:
+        path: "{{ output_root }}/managed-hosts"
+        state: directory
+        mode: '0700'
+      become: false
+      delegate_to: localhost
+      run_once: true
+
+    - name: Preserve collected evidence privately on Ansible controller
+      ansible.builtin.copy:
+        dest: "{{ output_root }}/managed-hosts/{{ inventory_hostname }}.json"
+        mode: '0600'
+        content: >-
+          {{ {
+             'inventory_hostname': inventory_hostname,
+             'ansible_host': ansible_host | default(inventory_hostname),
+             'observed_hostname': ansible_facts.hostname | default('unknown'),
+             'distribution': ansible_facts.distribution | default('unknown'),
+             'distribution_version': ansible_facts.distribution_version | default('unknown'),
+             'kernel': ansible_facts.kernel | default('unknown'),
+             'interfaces': ansible_facts.interfaces | default([]),
+             'default_ipv4': ansible_facts.default_ipv4 | default({}),
+             'listeners': audit_listeners.stdout_lines | default([]),
+             'unit_files': audit_unit_files.stdout_lines | default([]),
+             'services': audit_services.stdout_lines | default([]),
+             'packages': audit_packages.stdout_lines | default([]),
+             'docker_containers': audit_docker.stdout_lines | default([]),
+             'probe_return_codes': {
+                'ss': audit_listeners.rc | default(-1),
+                'systemd_unit_files': audit_unit_files.rc | default(-1),
+                'systemd_services': audit_services.rc | default(-1),
+                'packages': audit_packages.rc | default(-1),
+                'docker': audit_docker.rc | default(-1)
+             }
+          } | to_nice_json }}
+      become: false
+      delegate_to: localhost
+      no_log: true

@@ -1,0 +1,223 @@
+---
+- name: Deploy Zabbix-backed network inventory facts to Grafana pipeline
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+    zabbix_inventory_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+    exporter_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/network-device-inventory-exporter.py"
+    dashboard_generator_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/network-host-dashboard-generator.py"
+    dashboard_template_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/host-profile-template.json"
+    production_dashboard_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
+    inventory_metric_file: /var/lib/prometheus/node-exporter/homelab_network_devices.prom
+
+  tasks:
+    - name: Require runtime read-only Zabbix API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_inventory_token | length >= 20
+        fail_msg: >-
+          Export HOMELAB_ZABBIX_API_TOKEN with the dedicated read-only
+          network inventory token before running this playbook.
+      no_log: true
+
+    - name: Verify token can read Zabbix hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_inventory_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            limit: 1
+          id: 1
+        return_content: true
+        status_code: 200
+      register: zabbix_host_read
+      failed_when: >-
+        zabbix_host_read.status != 200
+        or zabbix_host_read.json.error is defined
+        or (zabbix_host_read.json.result | default([]) | length) < 1
+      changed_when: false
+      no_log: true
+
+    - name: Verify token can read OS fact items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_inventory_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            output:
+              - itemid
+              - hostid
+              - key_
+              - lastvalue
+              - lastclock
+            filter:
+              key_:
+                - system.sw.os[name]
+                - system.sw.os.get
+                - system.sw.arch
+          id: 1
+        return_content: true
+        status_code: 200
+      register: zabbix_item_read
+      failed_when: >-
+        zabbix_item_read.status != 200
+        or zabbix_item_read.json.error is defined
+        or (zabbix_item_read.json.result | default([]) | length) < 30
+      changed_when: false
+      no_log: true
+
+    - name: Ensure protected homelab configuration directory exists
+      ansible.builtin.file:
+        path: /etc/homelab
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install protected Zabbix network inventory token
+      ansible.builtin.copy:
+        content: "{{ zabbix_inventory_token }}\n"
+        dest: /etc/homelab/zabbix-network-inventory.token
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Install Zabbix-aware network inventory exporter
+      ansible.builtin.copy:
+        src: "{{ exporter_source }}"
+        dest: /usr/local/sbin/homelab-network-device-inventory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install updated Grafana host dashboard template
+      ansible.builtin.copy:
+        src: "{{ dashboard_template_source }}"
+        dest: /etc/homelab/network-host-template.json
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install updated production Hosts dashboard
+      ansible.builtin.copy:
+        src: "{{ production_dashboard_source }}"
+        dest: /opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install updated host dashboard generator
+      ansible.builtin.copy:
+        src: "{{ dashboard_generator_source }}"
+        dest: /usr/local/sbin/homelab-network-host-dashboards
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Validate exporter Python syntax
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - py_compile
+          - /usr/local/sbin/homelab-network-device-inventory
+      changed_when: false
+
+    - name: Validate dashboard generator Python syntax
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - py_compile
+          - /usr/local/sbin/homelab-network-host-dashboards
+      changed_when: false
+
+    - name: Publish Zabbix-backed consolidated inventory
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - /usr/local/sbin/homelab-network-device-inventory
+      register: inventory_publish
+      changed_when: false
+
+    - name: Count authoritative OS inventory series
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -c
+          - 'os_evidence="authoritative"'
+          - "{{ inventory_metric_file }}"
+      register: authoritative_os_count
+      changed_when: false
+      failed_when: (authoritative_os_count.stdout | int) < 15
+
+    - name: Confirm architecture labels are published
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - -m
+          - "1"
+          - 'architecture="(aarch64|x86_64)"'
+          - "{{ inventory_metric_file }}"
+      changed_when: false
+
+    - name: Confirm kernel labels are published
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -E
+          - -m
+          - "1"
+          - 'kernel="[^"]+"'
+          - "{{ inventory_metric_file }}"
+      changed_when: false
+
+    - name: Wait for Prometheus to scrape authoritative inventory
+      ansible.builtin.uri:
+        url: >-
+          http://127.0.0.1:9090/api/v1/query?query=count%28homelab_network_device_card_info%7Bos_evidence%3D%22authoritative%22%7D%29
+        status_code: 200
+        return_content: true
+      register: prometheus_authoritative
+      until:
+        - prometheus_authoritative.json.status == "success"
+        - prometheus_authoritative.json.data.result | length == 1
+        - (prometheus_authoritative.json.data.result[0].value[1] | float) >= 15
+      retries: 20
+      delay: 5
+      changed_when: false
+
+    - name: Regenerate per-host Grafana dashboards
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - /usr/local/sbin/homelab-network-host-dashboards
+      register: dashboards_generated
+      changed_when: "'changed=0' not in dashboards_generated.stdout"
+
+    - name: Show Zabbix-backed inventory result
+      ansible.builtin.debug:
+        msg:
+          - "{{ inventory_publish.stdout }}"
+          - "Authoritative OS series: {{ authoritative_os_count.stdout }}"
+          - "{{ dashboards_generated.stdout }}"

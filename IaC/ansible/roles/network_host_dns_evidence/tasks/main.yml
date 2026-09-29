@@ -1,0 +1,156 @@
+---
+- name: Require supported DNS evidence hosts only
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == 'monitor-01' or inventory_hostname in groups['dns_resolvers']
+    fail_msg: "DNS evidence role is limited to monitor-01 and dns_resolvers."
+
+- name: Create monitor DNS evidence configuration directory
+  ansible.builtin.file:
+    path: /etc/homelab-network-hosts
+    state: directory
+    owner: root
+    group: root
+    mode: '0700'
+  when: inventory_hostname == 'monitor-01'
+
+- name: Generate dedicated monitor-to-DNS evidence key
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh-keygen
+      - -q
+      - -t
+      - ed25519
+      - -N
+      - ''
+      - -f
+      - "{{ network_host_dns_evidence_key }}"
+      - -C
+      - homelab-dns-evidence
+  args:
+    creates: "{{ network_host_dns_evidence_key }}"
+  when: inventory_hostname == 'monitor-01'
+
+- name: Lock down dedicated DNS evidence private key
+  ansible.builtin.file:
+    path: "{{ network_host_dns_evidence_key }}"
+    owner: root
+    group: root
+    mode: '0600'
+  when: inventory_hostname == 'monitor-01'
+
+- name: Read dedicated DNS evidence public key
+  ansible.builtin.slurp:
+    src: "{{ network_host_dns_evidence_key }}.pub"
+  register: dns_evidence_public_key_raw
+  when: inventory_hostname == 'monitor-01'
+  no_log: true
+
+- name: Publish dedicated DNS evidence public key as a play fact
+  ansible.builtin.set_fact:
+    dns_evidence_public_key: "{{ dns_evidence_public_key_raw.content | b64decode | trim }}"
+  when: inventory_hostname == 'monitor-01'
+  no_log: true
+
+- name: Create restricted DNS evidence account
+  ansible.builtin.user:
+    name: "{{ network_host_dns_evidence_remote_user }}"
+    system: true
+    create_home: true
+    home: /var/lib/homelab-dns-evidence
+    shell: /bin/sh
+    groups: pihole
+    append: true
+    password_lock: true
+  when: inventory_hostname in groups['dns_resolvers']
+
+- name: Install restricted local Pi-hole query command
+  ansible.builtin.template:
+    src: homelab-dns-evidence-query.py.j2
+    dest: "{{ network_host_dns_evidence_remote_script }}"
+    owner: root
+    group: root
+    mode: '0755'
+  when: inventory_hostname in groups['dns_resolvers']
+
+- name: Create restricted DNS evidence SSH directory
+  ansible.builtin.file:
+    path: /var/lib/homelab-dns-evidence/.ssh
+    state: directory
+    owner: "{{ network_host_dns_evidence_remote_user }}"
+    group: "{{ network_host_dns_evidence_remote_user }}"
+    mode: '0700'
+  when: inventory_hostname in groups['dns_resolvers']
+
+- name: Install monitor forced-command key on each resolver
+  ansible.builtin.copy:
+    dest: /var/lib/homelab-dns-evidence/.ssh/authorized_keys
+    owner: "{{ network_host_dns_evidence_remote_user }}"
+    group: "{{ network_host_dns_evidence_remote_user }}"
+    mode: '0600'
+    content: >-
+      restrict,command="{{ network_host_dns_evidence_remote_script }}"
+      {{ hostvars['monitor-01']['dns_evidence_public_key'] }}
+  when: inventory_hostname in groups['dns_resolvers']
+  no_log: true
+
+- name: Capture resolver host keys from monitor-01
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/ssh-keyscan
+      - -T
+      - '5'
+      - '192.168.2.51'
+      - '192.168.2.50'
+  register: dns_evidence_keyscan
+  changed_when: false
+  when: inventory_hostname == 'monitor-01'
+
+- name: Install pinned resolver host keys on monitor-01
+  ansible.builtin.copy:
+    dest: "{{ network_host_dns_evidence_known_hosts }}"
+    owner: root
+    group: root
+    mode: '0600'
+    content: "{{ dns_evidence_keyscan.stdout }}
+"
+  when: inventory_hostname == 'monitor-01'
+
+- name: Install monitor DNS evidence refresher
+  ansible.builtin.template:
+    src: homelab-network-dns-evidence.py.j2
+    dest: "{{ network_host_dns_evidence_script }}"
+    owner: root
+    group: root
+    mode: '0755'
+  when: inventory_hostname == 'monitor-01'
+
+- name: Install DNS evidence systemd service
+  ansible.builtin.template:
+    src: homelab-network-dns-evidence.service.j2
+    dest: "/etc/systemd/system/{{ network_host_dns_evidence_service }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: inventory_hostname == 'monitor-01'
+
+- name: Install DNS evidence systemd timer
+  ansible.builtin.template:
+    src: homelab-network-dns-evidence.timer.j2
+    dest: "/etc/systemd/system/{{ network_host_dns_evidence_timer }}"
+    owner: root
+    group: root
+    mode: '0644'
+  when: inventory_hostname == 'monitor-01'
+
+- name: Reload systemd on monitor-01
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: inventory_hostname == 'monitor-01'
+
+- name: Keep DNS evidence timer gated until explicitly enabled
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_dns_evidence_timer }}"
+    enabled: "{{ network_host_dns_evidence_enable_timer | bool }}"
+    state: "{{ 'started' if network_host_dns_evidence_enable_timer | bool else 'stopped' }}"
+  when: inventory_hostname == 'monitor-01'

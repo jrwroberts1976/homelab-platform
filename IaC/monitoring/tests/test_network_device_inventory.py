@@ -21,6 +21,17 @@ class InventoryTests(unittest.TestCase):
         self.assertIsNone(inventory.lan_ip("10.10.10.1"))
         self.assertIsNone(inventory.lan_ip("192.168.2.invalid"))
 
+    def test_router_inventory_uses_immutable_read_only_sqlite(self):
+        with patch.object(inventory.Path, "is_file", return_value=True), \
+             patch.object(inventory.sqlite3, "connect") as connect:
+            connection = connect.return_value
+            connection.execute.return_value.fetchall.return_value = []
+            self.assertEqual(inventory.router_inventory(), [])
+        uri = connect.call_args.args[0]
+        self.assertIn("mode=ro", uri)
+        self.assertIn("immutable=1", uri)
+        self.assertTrue(connect.call_args.kwargs["uri"])
+
     def test_authoritative_os_and_incomplete_scan_handling(self):
         estate = {"assets": [
             {"name": "monitor-01", "address": "192.168.2.52", "state": "active",
@@ -64,7 +75,7 @@ class InventoryTests(unittest.TestCase):
                 {"metric": {"ip": "192.168.2.52", "protocol": "tcp",
                             "port": "9100", "service": "node_exporter",
                             "product": "", "version": ""}}],
-            'homelab_network_host_os_fingerprint_info{target_name="Proxmox-2"}': [
+            'homelab_network_host_os_fingerprint_info{target_name="monitor-01"}': [
                 {"metric": {"profiled_ip": "192.168.2.52",
                             "mac": "02:00:00:00:02:02",
                             "nmap_name": "Linux 6.X", "nmap_accuracy": "95%",

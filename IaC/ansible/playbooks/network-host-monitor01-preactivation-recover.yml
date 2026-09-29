@@ -1,0 +1,262 @@
+---
+# Gate 3b PRE-ACTIVATION RECOVERY ONLY.
+# Use after a completed source freeze or an interrupted protected transfer,
+# ONLY while target notifier has never been wired/activated.
+# Does not require destination alerted-macs.json, recipient or backup to exist.
+# Do not use after ANY target collection or email attempt: use the separate
+# post-activation rollback with explicit alert registry reconciliation instead.
+- name: Prove inert target even if only part of transfer reached monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    dest_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+    dest_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+      - homelab-proxmox-guest-refresh.service
+  tasks:
+    - name: Require separately authorised pre-activation recovery
+      ansible.builtin.assert:
+        that:
+          - cutover_pre_activation_recovery_approved | default(false) | bool
+          - (cutover_recovery_phrase | default('')) == 'RESTORE_FROZEN_SOURCE_BEFORE_ACTIVATION'
+          - cutover_change_id is defined
+          - cutover_change_id is match('^[A-Za-z0-9_-]{4,64}$')
+          - source_freeze_dir is defined
+          - source_freeze_dir is match('^/var/backups/homelab-network-migration/freeze-[0-9]{8}T[0-9]{6}$')
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+    - name: Check all five target timers disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ dest_timers }}"
+      changed_when: false
+      failed_when: false
+      register: recovery_target_enabled
+    - name: Check all five target timers and workers inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ dest_timers + dest_services }}"
+      changed_when: false
+      failed_when: false
+      register: recovery_target_active
+    - name: Reject any target service or timer activation, including partial activation
+      ansible.builtin.assert:
+        that:
+          - recovery_target_enabled.results | map(attribute='stdout') | unique | list == ['disabled']
+          - recovery_target_active.results | map(attribute='stdout') | unique | list == ['inactive']
+        fail_msg: Target is no longer demonstrably inert; use post-activation rollback.
+    - name: Inspect marker and original unmodified collector unit
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+        - /etc/systemd/system/homelab-network-host-collector.service
+      register: recovery_target_paths
+    - name: Require absent approval marker and expected original collector unit
+      ansible.builtin.assert:
+        that:
+          - not recovery_target_paths.results[0].stat.exists
+          - recovery_target_paths.results[1].stat.isreg | default(false)
+          - recovery_target_paths.results[1].stat.pw_name == 'root'
+    - name: Read loaded collector unit without executing any notifier
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, cat, homelab-network-host-collector.service]
+      register: recovery_collector_unit
+      changed_when: false
+    - name: Refuse any notifier wiring or environment in pre-activation recovery
+      ansible.builtin.assert:
+        that:
+          - "'ExecStartPost=' not in recovery_collector_unit.stdout"
+          - "'EnvironmentFile=' not in recovery_collector_unit.stdout"
+    - name: Confirm no detached notifier process on destination
+      ansible.builtin.command:
+        argv: [/usr/bin/pgrep, -f, /usr/local/sbin/homelab-network-device-email-alert]
+      register: recovery_target_notifier
+      changed_when: false
+      failed_when: false
+    - name: Refuse destination notifier that may have sent notifications
+      ansible.builtin.assert:
+        that:
+          - recovery_target_notifier.rc == 1
+    - name: Hold transferred destination datasets intact for future forensic reconciliation
+      ansible.builtin.debug:
+        msg:
+          - "Destination still inert; no alerts or collector were enabled by approved Gate 3."
+          - "Leave any partially transferred JSON/recipient and existing backups intact; do not overwrite or delete."
+          - "Proceed to verify frozen source and restore exact original source timer schedule."
+
+- name: Restore Proxmox-2 after frozen/partly transferred state without target mutation
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+    original_files:
+      - /var/lib/homelab-network-hosts/inventory.json
+      - /var/lib/homelab-network-hosts/deep-profiles.json
+      - /var/lib/homelab-network-hosts/enrichment.json
+      - /var/lib/homelab-network-hosts/alerted-macs.json
+      - /etc/homelab-network-hosts/alerts.env
+  tasks:
+    - name: Require matching approval and verified inert destination from first play
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+          - cutover_pre_activation_recovery_approved | default(false) | bool
+          - (cutover_recovery_phrase | default('')) == 'RESTORE_FROZEN_SOURCE_BEFORE_ACTIVATION'
+          - hostvars['monitor-01'].recovery_collector_unit is defined
+          - hostvars['monitor-01'].recovery_target_notifier.rc == 1
+          - hostvars['monitor-01'].recovery_target_paths.results[0].stat.exists == false
+    - name: Read protected freeze rollback metadata and five original hashes
+      ansible.builtin.slurp:
+        src: "{{ source_freeze_dir }}/{{ item }}"
+      loop:
+        - rollback-timers.json
+        - frozen-source-sha256.json
+      register: recovery_manifests
+      no_log: true
+    - name: Decode frozen metadata privately
+      ansible.builtin.set_fact:
+        recovery_manifest: "{{ recovery_manifests.results[0].content | b64decode | from_json }}"
+        recovery_sha: "{{ recovery_manifests.results[1].content | b64decode | from_json }}"
+      no_log: true
+    - name: Require exact change identity and complete original timer/data manifest
+      ansible.builtin.assert:
+        that:
+          - recovery_manifest.schema_version | int == 1
+          - recovery_manifest.source_host == 'Proxmox-2'
+          - recovery_manifest.change_id == cutover_change_id
+          - recovery_manifest.timers.keys() | list | sort == source_timers | sort
+          - recovery_manifest.timer_activity.keys() | list | sort == source_timers | sort
+          - recovery_sha.keys() | list | sort == original_files | sort
+    - name: Verify original systemd units are still identical to protected freeze record
+      ansible.builtin.stat:
+        path: "/etc/systemd/system/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_timers + source_services }}"
+      register: recovery_units
+      no_log: true
+    - name: Reject unreviewed source unit edits or lost rollback files
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.checksum == recovery_manifest.unit_sha256[item.item]
+      loop: "{{ recovery_units.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+    - name: Require original five source files still match freeze including historical alerts
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ original_files }}"
+      register: recovery_originals
+      no_log: true
+    - name: Refuse lost or modified source registry, recipient or evidence
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - item.stat.checksum == recovery_sha[item.item]
+      loop: "{{ recovery_originals.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+    - name: Verify source discovery timers are still disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: recovery_source_enabled
+      changed_when: false
+      failed_when: false
+    - name: Verify source timers and worker services remain inactive before restoration
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_timers + source_services }}"
+      register: recovery_source_active
+      changed_when: false
+      failed_when: false
+    - name: Reject any partial restart; manual reconciliation required
+      ansible.builtin.assert:
+        that:
+          - recovery_source_enabled.results | map(attribute='stdout') | unique | list == ['disabled']
+          - recovery_source_active.results | map(attribute='stdout') | unique | list == ['inactive']
+    - name: Recheck target timers cannot run immediately before source resumes
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      delegate_to: monitor-01
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-proxmox-guest-refresh.timer
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-network-os-evidence.service
+        - homelab-proxmox-guest-refresh.service
+      register: immediate_recovery_target
+      changed_when: false
+      failed_when: false
+    - name: Fail closed unless target remains fully inert before restoring old owner
+      ansible.builtin.assert:
+        that:
+          - immediate_recovery_target.results | map(attribute='stdout') | unique | list == ['inactive']
+    - name: Restore only originally enabled and active source timers
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+        state: started
+      loop: "{{ source_timers }}"
+      when:
+        - recovery_manifest.timers[item] == 'enabled'
+        - recovery_manifest.timer_activity[item] == 'active'
+    - name: Verify recovered original enablement on all four source timers
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_timers }}"
+      register: recovered_source_timers
+      changed_when: false
+      failed_when: false
+    - name: Require original source timer settings restored without enabling deep scans
+      ansible.builtin.assert:
+        that:
+          - item.stdout == recovery_manifest.timers[item.item]
+      loop: "{{ recovered_source_timers.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+    - name: Report source-only restoration and preserve partial target for review
+      ansible.builtin.debug:
+        msg:
+          - "Pre-activation recovery completed: original Proxmox-2 network timer schedule restored."
+          - "No target data, recipient, registry, backups or marker were changed."
+          - "Before retry: investigate the interrupted phase; reconcile partial target explicitly."

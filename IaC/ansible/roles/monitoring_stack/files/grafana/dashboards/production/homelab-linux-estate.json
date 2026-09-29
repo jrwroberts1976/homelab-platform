@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -645,6 +645,282 @@
         }
       },
       "description": "Inbound and outbound network throughput for the selected host, excluding loopback and virtual interfaces."
+    },
+    {
+      "id": 29,
+      "type": "table",
+      "title": "Operating System & Platform",
+      "description": "Authoritative OS facts collected by Zabbix Agent 2 and published through the network inventory exporter.",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 24,
+        "h": 6
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{hostname=\"$host\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_time_basis": true,
+              "nmap_services": true,
+              "nmap_scan_status": true
+            },
+            "indexByName": {
+              "hostname": 0,
+              "ip": 1,
+              "os": 2,
+              "architecture": 3,
+              "kernel": 4,
+              "os_source": 5,
+              "os_evidence": 6
+            },
+            "renameByName": {
+              "hostname": "Host",
+              "ip": "IP address",
+              "os": "Operating system",
+              "architecture": "Architecture",
+              "kernel": "Kernel",
+              "os_source": "OS source",
+              "os_evidence": "Evidence"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": false
+      }
+    },
+    {
+      "id": 30,
+      "type": "table",
+      "title": "Open Ports & Services",
+      "description": "Current open TCP ports and service/version evidence from the targeted Nmap enrichment pipeline.",
+      "gridPos": {
+        "x": 0,
+        "y": 29,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "max by (ip, port, protocol, service, product, version) (homelab_network_host_enrichment_port_info * on(ip) group_left(hostname) (homelab_network_device_card_info{hostname=\"$host\"} == 1))",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "hostname": true,
+              "target_name": true
+            },
+            "indexByName": {
+              "ip": 0,
+              "port": 1,
+              "protocol": 2,
+              "service": 3,
+              "product": 4,
+              "version": 5
+            },
+            "renameByName": {
+              "ip": "IP address",
+              "port": "Port",
+              "protocol": "Protocol",
+              "service": "Service",
+              "product": "Product",
+              "version": "Version"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": false
+      }
+    },
+    {
+      "id": 31,
+      "type": "table",
+      "title": "Nmap OS Fingerprint",
+      "description": "Supporting Nmap OS fingerprint evidence. For managed hosts, authoritative OS and kernel facts remain those reported by Zabbix Agent 2; Nmap does not override them.",
+      "gridPos": {
+        "x": 0,
+        "y": 37,
+        "w": 24,
+        "h": 7
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{hostname=\"$host\",nmap_name!=\"\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "hostname": true,
+              "ip": true,
+              "os": true,
+              "architecture": true,
+              "kernel": true,
+              "os_source": true,
+              "os_evidence": true,
+              "nmap_vendor": true,
+              "nmap_cpe": true,
+              "nmap_services": true
+            },
+            "indexByName": {
+              "nmap_name": 0,
+              "nmap_accuracy": 1,
+              "nmap_family": 2,
+              "nmap_generation": 3,
+              "nmap_device_type": 4,
+              "nmap_scanned_at": 5,
+              "nmap_time_basis": 6,
+              "nmap_scan_status": 7
+            },
+            "renameByName": {
+              "nmap_name": "Nmap match",
+              "nmap_accuracy": "Confidence",
+              "nmap_family": "Family",
+              "nmap_generation": "Generation",
+              "nmap_device_type": "Device type",
+              "nmap_scanned_at": "Scanned",
+              "nmap_time_basis": "Time basis",
+              "nmap_scan_status": "Status"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": false
+      }
     }
   ]
 }

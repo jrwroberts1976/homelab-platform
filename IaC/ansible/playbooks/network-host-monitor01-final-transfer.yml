@@ -1,0 +1,575 @@
+---
+# Gate 3b hold B: EXPLICITLY APPROVED FINAL TRANSFER ONLY, never activation.
+# Requires a separately executed successful source freeze; do not import
+# Gate 3a here because Gate 3a correctly requires an ACTIVE source.
+# Pass source_freeze_dir explicitly from the reviewed Gate 3b freeze output.
+# No service/timer startup, notifier execution, Nmap, mail or marker creation.
+- name: Validate frozen Proxmox-2 and protect all five final source files
+  hosts: Proxmox-2
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    source_data_root: /var/lib/homelab-network-hosts
+    source_names:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - alerted-macs.json
+      - alerts.env
+    source_paths:
+      - /var/lib/homelab-network-hosts/inventory.json
+      - /var/lib/homelab-network-hosts/deep-profiles.json
+      - /var/lib/homelab-network-hosts/enrichment.json
+      - /var/lib/homelab-network-hosts/alerted-macs.json
+      - /etc/homelab-network-hosts/alerts.env
+    source_network_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+    source_network_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-os-evidence.service
+    final_source_snapshot: "{{ source_freeze_dir }}/final-transfer"
+  tasks:
+    - name: Require separate recorded final-transfer approval and exact source freeze path
+      ansible.builtin.assert:
+        that:
+          - cutover_final_transfer_approved | default(false) | bool
+          - (cutover_transfer_phrase | default('')) == 'COPY_FROZEN_NETWORK_STATE'
+          - (cutover_change_id | default('') | trim | length) >= 4
+          - source_freeze_dir is defined
+          - source_freeze_dir is match('^/var/backups/homelab-network-migration/freeze-[0-9]{8}T[0-9]{6}$')
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_facts.hostname == 'Proxmox-2'
+          - ansible_facts.default_ipv4.address == '192.168.2.71'
+        fail_msg: Explicit final-transfer approval and exact verified source freeze are required.
+
+    - name: Verify prior freeze directory and private rollback evidence
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ source_freeze_dir }}"
+        - "{{ source_freeze_dir }}/rollback-timers.json"
+        - "{{ source_freeze_dir }}/frozen-source-sha256.json"
+      register: source_freeze_artifacts
+      no_log: true
+
+    - name: Refuse missing or insufficiently protected freeze evidence
+      ansible.builtin.assert:
+        that:
+          - source_freeze_artifacts.results[0].stat.isdir | default(false)
+          - source_freeze_artifacts.results[0].stat.pw_name == 'root'
+          - source_freeze_artifacts.results[0].stat.mode == '0700'
+          - source_freeze_artifacts.results[1].stat.isreg | default(false)
+          - source_freeze_artifacts.results[1].stat.pw_name == 'root'
+          - source_freeze_artifacts.results[1].stat.mode == '0600'
+          - source_freeze_artifacts.results[2].stat.isreg | default(false)
+          - source_freeze_artifacts.results[2].stat.pw_name == 'root'
+          - source_freeze_artifacts.results[2].stat.mode == '0600'
+
+    - name: Read private freeze manifest only in protected Ansible memory
+      ansible.builtin.slurp:
+        src: "{{ source_freeze_dir }}/{{ item }}"
+      loop:
+        - rollback-timers.json
+        - frozen-source-sha256.json
+      register: source_freeze_manifests
+      no_log: true
+
+    - name: Decode protected rollback manifest and five-file frozen checksums
+      ansible.builtin.set_fact:
+        freeze_rollback: "{{ source_freeze_manifests.results[0].content | b64decode | from_json }}"
+        freeze_sha: "{{ source_freeze_manifests.results[1].content | b64decode | from_json }}"
+      no_log: true
+
+    - name: Require exact change identity and complete recorded freeze
+      ansible.builtin.assert:
+        that:
+          - freeze_rollback.schema_version | int == 1
+          - freeze_rollback.source_host == 'Proxmox-2'
+          - freeze_rollback.change_id == cutover_change_id
+          - freeze_sha.keys() | list | sort == source_paths | sort
+          - freeze_rollback.timers.keys() | list | sort == source_network_timers | sort
+        fail_msg: Frozen manifest does not match this reviewed cutover.
+
+    - name: Require all four source discovery timers remain disabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ source_network_timers }}"
+      register: source_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Require all four source network timers remain stopped
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_network_timers }}"
+      register: source_timer_stopped
+      changed_when: false
+      failed_when: false
+
+    - name: Require source network jobs and notifier post-hooks are drained
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ source_network_services }}"
+      register: source_service_stopped
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse incomplete or interrupted freeze
+      ansible.builtin.assert:
+        that:
+          - source_disabled.results | map(attribute='stdout') | unique | list == ['disabled']
+          - source_timer_stopped.results | map(attribute='stdout') | unique | list == ['inactive']
+          - source_service_stopped.results | map(attribute='stdout') | unique | list == ['inactive']
+
+    - name: Rehash exact five original source files before snapshot
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_paths }}"
+      register: live_source_before
+      no_log: true
+
+    - name: Refuse any original protected data drift after freeze
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+          - item.stat.mode == '0600'
+          - item.stat.size | int > 0
+          - item.stat.checksum == freeze_sha[item.item]
+        fail_msg: Frozen data changed or lost file protection; no transfer.
+      loop: "{{ live_source_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Validate frozen first-seen registry and all original data without displaying MACs or recipients
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            base = Path('/var/lib/homelab-network-hosts')
+            inventory = json.loads((base / 'inventory.json').read_text())
+            deep = json.loads((base / 'deep-profiles.json').read_text())
+            enrich = json.loads((base / 'enrichment.json').read_text())
+            reg = json.loads((base / 'alerted-macs.json').read_text())
+            env = Path('/etc/homelab-network-hosts/alerts.env').read_text()
+            assert isinstance(inventory, dict) and len(inventory) >= 35
+            assert isinstance(deep.get('profiles'), dict)
+            assert isinstance(enrich.get('hosts'), dict)
+            assert reg.get('version') == 1 and isinstance(reg.get('devices'), dict)
+            statuses = [v.get('status') for v in reg['devices'].values()]
+            assert len(statuses) and all(s in ('baseline', 'alerted') for s in statuses)
+            present = {str(v.get('mac') or '').strip().lower()
+                       for v in inventory.values() if isinstance(v, dict) and v.get('mac')}
+            online = {str(v.get('mac') or '').strip().lower()
+                      for v in inventory.values()
+                      if isinstance(v, dict) and v.get('online') is True and v.get('mac')}
+            assert not (present - reg['devices'].keys())
+            assert not (online - reg['devices'].keys())
+            assert sum(x.strip().startswith('NETWORK_DEVICE_ALERT_TO=')
+                       for x in env.splitlines()) == 1
+            print(json.dumps({'source_records':len(inventory),
+                              'complete_historical_registry':len(reg['devices']),
+                              'pending_online':0}, sort_keys=True))
+      register: frozen_schema_private
+      changed_when: false
+      no_log: true
+
+    - name: Refuse any existing final source snapshot collision
+      ansible.builtin.stat:
+        path: "{{ final_source_snapshot }}"
+        follow: false
+      register: existing_final_source_snapshot
+
+    - name: Require no prior partial final copy
+      ansible.builtin.assert:
+        that:
+          - not existing_final_source_snapshot.stat.exists
+
+    - name: Create private immutable-name final source snapshot directory
+      ansible.builtin.file:
+        path: "{{ final_source_snapshot }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve all five frozen source files under source-only root protection
+      ansible.builtin.copy:
+        src: "{{ item.0 }}"
+        dest: "{{ final_source_snapshot }}/{{ item.1 }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      loop: "{{ source_paths | zip(source_names) | list }}"
+      no_log: true
+
+    - name: Hash five private source snapshot files
+      ansible.builtin.stat:
+        path: "{{ final_source_snapshot }}/{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_names }}"
+      register: saved_source_hashes
+      no_log: true
+
+    - name: Confirm snapshot exactly matches original frozen checksums
+      ansible.builtin.assert:
+        that:
+          - item.0.stat.checksum == freeze_sha[item.1]
+        fail_msg: Frozen snapshot changed; destination must remain inactive.
+      loop: "{{ saved_source_hashes.results | zip(source_paths) | list }}"
+      loop_control:
+        label: "{{ item.0.item }}"
+
+    - name: Rehash original files after snapshot to reject concurrent writes
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ source_paths }}"
+      register: live_source_after
+      no_log: true
+
+    - name: Reject any changes during protected final snapshot
+      ansible.builtin.assert:
+        that:
+          - item.stat.checksum == freeze_sha[item.item]
+        fail_msg: Source unexpectedly changed during copy; do not activate destination.
+      loop: "{{ live_source_after.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Stage five private final source snapshots in encrypted Ansible transport only
+      ansible.builtin.slurp:
+        src: "{{ final_source_snapshot }}/{{ item }}"
+      loop: "{{ source_names }}"
+      register: final_source_bytes
+      no_log: true
+
+    - name: Report source snapshot readiness without logging any protected content
+      ansible.builtin.debug:
+        msg:
+          - "Frozen source validated; all five files SHA-256 matched."
+          - "Complete historical first-seen state preserved; no pending online alerts."
+          - "Source snapshot protected at {{ final_source_snapshot }}."
+          - "HOLD: destination will back up four staged JSONs before any replacement."
+
+- name: Independently back up and verify final copied data on inert monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    target_state_root: /var/lib/homelab-network-hosts
+    target_alert_env: /etc/homelab-network-hosts/alerts.env
+    target_marker: /etc/homelab-network-hosts/network-discovery-cutover-approved
+    copied_names:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - alerted-macs.json
+      - alerts.env
+    copied_paths:
+      - /var/lib/homelab-network-hosts/inventory.json
+      - /var/lib/homelab-network-hosts/deep-profiles.json
+      - /var/lib/homelab-network-hosts/enrichment.json
+      - /var/lib/homelab-network-hosts/alerted-macs.json
+      - /etc/homelab-network-hosts/alerts.env
+    target_existing:
+      - inventory.json
+      - deep-profiles.json
+      - enrichment.json
+      - proxmox-guests.json
+    target_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-os-evidence.timer
+      - homelab-proxmox-guest-refresh.timer
+    target_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-proxmox-guest-refresh.service
+    target_backup_dir: "/var/backups/homelab-network-migration/final-transfer-{{ cutover_change_id }}"
+  tasks:
+    - name: Require precise monitor-01 identity and source freeze approval from same invocation
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - hostvars['Proxmox-2'].final_source_bytes is defined
+          - hostvars['Proxmox-2'].freeze_rollback.change_id == cutover_change_id
+          - cutover_final_transfer_approved | default(false) | bool
+          - (cutover_transfer_phrase | default('')) == 'COPY_FROZEN_NETWORK_STATE'
+          - cutover_change_id is match('^[A-Za-z0-9_-]{4,64}$')
+        fail_msg: Never run final transfer against another target or a partial source play.
+
+    - name: Require source remains stopped and disabled immediately before destination backup
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      delegate_to: Proxmox-2
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-os-evidence.timer
+        - homelab-network-host-collector.service
+        - homelab-network-host-enricher.service
+        - homelab-network-host-deep-profiler.service
+        - homelab-network-os-evidence.service
+      register: source_still_quiet
+      changed_when: false
+      failed_when: false
+
+    - name: Do not copy data while source discovery work is active
+      ansible.builtin.assert:
+        that:
+          - source_still_quiet.results | map(attribute='stdout') | unique | list == ['inactive']
+
+    - name: Confirm five destination timers are disabled and inactive
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ item }}"]
+      loop: "{{ target_timers }}"
+      register: target_disabled
+      changed_when: false
+      failed_when: false
+
+    - name: Confirm five destination timers are not running
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ target_timers }}"
+      register: target_inactive
+      changed_when: false
+      failed_when: false
+
+    - name: Confirm no destination collector enricher profiler or refresh service is running
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ item }}"]
+      loop: "{{ target_services }}"
+      register: target_jobs_inactive
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse premature destination ownership
+      ansible.builtin.assert:
+        that:
+          - target_disabled.results | map(attribute='stdout') | unique | list == ['disabled']
+          - target_inactive.results | map(attribute='stdout') | unique | list == ['inactive']
+          - target_jobs_inactive.results | map(attribute='stdout') | unique | list == ['inactive']
+
+    - name: Inspect target protected files and absent destination notification paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ target_state_root }}/inventory.json"
+        - "{{ target_state_root }}/deep-profiles.json"
+        - "{{ target_state_root }}/enrichment.json"
+        - "{{ target_state_root }}/proxmox-guests.json"
+        - "{{ target_state_root }}/alerted-macs.json"
+        - "{{ target_alert_env }}"
+        - "{{ target_marker }}"
+      register: original_target_stats
+      no_log: true
+
+    - name: Require four intact source-stage files and no target alert owner
+      ansible.builtin.assert:
+        that:
+          - original_target_stats.results[0].stat.isreg | default(false)
+          - original_target_stats.results[1].stat.isreg | default(false)
+          - original_target_stats.results[2].stat.isreg | default(false)
+          - original_target_stats.results[3].stat.isreg | default(false)
+          - original_target_stats.results[:4] | map(attribute='stat.pw_name') | unique | list == ['root']
+          - original_target_stats.results[:4] | map(attribute='stat.mode') | unique | list == ['0600']
+          - not original_target_stats.results[4].stat.exists
+          - not original_target_stats.results[5].stat.exists
+          - not original_target_stats.results[6].stat.exists
+        fail_msg: Target is already modified or partially transferred. Do not overwrite.
+
+    - name: Reject existing or partial private destination backup
+      ansible.builtin.stat:
+        path: "{{ target_backup_dir }}"
+        follow: false
+      register: existing_target_backup
+
+    - name: Require this change has no earlier attempted target copy
+      ansible.builtin.assert:
+        that:
+          - not existing_target_backup.stat.exists
+
+    - name: Create private destination rollback backup directory
+      ansible.builtin.file:
+        path: "{{ target_backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Back up all four prior protected JSON files before replacing any of them
+      ansible.builtin.copy:
+        src: "{{ target_state_root }}/{{ item }}"
+        dest: "{{ target_backup_dir }}/{{ item }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      loop: "{{ target_existing }}"
+      no_log: true
+
+    - name: Save exact previous destination state checksums privately
+      ansible.builtin.copy:
+        dest: "{{ target_backup_dir }}/previous-target-sha256.json"
+        content: >-
+          {{ dict(target_existing |
+             zip(original_target_stats.results[:4] | map(attribute='stat.checksum') | list))
+             | to_nice_json }}
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Transfer three source datasets, full historic first-seen registry and recipient environment
+      ansible.builtin.copy:
+        content: "{{ hostvars['Proxmox-2'].final_source_bytes.results[copy_index].content | b64decode }}"
+        dest: "{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: true
+      loop: "{{ copied_paths }}"
+      loop_control:
+        index_var: copy_index
+        label: "{{ copied_names[copy_index] }}"
+      no_log: true
+      diff: false
+
+    - name: Hash installed final data and recipient environment
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop: "{{ copied_paths }}"
+      register: final_target_hashes
+      no_log: true
+
+    - name: Require five exact byte-for-byte copies with root-only permissions
+      ansible.builtin.assert:
+        that:
+          - item.0.stat.isreg | default(false)
+          - not item.0.stat.islnk | default(false)
+          - item.0.stat.pw_name == 'root'
+          - item.0.stat.mode == '0600'
+          - item.0.stat.checksum == hostvars['Proxmox-2'].freeze_sha[item.1]
+        fail_msg: Final protected source and destination differ; leave all target units disabled.
+      loop: "{{ final_target_hashes.results | zip(copied_paths) | list }}"
+      loop_control:
+        label: "{{ item.0.item }}"
+
+    - name: Validate all final data and complete alert history without emitting raw MACs
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            base = Path('/var/lib/homelab-network-hosts')
+            inventory = json.loads((base / 'inventory.json').read_text())
+            deep = json.loads((base / 'deep-profiles.json').read_text())
+            enrich = json.loads((base / 'enrichment.json').read_text())
+            registry = json.loads((base / 'alerted-macs.json').read_text())
+            guest = json.loads((base / 'proxmox-guests.json').read_text())
+            env = Path('/etc/homelab-network-hosts/alerts.env').read_text()
+            assert isinstance(inventory, dict) and len(inventory) >= 35
+            assert isinstance(deep.get('profiles'), dict)
+            assert isinstance(enrich.get('hosts'), dict)
+            assert registry.get('version') == 1 and isinstance(registry.get('devices'),dict)
+            assert isinstance(guest,dict)
+            assert all(v.get('status') in ('baseline','alerted')
+                       for v in registry['devices'].values())
+            present = {str(v.get('mac') or '').strip().lower()
+                       for v in inventory.values() if isinstance(v,dict) and v.get('mac')}
+            online = {str(v.get('mac') or '').strip().lower()
+                      for v in inventory.values() if isinstance(v,dict)
+                      and v.get('online') is True and v.get('mac')}
+            assert not present - registry['devices'].keys()
+            assert not online - registry['devices'].keys()
+            assert sum(x.strip().startswith('NETWORK_DEVICE_ALERT_TO=')
+                       for x in env.splitlines()) == 1
+            print(json.dumps({'final_inventory':len(inventory),
+                              'historical_registry':len(registry['devices']),
+                              'pending_online':0},sort_keys=True))
+      changed_when: false
+      register: validated_target_private
+      no_log: true
+
+    - name: Verify guest snapshot identity against the NEW final source inventory with no Nmap
+      ansible.builtin.command:
+        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-enricher, --identity-check]
+      register: final_guest_identity
+      changed_when: false
+      no_log: true
+
+    - name: Refuse stale or unmatched guest identities after final state transfer
+      ansible.builtin.assert:
+        that:
+          - (final_guest_identity.stdout | from_json).event == 'staged_proxmox_identity_check'
+          - (final_guest_identity.stdout | from_json).snapshot_age_seconds | int < 172800
+          - (final_guest_identity.stdout | from_json).unmatched_guest_macs | int == 0
+          - (final_guest_identity.stdout | from_json).matched_guest_macs | int >= 1
+        fail_msg: Guest mapping stale or mismatched. Keep target inactive; refresh under separate reviewed procedure.
+
+    - name: Check source is still inactive before declaring transfer complete
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, homelab-network-host-collector.service]
+      delegate_to: Proxmox-2
+      changed_when: false
+      failed_when: false
+      register: source_collector_still_off
+
+    - name: Refuse transfer completion if any source collection resumed
+      ansible.builtin.assert:
+        that:
+          - source_collector_still_off.stdout == 'inactive'
+
+    - name: Require no cutover marker has appeared
+      ansible.builtin.stat:
+        path: "{{ target_marker }}"
+        follow: false
+      register: final_approval_marker
+
+    - name: Do not activate without separate reviewed approval
+      ansible.builtin.assert:
+        that:
+          - not final_approval_marker.stat.exists
+
+    - name: Explicit hold after final copy before any discovery or email activation
+      ansible.builtin.debug:
+        msg:
+          - "HOLD B COMPLETE: five final files SHA-256 match protected frozen source."
+          - "Historical registry and recipient environment copied without notifier execution."
+          - "Previous four target JSON files saved under {{ target_backup_dir }}."
+          - "monitor-01 and Proxmox-2 discovery workers remain inactive."
+          - "NO CUTOVER MARKER OR ACTIVATION. Separate reviewed Gate 3 activation approval required."

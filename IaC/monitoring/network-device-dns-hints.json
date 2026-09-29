@@ -1,7 +1,7 @@
 {
   "schema_version": 1,
-  "source": "Minimised Pi-hole dns-01/dns-02 observations, 2026-09-18 to 2026-09-25; DNS is indicative, not authoritative OS verification.",
-  "observed_on": "2026-09-25",
+  "source": "Minimised Pi-hole dns-01/dns-02 observations, including reviewed device-identification evidence through 2026-09-29; DNS is indicative and not authoritative OS verification.",
+  "observed_on": "2026-09-29",
   "devices": {
     "192.168.2.6": {
       "os_hint": "Windows (DNS indication)",
@@ -35,6 +35,11 @@
     },
     "192.168.2.224": {
       "dns_hint": "Google Home services (not proof of device OS)"
+    },
+    "192.168.2.8": {
+      "device_hint": "Amazon Fire TV / Fire TV Stick",
+      "dns_hint": "Amazon Fire TV / Amazon Video / Alexa endpoints observed; NordVPN endpoints also observed",
+      "evidence_note": "Corroborates Amazon MAC vendor and Nmap Amazon FireTV Stick service fingerprint"
     }
   }
 }

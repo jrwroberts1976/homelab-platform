@@ -12,7 +12,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 7,
+  "version": 8,
   "refresh": "1m",
   "time": {
     "from": "now-24h",
@@ -797,7 +797,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Device selection uses hostnames, not MAC addresses.** Devices without a known hostname display their current IP. The collector still uses MAC internally to keep device history when DHCP addresses change. OS classifications marked inferred come from DNS/Nmap clues; unknown ports or timed-out scans are **not** evidence that all ports are closed. CPU, memory, patch and filesystem graphs require Node Exporter and are unavailable for many phones, cameras and smart-home devices. DNS hints currently use a dated 18–25 September snapshot, not continuous DNS analysis."
+        "content": "**Device selection uses hostnames, not MAC addresses.** Devices without a known hostname display their current IP. The collector still uses MAC internally to keep device history when DHCP addresses change. OS classifications marked inferred come from DNS/Nmap clues; unknown ports or timed-out scans are **not** evidence that all ports are closed. CPU, memory, patch and filesystem graphs require Node Exporter and are unavailable for many phones, cameras and smart-home devices. DNS hints are evidence-qualified observations; continuous automated DNS investigation is not yet enabled."
       }
     },
     {
@@ -874,11 +874,13 @@
               "status": 2,
               "kind": 3,
               "os": 4,
-              "os_evidence": 5,
-              "os_source": 6,
-              "observed_open_ports": 7,
-              "vendor": 8,
-              "role": 9
+              "os_evidence": 7,
+              "os_source": 8,
+              "observed_open_ports": 9,
+              "vendor": 10,
+              "role": 11,
+              "architecture": 5,
+              "kernel": 6
             },
             "renameByName": {
               "hostname": "Hostname",
@@ -890,7 +892,9 @@
               "os_source": "OS source",
               "observed_open_ports": "Observed open ports",
               "vendor": "Vendor",
-              "role": "Role"
+              "role": "Role",
+              "architecture": "Architecture",
+              "kernel": "Kernel"
             }
           }
         }
@@ -978,7 +982,9 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "ip": 0,
@@ -1020,9 +1026,9 @@
     },
     {
       "id": 16,
-      "title": "DNS evidence — patching and cloud endpoints",
+      "title": "DNS evidence — device and cloud identification",
       "type": "table",
-      "description": "The DNS classification is a dated observation, not an OS verification.",
+      "description": "Dated DNS evidence used as an identification clue. It can corroborate device type or ecosystem but does not override authoritative OS facts.",
       "gridPos": {
         "x": 0,
         "y": 47,
@@ -1088,7 +1094,9 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "hostname": 0,
@@ -1351,7 +1359,9 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "name": 0,
@@ -1483,7 +1493,9 @@
               "observed": true,
               "name": true,
               "pretty_name": true,
-              "id": true
+              "id": true,
+              "architecture": true,
+              "kernel": true
             },
             "indexByName": {
               "nmap_name": 0,
