@@ -529,6 +529,7 @@ def main():
         )
 
     db.commit()
+    save_hostname_snapshot(db)
 
     write_metrics(db)
 
