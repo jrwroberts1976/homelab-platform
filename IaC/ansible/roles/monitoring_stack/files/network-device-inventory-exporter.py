@@ -25,6 +25,7 @@ ZABBIX_TOKEN = Path("/etc/homelab/zabbix-network-inventory.token")
 ZABBIX_MAX_AGE_SECONDS = 3 * 3600
 ESTATE = Path("/etc/homelab/network-estate.json")
 DNS_HINTS = Path("/etc/homelab/network-device-dns-hints.json")
+DNS_EVIDENCE = Path("/var/lib/homelab-network-hosts/dns-evidence.json")
 ROUTER_DB = Path("/var/lib/asus-network-inventory/assets.db")
 BASELINE_ROOT = Path("/var/lib/homelab-os-baselines")
 OUTPUT = Path("/var/lib/prometheus/node-exporter/homelab_network_devices.prom")
@@ -328,6 +329,42 @@ def populate():
         if h["os_evidence"] == "unknown" and evidence.get("os_hint"):
             h.update(os=evidence["os_hint"], os_source="Pi-hole DNS snapshot",
                      os_evidence="inferred_dns")
+
+    # Automatic dual-Pi-hole evidence is keyed by stable MAC in the profiler
+    # state. Prefer MAC correlation over IP so DHCP changes cannot attach an
+    # old DNS identity to a different device.
+    if DNS_EVIDENCE.is_file():
+        dynamic_dns = load_json(DNS_EVIDENCE)
+        for mac, evidence in dynamic_dns.get("devices", {}).items():
+            if not isinstance(evidence, dict) or evidence.get("error"):
+                continue
+
+            candidates = [
+                item for item in hosts.values()
+                if item.get("mac", "").lower() == str(mac).lower()
+            ]
+            h = candidates[0] if len(candidates) == 1 else None
+            if h is None:
+                evidence_ip = evidence.get("ip")
+                candidate = hosts.get(evidence_ip)
+                if (candidate is not None and
+                        (not candidate.get("mac") or
+                         candidate.get("mac", "").lower() == str(mac).lower())):
+                    h = candidate
+            if h is None:
+                continue
+
+            dns_hint = evidence.get("dns_hint", "")
+            if dns_hint:
+                h["dns_hint"] = dns_hint
+
+            checked_at = int(evidence.get("checked_at", 0) or 0)
+            if checked_at:
+                h["dns_observed"] = time.strftime(
+                    "%Y-%m-%d %H:%M UTC", time.gmtime(checked_at))
+
+            if not h["kind"] and evidence.get("device_hint"):
+                h["kind"] = evidence["device_hint"]
 
     baseline, timeouts, stamp = latest_baseline()
     for ip, entry in baseline.items():
