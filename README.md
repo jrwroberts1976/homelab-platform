@@ -14,6 +14,7 @@ The main current-state references are:
 - [Home Automation / Home Assistant Design](docs/architecture/HOME-AUTOMATION-DESIGN.md)
 - [VPN Remote-Access Design and Implementation Record](docs/network/VPN-REMOTE-ACCESS-DESIGN.md)
 - [Network Terms & Reference](docs/network/TERMS-AND-REFERENCE.md)
+- [Automated Network-Device Identification](docs/operations/network-device-identification.md)
 - [Installed Solutions Catalogue](docs/architecture/INSTALLED-SOLUTIONS-CATALOGUE.md)
 - [Proxmox Cluster Implementation Record](docs/architecture/PROXMOX-CLUSTER-REBUILD-PLAN.md)
 - [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
@@ -46,7 +47,7 @@ The retired controller identity must not be used as the current controller; the 
 | `admin-01` | `192.168.2.48` | Administration / SSH jump / IaC controller / QNetd |
 | `dns-02` | `192.168.2.50` | Pi-hole + Unbound, CT100 on `PROXMOX` |
 | `dns-01` | `192.168.2.51` | Pi-hole + Unbound, CT101 on `Proxmox-2` |
-| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox/Loki, VM202 on `Proxmox-2` |
+| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox/Loki + active network-discovery/identification owner, VM202 on `Proxmox-2` |
 | `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis, VM200 on `PROXMOX` |
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix SMTP relay, CT102 on `PROXMOX` |
 | `sensor-01` | `192.168.2.55` | Active Suricata/Zeek passive sensor, VM201 on `PROXMOX` |
@@ -56,7 +57,7 @@ The retired controller identity must not be used as the current controller; the 
 | `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform, CT105 on `PROXMOX` |
 | `home-01` | `192.168.2.60` | Home Assistant OS 18.2, VM204 on `PROXMOX` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 |
-| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / Network Host Collector |
+| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2; former Network Host Collector source retained for rollback/history |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / Proxmox NFS backup target |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
 | ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN remote-access endpoint |
@@ -148,7 +149,7 @@ Pre-cluster restore evidence includes an isolated CT103 restore/boot proof. A re
 
 ### Monitoring and logging
 
-`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter, Loki, the seven-panel **Network Hosts** directory and 50 individually generated host dashboards. Native Grafana Alloy is deployed across the managed estate. Router syslog and HP ProCurve telemetry are operational. Network discovery, selective enrichment and first-seen notifications are currently run from `Proxmox-2`; saved deep-profile evidence exists, but its scan timer is disabled as verified on 26 September. A guarded migration will centralise those workers on `monitor-01` without starting duplicate scans.
+`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter, Loki, the **Network Hosts** directory and individually generated host dashboards. Native Grafana Alloy is deployed across the managed estate. Router syslog and HP ProCurve telemetry are operational. Since the 27 September cutover, `monitor-01` is the single active owner of network discovery/enrichment and saved OS evidence. Targeted Nmap profiling is active with controlled backlog spreading and weekly re-profiling of current completed devices. Automatic dual-Pi-hole DNS evidence is also active: bounded read-only evidence from `dns-01` and `dns-02` is correlated with MAC/vendor and Nmap evidence and published into Grafana. See [Automated Network-Device Identification](docs/operations/network-device-identification.md).
 
 The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/router/rt-ac86u.log` and shipped to Loki by the dedicated Alloy router-syslog pipeline. OpenVPN connection/authentication events are present in that stream.
 
@@ -206,7 +207,7 @@ Home Assistant is no longer a planned reservation: `home-01` is active and commi
 | Zabbix | Server + 15 active-agent hosts reporting | Tune actionable templates/alerts and add service-specific coverage |
 | Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry and `home-01` external availability checks |
 | Komodo / container operations | Komodo Core commissioned; application backup/restore proven | Onboard managed Docker hosts, prove update/rollback ownership, then retire superseded paths |
-| Network Hosts | Source collector/enricher on `Proxmox-2`, 49 preserved devices and 8 saved Nmap OS-match records; deep-profiler timer disabled; 50 data-driven host pages on `monitor-01` | Stage protected state on `monitor-01` and resolve source-only Proxmox guest lookup/first-seen alerting before deliberate single-owner cutover |
+| Network Hosts | `monitor-01` is the single active discovery/identification owner; targeted Nmap profiling, weekly re-profiling, dual-Pi-hole DNS correlation and Grafana publication are live | Extend reviewed device-signal rules as useful; later implement AI/manual-review/GitHub-host-page stages only after separate design and verification |
 | Vulnerability management | `greenbone-01` commissioned and protected | Tune hardening/update policy as needed |
 | Remote-access VPN | **FULLY OPERATIONAL** — router-hosted OpenVPN accepted 18 September 2026 for external laptop administration with split tunnelling | Maintain DDNS/router recovery/client re-enrolment documentation; no operational acceptance work remains |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
