@@ -1,0 +1,117 @@
+---
+- name: Validate AI resolver target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == network_host_ai_resolver_expected_hostname
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.default_ipv4.address == "192.168.2.52"
+    fail_msg: >-
+      Refusing AI resolver deployment to an unexpected host.
+
+- name: Require explicit AI resolver deployment approval
+  ansible.builtin.assert:
+    that:
+      - network_host_ai_resolver_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing AI resolver deployment. Re-run with
+      -e network_host_ai_resolver_allow_deploy=true after review.
+
+- name: Verify required evidence stores exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ network_host_ai_resolver_inventory }}"
+    - "{{ network_host_ai_resolver_profiles }}"
+    - "{{ network_host_ai_resolver_dns }}"
+    - "{{ network_host_ai_resolver_enrichment }}"
+    - "{{ network_host_ai_resolver_router_db }}"
+  register: ai_resolver_evidence_files
+
+- name: Require evidence stores before AI deployment
+  ansible.builtin.assert:
+    that:
+      - item.stat.isreg | default(false)
+      - item.stat.size | int > 0
+  loop: "{{ ai_resolver_evidence_files.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Inspect AI resolver environment
+  ansible.builtin.stat:
+    path: "{{ network_host_ai_resolver_environment }}"
+  register: ai_resolver_environment
+
+- name: Require protected API environment before enabling timer
+  ansible.builtin.assert:
+    that:
+      - ai_resolver_environment.stat.isreg | default(false)
+      - ai_resolver_environment.stat.pw_name == "root"
+      - ai_resolver_environment.stat.mode == "0600"
+    fail_msg: >-
+      AI timer enablement requires a root-owned mode 0600 environment file.
+      Keep the API credential out of Git.
+  when: network_host_ai_resolver_enable_timer | bool
+
+- name: Install AI resolver
+  ansible.builtin.template:
+    src: homelab-network-host-ai-resolver.py.j2
+    dest: "{{ network_host_ai_resolver_script }}"
+    owner: root
+    group: root
+    mode: "0750"
+  register: ai_resolver_script
+
+- name: Validate AI resolver Python syntax
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - py_compile
+      - "{{ network_host_ai_resolver_script }}"
+  changed_when: false
+
+- name: Install AI resolver service
+  ansible.builtin.template:
+    src: homelab-network-host-ai-resolver.service.j2
+    dest: "/etc/systemd/system/{{ network_host_ai_resolver_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: ai_resolver_service
+
+- name: Install AI resolver timer
+  ansible.builtin.template:
+    src: homelab-network-host-ai-resolver.timer.j2
+    dest: "/etc/systemd/system/{{ network_host_ai_resolver_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: ai_resolver_timer
+
+- name: Reload systemd for AI resolver
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: ai_resolver_service.changed or ai_resolver_timer.changed
+
+- name: Reconcile AI resolver timer
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_ai_resolver_timer_name }}"
+    enabled: "{{ network_host_ai_resolver_enable_timer | bool }}"
+    state: "{{ 'started' if network_host_ai_resolver_enable_timer | bool else 'stopped' }}"
+
+- name: Run initial AI resolution pass
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_ai_resolver_service_name }}"
+    state: started
+  when: network_host_ai_resolver_enable_timer | bool
+
+- name: Verify enabled AI resolver timer
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - is-active
+      - "{{ network_host_ai_resolver_timer_name }}"
+  register: ai_resolver_timer_active
+  changed_when: false
+  failed_when: ai_resolver_timer_active.stdout != "active"
+  when: network_host_ai_resolver_enable_timer | bool
