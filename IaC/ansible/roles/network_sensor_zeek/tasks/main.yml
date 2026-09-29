@@ -140,6 +140,84 @@
     executable: /bin/bash
   changed_when: false
 
+- name: Ensure Zeek flow summary state directory exists
+  ansible.builtin.file:
+    path: "{{ network_sensor_zeek_flow_summary_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
+- name: Install Zeek flow summary collector
+  ansible.builtin.template:
+    src: homelab-zeek-flow-summary.py.j2
+    dest: "{{ network_sensor_zeek_flow_summary_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
+- name: Install Zeek flow summary systemd service
+  ansible.builtin.template:
+    src: homelab-zeek-flow-summary.service.j2
+    dest: "/etc/systemd/system/{{ network_sensor_zeek_flow_summary_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_zeek_flow_summary_service_unit
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
+- name: Install Zeek flow summary systemd timer
+  ansible.builtin.template:
+    src: homelab-zeek-flow-summary.timer.j2
+    dest: "/etc/systemd/system/{{ network_sensor_zeek_flow_summary_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_sensor_zeek_flow_summary_timer_unit
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
+- name: Reload systemd for Zeek flow summary units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when:
+    - network_sensor_zeek_flow_summary_enabled | bool
+    - network_sensor_zeek_flow_summary_service_unit.changed or network_sensor_zeek_flow_summary_timer_unit.changed
+
+- name: Generate initial Zeek flow summary
+  ansible.builtin.systemd_service:
+    name: "{{ network_sensor_zeek_flow_summary_service_name }}"
+    state: started
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
+- name: Enable daily Zeek flow summary timer
+  ansible.builtin.systemd_service:
+    name: "{{ network_sensor_zeek_flow_summary_timer_name }}"
+    enabled: true
+    state: started
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
+- name: Verify Zeek flow summary output and timer
+  ansible.builtin.shell: |
+    set -euo pipefail
+    test -s '{{ network_sensor_zeek_flow_summary_output }}'
+    python3 - <<'PY'
+    import json
+    from pathlib import Path
+    p = Path("{{ network_sensor_zeek_flow_summary_output }}")
+    data = json.loads(p.read_text())
+    assert data.get("schema_version") == 1
+    assert data.get("window_seconds") == {{ network_sensor_zeek_flow_summary_window_seconds | int }}
+    assert isinstance(data.get("devices"), dict)
+    PY
+    systemctl is-enabled '{{ network_sensor_zeek_flow_summary_timer_name }}' | grep -Fxq enabled
+    systemctl is-active '{{ network_sensor_zeek_flow_summary_timer_name }}' | grep -Fxq active
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: network_sensor_zeek_flow_summary_enabled | bool
+
 - name: Verify no failed systemd units after Zeek activation
   ansible.builtin.command:
     argv:
