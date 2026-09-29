@@ -469,7 +469,43 @@ The capture adapter remains dedicated to passive monitoring and must not be repu
 
 The approved production cutover `GATE3B_20260927_01` passed its two-host read-only preflight, source freeze, frozen-source SHA-256 verification, five-file protected final transfer and separately approved activation, each with zero Ansible failures. Source freeze: `/var/backups/homelab-network-migration/freeze-20260927T111141`; target pre-transfer backup: `/var/backups/homelab-network-migration/final-transfer-GATE3B_20260927_01`. The root-only source freeze contains five data hashes and eight original systemd unit backups; the exact original files were verified against the recorded hashes before transfer. Retain rollback evidence; do not automatically re-enable source timers or repeat activation.
 
-**Current timer ownership verified live:** on `monitor-01`, the network collector, network enricher, read-only OS evidence publisher and Proxmox guest refresh timers are enabled/active. The deep-profiler timer stays disabled/inactive. On `Proxmox-2`, the collector, enricher, OS publisher and deep-profiler timers are all disabled/inactive; the guest-refresh timer is not installed there. The new collector and all three other target services reported `Result=success` / `ExecMainStatus=0`. The collector last executed at 11:19:41–11:19:49 BST; the exporter and other scheduled jobs also had recent executions and subsequent timers scheduled.
+**Current timer ownership verified live:** on `monitor-01`, the network collector, network enricher, read-only OS evidence publisher and Proxmox guest refresh timers are enabled/active. Since the controlled 28–29 September follow-on work, the targeted deep-profiler timer is also enabled/active with deterministic backlog spreading and weekly re-profiling of current completed hosts; it remains disabled on `Proxmox-2`. On `Proxmox-2`, the collector, enricher, OS publisher and deep-profiler timers are all disabled/inactive; the guest-refresh timer is not installed there.
+
+### Automated network-device identification — verified 29 September 2026
+
+`monitor-01` now runs the complete evidence-qualified identification path for
+current network devices. The targeted profiler uses bounded top-100 TCP
+service/version-light scanning plus Nmap OS fingerprinting. Managed Linux OS
+identity remains authoritative from fresh Zabbix Agent 2 facts; Nmap is
+supporting evidence for those hosts and can become the best available
+`inferred_nmap` clue for unmanaged devices.
+
+Automatic dual-Pi-hole DNS evidence is now enabled through
+`homelab-network-dns-evidence.timer` on `monitor-01`, verified
+`enabled` and `active` with an approximately five-minute schedule. The
+worker queries restricted read-only helpers on `dns-01` and `dns-02`.
+The helpers keep raw Pi-hole FTL history local and return only bounded
+per-client summaries and reviewed signal classes. The seven-day DNS window is
+anchored to the Nmap profile timestamp so an offline device can still be
+investigated using evidence from when it was observed.
+
+The monitor correlates DNS signals with stable MAC/vendor and saved Nmap
+service evidence, writes protected state to
+`/var/lib/homelab-network-hosts/dns-evidence.json`, and the network inventory
+exporter consumes that state by MAC before publishing Prometheus metrics used
+by Grafana. DNS/Nmap inference does not overwrite stronger documented or
+Zabbix-authoritative OS facts.
+
+The production validation device `192.168.2.8` was automatically identified
+as **Amazon Fire TV / Fire TV Stick** with `corroborated` confidence using
+Amazon MAC vendor, saved Nmap `Amazon FireTV Stick` service evidence and
+Fire TV / Amazon Video / Alexa DNS signals observed across both Pi-holes.
+The resulting Grafana inventory carries the inferred device type, Android
+Nmap OS evidence, bounded DNS hint and DNS observation time.
+
+Operational details, privacy boundaries, source precedence and deployment
+commands are documented in
+[Automated network-device identification](../operations/network-device-identification.md).
 
 **Historical alert continuity and delivery evidence:** comparison of the original frozen registry with the live target registry found all **49 of 49** historical MAC entries present and unchanged, zero missing/modified entries and **one new entry** with status `alerted` (50 total registry entries at the check). The new notifier journal contained `network_device_alert_sent: 1`, and `mail-relay-01` recorded one successful mail delivery during the reviewed window. These events were not correlated by SMTP message ID; do not overstate recipient inbox delivery.
 
