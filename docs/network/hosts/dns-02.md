@@ -42,6 +42,23 @@
 
 ## Network flows
 
+<!-- BEGIN AUTO:ZEEK-FLOW -->
+### Automated Zeek summary
+
+- Evidence source: `sensor-01` Zeek connection telemetry
+- Rolling window: 24 hours
+- Summary generated: `2026-09-29T12:30:07+01:00`
+- MAC identity: `bc:24:11:35:3b:11`
+- Observed IP address(es): `192.168.2.50`
+- Connections: **128,833**
+- Traffic sent: **4.9 MiB**
+- Traffic received: **87.5 MiB**
+- Top services: `dns` (128536), `ntp` (168), `ssl` (12)
+- Top destination ports: `udp/53` (128293), `tcp/53` (244), `udp/123` (168), `icmp/3` (116), `tcp/443` (12)
+
+> This bounded summary intentionally excludes raw packet data and external destination IP history.
+<!-- END AUTO:ZEEK-FLOW -->
+
 Record reviewed, useful flow summaries rather than raw packet captures.
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
