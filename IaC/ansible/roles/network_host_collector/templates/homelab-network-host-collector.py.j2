@@ -3,6 +3,7 @@
 import json
 import os
 import socket
+import sqlite3
 import subprocess
 import tempfile
 import time
@@ -15,6 +16,9 @@ INTERFACE = "{{ network_host_collector_interface }}"
 STATE_FILE = Path("{{ network_host_collector_inventory }}")
 EVENT_FILE = Path("{{ network_host_collector_events }}")
 METRIC_FILE = Path("{{ network_host_collector_metrics }}")
+ASUS_INVENTORY_DB = Path(
+    "{{ network_host_collector_asus_inventory_database }}"
+)
 
 OFFLINE_AFTER = {{ network_host_collector_offline_after_seconds }}
 
@@ -50,6 +54,90 @@ def reverse_dns(ip):
 
     except Exception:
         return ""
+
+
+def load_asus_hostnames():
+    """Return bounded DHCP hostname evidence keyed by MAC and IP.
+
+    The ASUS inventory is supporting identity evidence only. If the database
+    is absent, unreadable or temporarily locked, discovery continues without
+    it. Reverse DNS remains higher priority than router DHCP naming.
+    """
+    if not ASUS_INVENTORY_DB.exists():
+        return {"by_mac": {}, "by_ip": {}}
+
+    by_mac = {}
+    by_ip = {}
+
+    try:
+        uri = "file:" + str(ASUS_INVENTORY_DB) + "?mode=ro"
+        con = sqlite3.connect(uri, uri=True, timeout=2)
+        con.row_factory = sqlite3.Row
+
+        rows = con.execute(
+            """
+            SELECT ip, mac, hostname, dhcp_hostname, last_seen
+            FROM assets
+            """
+        ).fetchall()
+
+        con.close()
+
+        for row in rows:
+            ip = str(row["ip"] or "").strip()
+            mac = str(row["mac"] or "").strip().lower()
+            hostname = str(
+                row["dhcp_hostname"]
+                or row["hostname"]
+                or ""
+            ).strip()
+            last_seen = int(row["last_seen"] or 0)
+
+            if not hostname:
+                continue
+
+            candidate = {
+                "hostname": hostname,
+                "last_seen": last_seen,
+            }
+
+            if ip:
+                existing = by_ip.get(ip)
+                if (
+                    existing is None
+                    or candidate["last_seen"] >= existing["last_seen"]
+                ):
+                    by_ip[ip] = candidate
+
+            if mac:
+                existing = by_mac.get(mac)
+                if (
+                    existing is None
+                    or candidate["last_seen"] >= existing["last_seen"]
+                ):
+                    by_mac[mac] = candidate
+
+    except Exception as exc:
+        emit_event({
+            "event": "router_hostname_evidence_unavailable",
+            "error": str(exc),
+        })
+        return {"by_mac": {}, "by_ip": {}}
+
+    return {"by_mac": by_mac, "by_ip": by_ip}
+
+
+def router_hostname(router_names, ip, mac):
+    if mac:
+        candidate = router_names["by_mac"].get(mac.lower())
+        if candidate and candidate.get("hostname"):
+            return candidate["hostname"]
+
+    candidate = router_names["by_ip"].get(ip)
+    if candidate and candidate.get("hostname"):
+        return candidate["hostname"]
+
+    return ""
 
 
 def load_state():
@@ -114,7 +202,7 @@ def emit_event(event):
     print(line, flush=True)
 
 
-def scan():
+def scan(router_names):
     xml = run([
         "nmap",
         "-sn",
@@ -164,11 +252,19 @@ def scan():
             except Exception:
                 pass
 
+        hostname = reverse_dns(ip)
+        if not hostname:
+            hostname = router_hostname(
+                router_names,
+                ip,
+                mac,
+            )
+
         found[ip] = {
             "ip": ip,
             "mac": mac,
             "vendor": vendor,
-            "hostname": reverse_dns(ip),
+            "hostname": hostname,
             "latency_ms": latency_ms,
         }
 
@@ -176,7 +272,8 @@ def scan():
 
 
 previous = load_state()
-current_scan = scan()
+router_names = load_asus_hostnames()
+current_scan = scan(router_names)
 
 inventory = dict(previous)
 
