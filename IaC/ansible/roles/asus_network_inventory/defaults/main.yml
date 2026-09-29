@@ -7,6 +7,8 @@ asus_network_inventory_known_hosts: "/root/.ssh/known_hosts"
 
 asus_network_inventory_state_dir: "/var/lib/asus-network-inventory"
 asus_network_inventory_database: "/var/lib/asus-network-inventory/assets.db"
+asus_network_inventory_hostname_snapshot:
+  "/var/lib/homelab-network-hosts/router-hostnames.json"
 
 asus_network_inventory_textfile_dir: "/var/lib/prometheus/node-exporter"
 asus_network_inventory_metrics_file: "/var/lib/prometheus/node-exporter/asus-network-assets.prom"
