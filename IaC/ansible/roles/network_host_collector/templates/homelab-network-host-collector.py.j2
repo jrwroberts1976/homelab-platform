@@ -12,6 +12,8 @@ from pathlib import Path
 SUBNET = "{{ network_host_collector_subnet }}"
 INTERFACE = "{{ network_host_collector_interface }}"
 
+CANONICAL_HOSTNAMES = {{ network_host_collector_canonical_hostnames | to_json }}
+
 STATE_FILE = Path("{{ network_host_collector_inventory }}")
 EVENT_FILE = Path("{{ network_host_collector_events }}")
 METRIC_FILE = Path("{{ network_host_collector_metrics }}")
@@ -271,7 +273,9 @@ def scan(router_names):
             except Exception:
                 pass
 
-        hostname = reverse_dns(ip)
+        hostname = CANONICAL_HOSTNAMES.get(ip, "")
+        if not hostname:
+            hostname = reverse_dns(ip)
         if not hostname:
             hostname = router_hostname(
                 router_names,
@@ -295,7 +299,11 @@ def scan(router_names):
 
         if local_ip:
             existing = found.get(local_ip, {})
-            local_hostname = reverse_dns(local_ip) or socket.gethostname()
+            local_hostname = (
+                CANONICAL_HOSTNAMES.get(local_ip, "")
+                or reverse_dns(local_ip)
+                or socket.gethostname()
+            )
 
             found[local_ip] = {
                 "ip": local_ip,
