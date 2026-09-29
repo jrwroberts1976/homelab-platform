@@ -323,6 +323,8 @@ def populate():
             continue
         h["dns_hint"] = evidence.get("dns_hint", "")
         h["dns_observed"] = dns.get("observed_on", "")
+        if not h["kind"] and evidence.get("device_hint"):
+            h["kind"] = evidence["device_hint"]
         if h["os_evidence"] == "unknown" and evidence.get("os_hint"):
             h.update(os=evidence["os_hint"], os_source="Pi-hole DNS snapshot",
                      os_evidence="inferred_dns")
