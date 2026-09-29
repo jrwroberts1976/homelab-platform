@@ -125,7 +125,7 @@ def query_summary(ip, profiled_at, now=None):
              ORDER BY hits DESC, d.domain ASC
              LIMIT ?
             """,
-            (ip, cutoff, MAX_DOMAINS),
+            (ip, cutoff, end_at, MAX_DOMAINS),
         ).fetchall()
 
         # Identity classification is performed locally against the distinct
