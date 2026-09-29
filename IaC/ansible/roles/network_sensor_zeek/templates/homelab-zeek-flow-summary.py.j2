@@ -1,0 +1,146 @@
+#!/usr/bin/env python3
+import gzip
+import json
+import os
+import tempfile
+import time
+from collections import Counter, defaultdict
+from pathlib import Path
+
+PREFIX = Path("{{ network_sensor_zeek_prefix }}")
+STATE_DIR = Path("{{ network_sensor_zeek_flow_summary_state_dir }}")
+OUTPUT = Path("{{ network_sensor_zeek_flow_summary_output }}")
+WINDOW_SECONDS = {{ network_sensor_zeek_flow_summary_window_seconds | int }}
+TOP_N = {{ network_sensor_zeek_flow_summary_top_n | int }}
+CUTOFF = time.time() - WINDOW_SECONDS
+
+devices = defaultdict(lambda: {
+    "ips": set(),
+    "connections": 0,
+    "bytes_out": 0,
+    "bytes_in": 0,
+    "destinations": Counter(),
+    "ports": Counter(),
+    "services": Counter(),
+})
+
+def number(value):
+    try:
+        return int(value or 0)
+    except Exception:
+        return 0
+
+def candidate_logs():
+    paths = set()
+    for p in (
+        PREFIX / "logs" / "current" / "conn.log",
+        PREFIX / "spool" / "zeek" / "conn.log",
+    ):
+        if p.exists():
+            paths.add(p)
+    logs_root = PREFIX / "logs"
+    if logs_root.exists():
+        for pattern in ("**/conn.log", "**/conn.*.log", "**/conn.log.gz", "**/conn.*.log.gz"):
+            for p in logs_root.glob(pattern):
+                try:
+                    if p.stat().st_mtime >= CUTOFF - 86400:
+                        paths.add(p)
+                except OSError:
+                    continue
+    return sorted(paths)
+
+def open_log(path):
+    if path.suffix == ".gz":
+        return gzip.open(path, "rt", errors="replace")
+    return path.open("rt", errors="replace")
+
+for log_path in candidate_logs():
+    try:
+        handle = open_log(log_path)
+    except OSError:
+        continue
+
+    with handle:
+        for line in handle:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            try:
+                rec = json.loads(line)
+                ts = float(rec.get("ts", 0))
+            except Exception:
+                continue
+            if ts < CUTOFF:
+                continue
+
+            src = str(rec.get("id.orig_h", ""))
+            mac = str(rec.get("orig_l2_addr", "") or "").strip().lower()
+            if not src.startswith("192.168.2."):
+                continue
+            if not mac or mac == "-":
+                continue
+
+            dst = str(rec.get("id.resp_h", "") or "")
+            proto = str(rec.get("proto", "") or "")
+            dport = str(rec.get("id.resp_p", "") or "")
+            service = str(rec.get("service", "") or "")
+
+            row = devices[mac]
+            row["ips"].add(src)
+            row["connections"] += 1
+            row["bytes_out"] += number(rec.get("orig_bytes"))
+            row["bytes_in"] += number(rec.get("resp_bytes"))
+
+            if dst:
+                row["destinations"][dst] += 1
+            if dport:
+                row["ports"][f"{proto}/{dport}"] += 1
+            for svc in service.split(","):
+                svc = svc.strip()
+                if svc:
+                    row["services"][svc] += 1
+
+result = {
+    "schema_version": 1,
+    "generated_at": int(time.time()),
+    "window_seconds": WINDOW_SECONDS,
+    "active_macs": len(devices),
+    "devices": {},
+}
+
+for mac in sorted(devices):
+    row = devices[mac]
+    result["devices"][mac] = {
+        "ips": sorted(row["ips"]),
+        "connections": row["connections"],
+        "bytes_out": row["bytes_out"],
+        "bytes_in": row["bytes_in"],
+        "top_services": [
+            {"name": name, "count": count}
+            for name, count in row["services"].most_common(TOP_N)
+        ],
+        "top_ports": [
+            {"name": name, "count": count}
+            for name, count in row["ports"].most_common(TOP_N)
+        ],
+        "top_destinations": [
+            {"address": address, "count": count}
+            for address, count in row["destinations"].most_common(TOP_N)
+        ],
+    }
+
+STATE_DIR.mkdir(parents=True, exist_ok=True)
+fd, tmp = tempfile.mkstemp(dir=str(STATE_DIR), prefix=".zeek-flow-summary-")
+try:
+    with os.fdopen(fd, "w") as f:
+        json.dump(result, f, indent=2, sort_keys=True)
+        f.write("\n")
+        f.flush()
+        os.fsync(f.fileno())
+    os.chmod(tmp, 0o644)
+    os.replace(tmp, OUTPUT)
+finally:
+    if os.path.exists(tmp):
+        os.unlink(tmp)
+
+print(f"active_macs={len(devices)} output={OUTPUT}")
