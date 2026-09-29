@@ -69,19 +69,29 @@ def domain_signals(domains):
     return signals
 
 
-def requested_ip():
+def requested_request():
     command = os.environ.get("SSH_ORIGINAL_COMMAND", "").strip().split()
-    if len(command) != 2 or command[0] != "query":
-        raise ValueError("Only 'query <LAN-IP>' is permitted")
+    if len(command) != 3 or command[0] != "query":
+        raise ValueError("Only 'query <LAN-IP> <profiled-at>' is permitted")
     address = ipaddress.ip_address(command[1])
     if address not in LAN:
         raise ValueError("Requested client is outside the permitted LAN")
-    return str(address)
+    try:
+        profiled_at = int(command[2])
+    except ValueError as exc:
+        raise ValueError("Profile timestamp must be an integer") from exc
+    if profiled_at <= 0:
+        raise ValueError("Profile timestamp must be positive")
+    return str(address), profiled_at
 
 
-def query_summary(ip, now=None):
+def query_summary(ip, profiled_at, now=None):
     now = int(time.time()) if now is None else int(now)
-    cutoff = now - LOOKBACK_SECONDS
+    # Anchor the bounded DNS window to the Nmap observation instead of wall
+    # clock time. This lets offline devices retain useful identification
+    # evidence after they disappear from the network.
+    end_at = min(now, int(profiled_at) + 3600)
+    cutoff = end_at - LOOKBACK_SECONDS
     uri = "file:" + DB + "?mode=ro"
 
     with sqlite3.connect(uri, uri=True, timeout=10) as connection:
@@ -99,9 +109,9 @@ def query_summary(ip, now=None):
             SELECT COUNT(*)
               FROM query_storage AS q
               JOIN client_by_id AS c ON c.id = q.client
-             WHERE c.ip = ? AND q.timestamp >= ?
+             WHERE c.ip = ? AND q.timestamp >= ? AND q.timestamp <= ?
             """,
-            (ip, cutoff),
+            (ip, cutoff, end_at),
         ).fetchone()[0]
 
         rows = connection.execute(
@@ -110,7 +120,7 @@ def query_summary(ip, now=None):
               FROM query_storage AS q
               JOIN client_by_id AS c ON c.id = q.client
               JOIN domain_by_id AS d ON d.id = q.domain
-             WHERE c.ip = ? AND q.timestamp >= ?
+             WHERE c.ip = ? AND q.timestamp >= ? AND q.timestamp <= ?
              GROUP BY d.domain
              ORDER BY hits DESC, d.domain ASC
              LIMIT ?
@@ -129,10 +139,10 @@ def query_summary(ip, now=None):
                   FROM query_storage AS q
                   JOIN client_by_id AS c ON c.id = q.client
                   JOIN domain_by_id AS d ON d.id = q.domain
-                 WHERE c.ip = ? AND q.timestamp >= ?
+                 WHERE c.ip = ? AND q.timestamp >= ? AND q.timestamp <= ?
                    AND d.domain IS NOT NULL
                 """,
-                (ip, cutoff),
+                (ip, cutoff, end_at),
             ).fetchall()
             if row[0]
         ]
@@ -145,12 +155,18 @@ def query_summary(ip, now=None):
         "signals": domain_signals(distinct_domains),
         "lookback_days": LOOKBACK_SECONDS // 86400,
         "observed_at": now,
+        "window_start": cutoff,
+        "window_end": end_at,
     }
 
 
 def main():
-    ip = requested_ip()
-    print(json.dumps(query_summary(ip), separators=(",", ":"), sort_keys=True))
+    ip, profiled_at = requested_request()
+    print(json.dumps(
+        query_summary(ip, profiled_at),
+        separators=(",", ":"),
+        sort_keys=True,
+    ))
 
 
 if __name__ == "__main__":
