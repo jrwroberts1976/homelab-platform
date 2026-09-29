@@ -42,12 +42,12 @@
 
 - Evidence source: `sensor-01` Zeek connection telemetry
 - Rolling window: 24 hours
-- Summary generated: `2026-09-29T12:30:07+01:00`
+- Summary generated: `2026-09-30T00:24:50+01:00`
 - MAC identity: `02:00:00:00:01:04`
 - Observed IP address(es): `192.168.2.58`
 - Connections: **54**
-- Traffic sent: **91.0 KiB**
-- Traffic received: **732.0 KiB**
+- Traffic sent: **87.4 KiB**
+- Traffic received: **717.6 KiB**
 - Top services: `ssl` (54)
 - Top destination ports: `tcp/443` (54)
 
