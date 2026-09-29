@@ -38,6 +38,11 @@ network_host_collector_interval: "5min"
 
 network_host_collector_offline_after_seconds: 900
 
+# Optional ASUS DHCP/ARP inventory. When present, its DHCP hostname is used
+# only as a fallback when reverse DNS does not provide a hostname.
+network_host_collector_asus_inventory_database:
+  "/var/lib/asus-network-inventory/assets.db"
+
 network_host_collector_alert_enabled: true
 
 network_host_collector_alert_script:
