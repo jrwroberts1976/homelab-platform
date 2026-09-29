@@ -40,8 +40,8 @@ network_host_collector_offline_after_seconds: 900
 
 # Optional ASUS DHCP/ARP inventory. When present, its DHCP hostname is used
 # only as a fallback when reverse DNS does not provide a hostname.
-network_host_collector_asus_inventory_database:
-  "/var/lib/asus-network-inventory/assets.db"
+network_host_collector_router_hostname_snapshot:
+  "/var/lib/homelab-network-hosts/router-hostnames.json"
 
 network_host_collector_alert_enabled: true
 
