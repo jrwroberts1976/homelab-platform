@@ -47,7 +47,12 @@ def save_atomic(path, payload):
 
 
 def due_for_dns(record, previous, now):
-    if not record.get("needs_os_identification"):
+    # DNS evidence is useful for device identity even when Nmap already found
+    # an OS family (for example Android -> Amazon Fire TV).  Run once after
+    # each completed deep profile rather than only when OS identification is
+    # unresolved.  Stable MAC correlation in the consumer prevents stale IP
+    # evidence from being attached to a different current device.
+    if record.get("status") != "complete":
         return False
 
     profiled_at = int(record.get("profiled_at", 0) or 0)
