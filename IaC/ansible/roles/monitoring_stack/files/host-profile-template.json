@@ -797,7 +797,7 @@
       },
       "options": {
         "mode": "markdown",
-        "content": "**Device selection uses hostnames, not MAC addresses.** Devices without a known hostname display their current IP. The collector still uses MAC internally to keep device history when DHCP addresses change. OS classifications marked inferred come from DNS/Nmap clues; unknown ports or timed-out scans are **not** evidence that all ports are closed. CPU, memory, patch and filesystem graphs require Node Exporter and are unavailable for many phones, cameras and smart-home devices. DNS hints currently use a dated 18–25 September snapshot, not continuous DNS analysis."
+        "content": "**Device selection uses hostnames, not MAC addresses.** Devices without a known hostname display their current IP. The collector still uses MAC internally to keep device history when DHCP addresses change. OS classifications marked inferred come from DNS/Nmap clues; unknown ports or timed-out scans are **not** evidence that all ports are closed. CPU, memory, patch and filesystem graphs require Node Exporter and are unavailable for many phones, cameras and smart-home devices. DNS hints are evidence-qualified observations; continuous automated DNS investigation is not yet enabled."
       }
     },
     {
@@ -1026,9 +1026,9 @@
     },
     {
       "id": 16,
-      "title": "DNS evidence — patching and cloud endpoints",
+      "title": "DNS evidence — device and cloud identification",
       "type": "table",
-      "description": "The DNS classification is a dated observation, not an OS verification.",
+      "description": "Dated DNS evidence used as an identification clue. It can corroborate device type or ecosystem but does not override authoritative OS facts.",
       "gridPos": {
         "x": 0,
         "y": 47,
