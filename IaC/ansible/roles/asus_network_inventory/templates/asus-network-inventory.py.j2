@@ -14,6 +14,7 @@ SSH_KEY = "{{ asus_network_inventory_ssh_key }}"
 KNOWN_HOSTS = "{{ asus_network_inventory_known_hosts }}"
 
 DATABASE = Path("{{ asus_network_inventory_database }}")
+HOSTNAME_SNAPSHOT = Path("{{ asus_network_inventory_hostname_snapshot }}")
 METRICS_FILE = Path("{{ asus_network_inventory_metrics_file }}")
 
 NOW = int(time.time())
@@ -144,6 +145,55 @@ def connect():
     )
 
     return db
+
+
+def save_hostname_snapshot(db):
+    rows = db.execute(
+        """
+        SELECT ip, mac, hostname, dhcp_hostname, online, last_seen
+        FROM assets
+        """
+    ).fetchall()
+
+    devices = {}
+    for row in rows:
+        ip, mac, hostname, dhcp_hostname, online, last_seen = row
+        mac = str(mac or "").strip().lower()
+        ip = str(ip or "").strip()
+        if not mac or not ip:
+            continue
+
+        devices[mac] = {
+            "ip": ip,
+            "hostname": str(hostname or ""),
+            "dhcp_hostname": str(dhcp_hostname or ""),
+            "online": bool(online),
+            "last_seen": int(last_seen or 0),
+        }
+
+    payload = {
+        "schema_version": 1,
+        "generated_at": NOW,
+        "devices": devices,
+    }
+
+    HOSTNAME_SNAPSHOT.parent.mkdir(parents=True, exist_ok=True)
+
+    fd, tmp = tempfile.mkstemp(
+        dir=str(HOSTNAME_SNAPSHOT.parent),
+        prefix=f".{HOSTNAME_SNAPSHOT.name}.",
+    )
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(payload, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, HOSTNAME_SNAPSHOT)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
 
 
 def record_event(db, ip, event_name, source, details=None):
