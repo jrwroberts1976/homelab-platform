@@ -1,10 +1,22 @@
-# Selective device identification (staged)
+# Selective device identification
 
 <!-- estate-authority: IaC/inventory/estate.json -->
 
 ## Scope and safety
 
-The live owner of LAN discovery, enrichment, saved OS evidence and guest identity remains **monitor-01**. Do not enable the legacy deep profiler or restart collectors on Proxmox-2. Only `192.168.2.0/24` is in scope; the Corosync network must not be scanned.
+The live owner of LAN discovery, enrichment, saved OS evidence and guest identity remains **monitor-01**. Do not restart legacy collectors on Proxmox-2. Only `192.168.2.0/24` is in scope; the Corosync network must not be scanned.
+
+**Current production state, 29 September 2026:** the targeted monitor-01 deep
+profiler is active, completed current devices are re-profiled weekly, and the
+automatic dual-Pi-hole DNS evidence timer is enabled/active. DNS evidence is
+retrieved through restricted read-only helpers on `dns-01` and `dns-02`,
+correlated with MAC/vendor and Nmap service evidence, consumed by the network
+inventory exporter and displayed in Grafana. The production Fire TV validation
+proved this flow end to end. See
+[Automated network-device identification](network-device-identification.md)
+for the deployed implementation. The AI assessment, manual escalation and
+persistent generated GitHub host-page stages described later in this document
+remain planned rather than deployed.
 
 `IaC/monitoring/audits/reconcile_unknown_devices.py` is the offline, **non-scanning** decision stage. It reads existing Gate 4 evidence plus the canonical `IaC/inventory/estate.json`. Known, documented devices are excluded from its unresolved queue; unknowns are enriched with available MAC manufacturer, saved Nmap OS candidates, and aggregated DNS clues. The tool does **not** declare a device known solely because Nmap returns an OS candidate. It does not change canonical inventory, device names or notes.
 
@@ -30,7 +42,7 @@ Omit `--oui` or `--dns` if those optional files do not exist. The output `unreso
 ]
 ```
 
-Produce DNS aggregates via a separately approved, **read-only** restricted collection from Pi-hole FTL on dns-01 and dns-02; filter to the unresolved IP queue, use a seven-day history window, and keep at most five domains per IP per server. DNS may be absent because of retention, privacy settings, client-side DoH or cache. Do not replicate full household DNS logs to GitHub. OUI is a public IEEE registry downloaded once; locally administered MACs are never assigned manufacturers from their apparent prefixes.
+The production DNS path now uses restricted, **read-only** Pi-hole FTL helpers on dns-01 and dns-02. The seven-day window is anchored to the associated Nmap profile timestamp so useful evidence can still be recovered for devices that are currently offline. Raw household DNS history stays on the resolvers. monitor-01 receives only bounded query counts, at most five top domains, reviewed signal classes and at most three examples per signal. DNS may still be absent because of retention, client-side DoH or cache. Do not replicate full household DNS logs to GitHub. OUI is a public IEEE registry downloaded once; locally administered MACs are never assigned manufacturers from their apparent prefixes.
 
 ## Intended new-device-triggered pipeline
 
@@ -46,25 +58,28 @@ Produce DNS aggregates via a separately approved, **read-only** restricted colle
 10. **Update Grafana after the identification state is persisted.** Regenerate the existing MAC-keyed host dashboard so the current OS, evidence source, DNS/OUI/Nmap/AI summaries, manual-review state and last/next identification checks are visible. Grafana is the live operational view; a failed dashboard refresh must not discard the last good host record.
 11. **Then create or update a persistent GitHub host page.** Generate a Markdown page for the stable host identity under a dedicated network-host documentation area (for example `docs/network/hosts/`) and keep a generated index linking all host pages. The page should contain the current hostname/IP/MAC/vendor, authoritative or inferred OS and source, observed services/ports, bounded dns-01/dns-02 clues, Nmap evidence, AI assessment, manual-review status and evidence timestamps. Never commit raw Pi-hole query logs, secrets, API responses containing hidden reasoning, or other household browsing history. When the host is manually confirmed or later re-identified, update the same page rather than creating a duplicate.
 
-## Existing profiler reused — staged changes
+## Existing profiler reused — current production behaviour
 
-The repository already contains a MAC-keyed pending queue, first-run baseline,
-fresh ARP verification, persisted partial results, 24-hour retry cooldown, and
-an existing OS evidence exporter. The full-scan profiler remains **disabled**
-on the live monitor-01 host.
+The repository profiler retains its MAC-keyed queue, fresh identity checks,
+persisted partial results and retry controls. Production uses the targeted mode
+on `monitor-01`: one bounded top-100-TCP service/version-light and Nmap OS
+profile at a time, with no NSE or UDP scan in targeted mode.
 
-The existing profiler template now supports an explicitly selected
-`network_host_deep_profiler_scan_mode: targeted`. This mode runs a bounded
-100-top-TCP-port service/version and Nmap OS scan against one freshly verified
-MAC/IP at a time, with no NSE or UDP scanning. The legacy scan remains the
-inactive default; no existing source host is activated.
+The controlled baseline backlog is spread deterministically across seven days.
+Completed devices that remain in current inventory are then re-profiled weekly
+so changes to open TCP ports, service/version evidence and supporting Nmap OS
+evidence can be detected. Historical records remain preserved but are not
+rescanned unless their MAC is current.
 
-A dedicated
-`IaC/ansible/playbooks/network-host-monitor01-targeted-profiler-stage.yml`
-requires separate execution approval, preserves the existing worker under
-`/var/backups/homelab-targeted-profiler/`, installs the targeted variant
-only on monitor-01, and leaves its timer disabled. The new PR CI checks
-existing offline profiler recovery tests, targeted TCP-only tests and Ansible
-syntax. Stage and live activation are distinct actions.
+The DNS evidence role is also deployed. Its five-minute timer does not cause a
+DNS query every five minutes for every device; it gives the worker frequent
+opportunities to process newly completed profiles. A successful record is
+normally collected once per profile, while failures respect the configured
+retry cooldown. Evidence-version changes can deliberately trigger a bounded
+refresh after collector upgrades.
 
-**Deployment status:** The offline reconciler, targeted-mode changes, existing-profiler tests and inert deployment playbook are staged in this PR. The event consumer, persistent deduplication, restricted SSH DNS summary retrieval, and gated single-device scan are **not yet deployed**. Existing new-device email and collector already work; this PR does not change those live services.
+**Deployment status:** targeted Nmap profiling, weekly completed-host
+re-profiling, restricted dual-Pi-hole DNS evidence, MAC/Nmap/DNS correlation,
+inventory publication and Grafana display are live. The later AI decision
+stage, deduplicated manual-input email fallback and generated persistent GitHub
+host pages remain future work.
