@@ -8,6 +8,7 @@ Wants=network-online.target
 Type=oneshot
 User={{ network_host_docs_sync_user }}
 Group={{ network_host_docs_sync_group }}
+Environment=HOME=/home/{{ network_host_docs_sync_user }}
 ExecStart={{ network_host_docs_sync_script }}
 WorkingDirectory={{ network_host_docs_sync_repo_path }}
 TimeoutStartSec=180
