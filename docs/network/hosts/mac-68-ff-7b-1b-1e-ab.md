@@ -1,4 +1,4 @@
-# Unidentified device — 192.168.2.76
+# TP-Link Kasa HS100 — 192.168.2.76
 
 > Persistent private device record generated from the live network-detail audit on 29 September 2026. Keep secrets, raw packet captures and complete household browsing history out of Git.
 
@@ -8,20 +8,22 @@
 |---|---|
 | Address | `192.168.2.76` |
 | MAC | `68:ff:7b:1b:1e:ab` |
-| DHCP / discovered hostname | Not known |
+| DHCP / discovered hostname | `HS100` (ASUS router DHCP evidence) |
 | MAC vendor | TP-Link Technologies |
 | Online at audit | True |
 | Stable identity key | MAC |
 
 ## Profiling and platform evidence
 
-- Deep-profile status: `baseline`
-- Nmap OS evidence: 0 Nmap match(es), needs_os=None
-- Observed TCP-port summary: 0 open TCP port(s)
-- Automatic device hint: None yet
-- Details still to investigate: hostname,OS,ports,DNS,device-type
+- Deep-profile status: `partial`
+- Nmap OS evidence: no reliable OS match; `needs_os_identification=true`
+- Observed TCP-port summary: TCP/9999 open
+- Reviewed device identity: TP-Link Kasa HS100 Smart Wi-Fi Plug
+- Identity confidence: High
+- OS/platform: embedded IoT firmware; exact OS remains unresolved
+- Identity evidence: ASUS DHCP hostname `HS100`, TP-Link MAC vendor, TCP/9999
 
-A `baseline` profile means the controlled seven-day backlog has not yet supplied the targeted profile for this device. Zero ports in this summary is therefore not proof that no ports are open.
+The targeted profile completed but did not yield a reliable OS fingerprint. Device identity is strong; exact embedded OS remains an AI/manual identification candidate.
 
 ## Network flows
 
@@ -50,7 +52,7 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 | Signal / service family | Evidence | Interpretation |
 |---|---|---|
-| No bounded DNS signal recorded yet | automatic dual-Pi-hole evidence | Review with other evidence before identifying the device |
+| No bounded DNS signal recorded yet | automatic dual-Pi-hole evidence | Device identity is supported by router hostname, vendor and TCP/9999 rather than DNS |
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
@@ -65,7 +67,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ## Ownership and administration
 
-- Friendly/reviewed device name:
+- Friendly/reviewed device name: TP-Link Kasa HS100
 - Owner / responsible person:
 - Physical location:
 - Management method:
@@ -78,6 +80,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 | Date | Evidence / change | Source | Reviewed by |
 |---|---|---|---|
 | 2026-09-29 | Initial persistent host record created from live inventory/detail audit | monitor-01 inventory + deep-profile + DNS state | pending review |
+| 2026-09-29 | Identified as TP-Link Kasa HS100 from ASUS DHCP hostname, TP-Link vendor and TCP/9999 evidence; exact OS remains unresolved | ASUS inventory + targeted Nmap | reviewed |
 
 ## Notes
 
