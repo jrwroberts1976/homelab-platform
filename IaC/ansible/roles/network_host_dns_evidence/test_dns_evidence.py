@@ -26,7 +26,7 @@ def load_remote_functions(db):
     selected = [
         node for node in tree.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"requested_ip", "query_summary"}
+        and node.name in {"requested_request", "domain_signals", "query_summary"}
     ]
     namespace = {
         "ipaddress": __import__("ipaddress"),
@@ -64,10 +64,11 @@ def load_monitor_functions():
     selected = [
         node for node in tree.body
         if isinstance(node, ast.FunctionDef)
-        and node.name in {"due_for_dns", "refresh"}
+        and node.name in {"due_for_dns", "correlate", "refresh"}
     ]
     namespace = {
         "FAILED_RETRY_SECONDS": 3600,
+        "EVIDENCE_VERSION": 2,
         "SERVERS": [
             {"name": "dns-01", "address": "192.168.2.51"},
             {"name": "dns-02", "address": "192.168.2.50"},
@@ -118,7 +119,9 @@ class DnsEvidenceTests(unittest.TestCase):
 
     def test_remote_summary_is_bounded_and_client_specific(self):
         worker = load_remote_functions(self.db)
-        summary = worker["query_summary"]("192.168.2.206", self.now)
+        summary = worker["query_summary"](
+            "192.168.2.206", self.now, self.now
+        )
         self.assertEqual(summary["query_count"], 3)
         self.assertEqual(
             summary["top_domains"], ["one.example", "two.example"]
@@ -126,38 +129,109 @@ class DnsEvidenceTests(unittest.TestCase):
         self.assertLessEqual(len(summary["top_domains"]), 5)
         self.assertEqual(summary["lookback_days"], 7)
 
-    def test_dns_runs_only_after_unresolved_nmap_observation(self):
+    def test_dns_runs_once_after_each_completed_profile(self):
         worker = load_monitor_functions()
         due = worker["due_for_dns"]
         record = {
-            "needs_os_identification": True,
+            "status": "complete",
             "profiled_at": 1000,
         }
         self.assertTrue(due(record, None, 1100))
         self.assertFalse(due(
             record,
-            {"checked_at": 1000, "last_attempt": 1000, "error": ""},
+            {
+                "evidence_version": 2,
+                "checked_at": 1000,
+                "last_attempt": 1000,
+                "error": "",
+            },
             1100,
         ))
         self.assertTrue(due(
             {**record, "profiled_at": 2000},
-            {"checked_at": 1000, "last_attempt": 1000, "error": ""},
+            {
+                "evidence_version": 2,
+                "checked_at": 1000,
+                "last_attempt": 1000,
+                "error": "",
+            },
             2100,
         ))
         self.assertFalse(due(
-            {"needs_os_identification": False, "profiled_at": 2000},
+            {"status": "partial", "profiled_at": 2000},
             None,
             2100,
         ))
+
+    def test_evidence_version_upgrade_forces_refresh(self):
+        worker = load_monitor_functions()
+        due = worker["due_for_dns"]
+        record = {"status": "complete", "profiled_at": 1000}
+        previous = {
+            "evidence_version": 1,
+            "checked_at": 1000,
+            "last_attempt": 1000,
+            "error": "",
+        }
+        self.assertTrue(due(record, previous, 1100))
+
+    def test_fire_tv_signal_and_correlation_are_bounded(self):
+        worker = load_remote_functions(self.db)
+        connection = sqlite3.connect(self.db)
+        connection.execute(
+            "INSERT INTO domain_by_id VALUES (3, 'ftvpes-eu.amazon.com')"
+        )
+        connection.execute(
+            "INSERT INTO query_storage(id,timestamp,domain,client) "
+            "VALUES (6,?,?,?)",
+            (self.now - 5, 3, 1),
+        )
+        connection.commit()
+        connection.close()
+
+        summary = worker["query_summary"](
+            "192.168.2.206", self.now, self.now
+        )
+        ids = {item["id"] for item in summary["signals"]}
+        self.assertIn("amazon_fire_tv", ids)
+        self.assertLessEqual(len(summary["top_domains"]), 5)
+        for signal in summary["signals"]:
+            self.assertLessEqual(len(signal["examples"]), 3)
+
+        monitor = load_monitor_functions()
+        correlated = monitor["correlate"](
+            {
+                "vendor": "Amazon Technologies",
+                "profile": {
+                    "tcp": {
+                        "ports": [{
+                            "service": {
+                                "name": "http",
+                                "product": "Amazon FireTV Stick",
+                            }
+                        }]
+                    }
+                },
+            },
+            [{
+                "signals": summary["signals"],
+            }],
+        )
+        self.assertEqual(
+            correlated["device_hint"],
+            "Amazon Fire TV / Fire TV Stick",
+        )
+        self.assertEqual(correlated["confidence"], "corroborated")
 
     def test_failed_dns_query_has_one_hour_backoff(self):
         worker = load_monitor_functions()
         due = worker["due_for_dns"]
         record = {
-            "needs_os_identification": True,
+            "status": "complete",
             "profiled_at": 2000,
         }
         previous = {
+            "evidence_version": 2,
             "checked_at": 0,
             "last_attempt": 3000,
             "error": "resolver unavailable",
@@ -169,14 +243,17 @@ class DnsEvidenceTests(unittest.TestCase):
         worker = load_monitor_functions()
         calls = []
 
-        def fake_query(server, ip):
-            calls.append((server["name"], ip))
+        def fake_query(server, ip, profiled_at):
+            calls.append((server["name"], ip, profiled_at))
             return {
                 "server": server["name"],
                 "query_count": 1,
                 "top_domains": ["service.example"],
+                "signals": [],
                 "lookback_days": 7,
                 "observed_at": 4000,
+                "window_start": 0,
+                "window_end": 4000,
             }
 
         refresh = types.FunctionType(
@@ -185,9 +262,10 @@ class DnsEvidenceTests(unittest.TestCase):
         )
         profiles = {
             "02:00:00:00:00:42": {
-                "needs_os_identification": True,
+                "status": "complete",
                 "profiled_at": 3500,
                 "profiled_ip": "192.168.2.206",
+                "profile": {"tcp": {"ports": []}},
             }
         }
         state = {"devices": {}}
@@ -196,8 +274,8 @@ class DnsEvidenceTests(unittest.TestCase):
         self.assertEqual(
             calls,
             [
-                ("dns-01", "192.168.2.206"),
-                ("dns-02", "192.168.2.206"),
+                ("dns-01", "192.168.2.206", 3500),
+                ("dns-02", "192.168.2.206", 3500),
             ],
         )
         entry = state["devices"]["02:00:00:00:00:42"]
