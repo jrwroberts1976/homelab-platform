@@ -1,0 +1,255 @@
+---
+# One-time controlled baseline sweep for the CURRENT MAC-keyed LAN inventory.
+#
+# Purpose:
+# - establish a clean 29 September 2026 scan baseline after the MAC registry
+#   has been proven complete;
+# - reuse the already-reviewed targeted profiler (top 100 TCP, version-light,
+#   OS fingerprint, no NSE/UDP in targeted mode);
+# - process at most one live MAC per profiler invocation, sequentially;
+# - never target historical-only MACs;
+# - preserve normal backlog scheduling for devices that are not present during
+#   this one-off sweep.
+#
+# This playbook does NOT subnet-scan 192.168.2.0/24.
+- name: Run controlled one-time targeted baseline sweep on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    state_root: /var/lib/homelab-network-hosts
+    inventory_file: "{{ state_root }}/inventory.json"
+    profiler_state: "{{ state_root }}/deep-profiles.json"
+    alerted_macs: "{{ state_root }}/alerted-macs.json"
+    profiler_service: homelab-network-host-deep-profiler.service
+    profiler_timer: homelab-network-host-deep-profiler.timer
+    backup_root: /var/backups/homelab-targeted-profiler
+  tasks:
+    - name: Require correct target and explicit sweep approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - targeted_profiler_one_time_sweep_approved | default(false) | bool
+        fail_msg: >-
+          Refusing one-time baseline sweep without explicit approval on the
+          verified monitor-01 target.
+
+    - name: Require profiler timer is enabled
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ profiler_timer }}"]
+      register: timer_enabled
+      changed_when: false
+
+    - name: Require profiler timer is active
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ profiler_timer }}"]
+      register: timer_active
+      changed_when: false
+
+    - name: Require existing targeted profiler mode
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import pathlib,sys;
+            s=pathlib.Path('/usr/local/sbin/homelab-network-host-deep-profiler').read_text();
+            ok=('SCAN_MODE = "targeted"' in s);
+            print('targeted_mode=pass' if ok else 'targeted_mode=fail');
+            sys.exit(0 if ok else 1)
+      register: targeted_mode
+      changed_when: false
+
+    - name: Prove current MAC inventory is already fully represented in first-seen registry
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import json,sys;
+            inv=json.load(open('{{ inventory_file }}'));
+            reg=json.load(open('{{ alerted_macs }}'));
+            devices=reg.get('devices',{});
+            norm=lambda x:str(x or '').strip().lower().replace('-',':');
+            current={norm(v.get('mac')) for v in inv.values()
+              if isinstance(v,dict) and norm(v.get('mac'))};
+            registered={norm(k) for k in devices};
+            missing=sorted(current-registered);
+            print('current_macs='+str(len(current)));
+            print('registered_macs='+str(len(registered)));
+            print('missing_baseline='+str(len(missing)));
+            print('missing='+','.join(missing));
+            sys.exit(0 if current and not missing else 1)
+      register: registry_guard
+      changed_when: false
+
+    - name: Determine current distinct MAC count
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import json;
+            d=json.load(open('{{ inventory_file }}'));
+            m={str(v.get('mac','')).strip().lower() for v in d.values()
+              if isinstance(v,dict) and str(v.get('mac','')).strip()};
+            print(len(m))
+      register: current_mac_count
+      changed_when: false
+
+    - name: Require sane current inventory size
+      ansible.builtin.assert:
+        that:
+          - timer_enabled.stdout == 'enabled'
+          - timer_active.stdout == 'active'
+          - targeted_mode.stdout == 'targeted_mode=pass'
+          - current_mac_count.stdout | int >= 1
+          - current_mac_count.stdout | int <= 254
+
+    - name: Create protected backup directory
+      ansible.builtin.file:
+        path: "{{ backup_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Set one-time sweep backup path
+      ansible.builtin.set_fact:
+        sweep_backup: >-
+          {{ backup_root }}/deep-profiles-before-one-time-sweep-{{
+          ansible_date_time.iso8601_basic_short }}.json
+
+    - name: Preserve profiler state before sweep
+      ansible.builtin.copy:
+        src: "{{ profiler_state }}"
+        dest: "{{ sweep_backup }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+
+    - name: Stop normal profiler timer during one-time sweep
+      ansible.builtin.systemd_service:
+        name: "{{ profiler_timer }}"
+        state: stopped
+
+    - name: Make all CURRENT baseline records due for this sweep only
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import json,os,tempfile;
+            inv=json.load(open('{{ inventory_file }}'));
+            p='{{ profiler_state }}';
+            d=json.load(open(p));
+            profiles=d.get('profiles',{});
+            current={str(v.get('mac','')).strip().lower() for v in inv.values()
+              if isinstance(v,dict) and str(v.get('mac','')).strip()};
+            changed=0;
+            for_mac=[];
+            [for_mac.append((m,r)) for m,r in profiles.items()
+              if m in current and isinstance(r,dict) and r.get('status')=='baseline'];
+            for m,r in for_mac:
+              r['baseline_backlog']=True;
+              r['backlog_due_at']=0;
+              changed+=1;
+            fd,tmp=tempfile.mkstemp(dir=os.path.dirname(p),prefix='.deep-sweep-');
+            f=os.fdopen(fd,'w'); json.dump(d,f,indent=2,sort_keys=True);
+            f.write('\n'); f.flush(); os.fsync(f.fileno()); f.close();
+            os.chmod(tmp,0o600); os.replace(tmp,p);
+            print('baseline_records_due='+str(changed))
+      register: due_patch
+      changed_when: true
+
+    - name: Run sequential bounded profiler passes for every current MAC slot
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, start, "{{ profiler_service }}"]
+      loop: "{{ range(0, current_mac_count.stdout | int) | list }}"
+      loop_control:
+        label: "bounded-pass-{{ item | int + 1 }}-of-{{ current_mac_count.stdout }}"
+      changed_when: true
+
+    - name: Restore original backlog schedule only for records still baseline
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import json,os,tempfile;
+            p='{{ profiler_state }}';
+            current=json.load(open(p));
+            before=json.load(open('{{ sweep_backup }}'));
+            cp=current.get('profiles',{});
+            bp=before.get('profiles',{});
+            restored=0;
+            for m,r in cp.items():
+              if not isinstance(r,dict) or r.get('status')!='baseline': continue;
+              old=bp.get(m,{});
+              if 'backlog_due_at' in old: r['backlog_due_at']=old['backlog_due_at'];
+              else: r.pop('backlog_due_at',None);
+              if 'baseline_backlog' in old: r['baseline_backlog']=old['baseline_backlog'];
+              else: r.pop('baseline_backlog',None);
+              restored+=1;
+            fd,tmp=tempfile.mkstemp(dir=os.path.dirname(p),prefix='.deep-restore-schedule-');
+            f=os.fdopen(fd,'w'); json.dump(current,f,indent=2,sort_keys=True);
+            f.write('\n'); f.flush(); os.fsync(f.fileno()); f.close();
+            os.chmod(tmp,0o600); os.replace(tmp,p);
+            print('remaining_baseline_schedule_restored='+str(restored))
+      register: schedule_restore
+      changed_when: true
+
+    - name: Re-enable and start normal profiler timer
+      ansible.builtin.systemd_service:
+        name: "{{ profiler_timer }}"
+        enabled: true
+        state: started
+
+    - name: Run DNS evidence collector once for newly completed profiles
+      ansible.builtin.systemd_service:
+        name: homelab-network-dns-evidence.service
+        state: started
+
+    - name: Summarise post-sweep profiler state
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import collections,json;
+            d=json.load(open('{{ profiler_state }}'));
+            p=d.get('profiles',{});
+            c=collections.Counter(
+              r.get('status','invalid') for r in p.values() if isinstance(r,dict));
+            print('profiles_total='+str(len(p)));
+            [print(k+'='+str(c[k])) for k in sorted(c)];
+      register: sweep_summary
+      changed_when: false
+
+    - name: Verify normal timer recovered
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-active, "{{ profiler_timer }}"]
+      register: timer_after
+      changed_when: false
+
+    - name: Report one-time sweep result
+      ansible.builtin.debug:
+        msg:
+          - "{{ registry_guard.stdout_lines }}"
+          - "{{ due_patch.stdout }}"
+          - "{{ schedule_restore.stdout }}"
+          - "{{ sweep_summary.stdout_lines }}"
+          - "profiler_timer={{ timer_after.stdout }}"
+          - "backup={{ sweep_backup }}"
