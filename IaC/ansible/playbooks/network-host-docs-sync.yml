@@ -1,0 +1,8 @@
+---
+- name: Publish bounded passive flow evidence to network host records
+  hosts: admin_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: network_host_docs_sync
