@@ -16,6 +16,7 @@ REMOTE_USER = "{{ network_host_dns_evidence_remote_user }}"
 FAILED_RETRY_SECONDS = {{ network_host_dns_evidence_failed_retry_seconds }}
 SERVERS = {{ network_host_dns_evidence_servers | to_json }}
 NOW = int(time.time())
+EVIDENCE_VERSION = 2
 
 
 def load_json(path, default=None):
@@ -62,6 +63,9 @@ def due_for_dns(record, previous, now):
     if not isinstance(previous, dict):
         return True
 
+    if int(previous.get("evidence_version", 0) or 0) < EVIDENCE_VERSION:
+        return True
+
     checked_at = int(previous.get("checked_at", 0) or 0)
     if checked_at >= profiled_at and not previous.get("error"):
         return False
@@ -73,7 +77,7 @@ def due_for_dns(record, previous, now):
     return True
 
 
-def query_server(server, ip):
+def query_server(server, ip, profiled_at):
     command = [
         "/usr/bin/ssh",
         "-T",
@@ -83,7 +87,7 @@ def query_server(server, ip):
         "-o", "UserKnownHostsFile=" + KNOWN_HOSTS,
         "-i", KEY,
         REMOTE_USER + "@" + server["address"],
-        "query", ip,
+        "query", ip, str(profiled_at),
     ]
     result = subprocess.run(
         command,
@@ -131,6 +135,8 @@ def query_server(server, ip):
         "signals": clean_signals,
         "lookback_days": int(payload.get("lookback_days", 7)),
         "observed_at": int(payload.get("observed_at", 0) or 0),
+        "window_start": int(payload.get("window_start", 0) or 0),
+        "window_end": int(payload.get("window_end", 0) or 0),
     }
 
 
@@ -210,11 +216,12 @@ def refresh(profiles, state, now):
             "checked_at": 0,
             "servers": [],
             "error": "",
+            "evidence_version": EVIDENCE_VERSION,
         }
 
         try:
             entry["servers"] = [
-                query_server(server, ip)
+                query_server(server, ip, entry["profiled_at"])
                 for server in SERVERS
             ]
             entry.update(correlate(record, entry["servers"]))
@@ -225,7 +232,7 @@ def refresh(profiles, state, now):
         records[mac] = entry
         refreshed += 1
 
-    state["schema_version"] = 2
+    state["schema_version"] = 3
     state["last_run"] = now
     return refreshed
 
