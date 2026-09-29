@@ -31,23 +31,26 @@ def number(value):
         return 0
 
 def candidate_logs():
-    paths = set()
+    paths = {}
     for p in (
         PREFIX / "logs" / "current" / "conn.log",
         PREFIX / "spool" / "zeek" / "conn.log",
     ):
         if p.exists():
-            paths.add(p)
+            try:
+                paths[str(p.resolve())] = p.resolve()
+            except OSError:
+                continue
     logs_root = PREFIX / "logs"
     if logs_root.exists():
         for pattern in ("**/conn.log", "**/conn.*.log", "**/conn.log.gz", "**/conn.*.log.gz"):
             for p in logs_root.glob(pattern):
                 try:
                     if p.stat().st_mtime >= CUTOFF - 86400:
-                        paths.add(p)
+                        paths[str(p.resolve())] = p.resolve()
                 except OSError:
                     continue
-    return sorted(paths)
+    return sorted(paths.values())
 
 def open_log(path):
     if path.suffix == ".gz":
