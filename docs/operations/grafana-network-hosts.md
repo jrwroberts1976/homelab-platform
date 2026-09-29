@@ -1,16 +1,19 @@
 # Network Hosts — recreated legacy Grafana workflow (2026-09)
 
-**Deployment truth, 26 September 2026:** Grafana, Prometheus, the seven-panel
-Network Hosts overview, the individual host dashboard generator and 50 indexed
-host pages are live on `monitor-01`. The collector and enrichment schedules
-still run on `Proxmox-2`. Its deep-profiler scan timer is disabled; the
-first read-only fingerprint exporter was installed there but exported zero
-matches because of older scan timestamps. A newer exporter can recover up
-to eight saved OS matches, but that fix has not yet been verified live.
-The 26 September staging run transferred all three JSON files and recovered eight historical Nmap fingerprints locally on monitor-01, but all four staged timers are still disabled. The production inventory exporter still queries the Proxmox-2 metric; no individual host page has yet been switched to the staged OS evidence. Do not assume the single-owner cutover has happened.
-See [the verified preflight and staged migration](network-discovery-monitor01-migration.md).
-The legacy Proxmox-2 fingerprint deployment instructions below are retained
-as historical context and **must not be rerun for the migration**.
+**Deployment truth, 29 September 2026:** Grafana, Prometheus, the Network
+Hosts overview and generated per-device dashboards are live on `monitor-01`.
+The 27 September Gate 3 cutover made `monitor-01` the single active owner of
+network discovery/enrichment and saved OS evidence. The targeted deep profiler
+is active with a controlled seven-day baseline backlog and weekly re-profiling
+of current completed devices. Automatic dual-Pi-hole DNS evidence collection
+is also enabled and active on `monitor-01`: it reads only bounded,
+privacy-minimised evidence from `dns-01` and `dns-02`, correlates it with
+MAC/vendor and Nmap evidence, and publishes the result into the network
+inventory used by Grafana. See
+[Automated network-device identification](network-device-identification.md)
+for the current production flow. Historical Proxmox-2 deployment instructions
+later in this document are retained only as migration history and must not be
+used to infer current ownership.
 
 This implementation recreates the **behaviour** documented by the retired
 `home-lab-docs/network-discovery-dashboard.md`. The historical generator and
@@ -52,13 +55,15 @@ really exists on this individual host**.
 | `sensor-01` or another Linux host with telemetry | The same device/network details, **plus only** CPU, memory, disk, network, patching and filesystem panels whose relevant metrics have samples. A measured **zero** security updates remains a valid value and its panel remains. |
 | Camera, phone, disconnected IoT | Only observed presence, identity, ports (if scanned) and DNS clues (if observed). No blank panels for uncollected measurements. |
 
-Source-specific limitations are visible: authoritative OS from the
-`IaC/inventory/estate.json` inventory, separate DNS- and Nmap-inferred OS,
-and observed open ports from **limited** scans. An empty port record or timed
-out Nmap scan is **not** proof that the device has no open ports.
-Current curated DNS clues are a dated **18–25 September 2026 snapshot** from
-`dns-01` and `dns-02`; continuous DNS/AI analysis is *not* deployed by
-this dashboard.
+Source-specific limitations are visible: authoritative OS from canonical
+inventory and fresh Zabbix Agent 2 facts, separate DNS- and Nmap-inferred
+evidence, and observed open ports from **limited** scans. An empty port record
+or timed-out Nmap scan is **not** proof that the device has no open ports.
+As of 29 September, DNS clues can also come from the automatic dual-Pi-hole
+evidence pipeline. Raw Pi-hole history remains on the resolvers; only bounded
+query counts, top-domain summaries, reviewed signal classes and a few examples
+are returned to `monitor-01`. DNS evidence remains supporting/inferred and
+does not override authoritative OS facts.
 
 ## Restored two-loop architecture
 
@@ -67,7 +72,8 @@ generation loops. The new deployment follows the same separation:
 
 ```text
 Current ASUS router inventory + current monitoring discovery
-  + canonical IaC estate + dated, minimised dns-01/dns-02 clues
+  + canonical IaC/Zabbix host facts
+  + automatic bounded dns-01/dns-02 evidence
   + usable selective Nmap observations
             |
             v
