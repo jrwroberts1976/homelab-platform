@@ -37,11 +37,11 @@ bounded service/domain-family evidence with timestamps and source.
 | home-01 | `192.168.2.60` | `02:00:00:00:02:04` | [Open](home-01.md) |
 | proxmox | `192.168.2.70` | `80:e8:2c:1c:55:d2` | [Open](proxmox.md) |
 | proxmox-2 | `192.168.2.71` | `00:1a:9f:0c:30:3b` | [Open](proxmox-2.md) |
-| Unidentified 192.168.2.76 | `192.168.2.76` | `68:ff:7b:1b:1e:ab` | [Open](mac-68-ff-7b-1b-1e-ab.md) |
+| TP-Link Kasa HS100 | `192.168.2.76` | `68:ff:7b:1b:1e:ab` | [Open](mac-68-ff-7b-1b-1e-ab.md) |
 | front-door-camera | `192.168.2.78` | `3c:52:a1:86:bc:56` | [Open](mac-3c-52-a1-86-bc-56.md) |
 | garden-gate-camera | `192.168.2.90` | `3c:64:cf:87:ae:ea` | [Open](mac-3c-64-cf-87-ae-ea.md) |
 | living-room-lamp-bulb | `192.168.2.91` | `68:ff:7b:1b:33:c0` | [Open](mac-68-ff-7b-1b-33-c0.md) |
-| Unidentified 192.168.2.92 | `192.168.2.92` | `60:83:e7:f4:0b:2e` | [Open](mac-60-83-e7-f4-0b-2e.md) |
+| TP-Link Tapo P110 | `192.168.2.92` | `60:83:e7:f4:0b:2e` | [Open](mac-60-83-e7-f4-0b-2e.md) |
 | acer-lights | `192.168.2.95` | `60:83:e7:f3:c1:92` | [Open](mac-60-83-e7-f3-c1-92.md) |
 | hp-printer | `192.168.2.123` | `c4:65:16:79:58:08` | [Open](mac-c4-65-16-79-58-08.md) |
 | front-drive-camera | `192.168.2.128` | `5c:e9:31:18:c1:4a` | [Open](mac-5c-e9-31-18-c1-4a.md) |
