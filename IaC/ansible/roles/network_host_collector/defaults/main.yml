@@ -38,6 +38,27 @@ network_host_collector_interval: "5min"
 
 network_host_collector_offline_after_seconds: 900
 
+# Canonical infrastructure identities mirrored from IaC/inventory/estate.json.
+# These names outrank resolver/service aliases (for example Pi-hole's
+# generic "pi.hole") so inventory identity remains stable.
+network_host_collector_canonical_hostnames:
+  "192.168.2.48": "admin-01.jameshouse"
+  "192.168.2.50": "dns-02.jameshouse"
+  "192.168.2.51": "dns-01.jameshouse"
+  "192.168.2.52": "monitor-01.jameshouse"
+  "192.168.2.53": "cloud-01.jameshouse"
+  "192.168.2.54": "mail-relay-01.jameshouse"
+  "192.168.2.55": "sensor-01.jameshouse"
+  "192.168.2.56": "edge-01.jameshouse"
+  "192.168.2.57": "greenbone-01.jameshouse"
+  "192.168.2.58": "komodo-01.jameshouse"
+  "192.168.2.59": "zabbix-01.jameshouse"
+  "192.168.2.60": "home-01.jameshouse"
+  "192.168.2.70": "proxmox.jameshouse"
+  "192.168.2.71": "proxmox-2.jameshouse"
+  "192.168.2.195": "media-01.jameshouse"
+  "192.168.2.220": "docker-01.jameshouse"
+
 # Optional ASUS DHCP/ARP inventory. When present, its DHCP hostname is used
 # only as a fallback when reverse DNS does not provide a hostname.
 network_host_collector_router_hostname_snapshot:
