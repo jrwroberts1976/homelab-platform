@@ -1,0 +1,21 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Resolve genuinely unidentified network hosts using bounded AI evidence
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists={{ network_host_ai_resolver_environment }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0077
+EnvironmentFile={{ network_host_ai_resolver_environment }}
+ExecStart={{ network_host_ai_resolver_script }}
+TimeoutStartSec=180
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths={{ network_host_ai_resolver_state_dir }}
