@@ -26,6 +26,22 @@
       Refusing host-doc sync deployment: repository or host-record index is
       missing on admin-01.
 
+- name: Verify Git and sensor access for docs publisher
+  ansible.builtin.shell: |
+    set -euo pipefail
+    REPO='{{ network_host_docs_sync_repo_path }}'
+    test "$(git -C "$REPO" branch --show-current)" = '{{ network_host_docs_sync_git_branch }}'
+    test -z "$(git -C "$REPO" status --porcelain)"
+    test -n "$(git -C "$REPO" config user.name)"
+    test -n "$(git -C "$REPO" config user.email)"
+    git -C "$REPO" ls-remote --exit-code '{{ network_host_docs_sync_git_remote }}'       'refs/heads/{{ network_host_docs_sync_git_branch }}' >/dev/null
+    ssh -o BatchMode=yes -o ConnectTimeout=10       '{{ network_host_docs_sync_sensor_user }}@{{ network_host_docs_sync_sensor_host }}'       "test -r '{{ network_host_docs_sync_flow_summary }}' && head -c 1 '{{ network_host_docs_sync_flow_summary }}'"       | grep -Fxq '{'
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ network_host_docs_sync_user }}"
+  changed_when: false
+
 - name: Install network host docs sync publisher
   ansible.builtin.template:
     src: homelab-network-host-docs-sync.py.j2
