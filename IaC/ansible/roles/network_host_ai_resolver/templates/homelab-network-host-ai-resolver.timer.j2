@@ -1,0 +1,12 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Check unresolved network hosts for AI identification
+
+[Timer]
+OnCalendar={{ network_host_ai_resolver_on_calendar }}
+Persistent=true
+RandomizedDelaySec={{ network_host_ai_resolver_randomized_delay_seconds }}
+Unit={{ network_host_ai_resolver_service_name }}
+
+[Install]
+WantedBy=timers.target
