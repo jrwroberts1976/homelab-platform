@@ -1,0 +1,11 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Build 24-hour MAC-keyed Zeek flow summary
+After={{ network_sensor_zeek_service_name }}
+Requires={{ network_sensor_zeek_service_name }}
+
+[Service]
+Type=oneshot
+ExecStart={{ network_sensor_zeek_flow_summary_script }}
+User=root
+Group=root
