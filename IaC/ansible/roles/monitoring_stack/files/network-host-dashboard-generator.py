@@ -236,9 +236,21 @@ def profile(template, key, metric, availability=None):
     result = copy.deepcopy(template)
     result["id"] = None
     result["uid"] = uid_for(key)
-    name = (metric.get("hostname") or metric.get("ip") or "").strip()[:85]
+    hostname = (metric.get("hostname") or "").strip()
+    ip = (metric.get("ip") or "").strip()
+    kind = (metric.get("kind") or "").strip()
+
+    # For unidentified devices the exporter intentionally falls back to using
+    # the IP address as the hostname. Once correlated evidence supplies a useful
+    # device type, prefer that friendly identity in the generated dashboard
+    # title while retaining the IP for disambiguation.
+    if kind and (not hostname or hostname == ip):
+        name = ("%s (%s)" % (kind, ip)).strip()[:85]
+    else:
+        name = (hostname or ip or kind).strip()[:85]
+
     if not name:
-        raise ValueError("Device has no human-readable hostname or IP")
+        raise ValueError("Device has no human-readable hostname, IP or type")
     result["title"] = "Homelab — %s" % name
     result["description"] = (
         "Automatically generated from MAC/IP evidence. Current identity, "
