@@ -1,0 +1,88 @@
+---
+- name: Deploy ASUS DHCP hostname fallback to monitor-01 discovery
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    collector_defaults:
+      "{{ playbook_dir }}/../roles/network_host_collector/defaults/main.yml"
+
+  tasks:
+    - name: Validate monitor-01 target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "monitor-01"
+          - ansible_facts.hostname == "monitor-01"
+          - ansible_facts.default_ipv4.address == "192.168.2.52"
+          - ansible_facts.default_ipv4.interface == "eth0"
+
+    - name: Load collector defaults
+      ansible.builtin.include_vars:
+        file: "{{ collector_defaults }}"
+
+    - name: Use commissioned monitor-01 collector interface
+      ansible.builtin.set_fact:
+        network_host_collector_interface: eth0
+
+    - name: Verify ASUS inventory database exists
+      ansible.builtin.stat:
+        path: "{{ network_host_collector_asus_inventory_database }}"
+      register: router_inventory_database
+
+    - name: Require ASUS router evidence database
+      ansible.builtin.assert:
+        that:
+          - router_inventory_database.stat.isreg | default(false)
+        fail_msg: >-
+          ASUS inventory database is missing; refusing to deploy hostname
+          fallback until router evidence is available.
+
+    - name: Install updated collector only
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/network_host_collector/templates/homelab-network-host-collector.py.j2"
+        dest: "{{ network_host_collector_script }}"
+        owner: root
+        group: root
+        mode: "0755"
+      register: collector_update
+
+    - name: Validate collector syntax
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - py_compile
+          - "{{ network_host_collector_script }}"
+      changed_when: false
+
+    - name: Run one discovery pass with router hostname evidence
+      ansible.builtin.systemd_service:
+        name: "{{ network_host_collector_service }}"
+        state: started
+
+    - name: Resume network evidence timers after controlled purge
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: started
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-dns-evidence.timer
+        - asus-network-inventory.timer
+
+    - name: Verify all resumed timers are active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ item }}"
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-dns-evidence.timer
+        - asus-network-inventory.timer
+      register: resumed_timers
+      changed_when: false
+      failed_when: resumed_timers.stdout != "active"
