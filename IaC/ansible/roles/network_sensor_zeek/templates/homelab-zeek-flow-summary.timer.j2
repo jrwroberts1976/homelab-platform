@@ -1,0 +1,12 @@
+# Managed by homelab-platform IaC.
+[Unit]
+Description=Daily Zeek flow summary
+
+[Timer]
+OnCalendar={{ network_sensor_zeek_flow_summary_on_calendar }}
+Persistent=true
+RandomizedDelaySec=300
+Unit={{ network_sensor_zeek_flow_summary_service_name }}
+
+[Install]
+WantedBy=timers.target
