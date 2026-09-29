@@ -1,0 +1,8 @@
+---
+- name: Deploy bounded AI resolver for unresolved network hosts
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+
+  roles:
+    - role: network_host_ai_resolver
