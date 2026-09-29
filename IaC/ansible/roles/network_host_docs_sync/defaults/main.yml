@@ -1,0 +1,17 @@
+---
+network_host_docs_sync_expected_hostname: admin-01
+network_host_docs_sync_repo_path: /home/james/projects/homelab-platform
+network_host_docs_sync_user: james
+network_host_docs_sync_group: james
+network_host_docs_sync_sensor_host: sensor-01
+network_host_docs_sync_sensor_user: james
+network_host_docs_sync_flow_summary: /var/lib/homelab-network-hosts/zeek-flow-summary.json
+network_host_docs_sync_script: /usr/local/sbin/homelab-network-host-docs-sync
+network_host_docs_sync_service_name: homelab-network-host-docs-sync.service
+network_host_docs_sync_timer_name: homelab-network-host-docs-sync.timer
+network_host_docs_sync_on_calendar: "*-*-* 00:45:00"
+network_host_docs_sync_randomized_delay_seconds: 300
+network_host_docs_sync_git_remote: origin
+network_host_docs_sync_git_branch: main
+network_host_docs_sync_enable_timer: true
+network_host_docs_sync_run_initial: true
