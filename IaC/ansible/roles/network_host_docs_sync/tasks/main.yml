@@ -1,0 +1,95 @@
+---
+- name: Validate network host docs sync target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == network_host_docs_sync_expected_hostname
+      - network_host_docs_sync_repo_path | length > 0
+      - network_host_docs_sync_sensor_host | length > 0
+    fail_msg: >-
+      Refusing host-doc sync deployment: target must be the expected admin host
+      with an explicit repository path and sensor hostname.
+
+- name: Verify repository and host records exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ network_host_docs_sync_repo_path }}/.git"
+    - "{{ network_host_docs_sync_repo_path }}/docs/network/hosts/README.md"
+  register: network_host_docs_sync_paths
+
+- name: Assert repository prerequisites
+  ansible.builtin.assert:
+    that:
+      - network_host_docs_sync_paths.results | map(attribute='stat.exists') | min
+    fail_msg: >-
+      Refusing host-doc sync deployment: repository or host-record index is
+      missing on admin-01.
+
+- name: Install network host docs sync publisher
+  ansible.builtin.template:
+    src: homelab-network-host-docs-sync.py.j2
+    dest: "{{ network_host_docs_sync_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: network_host_docs_sync_script_template
+
+- name: Install network host docs sync service
+  ansible.builtin.template:
+    src: homelab-network-host-docs-sync.service.j2
+    dest: "/etc/systemd/system/{{ network_host_docs_sync_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_host_docs_sync_service_template
+
+- name: Install network host docs sync timer
+  ansible.builtin.template:
+    src: homelab-network-host-docs-sync.timer.j2
+    dest: "/etc/systemd/system/{{ network_host_docs_sync_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: network_host_docs_sync_timer_template
+
+- name: Reload systemd for network host docs sync
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: >-
+    network_host_docs_sync_service_template.changed
+    or network_host_docs_sync_timer_template.changed
+
+- name: Run initial bounded host docs sync
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_docs_sync_service_name }}"
+    state: started
+  when: network_host_docs_sync_run_initial | bool
+
+- name: Enable daily network host docs sync timer
+  ansible.builtin.systemd_service:
+    name: "{{ network_host_docs_sync_timer_name }}"
+    enabled: true
+    state: started
+  when: network_host_docs_sync_enable_timer | bool
+
+- name: Verify network host docs sync timer
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled '{{ network_host_docs_sync_timer_name }}' | grep -Fxq enabled
+    systemctl is-active '{{ network_host_docs_sync_timer_name }}' | grep -Fxq active
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: network_host_docs_sync_enable_timer | bool
+
+- name: Verify no failed systemd units after network host docs sync deployment
+  ansible.builtin.command:
+    argv:
+      - systemctl
+      - --failed
+      - --no-legend
+      - --plain
+  register: network_host_docs_sync_failed_units
+  changed_when: false
+  failed_when: network_host_docs_sync_failed_units.stdout | trim | length > 0
