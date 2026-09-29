@@ -9,3 +9,12 @@ network_sensor_zeek_node_file: /opt/zeek/etc/node.cfg
 network_sensor_zeek_policy_file: /opt/zeek/share/zeek/site/homelab.zeek
 network_sensor_zeek_conn_log: /opt/zeek/logs/current/conn.log
 network_sensor_zeek_runtime_wait_seconds: 30
+network_sensor_zeek_flow_summary_enabled: true
+network_sensor_zeek_flow_summary_script: /usr/local/sbin/homelab-zeek-flow-summary
+network_sensor_zeek_flow_summary_state_dir: /var/lib/homelab-network-hosts
+network_sensor_zeek_flow_summary_output: /var/lib/homelab-network-hosts/zeek-flow-summary.json
+network_sensor_zeek_flow_summary_service_name: homelab-zeek-flow-summary.service
+network_sensor_zeek_flow_summary_timer_name: homelab-zeek-flow-summary.timer
+network_sensor_zeek_flow_summary_window_seconds: 86400
+network_sensor_zeek_flow_summary_top_n: 10
+network_sensor_zeek_flow_summary_on_calendar: "*-*-* 00:20:00"
