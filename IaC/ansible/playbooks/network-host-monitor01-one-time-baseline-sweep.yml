@@ -148,26 +148,37 @@
           - /usr/bin/python3
           - -B
           - -c
-          - >-
-            import json,os,tempfile;
-            inv=json.load(open('{{ inventory_file }}'));
-            p='{{ profiler_state }}';
-            d=json.load(open(p));
-            profiles=d.get('profiles',{});
-            current={str(v.get('mac','')).strip().lower() for v in inv.values()
-              if isinstance(v,dict) and str(v.get('mac','')).strip()};
-            changed=0;
-            for_mac=[];
-            [for_mac.append((m,r)) for m,r in profiles.items()
-              if m in current and isinstance(r,dict) and r.get('status')=='baseline'];
-            for m,r in for_mac:
-              r['baseline_backlog']=True;
-              r['backlog_due_at']=0;
-              changed+=1;
-            fd,tmp=tempfile.mkstemp(dir=os.path.dirname(p),prefix='.deep-sweep-');
-            f=os.fdopen(fd,'w'); json.dump(d,f,indent=2,sort_keys=True);
-            f.write('\n'); f.flush(); os.fsync(f.fileno()); f.close();
-            os.chmod(tmp,0o600); os.replace(tmp,p);
+          - |
+            import json,os,tempfile
+            inv=json.load(open('{{ inventory_file }}'))
+            p='{{ profiler_state }}'
+            d=json.load(open(p))
+            profiles=d.get('profiles',{})
+            current={
+                str(v.get('mac','')).strip().lower()
+                for v in inv.values()
+                if isinstance(v,dict) and str(v.get('mac','')).strip()
+            }
+            changed=0
+            for mac,record in profiles.items():
+                if (
+                    mac in current
+                    and isinstance(record,dict)
+                    and record.get('status')=='baseline'
+                ):
+                    record['baseline_backlog']=True
+                    record['backlog_due_at']=0
+                    changed+=1
+            fd,tmp=tempfile.mkstemp(
+                dir=os.path.dirname(p),prefix='.deep-sweep-'
+            )
+            with os.fdopen(fd,'w') as f:
+                json.dump(d,f,indent=2,sort_keys=True)
+                f.write('\n')
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp,0o600)
+            os.replace(tmp,p)
             print('baseline_records_due='+str(changed))
       register: due_patch
       changed_when: true
@@ -186,26 +197,37 @@
           - /usr/bin/python3
           - -B
           - -c
-          - >-
-            import json,os,tempfile;
-            p='{{ profiler_state }}';
-            current=json.load(open(p));
-            before=json.load(open('{{ sweep_backup }}'));
-            cp=current.get('profiles',{});
-            bp=before.get('profiles',{});
-            restored=0;
-            for m,r in cp.items():
-              if not isinstance(r,dict) or r.get('status')!='baseline': continue;
-              old=bp.get(m,{});
-              if 'backlog_due_at' in old: r['backlog_due_at']=old['backlog_due_at'];
-              else: r.pop('backlog_due_at',None);
-              if 'baseline_backlog' in old: r['baseline_backlog']=old['baseline_backlog'];
-              else: r.pop('baseline_backlog',None);
-              restored+=1;
-            fd,tmp=tempfile.mkstemp(dir=os.path.dirname(p),prefix='.deep-restore-schedule-');
-            f=os.fdopen(fd,'w'); json.dump(current,f,indent=2,sort_keys=True);
-            f.write('\n'); f.flush(); os.fsync(f.fileno()); f.close();
-            os.chmod(tmp,0o600); os.replace(tmp,p);
+          - |
+            import json,os,tempfile
+            p='{{ profiler_state }}'
+            current=json.load(open(p))
+            before=json.load(open('{{ sweep_backup }}'))
+            cp=current.get('profiles',{})
+            bp=before.get('profiles',{})
+            restored=0
+            for mac,record in cp.items():
+                if not isinstance(record,dict) or record.get('status')!='baseline':
+                    continue
+                old=bp.get(mac,{})
+                if 'backlog_due_at' in old:
+                    record['backlog_due_at']=old['backlog_due_at']
+                else:
+                    record.pop('backlog_due_at',None)
+                if 'baseline_backlog' in old:
+                    record['baseline_backlog']=old['baseline_backlog']
+                else:
+                    record.pop('baseline_backlog',None)
+                restored+=1
+            fd,tmp=tempfile.mkstemp(
+                dir=os.path.dirname(p),prefix='.deep-restore-schedule-'
+            )
+            with os.fdopen(fd,'w') as f:
+                json.dump(current,f,indent=2,sort_keys=True)
+                f.write('\n')
+                f.flush()
+                os.fsync(f.fileno())
+            os.chmod(tmp,0o600)
+            os.replace(tmp,p)
             print('remaining_baseline_schedule_restored='+str(restored))
       register: schedule_restore
       changed_when: true
