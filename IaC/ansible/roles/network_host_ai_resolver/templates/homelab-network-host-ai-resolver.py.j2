@@ -1,0 +1,446 @@
+#!/usr/bin/env python3
+
+import hashlib
+import json
+import os
+import sqlite3
+import tempfile
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+STATE_DIR = Path("{{ network_host_ai_resolver_state_dir }}")
+INVENTORY = Path("{{ network_host_ai_resolver_inventory }}")
+PROFILES = Path("{{ network_host_ai_resolver_profiles }}")
+DNS = Path("{{ network_host_ai_resolver_dns }}")
+ENRICHMENT = Path("{{ network_host_ai_resolver_enrichment }}")
+ROUTER_DB = Path("{{ network_host_ai_resolver_router_db }}")
+OPTIONAL_ZEEK = Path("{{ network_host_ai_resolver_optional_zeek }}")
+OUTPUT = Path("{{ network_host_ai_resolver_output }}")
+
+MODEL = os.environ.get(
+    "OPENAI_MODEL",
+    "{{ network_host_ai_resolver_model }}",
+).strip()
+API_URL = os.environ.get(
+    "OPENAI_RESPONSES_URL",
+    "https://api.openai.com/v1/responses",
+).strip()
+API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+
+MAX_DEVICES = {{ network_host_ai_resolver_max_devices_per_run | int }}
+RETRY_SECONDS = {{ network_host_ai_resolver_retry_seconds | int }}
+NOW = int(time.time())
+
+
+def load_json(path, default=None):
+    if not path.exists():
+        return default if default is not None else {}
+
+    value = json.loads(path.read_text())
+    if not isinstance(value, dict):
+        raise RuntimeError(f"Expected JSON object in {path}")
+    return value
+
+
+def save_atomic(path, value):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    fd, tmp = tempfile.mkstemp(
+        dir=str(path.parent),
+        prefix=f".{path.name}.",
+    )
+    try:
+        with os.fdopen(fd, "w") as handle:
+            json.dump(value, handle, indent=2, sort_keys=True)
+            handle.write("\n")
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.chmod(tmp, 0o600)
+        os.replace(tmp, path)
+    finally:
+        if os.path.exists(tmp):
+            os.unlink(tmp)
+
+
+def current_inventory_by_mac(inventory):
+    current = {}
+    for ip, entry in inventory.items():
+        if not isinstance(entry, dict):
+            continue
+        mac = str(entry.get("mac") or "").strip().lower()
+        if not mac:
+            continue
+
+        candidate = dict(entry)
+        candidate["ip"] = str(entry.get("ip") or ip)
+        existing = current.get(mac)
+
+        if (
+            existing is None
+            or int(candidate.get("last_seen", 0) or 0)
+            >= int(existing.get("last_seen", 0) or 0)
+        ):
+            current[mac] = candidate
+
+    return current
+
+
+def router_identity():
+    result = {}
+    if not ROUTER_DB.exists():
+        return result
+
+    uri = "file:" + str(ROUTER_DB) + "?mode=ro"
+    con = sqlite3.connect(uri, uri=True, timeout=2)
+    con.row_factory = sqlite3.Row
+    try:
+        rows = con.execute(
+            """
+            SELECT ip, mac, hostname, dhcp_hostname, online, last_seen
+            FROM assets
+            """
+        ).fetchall()
+    finally:
+        con.close()
+
+    for row in rows:
+        mac = str(row["mac"] or "").strip().lower()
+        if not mac:
+            continue
+        candidate = {
+            "ip": str(row["ip"] or ""),
+            "hostname": str(row["hostname"] or ""),
+            "dhcp_hostname": str(row["dhcp_hostname"] or ""),
+            "online": bool(row["online"]),
+            "last_seen": int(row["last_seen"] or 0),
+        }
+        old = result.get(mac)
+        if old is None or candidate["last_seen"] >= old["last_seen"]:
+            result[mac] = candidate
+
+    return result
+
+
+def bounded_dns(record):
+    if not isinstance(record, dict):
+        return {}
+
+    servers = []
+    for server in record.get("servers", [])[:2]:
+        if not isinstance(server, dict):
+            continue
+        servers.append({
+            "server": server.get("server", ""),
+            "signals": server.get("signals", [])[:5],
+            "top_domains": server.get("top_domains", [])[:5],
+        })
+
+    return {
+        "confidence": record.get("confidence", ""),
+        "device_hint": record.get("device_hint", ""),
+        "dns_hint": record.get("dns_hint", ""),
+        "signal_ids": record.get("signal_ids", [])[:8],
+        "servers": servers,
+    }
+
+
+def bounded_profile(record):
+    if not isinstance(record, dict):
+        return {}
+
+    profile = record.get("profile", {})
+    if not isinstance(profile, dict):
+        profile = {}
+
+    def side(name):
+        value = profile.get(name, {})
+        if not isinstance(value, dict):
+            return {}
+        return {
+            "os_matches": value.get("os_matches", [])[:5],
+            "ports": value.get("ports", [])[:20],
+        }
+
+    return {
+        "status": record.get("status", ""),
+        "needs_os_identification": bool(
+            record.get("needs_os_identification", False)
+        ),
+        "last_error": record.get("last_error", ""),
+        "vendor": record.get("vendor", ""),
+        "hostname": record.get("hostname", ""),
+        "tcp": side("tcp"),
+        "udp": side("udp"),
+    }
+
+
+def bounded_enrichment(record):
+    if not isinstance(record, dict):
+        return {}
+    return {
+        "services": record.get("services", [])[:20],
+        "tls_certificates": record.get("tls_certificates", [])[:5],
+        "proxmox": record.get("proxmox"),
+    }
+
+
+def bounded_zeek(mac, zeek):
+    devices = zeek.get("devices", {}) if isinstance(zeek, dict) else {}
+    record = devices.get(mac, {}) if isinstance(devices, dict) else {}
+    if not isinstance(record, dict):
+        return {}
+    return {
+        "connections": record.get("connections", 0),
+        "top_services": record.get("top_services", [])[:8],
+        "top_ports": record.get("top_ports", [])[:8],
+    }
+
+
+def evidence_hash(value):
+    payload = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+    ).encode()
+    return hashlib.sha256(payload).hexdigest()
+
+
+def response_text(payload):
+    for item in payload.get("output", []):
+        if not isinstance(item, dict) or item.get("type") != "message":
+            continue
+        for part in item.get("content", []):
+            if (
+                isinstance(part, dict)
+                and part.get("type") == "output_text"
+                and isinstance(part.get("text"), str)
+            ):
+                return part["text"]
+    raise RuntimeError("Responses API returned no output_text")
+
+
+def ask_model(evidence):
+    if not API_KEY:
+        raise RuntimeError("OPENAI_API_KEY is not configured")
+
+    schema = {
+        "type": "object",
+        "properties": {
+            "device_name": {"type": "string"},
+            "device_type": {"type": "string"},
+            "vendor": {"type": "string"},
+            "platform_family": {"type": "string"},
+            "exact_os": {"type": "string"},
+            "identity_confidence": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+            },
+            "os_confidence": {
+                "type": "string",
+                "enum": ["high", "medium", "low"],
+            },
+            "manual_review_required": {"type": "boolean"},
+            "evidence_summary": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+        },
+        "required": [
+            "device_name",
+            "device_type",
+            "vendor",
+            "platform_family",
+            "exact_os",
+            "identity_confidence",
+            "os_confidence",
+            "manual_review_required",
+            "evidence_summary",
+        ],
+        "additionalProperties": False,
+    }
+
+    system_text = (
+        "Classify a home-network device from bounded technical evidence. "
+        "Use only the supplied evidence. Do not invent a precise operating "
+        "system or version. DHCP model-like hostnames, MAC vendor, Nmap "
+        "fingerprints, open services and bounded DNS signals may support "
+        "device identity. Treat lwIP as a TCP/IP stack, not a complete OS. "
+        "If the exact OS is unsupported, return an empty exact_os string and "
+        "use a cautious platform_family such as embedded IoT firmware. "
+        "Set manual_review_required when evidence remains ambiguous."
+    )
+
+    request_body = {
+        "model": MODEL,
+        "store": False,
+        "input": [
+            {
+                "role": "system",
+                "content": system_text,
+            },
+            {
+                "role": "user",
+                "content": json.dumps(
+                    evidence,
+                    sort_keys=True,
+                    separators=(",", ":"),
+                ),
+            },
+        ],
+        "text": {
+            "format": {
+                "type": "json_schema",
+                "name": "network_device_identity",
+                "strict": True,
+                "schema": schema,
+            }
+        },
+    }
+
+    data = json.dumps(request_body).encode()
+    request = urllib.request.Request(
+        API_URL,
+        data=data,
+        headers={
+            "Authorization": "Bearer " + API_KEY,
+            "Content-Type": "application/json",
+        },
+        method="POST",
+    )
+
+    try:
+        with urllib.request.urlopen(request, timeout=90) as response:
+            payload = json.loads(response.read().decode())
+    except urllib.error.HTTPError as exc:
+        body = exc.read().decode(errors="replace")
+        raise RuntimeError(
+            f"Responses API HTTP {exc.code}: {body[:1000]}"
+        ) from exc
+
+    result = json.loads(response_text(payload))
+    if not isinstance(result, dict):
+        raise RuntimeError("Structured model result is not an object")
+    return result
+
+
+def main():
+    inventory = load_json(INVENTORY)
+    profiles_document = load_json(PROFILES)
+    profiles = profiles_document.get("profiles", {})
+    if not isinstance(profiles, dict):
+        raise RuntimeError("deep-profiles.json lacks a profiles object")
+
+    dns_devices = load_json(DNS, {}).get("devices", {})
+    if not isinstance(dns_devices, dict):
+        dns_devices = {}
+
+    enrichment_hosts = load_json(ENRICHMENT, {}).get("hosts", {})
+    if not isinstance(enrichment_hosts, dict):
+        enrichment_hosts = {}
+
+    zeek = load_json(OPTIONAL_ZEEK, {})
+    routers = router_identity()
+    current = current_inventory_by_mac(inventory)
+
+    state = load_json(
+        OUTPUT,
+        {
+            "schema_version": 1,
+            "devices": {},
+        },
+    )
+    state.setdefault("schema_version", 1)
+    devices_state = state.setdefault("devices", {})
+    if not isinstance(devices_state, dict):
+        raise RuntimeError("AI resolver devices state is invalid")
+
+    candidates = []
+
+    for mac, profile_record in profiles.items():
+        mac = str(mac).lower()
+
+        if mac not in current:
+            continue
+        if not isinstance(profile_record, dict):
+            continue
+        if profile_record.get("status") not in ("partial", "complete"):
+            continue
+        if not bool(profile_record.get("needs_os_identification", False)):
+            continue
+
+        inv = current[mac]
+        ip = str(inv.get("ip", ""))
+
+        evidence = {
+            "ip": ip,
+            "mac": mac,
+            "inventory": {
+                "hostname": inv.get("hostname", ""),
+                "vendor": inv.get("vendor", ""),
+            },
+            "router": routers.get(mac, {}),
+            "nmap_profile": bounded_profile(profile_record),
+            "dns": bounded_dns(dns_devices.get(mac, {})),
+            "enrichment": bounded_enrichment(
+                enrichment_hosts.get(ip, {})
+            ),
+            "zeek": bounded_zeek(mac, zeek),
+        }
+
+        digest = evidence_hash(evidence)
+        prior = devices_state.get(mac, {})
+        prior_hash = prior.get("evidence_hash", "")
+        prior_time = int(prior.get("assessed_at", 0) or 0)
+
+        if prior_hash == digest and NOW - prior_time < RETRY_SECONDS:
+            continue
+
+        candidates.append((mac, ip, evidence, digest))
+
+    candidates.sort(key=lambda item: item[1])
+
+    processed = 0
+
+    for mac, ip, evidence, digest in candidates[:MAX_DEVICES]:
+        result = ask_model(evidence)
+        devices_state[mac] = {
+            "ip": ip,
+            "evidence_hash": digest,
+            "assessed_at": NOW,
+            "model": MODEL,
+            "result": result,
+        }
+        processed += 1
+        print(json.dumps({
+            "event": "network_host_ai_identification",
+            "mac": mac,
+            "ip": ip,
+            "device_name": result.get("device_name", ""),
+            "platform_family": result.get("platform_family", ""),
+            "identity_confidence": result.get(
+                "identity_confidence",
+                "",
+            ),
+            "os_confidence": result.get("os_confidence", ""),
+            "manual_review_required": result.get(
+                "manual_review_required",
+                True,
+            ),
+        }, sort_keys=True))
+
+    state["last_run"] = NOW
+    state["model"] = MODEL
+    state["devices"] = devices_state
+    save_atomic(OUTPUT, state)
+
+    print(json.dumps({
+        "event": "network_host_ai_resolver_complete",
+        "eligible": len(candidates),
+        "processed": processed,
+        "tracked": len(devices_state),
+    }, sort_keys=True))
+
+
+if __name__ == "__main__":
+    main()
