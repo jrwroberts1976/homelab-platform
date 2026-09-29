@@ -300,22 +300,49 @@ def populate():
         h["last_seen"] = max(
             h["last_seen"], int(item.get("last_seen") or 0))
 
-    for metric_name in ("homelab_network_host_up", "asus_network_asset_up"):
-        for result in prometheus(metric_name):
-            m = result.get("metric", {})
-            h = host(m.get("ip"))
-            if h is None:
-                continue
-            up = float(result["value"][1]) == 1
-            h["online"] = bool(h["online"]) or up if h["online"] is not None else up
+    # Active discovery is authoritative for live presence. ASUS DHCP/ARP
+    # state can remain "up" after a client has left the network, so use it
+    # only when the network collector has no presence metric for that IP.
+    collector_presence_ips = set()
+    for result in prometheus("homelab_network_host_up"):
+        m = result.get("metric", {})
+        ip = lan_ip(m.get("ip"))
+        h = host(ip)
+        if h is None:
+            continue
+        h["online"] = float(result["value"][1]) == 1
+        collector_presence_ips.add(ip)
 
-    for metric_name in ("homelab_network_host_last_seen_seconds",
-                        "asus_network_asset_last_seen_seconds"):
-        for result in prometheus(metric_name):
-            h = host(result.get("metric", {}).get("ip"))
-            if h is not None:
-                h["last_seen"] = max(
-                    h["last_seen"], int(float(result["value"][1])))
+    for result in prometheus("asus_network_asset_up"):
+        m = result.get("metric", {})
+        ip = lan_ip(m.get("ip"))
+        if ip in collector_presence_ips:
+            continue
+        h = host(ip)
+        if h is None:
+            continue
+        h["online"] = float(result["value"][1]) == 1
+
+    # Keep last-seen semantics aligned with presence authority. When active
+    # discovery has a timestamp, do not let a lingering router lease/ARP
+    # observation make an offline device look freshly seen.
+    collector_last_seen_ips = set()
+    for result in prometheus("homelab_network_host_last_seen_seconds"):
+        ip = lan_ip(result.get("metric", {}).get("ip"))
+        h = host(ip)
+        if h is None:
+            continue
+        h["last_seen"] = int(float(result["value"][1]))
+        collector_last_seen_ips.add(ip)
+
+    for result in prometheus("asus_network_asset_last_seen_seconds"):
+        ip = lan_ip(result.get("metric", {}).get("ip"))
+        if ip in collector_last_seen_ips:
+            continue
+        h = host(ip)
+        if h is not None:
+            h["last_seen"] = max(
+                h["last_seen"], int(float(result["value"][1])))
 
     # Dated DNS evidence is a hint, never a verified operating system.
     for ip, evidence in dns.get("devices", {}).items():
