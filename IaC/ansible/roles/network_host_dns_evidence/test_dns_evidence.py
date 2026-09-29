@@ -25,8 +25,19 @@ def load_remote_functions(db):
     tree = ast.parse(source)
     selected = [
         node for node in tree.body
-        if isinstance(node, ast.FunctionDef)
-        and node.name in {"requested_request", "domain_signals", "query_summary"}
+        if (
+            isinstance(node, ast.FunctionDef)
+            and node.name in {
+                "requested_request", "domain_signals", "query_summary"
+            }
+        ) or (
+            isinstance(node, ast.Assign)
+            and any(
+                isinstance(target, ast.Name)
+                and target.id == "SIGNAL_RULES"
+                for target in node.targets
+            )
+        )
     ]
     namespace = {
         "ipaddress": __import__("ipaddress"),
