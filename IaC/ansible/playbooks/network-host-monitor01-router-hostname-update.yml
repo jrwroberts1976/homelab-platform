@@ -24,9 +24,13 @@
       ansible.builtin.set_fact:
         network_host_collector_interface: eth0
 
+    - name: Load ASUS inventory defaults
+      ansible.builtin.include_vars:
+        file: "{{ playbook_dir }}/../roles/asus_network_inventory/defaults/main.yml"
+
     - name: Verify ASUS inventory database exists
       ansible.builtin.stat:
-        path: "{{ network_host_collector_asus_inventory_database }}"
+        path: "{{ asus_network_inventory_database }}"
       register: router_inventory_database
 
     - name: Require ASUS router evidence database
@@ -36,6 +40,37 @@
         fail_msg: >-
           ASUS inventory database is missing; refusing to deploy hostname
           fallback until router evidence is available.
+
+    - name: Install updated ASUS inventory collector
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/asus_network_inventory/templates/asus-network-inventory.py.j2"
+        dest: /usr/local/sbin/asus-network-inventory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Install updated ASUS inventory service
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/asus_network_inventory/templates/asus-network-inventory.service.j2"
+        dest: /etc/systemd/system/asus-network-inventory.service
+        owner: root
+        group: root
+        mode: "0644"
+      register: asus_inventory_service_update
+
+    - name: Validate ASUS collector syntax
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - py_compile
+          - /usr/local/sbin/asus-network-inventory
+      changed_when: false
+
+    - name: Reload systemd when ASUS service changed
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: asus_inventory_service_update.changed
 
     - name: Install updated collector only
       ansible.builtin.template:
@@ -54,6 +89,24 @@
           - py_compile
           - "{{ network_host_collector_script }}"
       changed_when: false
+
+    - name: Refresh ASUS inventory and publish hostname snapshot
+      ansible.builtin.systemd_service:
+        name: asus-network-inventory.service
+        state: started
+
+    - name: Verify ASUS hostname snapshot exists
+      ansible.builtin.stat:
+        path: "{{ asus_network_inventory_hostname_snapshot }}"
+      register: router_hostname_snapshot
+
+    - name: Require populated ASUS hostname snapshot
+      ansible.builtin.assert:
+        that:
+          - router_hostname_snapshot.stat.isreg | default(false)
+          - router_hostname_snapshot.stat.size | int > 0
+        fail_msg: >-
+          ASUS hostname snapshot was not created; refusing discovery pass.
 
     - name: Run one discovery pass with router hostname evidence
       ansible.builtin.systemd_service:
