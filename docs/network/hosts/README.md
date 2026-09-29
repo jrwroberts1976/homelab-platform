@@ -45,6 +45,7 @@ bounded service/domain-family evidence with timestamps and source.
 | acer-lights | `192.168.2.95` | `60:83:e7:f3:c1:92` | [Open](mac-60-83-e7-f3-c1-92.md) |
 | hp-printer | `192.168.2.123` | `c4:65:16:79:58:08` | [Open](mac-c4-65-16-79-58-08.md) |
 | front-drive-camera | `192.168.2.128` | `5c:e9:31:18:c1:4a` | [Open](mac-5c-e9-31-18-c1-4a.md) |
+| Unidentified device 192.168.2.130 | `192.168.2.130` | `14:7f:67:6d:e5:98` | [Open](mac-14-7f-67-6d-e5-98.md) |
 | fire-stick | `192.168.2.149` | `ac:17:02:07:0d:5d` | [Open](mac-ac-17-02-07-0d-5d.md) |
 | Unidentified 192.168.2.154 | `192.168.2.154` | `28:33:34:57:ed:13` | [Open](mac-28-33-34-57-ed-13.md) |
 | Unidentified 192.168.2.155 | `192.168.2.155` | `d4:e9:f4:63:28:7c` | [Open](mac-d4-e9-f4-63-28-7c.md) |
