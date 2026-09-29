@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Refresh dual-Pi-hole evidence only after a new unresolved Nmap observation."""
+"""Refresh and correlate dual-Pi-hole evidence after unresolved Nmap observations."""
 
 import json
 import os
@@ -103,12 +103,82 @@ def query_server(server, ip):
     if not isinstance(domains, list) or len(domains) > 5:
         raise RuntimeError(server["name"] + ": invalid bounded domain summary")
 
+    signals = payload.get("signals", [])
+    if not isinstance(signals, list) or len(signals) > 8:
+        raise RuntimeError(server["name"] + ": invalid bounded DNS signals")
+    clean_signals = []
+    for signal in signals:
+        if not isinstance(signal, dict):
+            raise RuntimeError(server["name"] + ": invalid DNS signal")
+        examples = signal.get("examples", [])
+        if not isinstance(examples, list) or len(examples) > 3:
+            raise RuntimeError(server["name"] + ": invalid DNS signal examples")
+        clean_signals.append({
+            "id": str(signal.get("id", ""))[:80],
+            "description": str(signal.get("description", ""))[:200],
+            "examples": [str(value)[:255] for value in examples],
+        })
+
     return {
         "server": server["name"],
         "query_count": int(payload.get("query_count", 0)),
         "top_domains": [str(value) for value in domains],
+        "signals": clean_signals,
         "lookback_days": int(payload.get("lookback_days", 7)),
         "observed_at": int(payload.get("observed_at", 0) or 0),
+    }
+
+
+def correlate(record, servers):
+    signals = {}
+    for server in servers:
+        for signal in server.get("signals", []):
+            signal_id = signal.get("id", "")
+            if signal_id:
+                signals.setdefault(signal_id, signal)
+
+    descriptions = [
+        signals[key].get("description", "")
+        for key in sorted(signals)
+        if signals[key].get("description")
+    ]
+
+    vendor = str(record.get("vendor", "")).lower()
+    tcp = record.get("profile", {}).get("tcp", {})
+    service_text = []
+    for port in tcp.get("ports", []) if isinstance(tcp, dict) else []:
+        service = port.get("service", {}) if isinstance(port, dict) else {}
+        if isinstance(service, dict):
+            service_text.extend([
+                str(service.get("name", "")),
+                str(service.get("product", "")),
+                str(service.get("version", "")),
+                str(service.get("extra_info", "")),
+            ])
+    service_blob = " ".join(service_text).lower()
+
+    device_hint = ""
+    confidence = ""
+    evidence = []
+
+    if "amazon_fire_tv" in signals:
+        evidence.append("DNS: Amazon Fire TV / Amazon Video / Alexa endpoints")
+        if "amazon" in vendor:
+            evidence.append("MAC vendor: Amazon")
+        if "firetv" in service_blob or "fire tv" in service_blob:
+            evidence.append("Nmap service: Amazon FireTV")
+        if len(evidence) >= 2:
+            device_hint = "Amazon Fire TV / Fire TV Stick"
+            confidence = "corroborated"
+        else:
+            confidence = "dns_indication"
+
+    return {
+        "device_hint": device_hint,
+        "dns_hint": "; ".join(descriptions),
+        "confidence": confidence,
+        "evidence": evidence[:5],
+        "signal_ids": sorted(signals),
     }
 
 
@@ -142,6 +212,7 @@ def refresh(profiles, state, now):
                 query_server(server, ip)
                 for server in SERVERS
             ]
+            entry.update(correlate(record, entry["servers"]))
             entry["checked_at"] = now
         except Exception as exc:
             entry["error"] = str(exc)
@@ -149,7 +220,7 @@ def refresh(profiles, state, now):
         records[mac] = entry
         refreshed += 1
 
-    state["schema_version"] = 1
+    state["schema_version"] = 2
     state["last_run"] = now
     return refreshed
 
