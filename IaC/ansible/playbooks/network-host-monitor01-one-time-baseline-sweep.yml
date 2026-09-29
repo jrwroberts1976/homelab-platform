@@ -184,12 +184,17 @@
       changed_when: true
 
     - name: Run sequential bounded profiler passes for every current MAC slot
-      ansible.builtin.command:
-        argv: [/usr/bin/systemctl, start, "{{ profiler_service }}"]
+      ansible.builtin.shell: |
+        /usr/bin/systemctl reset-failed {{ profiler_service }}
+        /usr/bin/systemctl start {{ profiler_service }}
+      args:
+        executable: /bin/bash
       loop: "{{ range(0, current_mac_count.stdout | int) | list }}"
       loop_control:
         label: "bounded-pass-{{ item | int + 1 }}-of-{{ current_mac_count.stdout }}"
+      register: sweep_passes
       changed_when: true
+      failed_when: false
 
     - name: Restore original backlog schedule only for records still baseline
       ansible.builtin.command:
@@ -275,3 +280,17 @@
           - "{{ sweep_summary.stdout_lines }}"
           - "profiler_timer={{ timer_after.stdout }}"
           - "backup={{ sweep_backup }}"
+
+    - name: Require every bounded profiler service invocation to succeed
+      ansible.builtin.assert:
+        that:
+          - >-
+            (sweep_passes.results
+             | selectattr('rc', 'defined')
+             | selectattr('rc', 'ne', 0)
+             | list
+             | length) == 0
+        fail_msg: >-
+          One or more bounded profiler invocations failed. Recovery tasks have
+          already restored the normal backlog schedule and restarted the timer;
+          inspect sweep_passes before retrying.
