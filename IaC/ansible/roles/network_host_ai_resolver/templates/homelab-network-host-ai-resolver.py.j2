@@ -33,6 +33,8 @@ API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
 
 MAX_DEVICES = {{ network_host_ai_resolver_max_devices_per_run | int }}
 RETRY_SECONDS = {{ network_host_ai_resolver_retry_seconds | int }}
+FIRST_ASSESSMENT_DELAY_SECONDS = {{ network_host_ai_resolver_first_assessment_delay_seconds | int }}
+HISTORY_LIMIT = {{ network_host_ai_resolver_history_limit | int }}
 NOW = int(time.time())
 
 
@@ -298,6 +300,15 @@ def ask_model(evidence):
                 "enum": ["high", "medium", "low"],
             },
             "manual_review_required": {"type": "boolean"},
+            "summary": {"type": "string"},
+            "confirmed_facts": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
+            "inferences": {
+                "type": "array",
+                "items": {"type": "string"},
+            },
             "evidence_summary": {
                 "type": "array",
                 "items": {"type": "string"},
@@ -312,6 +323,9 @@ def ask_model(evidence):
             "identity_confidence",
             "os_confidence",
             "manual_review_required",
+            "summary",
+            "confirmed_facts",
+            "inferences",
             "evidence_summary",
         ],
         "additionalProperties": False,
@@ -325,10 +339,14 @@ def ask_model(evidence):
         "device identity. Treat lwIP as a TCP/IP stack, not a complete OS. "
         "If the exact OS is unsupported, return an empty exact_os string and "
         "use a cautious platform_family such as embedded IoT firmware. "
-        "Greenbone findings are factual vulnerability evidence for the "
-        "matching host IP only; absence of a matching finding is not proof "
-        "that a host is secure or fully scanned. "
-        "Set manual_review_required when evidence remains ambiguous."
+        "Separate confirmed facts from cautious inferences. Confirmed facts "
+        "must be directly supported by supplied evidence. Never override a "
+        "documented hostname, authoritative OS fact, or direct service fact "
+        "with an inference. Greenbone findings are factual vulnerability "
+        "evidence for the matching host IP only; absence of a matching finding "
+        "is not proof that a host is secure or fully scanned. Write a concise "
+        "summary suitable for a Grafana host page. Set manual_review_required "
+        "when identity or platform remains ambiguous."
     )
 
     request_body = {
@@ -418,20 +436,15 @@ def main():
 
     candidates = []
 
-    for mac, profile_record in profiles.items():
+    for mac, inv in current.items():
         mac = str(mac).lower()
-
-        if mac not in current:
-            continue
-        if not isinstance(profile_record, dict):
-            continue
-        if profile_record.get("status") not in ("partial", "complete"):
-            continue
-        if not bool(profile_record.get("needs_os_identification", False)):
+        if not isinstance(inv, dict):
             continue
 
-        inv = current[mac]
         ip = str(inv.get("ip", ""))
+        profile_record = profiles.get(mac, {})
+        if not isinstance(profile_record, dict):
+            profile_record = {}
 
         evidence = {
             "ip": ip,
@@ -439,6 +452,9 @@ def main():
             "inventory": {
                 "hostname": inv.get("hostname", ""),
                 "vendor": inv.get("vendor", ""),
+                "first_seen": int(inv.get("first_seen", 0) or 0),
+                "last_seen": int(inv.get("last_seen", 0) or 0),
+                "online": bool(inv.get("online", False)),
             },
             "router": routers.get(mac, {}),
             "nmap_profile": bounded_profile(profile_record),
@@ -452,26 +468,57 @@ def main():
 
         digest = evidence_hash(evidence)
         prior = devices_state.get(mac, {})
+        if not isinstance(prior, dict):
+            prior = {}
         prior_hash = prior.get("evidence_hash", "")
         prior_time = int(prior.get("assessed_at", 0) or 0)
+        first_seen = int(inv.get("first_seen", 0) or 0)
 
-        if prior_hash == digest and NOW - prior_time < RETRY_SECONDS:
+        # Give a genuinely new device one hour for DNS, profiling and passive
+        # evidence to settle before its first AI assessment.
+        if (
+            prior_time <= 0
+            and first_seen > 0
+            and NOW - first_seen < FIRST_ASSESSMENT_DELAY_SECONDS
+        ):
             continue
 
-        candidates.append((mac, ip, evidence, digest))
+        # Reassess immediately when evidence changes; otherwise refresh weekly.
+        if prior_hash == digest and prior_time > 0 and NOW - prior_time < RETRY_SECONDS:
+            continue
 
-    candidates.sort(key=lambda item: item[1])
+        # Unassessed devices take priority over routine weekly refreshes.
+        # Among them, newer devices go first so a fresh arrival is not stuck
+        # behind the existing estate during initial rollout.
+        priority = (
+            0 if prior_time <= 0 else 1,
+            -first_seen if prior_time <= 0 else prior_time,
+            ip,
+        )
+        candidates.append((priority, mac, ip, evidence, digest))
+
+    candidates.sort(key=lambda item: item[0])
 
     processed = 0
 
-    for mac, ip, evidence, digest in candidates[:MAX_DEVICES]:
+    for _priority, mac, ip, evidence, digest in candidates[:MAX_DEVICES]:
         result = ask_model(evidence)
+        prior = devices_state.get(mac, {})
+        history = list(prior.get("history", [])) if isinstance(prior, dict) else []
+        if isinstance(prior, dict) and prior.get("result"):
+            history.append({
+                "assessed_at": prior.get("assessed_at", 0),
+                "model": prior.get("model", ""),
+                "evidence_hash": prior.get("evidence_hash", ""),
+                "result": prior.get("result", {}),
+            })
         devices_state[mac] = {
             "ip": ip,
             "evidence_hash": digest,
             "assessed_at": NOW,
             "model": MODEL,
             "result": result,
+            "history": history[-HISTORY_LIMIT:],
         }
         processed += 1
         print(json.dumps({
