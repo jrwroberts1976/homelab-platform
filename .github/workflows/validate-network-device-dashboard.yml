@@ -185,7 +185,11 @@ jobs:
           assert 'read_text(encoding="utf-8")' in evidence_source
           focused_nmap = yaml.safe_load(Path(
               "IaC/ansible/playbooks/network-host-os-fingerprints.yml").read_text())
-          assert len(focused_nmap) == 2
+          assert len(focused_nmap) == 1
+          assert focused_nmap[0]["hosts"] == "monitoring_hosts"
+          assert "monitor-01" in str(focused_nmap)
+          assert "homelab-network-os-evidence.timer" in str(focused_nmap)
+          assert "homelab_network_host_os_fingerprint_info%7Btarget_name%3D%22monitor-01%22%7D" in str(focused_nmap)
           monitor_migration = yaml.safe_load(Path(
               "IaC/ansible/playbooks/network-host-monitor01-preflight.yml").read_text())
           assert [p["hosts"] for p in monitor_migration] == ["Proxmox-2", "monitoring_hosts"]
@@ -459,9 +463,9 @@ jobs:
               defaults = yaml.safe_load((root / "defaults/main.yml").read_text())
               assert defaults[role + "_expected_hostname"] == "Proxmox-2"
               assert defaults[role + "_expected_ipv4"] == "192.168.2.71"
-          assert focused_nmap[0]["hosts"] == "Proxmox-2"
-          assert focused_nmap[1]["hosts"] == "monitoring_hosts"
-          assert not any("deep-profiler.timer" in str(t)
+          assert focused_nmap[0]["hosts"] == "monitoring_hosts"
+          assert not any("homelab-network-host-deep-profiler.service" in str(t)
+                         or "homelab-network-host-deep-profiler.timer" in str(t)
                          for play in focused_nmap for t in play["tasks"])
           top = sorted(
               (p for p in full_template["panels"] if p["gridPos"]["y"] == 0),
