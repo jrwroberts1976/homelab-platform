@@ -40,6 +40,23 @@ def uid_for(key):
         key.encode("utf-8")).hexdigest()[:12]
 
 
+def clean_hostname(value):
+    """Return the short, human-facing hostname used in Grafana titles."""
+    hostname = str(value or "").strip()
+    suffix = ".jameshouse"
+    if hostname.casefold().endswith(suffix):
+        hostname = hostname[:-len(suffix)]
+    return hostname
+
+
+def publishable_card(metric):
+    """Hide unresolved IP-only records from the generated host directory."""
+    hostname = clean_hostname(metric.get("hostname"))
+    ip = str(metric.get("ip") or "").strip()
+    kind = str(metric.get("kind") or "").strip()
+    return bool((hostname and hostname != ip) or kind)
+
+
 def query_cards():
     expr = 'homelab_network_device_card_info{target_name="monitor-01"}'
     with urlopen(PROMETHEUS + "?" + urlencode({"query": expr}),
@@ -236,7 +253,7 @@ def profile(template, key, metric, availability=None):
     result = copy.deepcopy(template)
     result["id"] = None
     result["uid"] = uid_for(key)
-    hostname = (metric.get("hostname") or "").strip()
+    hostname = clean_hostname(metric.get("hostname"))
     ip = (metric.get("ip") or "").strip()
     kind = (metric.get("kind") or "").strip()
 
@@ -262,8 +279,10 @@ def profile(template, key, metric, availability=None):
     if availability is not None:
         result["panels"] = compact_panels(
             result["panels"], select_panel_ids(key, metric, availability))
-    result["tags"] = sorted(set(
-        result.get("tags", []) + ["generated-network-host"]))
+    # Keep generated dashboards easy to browse: one functional selector tag
+    # plus one broad homelab grouping tag. The old five generic tags repeated
+    # beneath every dashboard and added visual noise without improving lookup.
+    result["tags"] = ["generated-network-host", "homelab"]
     variables = result.get("templating", {}).get("list", [])
     device = next((v for v in variables if v.get("name") == "device"), None)
     if device is None:
@@ -333,6 +352,11 @@ def atomic_write(path, text):
 
 def run():
     cards = query_cards()
+    cards = {
+        key: metric
+        for key, metric in cards.items()
+        if publishable_card(metric)
+    }
     template = json.loads(TEMPLATE.read_text(encoding="utf-8"))
     if template.get("uid") != "homelab-mac-device-detail":
         raise ValueError("Unexpected Grafana profile template")
