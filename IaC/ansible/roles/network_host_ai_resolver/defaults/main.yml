@@ -12,6 +12,16 @@ network_host_ai_resolver_greenbone_freshness_seconds: 108000
 network_host_ai_resolver_loki_url: http://127.0.0.1:3100
 network_host_ai_resolver_loki_window_hours: 24
 network_host_ai_resolver_loki_sample_limit: 20
+network_host_ai_resolver_dns_key: /etc/homelab-network-hosts/dns-evidence-ed25519
+network_host_ai_resolver_dns_known_hosts: /etc/homelab-network-hosts/dns-evidence-known-hosts
+network_host_ai_resolver_dns_remote_user: dns-evidence
+network_host_ai_resolver_dns_recent_window_seconds: 3600
+network_host_ai_resolver_dns_recent_request_limit: 20
+network_host_ai_resolver_dns_servers:
+  - name: dns-01
+    address: 192.168.2.51
+  - name: dns-02
+    address: 192.168.2.50
 network_host_ai_resolver_output: "{{ network_host_ai_resolver_state_dir }}/ai-identification.json"
 network_host_ai_resolver_script: /usr/local/sbin/homelab-network-host-ai-resolver
 network_host_ai_resolver_service_name: homelab-network-host-ai-resolver.service
