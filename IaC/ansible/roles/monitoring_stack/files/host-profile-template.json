@@ -876,7 +876,11 @@
               "ai_assessed_at": true,
               "ai_model": true,
               "ai_confirmed_facts": true,
-              "ai_inferences": true
+              "ai_inferences": true,
+              "greenbone_findings": true,
+              "greenbone_cves": true,
+              "greenbone_report_id": true,
+              "greenbone_collected_at": true
             },
             "indexByName": {
               "hostname": 0,
@@ -1659,7 +1663,11 @@
               "nmap_services": true,
               "nmap_scan_status": true,
               "architecture": true,
-              "kernel": true
+              "kernel": true,
+              "greenbone_findings": true,
+              "greenbone_cves": true,
+              "greenbone_report_id": true,
+              "greenbone_collected_at": true
             },
             "indexByName": {
               "ai_summary": 0,
@@ -1684,6 +1692,88 @@
               "ai_inferences": "Inferences",
               "ai_assessed_at": "Assessed",
               "ai_model": "Model"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
+      }
+    },
+    {
+      "id": 24,
+      "title": "Current Greenbone CVE exposure",
+      "type": "table",
+      "description": "Deterministic actionable Greenbone findings correlated to this device's current IP. Absence of this panel means no actionable finding is currently evidenced; it is not proof that the host is vulnerability-free or fully scanned.",
+      "gridPos": {
+        "x": 0,
+        "y": 94,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_vulnerability_finding_info{device_key=\"$device\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "ip": true
+            },
+            "indexByName": {
+              "severity": 0,
+              "score": 1,
+              "port": 2,
+              "name": 3,
+              "cves": 4,
+              "oid": 5,
+              "collected_at": 6,
+              "report_id": 7
+            },
+            "renameByName": {
+              "severity": "Severity",
+              "score": "Score",
+              "port": "Affected port",
+              "name": "Finding",
+              "cves": "CVE exposure",
+              "oid": "NVT OID",
+              "collected_at": "Evidence collected",
+              "report_id": "Greenbone report"
             }
           }
         }
