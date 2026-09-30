@@ -866,7 +866,17 @@
               "nmap_scanned_at": true,
               "nmap_services": true,
               "nmap_scan_status": true,
-              "nmap_time_basis": true
+              "nmap_time_basis": true,
+              "ai_summary": true,
+              "ai_device_type": true,
+              "ai_platform_family": true,
+              "ai_identity_confidence": true,
+              "ai_os_confidence": true,
+              "ai_manual_review_required": true,
+              "ai_assessed_at": true,
+              "ai_model": true,
+              "ai_confirmed_facts": true,
+              "ai_inferences": true
             },
             "indexByName": {
               "hostname": 0,
@@ -984,7 +994,17 @@
               "nmap_scan_status": true,
               "nmap_time_basis": true,
               "architecture": true,
-              "kernel": true
+              "kernel": true,
+              "ai_summary": true,
+              "ai_device_type": true,
+              "ai_platform_family": true,
+              "ai_identity_confidence": true,
+              "ai_os_confidence": true,
+              "ai_manual_review_required": true,
+              "ai_assessed_at": true,
+              "ai_model": true,
+              "ai_confirmed_facts": true,
+              "ai_inferences": true
             },
             "indexByName": {
               "ip": 0,
@@ -1096,7 +1116,17 @@
               "nmap_scan_status": true,
               "nmap_time_basis": true,
               "architecture": true,
-              "kernel": true
+              "kernel": true,
+              "ai_summary": true,
+              "ai_device_type": true,
+              "ai_platform_family": true,
+              "ai_identity_confidence": true,
+              "ai_os_confidence": true,
+              "ai_manual_review_required": true,
+              "ai_assessed_at": true,
+              "ai_model": true,
+              "ai_confirmed_facts": true,
+              "ai_inferences": true
             },
             "indexByName": {
               "hostname": 0,
@@ -1361,7 +1391,17 @@
               "nmap_scan_status": true,
               "nmap_time_basis": true,
               "architecture": true,
-              "kernel": true
+              "kernel": true,
+              "ai_summary": true,
+              "ai_device_type": true,
+              "ai_platform_family": true,
+              "ai_identity_confidence": true,
+              "ai_os_confidence": true,
+              "ai_manual_review_required": true,
+              "ai_assessed_at": true,
+              "ai_model": true,
+              "ai_confirmed_facts": true,
+              "ai_inferences": true
             },
             "indexByName": {
               "name": 0,
@@ -1495,7 +1535,17 @@
               "pretty_name": true,
               "id": true,
               "architecture": true,
-              "kernel": true
+              "kernel": true,
+              "ai_summary": true,
+              "ai_device_type": true,
+              "ai_platform_family": true,
+              "ai_identity_confidence": true,
+              "ai_os_confidence": true,
+              "ai_manual_review_required": true,
+              "ai_assessed_at": true,
+              "ai_model": true,
+              "ai_confirmed_facts": true,
+              "ai_inferences": true
             },
             "indexByName": {
               "nmap_name": 0,
@@ -1522,6 +1572,118 @@
               "nmap_scan_status": "Profile status",
               "nmap_services": "Observed TCP services",
               "nmap_time_basis": "Time source"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
+      }
+    },
+    {
+      "id": 23,
+      "title": "AI host intelligence — advisory",
+      "type": "table",
+      "description": "Evidence-bounded AI interpretation. Confirmed infrastructure facts, live telemetry, Greenbone findings, Nmap evidence and observed services remain authoritative; AI fields are advisory and never overwrite them.",
+      "gridPos": {
+        "x": 0,
+        "y": 86,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_card_info{device_key=\"$device\",ai_summary!=\"\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true,
+              "mac": true,
+              "dashboard_uid": true,
+              "hostname": true,
+              "ip": true,
+              "status": true,
+              "vendor": true,
+              "role": true,
+              "kind": true,
+              "os": true,
+              "os_source": true,
+              "os_evidence": true,
+              "dns_hint": true,
+              "dns_observed": true,
+              "observed_open_ports": true,
+              "nmap_name": true,
+              "nmap_accuracy": true,
+              "nmap_family": true,
+              "nmap_generation": true,
+              "nmap_vendor": true,
+              "nmap_device_type": true,
+              "nmap_cpe": true,
+              "nmap_scanned_at": true,
+              "nmap_time_basis": true,
+              "nmap_services": true,
+              "nmap_scan_status": true,
+              "architecture": true,
+              "kernel": true
+            },
+            "indexByName": {
+              "ai_summary": 0,
+              "ai_device_type": 1,
+              "ai_platform_family": 2,
+              "ai_identity_confidence": 3,
+              "ai_os_confidence": 4,
+              "ai_manual_review_required": 5,
+              "ai_confirmed_facts": 6,
+              "ai_inferences": 7,
+              "ai_assessed_at": 8,
+              "ai_model": 9
+            },
+            "renameByName": {
+              "ai_summary": "Assessment",
+              "ai_device_type": "Device type",
+              "ai_platform_family": "Platform family",
+              "ai_identity_confidence": "Identity confidence",
+              "ai_os_confidence": "OS confidence",
+              "ai_manual_review_required": "Manual review",
+              "ai_confirmed_facts": "Confirmed facts",
+              "ai_inferences": "Inferences",
+              "ai_assessed_at": "Assessed",
+              "ai_model": "Model"
             }
           }
         }
