@@ -235,7 +235,7 @@ Implemented in development:
 - production Greenbone CVE-aware scan runner validated successfully on greenbone-01;
 - conditional per-host Greenbone CVE exposure metrics/panel deployed to monitor-01; 49 MAC-linked host dashboards regenerated successfully and Grafana API validation passed;
 - regression coverage for Greenbone CVE extraction;
-- deterministic per-host patch evidence from Prometheus (updates, security updates, reboot-required, unattended-upgrades and patch freshness);
+- deterministic per-host patch evidence from Prometheus (updates, security updates, reboot-required, unattended-upgrades and patch freshness), live-validated across all 15 managed hosts on 2026-09-30;
 - Greenbone host-scoped evidence source;
 - 24-hour bounded Loki evidence source;
 - one-hour bounded DNS request path under development;
@@ -252,7 +252,7 @@ The AI timer remains disabled by default while development and validation contin
 1. **CVE extraction from Greenbone — COMPLETE**
 2. **Production CVE evidence regeneration — COMPLETE**
 3. **Add host-level CVE exposure to correlated metrics/Grafana — DEPLOYED 2026-09-30**
-4. **Add deterministic patch status to the AI evidence packet — IMPLEMENTED, LIVE VALIDATION CURRENT**
+4. **Add deterministic patch status to the AI evidence packet — LIVE VALIDATED 2026-09-30**
 5. Complete the one-hour suspicious/blocked DNS classification path.
 6. Validate bounded 24-hour Loki evidence.
 7. Run isolated AI assessments against representative hosts.
