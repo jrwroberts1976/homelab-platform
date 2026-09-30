@@ -8,6 +8,7 @@ import sqlite3
 import time
 
 DB = "/etc/pihole/pihole-FTL.db"
+GRAVITY_DB = "/etc/pihole/gravity.db"
 LOOKBACK_SECONDS = {{ network_host_dns_evidence_lookback_days }} * 24 * 60 * 60
 MAX_DOMAINS = {{ network_host_dns_evidence_max_domains }}
 RECENT_WINDOW_SECONDS = {{ network_host_dns_evidence_recent_window_seconds }}
@@ -16,6 +17,34 @@ LAN = ipaddress.ip_network("192.168.2.0/24")
 
 # Deliberately small, reviewable signal vocabulary.  Matching happens on the
 # resolver so the full DNS history is never exported to monitor-01.
+RISK_LIST_RULES = {
+    "threat": (
+        "Threat / malware / phishing policy",
+        ("threat", "malware", "phishing", "malicious", "abuse"),
+    ),
+    "adult": (
+        "Adult-content policy",
+        ("nsfw", "adult", "porn"),
+    ),
+    "gambling": (
+        "Gambling policy",
+        ("gambling", "casino", "betting"),
+    ),
+    "vpn_proxy_tor": (
+        "VPN / proxy / Tor / DoH bypass policy",
+        ("vpn", "proxy", "tor", "doh", "bypass"),
+    ),
+}
+
+
+def classify_adlist(address, comment):
+    haystack = (str(address or "") + " " + str(comment or "")).lower()
+    for category, (description, needles) in RISK_LIST_RULES.items():
+        if any(needle in haystack for needle in needles):
+            return category, description
+    return "", ""
+
+
 SIGNAL_RULES = {
     "amazon_fire_tv": (
         "Amazon Fire TV / Amazon Video / Alexa endpoints",
@@ -168,40 +197,75 @@ def query_summary(ip, profiled_at, now=None):
 
 
 def recent_requests(ip, seconds, now=None):
+    """Return only high-risk locally-blocked DNS attempts from the last hour."""
     now = int(time.time()) if now is None else int(now)
     seconds = min(int(seconds), RECENT_WINDOW_SECONDS)
     cutoff = now - seconds
     uri = "file:" + DB + "?mode=ro"
+    gravity_uri = "file:" + GRAVITY_DB + "?mode=ro"
 
     with sqlite3.connect(uri, uri=True, timeout=10) as connection:
         connection.execute("PRAGMA query_only=ON")
         rows = connection.execute(
             """
-            SELECT q.timestamp, d.domain
+            SELECT q.timestamp, q.status, d.domain
               FROM query_storage AS q
               JOIN client_by_id AS c ON c.id = q.client
               JOIN domain_by_id AS d ON d.id = q.domain
              WHERE c.ip = ? AND q.timestamp >= ? AND q.timestamp <= ?
+               AND q.status IN (1, 9)
                AND d.domain IS NOT NULL
              ORDER BY q.timestamp DESC
-             LIMIT ?
+             LIMIT 500
             """,
-            (ip, cutoff, now, RECENT_REQUEST_LIMIT),
+            (ip, cutoff, now),
         ).fetchall()
+
+    matched = []
+    if rows and os.path.isfile(GRAVITY_DB):
+        with sqlite3.connect(gravity_uri, uri=True, timeout=10) as gravity:
+            gravity.execute("PRAGMA query_only=ON")
+            for timestamp, status, domain in rows:
+                sources = gravity.execute(
+                    """
+                    SELECT a.address, COALESCE(a.comment, '')
+                      FROM gravity AS g
+                      JOIN adlist AS a ON a.id = g.adlist_id
+                     WHERE g.domain = ?
+                    """,
+                    (domain,),
+                ).fetchall()
+                categories = []
+                descriptions = []
+                for address, comment in sources:
+                    category, description = classify_adlist(address, comment)
+                    if category and category not in categories:
+                        categories.append(category)
+                        descriptions.append(description)
+                if not categories:
+                    continue
+                matched.append({
+                    "timestamp": int(timestamp),
+                    "domain": str(domain)[:255],
+                    "status": int(status),
+                    "categories": categories,
+                    "category_descriptions": descriptions,
+                })
+                if len(matched) >= RECENT_REQUEST_LIMIT:
+                    break
 
     return {
         "ip": ip,
         "server": os.uname().nodename,
         "window_seconds": seconds,
         "observed_at": now,
-        "requests": [
-            {
-                "timestamp": int(timestamp),
-                "domain": str(domain)[:255],
-            }
-            for timestamp, domain in rows
-            if domain
-        ],
+        "policy_matches": matched,
+        "interpretation_note": (
+            "Only DNS attempts blocked by locally configured high-risk policy "
+            "lists are returned. Generic ad/tracker blocks and ordinary DNS "
+            "requests are intentionally omitted. A match is network evidence "
+            "only and does not prove user intent."
+        ),
     }
 
 
