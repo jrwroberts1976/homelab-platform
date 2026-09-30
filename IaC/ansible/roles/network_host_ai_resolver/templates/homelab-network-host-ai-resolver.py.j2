@@ -345,12 +345,13 @@ def bounded_loki(hostname):
     return {
         "status": "ok",
         "window_hours": LOKI_WINDOW_HOURS,
-        "total_entries": total,
-        "jobs": dict(sorted(jobs.items())),
+        "sampled_entries": total,
+        "sampled_entries_by_job": dict(sorted(jobs.items())),
         "warning_error_samples": samples,
         "interpretation_note": (
-            "This is a bounded 24-hour host-scoped Loki sample. Counts are "
-            "log entries, not incidents. Samples are filtered/redacted and "
+            "This is a bounded 24-hour host-scoped Loki sample. Sampled "
+            "entry counts are not complete 24-hour totals or incident counts. "
+            "Samples are filtered/redacted and "
             "absence of warning/error text is not proof of health."
         ),
     }
