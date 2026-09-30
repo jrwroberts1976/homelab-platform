@@ -10,6 +10,8 @@ import time
 DB = "/etc/pihole/pihole-FTL.db"
 LOOKBACK_SECONDS = {{ network_host_dns_evidence_lookback_days }} * 24 * 60 * 60
 MAX_DOMAINS = {{ network_host_dns_evidence_max_domains }}
+RECENT_WINDOW_SECONDS = {{ network_host_dns_evidence_recent_window_seconds }}
+RECENT_REQUEST_LIMIT = {{ network_host_dns_evidence_recent_request_limit }}
 LAN = ipaddress.ip_network("192.168.2.0/24")
 
 # Deliberately small, reviewable signal vocabulary.  Matching happens on the
@@ -71,18 +73,23 @@ def domain_signals(domains):
 
 def requested_request():
     command = os.environ.get("SSH_ORIGINAL_COMMAND", "").strip().split()
-    if len(command) != 3 or command[0] != "query":
-        raise ValueError("Only 'query <LAN-IP> <profiled-at>' is permitted")
+    if len(command) != 3 or command[0] not in ("query", "recent"):
+        raise ValueError(
+            "Only 'query <LAN-IP> <profiled-at>' or "
+            "'recent <LAN-IP> <seconds>' is permitted"
+        )
     address = ipaddress.ip_address(command[1])
     if address not in LAN:
         raise ValueError("Requested client is outside the permitted LAN")
     try:
-        profiled_at = int(command[2])
+        value = int(command[2])
     except ValueError as exc:
-        raise ValueError("Profile timestamp must be an integer") from exc
-    if profiled_at <= 0:
-        raise ValueError("Profile timestamp must be positive")
-    return str(address), profiled_at
+        raise ValueError("Request value must be an integer") from exc
+    if value <= 0:
+        raise ValueError("Request value must be positive")
+    if command[0] == "recent" and value > RECENT_WINDOW_SECONDS:
+        raise ValueError("Recent DNS request exceeds permitted lookback")
+    return command[0], str(address), value
 
 
 def query_summary(ip, profiled_at, now=None):
@@ -160,10 +167,53 @@ def query_summary(ip, profiled_at, now=None):
     }
 
 
+def recent_requests(ip, seconds, now=None):
+    now = int(time.time()) if now is None else int(now)
+    seconds = min(int(seconds), RECENT_WINDOW_SECONDS)
+    cutoff = now - seconds
+    uri = "file:" + DB + "?mode=ro"
+
+    with sqlite3.connect(uri, uri=True, timeout=10) as connection:
+        connection.execute("PRAGMA query_only=ON")
+        rows = connection.execute(
+            """
+            SELECT q.timestamp, d.domain
+              FROM query_storage AS q
+              JOIN client_by_id AS c ON c.id = q.client
+              JOIN domain_by_id AS d ON d.id = q.domain
+             WHERE c.ip = ? AND q.timestamp >= ? AND q.timestamp <= ?
+               AND d.domain IS NOT NULL
+             ORDER BY q.timestamp DESC
+             LIMIT ?
+            """,
+            (ip, cutoff, now, RECENT_REQUEST_LIMIT),
+        ).fetchall()
+
+    return {
+        "ip": ip,
+        "server": os.uname().nodename,
+        "window_seconds": seconds,
+        "observed_at": now,
+        "requests": [
+            {
+                "timestamp": int(timestamp),
+                "domain": str(domain)[:255],
+            }
+            for timestamp, domain in rows
+            if domain
+        ],
+    }
+
+
 def main():
-    ip, profiled_at = requested_request()
+    mode, ip, value = requested_request()
+    payload = (
+        query_summary(ip, value)
+        if mode == "query"
+        else recent_requests(ip, value)
+    )
     print(json.dumps(
-        query_summary(ip, profiled_at),
+        payload,
         separators=(",", ":"),
         sort_keys=True,
     ))
