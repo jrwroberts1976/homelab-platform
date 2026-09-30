@@ -582,7 +582,7 @@ def render(hosts):
                        else "No open ports evidenced")
         status = ("Unknown" if h["online"] is None
                   else "Online" if h["online"] else "Offline")
-        info = {key: h[key] for key in
+        info = {key: h.get(key, "") for key in
                 ("ip", "mac", "hostname", "vendor", "kind", "role",
                  "os", "os_source", "os_evidence", "architecture", "kernel",
                  "dns_hint", "dns_observed")}
