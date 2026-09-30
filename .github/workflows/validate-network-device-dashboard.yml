@@ -3,6 +3,7 @@ name: Validate network inventory dashboard
 on:
   push:
     branches:
+      - main
       - feature/network-all-hosts-grafana
       - feature/grafana-network-host-tiles
       - feature/hostname-first-grafana-hosts
