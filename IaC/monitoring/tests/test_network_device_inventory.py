@@ -175,6 +175,74 @@ class InventoryTests(unittest.TestCase):
         self.assertEqual(len(card_online), 1)
         self.assertTrue(card_online[0].endswith(" 0"))
 
+    def test_matching_saved_apple_fingerprint_enriches_unknown_iphone(self):
+        estate = {"assets": []}
+        dns = {"observed_on": "", "devices": {}}
+        query_results = {
+            "homelab_network_host_info": [
+                {"metric": {"ip": "192.168.2.182", "hostname": "iPhone",
+                            "mac": "92:8b:32:14:8b:e9"}}],
+            "asus_network_asset_info": [
+                {"metric": {"ip": "192.168.2.182", "hostname": "iPhone",
+                            "mac": "92:8b:32:14:8b:e9"}}],
+            "homelab_network_host_up": [
+                {"metric": {"ip": "192.168.2.182"}, "value": [0, "0"]}],
+            "asus_network_asset_up": [
+                {"metric": {"ip": "192.168.2.182"}, "value": [0, "1"]}],
+            "homelab_network_host_last_seen_seconds": [
+                {"metric": {"ip": "192.168.2.182"}, "value": [0, "1000"]}],
+            "asus_network_asset_last_seen_seconds": [
+                {"metric": {"ip": "192.168.2.182"}, "value": [0, "2000"]}],
+            "homelab_network_host_enrichment_port_info": [],
+            'homelab_network_host_os_fingerprint_info{target_name="monitor-01"}': [
+                {"metric": {
+                    "profiled_ip": "192.168.2.182",
+                    "mac": "92:8b:32:14:8b:e9",
+                    "nmap_name":
+                        "Apple macOS 11 (Big Sur) - 13 (Ventura) or iOS 16",
+                    "nmap_accuracy": "96%",
+                    "nmap_family": "iOS",
+                    "nmap_generation": "16",
+                    "nmap_vendor": "Apple",
+                    "nmap_device_type": "phone",
+                    "nmap_cpe": "",
+                    "nmap_scanned_at": "2026-09-29 17:22 UTC",
+                    "nmap_time_basis": "TCP scan",
+                    "nmap_services": "62078/tcp tcpwrapped",
+                    "nmap_scan_status": "complete",
+                }}],
+        }
+
+        def mocked_json(path):
+            return estate if path == inventory.ESTATE else dns
+
+        with patch.object(inventory, "load_json", side_effect=mocked_json), \
+             patch.object(inventory, "prometheus",
+                          side_effect=lambda expr: query_results[expr]), \
+             patch.object(inventory, "router_inventory", return_value=[]), \
+             patch.object(inventory, "latest_baseline",
+                          return_value=({}, set(), "")):
+            hosts = inventory.populate()
+
+        phone = hosts["192.168.2.182"]
+        self.assertEqual(phone["os_evidence"], "inferred_nmap")
+        self.assertEqual(
+            phone["os"],
+            "Apple macOS 11 (Big Sur) - 13 (Ventura) or iOS 16")
+        self.assertEqual(phone["nmap_accuracy"], "96%")
+        self.assertEqual(phone["nmap_vendor"], "Apple")
+        self.assertFalse(phone["online"])
+
+        metrics = inventory.render(hosts)
+        card = next(
+            line for line in metrics.splitlines()
+            if line.startswith("homelab_network_device_card_info{")
+            and 'ip="192.168.2.182"' in line
+        )
+        self.assertIn('os_evidence="inferred_nmap"', card)
+        self.assertIn('nmap_vendor="Apple"', card)
+        self.assertIn('nmap_accuracy="96%"', card)
+
     def test_mac_card_is_unique_across_ip_changes(self):
         from copy import deepcopy
         template = {
