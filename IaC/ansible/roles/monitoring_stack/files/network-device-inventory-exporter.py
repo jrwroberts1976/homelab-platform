@@ -27,6 +27,7 @@ ESTATE = Path("/etc/homelab/network-estate.json")
 DNS_HINTS = Path("/etc/homelab/network-device-dns-hints.json")
 DNS_EVIDENCE = Path("/var/lib/homelab-network-hosts/dns-evidence.json")
 AI_IDENTIFICATION = Path("/var/lib/homelab-network-hosts/ai-identification.json")
+GREENBONE_EVIDENCE = Path("/var/lib/homelab-management-report/evidence-sources/greenbone-01/incoming/managed.json")
 ROUTER_DB = Path("/var/lib/asus-network-inventory/assets.db")
 BASELINE_ROOT = Path("/var/lib/homelab-os-baselines")
 OUTPUT = Path("/var/lib/prometheus/node-exporter/homelab_network_devices.prom")
@@ -222,7 +223,10 @@ def populate():
                              ai_os_confidence="",
                              ai_manual_review_required="",
                              ai_assessed_at="", ai_model="",
-                             ai_confirmed_facts="", ai_inferences="")
+                             ai_confirmed_facts="", ai_inferences="",
+                             greenbone_report_id="",
+                             greenbone_collected_at="",
+                             greenbone_findings=[])
         return hosts[ip]
 
     # Documented infrastructure is included even when temporarily offline.
@@ -497,6 +501,38 @@ def populate():
                 os_evidence="inferred_nmap",
             )
 
+    # Greenbone vulnerability findings are deterministic evidence. Correlate
+    # only by the current host IP and publish only actionable findings. A host
+    # with no finding metric must never be interpreted as vulnerability-free.
+    if GREENBONE_EVIDENCE.is_file():
+        try:
+            greenbone = load_json(GREENBONE_EVIDENCE)
+        except (OSError, json.JSONDecodeError):
+            greenbone = {}
+        report_id = str(greenbone.get("report_id") or "")
+        collected_at = str(greenbone.get("collected_at") or "")
+        for finding in greenbone.get("actionable_findings", []):
+            if not isinstance(finding, dict):
+                continue
+            h = hosts.get(lan_ip(finding.get("host")))
+            if h is None:
+                continue
+            cves = []
+            for value in finding.get("cves", [])[:20]:
+                value = str(value or "").strip().upper()
+                if value.startswith("CVE-") and value not in cves:
+                    cves.append(value)
+            h["greenbone_report_id"] = report_id
+            h["greenbone_collected_at"] = collected_at
+            h["greenbone_findings"].append({
+                "severity": str(finding.get("severity") or "")[:32],
+                "score": finding.get("score"),
+                "port": str(finding.get("port") or "")[:80],
+                "name": str(finding.get("name") or "")[:240],
+                "oid": str(finding.get("oid") or "")[:120],
+                "cves": cves,
+            })
+
     # AI host intelligence is advisory only. Correlate by stable MAC and
     # expose the assessment without changing deterministic identity, OS,
     # presence, port or vulnerability facts.
@@ -567,6 +603,12 @@ def render(hosts):
         "# TYPE homelab_network_device_card_last_seen_seconds gauge",
         "# HELP homelab_network_device_card_port_info Positively observed open service port for the device's current known address.",
         "# TYPE homelab_network_device_card_port_info gauge",
+        "# HELP homelab_network_device_vulnerability_finding_info Current actionable Greenbone finding correlated to the device's current IP.",
+        "# TYPE homelab_network_device_vulnerability_finding_info gauge",
+        "# HELP homelab_network_device_vulnerability_findings_total Number of current actionable Greenbone findings evidenced for this device; absent metric means not evidenced, not zero.",
+        "# TYPE homelab_network_device_vulnerability_findings_total gauge",
+        "# HELP homelab_network_device_cve_exposure_total Number of unique CVE references in current actionable Greenbone findings; absent metric means not evidenced, not zero.",
+        "# TYPE homelab_network_device_cve_exposure_total gauge",
     ]
     for ip in sorted(hosts, key=lambda s: ipaddress.ip_address(s)):
         h = hosts[ip]
@@ -730,6 +772,43 @@ def render(hosts):
                 "homelab_network_device_card_port_info{" +
                 labels(fields) + "} 1"
             )
+
+        findings = h.get("greenbone_findings", [])
+        if findings:
+            unique_cves = sorted({
+                cve
+                for finding in findings
+                for cve in finding.get("cves", [])
+                if cve
+            })
+            lines.append(
+                "homelab_network_device_vulnerability_findings_total{" +
+                labels({"device_key": device_key, "ip": ip}) + "} " +
+                str(len(findings))
+            )
+            lines.append(
+                "homelab_network_device_cve_exposure_total{" +
+                labels({"device_key": device_key, "ip": ip}) + "} " +
+                str(len(unique_cves))
+            )
+            for finding in findings:
+                score = finding.get("score")
+                fields = {
+                    "device_key": device_key,
+                    "ip": ip,
+                    "severity": finding.get("severity", ""),
+                    "score": "" if score is None else score,
+                    "port": finding.get("port", ""),
+                    "name": finding.get("name", ""),
+                    "oid": finding.get("oid", ""),
+                    "cves": ",".join(finding.get("cves", [])),
+                    "report_id": h.get("greenbone_report_id", ""),
+                    "collected_at": h.get("greenbone_collected_at", ""),
+                }
+                lines.append(
+                    "homelab_network_device_vulnerability_finding_info{" +
+                    labels(fields) + "} 1"
+                )
 
     lines.append("homelab_network_device_inventory_last_run_seconds %d" %
                  int(time.time()))
