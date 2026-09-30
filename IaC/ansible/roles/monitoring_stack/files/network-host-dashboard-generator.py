@@ -188,6 +188,8 @@ def select_panel_ids(key, metric, availability):
         selected.add(22)  # Only when OS identification needs investigation.
     if metric.get("ai_summary", "").strip():
         selected.add(23)  # Advisory AI assessment; deterministic facts remain authoritative.
+    if metric.get("greenbone_findings", "").strip():
+        selected.add(24)  # Deterministic actionable Greenbone findings only.
     if present("disk"):
         selected.add(18)
     if present("load"):
@@ -242,6 +244,7 @@ def compact_panels(template_panels, selected):
     add_row((14,), 6)
     add_row((22,), 8)
     add_row((23,), 8)
+    add_row((24,), 8)
     add_row((15,), 7)
     add_row((16,), 6)
     add_row((17,), 7)
