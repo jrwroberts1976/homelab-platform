@@ -673,8 +673,8 @@ def render(hosts):
             "hostname": display_name,
             "os": h["os"],
             "os_evidence": h["os_evidence"],
-            "architecture": h["architecture"],
-            "kernel": h["kernel"],
+            "architecture": h.get("architecture", ""),
+            "kernel": h.get("kernel", ""),
             "dashboard_uid": dashboard_uid,
         }
         info = {
