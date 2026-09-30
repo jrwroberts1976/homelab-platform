@@ -640,7 +640,10 @@ def ask_model(evidence):
         "documented hostname, authoritative OS fact, or direct service fact "
         "with an inference. Greenbone findings are factual vulnerability "
         "evidence for the matching host IP only; absence of a matching finding "
-        "is not proof that a host is secure or fully scanned. Write a concise "
+        "is not proof that a host is secure or fully scanned. If CVE findings "
+        "and pending security updates coexist, state only that both conditions "
+        "merit review; do not claim a package fixes a specific CVE without "
+        "explicit package-to-CVE evidence. Write a concise "
         "summary suitable for a Grafana host page. Set manual_review_required "
         "when identity or platform remains ambiguous."
     )
@@ -769,7 +772,6 @@ def main():
         prior = devices_state.get(mac, {})
         if not isinstance(prior, dict):
             prior = {}
-        prior_hash = prior.get("evidence_hash", "")
         prior_time = int(prior.get("assessed_at", 0) or 0)
         first_seen = int(inv.get("first_seen", 0) or 0)
 
@@ -782,8 +784,10 @@ def main():
         ):
             continue
 
-        # Reassess immediately when evidence changes; otherwise refresh weekly.
-        if prior_hash == digest and prior_time > 0 and NOW - prior_time < RETRY_SECONDS:
+        # Existing hosts refresh weekly. Rolling Loki (24h) and DNS (1h)
+        # evidence naturally changes between hourly resolver runs and must not
+        # turn the advisory AI layer into an hourly reassessment loop.
+        if prior_time > 0 and NOW - prior_time < RETRY_SECONDS:
             continue
 
         # Unassessed devices take priority over routine weekly refreshes.
