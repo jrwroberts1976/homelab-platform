@@ -290,6 +290,36 @@ class GeneratorTests(unittest.TestCase):
         metrics["os"].clear()
         self.assertNotIn(22, generator.select_panel_ids(key, missing, availability))
 
+    def test_ai_host_intelligence_panel_is_conditional(self):
+        template_path = (Path(__file__).resolve().parents[2] /
+                         "ansible/roles/monitoring_stack/files/"
+                         "host-profile-template.json")
+        template = json.loads(template_path.read_text())
+        self.assertIn(23, {p["id"] for p in template["panels"]})
+        key = "mac:aa:bb:cc:dd:ee:ff"
+        metrics = {name: set() for name in generator.AVAILABILITY_QUERIES}
+        availability = (metrics, set(), set(), set())
+
+        assessed = {
+            "hostname": "hp-printer",
+            "ip": "192.168.2.123",
+            "status": "Online",
+            "ai_summary": "Likely network printer based on direct evidence.",
+        }
+        unassessed = dict(assessed, ai_summary="")
+
+        self.assertIn(
+            23, generator.select_panel_ids(key, assessed, availability)
+        )
+        self.assertNotIn(
+            23, generator.select_panel_ids(key, unassessed, availability)
+        )
+
+        dashboard = generator.profile(
+            template, key, assessed, availability
+        )
+        self.assertIn(23, {p["id"] for p in dashboard["panels"]})
+
     def test_no_observed_ports_does_not_make_fake_zero_panel(self):
         key = "ip:192.168.2.206"
         metrics = {name: set() for name in generator.AVAILABILITY_QUERIES}
