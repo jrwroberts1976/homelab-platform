@@ -10,6 +10,8 @@ network_host_ai_resolver_optional_zeek: "{{ network_host_ai_resolver_state_dir }
 network_host_ai_resolver_greenbone: /var/lib/homelab-management-report/evidence-sources/greenbone-01/incoming/managed.json
 network_host_ai_resolver_greenbone_freshness_seconds: 108000
 network_host_ai_resolver_loki_url: http://127.0.0.1:3100
+network_host_ai_resolver_prometheus_url: http://127.0.0.1:9090
+network_host_ai_resolver_patch_freshness_seconds: 5400
 network_host_ai_resolver_loki_window_hours: 24
 network_host_ai_resolver_loki_sample_limit: 20
 network_host_ai_resolver_dns_key: /etc/homelab-network-hosts/dns-evidence-ed25519
