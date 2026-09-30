@@ -262,6 +262,19 @@ def parse_results(report):
 
         nvt = result.find("nvt")
 
+        cves = []
+        if nvt is not None:
+            for ref in nvt.findall("./refs/ref"):
+                if str(ref.get("type") or "").strip().lower() != "cve":
+                    continue
+                cve = str(ref.get("id") or "").strip().upper()
+                if (
+                    cve.startswith("CVE-")
+                    and cve not in cves
+                    and len(cves) < 20
+                ):
+                    cves.append(cve)
+
         findings.append({
             "host": result.findtext("host", "").strip(),
             "port": result.findtext("port", "").strip(),
@@ -269,6 +282,7 @@ def parse_results(report):
             "name": result.findtext("name", "").strip(),
             "score": score,
             "severity": severity_name(score),
+            "cves": cves,
         })
 
     return findings
@@ -359,7 +373,8 @@ def format_finding(finding):
     return (
         f'{finding["severity"]} {finding["score"]:.1f} | '
         f'{finding["host"]} | {finding["port"]} | '
-        f'{finding["name"]} | OID {finding["oid"]}'
+        f'{finding["name"]} | OID {finding["oid"]} | '
+        f'CVE {",".join(finding.get("cves", [])) or "none"}'
     )
 
 def build_email(task_name, report_id, counts, actionable, accepted):
