@@ -160,7 +160,7 @@ Patch state remains factual evidence. AI may explain the significance but must n
 
 ## CVE phase — current work
 
-**Development status (2026-09-30):** CVE extraction has been implemented in the Greenbone scan parser and passed through to the bounded host-AI Greenbone evidence structure. Regression tests cover single, multiple, absent, non-CVE and bounded-reference cases. Live Greenbone production evidence has not yet been regenerated/validated with the new schema.
+**Development status (2026-09-30):** CVE extraction is implemented in the Greenbone scan parser and passed through to the bounded host-AI Greenbone evidence structure. Regression tests cover single, multiple, absent, non-CVE and bounded-reference cases. Production validation completed successfully on greenbone-01: the CVE-aware runner compiled and deployed, the fresh managed scan exited 0/SUCCESS, and evidence was regenerated under report bbfa16af-21a8-4443-ac78-0b9a3f3fe496 at 2026-09-30T09:20:36Z. That scan contained no actionable findings, so there were no live CVE-bearing findings to exercise in production.
 
 Historically, the Greenbone managed evidence exported NVT OID, finding name, score, severity, host and port but did not export CVE references. The development change now extracts bounded CVE references from each NVT result.
 
@@ -232,6 +232,8 @@ Implemented in development:
 
 - bounded AI resolver scaffold on `monitor-01`;
 - Greenbone CVE extraction with up to 20 unique CVE references per finding;
+- production Greenbone CVE-aware scan runner validated successfully on greenbone-01;
+- conditional per-host Greenbone CVE exposure metrics/panel implemented in development;
 - regression coverage for Greenbone CVE extraction;
 - deterministic per-host patch evidence from Prometheus (updates, security updates, reboot-required, unattended-upgrades and patch freshness);
 - Greenbone host-scoped evidence source;
@@ -247,10 +249,10 @@ The AI timer remains disabled by default while development and validation contin
 
 ## Work sequence from here
 
-1. **CVE extraction from Greenbone — CURRENT**
-2. Validate CVE evidence schema and publication.
-3. Add host-level CVE exposure to correlated metrics/Grafana.
-4. Add deterministic patch status to the AI evidence packet.
+1. **CVE extraction from Greenbone — COMPLETE**
+2. **Production CVE evidence regeneration — COMPLETE**
+3. **Add host-level CVE exposure to correlated metrics/Grafana — CURRENT**
+4. **Add deterministic patch status to the AI evidence packet — IMPLEMENTED, LIVE VALIDATION PENDING**
 5. Complete the one-hour suspicious/blocked DNS classification path.
 6. Validate bounded 24-hour Loki evidence.
 7. Run isolated AI assessments against representative hosts.
