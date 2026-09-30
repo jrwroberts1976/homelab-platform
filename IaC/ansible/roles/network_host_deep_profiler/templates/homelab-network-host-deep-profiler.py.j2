@@ -177,11 +177,40 @@ def merge_scan_evidence(
     """Merge successful scans without replacing failed UDP evidence."""
     previous = previous_profile or {}
 
-    result = {
-        "tcp": tcp,
-        "tcp_scanned_at": now,
-        "errors": {},
-    }
+    previous_tcp = (
+        previous.get("tcp")
+        if isinstance(previous.get("tcp"), dict)
+        else None
+    )
+
+    # A bounded retry can legitimately return no OS match even when an
+    # earlier scan of the same MAC/IP produced strong evidence. Do not let
+    # that weaker retry destroy the last useful TCP profile. Preserve both
+    # the evidence and its original timestamp so stale evidence is never
+    # presented as newly observed.
+    preserve_previous_tcp = (
+        previous_tcp is not None
+        and tcp_has_os_evidence(previous_tcp)
+        and not tcp_has_os_evidence(tcp)
+    )
+
+    if preserve_previous_tcp:
+        result = {
+            "tcp": previous_tcp,
+            "tcp_scanned_at": previous.get(
+                "tcp_scanned_at",
+                previous.get("scanned_at"),
+            ),
+            "tcp_evidence_stale": True,
+            "errors": {},
+        }
+    else:
+        result = {
+            "tcp": tcp,
+            "tcp_scanned_at": now,
+            "tcp_evidence_stale": False,
+            "errors": {},
+        }
 
     if udp_error:
         result["errors"]["udp"] = str(udp_error)
@@ -996,7 +1025,7 @@ for mac, record in pending:
 
     missing_os = (
         SCAN_MODE == "targeted"
-        and not tcp_has_os_evidence(tcp)
+        and not tcp_has_os_evidence(merged_profile.get("tcp"))
     )
     partial = bool(merged_profile["errors"]) or missing_os
 
