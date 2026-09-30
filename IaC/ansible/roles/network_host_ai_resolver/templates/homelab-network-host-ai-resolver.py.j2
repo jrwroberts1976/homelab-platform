@@ -4,6 +4,7 @@ import hashlib
 import json
 import os
 import sqlite3
+import subprocess
 import tempfile
 import time
 import urllib.error
@@ -24,6 +25,12 @@ GREENBONE_FRESHNESS_SECONDS = {{ network_host_ai_resolver_greenbone_freshness_se
 LOKI_URL = "{{ network_host_ai_resolver_loki_url }}".rstrip("/")
 LOKI_WINDOW_HOURS = {{ network_host_ai_resolver_loki_window_hours | int }}
 LOKI_SAMPLE_LIMIT = {{ network_host_ai_resolver_loki_sample_limit | int }}
+DNS_KEY = "{{ network_host_ai_resolver_dns_key }}"
+DNS_KNOWN_HOSTS = "{{ network_host_ai_resolver_dns_known_hosts }}"
+DNS_REMOTE_USER = "{{ network_host_ai_resolver_dns_remote_user }}"
+DNS_RECENT_WINDOW_SECONDS = {{ network_host_ai_resolver_dns_recent_window_seconds | int }}
+DNS_RECENT_REQUEST_LIMIT = {{ network_host_ai_resolver_dns_recent_request_limit | int }}
+DNS_SERVERS = {{ network_host_ai_resolver_dns_servers | to_json }}
 OUTPUT = Path("{{ network_host_ai_resolver_output }}")
 
 MODEL = os.environ.get(
@@ -357,6 +364,97 @@ def bounded_loki(hostname):
     }
 
 
+def recent_dns_activity(ip):
+    """Fetch a bounded one-hour DNS request list from both Pi-hole resolvers."""
+    if not ip:
+        return {
+            "status": "unavailable",
+            "window_seconds": DNS_RECENT_WINDOW_SECONDS,
+            "requests": [],
+        }
+
+    combined = []
+    sources = []
+    errors = []
+
+    for server in DNS_SERVERS:
+        command = [
+            "/usr/bin/ssh",
+            "-T",
+            "-o", "BatchMode=yes",
+            "-o", "ConnectTimeout=10",
+            "-o", "StrictHostKeyChecking=yes",
+            "-o", "UserKnownHostsFile=" + DNS_KNOWN_HOSTS,
+            "-i", DNS_KEY,
+            DNS_REMOTE_USER + "@" + server["address"],
+            "recent", ip, str(DNS_RECENT_WINDOW_SECONDS),
+        ]
+        try:
+            result = subprocess.run(
+                command,
+                text=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                timeout=30,
+                check=False,
+            )
+            if result.returncode != 0:
+                raise RuntimeError(result.stderr.strip()[:240])
+
+            payload = json.loads(result.stdout)
+            if payload.get("ip") != ip:
+                raise RuntimeError("mismatched DNS client IP")
+            if payload.get("server") != server["name"]:
+                raise RuntimeError("unexpected DNS source")
+
+            requests = payload.get("requests", [])
+            if not isinstance(requests, list):
+                raise RuntimeError("invalid recent DNS response")
+
+            sources.append(server["name"])
+            for item in requests[:DNS_RECENT_REQUEST_LIMIT]:
+                if not isinstance(item, dict):
+                    continue
+                domain = str(item.get("domain") or "").strip()
+                timestamp = int(item.get("timestamp", 0) or 0)
+                if not domain or timestamp <= 0:
+                    continue
+                combined.append({
+                    "timestamp": timestamp,
+                    "domain": domain[:255],
+                    "server": server["name"],
+                })
+        except Exception as exc:
+            errors.append(server["name"] + ": " + str(exc)[:200])
+
+    # The same request may be visible through more than one resolver. Keep one
+    # copy of each timestamp/domain pair and return only the newest bounded set.
+    unique = {}
+    for item in combined:
+        key = (item["timestamp"], item["domain"])
+        unique.setdefault(key, item)
+
+    requests = sorted(
+        unique.values(),
+        key=lambda item: item["timestamp"],
+        reverse=True,
+    )[:DNS_RECENT_REQUEST_LIMIT]
+
+    return {
+        "status": "ok" if sources else "unavailable",
+        "window_seconds": DNS_RECENT_WINDOW_SECONDS,
+        "sources": sources,
+        "requests": requests,
+        "errors": errors,
+        "interpretation_note": (
+            "Most recent bounded DNS requests from the last hour for this "
+            "client IP. This is not complete browsing history and DNS names "
+            "must be treated as behavioural evidence, not proof of device "
+            "identity or user activity."
+        ),
+    }
+
+
 def evidence_hash(value):
     payload = json.dumps(
         value,
@@ -566,6 +664,7 @@ def main():
             "zeek": bounded_zeek(mac, zeek),
             "greenbone": bounded_greenbone(ip, greenbone),
             "loki": bounded_loki(inv.get("hostname", "")),
+            "recent_dns_1h": recent_dns_activity(ip),
         }
 
         digest = evidence_hash(evidence)
