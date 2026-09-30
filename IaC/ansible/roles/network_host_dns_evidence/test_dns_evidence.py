@@ -15,12 +15,16 @@ REMOTE = HERE / "templates/homelab-dns-evidence-query.py.j2"
 MONITOR = HERE / "templates/homelab-network-dns-evidence.py.j2"
 
 
-def load_remote_functions(db):
+def load_remote_functions(db, gravity_db=None):
     source = REMOTE.read_text()
     source = source.replace(
         "{{ network_host_dns_evidence_lookback_days }}", "7"
     ).replace(
         "{{ network_host_dns_evidence_max_domains }}", "5"
+    ).replace(
+        "{{ network_host_dns_evidence_recent_window_seconds }}", "3600"
+    ).replace(
+        "{{ network_host_dns_evidence_recent_request_limit }}", "20"
     )
     tree = ast.parse(source)
     selected = [
@@ -28,13 +32,14 @@ def load_remote_functions(db):
         if (
             isinstance(node, ast.FunctionDef)
             and node.name in {
-                "requested_request", "domain_signals", "query_summary"
+                "requested_request", "domain_signals", "query_summary",
+                "classify_adlist", "recent_requests"
             }
         ) or (
             isinstance(node, ast.Assign)
             and any(
                 isinstance(target, ast.Name)
-                and target.id == "SIGNAL_RULES"
+                and target.id in {"SIGNAL_RULES", "RISK_LIST_RULES"}
                 for target in node.targets
             )
         )
@@ -46,8 +51,11 @@ def load_remote_functions(db):
         "sqlite3": sqlite3,
         "time": time,
         "DB": str(db),
+        "GRAVITY_DB": str(gravity_db or Path(str(db) + ".gravity")),
         "LOOKBACK_SECONDS": 7 * 86400,
         "MAX_DOMAINS": 5,
+        "RECENT_WINDOW_SECONDS": 3600,
+        "RECENT_REQUEST_LIMIT": 20,
         "LAN": __import__("ipaddress").ip_network("192.168.2.0/24"),
     }
     exec(compile(ast.Module(body=selected, type_ignores=[]), str(REMOTE), "exec"),
@@ -139,6 +147,65 @@ class DnsEvidenceTests(unittest.TestCase):
         )
         self.assertLessEqual(len(summary["top_domains"]), 5)
         self.assertEqual(summary["lookback_days"], 7)
+
+    def test_recent_dns_returns_only_high_risk_policy_blocks(self):
+        gravity_db = Path(self.temp.name) / "gravity.db"
+        gravity = sqlite3.connect(gravity_db)
+        gravity.executescript(
+            """
+            CREATE TABLE adlist (
+                id INTEGER PRIMARY KEY,
+                address TEXT,
+                comment TEXT
+            );
+            CREATE TABLE gravity (
+                domain TEXT,
+                adlist_id INTEGER
+            );
+            INSERT INTO adlist VALUES (
+                1,
+                'https://example.invalid/hagezi-nsfw.txt',
+                'HaGeZi NSFW'
+            );
+            INSERT INTO adlist VALUES (
+                2,
+                'https://example.invalid/general-adblock.txt',
+                'General ads and trackers'
+            );
+            INSERT INTO gravity VALUES ('adult.example', 1);
+            INSERT INTO gravity VALUES ('ads.example', 2);
+            """
+        )
+        gravity.commit()
+        gravity.close()
+
+        connection = sqlite3.connect(self.db)
+        connection.execute(
+            "INSERT INTO domain_by_id VALUES (3, 'adult.example')"
+        )
+        connection.execute(
+            "INSERT INTO domain_by_id VALUES (4, 'ads.example')"
+        )
+        connection.executemany(
+            "INSERT INTO query_storage(id,timestamp,status,domain,client) "
+            "VALUES (?,?,?,?,?)",
+            [
+                (6, self.now - 5, 1, 3, 1),
+                (7, self.now - 6, 1, 4, 1),
+                (8, self.now - 7, 2, 1, 1),
+            ],
+        )
+        connection.commit()
+        connection.close()
+
+        worker = load_remote_functions(self.db, gravity_db)
+        payload = worker["recent_requests"](
+            "192.168.2.206", 3600, self.now
+        )
+        self.assertEqual(len(payload["policy_matches"]), 1)
+        match = payload["policy_matches"][0]
+        self.assertEqual(match["domain"], "adult.example")
+        self.assertEqual(match["categories"], ["adult"])
 
     def test_dns_runs_once_after_each_completed_profile(self):
         worker = load_monitor_functions()
