@@ -115,6 +115,51 @@ class GeneratorTests(unittest.TestCase):
         self.assertEqual(dashboard["templating"]["list"][0]["current"]["text"],
                          "192.168.2.224")
 
+    def test_display_name_strips_jameshouse_suffix(self):
+        key = "mac:aa:bb:cc:dd:ee:ff"
+        template = {
+            "uid": "homelab-mac-device-detail",
+            "templating": {"list": [
+                {"name": "host"},
+                {"name": "device"}
+            ]}
+        }
+        dashboard = generator.profile(template, key, {
+            "hostname": "acer-lights.jameshouse",
+            "ip": "192.168.2.95",
+        })
+        self.assertEqual(dashboard["title"], "Homelab — acer-lights")
+        self.assertEqual(
+            dashboard["templating"]["list"][0]["current"]["value"],
+            "acer-lights",
+        )
+        self.assertEqual(
+            dashboard["tags"],
+            ["generated-network-host", "homelab"],
+        )
+
+    def test_ip_only_unknown_card_is_not_publishable(self):
+        self.assertFalse(generator.publishable_card({
+            "hostname": "192.168.2.154",
+            "ip": "192.168.2.154",
+            "kind": "",
+        }))
+        self.assertFalse(generator.publishable_card({
+            "hostname": "",
+            "ip": "192.168.2.44",
+            "kind": "",
+        }))
+        self.assertTrue(generator.publishable_card({
+            "hostname": "192.168.2.181",
+            "ip": "192.168.2.181",
+            "kind": "ASUS AiMesh node",
+        }))
+        self.assertTrue(generator.publishable_card({
+            "hostname": "dns-01",
+            "ip": "192.168.2.51",
+            "kind": "",
+        }))
+
     def test_generator_refuses_partial_snapshot(self):
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
