@@ -22,6 +22,8 @@ ROUTER_DB = Path("{{ network_host_ai_resolver_router_db }}")
 OPTIONAL_ZEEK = Path("{{ network_host_ai_resolver_optional_zeek }}")
 GREENBONE = Path("{{ network_host_ai_resolver_greenbone }}")
 GREENBONE_FRESHNESS_SECONDS = {{ network_host_ai_resolver_greenbone_freshness_seconds | int }}
+PROMETHEUS_URL = "{{ network_host_ai_resolver_prometheus_url }}".rstrip("/")
+PATCH_FRESHNESS_SECONDS = {{ network_host_ai_resolver_patch_freshness_seconds | int }}
 LOKI_URL = "{{ network_host_ai_resolver_loki_url }}".rstrip("/")
 LOKI_WINDOW_HOURS = {{ network_host_ai_resolver_loki_window_hours | int }}
 LOKI_SAMPLE_LIMIT = {{ network_host_ai_resolver_loki_sample_limit | int }}
@@ -269,6 +271,96 @@ def bounded_greenbone(ip, evidence):
         "interpretation_note": (
             "Only actionable findings matching this current IP are included. "
             "Zero matches is not proof that the host is vulnerability-free."
+        ),
+    }
+
+
+def prometheus_query(expr):
+    params = urllib.parse.urlencode({"query": expr})
+    request = urllib.request.Request(
+        PROMETHEUS_URL + "/api/v1/query?" + params,
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=15) as response:
+        payload = json.loads(response.read().decode())
+    if payload.get("status") != "success":
+        raise RuntimeError("Prometheus query failed")
+    return payload.get("data", {}).get("result", [])
+
+
+def bounded_patch_status(hostname):
+    """Return deterministic patch telemetry for a single managed host."""
+    if not hostname:
+        return {"status": "unavailable"}
+
+    safe = hostname.replace("\\", "\\\\").replace('"', '\\"')
+    queries = {
+        "updates_available":
+            'homelab_updates_available{target_name="' + safe + '"}',
+        "security_updates_available":
+            'homelab_security_updates_available{target_name="' + safe + '"}',
+        "reboot_required":
+            'homelab_reboot_required{target_name="' + safe + '"}',
+        "unattended_upgrades_enabled":
+            'homelab_unattended_upgrades_enabled{target_name="' + safe + '"}',
+        "last_patch_success":
+            'homelab_patch_last_success_timestamp_seconds{target_name="' + safe + '"}',
+    }
+
+    values = {}
+    errors = []
+    for name, expr in queries.items():
+        try:
+            results = prometheus_query(expr)
+            if len(results) != 1:
+                values[name] = None
+                continue
+            values[name] = float(results[0]["value"][1])
+        except Exception as exc:
+            values[name] = None
+            errors.append(name + ": " + str(exc)[:160])
+
+    last_success = values.get("last_patch_success")
+    age_seconds = None
+    freshness = "unavailable"
+    if last_success is not None and last_success > 0:
+        age_seconds = max(0, NOW - int(last_success))
+        freshness = (
+            "fresh"
+            if age_seconds <= PATCH_FRESHNESS_SECONDS
+            else "stale"
+        )
+
+    available = sum(1 for value in values.values() if value is not None)
+    return {
+        "status": "ok" if available else "unavailable",
+        "updates_available": (
+            int(values["updates_available"])
+            if values["updates_available"] is not None else None
+        ),
+        "security_updates_available": (
+            int(values["security_updates_available"])
+            if values["security_updates_available"] is not None else None
+        ),
+        "reboot_required": (
+            bool(int(values["reboot_required"]))
+            if values["reboot_required"] is not None else None
+        ),
+        "unattended_upgrades_enabled": (
+            bool(int(values["unattended_upgrades_enabled"]))
+            if values["unattended_upgrades_enabled"] is not None else None
+        ),
+        "last_patch_success_timestamp": (
+            int(last_success) if last_success is not None else None
+        ),
+        "last_patch_success_age_seconds": age_seconds,
+        "freshness": freshness,
+        "freshness_threshold_seconds": PATCH_FRESHNESS_SECONDS,
+        "errors": errors,
+        "interpretation_note": (
+            "Patch telemetry is deterministic host evidence. Pending security "
+            "updates may coexist with CVE findings, but this data does not "
+            "prove that a specific package update fixes a specific CVE."
         ),
     }
 
@@ -668,6 +760,7 @@ def main():
             ),
             "zeek": bounded_zeek(mac, zeek),
             "greenbone": bounded_greenbone(ip, greenbone),
+            "patching": bounded_patch_status(inv.get("hostname", "")),
             "loki": bounded_loki(inv.get("hostname", "")),
             "recent_dns_1h": recent_dns_activity(ip),
         }
