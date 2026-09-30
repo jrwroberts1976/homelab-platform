@@ -729,6 +729,21 @@ def render(hosts):
             "dns_observed": h["dns_observed"],
             "observed_open_ports": summary,
             "status": status,
+            "greenbone_findings": (
+                str(len(h.get("greenbone_findings", [])))
+                if h.get("greenbone_findings") else ""
+            ),
+            "greenbone_cves": (
+                str(len({
+                    cve
+                    for finding in h.get("greenbone_findings", [])
+                    for cve in finding.get("cves", [])
+                    if cve
+                }))
+                if h.get("greenbone_findings") else ""
+            ),
+            "greenbone_report_id": h.get("greenbone_report_id", ""),
+            "greenbone_collected_at": h.get("greenbone_collected_at", ""),
             **{name: h.get(name, "") for name in (
                 "nmap_name", "nmap_accuracy", "nmap_family",
                 "nmap_generation", "nmap_vendor", "nmap_device_type",
