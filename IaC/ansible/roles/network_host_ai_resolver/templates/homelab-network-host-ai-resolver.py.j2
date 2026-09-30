@@ -251,6 +251,11 @@ def bounded_greenbone(ip, evidence):
             "port": finding.get("port", ""),
             "name": finding.get("name", ""),
             "oid": finding.get("oid", ""),
+            "cves": [
+                str(value)[:32]
+                for value in finding.get("cves", [])[:20]
+                if value
+            ],
         })
 
     return {
