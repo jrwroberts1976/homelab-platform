@@ -1,0 +1,43 @@
+name: Validate Greenbone CVE evidence
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "IaC/ansible/roles/greenbone_scanning/**"
+      - "IaC/ansible/roles/network_host_ai_resolver/**"
+      - "docs/architecture/HOST-AI-INTELLIGENCE-PLAN.md"
+      - ".github/workflows/validate-greenbone-evidence.yml"
+  pull_request:
+    paths:
+      - "IaC/ansible/roles/greenbone_scanning/**"
+      - "IaC/ansible/roles/network_host_ai_resolver/**"
+      - "docs/architecture/HOST-AI-INTELLIGENCE-PLAN.md"
+      - ".github/workflows/validate-greenbone-evidence.yml"
+
+jobs:
+  validate-greenbone-cve:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+
+    steps:
+      - name: Checkout changes
+        uses: actions/checkout@v4
+
+      - name: Configure Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Validate CVE extraction regression tests
+        run: |
+          python3 IaC/ansible/roles/greenbone_scanning/test_greenbone_cve_evidence.py
+
+      - name: Validate AI resolver Ansible syntax
+        run: |
+          python3 -m pip install "PyYAML==6.0.2" "ansible-core>=2.19,<2.20"
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml             playbooks/network-host-ai-resolver.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml             playbooks/greenbone-scanning.yml --syntax-check
