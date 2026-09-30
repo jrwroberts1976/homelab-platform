@@ -26,6 +26,7 @@ ZABBIX_MAX_AGE_SECONDS = 3 * 3600
 ESTATE = Path("/etc/homelab/network-estate.json")
 DNS_HINTS = Path("/etc/homelab/network-device-dns-hints.json")
 DNS_EVIDENCE = Path("/var/lib/homelab-network-hosts/dns-evidence.json")
+AI_IDENTIFICATION = Path("/var/lib/homelab-network-hosts/ai-identification.json")
 ROUTER_DB = Path("/var/lib/asus-network-inventory/assets.db")
 BASELINE_ROOT = Path("/var/lib/homelab-os-baselines")
 OUTPUT = Path("/var/lib/prometheus/node-exporter/homelab_network_devices.prom")
@@ -214,7 +215,14 @@ def populate():
                              nmap_vendor="", nmap_device_type="",
                              nmap_cpe="", nmap_scanned_at="",
                               nmap_time_basis="",
-                             nmap_services="", nmap_scan_status="")
+                             nmap_services="", nmap_scan_status="",
+                             ai_summary="", ai_device_type="",
+                             ai_platform_family="",
+                             ai_identity_confidence="",
+                             ai_os_confidence="",
+                             ai_manual_review_required="",
+                             ai_assessed_at="", ai_model="",
+                             ai_confirmed_facts="", ai_inferences="")
         return hosts[ip]
 
     # Documented infrastructure is included even when temporarily offline.
@@ -489,6 +497,51 @@ def populate():
                 os_evidence="inferred_nmap",
             )
 
+    # AI host intelligence is advisory only. Correlate by stable MAC and
+    # expose the assessment without changing deterministic identity, OS,
+    # presence, port or vulnerability facts.
+    if AI_IDENTIFICATION.is_file():
+        ai_state = load_json(AI_IDENTIFICATION)
+        ai_devices = ai_state.get("devices", {})
+        if isinstance(ai_devices, dict):
+            for mac, assessment in ai_devices.items():
+                if not isinstance(assessment, dict):
+                    continue
+                source_mac = str(mac).strip().lower().replace("-", ":")
+                candidates = [
+                    item for item in hosts.values()
+                    if str(item.get("mac") or "").strip().lower()
+                    .replace("-", ":") == source_mac
+                ]
+                if len(candidates) != 1:
+                    continue
+                h = candidates[0]
+                result = assessment.get("result", {})
+                if not isinstance(result, dict):
+                    continue
+                h["ai_summary"] = result.get("summary", "")
+                h["ai_device_type"] = result.get("device_type", "")
+                h["ai_platform_family"] = result.get("platform_family", "")
+                h["ai_identity_confidence"] = result.get(
+                    "identity_confidence", "")
+                h["ai_os_confidence"] = result.get("os_confidence", "")
+                h["ai_manual_review_required"] = str(
+                    bool(result.get("manual_review_required", False))
+                ).lower()
+                assessed_at = int(assessment.get("assessed_at", 0) or 0)
+                if assessed_at:
+                    h["ai_assessed_at"] = time.strftime(
+                        "%Y-%m-%d %H:%M UTC", time.gmtime(assessed_at))
+                h["ai_model"] = assessment.get("model", "")
+                h["ai_confirmed_facts"] = "; ".join(
+                    str(x) for x in result.get("confirmed_facts", [])[:6]
+                    if x
+                )
+                h["ai_inferences"] = "; ".join(
+                    str(x) for x in result.get("inferences", [])[:6]
+                    if x
+                )
+
     return hosts
 
 
@@ -639,7 +692,12 @@ def render(hosts):
                 "nmap_generation", "nmap_vendor", "nmap_device_type",
                 "nmap_cpe", "nmap_scanned_at", "nmap_time_basis",
                 "nmap_services",
-                "nmap_scan_status")},
+                "nmap_scan_status",
+                "ai_summary", "ai_device_type",
+                "ai_platform_family", "ai_identity_confidence",
+                "ai_os_confidence", "ai_manual_review_required",
+                "ai_assessed_at", "ai_model",
+                "ai_confirmed_facts", "ai_inferences")},
         }
         lines.append(
             "homelab_network_device_card_info{" +
