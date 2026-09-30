@@ -213,6 +213,30 @@ class DeepProfilerTests(unittest.TestCase):
         self.assertTrue(result["udp_evidence_stale"])
         self.assertEqual(result["errors"]["udp"], "timeout")
 
+
+    def test_retry_without_os_keeps_previous_tcp_evidence(self):
+        merge = self.worker["merge_scan_evidence"]
+        previous = {
+            "tcp": {
+                "os_matches": [{"name": "Known OS", "accuracy": "94"}],
+                "ports": [{"port": 62078, "state": "open"}],
+            },
+            "tcp_scanned_at": 100,
+            "udp": {"ports": []},
+            "udp_scanned_at": 100,
+        }
+        result = merge(
+            previous,
+            {"os_matches": [], "ports": []},
+            {"os_matches": [], "ports": []},
+            None,
+            200,
+        )
+        self.assertEqual(result["tcp"], previous["tcp"])
+        self.assertEqual(result["tcp_scanned_at"], 100)
+        self.assertTrue(result["tcp_evidence_stale"])
+        self.assertTrue(self.worker["tcp_has_os_evidence"](result["tcp"]))
+
     def test_successful_udp_replaces_old_evidence(self):
         merge = self.worker["merge_scan_evidence"]
         result = merge(
