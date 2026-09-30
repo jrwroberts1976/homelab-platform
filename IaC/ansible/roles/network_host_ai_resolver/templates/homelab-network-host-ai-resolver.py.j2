@@ -17,6 +17,8 @@ DNS = Path("{{ network_host_ai_resolver_dns }}")
 ENRICHMENT = Path("{{ network_host_ai_resolver_enrichment }}")
 ROUTER_DB = Path("{{ network_host_ai_resolver_router_db }}")
 OPTIONAL_ZEEK = Path("{{ network_host_ai_resolver_optional_zeek }}")
+GREENBONE = Path("{{ network_host_ai_resolver_greenbone }}")
+GREENBONE_FRESHNESS_SECONDS = {{ network_host_ai_resolver_greenbone_freshness_seconds | int }}
 OUTPUT = Path("{{ network_host_ai_resolver_output }}")
 
 MODEL = os.environ.get(
@@ -197,6 +199,61 @@ def bounded_zeek(mac, zeek):
     }
 
 
+def bounded_greenbone(ip, evidence):
+    """Return only Greenbone evidence relevant to this current host IP."""
+    if not isinstance(evidence, dict):
+        return {"status": "unavailable"}
+
+    collected_at = str(evidence.get("collected_at") or "")
+    age_seconds = None
+    if collected_at:
+        try:
+            from datetime import datetime, timezone
+            stamp = datetime.fromisoformat(collected_at.replace("Z", "+00:00"))
+            if stamp.tzinfo is not None:
+                age_seconds = max(
+                    0,
+                    int((datetime.now(timezone.utc) -
+                         stamp.astimezone(timezone.utc)).total_seconds()),
+                )
+        except (TypeError, ValueError):
+            age_seconds = None
+
+    status = "ok"
+    if age_seconds is None:
+        status = "undated"
+    elif age_seconds > GREENBONE_FRESHNESS_SECONDS:
+        status = "stale"
+
+    findings = []
+    for finding in evidence.get("actionable_findings", [])[:100]:
+        if not isinstance(finding, dict):
+            continue
+        if str(finding.get("host") or "").strip() != ip:
+            continue
+        findings.append({
+            "severity": finding.get("severity", ""),
+            "score": finding.get("score"),
+            "port": finding.get("port", ""),
+            "name": finding.get("name", ""),
+            "oid": finding.get("oid", ""),
+        })
+
+    return {
+        "status": status,
+        "report_id": evidence.get("report_id", ""),
+        "task_name": evidence.get("task_name", ""),
+        "collected_at": collected_at,
+        "age_seconds": age_seconds,
+        "matching_actionable_count": len(findings),
+        "matching_actionable_findings": findings[:20],
+        "interpretation_note": (
+            "Only actionable findings matching this current IP are included. "
+            "Zero matches is not proof that the host is vulnerability-free."
+        ),
+    }
+
+
 def evidence_hash(value):
     payload = json.dumps(
         value,
@@ -268,6 +325,9 @@ def ask_model(evidence):
         "device identity. Treat lwIP as a TCP/IP stack, not a complete OS. "
         "If the exact OS is unsupported, return an empty exact_os string and "
         "use a cautious platform_family such as embedded IoT firmware. "
+        "Greenbone findings are factual vulnerability evidence for the "
+        "matching host IP only; absence of a matching finding is not proof "
+        "that a host is secure or fully scanned. "
         "Set manual_review_required when evidence remains ambiguous."
     )
 
@@ -340,6 +400,7 @@ def main():
         enrichment_hosts = {}
 
     zeek = load_json(OPTIONAL_ZEEK, {})
+    greenbone = load_json(GREENBONE, {})
     routers = router_identity()
     current = current_inventory_by_mac(inventory)
 
@@ -386,6 +447,7 @@ def main():
                 enrichment_hosts.get(ip, {})
             ),
             "zeek": bounded_zeek(mac, zeek),
+            "greenbone": bounded_greenbone(ip, greenbone),
         }
 
         digest = evidence_hash(evidence)
