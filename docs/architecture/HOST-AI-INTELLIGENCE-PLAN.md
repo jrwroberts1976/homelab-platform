@@ -238,7 +238,7 @@ Implemented in development:
 - deterministic per-host patch evidence from Prometheus (updates, security updates, reboot-required, unattended-upgrades and patch freshness), live-validated across all 15 managed hosts on 2026-09-30;
 - Greenbone host-scoped evidence source;
 - 24-hour bounded Loki evidence source;
-- one-hour bounded DNS request path under development;
+- one-hour DNS path restricted in development to locally blocked high-risk policy categories (threat/malware/phishing, adult, gambling, VPN/proxy/Tor/DoH bypass); ordinary DNS and generic ad/tracker blocks are excluded;
 - weekly refresh logic;
 - one-hour initial-assessment delay for new devices;
 - bounded five-assessment history;
@@ -253,7 +253,7 @@ The AI timer remains disabled by default while development and validation contin
 2. **Production CVE evidence regeneration — COMPLETE**
 3. **Add host-level CVE exposure to correlated metrics/Grafana — DEPLOYED 2026-09-30**
 4. **Add deterministic patch status to the AI evidence packet — LIVE VALIDATED 2026-09-30**
-5. Complete the one-hour suspicious/blocked DNS classification path.
+5. **Complete the one-hour suspicious/blocked DNS classification path — CURRENT**
 6. Validate bounded 24-hour Loki evidence.
 7. Run isolated AI assessments against representative hosts.
 8. Review hallucination/overreach behaviour and confidence handling.
