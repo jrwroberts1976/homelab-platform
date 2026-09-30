@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
 """Publish *existing* MAC-keyed Nmap OS evidence; never initiate a scan.
 
-Reads root-only deep-profiles.json on Proxmox-2. Exports a bounded, minimally
-identified metric via the existing node-exporter textfile collector.
+Reads root-only deep-profiles.json on the active profiler owner. Exports a
+bounded, minimally identified metric via the existing node-exporter textfile
+collector.
 """
 import ipaddress
 import json
