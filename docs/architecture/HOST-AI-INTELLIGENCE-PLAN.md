@@ -160,7 +160,9 @@ Patch state remains factual evidence. AI may explain the significance but must n
 
 ## CVE phase — current work
 
-The Greenbone managed evidence currently exports NVT OID, finding name, score, severity, host and port, but does not export CVE references.
+**Development status (2026-09-30):** CVE extraction has been implemented in the Greenbone scan parser and passed through to the bounded host-AI Greenbone evidence structure. Regression tests cover single, multiple, absent, non-CVE and bounded-reference cases. Live Greenbone production evidence has not yet been regenerated/validated with the new schema.
+
+Historically, the Greenbone managed evidence exported NVT OID, finding name, score, severity, host and port but did not export CVE references. The development change now extracts bounded CVE references from each NVT result.
 
 ### Required CVE changes
 
@@ -229,6 +231,9 @@ Target behaviour:
 Implemented in development:
 
 - bounded AI resolver scaffold on `monitor-01`;
+- Greenbone CVE extraction with up to 20 unique CVE references per finding;
+- regression coverage for Greenbone CVE extraction;
+- deterministic per-host patch evidence from Prometheus (updates, security updates, reboot-required, unattended-upgrades and patch freshness);
 - Greenbone host-scoped evidence source;
 - 24-hour bounded Loki evidence source;
 - one-hour bounded DNS request path under development;
