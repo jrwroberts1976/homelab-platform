@@ -1,34 +1,43 @@
 ---
-# Focused, non-scanning rollout: publish EXISTING Proxmox-2 Nmap fingerprints
+# Focused, non-scanning rollout: publish EXISTING monitor-01 Nmap fingerprints
 # and display only MAC + scanned-IP-correlated evidence on per-host Grafana.
-- name: Publish saved deep Nmap OS fingerprints from Proxmox-2 without scanning
-  hosts: Proxmox-2
+- name: Publish saved deep Nmap OS fingerprints and integrate them into Grafana
+  hosts: monitoring_hosts
   become: true
   gather_facts: true
+  any_errors_fatal: true
   vars:
     publisher_src: "{{ playbook_dir }}/../roles/network_host_deep_profiler/files"
+    base: "{{ playbook_dir }}/../roles/monitoring_stack/files"
+    dashboards_live: /opt/monitoring/grafana/provisioning/dashboards
+
   tasks:
-    - name: Validate existing deep profiler host
+    - name: Verify canonical monitor-01 and current profiler ownership
       ansible.builtin.assert:
         that:
-          - ansible_facts.hostname == 'Proxmox-2'
-          - ansible_facts.default_ipv4.address == '192.168.2.71'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Refusing to publish OS evidence from an unexpected host.
 
-    - name: Require existing deep-profile state and node exporter
+    - name: Require existing deep-profile state, Grafana and node exporter
       ansible.builtin.stat:
         path: "{{ item }}"
       loop:
         - /var/lib/homelab-network-hosts/deep-profiles.json
         - /var/lib/prometheus/node-exporter
+        - /opt/monitoring/docker-compose.yml
+        - /etc/homelab/network-estate.json
       register: os_publisher_prereqs
 
-    - name: Refuse to invent profile state or start new Nmap scans
+    - name: Refuse to invent profile state or bootstrap monitoring
       ansible.builtin.assert:
         that:
           - os_publisher_prereqs.results | selectattr('stat.exists', 'equalto', false) | list | length == 0
         fail_msg: >-
-          Existing deep-profiles.json and node-exporter textfile directory
-          are required. This playbook does not start the deep scanner.
+          Existing monitor-01 deep-profile state and monitoring platform are
+          required. This playbook never starts an Nmap scan.
 
     - name: Install read-only saved Nmap evidence exporter
       ansible.builtin.copy:
@@ -38,7 +47,7 @@
         group: root
         mode: '0755'
 
-    - name: Install only the read-only exporter service and timer
+    - name: Install read-only evidence exporter service and timer
       ansible.builtin.copy:
         src: "{{ publisher_src }}/{{ item }}"
         dest: "/etc/systemd/system/{{ item }}"
@@ -48,6 +57,19 @@
       loop:
         - homelab-network-os-evidence.service
         - homelab-network-os-evidence.timer
+
+    - name: Install Nmap-aware inventory correlation and dashboard generator
+      ansible.builtin.copy:
+        src: "{{ base }}/{{ item.src }}"
+        dest: "{{ item.dest }}"
+        owner: root
+        group: root
+        mode: "{{ item.mode }}"
+      loop:
+        - {src: network-device-inventory-exporter.py, dest: /usr/local/sbin/homelab-network-device-inventory, mode: '0750'}
+        - {src: network-host-dashboard-generator.py, dest: /usr/local/sbin/homelab-network-host-dashboards, mode: '0750'}
+        - {src: host-profile-template.json, dest: /etc/homelab/network-host-template.json, mode: '0644'}
+      register: nmap_dashboard_assets
 
     - name: Run initial export of already saved OS fingerprints
       ansible.builtin.systemd_service:
@@ -72,67 +94,20 @@
           {{ (saved_nmap_metric.content | b64decode
              | regex_findall('(?m)^homelab_network_host_os_fingerprint_info\\{')) | length }}
 
-    - name: Report saved scan evidence count without asserting phantom matches
-      ansible.builtin.debug:
-        msg: >-
-          Exported {{ saved_nmap_fingerprints }} existing OS fingerprint
-          matches on Proxmox-2. No Nmap scans started or enabled.
-
-- name: Integrate saved OS fingerprint evidence into per-host Grafana
-  hosts: monitoring_hosts
-  become: true
-  gather_facts: true
-  vars:
-    base: "{{ playbook_dir }}/../roles/monitoring_stack/files"
-    dashboards_live: /opt/monitoring/grafana/provisioning/dashboards
-  tasks:
-    - name: Verify canonical monitor-01 and existing monitoring stack
-      ansible.builtin.assert:
-        that:
-          - ansible_facts.hostname == 'monitor-01'
-          - ansible_facts.default_ipv4.address == '192.168.2.52'
-
-    - name: Verify existing Grafana and node-exporter deployment
-      ansible.builtin.stat:
-        path: "{{ item }}"
-      loop:
-        - /opt/monitoring/docker-compose.yml
-        - /var/lib/prometheus/node-exporter
-        - /etc/homelab/network-estate.json
-      register: os_dashboard_prereqs
-
-    - name: Require existing deployment, do not bootstrap or recreate containers
-      ansible.builtin.assert:
-        that:
-          - os_dashboard_prereqs.results | selectattr('stat.exists', 'equalto', false) | list | length == 0
-
-    - name: Install Nmap-aware evidence correlation and conditional dashboard generator
-      ansible.builtin.copy:
-        src: "{{ base }}/{{ item.src }}"
-        dest: "{{ item.dest }}"
-        owner: root
-        group: root
-        mode: "{{ item.mode }}"
-      loop:
-        - {src: network-device-inventory-exporter.py, dest: /usr/local/sbin/homelab-network-device-inventory, mode: '0750'}
-        - {src: network-host-dashboard-generator.py, dest: /usr/local/sbin/homelab-network-host-dashboards, mode: '0750'}
-        - {src: host-profile-template.json, dest: /etc/homelab/network-host-template.json, mode: '0644'}
-      register: nmap_dashboard_assets
-
-    - name: Wait for saved fingerprint metric scrape when evidence exists
+    - name: Wait for monitor-01 saved fingerprint metric scrape
       ansible.builtin.uri:
         url: >-
-          http://127.0.0.1:9090/api/v1/query?query=homelab_network_host_os_fingerprint_info%7Btarget_name%3D%22Proxmox-2%22%7D
+          http://127.0.0.1:9090/api/v1/query?query=homelab_network_host_os_fingerprint_info%7Btarget_name%3D%22monitor-01%22%7D
         status_code: 200
         return_content: true
       register: saved_nmap_scrape
       until:
         - saved_nmap_scrape.json.status == 'success'
-        - saved_nmap_scrape.json.data.result | length >= hostvars['Proxmox-2'].saved_nmap_fingerprints | int
+        - saved_nmap_scrape.json.data.result | length >= saved_nmap_fingerprints | int
       retries: 20
       delay: 5
       changed_when: false
-      when: hostvars['Proxmox-2'].saved_nmap_fingerprints | int > 0
+      when: saved_nmap_fingerprints | int > 0
 
     - name: Publish inventory with MAC and scanned-IP-correlated Nmap evidence
       ansible.builtin.command:
@@ -154,7 +129,7 @@
       delay: 5
       changed_when: false
 
-    - name: Count fingerprint matches correlated with today's device identities
+    - name: Count fingerprint matches correlated with current device identities
       ansible.builtin.uri:
         url: >-
           http://127.0.0.1:9090/api/v1/query?query=count%28homelab_network_device_card_info%7Btarget_name%3D%22monitor-01%22%2Cnmap_name%21%3D%22%22%7D%29%20or%20vector%280%29
@@ -198,8 +173,8 @@
     - name: Show saved fingerprint integration result
       ansible.builtin.debug:
         msg: >-
-          Proxmox-2 exported {{ hostvars['Proxmox-2'].saved_nmap_fingerprints }}
-          saved Nmap OS matches; {{ nmap_correlated_count.json.data.result[0].value[1] }}
+          monitor-01 exported {{ saved_nmap_fingerprints }} saved Nmap OS
+          matches; {{ nmap_correlated_count.json.data.result[0].value[1] }}
           matched current MAC/IP evidence in Prometheus;
           {{ os_host_pages.matched }} per-host Grafana pages generated.
           Zero matched profiles means the Nmap panel remains absent.
