@@ -32,14 +32,14 @@ The targeted profile completed but did not yield a reliable OS fingerprint. Devi
 
 - Evidence source: `sensor-01` Zeek connection telemetry
 - Rolling window: 24 hours
-- Summary generated: `2026-09-30T00:24:50+01:00`
+- Summary generated: `2026-10-01T00:23:08+01:00`
 - MAC identity: `68:ff:7b:1b:1e:ab`
 - Observed IP address(es): `192.168.2.76`
-- Connections: **51**
-- Traffic sent: **4.1 KiB**
-- Traffic received: **13.3 KiB**
-- Top services: `ntp` (48), `ssl` (2), `dhcp` (1)
-- Top destination ports: `udp/123` (48), `tcp/443` (2), `udp/67` (1)
+- Connections: **48**
+- Traffic sent: **2.3 KiB**
+- Traffic received: **2.2 KiB**
+- Top services: `ntp` (48)
+- Top destination ports: `udp/123` (48)
 
 > This bounded summary intentionally excludes raw packet data and external destination IP history.
 <!-- END AUTO:ZEEK-FLOW -->
