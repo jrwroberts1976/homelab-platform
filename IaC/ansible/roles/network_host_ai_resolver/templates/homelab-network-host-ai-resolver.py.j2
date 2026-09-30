@@ -8,6 +8,8 @@ import tempfile
 import time
 import urllib.error
 import urllib.request
+import urllib.parse
+import re
 from pathlib import Path
 
 STATE_DIR = Path("{{ network_host_ai_resolver_state_dir }}")
@@ -19,6 +21,9 @@ ROUTER_DB = Path("{{ network_host_ai_resolver_router_db }}")
 OPTIONAL_ZEEK = Path("{{ network_host_ai_resolver_optional_zeek }}")
 GREENBONE = Path("{{ network_host_ai_resolver_greenbone }}")
 GREENBONE_FRESHNESS_SECONDS = {{ network_host_ai_resolver_greenbone_freshness_seconds | int }}
+LOKI_URL = "{{ network_host_ai_resolver_loki_url }}".rstrip("/")
+LOKI_WINDOW_HOURS = {{ network_host_ai_resolver_loki_window_hours | int }}
+LOKI_SAMPLE_LIMIT = {{ network_host_ai_resolver_loki_sample_limit | int }}
 OUTPUT = Path("{{ network_host_ai_resolver_output }}")
 
 MODEL = os.environ.get(
@@ -256,6 +261,101 @@ def bounded_greenbone(ip, evidence):
     }
 
 
+def loki_query_range(selector, limit):
+    end_ns = NOW * 1_000_000_000
+    start_ns = (NOW - LOKI_WINDOW_HOURS * 3600) * 1_000_000_000
+    params = urllib.parse.urlencode({
+        "query": selector,
+        "start": str(start_ns),
+        "end": str(end_ns),
+        "limit": str(limit),
+        "direction": "backward",
+    })
+    request = urllib.request.Request(
+        LOKI_URL + "/loki/api/v1/query_range?" + params,
+        method="GET",
+    )
+    with urllib.request.urlopen(request, timeout=20) as response:
+        payload = json.loads(response.read().decode())
+    if payload.get("status") != "success":
+        raise RuntimeError("Loki query failed")
+    return payload.get("data", {}).get("result", [])
+
+
+def bounded_loki(hostname):
+    """Return a 24h host-scoped Loki summary without exporting full raw logs."""
+    if not hostname:
+        return {"status": "unavailable", "window_hours": LOKI_WINDOW_HOURS}
+
+    safe_host = hostname.replace("\\", "\\\\").replace('"', '\\"')
+    selector = '{host="' + safe_host + '"}'
+    try:
+        streams = loki_query_range(selector, 5000)
+    except Exception as exc:
+        return {
+            "status": "unavailable",
+            "window_hours": LOKI_WINDOW_HOURS,
+            "reason": str(exc)[:240],
+        }
+
+    total = 0
+    jobs = {}
+    samples = []
+    seen_samples = set()
+    sensitive = re.compile(
+        r"(password|passwd|secret|token|api[_ -]?key|authorization|cookie|"
+        r"session|private[_ -]?key|bearer\s+[a-z0-9._-]+)",
+        re.IGNORECASE,
+    )
+    interesting = re.compile(
+        r"(error|failed|failure|critical|warning|warn|denied|timeout|"
+        r"unreachable|oom|segfault|panic)",
+        re.IGNORECASE,
+    )
+
+    for stream in streams:
+        labels = stream.get("stream", {})
+        job = str(labels.get("job") or labels.get("source") or "unknown")
+        values = stream.get("values", [])
+        jobs[job] = jobs.get(job, 0) + len(values)
+        total += len(values)
+        for _stamp, line in values:
+            text = str(line or "").strip()
+            if not text or not interesting.search(text):
+                continue
+            if sensitive.search(text):
+                text = "[redacted potentially sensitive log message]"
+            text = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "[ip]", text)
+            text = re.sub(
+                r"\b[0-9a-f]{2}(?::[0-9a-f]{2}){5}\b",
+                "[mac]",
+                text,
+                flags=re.IGNORECASE,
+            )
+            text = text[:300]
+            if text in seen_samples:
+                continue
+            seen_samples.add(text)
+            samples.append(text)
+            if len(samples) >= LOKI_SAMPLE_LIMIT:
+                break
+        if len(samples) >= LOKI_SAMPLE_LIMIT:
+            break
+
+    return {
+        "status": "ok",
+        "window_hours": LOKI_WINDOW_HOURS,
+        "total_entries": total,
+        "jobs": dict(sorted(jobs.items())),
+        "warning_error_samples": samples,
+        "interpretation_note": (
+            "This is a bounded 24-hour host-scoped Loki sample. Counts are "
+            "log entries, not incidents. Samples are filtered/redacted and "
+            "absence of warning/error text is not proof of health."
+        ),
+    }
+
+
 def evidence_hash(value):
     payload = json.dumps(
         value,
@@ -464,6 +564,7 @@ def main():
             ),
             "zeek": bounded_zeek(mac, zeek),
             "greenbone": bounded_greenbone(ip, greenbone),
+            "loki": bounded_loki(inv.get("hostname", "")),
         }
 
         digest = evidence_hash(evidence)
