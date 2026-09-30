@@ -320,6 +320,36 @@ class GeneratorTests(unittest.TestCase):
         )
         self.assertIn(23, {p["id"] for p in dashboard["panels"]})
 
+    def test_greenbone_cve_panel_is_conditional(self):
+        template_path = (Path(__file__).resolve().parents[2] /
+                         "ansible/roles/monitoring_stack/files/"
+                         "host-profile-template.json")
+        template = json.loads(template_path.read_text())
+        self.assertIn(24, {p["id"] for p in template["panels"]})
+        key = "mac:aa:bb:cc:dd:ee:ff"
+        metrics = {name: set() for name in generator.AVAILABILITY_QUERIES}
+        availability = (metrics, set(), set(), set())
+
+        exposed = {
+            "hostname": "example-host",
+            "ip": "192.168.2.123",
+            "status": "Online",
+            "greenbone_findings": "2",
+        }
+        no_findings = dict(exposed, greenbone_findings="")
+
+        self.assertIn(
+            24, generator.select_panel_ids(key, exposed, availability)
+        )
+        self.assertNotIn(
+            24, generator.select_panel_ids(key, no_findings, availability)
+        )
+
+        dashboard = generator.profile(
+            template, key, exposed, availability
+        )
+        self.assertIn(24, {p["id"] for p in dashboard["panels"]})
+
     def test_no_observed_ports_does_not_make_fake_zero_panel(self):
         key = "ip:192.168.2.206"
         metrics = {name: set() for name in generator.AVAILABILITY_QUERIES}
