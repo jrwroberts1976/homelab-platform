@@ -19,5 +19,7 @@ network_host_dns_evidence_servers:
 network_host_dns_evidence_remote_script: /usr/local/sbin/homelab-dns-evidence-query
 network_host_dns_evidence_lookback_days: 7
 network_host_dns_evidence_max_domains: 5
+network_host_dns_evidence_recent_window_seconds: 3600
+network_host_dns_evidence_recent_request_limit: 20
 network_host_dns_evidence_failed_retry_seconds: 3600
 network_host_dns_evidence_enable_timer: false
