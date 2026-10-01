@@ -245,6 +245,8 @@ Implemented in development:
 - AI fields exposed through the MAC-keyed device-card metric;
 - conditional Grafana `AI host intelligence — advisory` panel.
 
+The first controlled production assessment was run for admin-01 on 2026-10-01 with the timer disabled. The model correctly kept the exact OS unconfirmed and requested manual review, but the run exposed an evidence-label mismatch: inventory used the FQDN admin-01.jameshouse while Prometheus and Loki use admin-01. This caused patch telemetry to appear unavailable and prevented the intended Loki host match. The resolver now normalizes the .jameshouse suffix for telemetry lookups and includes canonical estate plus available authoritative OS/kernel fields in the AI evidence packet. A second controlled validation is required before scheduling is enabled.
+
 The AI timer remains disabled by default while development and validation continue.
 
 ## Work sequence from here
@@ -255,7 +257,7 @@ The AI timer remains disabled by default while development and validation contin
 4. **Add deterministic patch status to the AI evidence packet — LIVE VALIDATED 2026-09-30**
 5. **Complete the one-hour suspicious/blocked DNS classification path — LIVE VALIDATED 2026-10-01**
 6. **Validate bounded 24-hour Loki evidence — LIVE VALIDATED 2026-10-01**
-7. **Run isolated AI assessments against representative hosts — CURRENT**
+7. **Run isolated AI assessments against representative hosts — CURRENT; first admin-01 assessment completed, evidence-normalization fixes in progress**
 8. Review hallucination/overreach behaviour and confidence handling.
 9. Deploy resolver to `monitor-01` with timer disabled.
 10. Run manual production evidence tests.
