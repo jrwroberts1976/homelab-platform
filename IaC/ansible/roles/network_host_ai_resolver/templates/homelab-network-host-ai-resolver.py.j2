@@ -280,8 +280,41 @@ def bounded_profile(record):
 def bounded_enrichment(record):
     if not isinstance(record, dict):
         return {}
+
+    services = []
+    for raw in record.get("services", [])[:20]:
+        if not isinstance(raw, dict):
+            continue
+
+        corroborated = bool(
+            raw.get("product")
+            or raw.get("version")
+            or raw.get("extra_info")
+            or raw.get("tunnel")
+        )
+
+        item = {
+            "protocol": raw.get("protocol", ""),
+            "port": raw.get("port", 0),
+            "service_evidence": (
+                "corroborated" if corroborated
+                else "bare_nmap_label_omitted"
+            ),
+        }
+
+        if corroborated:
+            item.update({
+                "service": raw.get("service", ""),
+                "product": raw.get("product", ""),
+                "version": raw.get("version", ""),
+                "extra_info": raw.get("extra_info", ""),
+                "tunnel": raw.get("tunnel", ""),
+            })
+
+        services.append(item)
+
     return {
-        "services": record.get("services", [])[:20],
+        "services": services,
         "tls_certificates": record.get("tls_certificates", [])[:5],
         "proxmox": record.get("proxmox"),
     }
@@ -814,8 +847,9 @@ def ask_model(evidence):
         "Do not perform further OS identification when authoritative OS facts "
         "are present; Nmap may still be used for ports and service evidence only. "
         "For ports marked bare_nmap_label_omitted, state only that the port is open "
-        "when relevant; do not invent, restore, or discuss the omitted Nmap service "
-        "label. Treat Nmap service names as tentative unless corroborated by product, "
+        "when relevant; do not invent, restore, discuss, or speculate about the omitted "
+        "Nmap service label or any function commonly associated with that port number. "
+        "Treat Nmap service names as tentative unless corroborated by product, "
         "version, CPE, hostname, script output, or other direct service evidence. "
         "Do not infer a host function from a port label alone. Greenbone findings are factual vulnerability "
         "evidence for the matching host IP only; absence of a matching finding "
