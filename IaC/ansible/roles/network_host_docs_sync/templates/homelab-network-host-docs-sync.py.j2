@@ -12,9 +12,7 @@ INDEX = HOSTS_DIR / "README.md"
 ALIASES = HOSTS_DIR / "MAC-ALIASES.json"
 REMOTE = "{{ network_host_docs_sync_git_remote }}"
 BRANCH = "{{ network_host_docs_sync_git_branch }}"
-SENSOR = "{{ network_host_docs_sync_sensor_user }}@{{ network_host_docs_sync_sensor_host }}"
 FLOW_SUMMARY = "{{ network_host_docs_sync_flow_summary }}"
-AI_SOURCE = "{{ network_host_docs_sync_ai_user }}@{{ network_host_docs_sync_ai_host }}"
 AI_SUMMARY = "{{ network_host_docs_sync_ai_summary }}"
 BEGIN = "<!-- BEGIN AUTO:ZEEK-FLOW -->"
 END = "<!-- END AUTO:ZEEK-FLOW -->"
@@ -373,15 +371,8 @@ def main():
 
     run(["git", "-C", str(REPO), "pull", "--ff-only", REMOTE, BRANCH], capture=True)
 
-    result = run([
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=10",
-        SENSOR,
-        "cat", FLOW_SUMMARY,
-    ])
     try:
-        summary = json.loads(result.stdout)
+        summary = json.loads(Path(FLOW_SUMMARY).read_text())
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Invalid Zeek flow summary JSON: {exc}")
 
@@ -391,15 +382,8 @@ def main():
     if not isinstance(devices, dict):
         raise SystemExit("Zeek flow summary does not contain a devices object")
 
-    ai_result = run([
-        "ssh",
-        "-o", "BatchMode=yes",
-        "-o", "ConnectTimeout=10",
-        AI_SOURCE,
-        "cat", AI_SUMMARY,
-    ])
     try:
-        ai_summary = json.loads(ai_result.stdout)
+        ai_summary = json.loads(Path(AI_SUMMARY).read_text())
     except json.JSONDecodeError as exc:
         raise SystemExit(f"Invalid AI assessment JSON: {exc}")
     if ai_summary.get("schema_version") != 1:
