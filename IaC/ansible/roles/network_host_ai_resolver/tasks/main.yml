@@ -24,6 +24,7 @@
     - "{{ network_host_ai_resolver_profiles }}"
     - "{{ network_host_ai_resolver_dns }}"
     - "{{ network_host_ai_resolver_enrichment }}"
+    - "{{ network_host_ai_resolver_estate }}"
     - "{{ network_host_ai_resolver_router_db }}"
   register: ai_resolver_evidence_files
 
