@@ -322,6 +322,46 @@ def prometheus_query(expr):
     return payload.get("data", {}).get("result", [])
 
 
+def bounded_authoritative_os(ip):
+    """Return authoritative OS facts already consolidated from Zabbix Agent 2."""
+    if not ip:
+        return {"status": "unavailable"}
+
+    safe = ip.replace("\\", "\\\\").replace('"', '\\"')
+    expr = 'homelab_network_device_inventory_info{ip="' + safe + '"}'
+    try:
+        results = prometheus_query(expr)
+    except Exception as exc:
+        return {"status": "unavailable", "reason": str(exc)[:240]}
+
+    authoritative = []
+    for item in results:
+        metric = item.get("metric", {}) if isinstance(item, dict) else {}
+        if metric.get("os_evidence") != "authoritative":
+            continue
+        authoritative.append(metric)
+
+    if len(authoritative) != 1:
+        return {
+            "status": "unavailable",
+            "matching_authoritative_series": len(authoritative),
+        }
+
+    metric = authoritative[0]
+    return {
+        "status": "authoritative",
+        "os": metric.get("os", ""),
+        "os_source": metric.get("os_source", ""),
+        "os_evidence": metric.get("os_evidence", ""),
+        "architecture": metric.get("architecture", ""),
+        "kernel": metric.get("kernel", ""),
+        "interpretation_note": (
+            "Fresh managed-host OS facts from the consolidated Zabbix Agent 2 "
+            "inventory are authoritative and outrank Nmap/DNS inference."
+        ),
+    }
+
+
 def bounded_patch_status(hostname):
     """Return deterministic patch telemetry for a single managed host."""
     if not hostname:
@@ -718,7 +758,9 @@ def ask_model(evidence):
         "Separate confirmed facts from cautious inferences. Confirmed facts "
         "must be directly supported by supplied evidence. Never override a "
         "documented hostname, canonical estate role/kind, authoritative OS "
-        "fact, or direct service fact "
+        "fact, or direct service fact. When authoritative_os.status is "
+        "authoritative, copy its os value into exact_os, set os_confidence "
+        "to high, and do not replace it with Nmap or DNS inference. "
         "with an inference. Treat Nmap service names as tentative labels unless "
         "corroborated by product/version or direct service evidence. Do not infer "
         "a host function from a port label alone. Greenbone findings are factual vulnerability "
@@ -864,6 +906,7 @@ def main():
             ),
             "zeek": bounded_zeek(mac, zeek),
             "greenbone": bounded_greenbone(ip, greenbone),
+            "authoritative_os": bounded_authoritative_os(ip),
             "patching": bounded_patch_status(short_hostname),
             "loki": bounded_loki(short_hostname),
             "recent_dns_1h": recent_dns_activity(ip),
