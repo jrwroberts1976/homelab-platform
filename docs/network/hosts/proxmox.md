@@ -81,7 +81,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:33:08+01:00`
+- Assessed: `2026-10-01T11:43:45+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `80:e8:2c:1c:55:d2`
 - Identity confidence: **high**
@@ -91,24 +91,23 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-PROXMOX is the managed physical Proxmox VE cluster node and cluster anchor at 192.168.2.70. Authoritative Zabbix inventory identifies Proxmox VE on Debian GNU/Linux 13 with kernel 7.0.14-17-pve. Open services include SSH, the Proxmox Virtual Environment REST API, and ports 111 and 9100 with Nmap labels omitted.
+PROXMOX is an online Hewlett Packard physical Proxmox VE cluster node at 192.168.2.70. Authoritative Zabbix inventory identifies Debian GNU/Linux 13 (trixie) with kernel 7.0.14-17-pve. Open services include corroborated OpenSSH on 22/tcp and the Proxmox Virtual Environment REST API on 3128/tcp; 111/tcp and 9100/tcp are also open. No matching actionable Greenbone findings were reported, which is not proof of vulnerability-free status.
 
 ### Confirmed facts
 
-- The canonical estate identifies this device as PROXMOX, a physical Proxmox VE cluster node 1 and cluster anchor.
-- The device is managed by Ansible.
+- The canonical estate identifies the device as PROXMOX, a physical Proxmox VE cluster node and cluster anchor.
+- The device is online at 192.168.2.70 and has hostname proxmox.jameshouse.
 - The vendor is Hewlett Packard.
-- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie).
-- The authoritative architecture is x86_64 and the kernel is 7.0.14-17-pve.
-- TCP port 22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 3128 is open and is identified as the Proxmox Virtual Environment REST API, version 3.0.
-- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
-- Greenbone reported zero actionable findings matching the current IP; this does not establish that the host is vulnerability-free or fully scanned.
+- Authoritative Zabbix Agent 2 facts identify the OS as Proxmox VE / Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-17-pve.
+- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 3128 is open and provides the corroborated Proxmox Virtual Environment REST API, version 3.0.
+- TCP ports 111 and 9100 are open; their service labels were omitted.
+- Greenbone reported zero matching actionable findings for the current IP in the supplied scan data.
 
 ### Inferences
 
-- The host functions as a virtualization infrastructure server and likely provides Proxmox management services.
-- Port 9100 may support monitoring or printing-related communication, but its service identity is not established by the supplied evidence.
+- The device is the primary or anchor node for the documented Proxmox VE cluster.
+- The host is managed by Ansible, as recorded by the canonical estate metadata.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

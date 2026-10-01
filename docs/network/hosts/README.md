@@ -59,6 +59,8 @@ bounded service/domain-family evidence with timestamps and source.
 | main-tv | `192.168.2.234` | `5c:34:00:50:df:b3` | [Open](main-tv.md) |
 | google-home-mini | `192.168.2.249` | `f0:ef:86:35:bc:55` | [Open](google-home-mini.md) |
 | light-bulb | `192.168.2.252` | `40:ed:00:7c:7b:80` | [Open](light-bulb.md) |
+| LGwebOSTV | `192.168.2.130` | `14:7f:67:6d:e5:98` | [Open](lgwebostv.md) |
+| iPhone | `192.168.2.182` | `92:8b:32:14:8b:e9` | [Open](iphone.md) |
 
 ## What to maintain
 
