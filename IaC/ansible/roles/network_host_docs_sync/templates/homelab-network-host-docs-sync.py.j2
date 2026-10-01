@@ -9,6 +9,7 @@ from pathlib import Path
 REPO = Path("{{ network_host_docs_sync_repo_path }}")
 HOSTS_DIR = REPO / "docs" / "network" / "hosts"
 INDEX = HOSTS_DIR / "README.md"
+ALIASES = HOSTS_DIR / "MAC-ALIASES.json"
 REMOTE = "{{ network_host_docs_sync_git_remote }}"
 BRANCH = "{{ network_host_docs_sync_git_branch }}"
 SENSOR = "{{ network_host_docs_sync_sensor_user }}@{{ network_host_docs_sync_sensor_host }}"
@@ -74,6 +75,134 @@ def parse_index():
     if not mapping:
         raise SystemExit(f"No host mappings parsed from {INDEX}")
     return mapping
+
+def parse_aliases():
+    if not ALIASES.is_file():
+        return {}
+    try:
+        payload = json.loads(ALIASES.read_text())
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid MAC alias registry {ALIASES}: {exc}")
+    if payload.get("schema_version") != 1:
+        raise SystemExit(f"Unsupported MAC alias registry schema: {payload.get('schema_version')}")
+    aliases = payload.get("aliases", {})
+    if not isinstance(aliases, dict):
+        raise SystemExit("MAC alias registry does not contain an aliases object")
+    result = {}
+    for mac, meta in aliases.items():
+        if not isinstance(meta, dict):
+            continue
+        page = str(meta.get("page", "") or "").strip()
+        if page:
+            result[str(mac).lower()] = page
+    return result
+
+
+def slugify(value):
+    slug = re.sub(r"[^a-z0-9]+", "-", str(value or "").strip().lower()).strip("-")
+    return slug or "unknown-device"
+
+
+def unique_filename(label, mac, mapping, aliases):
+    stem = slugify(label)
+    used = {meta["filename"] for meta in mapping.values()} | set(aliases.values())
+    candidate = f"{stem}.md"
+    if candidate not in used:
+        return candidate
+    suffix = re.sub(r"[^0-9a-f]", "", mac.lower())[-6:] or "device"
+    return f"{stem}-{suffix}.md"
+
+
+def create_host_page(path, mac, ip, result):
+    label = md_text(result.get("device_name")) or f"unknown-{mac.replace(':', '')[-6:]}"
+    vendor = md_text(result.get("vendor")) or "Not established"
+    device_type = md_text(result.get("device_type")) or "Not established"
+    platform = md_text(result.get("platform_family")) or "Not established"
+    exact_os = md_text(result.get("exact_os")) or "Not established"
+    identity_conf = md_text(result.get("identity_confidence")) or "unknown"
+    os_conf = md_text(result.get("os_confidence")) or "unknown"
+    stamp = datetime.now().astimezone().strftime("%Y-%m-%d")
+
+    text = f"""# {label}
+
+> Automatically created provisional host record from bounded discovery and AI evidence on {stamp}. Canonical inventory and direct telemetry remain authoritative.
+
+## Identity
+
+| Field | Value |
+|---|---|
+| Address | `{ip or 'unknown'}` |
+| MAC | `{mac}` |
+| Device / discovered name | {label} |
+| MAC vendor | {vendor} |
+| Stable identity key | MAC |
+| Identity confidence | {identity_conf} |
+
+## Profiling and platform evidence
+
+- Device type: {device_type}
+- Platform family: {platform}
+- Exact OS: {exact_os}
+- OS confidence: {os_conf}
+- Record state: provisional / automatically created
+
+## Network flows
+
+{BEGIN}
+### Automated Zeek summary
+
+- Awaiting first docs-sync flow render for this MAC.
+
+{END}
+
+## Internet / DNS activity
+
+Use bounded service/domain-family summaries here, not raw browsing history. DNS resolution alone does not prove user intent.
+
+{render_ai_block(mac, {"assessed_at": 0, "model": "pending docs sync", "result": result})}
+
+## Monitoring and security
+
+- Grafana host dashboard:
+- Expected services:
+- Unexpected services:
+- Alerts/findings:
+- Firewall/access policy:
+- Accepted risks:
+
+## Ownership and administration
+
+- Friendly/reviewed device name:
+- Owner / responsible person:
+- Physical location:
+- Management method:
+- Firmware / patching:
+- Backup / recovery:
+- Planned retirement / replacement:
+
+## Evidence history
+
+| Date | Evidence / change | Source | Reviewed by |
+|---|---|---|---|
+| {stamp} | Provisional host record created automatically for newly assessed MAC | network discovery + AI resolver | pending review |
+
+## Notes
+
+-
+"""
+    path.write_text(text)
+
+
+def append_index_row(label, ip, mac, filename):
+    text = INDEX.read_text()
+    marker = "\n## What to maintain"
+    pos = text.find(marker)
+    if pos < 0:
+        raise SystemExit(f"Unable to locate host-table end in {INDEX}")
+    row = f"| {label} | `{ip or 'unknown'}` | `{mac}` | [Open]({filename}) |\n"
+    updated = text[:pos].rstrip() + "\n" + row + text[pos:]
+    INDEX.write_text(updated)
+
 
 def render_block(mac, summary, record):
     generated = int(summary.get("generated_at", 0) or 0)
@@ -282,8 +411,35 @@ def main():
         raise SystemExit("AI assessment does not contain a devices object")
 
     mapping = parse_index()
+    aliases = parse_aliases()
     changed = []
     missing_files = []
+    created = []
+
+    # Create provisional records for newly assessed MAC identities unless the
+    # MAC is registered as an alternate interface of an existing host page.
+    for mac, ai_record in sorted(ai_devices.items()):
+        mac = str(mac).lower()
+        if mac in mapping or mac in aliases:
+            continue
+        if not isinstance(ai_record, dict):
+            continue
+        result = ai_record.get("result")
+        if not isinstance(result, dict) or not result:
+            continue
+
+        ip = str(ai_record.get("ip", "") or "").strip()
+        label = md_text(result.get("device_name")) or f"unknown-{mac.replace(':', '')[-6:]}"
+        filename = unique_filename(label, mac, mapping, aliases)
+        page = HOSTS_DIR / filename
+
+        if page.exists():
+            raise SystemExit(f"Refusing automatic host creation: unexpected existing page {page}")
+
+        create_host_page(page, mac, ip, result)
+        append_index_row(label, ip, mac, filename)
+        mapping[mac] = {"ip": ip, "filename": filename}
+        created.extend([page, INDEX])
 
     for mac, meta in sorted(mapping.items()):
         page = HOSTS_DIR / meta["filename"]
@@ -305,8 +461,11 @@ def main():
     if missing_files:
         raise SystemExit("Mapped host record(s) missing: " + ", ".join(missing_files))
 
+    changed.extend(created)
+    changed = list(dict.fromkeys(changed))
+
     if not changed:
-        print(f"host_records={len(mapping)} active_flow_records={len(devices)} ai_records={len(ai_devices)} changed=0")
+        print(f"host_records={len(mapping)} active_flow_records={len(devices)} ai_records={len(ai_devices)} created=0 changed=0")
         return
 
     relpaths = [str(p.relative_to(REPO)) for p in changed]
@@ -328,7 +487,8 @@ def main():
 
     print(
         f"host_records={len(mapping)} active_flow_records={len(devices)} "
-        f"ai_records={len(ai_devices)} changed={len(changed)} pushed={REMOTE}/{BRANCH}"
+        f"ai_records={len(ai_devices)} created={len(created) // 2} "
+        f"changed={len(changed)} pushed={REMOTE}/{BRANCH}"
     )
 
 if __name__ == "__main__":
