@@ -13,8 +13,12 @@ REMOTE = "{{ network_host_docs_sync_git_remote }}"
 BRANCH = "{{ network_host_docs_sync_git_branch }}"
 SENSOR = "{{ network_host_docs_sync_sensor_user }}@{{ network_host_docs_sync_sensor_host }}"
 FLOW_SUMMARY = "{{ network_host_docs_sync_flow_summary }}"
+AI_SOURCE = "{{ network_host_docs_sync_ai_user }}@{{ network_host_docs_sync_ai_host }}"
+AI_SUMMARY = "{{ network_host_docs_sync_ai_summary }}"
 BEGIN = "<!-- BEGIN AUTO:ZEEK-FLOW -->"
 END = "<!-- END AUTO:ZEEK-FLOW -->"
+AI_BEGIN = "<!-- BEGIN AUTO:AI-ASSESSMENT -->"
+AI_END = "<!-- END AUTO:AI-ASSESSMENT -->"
 
 def run(argv, *, check=True, capture=True, cwd=None):
     result = subprocess.run(
