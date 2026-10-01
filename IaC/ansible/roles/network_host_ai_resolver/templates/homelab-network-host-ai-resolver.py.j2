@@ -761,6 +761,8 @@ def ask_model(evidence):
         "fact, or direct service fact. When authoritative_os.status is "
         "authoritative, copy its os value into exact_os, set os_confidence "
         "to high, and do not replace it with Nmap or DNS inference. "
+        "Do not perform further OS identification when authoritative OS facts "
+        "are present; Nmap may still be used for ports and service evidence only. "
         "with an inference. Treat Nmap service names as tentative labels unless "
         "corroborated by product/version or direct service evidence. Do not infer "
         "a host function from a port label alone. Greenbone findings are factual vulnerability "
@@ -879,6 +881,18 @@ def main():
         if not isinstance(profile_record, dict):
             profile_record = {}
 
+        authoritative_os = bounded_authoritative_os(ip)
+        nmap_profile = bounded_profile(profile_record)
+        if authoritative_os.get("status") == "authoritative":
+            for side_name in ("tcp", "udp"):
+                side = nmap_profile.get(side_name, {})
+                if isinstance(side, dict):
+                    side["os_matches"] = []
+            nmap_profile["needs_os_identification"] = False
+            nmap_profile["os_identification_note"] = (
+                "Skipped because authoritative Zabbix Agent 2 OS facts exist."
+            )
+
         evidence = {
             "ip": ip,
             "mac": mac,
@@ -899,14 +913,14 @@ def main():
             },
             "canonical_estate": estate.get(ip, {}),
             "router": routers.get(mac, {}),
-            "nmap_profile": bounded_profile(profile_record),
+            "nmap_profile": nmap_profile,
             "dns": bounded_dns(dns_devices.get(mac, {})),
             "enrichment": bounded_enrichment(
                 enrichment_hosts.get(ip, {})
             ),
             "zeek": bounded_zeek(mac, zeek),
             "greenbone": bounded_greenbone(ip, greenbone),
-            "authoritative_os": bounded_authoritative_os(ip),
+            "authoritative_os": authoritative_os,
             "patching": bounded_patch_status(short_hostname),
             "loki": bounded_loki(short_hostname),
             "recent_dns_1h": recent_dns_activity(ip),
