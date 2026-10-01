@@ -18,6 +18,7 @@ INVENTORY = Path("{{ network_host_ai_resolver_inventory }}")
 PROFILES = Path("{{ network_host_ai_resolver_profiles }}")
 DNS = Path("{{ network_host_ai_resolver_dns }}")
 ENRICHMENT = Path("{{ network_host_ai_resolver_enrichment }}")
+ESTATE = Path("{{ network_host_ai_resolver_estate }}")
 ROUTER_DB = Path("{{ network_host_ai_resolver_router_db }}")
 OPTIONAL_ZEEK = Path("{{ network_host_ai_resolver_optional_zeek }}")
 GREENBONE = Path("{{ network_host_ai_resolver_greenbone }}")
@@ -83,6 +84,34 @@ def save_atomic(path, value):
     finally:
         if os.path.exists(tmp):
             os.unlink(tmp)
+
+
+def telemetry_hostname(hostname):
+    """Map inventory FQDNs onto short host labels used by Prometheus/Loki."""
+    value = str(hostname or "").strip()
+    if value.lower().endswith(".jameshouse"):
+        return value[:-11]
+    return value
+
+
+def canonical_estate_by_ip(estate):
+    result = {}
+    if not isinstance(estate, dict):
+        return result
+    for asset in estate.get("assets", []):
+        if not isinstance(asset, dict) or asset.get("state") != "active":
+            continue
+        address = str(asset.get("address") or "").strip()
+        if not address:
+            continue
+        result[address] = {
+            "name": asset.get("name", ""),
+            "document_label": asset.get("document_label", ""),
+            "kind": asset.get("kind", ""),
+            "role": asset.get("role", ""),
+            "managed_by_ansible": bool(asset.get("managed_by_ansible", False)),
+        }
+    return result
 
 
 def current_inventory_by_mac(inventory):
@@ -649,7 +678,8 @@ def ask_model(evidence):
         "use a cautious platform_family such as embedded IoT firmware. "
         "Separate confirmed facts from cautious inferences. Confirmed facts "
         "must be directly supported by supplied evidence. Never override a "
-        "documented hostname, authoritative OS fact, or direct service fact "
+        "documented hostname, canonical estate role/kind, authoritative OS "
+        "fact, or direct service fact "
         "with an inference. Greenbone findings are factual vulnerability "
         "evidence for the matching host IP only; absence of a matching finding "
         "is not proof that a host is secure or fully scanned. If CVE findings "
@@ -730,6 +760,7 @@ def main():
 
     zeek = load_json(OPTIONAL_ZEEK, {})
     greenbone = load_json(GREENBONE, {})
+    estate = canonical_estate_by_ip(load_json(ESTATE, {}))
     routers = router_identity()
     current = current_inventory_by_mac(inventory)
 
@@ -753,7 +784,12 @@ def main():
             continue
 
         ip = str(inv.get("ip", ""))
-        if TARGET_HOSTNAME and str(inv.get("hostname") or "") != TARGET_HOSTNAME:
+        inventory_hostname = str(inv.get("hostname") or "")
+        short_hostname = telemetry_hostname(inventory_hostname)
+        if TARGET_HOSTNAME and TARGET_HOSTNAME not in {
+            inventory_hostname,
+            short_hostname,
+        }:
             continue
 
         profile_record = profiles.get(mac, {})
@@ -764,12 +800,14 @@ def main():
             "ip": ip,
             "mac": mac,
             "inventory": {
-                "hostname": inv.get("hostname", ""),
+                "hostname": inventory_hostname,
+                "telemetry_hostname": short_hostname,
                 "vendor": inv.get("vendor", ""),
                 "first_seen": int(inv.get("first_seen", 0) or 0),
                 "last_seen": int(inv.get("last_seen", 0) or 0),
                 "online": bool(inv.get("online", False)),
             },
+            "canonical_estate": estate.get(ip, {}),
             "router": routers.get(mac, {}),
             "nmap_profile": bounded_profile(profile_record),
             "dns": bounded_dns(dns_devices.get(mac, {})),
@@ -778,8 +816,8 @@ def main():
             ),
             "zeek": bounded_zeek(mac, zeek),
             "greenbone": bounded_greenbone(ip, greenbone),
-            "patching": bounded_patch_status(inv.get("hostname", "")),
-            "loki": bounded_loki(inv.get("hostname", "")),
+            "patching": bounded_patch_status(short_hostname),
+            "loki": bounded_loki(short_hostname),
             "recent_dns_1h": recent_dns_activity(ip),
         }
 
