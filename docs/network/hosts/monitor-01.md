@@ -96,7 +96,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:13:41+01:00`
+- Assessed: `2026-10-01T11:32:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:0b:16:a2`
 - Identity confidence: **high**
@@ -106,22 +106,23 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Debian 13 VM monitor-01 on Proxmox-2 (VM202), serving Prometheus/Grafana/Alertmanager and network-discovery functions. Authoritative Zabbix OS data is present. Two updates and a reboot are pending; no matching actionable Greenbone findings were reported.
+Managed Debian 13 VM202 on Proxmox-2 providing Prometheus, Grafana, Alertmanager, Blackbox, Loki, and network-discovery services. OpenSSH, Grafana HTTP, and port 9100 are reported; two updates are pending and a reboot is required. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- Canonical estate identity is monitor-01, kind vm, with role covering Prometheus, Grafana, Alertmanager, Blackbox, Loki, and active network discovery.
-- The VM is VM202 on Proxmox-2 and is managed by Ansible.
+- The canonical estate identity is monitor-01, kind vm, role managed by Ansible.
+- The VM is QEMU guest monitor-01, VMID 202, on Proxmox-2.
+- The MAC vendor and inventory vendor are Proxmox Server Solutions GmbH.
 - Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.107+deb13-cloud-amd64.
-- The MAC vendor and Proxmox enrichment identify Proxmox Server Solutions GmbH; the Proxmox guest type is qemu.
-- Open services include OpenSSH 10.0p2 Debian 7+deb13u4 on TCP/22, Grafana HTTP on TCP/3000, and a service labeled jetdirect on TCP/9100.
-- Patching telemetry reports two updates available, zero security updates available, and a reboot required.
-- Greenbone reports zero matching actionable findings for the current host IP; this does not establish that the host is vulnerability-free.
+- Open services are OpenSSH 10.0p2 Debian 7+deb13u4 on TCP port 22, Grafana HTTP on TCP port 3000, and TCP port 9100 reported with the jetdirect label.
+- The host is online at 192.168.2.52 and has hostname monitor-01.jameshouse in inventory and Nmap metadata.
+- Patching reports two updates available, no security updates available, and a reboot required.
+- Greenbone reports zero matching actionable findings for the current host IP.
 
 ### Inferences
 
-- This is a Linux server-oriented monitoring and observability VM.
-- The platform is likely a cloud-kernel Debian installation based on the authoritative kernel string.
+- This is a managed infrastructure and observability collector VM based on its documented estate role and exposed Grafana/SSH services.
+- The platform family is Debian Linux, directly supported by the authoritative OS fact.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

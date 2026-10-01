@@ -96,7 +96,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:14:34+01:00`
+- Assessed: `2026-10-01T11:33:55+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Identity confidence: **high**
@@ -106,25 +106,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Proxmox LXC edge-01 (CT103) running authoritative Debian GNU/Linux 13 on x86_64. SSH is exposed on TCP 22 and TCP 9100 is open with an uncorroborated Nmap jetdirect label. No actionable Greenbone findings matched the current IP, and no updates are pending.
+edge-01 is CT103, a managed Debian GNU/Linux 13 LXC on Proxmox-2. SSH is provided by OpenSSH 10.0p2; TCP port 9100 is open with no service label supplied. No actionable Greenbone findings currently match this host.
 
 ### Confirmed facts
 
-- The canonical estate identity is edge-01, a reserved edge LXC, CT103 on Proxmox-2.
-- The Proxmox cluster API identifies the guest as an LXC named edge-01 with VMID 103.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-17-pve.
-- The hostname is edge-01.jameshouse and the current IP address is 192.168.2.56.
-- The recorded vendor is Proxmox Server Solutions GmbH.
-- TCP port 22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 9100 is open; Nmap labels the service jetdirect but provides no product or version.
-- Greenbone reported zero actionable findings matching the current IP; this does not establish that the host is vulnerability-free.
-- Patch telemetry is fresh and reports zero available updates, zero security updates, and no reboot required.
-- The bounded 24-hour log sample includes repeated SSH authentication failures and network-wait/protocol error messages.
+- The canonical estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
+- Proxmox inventory identifies the guest type as LXC and the vendor as Proxmox Server Solutions GmbH.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-17-pve.
+- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
+- TCP port 9100 is open; its Nmap service label was omitted.
+- No actionable Greenbone findings match 192.168.2.56.
+- Patch telemetry reports zero available updates and no reboot required at collection time.
+- The sampled logs include repeated SSH authentication failures and network-online timeout/protocol error messages.
 
 ### Inferences
 
-- The host is a managed Debian-based infrastructure container rather than a physical Proxmox host.
-- TCP 9100 may provide a print-style or raw TCP service, but its function is not confirmed by the supplied evidence.
+- This host is a managed Linux container rather than a standalone physical device or VM.
+- The reserved edge role is operational metadata; cloudflared is documented as not deployed.
+- The SSH authentication failures merit review, but the bounded log sample does not establish compromise.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

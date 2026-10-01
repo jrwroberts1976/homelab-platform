@@ -96,7 +96,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:14:23+01:00`
+- Assessed: `2026-10-01T11:33:39+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:e9:49:60`
 - Identity confidence: **high**
@@ -106,23 +106,26 @@ complete household browsing history.
 
 ### Assessment summary
 
-cloud-01 is a managed QEMU VM on PROXMOX running Debian GNU/Linux 13, hosting production Nextcloud, PostgreSQL and Redis services. OpenSSH, Apache httpd and TCP/9100 were detected. A reboot is required and two updates are available; no matching actionable Greenbone findings were reported.
+cloud-01 is a managed QEMU VM on PROXMOX running authoritative Debian GNU/Linux 13 (trixie). It hosts production Nextcloud, PostgreSQL and Redis workloads, with OpenSSH on port 22, Apache HTTP on port 8080, and an additional open port 9100. A reboot is required and two non-security updates are available; no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The canonical estate identifies the device as cloud-01, a VM managed by Ansible.
-- The VM is QEMU guest 200 on PROXMOX.
-- The authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, with kernel 6.12.107+deb13-cloud-amd64.
-- Open TCP ports are 22, 8080 and 9100.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is detected on TCP/22.
-- Apache httpd 2.4.68 is detected on TCP/8080.
-- Greenbone reports zero matching actionable findings for the current host IP.
-- Patch telemetry reports two updates available, zero security updates available, and a reboot required.
+- The device hostname is cloud-01.jameshouse, with telemetry hostname cloud-01.
+- The canonical estate identity is cloud-01, a VM managed by Ansible and hosted as VM200 on PROXMOX.
+- The Proxmox cluster API identifies the guest type as QEMU.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.107+deb13-cloud-amd64.
+- TCP port 22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 8080 is open and provides Apache httpd 2.4.68 (Debian).
+- TCP port 9100 is open; the Nmap service label was omitted.
+- The host is online at 192.168.2.53.
+- Greenbone reported zero matching actionable findings for the current host IP.
+- Patch telemetry reports a required reboot, two updates available, and zero security updates available.
 
 ### Inferences
 
-- The host is a Linux-based production application and database VM consistent with its documented estate role.
-- TCP/9100 is labeled jetdirect by scanning, but no product or version evidence confirms the service function.
+- The device is best classified as a Linux-based production application/server VM.
+- The Proxmox vendor attribution describes the virtualization platform rather than the guest operating system.
+- The open HTTP service on port 8080 is consistent with the documented production Nextcloud role, but the evidence does not establish the exact application bound to that port.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

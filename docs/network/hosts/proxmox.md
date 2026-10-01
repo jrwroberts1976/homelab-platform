@@ -81,7 +81,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:19:21+01:00`
+- Assessed: `2026-10-01T11:33:08+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `80:e8:2c:1c:55:d2`
 - Identity confidence: **high**
@@ -91,28 +91,24 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-PROXMOX is a managed physical Proxmox VE cluster node at 192.168.2.70, running authoritative Debian 13 (trixie) OS facts. SSH, rpcbind, the Proxmox REST API, and a JetDirect-labeled TCP service are exposed; no matching actionable Greenbone findings were reported.
+PROXMOX is the managed physical Proxmox VE cluster node and cluster anchor at 192.168.2.70. Authoritative Zabbix inventory identifies Proxmox VE on Debian GNU/Linux 13 with kernel 7.0.14-17-pve. Open services include SSH, the Proxmox Virtual Environment REST API, and ports 111 and 9100 with Nmap labels omitted.
 
 ### Confirmed facts
 
-- Canonical estate identifies the device as PROXMOX, a physical Proxmox VE cluster node 1 and cluster anchor.
+- The canonical estate identifies this device as PROXMOX, a physical Proxmox VE cluster node 1 and cluster anchor.
 - The device is managed by Ansible.
-- The hostname is proxmox.jameshouse and the telemetry hostname is proxmox.
 - The vendor is Hewlett Packard.
-- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie) on x86_64, with kernel 7.0.14-17-pve.
-- The device is online at 192.168.2.70.
-- TCP ports 22, 111, 3128, and 9100 are open.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is identified on TCP port 22.
-- The Proxmox Virtual Environment REST API, version 3.0, is identified on TCP port 3128.
-- TCP port 111 is labeled rpcbind and TCP port 9100 is labeled jetdirect.
-- Greenbone reported zero matching actionable findings for the current IP; this does not prove the host is vulnerability-free.
-- Patch telemetry is unavailable.
+- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie).
+- The authoritative architecture is x86_64 and the kernel is 7.0.14-17-pve.
+- TCP port 22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 3128 is open and is identified as the Proxmox Virtual Environment REST API, version 3.0.
+- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
+- Greenbone reported zero actionable findings matching the current IP; this does not establish that the host is vulnerability-free or fully scanned.
 
 ### Inferences
 
-- The host functions as a Proxmox virtualization server and cluster anchor based on the canonical estate role and authoritative identity.
-- The JetDirect label on TCP 9100 does not by itself establish that the host is a printer or print server.
-- The exposed rpcbind service may indicate RPC-related functionality, but its specific host function is not established by the supplied evidence.
+- The host functions as a virtualization infrastructure server and likely provides Proxmox management services.
+- Port 9100 may support monitoring or printing-related communication, but its service identity is not established by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -68,7 +68,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:13:34+01:00`
+- Assessed: `2026-10-01T11:32:24+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `2c:cf:67:30:be:1f`
 - Identity confidence: **high**
@@ -78,25 +78,25 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-media-01 is a Raspberry Pi 5 running authoritative Debian GNU/Linux 13 (trixie). It serves as a Kodi endpoint and primary Proxmox NFS backup target, with SSH, Samba, and TCP/9100 exposed. No matching actionable Greenbone findings were reported; 96 non-security updates are available.
+media-01 is a managed physical Raspberry Pi 5 running authoritative Debian GNU/Linux 13 (trixie) on aarch64. It serves SSH, Samba, and an open port 9100. No matching actionable Greenbone findings were reported; 96 general updates are available and failed SSH authentication samples were observed.
 
 ### Confirmed facts
 
-- The canonical device name is media-01.
-- The device is documented as physical and managed by Ansible.
+- The canonical estate identity is media-01, a physical device managed by Ansible.
 - The canonical role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
-- The vendor is Raspberry Pi (Trading).
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture aarch64, with kernel 6.18.39+rpt-rpi-2712.
-- TCP port 22 is open and identified as OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 445 is open and identified as Samba smbd 4.
-- TCP port 9100 is open; Nmap labels the service jetdirect without product or version details.
-- Greenbone reported zero matching actionable findings for the current IP.
-- Patch telemetry reports zero security updates, 96 total updates, and no reboot required.
+- The vendor is Raspberry Pi (Trading), with MAC address 2c:cf:67:30:be:1f.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), aarch64, with kernel 6.18.39+rpt-rpi-2712.
+- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 445 is open and provides corroborated Samba smbd version 4.
+- TCP port 9100 is open; its Nmap service label was omitted.
+- No actionable Greenbone findings currently match this host IP.
+- Patch telemetry reports 96 updates available, 0 security updates available, and no reboot required.
+- The bounded Loki sample contains failed SSH authentication events, including attempts involving unknown users and root.
 
 ### Inferences
 
-- The platform is consistent with a Raspberry Pi running Debian Linux.
-- The exposed Samba service is consistent with network file-sharing duties, but the scan alone does not establish its exact use.
+- The device is a Raspberry Pi 5 running a Debian-based Linux system used for media playback and network backup duties, consistent with its canonical estate role.
+- Samba and SSH indicate file-sharing and remote-administration capabilities; the open port 9100 may support printing or another raw TCP service, but the supplied evidence does not identify its function.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

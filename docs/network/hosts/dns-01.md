@@ -96,7 +96,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:14:28+01:00`
+- Assessed: `2026-10-01T11:33:46+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:c3:75:ba`
 - Identity confidence: **high**
@@ -106,26 +106,25 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Proxmox LXC container CT101 providing Pi-hole and Unbound at 192.168.2.51. Authoritative Zabbix inventory identifies Debian GNU/Linux 13 (trixie); SSH, DNS/dnsmasq, HTTPS, HTTP, and TCP/9100 are open. Four security updates are available.
+dns-01 is CT101, a managed Proxmox LXC container running authoritative Debian GNU/Linux 13 (trixie) for Pi-hole and Unbound. Open services include SSH on 22/tcp and dnsmasq/Pi-hole DNS on 53/tcp; ports 80, 443, and 9100 are also open. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- Canonical estate identity is dns-01, an LXC container CT101 on Proxmox-2.
+- The canonical device name is dns-01.
+- The device is LXC container CT101 on Proxmox-2 and is managed by Ansible.
 - The documented role is Pi-hole and Unbound.
-- The IP address is 192.168.2.51 and the host is currently online.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie) on x86_64.
-- The kernel is 7.0.14-17-pve.
-- Open TCP services include OpenSSH 10.0p2 on port 22 and dnsmasq 2.93 with Pi-hole extra information on port 53.
-- TCP ports 80, 443, and 9100 are open; ports 80 and 443 have tentative scanner labels of webdav, and port 9100 has a tentative jetdirect label.
-- The TLS certificate on port 443 identifies pi.hole and Pi-hole.
-- Greenbone reported zero matching actionable findings for this IP in the supplied scan result.
-- Patch telemetry reports four security updates and five total updates available; no reboot is required.
+- The authoritative OS is Debian GNU/Linux 13 (trixie) on x86_64.
+- The authoritative OS facts come from Zabbix Agent 2.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
+- dnsmasq 2.93 with Pi-hole context is exposed on TCP port 53.
+- TCP ports 80, 443, and 9100 are open.
+- The matching Greenbone actionable finding count is zero.
+- Four security updates and five total updates are available; no reboot is required.
 
 ### Inferences
 
-- This is an infrastructure DNS/filtering service container rather than a physical network appliance.
-- The Proxmox kernel string is consistent with the container running under a Proxmox environment, but it does not replace the authoritative guest OS identification.
-- The port 80, 443, and 9100 service labels should not be treated as confirmed application identities without additional corroborating evidence.
+- The host is a Linux-based managed infrastructure service container.
+- The Proxmox vendor attribution likely describes the virtualization environment rather than the application stack itself.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

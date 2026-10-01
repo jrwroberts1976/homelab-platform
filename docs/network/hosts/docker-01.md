@@ -68,7 +68,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:14:47+01:00`
+- Assessed: `2026-10-01T11:34:08+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `d8:3a:dd:5a:51:44`
 - Identity confidence: **high**
@@ -78,25 +78,26 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-docker-01 is a Raspberry Pi 4 physical host running authoritative Debian GNU/Linux 13 (trixie) with Docker-host role. SSH, HTTP on 8080, rpcbind, and JetDirect-labeled TCP/9100 are open. Sixteen security updates are pending; no matching actionable Greenbone findings were reported.
+docker-01 is a physical Raspberry Pi 4 BirdNET-Go Docker host running authoritative Debian GNU/Linux 13 (trixie) on aarch64. Open services include SSH on 22, HTTP on 8080, and open ports 111 and 9100. No matching actionable Greenbone findings were reported; 16 security updates are available.
 
 ### Confirmed facts
 
-- The canonical estate identity is docker-01, a physical host managed by Ansible.
-- Its documented role is Raspberry Pi 4 BirdNET-Go Docker host.
-- The vendor is Raspberry Pi Trading and the architecture is aarch64.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie) with kernel 6.18.39+rpt-rpi-v8.
-- TCP ports 22, 111, 8080, and 9100 are open.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is identified on TCP/22.
-- A Golang net/http server is identified on TCP/8080.
-- Sixteen security updates and 131 total updates are available; no reboot is required.
-- Greenbone reported zero matching actionable findings for the current IP.
+- The canonical estate name is docker-01.
+- The device is documented as physical and managed by Ansible.
+- Its canonical role is Raspberry Pi 4 BirdNET-Go Docker host.
+- The vendor is Raspberry Pi Trading.
+- Authoritative Zabbix Agent 2 facts report architecture aarch64.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie).
+- TCP port 22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 8080 is open and provides a Golang net/http server.
+- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
+- Greenbone reported zero matching actionable findings for the current host IP.
+- Patch telemetry reports 16 security updates and 131 total updates available, with no reboot required.
 
 ### Inferences
 
-- The host is serving as a Linux-based Raspberry Pi infrastructure and container host consistent with its documented estate role.
-- The TCP/9100 service is only tentatively labeled JetDirect because no product or version was supplied.
-- The sampled container-log errors merit operational review, but the bounded sample does not establish overall host health.
+- The host is a Raspberry Pi 4-based Linux server supporting Docker workloads, consistent with its canonical estate role.
+- The HTTP service on port 8080 may provide an application or management endpoint, but its specific application is not established by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

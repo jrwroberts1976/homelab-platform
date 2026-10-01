@@ -96,7 +96,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:14:41+01:00`
+- Assessed: `2026-10-01T11:34:03+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:a5:cb:28`
 - Identity confidence: **high**
@@ -106,23 +106,23 @@ complete household browsing history.
 
 ### Assessment summary
 
-Authoritative inventory identifies this host as the Proxmox CT102 internal Postfix SMTP relay. It runs Debian GNU/Linux 13 (trixie) and exposes SSH, SMTP, and TCP/9100; no matching actionable Greenbone findings were reported.
+Managed Proxmox LXC container CT102 providing the internal Postfix SMTP relay. Authoritative Zabbix inventory identifies Debian GNU/Linux 13 (trixie), x86_64. Open services include SSH on 22/tcp, Postfix SMTP on 25/tcp, and an unidentified open service on 9100/tcp.
 
 ### Confirmed facts
 
-- Canonical estate identity is mail-relay-01, role Internal Postfix SMTP relay, CT102 on PROXMOX.
-- The host is an LXC guest managed through Proxmox, VMID 102.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-17-pve.
-- Open services include OpenSSH 10.0p2 on TCP/22 and Postfix smtpd on TCP/25.
-- TCP/9100 is open and has the Nmap service label jetdirect, without product or version evidence.
-- Greenbone reported zero matching actionable findings for the current host IP.
-- Patch telemetry reports zero available updates and no reboot required at collection time.
+- Canonical estate identity is mail-relay-01, CT102, an LXC container on PROXMOX.
+- The documented role is Internal Postfix SMTP relay.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), kernel 7.0.14-17-pve, and x86_64 architecture.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is open on 22/tcp.
+- Postfix smtpd is open on 25/tcp.
+- Port 9100/tcp is open; its Nmap service label was omitted.
+- No actionable Greenbone findings match the current host IP.
+- Patch telemetry reports zero available updates, zero security updates, and no reboot required.
 
 ### Inferences
 
-- The platform is a Debian-based Linux system running inside a Proxmox LXC container.
-- The host function is an internal SMTP relay, supported by the canonical role and Postfix service evidence.
-- The TCP/9100 service identity and purpose remain unconfirmed because no product or version was supplied.
+- The host is a Debian-based mail-relay workload running inside a Proxmox LXC container.
+- The Proxmox vendor attribution reflects the virtualization/container platform rather than the application workload vendor.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
