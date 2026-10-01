@@ -11,33 +11,40 @@
       Refusing host-doc sync deployment: target must be the expected monitoring host
       with an explicit repository path, sensor hostname and AI source.
 
-- name: Verify repository and host records exist
-  ansible.builtin.stat:
-    path: "{{ item }}"
-  loop:
-    - "{{ network_host_docs_sync_repo_path }}/.git"
-    - "{{ network_host_docs_sync_repo_path }}/docs/network/hosts/README.md"
-  register: network_host_docs_sync_paths
+- name: Ensure publisher parent directory exists
+  ansible.builtin.file:
+    path: "{{ network_host_docs_sync_repo_path | dirname }}"
+    state: directory
+    owner: "{{ network_host_docs_sync_user }}"
+    group: "{{ network_host_docs_sync_group }}"
+    mode: "0755"
 
-- name: Assert repository prerequisites
-  ansible.builtin.assert:
-    that:
-      - network_host_docs_sync_paths.results | map(attribute='stat.exists') | min
-    fail_msg: >-
-      Refusing host-doc sync deployment: repository or host-record index is
-      missing on monitor-01.
+- name: Ensure homelab-platform checkout exists and is current
+  ansible.builtin.git:
+    repo: "{{ network_host_docs_sync_repo_url }}"
+    dest: "{{ network_host_docs_sync_repo_path }}"
+    version: "{{ network_host_docs_sync_git_branch }}"
+    remote: "{{ network_host_docs_sync_git_remote }}"
+    update: true
+    force: false
+  become: true
+  become_user: "{{ network_host_docs_sync_user }}"
 
-- name: Verify Git and sensor access for docs publisher
+- name: Verify local evidence and Git access for docs publisher
   ansible.builtin.shell: |
     set -euo pipefail
     REPO='{{ network_host_docs_sync_repo_path }}'
+    test -f "$REPO/docs/network/hosts/README.md"
     test "$(git -C "$REPO" branch --show-current)" = '{{ network_host_docs_sync_git_branch }}'
     test -z "$(git -C "$REPO" status --porcelain)"
     test -n "$(git -C "$REPO" config user.name)"
     test -n "$(git -C "$REPO" config user.email)"
-    git -C "$REPO" ls-remote --exit-code '{{ network_host_docs_sync_git_remote }}'       'refs/heads/{{ network_host_docs_sync_git_branch }}' >/dev/null
-    ssh -o BatchMode=yes -o ConnectTimeout=10       '{{ network_host_docs_sync_sensor_user }}@{{ network_host_docs_sync_sensor_host }}'       "test -r '{{ network_host_docs_sync_flow_summary }}' && head -c 1 '{{ network_host_docs_sync_flow_summary }}'"       | grep -Fxq '{'
-    ssh -o BatchMode=yes -o ConnectTimeout=10       '{{ network_host_docs_sync_ai_user }}@{{ network_host_docs_sync_ai_host }}'       "test -r '{{ network_host_docs_sync_ai_summary }}' && head -c 1 '{{ network_host_docs_sync_ai_summary }}'"       | grep -Fxq '{'
+    git -C "$REPO" ls-remote --exit-code '{{ network_host_docs_sync_git_remote }}' \
+      'refs/heads/{{ network_host_docs_sync_git_branch }}' >/dev/null
+    test -r '{{ network_host_docs_sync_flow_summary }}'
+    test "$(head -c 1 '{{ network_host_docs_sync_flow_summary }}')" = "{"
+    test -r '{{ network_host_docs_sync_ai_summary }}'
+    test "$(head -c 1 '{{ network_host_docs_sync_ai_summary }}')" = "{"
   args:
     executable: /bin/bash
   become: true
@@ -84,7 +91,7 @@
     state: started
   when: network_host_docs_sync_run_initial | bool
 
-- name: Enable daily network host docs sync timer
+- name: Enable hourly network host docs sync timer
   ansible.builtin.systemd_service:
     name: "{{ network_host_docs_sync_timer_name }}"
     enabled: true
