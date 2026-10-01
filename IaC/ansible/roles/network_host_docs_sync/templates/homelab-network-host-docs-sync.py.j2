@@ -118,6 +118,95 @@ def render_block(mac, summary, record):
     ])
     return "\n".join(lines)
 
+def md_text(value):
+    return " ".join(str(value or "").replace("\r", " ").replace("\n", " ").split())
+
+
+def render_ai_block(mac, record):
+    result = record.get("result", {}) if isinstance(record, dict) else {}
+    if not isinstance(result, dict):
+        result = {}
+
+    assessed_at = int(record.get("assessed_at", 0) or 0)
+    if assessed_at:
+        stamp = datetime.fromtimestamp(
+            assessed_at, tz=timezone.utc
+        ).astimezone().isoformat(timespec="seconds")
+    else:
+        stamp = "unknown"
+
+    identity_confidence = md_text(result.get("identity_confidence")) or "unknown"
+    os_confidence = md_text(result.get("os_confidence")) or "unknown"
+    manual_review = "Yes" if result.get("manual_review_required", True) else "No"
+    exact_os = md_text(result.get("exact_os")) or "Not established"
+    summary = md_text(result.get("summary")) or "No summary supplied."
+
+    lines = [
+        AI_BEGIN,
+        "## AI-assisted host assessment",
+        "",
+        "> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.",
+        "",
+        f"- Assessed: `{stamp}`",
+        f"- Model: `{md_text(record.get('model')) or 'unknown'}`",
+        f"- MAC identity: `{mac}`",
+        f"- Identity confidence: **{identity_confidence}**",
+        f"- OS confidence: **{os_confidence}**",
+        f"- Exact OS: **{exact_os}**",
+        f"- Manual review required: **{manual_review}**",
+        "",
+        "### Assessment summary",
+        "",
+        summary,
+        "",
+        "### Confirmed facts",
+        "",
+    ]
+
+    facts = result.get("confirmed_facts", [])
+    if isinstance(facts, list) and facts:
+        lines.extend(f"- {md_text(item)}" for item in facts[:20] if md_text(item))
+    else:
+        lines.append("- None supplied.")
+
+    lines.extend(["", "### Inferences", ""])
+    inferences = result.get("inferences", [])
+    if isinstance(inferences, list) and inferences:
+        lines.extend(
+            f"- {md_text(item)}" for item in inferences[:20] if md_text(item)
+        )
+    else:
+        lines.append("- None supplied.")
+
+    lines.extend([
+        "",
+        "> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.",
+        AI_END,
+    ])
+    return "\n".join(lines)
+
+
+def update_ai_section(path, block):
+    text = path.read_text()
+    pattern = re.compile(
+        re.escape(AI_BEGIN) + r".*?" + re.escape(AI_END),
+        flags=re.DOTALL,
+    )
+    if pattern.search(text):
+        updated = pattern.sub(block, text, count=1)
+    else:
+        heading = "## Monitoring and security"
+        pos = text.find(heading)
+        if pos < 0:
+            raise SystemExit(f"Missing '{heading}' in {path}")
+        updated = text[:pos] + block + "\n\n" + text[pos:]
+
+    if updated == text:
+        return False
+    path.write_text(updated)
+    return True
+
+
 def update_network_flow_section(path, block):
     text = path.read_text()
     auto_pattern = re.compile(
