@@ -39,4 +39,4 @@ network_host_ai_resolver_history_limit: 5
 network_host_ai_resolver_on_calendar: hourly
 network_host_ai_resolver_randomized_delay_seconds: 300
 network_host_ai_resolver_allow_deploy: false
-network_host_ai_resolver_enable_timer: false
+network_host_ai_resolver_enable_timer: true
