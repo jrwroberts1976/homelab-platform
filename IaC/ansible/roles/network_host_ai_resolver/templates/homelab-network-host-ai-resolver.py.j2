@@ -35,6 +35,7 @@ DNS_RECENT_WINDOW_SECONDS = {{ network_host_ai_resolver_dns_recent_window_second
 DNS_RECENT_REQUEST_LIMIT = {{ network_host_ai_resolver_dns_recent_request_limit | int }}
 DNS_SERVERS = {{ network_host_ai_resolver_dns_servers | to_json }}
 OUTPUT = Path("{{ network_host_ai_resolver_output }}")
+PUBLIC_OUTPUT = Path("{{ network_host_ai_resolver_public_output }}")
 
 MODEL = os.environ.get(
     "OPENAI_MODEL",
@@ -602,6 +603,44 @@ def evidence_hash(value):
     return hashlib.sha256(payload).hexdigest()
 
 
+def public_state(state):
+    """Return the bounded documentation-safe projection of AI assessment state."""
+    devices = {}
+    for mac, record in state.get("devices", {}).items():
+        if not isinstance(record, dict):
+            continue
+        result = record.get("result", {})
+        if not isinstance(result, dict):
+            result = {}
+        devices[mac] = {
+            "ip": record.get("ip", ""),
+            "assessed_at": int(record.get("assessed_at", 0) or 0),
+            "model": record.get("model", ""),
+            "result": {
+                "device_name": result.get("device_name", ""),
+                "device_type": result.get("device_type", ""),
+                "vendor": result.get("vendor", ""),
+                "platform_family": result.get("platform_family", ""),
+                "exact_os": result.get("exact_os", ""),
+                "identity_confidence": result.get("identity_confidence", ""),
+                "os_confidence": result.get("os_confidence", ""),
+                "manual_review_required": bool(
+                    result.get("manual_review_required", True)
+                ),
+                "summary": result.get("summary", ""),
+                "confirmed_facts": result.get("confirmed_facts", [])[:20],
+                "inferences": result.get("inferences", [])[:20],
+                "evidence_summary": result.get("evidence_summary", [])[:20],
+            },
+        }
+    return {
+        "schema_version": 1,
+        "generated_at": NOW,
+        "model": state.get("model", MODEL),
+        "devices": devices,
+    }
+
+
 def response_text(payload):
     for item in payload.get("output", []):
         if not isinstance(item, dict) or item.get("type") != "message":
@@ -905,6 +944,8 @@ def main():
     state["model"] = MODEL
     state["devices"] = devices_state
     save_atomic(OUTPUT, state)
+    save_atomic(PUBLIC_OUTPUT, public_state(state))
+    os.chmod(PUBLIC_OUTPUT, 0o644)
 
     print(json.dumps({
         "event": "network_host_ai_resolver_complete",
