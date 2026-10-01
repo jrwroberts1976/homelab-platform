@@ -2,6 +2,7 @@
 network_host_docs_sync_expected_hostname: monitor-01
 network_host_docs_sync_repo_path: /home/james/projects/homelab-platform
 network_host_docs_sync_repo_url: git@github.com:jrwroberts1976/homelab-platform.git
+network_host_docs_sync_git_ssh_key: /home/james/.ssh/homelab-platform-publisher
 network_host_docs_sync_user: james
 network_host_docs_sync_group: james
 network_host_docs_sync_sensor_host: monitor-01
