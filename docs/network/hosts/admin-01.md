@@ -91,6 +91,43 @@ complete household browsing history.
 
 - 
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T08:31:05+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `b8:27:eb:e8:36:cd`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **No**
+
+### Assessment summary
+
+admin-01 is a Raspberry Pi 3 physical administration host running Linux, with SSH and RPC services exposed. OpenSSH reports a Debian build; the exact OS release and kernel are not established. 19 security updates and 135 total updates are available.
+
+### Confirmed facts
+
+- The canonical estate identifies admin-01 as a physical Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host.
+- The inventory and router identify the hostname as admin-01 / admin-01.jameshouse at 192.168.2.48.
+- The recorded vendor is Raspberry Pi Foundation.
+- Nmap identified Linux operating-system matches with 95–97% fingerprint accuracy.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
+- TCP ports 111 (rpcbind) and 9100 (Nmap service label: jetdirect) are open.
+- Patch telemetry reports 19 security updates and 135 total updates available, with no reboot required.
+- Greenbone completed successfully with zero actionable findings matching this current IP.
+
+### Inferences
+
+- The host is likely running a Debian-based Linux installation on Raspberry Pi hardware, based on the Debian OpenSSH build and Linux fingerprint.
+- The exact distribution release and kernel version cannot be determined from the supplied evidence.
+- Nmap labels TCP/9100 as jetdirect, but that service label is not authoritative and requires corroboration before assigning a printing role.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:
