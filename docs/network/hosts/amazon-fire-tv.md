@@ -62,6 +62,41 @@ Only bounded application/service evidence is retained here.
 | Fire TV release services | `firereleasenotes-eu.amazon.com` | dns-01 | Fire TV platform activity |
 | NordVPN | `pdp.nordvpn.com`, `nc-mqtt.nordvpn.com` | dns-01 | NordVPN application/service activity observed |
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:02:06+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `94:3a:91:cd:4c:51`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+192.168.2.8 is an Amazon Technologies device with an Android/Android TV-like Nmap fingerprint and TCP port 8009 open. DNS inventory includes firetvcaptiveportal.com, which is consistent with an Amazon/Fire TV ecosystem, but the device identity and exact OS remain ambiguous.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.8 with MAC address 94:3a:91:cd:4c:51.
+- Inventory and Nmap identify the vendor as Amazon Technologies.
+- Nmap reports TCP port 8009 as open and labels the service tcpwrapped.
+- Nmap produced competing fingerprints for Android 5.0.1/Linux 3.10 and Android TV OS 11/Linux 4.19, among other Linux matches.
+- The DNS server data lists firetvcaptiveportal.com among its top domains.
+- No canonical estate role, hostname, authoritative OS fact, or direct service product/version is supplied.
+
+### Inferences
+
+- The device is likely an Android-based embedded media device, potentially associated with the Amazon/Fire TV ecosystem.
+- The DNS domain signal supports, but does not prove, a Fire TV identity.
+- The exact operating system cannot be established from the conflicting Nmap candidates.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana dashboard UID: `net-host-f81780db642f`
 - Identity correlation: DNS + Amazon MAC vendor + Nmap Amazon FireTV service

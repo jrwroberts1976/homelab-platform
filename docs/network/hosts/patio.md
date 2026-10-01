@@ -54,6 +54,42 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:04:46+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `c4:82:e1:f2:f9:9f`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a Tuya Smart embedded IoT device at 192.168.2.30. No exposed services, Nmap OS match, DNS identity signal, or OS telemetry were collected; exact device type and OS require manual review.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.30.
+- The recorded hostname is patio.jameshouse and the telemetry hostname is patio.
+- The DHCP/router hostname is wlan0.
+- The recorded vendor is Tuya Smart.
+- The MAC address is c4:82:e1:f2:f9:9f.
+- Nmap OS identification is incomplete because OS evidence is missing; no TCP or UDP ports were reported.
+- No Zeek connections or top services were reported in the supplied sample.
+- No matching actionable Greenbone findings were reported for this IP; this does not establish that the host is vulnerability-free.
+
+### Inferences
+
+- The Tuya Smart vendor attribution supports classifying the device as an embedded IoT device.
+- The supplied evidence does not support identifying a specific Tuya product, function, operating system, or OS version.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

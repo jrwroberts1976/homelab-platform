@@ -54,6 +54,42 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:07:35+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `3c:52:a1:86:bc:56`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a TP-Link Tapo TC65 camera serving HTTPS and RTSP. TP-Link/Tapo cloud DNS activity and the DHCP hostname support the identity, but the exact firmware or operating system is not established. Nmap produced conflicting legacy Linux/router/camera fingerprints and should not be treated as an exact OS identification.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.78 with hostname front-door-camera.jameshouse.
+- Its DHCP hostname is TC65.
+- Inventory and Nmap identify the vendor as TP-Link Limited.
+- Bounded DNS signals include TP-Link Cloud and Tapo endpoints.
+- TCP ports 443/HTTPS and 554/RTSP are open.
+- The TLS certificate identifies the device as TPRI-DEVICE.
+- Greenbone reported zero matching actionable findings for this IP; this does not prove the device is vulnerability-free or fully assessed.
+
+### Inferences
+
+- The device is likely a TP-Link Tapo TC65 or closely related TP-Link camera model.
+- The hostname and RTSP service are consistent with a front-door security camera.
+- The device likely uses embedded IoT firmware, possibly Linux-derived, but no precise OS is supported.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

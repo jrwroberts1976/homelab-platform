@@ -59,6 +59,42 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 |---|---|---|---|---|
 | | | | | |
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:03:30+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `00:9c:02:45:39:00`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Identified as the HP ProCurve 2510G-24 core managed switch and SPAN source at 192.168.2.16. Telnet and the HP ProCurve web configuration service are exposed. Exact firmware OS is not established; Nmap suggests VxWorks but the fingerprint is not definitive.
+
+### Confirmed facts
+
+- The canonical estate record identifies the device as an HP ProCurve 2510G-24 network device named hp-procurve-2510g-24.
+- The documented estate role is core managed switch and SPAN source.
+- The inventory vendor is Hewlett Packard.
+- TCP/23 is open and identified as Telnet.
+- TCP/80 is open and identified as eHTTP 2.0 with HP ProCurve Switch 2510G-24 HTTP configuration metadata.
+- Nmap completed OS identification and reported no need for additional OS identification.
+- Greenbone reported zero actionable findings matching 192.168.2.16 in the supplied scan results.
+
+### Inferences
+
+- The device is an embedded network-switch platform rather than a general-purpose host.
+- VxWorks is a leading Nmap fingerprint, but it is not sufficiently corroborated to establish the exact operating system.
+- The exposed Telnet service may warrant security review.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Monitoring:

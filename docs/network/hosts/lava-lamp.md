@@ -54,6 +54,42 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:04:46+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `68:ff:7b:1b:2d:07`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a TP-Link HS100 smart plug at 192.168.2.233. The device exposes TCP/9999; Nmap identified the service only tentatively as "abyss". Exact OS is unsupported by the available evidence.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.233.
+- The router DHCP hostname is HS100.
+- Inventory and Nmap identify the vendor as TP-Link Technologies.
+- MAC address is 68:ff:7b:1b:2d:07.
+- TCP port 9999 is open.
+- Nmap OS identification is incomplete and reports missing OS evidence.
+- No actionable Greenbone findings matched the current IP.
+
+### Inferences
+
+- The HS100 hostname and TP-Link vendor are consistent with a TP-Link HS100 smart plug.
+- The device likely runs embedded IoT firmware, but the exact operating system is unknown.
+- The Nmap "abyss" service label is tentative and does not establish the device function.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

@@ -49,6 +49,41 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:02:06+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `c4:65:16:79:58:08`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+HP DeskJet 2600 series network printer identified at 192.168.2.123. Embedded firmware is indicated, but no exact operating system is supported by the evidence. No matching actionable Greenbone findings were reported; this does not establish that the host is vulnerability-free.
+
+### Confirmed facts
+
+- Inventory identifies vendor Hewlett Packard and hostname hp-printer.jameshouse.
+- DHCP/router hostname is HP795808.
+- Nmap identifies the device type as printer and reports HP DeskJet 2600 series printer HTTP configuration services on ports 80, 443, 631, and 8080.
+- The device exposes JetDirect on TCP port 9100 and HP Generic Scan Gateway 1.0 on TCP port 9220.
+- The observed serial is CN95O878PS06PX.
+- No Nmap OS matches or inventory OS evidence are present.
+- Greenbone reported zero matching actionable findings for the current IP.
+
+### Inferences
+
+- The device is very likely an HP DeskJet 2600 series printer using embedded printer firmware.
+- The TLS certificate naming HP795808 is consistent with the documented DHCP hostname.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

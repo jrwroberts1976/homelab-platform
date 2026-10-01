@@ -91,6 +91,41 @@ complete household browsing history.
 
 - 
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:06:08+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `bc:24:11:0b:16:a2`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Confirmed Proxmox QEMU VM monitor-01 (VMID 202) serving the documented monitoring stack. SSH exposes OpenSSH 10.0p2 built for Debian 13; the exact guest OS is not directly established.
+
+### Confirmed facts
+
+- Canonical estate identifies the device as monitor-01, a managed VM on Proxmox-2 with VMID 202.
+- Proxmox cluster evidence identifies the guest type as QEMU and vendor as Proxmox Server Solutions GmbH.
+- The hostname is monitor-01.jameshouse and the IP address is 192.168.2.52.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP/22.
+- Grafana HTTP is exposed on TCP/3000.
+- The host has two updates available, no security updates available, and requires a reboot.
+- Greenbone reported zero actionable findings matching this current IP; this is not proof that the host is vulnerability-free or fully scanned.
+
+### Inferences
+
+- The guest is likely running a Debian-family Linux platform based on the Debian-built OpenSSH package and the documented monitoring role.
+- The exact guest OS and version remain unconfirmed because inventory OS and kernel fields are empty and Nmap returned no OS matches.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

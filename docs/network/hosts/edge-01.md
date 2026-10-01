@@ -91,6 +91,44 @@ complete household browsing history.
 
 - 
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:06:08+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `bc:24:11:8d:1b:c1`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **No**
+
+### Assessment summary
+
+Managed Proxmox LXC container edge-01 (CT103) on Proxmox-2. Linux/OpenSSH evidence is present, but the exact guest OS is not established. SSH and TCP/9100 are open; no matching actionable Greenbone findings or pending updates were reported.
+
+### Confirmed facts
+
+- The canonical estate identifies this device as edge-01, a reserved edge LXC, CT103 on Proxmox-2.
+- Proxmox inventory identifies guest type LXC, name edge-01, and VMID 103.
+- The device is online at 192.168.2.56.
+- Nmap fingerprinting reports Linux matches, primarily Linux 4.15–5.19, but also lists alternative Linux and Android matches.
+- TCP/22 is open and directly identified as OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
+- TCP/9100 is open and has a tentative Nmap service label of jetdirect without product or version evidence.
+- Greenbone reported zero matching actionable findings for the current IP.
+- Patch telemetry reports zero available updates, zero security updates, and no reboot required.
+- The sampled logs include SSH authentication failures and network-online timeout/protocol-version errors.
+
+### Inferences
+
+- The host is most consistent with a Linux-based Proxmox LXC guest.
+- The OpenSSH Debian package string suggests Debian-family guest software, but it does not establish the exact guest OS or release.
+- The purpose of TCP/9100 cannot be determined from the tentative jetdirect label alone.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

@@ -54,6 +54,41 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:03:30+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `f8:17:2d:64:ca:04`
+- Identity confidence: **low**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Online host at 192.168.2.167 with the documented kitchen-light-switch hostname, but DHCP identifies it only as wlan0. No vendor, service, Nmap OS, DNS, or telemetry evidence is available to confirm device identity or platform.
+
+### Confirmed facts
+
+- The host is online at 192.168.2.167.
+- The inventory hostname is kitchen-light-switch.jameshouse and the telemetry hostname is kitchen-light-switch.
+- The router reports DHCP hostname wlan0 for this IP.
+- The MAC address is f8:17:2d:64:ca:04; no vendor is supplied.
+- Nmap OS and port evidence is unavailable because the scan is partial and reports os_evidence_missing.
+- No actionable Greenbone findings match the current IP.
+- No sampled Loki entries or Zeek connections are present in the supplied bounded data.
+
+### Inferences
+
+- The hostname suggests this may be a kitchen light switch or related IoT device.
+- The device may use embedded IoT firmware, but no operating-system evidence supports that conclusion.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

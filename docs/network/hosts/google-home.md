@@ -54,6 +54,42 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:04:46+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `a4:77:33:5f:94:fe`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Highly likely Google Home/Chromecast-family device. Identity is supported by the documented Google-Home hostname, Google vendor data, Nmap's Google Home device fingerprint, and a Chromecast Audio Assist TLS certificate. Exact OS is not established; Nmap Linux matches are fingerprint results only. No matching Greenbone findings were reported, which does not establish that the host is vulnerability-free.
+
+### Confirmed facts
+
+- The host is online at 192.168.2.17.
+- The documented hostname is google-home.jameshouse, with DHCP hostname Google-Home.
+- Inventory and Nmap identify the vendor as Google.
+- Nmap reports a Google Home device fingerprint with 98% accuracy.
+- The TLS certificate on TCP port 8443 has Google organization details and issuer common name Chromecast ICA 6 (Audio Assist).
+- TCP ports 8008, 8009, and 8443 were observed open by Nmap; enrichment also reports services on 8443 and 9000.
+- Greenbone reported zero actionable findings matching this current IP.
+- Patch telemetry is unavailable.
+
+### Inferences
+
+- The device is most likely a Google Home or closely related Chromecast-family smart speaker/media device.
+- The device likely uses embedded firmware with a Linux-derived networking environment, but the exact operating system and version are unsupported by the supplied evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

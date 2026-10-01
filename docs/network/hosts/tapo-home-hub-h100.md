@@ -54,6 +54,43 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:04:46+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `20:23:51:dc:ef:05`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a TP-Link Tapo H100 home automation hub at 192.168.2.29. The identity is supported by the documented hostnames, TP-Link vendor data, and TP-Link/Tapo cloud DNS signals. Nmap identifies an embedded lwIP-based network stack, but this does not establish the complete operating system.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.29.
+- The documented DHCP/router hostname is H100.
+- The inventory hostname is tapo-home-hub-h100.jameshouse.
+- The inventory vendor and MAC vendor identify TP-Link PTE.
+- DNS activity includes TP-Link/Tapo cloud endpoints.
+- TCP port 80 is open.
+- Nmap returned lwIP-related OS fingerprints, with the strongest match labeled lwIP 1.4.1–2.0.3.
+- Greenbone reported zero actionable findings matching the current IP; this is not proof that the host is vulnerability-free or fully scanned.
+
+### Inferences
+
+- The device is likely a TP-Link Tapo H100 hub based on the H100 hostname, Tapo-style inventory name, TP-Link vendor, and Tapo cloud DNS signals.
+- The firmware likely uses the lwIP TCP/IP stack.
+- The underlying complete operating system and lwIP version cannot be established from the supplied evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

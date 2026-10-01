@@ -54,6 +54,43 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:07:35+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `68:ff:7b:1b:33:c0`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a TP-Link smart-home device associated with the living-room lamp. The DHCP model-like hostname is HS100, while the estate hostname suggests a lamp bulb; exact device identity and OS remain unconfirmed.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.91.
+- The recorded hostname is living-room-lamp-bulb.jameshouse.
+- The DHCP hostname is HS100.
+- The recorded vendor is TP-Link Technologies.
+- TCP port 9999 is open.
+- Nmap did not obtain OS matches and marked OS evidence as missing.
+- No actionable Greenbone findings match the current IP.
+- No high-risk DNS policy matches were recorded in the sampled period.
+
+### Inferences
+
+- The device is likely part of the TP-Link smart-home/Kasa ecosystem based on the vendor and DHCP hostname HS100.
+- The device is likely an embedded IoT product rather than a general-purpose computer.
+- The hostname suggests a lamp or bulb role, but this is not consistent enough with the HS100 DHCP hostname to confirm the exact product.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

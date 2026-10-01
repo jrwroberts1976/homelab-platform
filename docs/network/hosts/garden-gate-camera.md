@@ -54,6 +54,42 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:07:35+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `3c:64:cf:87:ae:ea`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a TP-Link Tapo TC40 camera at 192.168.2.90. The camera identity is supported by the documented hostname, DHCP hostname, Tapo/TP-Link cloud DNS signals, RTSP service, and device certificate. Exact OS is not established; Nmap returned conflicting legacy Linux, router, and camera fingerprints.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.90.
+- Its documented hostname is garden-gate-camera.jameshouse and its DHCP hostname is TC40.
+- DNS observations include TP-Link Cloud and Tapo-related endpoints.
+- TCP ports 443/HTTPS and 554/RTSP were reported open.
+- The TLS certificate identifies itself as TPRI-DEVICE.
+- Nmap completed OS detection but returned multiple conflicting fingerprints, including Linux, router, and AXIS network-camera candidates.
+- No matching actionable Greenbone findings were reported for this IP; this does not establish that the device is vulnerability-free.
+- Patch telemetry is unavailable.
+
+### Inferences
+
+- The device is likely a TP-Link Tapo TC40 camera, based on the DHCP model-like hostname TC40, Tapo DNS signals, camera hostname, and RTSP service.
+- It likely runs vendor-specific embedded IoT firmware, possibly Linux-based, but the exact OS and version are unsupported by the evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

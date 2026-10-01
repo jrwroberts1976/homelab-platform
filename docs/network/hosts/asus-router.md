@@ -63,6 +63,42 @@ Use bounded domain/service summaries only; do not commit a complete household br
 |---|---|---|---|---|
 | | | | | |
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:03:30+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `24:4b:fe:5e:cc:c8`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **No**
+
+### Assessment summary
+
+ASUS RT-AC86U network device at 192.168.2.1, serving as the documented router, DHCP server, AiMesh controller, and OpenVPN endpoint. Embedded firmware platform is likely, but the exact OS is not identified by the supplied evidence.
+
+### Confirmed facts
+
+- The canonical estate record identifies the device as an ASUS RT-AC86U named asus-router.
+- Its documented kind is network, with the role of router, DHCP server, AiMesh controller, and OpenVPN remote-access endpoint.
+- The device is online at 192.168.2.1 with hostname _gateway.
+- The inventory vendor is ASUSTek Computer.
+- TCP port 22 exposes Dropbear sshd protocol 2.0.
+- TCP ports 53, 80, and 8443 are reported open; port 8443 has an HTTPS certificate for jrwroberts1976.asuscomm.com.
+- Nmap OS identification is incomplete and reports os_evidence_missing.
+- Greenbone reports zero actionable findings matching this current IP; this does not establish that the host is vulnerability-free or fully scanned.
+
+### Inferences
+
+- The device is consistent with an embedded router firmware platform.
+- The Dropbear SSH service and web services are consistent with network-device firmware, but do not identify an exact OS or firmware version.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:

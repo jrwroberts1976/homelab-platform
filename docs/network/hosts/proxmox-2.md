@@ -63,6 +63,42 @@ Use bounded domain/service summaries only.
 |---|---|---|---|---|
 | | | | | |
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:02:06+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `00:1a:9f:0c:30:3b`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **No**
+
+### Assessment summary
+
+Proxmox-2 is a managed physical Proxmox VE cluster node. Evidence supports a Linux-based host with OpenSSH and a Proxmox REST API service; the exact OS and version are not established. No matching Greenbone findings were reported, which does not prove the host is vulnerability-free.
+
+### Confirmed facts
+
+- The canonical estate record identifies the device as Proxmox-2, a physical Proxmox VE cluster node 2.
+- The host is online at 192.168.2.71 and has hostname proxmox-2.jameshouse.
+- The host exposes OpenSSH 10.0p2 Debian 7+deb13u4 on TCP port 22.
+- Nmap reports Linux as the operating-system family with 97% accuracy for Linux 4.15–5.19.
+- Nmap reports a Proxmox Virtual Environment REST API service on TCP port 3128, identified as version 3.0.
+- TCP ports 111 and 9100 were reported open; their service identities are not fully corroborated.
+- Greenbone reported zero actionable findings matching the current IP.
+- Inventory reports the MAC vendor as A-Link.
+
+### Inferences
+
+- The host is likely a Linux-based Proxmox virtualization server.
+- The Debian package suffix in the OpenSSH banner is consistent with a Debian-family userspace, but it does not establish the complete operating system or Proxmox version.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:

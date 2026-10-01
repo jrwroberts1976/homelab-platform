@@ -91,6 +91,45 @@ complete household browsing history.
 
 - 
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:02:06+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `bc:24:11:26:25:d1`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Proxmox QEMU VM203 identified as the Greenbone Community vulnerability scanner. It exposes SSH, HTTPS/nginx, and TCP/9100; evidence supports a Linux guest, but not a precise OS or kernel. Greenbone reports no actionable findings for this IP, while feed-signature warnings and a required reboot merit review.
+
+### Confirmed facts
+
+- Canonical estate record identifies greenbone-01 as a managed VM and Greenbone Community vulnerability scanner on Proxmox-2.
+- Proxmox inventory reports a QEMU guest named greenbone-01 with VMID 203.
+- The host is online at 192.168.2.57 and has hostname greenbone-01.jameshouse.
+- TCP ports 22, 443, and 9100 are open.
+- Port 22 reports OpenSSH 10.0p2 Debian 7+deb13u4 with SSH protocol 2.0.
+- Port 443 reports nginx 1.30.4 over TLS.
+- Nmap OS detection completed and reports Linux matches, including Linux 4.15–5.19 and other less-specific alternatives.
+- Greenbone reports zero actionable findings matching the current IP.
+- Patch telemetry reports six total updates available, zero security updates available, and a reboot required.
+- Loki samples include repeated Greenbone feed-signature warnings because sha256sums.asc was missing.
+
+### Inferences
+
+- The guest is most consistent with a Linux-based server VM running Greenbone services.
+- The Debian build string on OpenSSH suggests a Debian-family userland, but it does not establish the guest OS or version.
+- The TCP/9100 service is identified tentatively as jetdirect; its host function is not established from that label alone.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

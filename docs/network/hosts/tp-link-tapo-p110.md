@@ -57,6 +57,43 @@ The targeted profile provides strong embedded-platform evidence. The lwIP finger
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:07:35+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `60:83:e7:f4:0b:2e`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a TP-Link Tapo P110 smart plug at 192.168.2.92. The host uses TP-Link/Tapo cloud endpoints and exposes HTTP; Nmap reports a tentative lwIP fingerprint, which does not establish a complete operating system.
+
+### Confirmed facts
+
+- The device hostname is P110.
+- The inventory and Nmap vendor are reported as TP-Link PTE.
+- The device is online at 192.168.2.92.
+- Bounded DNS evidence includes TP-Link cloud/Tapo endpoints, including security.iot.i.tplinknbu.com and euw1-device-cloudgateway.iot.i.tplinknbu.com.
+- TCP port 80 is open and Nmap labels the service as HTTP.
+- Nmap reports a lwIP 1.4.1–2.0.3 fingerprint with 100% match accuracy.
+- Greenbone has zero actionable findings matching the current IP; this is not proof that the host is vulnerability-free or fully scanned.
+- Patch telemetry is unavailable.
+
+### Inferences
+
+- The P110 hostname together with TP-Link/Tapo cloud DNS strongly suggests a TP-Link Tapo P110 smart plug.
+- The device likely runs embedded IoT firmware using the lwIP TCP/IP stack.
+- The exact operating system and firmware version cannot be established from the supplied evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

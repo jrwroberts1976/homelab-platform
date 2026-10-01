@@ -91,6 +91,45 @@ complete household browsing history.
 
 - 
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:06:08+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `bc:24:11:c3:75:ba`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **No**
+
+### Assessment summary
+
+Managed Proxmox LXC container CT101 providing Pi-hole and Unbound DNS services. Linux is strongly indicated; exact OS is not established. Four security updates and five total updates are available for review. No matching actionable Greenbone findings were reported for 192.168.2.51, which does not prove the host is vulnerability-free.
+
+### Confirmed facts
+
+- The canonical estate record identifies dns-01 as an LXC container, managed by Ansible, with the role Pi-hole and Unbound on CT101 on Proxmox-2.
+- The Proxmox cluster API identifies guest type lxc, name dns-01, node Proxmox-2, and VMID 101.
+- The host is online at 192.168.2.51 and has hostname dns-01.jameshouse.
+- Nmap completed OS detection and identified Linux 4.15–5.19 as its highest-confidence match at 96%.
+- OpenSSH 10.0p2 with Debian 7+deb13u4 is detected on TCP port 22.
+- dnsmasq 2.93 with extra information pi-hole is detected on TCP port 53.
+- TCP ports 80, 443, and 9100 are open; Nmap labels them webdav, SSL webdav, and jetdirect respectively, without product or version evidence.
+- Greenbone reported zero matching actionable findings for this host IP.
+- Patch telemetry reports four security updates and five total updates available; unattended upgrades are disabled and no reboot is required.
+
+### Inferences
+
+- The host is most likely a Debian-family Linux userspace running inside a Proxmox LXC container, based on the Debian OpenSSH build and Linux Nmap fingerprint.
+- The detected DNS service is consistent with the documented Pi-hole role.
+- The exact Linux distribution release and kernel version cannot be established from the supplied evidence.
+- The Nmap labels for ports 80, 443, and 9100 are tentative because they lack corroborating product or version evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

@@ -76,6 +76,43 @@ Keep only bounded domain/service summaries, not complete browsing history.
 ### Browsing / application observations
 - 
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:06:08+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `80:e8:2c:1c:55:d2`
+- Identity confidence: **high**
+- OS confidence: **medium**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+PROXMOX is a Hewlett Packard physical Proxmox VE cluster node and cluster anchor. Linux is strongly indicated, with Debian-packaged OpenSSH observed; the exact host OS and version are not established by the available evidence.
+
+### Confirmed facts
+
+- The canonical estate identifies PROXMOX as a physical Proxmox VE cluster node 1 and cluster anchor.
+- The host is managed by Ansible.
+- The inventory hostname is proxmox.jameshouse and the vendor is Hewlett Packard.
+- Nmap OS detection completed and matched Linux 4.15–5.19 with 97% accuracy.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
+- TCP port 3128 was identified by Nmap as the Proxmox Virtual Environment REST API, version 3.0.
+- TCP ports 111 and 9100 were open; Nmap labeled them rpcbind and jetdirect respectively.
+- Greenbone reported zero matching actionable findings for the current IP; this does not prove the host is vulnerability-free or fully scanned.
+
+### Inferences
+
+- The host is likely a Debian-based Proxmox VE system.
+- The Nmap Linux result and Debian-packaged OpenSSH support a Linux platform classification.
+- The port 9100 label alone is insufficient to infer that this host functions as a printer.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:

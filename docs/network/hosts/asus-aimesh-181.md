@@ -63,6 +63,43 @@ Use bounded domain/service summaries only; do not commit a complete household br
 |---|---|---|---|---|
 | | | | | |
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:04:46+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `04:d4:c4:b8:52:28`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+ASUS RT-AC86U-class AiMesh wireless mesh node, identified from the canonical estate role, ASUS hostname, vendor data, and ASUS router TLS certificate. It exposes Dropbear SSH plus HTTP/HTTPS management services. Nmap suggests older Linux/Android fingerprints but does not establish the exact firmware or OS.
+
+### Confirmed facts
+
+- The canonical estate record identifies this device as an ASUS AiMesh node with role Wireless mesh node.
+- The inventory and Nmap data identify the vendor as ASUSTek Computer.
+- The DHCP and inventory hostnames are RT-AC86U-5228.
+- The TLS certificate identifies RT-AC86U-5228 and includes ASUS router, repeater, access-point, and mesh-related DNS names.
+- TCP ports 22, 80, and 8443 are open.
+- Port 22 is identified as Dropbear sshd, protocol 2.0.
+- No actionable Greenbone findings match IP 192.168.2.181.
+- The host is currently online at 192.168.2.181.
+
+### Inferences
+
+- The device is likely an ASUS RT-AC86U-class unit operating as an AiMesh node.
+- The platform is likely ASUS embedded firmware, probably Linux-based, but the supplied evidence does not establish an exact OS or firmware version.
+- The Nmap Linux 3.x/4.x and Android fingerprints are tentative network fingerprints and are not sufficient to identify the exact OS.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:

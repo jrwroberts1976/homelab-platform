@@ -54,6 +54,42 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:03:30+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `ac:17:02:07:0d:5d`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely an Amazon Fire TV/Fire Stick streaming device based on its documented hostname and Amazon Fire TV/Video DNS activity. Nmap reports conflicting Android/Linux fingerprints, so the exact OS is not established. The recorded Fibar vendor and conflicting online-state fields merit review.
+
+### Confirmed facts
+
+- The inventory hostname is fire-stick.jameshouse and the telemetry hostname is fire-stick.
+- The inventory vendor is recorded as Fibar Group sp. z o.o.
+- DNS activity includes Amazon Fire TV, Amazon Video, Alexa, and NordVPN-related domains.
+- Nmap completed OS detection and identified TCP port 8009 as open with a tcpwrapped service label.
+- Nmap produced multiple Android and Linux OS matches, including Android 4.1–6.0, Android 9–10, and Linux kernel ranges.
+- Greenbone reported zero matching actionable findings for 192.168.2.149; this is not proof that the host is vulnerability-free.
+- Router telemetry reports the host online, while inventory telemetry reports it offline.
+
+### Inferences
+
+- The device is likely an Amazon Fire TV/Fire Stick or closely related Amazon streaming endpoint.
+- The platform is likely embedded Android/Linux-based firmware, but the supplied evidence does not support a precise OS or version.
+- The Nmap service label alone does not establish the host function.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

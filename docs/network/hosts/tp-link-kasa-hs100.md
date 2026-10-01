@@ -56,6 +56,42 @@ The targeted profile completed but did not yield a reliable OS fingerprint. Devi
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:07:35+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `68:ff:7b:1b:1e:ab`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+HS100 is likely a TP-Link HS100 smart plug. Its exact operating system cannot be identified from the available evidence; manual review is recommended.
+
+### Confirmed facts
+
+- The device is online at 192.168.2.76.
+- The documented hostname is HS100.
+- The inventory and Nmap vendor are TP-Link Technologies.
+- TCP port 9999 is open.
+- Nmap has no OS matches and reports missing OS evidence.
+- Nmap tentatively labels port 9999 as the abyss service.
+- No actionable Greenbone findings currently match this IP.
+
+### Inferences
+
+- The HS100 hostname combined with the TP-Link vendor is consistent with a TP-Link HS100 smart plug.
+- The device likely runs embedded IoT firmware, but the specific operating system is unsupported by the evidence.
+- The Nmap abyss label is uncorroborated and should not be treated as a confirmed product or host function.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

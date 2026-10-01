@@ -54,6 +54,44 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:03:30+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `24:b2:b9:30:f8:55`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Online endpoint at 192.168.2.183 identified by DHCP and inventory hostname as James-LT. Its laptop-like role is inferred from the hostname; no OS, vendor, service, or Nmap fingerprint evidence is available.
+
+### Confirmed facts
+
+- The current IP is 192.168.2.183.
+- The device is online according to inventory and router data.
+- The documented inventory hostname is james-lt.jameshouse, with telemetry hostname james-lt.
+- The DHCP hostname is James-LT.
+- The MAC address is 24:b2:b9:30:f8:55.
+- Nmap OS and port evidence is unavailable; the scan status is partial with os_evidence_missing.
+- No enriched services, Zeek connections, or top ports/services were reported.
+- Greenbone reported zero matching actionable findings for the current IP; this is not proof that the host is vulnerability-free or fully scanned.
+- Patch telemetry is unavailable.
+- No sampled Loki entries or warning/error samples were reported for the bounded 24-hour sample.
+
+### Inferences
+
+- The hostname convention suggests a laptop-like endpoint.
+- The operating system and hardware vendor cannot be determined from the supplied evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

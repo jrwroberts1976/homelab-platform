@@ -54,6 +54,41 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 
 Use service/domain-family summaries here, not raw Pi-hole history. DNS resolution does not prove a person visited a website.
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:03:30+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `92:ff:53:0a:16:e9`
+- Identity confidence: **medium**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+Likely a POCO C75 mobile device identified from its DHCP hostname. No MAC vendor, service, Nmap OS, or exact-OS evidence is available; router telemetry currently reports it online while inventory reports it offline.
+
+### Confirmed facts
+
+- The router reports DHCP hostname POCO-C75 for 192.168.2.224.
+- The device MAC address is 92:ff:53:0a:16:e9.
+- Nmap collection is partial and has no TCP/UDP ports or OS matches; OS identification is pending.
+- No actionable Greenbone findings matched the current IP.
+- No high-risk DNS policy matches were recorded in the recent one-hour window.
+- Patch telemetry is unavailable.
+
+### Inferences
+
+- The DHCP hostname likely identifies the device as a POCO C75.
+- The device is likely a smartphone, and may use Android-based mobile firmware.
+- The locally administered MAC address provides no reliable vendor identification.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:

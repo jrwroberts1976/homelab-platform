@@ -63,6 +63,45 @@ Use bounded domain/service summaries only; do not commit a complete household br
 |---|---|---|---|---|
 | | | | | |
 
+<!-- BEGIN AUTO:AI-ASSESSMENT -->
+## AI-assisted host assessment
+
+> Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
+
+- Assessed: `2026-10-01T10:04:46+01:00`
+- Model: `gpt-5.6-luna`
+- MAC identity: `2c:cf:67:30:be:1f`
+- Identity confidence: **high**
+- OS confidence: **low**
+- Exact OS: **Not established**
+- Manual review required: **Yes**
+
+### Assessment summary
+
+media-01 is a confirmed Raspberry Pi physical host serving as the Kodi endpoint and primary Proxmox NFS backup target. SSH, Samba, and TCP/9100 are open. Linux-based operation is suggested, but no exact OS was identified. No actionable Greenbone findings matched this IP; 96 total updates are available, including 0 reported security updates.
+
+### Confirmed facts
+
+- The canonical estate record identifies media-01 as a physical Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
+- The host is managed by Ansible and is online at 192.168.2.195.
+- The inventory vendor is Raspberry Pi (Trading), and the MAC address is 2c:cf:67:30:be:1f.
+- The hostname is media-01.jameshouse and the DHCP hostname is media-01.
+- TCP port 22 is open and identified as OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
+- TCP port 445 is open and identified as Samba smbd version 4.
+- TCP port 9100 is open; Nmap labels the service jetdirect, but no product or version is provided.
+- Nmap reported no OS matches and marked OS evidence as missing.
+- Greenbone reported zero actionable findings matching 192.168.2.195; this does not establish that the host is vulnerability-free.
+- Patch telemetry reports 96 updates available, 0 security updates available, and no reboot required.
+
+### Inferences
+
+- The host is likely running an embedded Linux-based Raspberry Pi environment, based on the Raspberry Pi identity and Nmap's Linux-related service metadata.
+- The OpenSSH and Samba services are consistent with a managed Linux file/media host, but service presence alone does not prove the full host role or operating system.
+- The TCP/9100 service may be printer-related, but its function is not confirmed by the supplied evidence.
+
+> Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
+<!-- END AUTO:AI-ASSESSMENT -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:
