@@ -1,5 +1,5 @@
 ---
-- name: Publish bounded passive flow evidence to network host records
+- name: Publish bounded passive flow and AI evidence to network host records
   hosts: admin_hosts
   become: true
   gather_facts: true
