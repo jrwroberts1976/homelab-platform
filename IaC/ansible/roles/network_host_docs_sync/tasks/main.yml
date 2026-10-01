@@ -6,6 +6,7 @@
       - ansible_facts.hostname == network_host_docs_sync_expected_hostname
       - network_host_docs_sync_repo_path | length > 0
       - network_host_docs_sync_sensor_host | length > 0
+      - network_host_docs_sync_ai_host | length > 0
     fail_msg: >-
       Refusing host-doc sync deployment: target must be the expected admin host
       with an explicit repository path and sensor hostname.
@@ -36,6 +37,7 @@
     test -n "$(git -C "$REPO" config user.email)"
     git -C "$REPO" ls-remote --exit-code '{{ network_host_docs_sync_git_remote }}'       'refs/heads/{{ network_host_docs_sync_git_branch }}' >/dev/null
     ssh -o BatchMode=yes -o ConnectTimeout=10       '{{ network_host_docs_sync_sensor_user }}@{{ network_host_docs_sync_sensor_host }}'       "test -r '{{ network_host_docs_sync_flow_summary }}' && head -c 1 '{{ network_host_docs_sync_flow_summary }}'"       | grep -Fxq '{'
+    ssh -o BatchMode=yes -o ConnectTimeout=10       '{{ network_host_docs_sync_ai_user }}@{{ network_host_docs_sync_ai_host }}'       "test -r '{{ network_host_docs_sync_ai_summary }}' && head -c 1 '{{ network_host_docs_sync_ai_summary }}'"       | grep -Fxq '{'
   args:
     executable: /bin/bash
   become: true
