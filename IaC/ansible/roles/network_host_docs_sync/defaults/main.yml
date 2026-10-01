@@ -1,9 +1,9 @@
 ---
-network_host_docs_sync_expected_hostname: admin-01
+network_host_docs_sync_expected_hostname: monitor-01
 network_host_docs_sync_repo_path: /home/james/projects/homelab-platform
 network_host_docs_sync_user: james
 network_host_docs_sync_group: james
-network_host_docs_sync_sensor_host: sensor-01
+network_host_docs_sync_sensor_host: monitor-01
 network_host_docs_sync_sensor_user: james
 network_host_docs_sync_flow_summary: /var/lib/homelab-network-hosts/zeek-flow-summary.json
 network_host_docs_sync_ai_host: monitor-01
