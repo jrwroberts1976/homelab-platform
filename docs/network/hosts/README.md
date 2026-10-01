@@ -2,8 +2,8 @@
 
 This directory contains one persistent, editable Markdown record per current known network host/device.
 
-**Published host records: named and identified devices only.**
-Unidentified MAC-only devices remain in the live discovery inventory and Grafana, but are not published as standalone GitHub host pages.
+**Published host records include reviewed devices and provisional records created automatically for newly assessed MAC identities.**
+Known alternate interfaces are mapped through `MAC-ALIASES.json` so Wi-Fi and wired interfaces for the same machine do not create duplicate host pages. Provisional records remain subject to manual review and can later be renamed or merged.
 See [coverage and investigation status](COVERAGE-2026-09-29.md).
 
 Do **not** commit passwords, API tokens, recovery material, raw packet captures,
