@@ -262,6 +262,25 @@ def main():
     if not isinstance(devices, dict):
         raise SystemExit("Zeek flow summary does not contain a devices object")
 
+    ai_result = run([
+        "ssh",
+        "-o", "BatchMode=yes",
+        "-o", "ConnectTimeout=10",
+        AI_SOURCE,
+        "cat", AI_SUMMARY,
+    ])
+    try:
+        ai_summary = json.loads(ai_result.stdout)
+    except json.JSONDecodeError as exc:
+        raise SystemExit(f"Invalid AI assessment JSON: {exc}")
+    if ai_summary.get("schema_version") != 1:
+        raise SystemExit(
+            f"Unsupported AI assessment schema: {ai_summary.get('schema_version')}"
+        )
+    ai_devices = ai_summary.get("devices")
+    if not isinstance(ai_devices, dict):
+        raise SystemExit("AI assessment does not contain a devices object")
+
     mapping = parse_index()
     changed = []
     missing_files = []
@@ -273,14 +292,21 @@ def main():
             continue
         record = devices.get(mac)
         block = render_block(mac, summary, record if isinstance(record, dict) else None)
-        if update_network_flow_section(page, block):
+        page_changed = update_network_flow_section(page, block)
+
+        ai_record = ai_devices.get(mac)
+        if isinstance(ai_record, dict) and ai_record.get("result"):
+            ai_block = render_ai_block(mac, ai_record)
+            page_changed = update_ai_section(page, ai_block) or page_changed
+
+        if page_changed:
             changed.append(page)
 
     if missing_files:
         raise SystemExit("Mapped host record(s) missing: " + ", ".join(missing_files))
 
     if not changed:
-        print(f"host_records={len(mapping)} active_flow_records={len(devices)} changed=0")
+        print(f"host_records={len(mapping)} active_flow_records={len(devices)} ai_records={len(ai_devices)} changed=0")
         return
 
     relpaths = [str(p.relative_to(REPO)) for p in changed]
@@ -302,7 +328,7 @@ def main():
 
     print(
         f"host_records={len(mapping)} active_flow_records={len(devices)} "
-        f"changed={len(changed)} pushed={REMOTE}/{BRANCH}"
+        f"ai_records={len(ai_devices)} changed={len(changed)} pushed={REMOTE}/{BRANCH}"
     )
 
 if __name__ == "__main__":
