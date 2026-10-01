@@ -44,6 +44,10 @@ API_URL = os.environ.get(
     "https://api.openai.com/v1/responses",
 ).strip()
 API_KEY = os.environ.get("OPENAI_API_KEY", "").strip()
+TARGET_HOSTNAME = os.environ.get(
+    "HOMELAB_AI_TARGET_HOSTNAME",
+    "",
+).strip()
 
 MAX_DEVICES = {{ network_host_ai_resolver_max_devices_per_run | int }}
 RETRY_SECONDS = {{ network_host_ai_resolver_retry_seconds | int }}
@@ -749,6 +753,9 @@ def main():
             continue
 
         ip = str(inv.get("ip", ""))
+        if TARGET_HOSTNAME and str(inv.get("hostname") or "") != TARGET_HOSTNAME:
+            continue
+
         profile_record = profiles.get(mac, {})
         if not isinstance(profile_record, dict):
             profile_record = {}
@@ -859,6 +866,7 @@ def main():
         "eligible": len(candidates),
         "processed": processed,
         "tracked": len(devices_state),
+        "target_hostname": TARGET_HOSTNAME,
     }, sort_keys=True))
 
 
