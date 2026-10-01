@@ -209,9 +209,59 @@ def bounded_profile(record):
         value = profile.get(name, {})
         if not isinstance(value, dict):
             return {}
+
+        bounded_ports = []
+        for raw in value.get("ports", [])[:20]:
+            if not isinstance(raw, dict):
+                continue
+
+            service = raw.get("service", {})
+            if not isinstance(service, dict):
+                service = {}
+            scripts = raw.get("scripts", {})
+            if not isinstance(scripts, dict):
+                scripts = {}
+
+            corroborated = bool(
+                service.get("product")
+                or service.get("version")
+                or service.get("extra_info")
+                or service.get("hostname")
+                or service.get("cpe")
+                or scripts
+            )
+
+            port = {
+                "protocol": raw.get("protocol", ""),
+                "port": raw.get("port", 0),
+                "state": raw.get("state", ""),
+                "service_evidence": (
+                    "corroborated" if corroborated
+                    else "bare_nmap_label_omitted"
+                ),
+            }
+
+            if corroborated:
+                port["service"] = {
+                    "name": service.get("name", ""),
+                    "product": service.get("product", ""),
+                    "version": service.get("version", ""),
+                    "extra_info": service.get("extra_info", ""),
+                    "hostname": service.get("hostname", ""),
+                    "tunnel": service.get("tunnel", ""),
+                    "cpe": service.get("cpe", [])[:5],
+                }
+                if scripts:
+                    port["scripts"] = {
+                        key: str(value)[:1000]
+                        for key, value in list(scripts.items())[:5]
+                    }
+
+            bounded_ports.append(port)
+
         return {
             "os_matches": value.get("os_matches", [])[:5],
-            "ports": value.get("ports", [])[:20],
+            "ports": bounded_ports,
         }
 
     return {
@@ -763,9 +813,11 @@ def ask_model(evidence):
         "to high, and do not replace it with Nmap or DNS inference. "
         "Do not perform further OS identification when authoritative OS facts "
         "are present; Nmap may still be used for ports and service evidence only. "
-        "with an inference. Treat Nmap service names as tentative labels unless "
-        "corroborated by product/version or direct service evidence. Do not infer "
-        "a host function from a port label alone. Greenbone findings are factual vulnerability "
+        "For ports marked bare_nmap_label_omitted, state only that the port is open "
+        "when relevant; do not invent, restore, or discuss the omitted Nmap service "
+        "label. Treat Nmap service names as tentative unless corroborated by product, "
+        "version, CPE, hostname, script output, or other direct service evidence. "
+        "Do not infer a host function from a port label alone. Greenbone findings are factual vulnerability "
         "evidence for the matching host IP only; absence of a matching finding "
         "is not proof that a host is secure or fully scanned. If CVE findings "
         "and pending security updates coexist, state only that both conditions "
