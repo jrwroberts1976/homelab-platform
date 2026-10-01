@@ -81,34 +81,38 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `unknown`
+- Assessed: `2026-10-01T11:19:21+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `80:e8:2c:1c:55:d2`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
-- Manual review required: **Yes**
+- OS confidence: **high**
+- Exact OS: **Proxmox VE / Debian GNU/Linux 13 (trixie)**
+- Manual review required: **No**
 
 ### Assessment summary
 
-PROXMOX is a Hewlett Packard physical Proxmox VE cluster node and cluster anchor. Linux is strongly indicated, with Debian-packaged OpenSSH observed; the exact host OS and version are not established by the available evidence.
+PROXMOX is a managed physical Proxmox VE cluster node at 192.168.2.70, running authoritative Debian 13 (trixie) OS facts. SSH, rpcbind, the Proxmox REST API, and a JetDirect-labeled TCP service are exposed; no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The canonical estate identifies PROXMOX as a physical Proxmox VE cluster node 1 and cluster anchor.
-- The host is managed by Ansible.
-- The inventory hostname is proxmox.jameshouse and the vendor is Hewlett Packard.
-- Nmap OS detection completed and matched Linux 4.15–5.19 with 97% accuracy.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
-- TCP port 3128 was identified by Nmap as the Proxmox Virtual Environment REST API, version 3.0.
-- TCP ports 111 and 9100 were open; Nmap labeled them rpcbind and jetdirect respectively.
-- Greenbone reported zero matching actionable findings for the current IP; this does not prove the host is vulnerability-free or fully scanned.
+- Canonical estate identifies the device as PROXMOX, a physical Proxmox VE cluster node 1 and cluster anchor.
+- The device is managed by Ansible.
+- The hostname is proxmox.jameshouse and the telemetry hostname is proxmox.
+- The vendor is Hewlett Packard.
+- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie) on x86_64, with kernel 7.0.14-17-pve.
+- The device is online at 192.168.2.70.
+- TCP ports 22, 111, 3128, and 9100 are open.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is identified on TCP port 22.
+- The Proxmox Virtual Environment REST API, version 3.0, is identified on TCP port 3128.
+- TCP port 111 is labeled rpcbind and TCP port 9100 is labeled jetdirect.
+- Greenbone reported zero matching actionable findings for the current IP; this does not prove the host is vulnerability-free.
+- Patch telemetry is unavailable.
 
 ### Inferences
 
-- The host is likely a Debian-based Proxmox VE system.
-- The Nmap Linux result and Debian-packaged OpenSSH support a Linux platform classification.
-- The port 9100 label alone is insufficient to infer that this host functions as a printer.
+- The host functions as a Proxmox virtualization server and cluster anchor based on the canonical estate role and authoritative identity.
+- The JetDirect label on TCP 9100 does not by itself establish that the host is a printer or print server.
+- The exposed rpcbind service may indicate RPC-related functionality, but its specific host function is not established by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
