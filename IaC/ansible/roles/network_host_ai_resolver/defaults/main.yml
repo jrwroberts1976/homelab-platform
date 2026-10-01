@@ -5,6 +5,7 @@ network_host_ai_resolver_inventory: "{{ network_host_ai_resolver_state_dir }}/in
 network_host_ai_resolver_profiles: "{{ network_host_ai_resolver_state_dir }}/deep-profiles.json"
 network_host_ai_resolver_dns: "{{ network_host_ai_resolver_state_dir }}/dns-evidence.json"
 network_host_ai_resolver_enrichment: "{{ network_host_ai_resolver_state_dir }}/enrichment.json"
+network_host_ai_resolver_estate: /etc/homelab/network-estate.json
 network_host_ai_resolver_router_db: /var/lib/asus-network-inventory/assets.db
 network_host_ai_resolver_optional_zeek: "{{ network_host_ai_resolver_state_dir }}/zeek-flow-summary.json"
 network_host_ai_resolver_greenbone: /var/lib/homelab-management-report/evidence-sources/greenbone-01/incoming/managed.json
