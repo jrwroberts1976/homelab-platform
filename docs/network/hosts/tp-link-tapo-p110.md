@@ -33,14 +33,14 @@ The targeted profile provides strong embedded-platform evidence. The lwIP finger
 
 - Evidence source: `sensor-01` Zeek connection telemetry
 - Rolling window: 24 hours
-- Summary generated: `2026-10-01T00:23:08+01:00`
+- Summary generated: `2026-10-02T00:22:09+01:00`
 - MAC identity: `60:83:e7:f4:0b:2e`
 - Observed IP address(es): `192.168.2.92`
-- Connections: **4**
-- Traffic sent: **192 B**
-- Traffic received: **192 B**
-- Top services: `ntp` (4)
-- Top destination ports: `udp/123` (4)
+- Connections: **7**
+- Traffic sent: **1.3 KiB**
+- Traffic received: **5.7 KiB**
+- Top services: `ntp` (5), `ssl` (1), `dhcp` (1)
+- Top destination ports: `udp/123` (5), `tcp/443` (1), `udp/67` (1)
 
 > This bounded summary intentionally excludes raw packet data and external destination IP history.
 <!-- END AUTO:ZEEK-FLOW -->

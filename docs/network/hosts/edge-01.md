@@ -47,7 +47,7 @@
 
 - Evidence source: `sensor-01` Zeek connection telemetry
 - Rolling window: 24 hours
-- Summary generated: `2026-10-01T00:23:08+01:00`
+- Summary generated: `2026-10-02T00:22:09+01:00`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Observed IP address(es): `192.168.2.56`
 - Connections: **6**
