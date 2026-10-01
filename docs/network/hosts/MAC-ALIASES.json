@@ -1,0 +1,9 @@
+{
+  "schema_version": 1,
+  "aliases": {
+    "c4:ef:bb:ab:41:66": {
+      "page": "work-laptop.md",
+      "reason": "Wired LAN interface of the existing work-laptop; confirmed 2026-10-01"
+    }
+  }
+}
