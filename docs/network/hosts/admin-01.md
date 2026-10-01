@@ -115,7 +115,7 @@ admin-01 is a Raspberry Pi 3 physical administration host running Linux, with SS
 - The recorded vendor is Raspberry Pi Foundation.
 - Nmap identified Linux operating-system matches with 95–97% fingerprint accuracy.
 - OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
-- TCP ports 111 (rpcbind) and 9100 (Nmap service label: jetdirect) are open.
+- TCP ports 111 (rpcbind) and 9100 (jetdirect) are open.
 - Patch telemetry reports 19 security updates and 135 total updates available, with no reboot required.
 - Greenbone completed successfully with zero actionable findings matching this current IP.
 
@@ -123,7 +123,7 @@ admin-01 is a Raspberry Pi 3 physical administration host running Linux, with SS
 
 - The host is likely running a Debian-based Linux installation on Raspberry Pi hardware, based on the Debian OpenSSH build and Linux fingerprint.
 - The exact distribution release and kernel version cannot be determined from the supplied evidence.
-- Nmap labels TCP/9100 as jetdirect, but that service label is not authoritative and requires corroboration before assigning a printing role.
+- The TCP 9100 service may provide raw printing functionality, but the evidence does not establish the attached device or its purpose.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
