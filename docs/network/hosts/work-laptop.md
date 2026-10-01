@@ -6,8 +6,9 @@
 
 | Field | Value |
 |---|---|
-| Address | `192.168.2.219` |
-| MAC | `ec:91:61:9c:a4:45` |
+| Address | `192.168.2.219` (Wi-Fi), `192.168.2.253` (LAN observed 2026-10-01) |
+| Primary MAC (Wi-Fi) | `ec:91:61:9c:a4:45` |
+| Alternate MAC (LAN) | `c4:ef:bb:ab:41:66` |
 | DHCP / discovered hostname | `work-laptop.jameshouse` |
 | MAC vendor | Cloud Network Technology Singapore PTE. |
 | Online at audit | True |
@@ -114,6 +115,7 @@ Likely a work laptop, with DNS activity matching Microsoft Windows Update and de
 | Date | Evidence / change | Source | Reviewed by |
 |---|---|---|---|
 | 2026-09-29 | Initial persistent host record created from live inventory/detail audit | monitor-01 inventory + deep-profile + DNS state | pending review |
+| 2026-10-01 | Confirmed MAC `c4:ef:bb:ab:41:66` / IP `192.168.2.253` is the wired LAN interface of this same machine | new-device detection + user confirmation | James |
 
 ## Notes
 
