@@ -96,32 +96,32 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:06:08+01:00`
+- Assessed: `2026-10-01T11:13:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:0b:16:a2`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
-- Manual review required: **Yes**
+- OS confidence: **high**
+- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Confirmed Proxmox QEMU VM monitor-01 (VMID 202) serving the documented monitoring stack. SSH exposes OpenSSH 10.0p2 built for Debian 13; the exact guest OS is not directly established.
+Managed Debian 13 VM monitor-01 on Proxmox-2 (VM202), serving Prometheus/Grafana/Alertmanager and network-discovery functions. Authoritative Zabbix OS data is present. Two updates and a reboot are pending; no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- Canonical estate identifies the device as monitor-01, a managed VM on Proxmox-2 with VMID 202.
-- Proxmox cluster evidence identifies the guest type as QEMU and vendor as Proxmox Server Solutions GmbH.
-- The hostname is monitor-01.jameshouse and the IP address is 192.168.2.52.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP/22.
-- Grafana HTTP is exposed on TCP/3000.
-- The host has two updates available, no security updates available, and requires a reboot.
-- Greenbone reported zero actionable findings matching this current IP; this is not proof that the host is vulnerability-free or fully scanned.
+- Canonical estate identity is monitor-01, kind vm, with role covering Prometheus, Grafana, Alertmanager, Blackbox, Loki, and active network discovery.
+- The VM is VM202 on Proxmox-2 and is managed by Ansible.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.107+deb13-cloud-amd64.
+- The MAC vendor and Proxmox enrichment identify Proxmox Server Solutions GmbH; the Proxmox guest type is qemu.
+- Open services include OpenSSH 10.0p2 Debian 7+deb13u4 on TCP/22, Grafana HTTP on TCP/3000, and a service labeled jetdirect on TCP/9100.
+- Patching telemetry reports two updates available, zero security updates available, and a reboot required.
+- Greenbone reports zero matching actionable findings for the current host IP; this does not establish that the host is vulnerability-free.
 
 ### Inferences
 
-- The guest is likely running a Debian-family Linux platform based on the Debian-built OpenSSH package and the documented monitoring role.
-- The exact guest OS and version remain unconfirmed because inventory OS and kernel fields are empty and Nmap returned no OS matches.
+- This is a Linux server-oriented monitoring and observability VM.
+- The platform is likely a cloud-kernel Debian installation based on the authoritative kernel string.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

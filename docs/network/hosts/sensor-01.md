@@ -96,35 +96,35 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:06:08+01:00`
+- Assessed: `2026-10-01T11:14:17+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:3b:b9:e4`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
+- OS confidence: **high**
+- Exact OS: **Debian GNU/Linux 13 (trixie)**
 - Manual review required: **No**
 
 ### Assessment summary
 
-sensor-01 is a Proxmox QEMU VM (VMID 201) serving as the documented Suricata/Zeek passive network sensor. Linux and Debian-family evidence is present, but the exact OS is not established. OpenSSH 10.0p2 is exposed on TCP/22; TCP/9100 is open with a tentative JetDirect label. Three updates and a reboot are pending; Greenbone has no matching actionable findings.
+sensor-01 is a managed Debian 13 QEMU VM on Proxmox, documented as the Suricata and Zeek passive network sensor VM201. SSH and TCP/9100 are open; patch telemetry reports a reboot required and three updates available.
 
 ### Confirmed facts
 
-- The canonical estate identifies sensor-01 as a VM managed by Ansible with role "Suricata and Zeek passive network sensor, VM201 on PROXMOX".
-- Proxmox reports a QEMU guest named sensor-01 with VMID 201 on node PROXMOX.
-- The host is online at 192.168.2.55 and has hostname sensor-01.jameshouse.
-- The recorded vendor is Proxmox Server Solutions GmbH.
-- TCP/22 is open and directly identified as OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP/9100 is open; Nmap gives the tentative service label "jetdirect" without product or version details.
-- Nmap completed OS identification and reported Linux fingerprint matches, including Linux 4.x-5.x, Linux 5.4-5.10, and Linux 6.0 candidates.
-- Patching telemetry reports three updates available, zero security updates available, unattended upgrades enabled, and a reboot required.
-- Greenbone completed successfully with zero matching actionable findings for this IP.
+- Canonical name is sensor-01 and the estate kind is VM.
+- The VM is VM201 on PROXMOX and uses QEMU.
+- The documented role is Suricata and Zeek passive network sensor.
+- The host is managed by Ansible.
+- Authoritative Zabbix Agent 2 facts identify Debian GNU/Linux 13 (trixie), x86_64, kernel 6.12.107+deb13-amd64.
+- MAC/vendor evidence identifies Proxmox Server Solutions GmbH.
+- TCP port 22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 9100 is open and is labeled jetdirect by service discovery, without product/version details.
+- Greenbone reported zero actionable findings matching this host IP.
+- Patch telemetry is fresh, reports three updates available, and indicates a reboot is required.
 
 ### Inferences
 
-- The host is most consistent with a Debian-family Linux guest because the SSH service banner identifies a Debian package build and Nmap reports Linux matches.
-- The exact distribution release and kernel version cannot be determined from the supplied evidence.
-- The TCP/9100 service may be printer-protocol compatible, but its host function cannot be inferred from the tentative port label alone.
+- The host is a virtualized Linux-based security monitoring sensor rather than a physical network appliance.
+- The TCP/9100 service purpose is not established from the available evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

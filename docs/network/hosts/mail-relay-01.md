@@ -96,35 +96,33 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:06:08+01:00`
+- Assessed: `2026-10-01T11:14:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:a5:cb:28`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
+- OS confidence: **high**
+- Exact OS: **Debian GNU/Linux 13 (trixie)**
 - Manual review required: **No**
 
 ### Assessment summary
 
-Proxmox LXC CT102 identified as the managed internal Postfix SMTP relay. Linux is strongly indicated, but the exact distribution and kernel version are not established by the supplied evidence. SSH and SMTP are confirmed open; port 9100 has a tentative JetDirect label. No matching actionable Greenbone findings or pending updates were reported.
+Authoritative inventory identifies this host as the Proxmox CT102 internal Postfix SMTP relay. It runs Debian GNU/Linux 13 (trixie) and exposes SSH, SMTP, and TCP/9100; no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The canonical estate record identifies the device as mail-relay-01, an LXC container and internal Postfix SMTP relay, CT102 on PROXMOX.
-- The Proxmox inventory identifies guest type lxc, name mail-relay-01, node PROXMOX, and VMID 102.
-- The host is online at 192.168.2.54 and has hostname mail-relay-01.jameshouse.
-- TCP port 22 is open and runs OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP port 25 is open and runs Postfix smtpd.
-- TCP port 9100 is open and is labeled jetdirect by Nmap, without product or version evidence.
-- Nmap completed OS identification and reported Linux matches, with the strongest match covering Linux kernel generations 4.X and 5.X.
+- Canonical estate identity is mail-relay-01, role Internal Postfix SMTP relay, CT102 on PROXMOX.
+- The host is an LXC guest managed through Proxmox, VMID 102.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-17-pve.
+- Open services include OpenSSH 10.0p2 on TCP/22 and Postfix smtpd on TCP/25.
+- TCP/9100 is open and has the Nmap service label jetdirect, without product or version evidence.
 - Greenbone reported zero matching actionable findings for the current host IP.
-- Patch telemetry reports zero available updates, zero security updates, and no reboot required.
+- Patch telemetry reports zero available updates and no reboot required at collection time.
 
 ### Inferences
 
-- The guest is most consistently classified as a Linux-based general-purpose server environment.
-- The OpenSSH Debian package suffix supports a Debian-packaged userspace, but does not establish the exact operating system or release.
-- The port 9100 label alone is insufficient to conclude that the host is a printer or print server.
+- The platform is a Debian-based Linux system running inside a Proxmox LXC container.
+- The host function is an internal SMTP relay, supported by the canonical role and Postfix service evidence.
+- The TCP/9100 service identity and purpose remain unconfirmed because no product or version was supplied.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

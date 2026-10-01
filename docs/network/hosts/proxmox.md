@@ -81,7 +81,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:06:08+01:00`
+- Assessed: `unknown`
 - Model: `gpt-5.6-luna`
 - MAC identity: `80:e8:2c:1c:55:d2`
 - Identity confidence: **high**

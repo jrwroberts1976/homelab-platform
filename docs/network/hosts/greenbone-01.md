@@ -96,36 +96,35 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-01T11:13:46+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:26:25:d1`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
-- Manual review required: **Yes**
+- OS confidence: **high**
+- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Proxmox QEMU VM203 identified as the Greenbone Community vulnerability scanner. It exposes SSH, HTTPS/nginx, and TCP/9100; evidence supports a Linux guest, but not a precise OS or kernel. Greenbone reports no actionable findings for this IP, while feed-signature warnings and a required reboot merit review.
+greenbone-01 is a managed Greenbone Community vulnerability scanner VM203 on Proxmox-2, running authoritative Debian 13 (trixie) x86_64. SSH, HTTPS/nginx, and TCP/9100 are open. No matching actionable Greenbone findings were reported, but feed-signature warnings and a required reboot merit review.
 
 ### Confirmed facts
 
-- Canonical estate record identifies greenbone-01 as a managed VM and Greenbone Community vulnerability scanner on Proxmox-2.
-- Proxmox inventory reports a QEMU guest named greenbone-01 with VMID 203.
-- The host is online at 192.168.2.57 and has hostname greenbone-01.jameshouse.
+- Hostname is greenbone-01.jameshouse and IP address is 192.168.2.57.
+- The canonical estate role is Greenbone Community vulnerability scanner, VM203 on Proxmox-2.
+- The guest is a QEMU VM managed by Ansible on Proxmox-2.
+- Authoritative Zabbix Agent 2 facts identify Debian GNU/Linux 13 (trixie), kernel 6.12.107+deb13-cloud-amd64, architecture x86_64.
 - TCP ports 22, 443, and 9100 are open.
-- Port 22 reports OpenSSH 10.0p2 Debian 7+deb13u4 with SSH protocol 2.0.
-- Port 443 reports nginx 1.30.4 over TLS.
-- Nmap OS detection completed and reports Linux matches, including Linux 4.15–5.19 and other less-specific alternatives.
-- Greenbone reports zero actionable findings matching the current IP.
-- Patch telemetry reports six total updates available, zero security updates available, and a reboot required.
-- Loki samples include repeated Greenbone feed-signature warnings because sha256sums.asc was missing.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP/22.
+- nginx 1.30.4 is exposed over TLS on TCP/443.
+- Greenbone reported zero matching actionable findings for the current IP.
+- Six updates are available, zero security updates are reported, and a reboot is required.
+- Sampled logs contain repeated Greenbone feed-signature warnings for a missing /var/lib/openvas/plugins/sha256sums.asc file.
 
 ### Inferences
 
-- The guest is most consistent with a Linux-based server VM running Greenbone services.
-- The Debian build string on OpenSSH suggests a Debian-family userland, but it does not establish the guest OS or version.
-- The TCP/9100 service is identified tentatively as jetdirect; its host function is not established from that label alone.
+- This is a Linux-based server VM hosting Greenbone/OpenVAS-related services.
+- TCP/9100 is identified as jetdirect by Nmap, but no product or function is confirmed for that service.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

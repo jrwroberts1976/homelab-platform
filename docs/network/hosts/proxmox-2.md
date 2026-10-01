@@ -68,7 +68,7 @@ Use bounded domain/service summaries only.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `unknown`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1a:9f:0c:30:3b`
 - Identity confidence: **high**

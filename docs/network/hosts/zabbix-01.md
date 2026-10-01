@@ -81,35 +81,33 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-01T11:14:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:05`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
-- Manual review required: **Yes**
+- OS confidence: **high**
+- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- Manual review required: **No**
 
 ### Assessment summary
 
-zabbix-01 is the documented CT105 Zabbix monitoring container on PROXMOX. It exposes OpenSSH 10.0p2, nginx on ports 80 and 8080, and an unidentified service on port 9100. Evidence confirms a Linux-based environment, but does not support an exact OS identification. Eight security updates are available and unattended upgrades are disabled.
+zabbix-01 is an online Debian 13 LXC container on PROXMOX (CT105), serving the Zabbix monitoring platform. SSH, Nginx on ports 80/8080, and port 9100 are open. Eight security updates are available and failed SSH authentication attempts were sampled in the last 24 hours.
 
 ### Confirmed facts
 
-- The canonical estate record identifies this host as zabbix-01, an LXC container CT105 on PROXMOX managed by Ansible.
-- The documented role is a Zabbix monitoring platform with PostgreSQL, TimescaleDB, Zabbix Server, Agent 2, and Nginx active.
+- The canonical estate identity is zabbix-01, a Zabbix monitoring platform in LXC container CT105 on PROXMOX.
+- The container is hosted on PROXMOX node PROXMOX with VMID 105.
+- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie) on x86_64.
 - The host is online at 192.168.2.59.
-- Nmap OS fingerprinting identified Linux matches, primarily Linux 4.15–5.19, with 97% reported accuracy.
-- OpenSSH 10.0p2 with Debian 7+deb13u4 is exposed on TCP port 22.
-- Nginx is exposed on TCP ports 80 and 8080.
-- TCP port 9100 is open and tentatively labelled jetdirect by Nmap, without product evidence.
-- Greenbone reported zero actionable findings matching the current host IP; this is not proof that the host is vulnerability-free.
-- Patch telemetry reports 8 security updates and 36 total updates available, with no reboot required and unattended upgrades disabled.
+- Open TCP ports include 22 with OpenSSH 10.0p2 Debian 7+deb13u4, 80 with Nginx, 8080 with Nginx, and 9100 with a tentative JetDirect service label.
+- Zabbix Server, Agent 2, Nginx, PostgreSQL, and TimescaleDB are documented as active in the canonical estate record.
+- Patching telemetry reports 8 security updates and 36 total updates available, with no reboot required.
+- Greenbone reported zero matching actionable findings for the current IP; this does not establish that the host is vulnerability-free.
 
 ### Inferences
 
-- The host is best classified as a Linux-based server container rather than a standalone physical or virtual appliance.
-- The Debian-qualified OpenSSH package suggests a Debian-family userland, but the exact distribution and release are not established.
-- The Nmap Linux kernel ranges are fingerprint matches and do not establish the running kernel version.
+- The device is best classified as a managed Linux server workload rather than a physical network appliance.
+- The port 9100 service may be related to a metrics or print-style protocol, but its function is not established by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
