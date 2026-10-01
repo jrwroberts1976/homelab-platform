@@ -1,0 +1,47 @@
+---
+- name: Retire network host docs publisher from admin-01
+  hosts: admin_hosts
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Validate retirement target
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == "admin-01"
+        fail_msg: "Refusing docs-publisher retirement on any host except admin-01."
+
+    - name: Stop and disable legacy docs sync timer
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-docs-sync.timer
+        enabled: false
+        state: stopped
+      failed_when: false
+
+    - name: Stop legacy docs sync service
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-docs-sync.service
+        state: stopped
+      failed_when: false
+
+    - name: Remove legacy docs sync unit files and script
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: absent
+      loop:
+        - /etc/systemd/system/homelab-network-host-docs-sync.timer
+        - /etc/systemd/system/homelab-network-host-docs-sync.service
+        - /usr/local/sbin/homelab-network-host-docs-sync
+
+    - name: Reload systemd after retirement
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Confirm legacy docs sync timer is absent or disabled
+      ansible.builtin.shell: |
+        set -euo pipefail
+        state="$(systemctl is-enabled homelab-network-host-docs-sync.timer 2>/dev/null || true)"
+        test "$state" = "disabled" -o "$state" = "not-found"
+      args:
+        executable: /bin/bash
+      changed_when: false
