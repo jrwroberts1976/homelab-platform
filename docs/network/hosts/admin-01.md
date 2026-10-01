@@ -96,34 +96,34 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T08:31:05+01:00`
+- Assessed: `2026-10-01T10:35:22+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `b8:27:eb:e8:36:cd`
 - Identity confidence: **high**
-- OS confidence: **medium**
-- Exact OS: **Not established**
+- OS confidence: **high**
+- Exact OS: **Debian GNU/Linux 13 (trixie)**
 - Manual review required: **No**
 
 ### Assessment summary
 
-admin-01 is a Raspberry Pi 3 physical administration host running Linux, with SSH and RPC services exposed. OpenSSH reports a Debian build; the exact OS release and kernel are not established. 19 security updates and 135 total updates are available.
+admin-01 is a managed physical Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host running authoritative Debian GNU/Linux 13 (trixie) on aarch64. SSH and rpcbind are open; 19 security updates are available and no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The canonical estate identifies admin-01 as a physical Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host.
-- The inventory and router identify the hostname as admin-01 / admin-01.jameshouse at 192.168.2.48.
-- The recorded vendor is Raspberry Pi Foundation.
-- Nmap identified Linux operating-system matches with 95–97% fingerprint accuracy.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
-- TCP ports 111 (rpcbind) and 9100 (jetdirect) are open.
-- Patch telemetry reports 19 security updates and 135 total updates available, with no reboot required.
-- Greenbone completed successfully with zero actionable findings matching this current IP.
+- The canonical device name is admin-01.
+- The device is classified as physical and managed by Ansible.
+- Its documented role is Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host.
+- The vendor is Raspberry Pi Foundation.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), kernel 6.18.39+rpt-rpi-v8, and architecture aarch64.
+- Open TCP services include OpenSSH on port 22, rpcbind on port 111, and a service identified by Nmap as jetdirect on port 9100.
+- Patching telemetry reports 19 security updates and 135 total updates available, with no reboot required.
+- Greenbone reported zero matching actionable findings for the current host IP.
 
 ### Inferences
 
-- The host is likely running a Debian-based Linux installation on Raspberry Pi hardware, based on the Debian OpenSSH build and Linux fingerprint.
-- The exact distribution release and kernel version cannot be determined from the supplied evidence.
-- The TCP 9100 service may provide raw printing functionality, but the evidence does not establish the attached device or its purpose.
+- The platform is Raspberry Pi hardware running Debian Linux.
+- The host likely provides administration and infrastructure-management functions consistent with its documented estate role.
+- The port 9100 service may be printer-protocol compatible, but its function is not confirmed by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
