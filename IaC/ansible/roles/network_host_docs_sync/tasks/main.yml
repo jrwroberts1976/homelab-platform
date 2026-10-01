@@ -9,7 +9,7 @@
       - network_host_docs_sync_ai_host | length > 0
     fail_msg: >-
       Refusing host-doc sync deployment: target must be the expected admin host
-      with an explicit repository path and sensor hostname.
+      with an explicit repository path, sensor hostname and AI source.
 
 - name: Verify repository and host records exist
   ansible.builtin.stat:
