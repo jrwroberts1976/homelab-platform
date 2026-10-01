@@ -19,6 +19,23 @@
     group: "{{ network_host_docs_sync_group }}"
     mode: "0755"
 
+- name: Ensure publisher SSH directory exists
+  ansible.builtin.file:
+    path: "/home/{{ network_host_docs_sync_user }}/.ssh"
+    state: directory
+    owner: "{{ network_host_docs_sync_user }}"
+    group: "{{ network_host_docs_sync_group }}"
+    mode: "0700"
+
+- name: Trust GitHub published Ed25519 host key
+  ansible.builtin.known_hosts:
+    path: "/home/{{ network_host_docs_sync_user }}/.ssh/known_hosts"
+    name: github.com
+    key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+    state: present
+  become: true
+  become_user: "{{ network_host_docs_sync_user }}"
+
 - name: Ensure homelab-platform checkout exists and is current
   ansible.builtin.git:
     repo: "{{ network_host_docs_sync_repo_url }}"
