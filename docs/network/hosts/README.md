@@ -61,6 +61,7 @@ bounded service/domain-family evidence with timestamps and source.
 | light-bulb | `192.168.2.252` | `40:ed:00:7c:7b:80` | [Open](light-bulb.md) |
 | LGwebOSTV | `192.168.2.130` | `14:7f:67:6d:e5:98` | [Open](lgwebostv.md) |
 | iPhone | `192.168.2.182` | `92:8b:32:14:8b:e9` | [Open](iphone.md) |
+| 192.168.2.154 | `192.168.2.154` | `28:33:34:57:ed:13` | [Open](192-168-2-154.md) |
 
 ## What to maintain
 
