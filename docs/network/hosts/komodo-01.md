@@ -42,14 +42,14 @@
 
 - Evidence source: `sensor-01` Zeek connection telemetry
 - Rolling window: 24 hours
-- Summary generated: `2026-10-02T00:22:09+01:00`
+- Summary generated: `2026-10-03T00:22:04+01:00`
 - MAC identity: `02:00:00:00:01:04`
 - Observed IP address(es): `192.168.2.58`
-- Connections: **54**
-- Traffic sent: **77.3 KiB**
-- Traffic received: **397.9 KiB**
-- Top services: `ssl` (54)
-- Top destination ports: `tcp/443` (54)
+- Connections: **64**
+- Traffic sent: **95.2 KiB**
+- Traffic received: **271.3 MiB**
+- Top services: `ssl` (60), `http` (4)
+- Top destination ports: `tcp/443` (60), `tcp/80` (4)
 
 > This bounded summary intentionally excludes raw packet data and external destination IP history.
 <!-- END AUTO:ZEEK-FLOW -->
