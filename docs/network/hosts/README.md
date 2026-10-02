@@ -63,6 +63,7 @@ bounded service/domain-family evidence with timestamps and source.
 | iPhone | `192.168.2.182` | `92:8b:32:14:8b:e9` | [Open](iphone.md) |
 | 192.168.2.154 | `192.168.2.154` | `28:33:34:57:ed:13` | [Open](192-168-2-154.md) |
 | SM-R910 | `192.168.2.235` | `06:b9:4e:71:a7:c5` | [Open](sm-r910.md) |
+| 192.168.2.196 | `192.168.2.196` | `7e:30:93:05:c9:0a` | [Open](192-168-2-196.md) |
 
 ## What to maintain
 
