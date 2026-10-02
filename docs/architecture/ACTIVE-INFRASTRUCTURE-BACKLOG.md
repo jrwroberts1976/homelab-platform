@@ -13,6 +13,21 @@
 - Do not silently reopen completed work based on stale historical plans.
 - Estimates below are **hands-on engineering effort**, excluding observation time and unexpected failures.
 
+## Immediate priority override — estate patching (2026-10-02)
+
+**Status:** CURRENT FOCUS
+
+Patching is temporarily promoted ahead of the normal project sequence. Reconcile the live Debian/Proxmox estate from the existing `homelab_patch_*` telemetry, then perform a controlled patch cycle with service-specific safety gates, staggered reboots and post-change validation. Do not update Docker application images through the OS patch workflow; Docker image/application updates remain owned by Komodo. Do not reboot both Proxmox nodes together, both DNS resolvers together, or `media-01` while Proxmox backup activity is in progress. Complete the current patch cycle before resuming the paused monitor-01 host-docs publisher migration.
+
+Acceptance evidence for this cycle:
+- fresh per-host totals for available updates, security updates and reboot requirement;
+- explicit host order and maintenance gates;
+- package upgrades applied successfully;
+- required reboots completed one host at a time;
+- DNS, monitoring, mail relay, sensor, Docker/BirdNET, media/NFS and Proxmox services validated after change;
+- no failed systemd units on managed Linux hosts;
+- final patch telemetry shows the intended steady state or documents any deliberately deferred packages.
+
 ## Prioritised projects
 
 | # | Project | Status | Estimated effort | Remaining outcome |
