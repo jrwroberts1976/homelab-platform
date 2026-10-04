@@ -149,7 +149,7 @@ def create_host_page(path, mac, ip, result):
 {BEGIN}
 ### Automated Zeek summary
 
-- Awaiting first docs-sync flow render for this MAC.
+- Zeek flow evidence is not configured for this estate.
 
 {END}
 
@@ -203,6 +203,17 @@ def append_index_row(label, ip, mac, filename):
 
 
 def render_block(mac, summary, record):
+    if not summary.get("available", True):
+        return "\n".join([
+            BEGIN,
+            "### Automated Zeek summary",
+            "",
+            "- Zeek flow evidence is not configured for this estate.",
+            "",
+            "> No absence-of-traffic conclusion is made when the Zeek source is unavailable.",
+            END,
+        ])
+
     generated = int(summary.get("generated_at", 0) or 0)
     if generated:
         stamp = datetime.fromtimestamp(generated, tz=timezone.utc).astimezone().isoformat(timespec="seconds")
@@ -371,16 +382,26 @@ def main():
 
     run(["git", "-C", str(REPO), "pull", "--ff-only", REMOTE, BRANCH], capture=True)
 
-    try:
-        summary = json.loads(Path(FLOW_SUMMARY).read_text())
-    except json.JSONDecodeError as exc:
-        raise SystemExit(f"Invalid Zeek flow summary JSON: {exc}")
+    flow_path = Path(FLOW_SUMMARY)
+    if flow_path.is_file():
+        try:
+            summary = json.loads(flow_path.read_text())
+        except json.JSONDecodeError as exc:
+            raise SystemExit(f"Invalid Zeek flow summary JSON: {exc}")
 
-    if summary.get("schema_version") != 1:
-        raise SystemExit(f"Unsupported Zeek flow summary schema: {summary.get('schema_version')}")
-    devices = summary.get("devices")
-    if not isinstance(devices, dict):
-        raise SystemExit("Zeek flow summary does not contain a devices object")
+        if summary.get("schema_version") != 1:
+            raise SystemExit(f"Unsupported Zeek flow summary schema: {summary.get('schema_version')}")
+        devices = summary.get("devices")
+        if not isinstance(devices, dict):
+            raise SystemExit("Zeek flow summary does not contain a devices object")
+        summary["available"] = True
+    else:
+        summary = {
+            "schema_version": 1,
+            "available": False,
+            "devices": {},
+        }
+        devices = {}
 
     try:
         ai_summary = json.loads(Path(AI_SUMMARY).read_text())
@@ -465,7 +486,7 @@ def main():
     stamp = datetime.now().astimezone().strftime("%Y-%m-%d")
     run([
         "git", "-C", str(REPO), "commit",
-        "-m", f"Update bounded Zeek host flow summaries ({stamp})",
+        "-m", f"Update bounded network host evidence summaries ({stamp})",
     ], capture=False)
     run(["git", "-C", str(REPO), "push", REMOTE, BRANCH], capture=False)
 
