@@ -102,6 +102,19 @@
   become: true
   become_user: "{{ github_repo_access_user }}"
 
+- name: Persist dedicated SSH key for repository runtime access
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ github_repo_access_repo_path }}"
+      - config
+      - core.sshCommand
+      - "ssh -i {{ github_repo_access_ssh_key }} -o IdentitiesOnly=yes"
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+  changed_when: false
+
 - name: Configure repository Git user name
   ansible.builtin.command:
     argv:
