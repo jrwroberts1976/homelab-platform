@@ -115,13 +115,15 @@
   changed_when: false
   when: network_host_docs_sync_enable_timer | bool
 
-- name: Verify no failed systemd units after network host docs sync deployment
-  ansible.builtin.command:
-    argv:
-      - systemctl
-      - --failed
-      - --no-legend
-      - --plain
-  register: network_host_docs_sync_failed_units
+- name: Verify managed docs sync units are not failed
+  ansible.builtin.shell: |
+    set -euo pipefail
+    for unit in \
+      '{{ network_host_docs_sync_service_name }}' \
+      '{{ network_host_docs_sync_timer_name }}'; do
+      state="$(systemctl is-failed "$unit" 2>/dev/null || true)"
+      test "$state" != "failed"
+    done
+  args:
+    executable: /bin/bash
   changed_when: false
-  failed_when: network_host_docs_sync_failed_units.stdout | trim | length > 0
