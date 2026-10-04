@@ -1,0 +1,10 @@
+---
+automated_patching_enabled: true
+automated_patching_update_package_lists: 1
+automated_patching_unattended_upgrade: 1
+automated_patching_autoclean_interval: 7
+automated_patching_automatic_reboot: false
+automated_patching_remove_unused_kernel_packages: true
+automated_patching_remove_new_unused_dependencies: true
+automated_patching_remove_unused_dependencies: true
+automated_patching_syslog_enable: true
