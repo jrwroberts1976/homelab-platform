@@ -1,0 +1,162 @@
+---
+- name: Validate GitHub repository access inputs
+  ansible.builtin.assert:
+    that:
+      - github_repo_access_user | length > 0
+      - github_repo_access_group | length > 0
+      - github_repo_access_repo_url | length > 0
+      - github_repo_access_repo_path | length > 0
+      - github_repo_access_branch | length > 0
+      - github_repo_access_ssh_key | length > 0
+    fail_msg: >-
+      Refusing GitHub repository access setup without explicit user, group,
+      repository URL/path, branch and SSH key path.
+
+- name: Ensure GitHub repository parent directory exists
+  ansible.builtin.file:
+    path: "{{ github_repo_access_repo_path | dirname }}"
+    state: directory
+    owner: "{{ github_repo_access_user }}"
+    group: "{{ github_repo_access_group }}"
+    mode: "0755"
+
+- name: Ensure GitHub SSH directory exists
+  ansible.builtin.file:
+    path: "/home/{{ github_repo_access_user }}/.ssh"
+    state: directory
+    owner: "{{ github_repo_access_user }}"
+    group: "{{ github_repo_access_group }}"
+    mode: "0700"
+
+- name: Trust GitHub published Ed25519 host key
+  ansible.builtin.known_hosts:
+    path: "{{ github_repo_access_known_hosts }}"
+    name: github.com
+    key: "{{ github_repo_access_github_host_key }}"
+    state: present
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+
+- name: Generate dedicated GitHub repository SSH key
+  ansible.builtin.command:
+    argv:
+      - ssh-keygen
+      - -q
+      - -t
+      - ed25519
+      - -N
+      - ""
+      - -C
+      - "{{ github_repo_access_ssh_key_comment }}"
+      - -f
+      - "{{ github_repo_access_ssh_key }}"
+  args:
+    creates: "{{ github_repo_access_ssh_key }}"
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+
+- name: Read GitHub repository public key
+  ansible.builtin.command:
+    argv:
+      - cat
+      - "{{ github_repo_access_ssh_key }}.pub"
+  register: github_repo_access_public_key
+  changed_when: false
+
+- name: Verify GitHub repository can be read with dedicated key
+  ansible.builtin.command:
+    argv:
+      - git
+      - ls-remote
+      - --exit-code
+      - "{{ github_repo_access_repo_url }}"
+      - "refs/heads/{{ github_repo_access_branch }}"
+  environment:
+    GIT_SSH_COMMAND: >-
+      ssh -i {{ github_repo_access_ssh_key }} -o IdentitiesOnly=yes
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+  register: github_repo_access_read_check
+  changed_when: false
+  failed_when: false
+
+- name: Require registered GitHub repository key
+  ansible.builtin.assert:
+    that:
+      - github_repo_access_read_check.rc == 0
+    fail_msg: >-
+      GitHub rejected the dedicated repository SSH key. Add this public key to
+      the target repository as a deploy key (enable write access when the
+      consuming role needs to push), then rerun Ansible:
+      {{ github_repo_access_public_key.stdout }}
+
+- name: Ensure GitHub repository checkout exists and is current
+  ansible.builtin.git:
+    repo: "{{ github_repo_access_repo_url }}"
+    dest: "{{ github_repo_access_repo_path }}"
+    version: "{{ github_repo_access_branch }}"
+    remote: "{{ github_repo_access_remote }}"
+    update: "{{ github_repo_access_update_checkout | bool }}"
+    force: false
+    key_file: "{{ github_repo_access_ssh_key }}"
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+
+- name: Configure repository Git user name
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ github_repo_access_repo_path }}"
+      - config
+      - user.name
+      - "{{ github_repo_access_git_user_name }}"
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+  changed_when: false
+  when: github_repo_access_git_user_name | length > 0
+
+- name: Configure repository Git user email
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ github_repo_access_repo_path }}"
+      - config
+      - user.email
+      - "{{ github_repo_access_git_user_email }}"
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+  changed_when: false
+  when: github_repo_access_git_user_email | length > 0
+
+- name: Verify GitHub write access with dry-run push
+  ansible.builtin.command:
+    argv:
+      - git
+      - -C
+      - "{{ github_repo_access_repo_path }}"
+      - push
+      - --dry-run
+      - "{{ github_repo_access_remote }}"
+      - "HEAD:refs/heads/{{ github_repo_access_branch }}"
+  environment:
+    GIT_SSH_COMMAND: >-
+      ssh -i {{ github_repo_access_ssh_key }} -o IdentitiesOnly=yes
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+  register: github_repo_access_write_check
+  changed_when: false
+  when: github_repo_access_verify_push | bool
+
+- name: Verify repository checkout state
+  ansible.builtin.shell: |
+    set -euo pipefail
+    REPO='{{ github_repo_access_repo_path }}'
+    test "$(git -C "$REPO" branch --show-current)" = '{{ github_repo_access_branch }}'
+    test -z "$(git -C "$REPO" status --porcelain)"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ github_repo_access_user }}"
+  changed_when: false
