@@ -1,5 +1,9 @@
-Unattended-Upgrade::Allowed-Origins {
-        "${distro_id}:${distro_codename}-security";
+#clear Unattended-Upgrade::Origins-Pattern;
+#clear Unattended-Upgrade::Allowed-Origins;
+
+Unattended-Upgrade::Origins-Pattern {
+        "origin=Debian,codename=${distro_codename},label=Debian-Security";
+        "origin=Debian,codename=${distro_codename}-security,label=Debian-Security";
 };
 
 Unattended-Upgrade::Automatic-Reboot "{{ automated_patching_automatic_reboot | ternary('true', 'false') }}";
