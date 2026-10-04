@@ -1,0 +1,9 @@
+Unattended-Upgrade::Allowed-Origins {
+        "${distro_id}:${distro_codename}-security";
+};
+
+Unattended-Upgrade::Automatic-Reboot "{{ automated_patching_automatic_reboot | ternary('true', 'false') }}";
+Unattended-Upgrade::Remove-Unused-Kernel-Packages "{{ automated_patching_remove_unused_kernel_packages | ternary('true', 'false') }}";
+Unattended-Upgrade::Remove-New-Unused-Dependencies "{{ automated_patching_remove_new_unused_dependencies | ternary('true', 'false') }}";
+Unattended-Upgrade::Remove-Unused-Dependencies "{{ automated_patching_remove_unused_dependencies | ternary('true', 'false') }}";
+Unattended-Upgrade::SyslogEnable "{{ automated_patching_syslog_enable | ternary('true', 'false') }}";
