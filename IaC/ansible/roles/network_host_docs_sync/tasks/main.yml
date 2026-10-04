@@ -11,62 +11,23 @@
       Refusing host-doc sync deployment: target must be the expected monitoring host
       with an explicit repository path, sensor hostname and AI source.
 
-- name: Ensure publisher parent directory exists
-  ansible.builtin.file:
-    path: "{{ network_host_docs_sync_repo_path | dirname }}"
-    state: directory
-    owner: "{{ network_host_docs_sync_user }}"
-    group: "{{ network_host_docs_sync_group }}"
-    mode: "0755"
+- name: Prepare reusable GitHub repository access
+  ansible.builtin.import_role:
+    name: github_repo_access
+  vars:
+    github_repo_access_user: "{{ network_host_docs_sync_user }}"
+    github_repo_access_group: "{{ network_host_docs_sync_group }}"
+    github_repo_access_repo_url: "{{ network_host_docs_sync_repo_url }}"
+    github_repo_access_repo_path: "{{ network_host_docs_sync_repo_path }}"
+    github_repo_access_branch: "{{ network_host_docs_sync_git_branch }}"
+    github_repo_access_remote: "{{ network_host_docs_sync_git_remote }}"
+    github_repo_access_ssh_key: "{{ network_host_docs_sync_git_ssh_key }}"
+    github_repo_access_ssh_key_comment: "{{ network_host_docs_sync_git_key_comment }}"
+    github_repo_access_verify_push: true
+    github_repo_access_git_user_name: "{{ network_host_docs_sync_git_user_name }}"
+    github_repo_access_git_user_email: "{{ network_host_docs_sync_git_user_email }}"
 
-- name: Ensure publisher SSH directory exists
-  ansible.builtin.file:
-    path: "/home/{{ network_host_docs_sync_user }}/.ssh"
-    state: directory
-    owner: "{{ network_host_docs_sync_user }}"
-    group: "{{ network_host_docs_sync_group }}"
-    mode: "0700"
-
-- name: Trust GitHub published Ed25519 host key
-  ansible.builtin.known_hosts:
-    path: "/home/{{ network_host_docs_sync_user }}/.ssh/known_hosts"
-    name: github.com
-    key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
-    state: present
-  become: true
-  become_user: "{{ network_host_docs_sync_user }}"
-
-- name: Generate dedicated GitHub publisher SSH key
-  ansible.builtin.command:
-    argv:
-      - ssh-keygen
-      - -q
-      - -t
-      - ed25519
-      - -N
-      - ""
-      - -C
-      - monitor-01-homelab-platform-publisher
-      - -f
-      - "{{ network_host_docs_sync_git_ssh_key }}"
-  args:
-    creates: "{{ network_host_docs_sync_git_ssh_key }}"
-  become: true
-  become_user: "{{ network_host_docs_sync_user }}"
-
-- name: Ensure homelab-platform checkout exists and is current
-  ansible.builtin.git:
-    repo: "{{ network_host_docs_sync_repo_url }}"
-    dest: "{{ network_host_docs_sync_repo_path }}"
-    version: "{{ network_host_docs_sync_git_branch }}"
-    remote: "{{ network_host_docs_sync_git_remote }}"
-    update: true
-    force: false
-    key_file: "{{ network_host_docs_sync_git_ssh_key }}"
-  become: true
-  become_user: "{{ network_host_docs_sync_user }}"
-
-- name: Verify local evidence and Git access for docs publisher
+- name: Verify local evidence for docs publisher
   ansible.builtin.shell: |
     set -euo pipefail
     REPO='{{ network_host_docs_sync_repo_path }}'
@@ -75,9 +36,6 @@
     test -z "$(git -C "$REPO" status --porcelain)"
     test -n "$(git -C "$REPO" config user.name)"
     test -n "$(git -C "$REPO" config user.email)"
-    GIT_SSH_COMMAND="ssh -i {{ network_host_docs_sync_git_ssh_key }} -o IdentitiesOnly=yes" \
-      git -C "$REPO" ls-remote --exit-code '{{ network_host_docs_sync_git_remote }}' \
-      'refs/heads/{{ network_host_docs_sync_git_branch }}' >/dev/null
     test -r '{{ network_host_docs_sync_flow_summary }}'
     test "$(head -c 1 '{{ network_host_docs_sync_flow_summary }}')" = "{"
     test -r '{{ network_host_docs_sync_ai_summary }}'
