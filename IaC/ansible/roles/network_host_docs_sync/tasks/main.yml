@@ -27,7 +27,7 @@
     github_repo_access_git_user_name: "{{ network_host_docs_sync_git_user_name }}"
     github_repo_access_git_user_email: "{{ network_host_docs_sync_git_user_email }}"
 
-- name: Verify local evidence for docs publisher
+- name: Verify required local evidence for docs publisher
   ansible.builtin.shell: |
     set -euo pipefail
     REPO='{{ network_host_docs_sync_repo_path }}'
@@ -36,10 +36,22 @@
     test -z "$(git -C "$REPO" status --porcelain)"
     test -n "$(git -C "$REPO" config user.name)"
     test -n "$(git -C "$REPO" config user.email)"
-    test -r '{{ network_host_docs_sync_flow_summary }}'
-    test "$(head -c 1 '{{ network_host_docs_sync_flow_summary }}')" = "{"
     test -r '{{ network_host_docs_sync_ai_summary }}'
     test "$(head -c 1 '{{ network_host_docs_sync_ai_summary }}')" = "{"
+  args:
+    executable: /bin/bash
+  become: true
+  become_user: "{{ network_host_docs_sync_user }}"
+  changed_when: false
+
+- name: Validate optional Zeek flow summary when present
+  ansible.builtin.shell: |
+    set -euo pipefail
+    FLOW='{{ network_host_docs_sync_flow_summary }}'
+    if [ -e "$FLOW" ]; then
+      test -r "$FLOW"
+      test "$(head -c 1 "$FLOW")" = "{"
+    fi
   args:
     executable: /bin/bash
   become: true
