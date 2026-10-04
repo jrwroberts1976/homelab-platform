@@ -1,0 +1,15 @@
+---
+github_repo_access_user: james
+github_repo_access_group: james
+github_repo_access_repo_url: ""
+github_repo_access_repo_path: ""
+github_repo_access_branch: main
+github_repo_access_remote: origin
+github_repo_access_ssh_key: "/home/{{ github_repo_access_user }}/.ssh/github-repo-access"
+github_repo_access_ssh_key_comment: "{{ inventory_hostname }}-github-repo-access"
+github_repo_access_known_hosts: "/home/{{ github_repo_access_user }}/.ssh/known_hosts"
+github_repo_access_github_host_key: "github.com ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIOMqqnkVzrm0SdG6UOoqKLsabgH5C9okWi0dh2l9GKJl"
+github_repo_access_update_checkout: true
+github_repo_access_verify_push: false
+github_repo_access_git_user_name: ""
+github_repo_access_git_user_email: ""
