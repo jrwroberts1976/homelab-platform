@@ -1,0 +1,87 @@
+---
+- name: Validate patch docs sync target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.hostname == patch_docs_sync_expected_hostname
+      - patch_docs_sync_repo_path | length > 0
+    fail_msg: "Refusing patch docs sync deployment: target must be the expected monitoring host"
+
+- name: Prepare reusable GitHub repository access
+  ansible.builtin.import_role:
+    name: github_repo_access
+  vars:
+    github_repo_access_user: "{{ patch_docs_sync_user }}"
+    github_repo_access_group: "{{ patch_docs_sync_group }}"
+    github_repo_access_repo_url: "{{ patch_docs_sync_repo_url }}"
+    github_repo_access_repo_path: "{{ patch_docs_sync_repo_path }}"
+    github_repo_access_branch: "{{ patch_docs_sync_git_branch }}"
+    github_repo_access_remote: "{{ patch_docs_sync_git_remote }}"
+    github_repo_access_ssh_key: "{{ patch_docs_sync_git_ssh_key }}"
+    github_repo_access_ssh_key_comment: "{{ patch_docs_sync_git_key_comment }}"
+    github_repo_access_verify_push: false
+    github_repo_access_git_user_name: "{{ patch_docs_sync_git_user_name }}"
+    github_repo_access_git_user_email: "{{ patch_docs_sync_git_user_email }}"
+
+- name: Verify Prometheus patch metric endpoint
+  ansible.builtin.uri:
+    url: "{{ patch_docs_sync_prometheus_url }}/api/v1/query?query=up"
+    return_content: true
+    status_code: 200
+  register: patch_docs_sync_prometheus_probe
+  changed_when: false
+
+- name: Install patch docs publisher
+  ansible.builtin.template:
+    src: homelab-patch-docs-sync.py.j2
+    dest: "{{ patch_docs_sync_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: patch_docs_sync_script_template
+
+- name: Install patch docs service
+  ansible.builtin.template:
+    src: homelab-patch-docs-sync.service.j2
+    dest: "/etc/systemd/system/{{ patch_docs_sync_service_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: patch_docs_sync_service_template
+
+- name: Install patch docs timer
+  ansible.builtin.template:
+    src: homelab-patch-docs-sync.timer.j2
+    dest: "/etc/systemd/system/{{ patch_docs_sync_timer_name }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: patch_docs_sync_timer_template
+
+- name: Reload systemd for patch docs sync
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: patch_docs_sync_service_template.changed or patch_docs_sync_timer_template.changed
+
+- name: Run initial patch docs sync
+  ansible.builtin.systemd_service:
+    name: "{{ patch_docs_sync_service_name }}"
+    state: started
+  when: patch_docs_sync_run_initial | bool
+
+- name: Enable patch docs sync timer
+  ansible.builtin.systemd_service:
+    name: "{{ patch_docs_sync_timer_name }}"
+    enabled: true
+    state: started
+  when: patch_docs_sync_enable_timer | bool
+
+- name: Verify patch docs sync timer
+  ansible.builtin.shell: |
+    set -euo pipefail
+    systemctl is-enabled '{{ patch_docs_sync_timer_name }}' | grep -Fxq enabled
+    systemctl is-active '{{ patch_docs_sync_timer_name }}' | grep -Fxq active
+  args:
+    executable: /bin/bash
+  changed_when: false
+  when: patch_docs_sync_enable_timer | bool
