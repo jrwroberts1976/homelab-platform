@@ -101,6 +101,24 @@ media-01 is a managed physical Raspberry Pi 5 running authoritative Debian GNU/L
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
 
+<!-- BEGIN AUTO:PATCHING -->
+## Automated patching status
+
+> Generated from host patch metrics collected by Prometheus. This bounded section is maintained automatically.
+
+- Policy: **Security updates automatically**
+- Automatic reboot: **Disabled**
+- Last assessed: `2026-10-05T17:43:53+01:00`
+- Pending updates: **7**
+- Security updates pending: **0**
+- Reboot required: **No**
+- unattended-upgrades installed: **Yes**
+- Last APT transaction activity: `2026-10-05T17:43:27+01:00`
+- Patch state: **Healthy**
+
+> Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
+<!-- END AUTO:PATCHING -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:
