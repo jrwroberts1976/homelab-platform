@@ -10,6 +10,19 @@ Do **not** commit passwords, API tokens, recovery material, raw packet captures,
 or complete household browsing history. Internet activity should be retained as
 bounded service/domain-family evidence with timestamps and source.
 
+## Automated patching coverage
+
+Validated on 5 October 2026, all **15 Ansible-managed Debian/Linux hosts** are enrolled in the homelab automated patch-status framework, including both Proxmox VE nodes.
+
+- Debian security updates are applied automatically with `unattended-upgrades`.
+- Automatic reboot is disabled on every managed host.
+- Proxmox platform/full upgrades remain controlled maintenance and are not replaced by unattended Debian security updates.
+- Each managed host publishes patch state to `/var/lib/homelab-patching/status.json` and Node Exporter textfile metrics.
+- Prometheus on `monitor-01` collects the estate patch metrics.
+- `monitor-01` publishes bounded `AUTO:PATCHING` sections into the host records through `homelab-patch-docs-sync.service`.
+- The 5 October 2026 validation completed with `patch_records=15` and `unmatched=0`.
+- `PROXMOX` and `Proxmox-2` were both fully upgraded to pve-manager 9.2.21 and rebooted successfully onto kernel `7.0.14-20-pve`; both reported zero pending updates after enrolment.
+
 ## Current hosts
 
 | Host / label | IP | MAC | Record |
@@ -72,7 +85,7 @@ services, expected/observed network flows, bounded Internet/DNS evidence,
 monitoring/security, ownership/maintenance and dated evidence history.
 
 Unmanaged devices retain their MAC identity in the underlying discovery data, while published GitHub pages use readable device names.
-second host page. Canonical infrastructure keeps its reviewed hostname page.
+Canonical infrastructure keeps its reviewed hostname page.
 
 Domain resolution is supporting evidence. It does not by itself prove that a
 person visited a site or that a device has a particular identity.
