@@ -29,6 +29,10 @@ def esc(value):
     return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
 
 
+def metric(name, labels, value):
+    return f'{name}' + '{' + labels + '} ' + str(value)
+
+
 def main():
     STATUS_DIR.mkdir(parents=True, exist_ok=True)
     METRICS_DIR.mkdir(parents=True, exist_ok=True)
@@ -75,25 +79,25 @@ def main():
     metrics = [
         "# HELP homelab_patch_pending_updates Number of APT packages currently upgradable.",
         "# TYPE homelab_patch_pending_updates gauge",
-        f"homelab_patch_pending_updates{{{labels}}} {pending}",
+        metric("homelab_patch_pending_updates", labels, pending),
         "# HELP homelab_patch_security_updates_pending Number of pending packages sourced from security repositories.",
         "# TYPE homelab_patch_security_updates_pending gauge",
-        f"homelab_patch_security_updates_pending{{{labels}}} {security}",
+        metric("homelab_patch_security_updates_pending", labels, security),
         "# HELP homelab_patch_reboot_required Whether /var/run/reboot-required exists.",
         "# TYPE homelab_patch_reboot_required gauge",
-        f"homelab_patch_reboot_required{{{labels}}} {1 if reboot_required else 0}",
+        metric("homelab_patch_reboot_required", labels, 1 if reboot_required else 0),
         "# HELP homelab_patch_unattended_upgrades_installed Whether unattended-upgrades is installed.",
         "# TYPE homelab_patch_unattended_upgrades_installed gauge",
-        f"homelab_patch_unattended_upgrades_installed{{{labels}}} {1 if uu_installed else 0}",
+        metric("homelab_patch_unattended_upgrades_installed", labels, 1 if uu_installed else 0),
         "# HELP homelab_patch_automatic_reboot Whether automated patching permits automatic reboot.",
         "# TYPE homelab_patch_automatic_reboot gauge",
-        f"homelab_patch_automatic_reboot{{{labels}}} 0",
+        metric("homelab_patch_automatic_reboot", labels, 0),
         "# HELP homelab_patch_status_timestamp_seconds Unix time when patch status was assessed.",
         "# TYPE homelab_patch_status_timestamp_seconds gauge",
-        f"homelab_patch_status_timestamp_seconds{{{labels}}} {assessed}",
+        metric("homelab_patch_status_timestamp_seconds", labels, assessed),
         "# HELP homelab_patch_last_apt_transaction_timestamp_seconds Mtime of the current APT history log.",
         "# TYPE homelab_patch_last_apt_transaction_timestamp_seconds gauge",
-        f"homelab_patch_last_apt_transaction_timestamp_seconds{{{labels}}} {last_apt_transaction}",
+        metric("homelab_patch_last_apt_transaction_timestamp_seconds", labels, last_apt_transaction),
     ]
     tmp_metrics = METRICS_FILE.with_suffix(".prom.tmp")
     tmp_metrics.write_text("\n".join(metrics) + "\n")
