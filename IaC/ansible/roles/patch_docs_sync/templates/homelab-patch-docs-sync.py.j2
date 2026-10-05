@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+import json
+import re
+import subprocess
+import sys
+import urllib.parse
+import urllib.request
+from datetime import datetime, timezone
+from pathlib import Path
+
+REPO = Path("{{ patch_docs_sync_repo_path }}")
+HOSTS_DIR = REPO / "docs" / "network" / "hosts"
+INDEX = HOSTS_DIR / "README.md"
+REMOTE = "{{ patch_docs_sync_git_remote }}"
+BRANCH = "{{ patch_docs_sync_git_branch }}"
+PROM = "{{ patch_docs_sync_prometheus_url }}".rstrip("/")
+BEGIN = "<!-- BEGIN AUTO:PATCHING -->"
+END = "<!-- END AUTO:PATCHING -->"
+
+METRICS = [
+    "homelab_patch_pending_updates",
+    "homelab_patch_security_updates_pending",
+    "homelab_patch_reboot_required",
+    "homelab_patch_unattended_upgrades_installed",
+    "homelab_patch_automatic_reboot",
+    "homelab_patch_status_timestamp_seconds",
+    "homelab_patch_last_apt_transaction_timestamp_seconds",
+]
+
+
+def run(argv, *, cwd=None):
+    result = subprocess.run(argv, cwd=cwd, text=True, capture_output=True)
+    if result.returncode != 0:
+        if result.stdout:
+            print(result.stdout, end="", file=sys.stderr)
+        if result.stderr:
+            print(result.stderr, end="", file=sys.stderr)
+        raise SystemExit(f"command failed ({result.returncode}): {' '.join(argv)}")
+    return result.stdout.strip()
+
+
+def query(metric):
+    url = PROM + "/api/v1/query?" + urllib.parse.urlencode({"query": metric})
+    try:
+        with urllib.request.urlopen(url, timeout=10) as response:
+            payload = json.load(response)
+    except Exception as exc:
+        raise SystemExit(f"Prometheus query failed for {metric}: {exc}")
+    if payload.get("status") != "success":
+        raise SystemExit(f"Prometheus query unsuccessful for {metric}")
+    return payload.get("data", {}).get("result", [])
+
+
+def parse_index():
+    by_ip = {}
+    pattern = re.compile(
+        r"^\|\s*[^|]+\|\s*`([^`]+)`\s*\|\s*`([0-9A-Fa-f:]{17})`\s*\|\s*\[Open\]\(([^)]+\.md)\)\s*\|$"
+    )
+    for line in INDEX.read_text().splitlines():
+        match = pattern.match(line)
+        if match:
+            ip, _mac, filename = match.groups()
+            by_ip[ip] = filename
+    if not by_ip:
+        raise SystemExit(f"No host mappings parsed from {INDEX}")
+    return by_ip
+
+
+def stamp(value):
+    try:
+        epoch = int(float(value))
+    except Exception:
+        return "unknown"
+    if epoch <= 0:
+        return "not recorded"
+    return datetime.fromtimestamp(epoch, tz=timezone.utc).astimezone().isoformat(timespec="seconds")
+
+
+def yesno(value):
+    try:
+        return "Yes" if float(value) >= 0.5 else "No"
+    except Exception:
+        return "Unknown"
+
+
+def render(record):
+    pending = int(float(record.get("homelab_patch_pending_updates", 0)))
+    security = int(float(record.get("homelab_patch_security_updates_pending", 0)))
+    managed = float(record.get("homelab_patch_unattended_upgrades_installed", 0)) >= 0.5
+    reboot = float(record.get("homelab_patch_reboot_required", 0)) >= 0.5
+    auto_reboot = float(record.get("homelab_patch_automatic_reboot", 0)) >= 0.5
+    healthy = managed and security == 0 and not reboot
+    state = "Healthy" if healthy else "Attention required"
+    return "\n".join([
+        BEGIN,
+        "## Automated patching status",
+        "",
+        "> Generated from host patch metrics collected by Prometheus. This bounded section is maintained automatically.",
+        "",
+        f"- Policy: **{'Security updates automatically' if managed else 'Not managed by unattended-upgrades'}**",
+        f"- Automatic reboot: **{'Enabled' if auto_reboot else 'Disabled'}**",
+        f"- Last assessed: `{stamp(record.get('homelab_patch_status_timestamp_seconds', 0))}`",
+        f"- Pending updates: **{pending}**",
+        f"- Security updates pending: **{security}**",
+        f"- Reboot required: **{'Yes' if reboot else 'No'}**",
+        f"- unattended-upgrades installed: **{'Yes' if managed else 'No'}**",
+        f"- Last APT transaction activity: `{stamp(record.get('homelab_patch_last_apt_transaction_timestamp_seconds', 0))}`",
+        f"- Patch state: **{state}**",
+        "",
+        "> Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.",
+        END,
+    ])
+
+
+def update_page(path, block):
+    text = path.read_text()
+    pattern = re.compile(re.escape(BEGIN) + r".*?" + re.escape(END), re.DOTALL)
+    if pattern.search(text):
+        updated = pattern.sub(block, text, count=1)
+    else:
+        heading = "## Monitoring and security"
+        pos = text.find(heading)
+        if pos < 0:
+            heading = "## Ownership and administration"
+            pos = text.find(heading)
+        if pos < 0:
+            updated = text.rstrip() + "\n\n" + block + "\n"
+        else:
+            updated = text[:pos] + block + "\n\n" + text[pos:]
+    if updated == text:
+        return False
+    path.write_text(updated)
+    return True
+
+
+def main():
+    if not REPO.is_dir() or not INDEX.is_file():
+        raise SystemExit("Repository or network host index is missing")
+    branch = run(["git", "-C", str(REPO), "branch", "--show-current"])
+    if branch != BRANCH:
+        raise SystemExit(f"Expected branch {BRANCH}, found {branch or 'detached HEAD'}")
+    if run(["git", "-C", str(REPO), "status", "--porcelain"]):
+        raise SystemExit("Refusing patch docs sync: repository working tree is not clean")
+    run(["git", "-C", str(REPO), "pull", "--ff-only", REMOTE, BRANCH])
+
+    by_ip = parse_index()
+    statuses = {}
+    for metric in METRICS:
+        for sample in query(metric):
+            labels = sample.get("metric", {})
+            ip = labels.get("ip", "")
+            host = labels.get("host", "")
+            value = (sample.get("value") or [0, "0"])[1]
+            if not ip:
+                continue
+            entry = statuses.setdefault(ip, {"host": host, "ip": ip})
+            entry[metric] = value
+
+    changed = 0
+    unmatched = []
+    for ip, record in sorted(statuses.items()):
+        filename = by_ip.get(ip)
+        if not filename:
+            unmatched.append(f"{record.get('host') or 'unknown'}={ip}")
+            continue
+        page = HOSTS_DIR / filename
+        if page.is_file() and update_page(page, render(record)):
+            changed += 1
+
+    if not changed:
+        print(f"patch_records={len(statuses)} changed=0 unmatched={len(unmatched)}")
+        return
+
+    run(["git", "-C", str(REPO), "add", "docs/network/hosts"])
+    status = run(["git", "-C", str(REPO), "status", "--porcelain"])
+    if not status:
+        print(f"patch_records={len(statuses)} changed=0 unmatched={len(unmatched)}")
+        return
+    date = datetime.now().astimezone().strftime("%Y-%m-%d")
+    run(["git", "-C", str(REPO), "commit", "-m", f"Update automated patch status ({date})"])
+    run(["git", "-C", str(REPO), "push", REMOTE, BRANCH])
+    print(f"patch_records={len(statuses)} changed={changed} unmatched={len(unmatched)} pushed={REMOTE}/{BRANCH}")
+    if unmatched:
+        print("unmatched_hosts=" + ",".join(unmatched))
+
+
+if __name__ == "__main__":
+    main()
