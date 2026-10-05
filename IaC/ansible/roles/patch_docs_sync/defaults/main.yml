@@ -1,0 +1,20 @@
+---
+patch_docs_sync_expected_hostname: monitor-01
+patch_docs_sync_repo_path: /home/james/projects/homelab-platform
+patch_docs_sync_repo_url: git@github.com:jrwroberts1976/homelab-platform.git
+patch_docs_sync_git_ssh_key: /home/james/.ssh/homelab-platform-publisher
+patch_docs_sync_git_key_comment: monitor-01-homelab-platform-publisher
+patch_docs_sync_git_user_name: James Roberts
+patch_docs_sync_git_user_email: jrwroberts1976@gmail.com
+patch_docs_sync_user: james
+patch_docs_sync_group: james
+patch_docs_sync_git_remote: origin
+patch_docs_sync_git_branch: main
+patch_docs_sync_prometheus_url: http://127.0.0.1:9090
+patch_docs_sync_script: /usr/local/sbin/homelab-patch-docs-sync
+patch_docs_sync_service_name: homelab-patch-docs-sync.service
+patch_docs_sync_timer_name: homelab-patch-docs-sync.timer
+patch_docs_sync_on_calendar: "*-*-* *:35:00"
+patch_docs_sync_randomized_delay_seconds: 120
+patch_docs_sync_enable_timer: true
+patch_docs_sync_run_initial: true
