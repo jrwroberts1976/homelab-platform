@@ -1,0 +1,15 @@
+[Unit]
+Description=Publish automated patch status to network host documentation
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart={{ patch_docs_sync_script }}
+User={{ patch_docs_sync_user }}
+Group={{ patch_docs_sync_group }}
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=full
+ProtectHome=read-only
+ReadWritePaths={{ patch_docs_sync_repo_path }}
