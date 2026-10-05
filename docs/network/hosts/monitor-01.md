@@ -136,13 +136,13 @@ Authoritative inventory identifies this host as monitor-01, a Debian 13 QEMU VM 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T17:09:11+01:00`
+- Last assessed: `2026-10-05T18:04:32+01:00`
 - Pending updates: **2**
 - Security updates pending: **0**
-- Reboot required: **Yes**
+- Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-03T06:13:34+01:00`
-- Patch state: **Attention required**
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
