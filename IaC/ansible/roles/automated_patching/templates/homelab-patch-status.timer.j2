@@ -1,0 +1,12 @@
+[Unit]
+Description=Refresh homelab patch status metrics
+
+[Timer]
+OnBootSec=5min
+OnUnitActiveSec={{ automated_patching_status_interval }}
+RandomizedDelaySec={{ automated_patching_status_randomized_delay_seconds }}
+Persistent=true
+Unit=homelab-patch-status.service
+
+[Install]
+WantedBy=timers.target
