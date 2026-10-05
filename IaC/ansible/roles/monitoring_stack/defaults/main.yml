@@ -120,6 +120,7 @@ monitoring_grafana_dashboard_files:
 monitoring_grafana_production_dashboard_files:
   - "homelab-operations-overview.json"
   - "homelab-linux-estate.json"
+  - "homelab-patching.json"
 
 monitoring_grafana_dashboard_uids:
   - "homelab-network-host-tiles"
@@ -134,3 +135,4 @@ monitoring_grafana_dashboard_uids:
   - "homelab-security"
   - "homelab-node-detail"
   - "homelab-network-device-detail"
+  - "homelab-patching"
