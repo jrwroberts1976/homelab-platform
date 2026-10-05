@@ -57,3 +57,80 @@
       - "'Unattended-Upgrade::Automatic-Reboot \"false\"' in automated_patching_apt_config.stdout"
     fail_msg: "Effective unattended-upgrades policy is not security-only/no-auto-reboot as expected"
   when: automated_patching_enabled | bool
+
+- name: Create patch status directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+  loop:
+    - "{{ automated_patching_status_dir }}"
+    - "{{ automated_patching_textfile_dir }}"
+  when: automated_patching_publish_status | bool
+
+- name: Install patch status exporter
+  ansible.builtin.template:
+    src: homelab-patch-status.py.j2
+    dest: "{{ automated_patching_status_script }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when: automated_patching_publish_status | bool
+
+- name: Install patch status service
+  ansible.builtin.template:
+    src: homelab-patch-status.service.j2
+    dest: /etc/systemd/system/homelab-patch-status.service
+    owner: root
+    group: root
+    mode: "0644"
+  register: automated_patching_status_service_unit
+  when: automated_patching_publish_status | bool
+
+- name: Install patch status timer
+  ansible.builtin.template:
+    src: homelab-patch-status.timer.j2
+    dest: /etc/systemd/system/homelab-patch-status.timer
+    owner: root
+    group: root
+    mode: "0644"
+  register: automated_patching_status_timer_unit
+  when: automated_patching_publish_status | bool
+
+- name: Reload systemd for patch status units
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when:
+    - automated_patching_publish_status | bool
+    - automated_patching_status_service_unit.changed or automated_patching_status_timer_unit.changed
+
+- name: Run patch status exporter now
+  ansible.builtin.systemd_service:
+    name: homelab-patch-status.service
+    state: started
+  when: automated_patching_publish_status | bool
+
+- name: Enable patch status timer
+  ansible.builtin.systemd_service:
+    name: homelab-patch-status.timer
+    enabled: true
+    state: started
+  when: automated_patching_publish_status | bool
+
+- name: Verify patch status artifacts
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ automated_patching_status_dir }}/status.json"
+    - "{{ automated_patching_textfile_dir }}/homelab_patching.prom"
+  register: automated_patching_status_artifacts
+  when: automated_patching_publish_status | bool
+
+- name: Require patch status artifacts
+  ansible.builtin.assert:
+    that:
+      - automated_patching_status_artifacts.results | map(attribute='stat.exists') | min
+    fail_msg: "Patch status JSON/Prometheus artifacts were not created"
+  when: automated_patching_publish_status | bool
