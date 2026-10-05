@@ -134,13 +134,13 @@ sensor-01 is VM201 on PROXMOX, managed by Ansible and used as a Suricata/Zeek pa
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T17:14:12+01:00`
+- Last assessed: `2026-10-05T18:18:14+01:00`
 - Pending updates: **3**
 - Security updates pending: **0**
-- Reboot required: **Yes**
+- Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-03T06:20:55+01:00`
-- Patch state: **Attention required**
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
