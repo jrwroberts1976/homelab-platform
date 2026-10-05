@@ -134,7 +134,7 @@ Managed Proxmox LXC container CT102 providing the internal Postfix SMTP relay. A
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T22:25:34+01:00`
+- Last assessed: `2026-10-05T23:26:34+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
