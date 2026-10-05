@@ -1,6 +1,6 @@
 ---
-- name: Configure automated security patching on standard Debian hosts
-  hosts: "all:!proxmox_hosts"
+- name: Configure automated security patching on Debian hosts
+  hosts: all
   become: true
   gather_facts: true
 
