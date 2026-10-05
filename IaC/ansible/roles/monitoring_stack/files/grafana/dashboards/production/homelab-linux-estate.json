@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 2,
+  "version": 3,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -441,7 +441,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(homelab_security_updates_available{target_name=~\"$host\"})",
+          "expr": "sum(homelab_patch_security_updates_pending{target_name=~\"$host\"})",
           "instant": true,
           "range": false
         }
@@ -498,7 +498,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max(time() - homelab_patch_last_success_timestamp_seconds{target_name=~\"$host\"})",
+          "expr": "max(time() - homelab_patch_status_timestamp_seconds{target_name=~\"$host\"})",
           "instant": true,
           "range": false
         }
@@ -559,7 +559,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(homelab_updates_available{target_name=~\"$host\"})",
+          "expr": "sum(homelab_patch_pending_updates{target_name=~\"$host\"})",
           "instant": true,
           "range": false
         }
