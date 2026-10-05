@@ -111,7 +111,7 @@ Authoritative inventory identifies this host as zabbix-01, an LXC container CT10
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T13:05:10+01:00`
+- Last assessed: `2026-10-05T14:07:36+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**

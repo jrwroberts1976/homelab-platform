@@ -128,7 +128,7 @@ cloud-01 is a managed QEMU VM on PROXMOX running authoritative Debian GNU/Linux 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T13:07:17+01:00`
+- Last assessed: `2026-10-05T14:10:52+01:00`
 - Pending updates: **2**
 - Security updates pending: **0**
 - Reboot required: **Yes**

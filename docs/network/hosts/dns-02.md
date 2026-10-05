@@ -127,7 +127,7 @@ Managed Proxmox LXC container CT100 running Debian GNU/Linux 13, providing Pi-ho
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T13:02:50+01:00`
+- Last assessed: `2026-10-05T14:03:21+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**

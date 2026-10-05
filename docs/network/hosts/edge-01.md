@@ -126,7 +126,7 @@ edge-01 is CT103, a managed Debian GNU/Linux 13 LXC on Proxmox-2. SSH is provide
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T13:02:45+01:00`
+- Last assessed: `2026-10-05T14:05:20+01:00`
 - Pending updates: **2**
 - Security updates pending: **0**
 - Reboot required: **No**
