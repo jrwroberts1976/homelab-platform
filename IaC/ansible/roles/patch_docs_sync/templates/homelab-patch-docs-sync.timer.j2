@@ -1,0 +1,11 @@
+[Unit]
+Description=Refresh automated patch status in host documentation
+
+[Timer]
+OnCalendar={{ patch_docs_sync_on_calendar }}
+RandomizedDelaySec={{ patch_docs_sync_randomized_delay_seconds }}
+Persistent=true
+Unit={{ patch_docs_sync_service_name }}
+
+[Install]
+WantedBy=timers.target
