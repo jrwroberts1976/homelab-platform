@@ -112,6 +112,24 @@ komodo-01 is CT104 on PROXMOX, serving as the Komodo container-management contro
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
 
+<!-- BEGIN AUTO:PATCHING -->
+## Automated patching status
+
+> Generated from host patch metrics collected by Prometheus. This bounded section is maintained automatically.
+
+- Policy: **Security updates automatically**
+- Automatic reboot: **Disabled**
+- Last assessed: `2026-10-05T07:50:52+01:00`
+- Pending updates: **1**
+- Security updates pending: **0**
+- Reboot required: **No**
+- unattended-upgrades installed: **Yes**
+- Last APT transaction activity: `2026-10-04T12:26:39+01:00`
+- Patch state: **Healthy**
+
+> Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
+<!-- END AUTO:PATCHING -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:

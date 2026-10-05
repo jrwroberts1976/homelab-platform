@@ -129,6 +129,24 @@ Authoritative inventory identifies this host as monitor-01, a Debian 13 QEMU VM 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
 
+<!-- BEGIN AUTO:PATCHING -->
+## Automated patching status
+
+> Generated from host patch metrics collected by Prometheus. This bounded section is maintained automatically.
+
+- Policy: **Security updates automatically**
+- Automatic reboot: **Disabled**
+- Last assessed: `2026-10-05T07:50:51+01:00`
+- Pending updates: **2**
+- Security updates pending: **0**
+- Reboot required: **Yes**
+- unattended-upgrades installed: **Yes**
+- Last APT transaction activity: `2026-10-03T06:13:34+01:00`
+- Patch state: **Attention required**
+
+> Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
+<!-- END AUTO:PATCHING -->
+
 ## Monitoring and security
 
 - Grafana host dashboard:
