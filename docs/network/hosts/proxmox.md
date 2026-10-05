@@ -22,13 +22,13 @@
 - Stable device identifier:
 
 ## Operating system and platform evidence
-- Authoritative OS:
-- OS evidence source:
-- Architecture:
-- Kernel / firmware:
+- Authoritative OS: Proxmox VE 9.2.21 / Debian GNU/Linux 13 (trixie)
+- OS evidence source: live `pveversion`, `uname`, cluster and service validation on 5 October 2026
+- Architecture: x86_64
+- Kernel / firmware: `7.0.14-20-pve`
 - Nmap fingerprint:
 - Nmap evidence timestamp:
-- Confidence / review status:
+- Confidence / review status: High — live validated 5 October 2026
 
 ## Open ports and services
 | Port | Protocol | Service | Product/version | Evidence time | Expected? |
@@ -131,25 +131,26 @@ PROXMOX is an online Hewlett Packard physical Proxmox VE cluster node at 192.168
 <!-- END AUTO:PATCHING -->
 
 ## Monitoring and security
-- Grafana host dashboard:
-- Zabbix / Node Exporter / other monitoring:
-- Alerting:
-- Vulnerability findings:
+- Grafana host dashboard: monitored through the homelab Linux estate dashboards
+- Zabbix / Node Exporter / other monitoring: Zabbix Agent 2, Node Exporter, Grafana Alloy and homelab patch-status exporter
+- Alerting: central monitoring on `monitor-01`
+- Vulnerability findings: managed Greenbone evidence; no current actionable finding recorded in the latest retained assessment
 - Firewall/access policy:
 - Accepted risks:
 
 ## Ownership and administration
-- Owner / responsible person:
-- Management method:
-- Configuration source:
-- Patching / maintenance:
+- Owner / responsible person: Homelab administrator
+- Management method: Ansible from `admin-01`; Proxmox VE cluster management for hypervisor operations
+- Configuration source: `homelab-platform/IaC/`
+- Patching / maintenance: Debian security updates automated with `unattended-upgrades`; Proxmox platform/full upgrades performed as controlled maintenance; automatic reboot disabled
 - Backup / recovery:
 - Planned retirement / replacement:
 
 ## Evidence history
 | Date | Evidence / change | Source | Reviewed by |
 |---|---|---|---|
-| | | | |
+| 2026-10-05 | Full Proxmox/Debian upgrade completed; pve-manager 9.2.21 installed; node rebooted onto `7.0.14-20-pve`; cluster quorate with QDevice; guests healthy; automated security patching enrolled with 0 pending updates | Live Ansible validation / Prometheus patch status | James |
 
 ## Notes
-- 
+- Proxmox package-stack upgrades remain controlled maintenance even though Debian security updates are automated.
+- Automatic reboots are disabled by policy.
