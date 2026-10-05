@@ -1,0 +1,104 @@
+#!/usr/bin/env python3
+import json
+import os
+import subprocess
+import time
+from pathlib import Path
+
+HOST = "{{ inventory_hostname }}"
+IP = "{{ ansible_default_ipv4.address | default(ansible_host | default('unknown')) }}"
+STATUS_DIR = Path("{{ automated_patching_status_dir }}")
+STATUS_FILE = STATUS_DIR / "status.json"
+METRICS_DIR = Path("{{ automated_patching_textfile_dir }}")
+METRICS_FILE = METRICS_DIR / "homelab_patching.prom"
+
+
+def run(argv):
+    return subprocess.run(argv, text=True, stdout=subprocess.PIPE, stderr=subprocess.DEVNULL).stdout.strip()
+
+
+def enabled(unit):
+    return run(["systemctl", "is-enabled", unit]) == "enabled"
+
+
+def active(unit):
+    return run(["systemctl", "is-active", unit]) == "active"
+
+
+def esc(value):
+    return str(value).replace("\\", "\\\\").replace('"', '\\"').replace("\n", " ")
+
+
+def main():
+    STATUS_DIR.mkdir(parents=True, exist_ok=True)
+    METRICS_DIR.mkdir(parents=True, exist_ok=True)
+
+    upgradable = run(["bash", "-lc", "apt list --upgradable 2>/dev/null | sed 1d"])
+    lines = [line for line in upgradable.splitlines() if line.strip()]
+    pending = len(lines)
+    security = sum(1 for line in lines if "-security" in line or "security" in line.lower())
+    reboot_required = Path("/var/run/reboot-required").exists()
+    uu_installed = subprocess.run(
+        ["dpkg-query", "-W", "-f=${Status}", "unattended-upgrades"],
+        stdout=subprocess.PIPE,
+        stderr=subprocess.DEVNULL,
+        text=True,
+    ).returncode == 0
+
+    apt_history = Path("/var/log/apt/history.log")
+    last_apt_transaction = int(apt_history.stat().st_mtime) if apt_history.exists() else 0
+    assessed = int(time.time())
+
+    payload = {
+        "schema_version": 1,
+        "host": HOST,
+        "ip": IP,
+        "assessed_at": assessed,
+        "policy": "security-only" if uu_installed else "not-managed",
+        "automatic_reboot": False,
+        "pending_updates": pending,
+        "security_updates_pending": security,
+        "reboot_required": reboot_required,
+        "unattended_upgrades_installed": uu_installed,
+        "apt_daily_timer_enabled": enabled("apt-daily.timer"),
+        "apt_daily_timer_active": active("apt-daily.timer"),
+        "apt_daily_upgrade_timer_enabled": enabled("apt-daily-upgrade.timer"),
+        "apt_daily_upgrade_timer_active": active("apt-daily-upgrade.timer"),
+        "last_apt_transaction_epoch": last_apt_transaction,
+    }
+
+    tmp = STATUS_FILE.with_suffix(".json.tmp")
+    tmp.write_text(json.dumps(payload, indent=2, sort_keys=True) + "\n")
+    os.replace(tmp, STATUS_FILE)
+
+    labels = f'host="{esc(HOST)}",ip="{esc(IP)}"'
+    metrics = [
+        "# HELP homelab_patch_pending_updates Number of APT packages currently upgradable.",
+        "# TYPE homelab_patch_pending_updates gauge",
+        f"homelab_patch_pending_updates{{{labels}}} {pending}",
+        "# HELP homelab_patch_security_updates_pending Number of pending packages sourced from security repositories.",
+        "# TYPE homelab_patch_security_updates_pending gauge",
+        f"homelab_patch_security_updates_pending{{{labels}}} {security}",
+        "# HELP homelab_patch_reboot_required Whether /var/run/reboot-required exists.",
+        "# TYPE homelab_patch_reboot_required gauge",
+        f"homelab_patch_reboot_required{{{labels}}} {1 if reboot_required else 0}",
+        "# HELP homelab_patch_unattended_upgrades_installed Whether unattended-upgrades is installed.",
+        "# TYPE homelab_patch_unattended_upgrades_installed gauge",
+        f"homelab_patch_unattended_upgrades_installed{{{labels}}} {1 if uu_installed else 0}",
+        "# HELP homelab_patch_automatic_reboot Whether automated patching permits automatic reboot.",
+        "# TYPE homelab_patch_automatic_reboot gauge",
+        f"homelab_patch_automatic_reboot{{{labels}}} 0",
+        "# HELP homelab_patch_status_timestamp_seconds Unix time when patch status was assessed.",
+        "# TYPE homelab_patch_status_timestamp_seconds gauge",
+        f"homelab_patch_status_timestamp_seconds{{{labels}}} {assessed}",
+        "# HELP homelab_patch_last_apt_transaction_timestamp_seconds Mtime of the current APT history log.",
+        "# TYPE homelab_patch_last_apt_transaction_timestamp_seconds gauge",
+        f"homelab_patch_last_apt_transaction_timestamp_seconds{{{labels}}} {last_apt_transaction}",
+    ]
+    tmp_metrics = METRICS_FILE.with_suffix(".prom.tmp")
+    tmp_metrics.write_text("\n".join(metrics) + "\n")
+    os.replace(tmp_metrics, METRICS_FILE)
+
+
+if __name__ == "__main__":
+    main()
