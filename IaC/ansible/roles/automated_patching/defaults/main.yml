@@ -8,3 +8,10 @@ automated_patching_remove_unused_kernel_packages: true
 automated_patching_remove_new_unused_dependencies: true
 automated_patching_remove_unused_dependencies: true
 automated_patching_syslog_enable: true
+
+automated_patching_status_dir: /var/lib/homelab-patching
+automated_patching_textfile_dir: /var/lib/prometheus/node-exporter
+automated_patching_status_script: /usr/local/sbin/homelab-patch-status
+automated_patching_status_interval: 1h
+automated_patching_status_randomized_delay_seconds: 300
+automated_patching_publish_status: true
