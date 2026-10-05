@@ -125,12 +125,12 @@ Raspberry Pi 3 administration host running authoritative Debian GNU/Linux 13 (tr
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-05T19:27:00+01:00`
-- Pending updates: **13**
+- Last assessed: `2026-10-05T20:00:42+01:00`
+- Pending updates: **1**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-05T08:50:24+01:00`
+- Last APT transaction activity: `2026-10-05T19:35:56+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
