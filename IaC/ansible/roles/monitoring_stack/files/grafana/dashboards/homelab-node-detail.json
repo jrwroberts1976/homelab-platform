@@ -11,7 +11,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -47,7 +47,32 @@
   "annotations": {
     "list": []
   },
-  "links": [],
+  "links": [
+    {
+      "title": "Home",
+      "type": "link",
+      "url": "/d/homelab-operations",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Hosts",
+      "type": "link",
+      "url": "/d/homelab-linux-estate",
+      "keepTime": true,
+      "includeVars": true,
+      "targetBlank": false
+    },
+    {
+      "title": "Patching",
+      "type": "link",
+      "url": "/d/homelab-patching",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    }
+  ],
   "panels": [
     {
       "id": 1,
@@ -226,7 +251,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_reboot_required{target_name=\"$host\"}",
+          "expr": "homelab_patch_reboot_required{target_name=\"$host\"}",
           "instant": true,
           "range": false
         }
@@ -631,7 +656,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_updates_available{target_name=\"$host\"}",
+          "expr": "homelab_patch_pending_updates{target_name=\"$host\"}",
           "instant": true,
           "range": false
         }
@@ -674,7 +699,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_security_updates_available{target_name=\"$host\"}",
+          "expr": "homelab_patch_security_updates_pending{target_name=\"$host\"}",
           "instant": true,
           "range": false
         }
@@ -717,7 +742,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "time() - homelab_patch_last_success_timestamp_seconds{target_name=\"$host\"}",
+          "expr": "time() - homelab_patch_status_timestamp_seconds{target_name=\"$host\"}",
           "instant": true,
           "range": false
         }
@@ -746,7 +771,7 @@
     {
       "id": 16,
       "type": "stat",
-      "title": "Unattended Upgrades Enabled",
+      "title": "Unattended Upgrades Installed",
       "gridPos": {
         "x": 16,
         "y": 37,
@@ -760,7 +785,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_unattended_upgrades_enabled{target_name=\"$host\"}",
+          "expr": "homelab_patch_unattended_upgrades_installed{target_name=\"$host\"}",
           "instant": true,
           "range": false
         }
@@ -784,12 +809,13 @@
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto"
-      }
+      },
+      "description": "1 means unattended-upgrades is installed on the selected host. No data means patch telemetry is missing."
     },
     {
       "id": 17,
       "type": "stat",
-      "title": "Unattended Upgrades Active",
+      "title": "Automatic Reboots Enabled",
       "gridPos": {
         "x": 20,
         "y": 37,
@@ -803,7 +829,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_unattended_upgrades_active{target_name=\"$host\"}",
+          "expr": "homelab_patch_automatic_reboot{target_name=\"$host\"}",
           "instant": true,
           "range": false
         }
@@ -827,7 +853,8 @@
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto"
-      }
+      },
+      "description": "Policy guardrail: expected value is 0 because automatic reboots are deliberately disabled."
     },
     {
       "id": 18,
