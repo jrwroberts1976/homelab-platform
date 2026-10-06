@@ -1,10 +1,11 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # PROXMOX — Current Hardware Record
 
-Original audit source: TestServer jump-box read-only audit of `192.168.2.70` on 6 September 2026.  
-RAM update validated: 11 September 2026.  
-Current storage/backup/network review: 12 September 2026.
+**Status:** ACTIVE — `jameshouse-pve` CLUSTER NODE 1  
+**Current-state review:** 6 October 2026  
+**Identity/address authority:** `IaC/inventory/estate.json`
 
-The original TestServer audit provenance is retained as historical evidence; TestServer itself is now a retired identity.
+Earlier September hardware audits remain useful dated evidence. This page records the current operational state.
 
 ## Identity
 
@@ -14,10 +15,13 @@ The original TestServer audit provenance is retained as historical evidence; Tes
 | Address | `192.168.2.70/24` |
 | Hardware | HP ProDesk 400 G4 DM |
 | OS | Debian GNU/Linux 13 (trixie) |
-| Proxmox | VE 9.2.11 / pve-manager 9.2.11 |
-| Kernel | 7.0.14-15-pve |
+| Proxmox | pve-manager `9.2.21` |
+| Running kernel | `7.0.14-20-pve` |
 | Architecture | x86-64 |
-| Cluster | Standalone by design |
+| Cluster | `jameshouse-pve`, node ID 1 |
+| QDevice | external QNetd on `admin-01` |
+
+Latest PVE version/kernel evidence is from the controlled 5 October 2026 maintenance cycle.
 
 ## Compute
 
@@ -30,169 +34,124 @@ The original TestServer audit provenance is retained as historical evidence; Tes
 | RAM visible to Proxmox | approximately 15.47 GiB |
 | Swap | approximately 7.6 GiB |
 
-The 11 September memory upgrade doubled the host from approximately 8 GB to 16 GB and cleared the previous capacity gate for the current guest set.
-
 ## Storage
 
 ### NVMe system disk
 
 - WDC PC SN520 256 GB-class NVMe;
 - Proxmox root on LVM;
-- root filesystem approximately 68 GiB;
-- `local-lvm` approximately 141.5 GiB thin pool;
-- original audit showed no NVMe critical warning, low lifetime usage and zero media errors.
+- `local-lvm` used for node-local guest storage.
 
 ### SATA VM SSD
 
 - Kingston SA400S37 480 GB-class SATA SSD;
-- `vm-ssd` approximately 424.6 GiB thin pool;
-- SMART health passed in the original audit.
+- `vm-ssd` provides additional node-local VM storage.
 
 ### External 4 TB WD USB disk
 
-Device:
+The WD 4 TB USB disk remains **POC/risk storage only**. It is not the `cloud-01` production data disk and is not an approved sole backup copy. Historical health concerns remain documented in earlier hardware evidence.
+
+## Cluster networking
+
+Management:
 
 ```text
-WDC WD40EZRX-00SPEB0
-~4 TB / 3.64 TiB
+192.168.2.70/24
+vmbr0 / normal LAN
+gateway 192.168.2.1
 ```
 
-Current role: **blank/unallocated/unmounted POC/risk storage only**.
+Corosync:
 
-It is **not**:
+```text
+link0: 10.255.255.1/30 — preferred direct point-to-point interconnect
+link1: 192.168.2.70    — management-LAN fallback
+```
 
-- the `cloud-01` production data disk;
-- a mounted backup repository;
-- an approved sole copy of important data.
+`admin-01` supplies the external QDevice vote. Validated steady state is two cluster nodes, three total votes, quorum two and QDevice present.
 
-Current health evidence:
-
-- SMART overall: PASS;
-- reallocated sectors: 0;
-- current pending sectors: 0;
-- offline uncorrectable sectors: 2;
-- UDMA CRC errors: 10;
-- recent extended self-test recorded as aborted by host before completion;
-- historical USB/UAS reset events remain part of the risk assessment.
-
-The disk may be useful for controlled testing, but production use requires a separate reviewed storage decision.
-
-## Network
-
-- Realtek RTL8111/8168-family 1 GbE NIC;
-- management/guest bridge through `vmbr0`;
-- address `192.168.2.70/24`;
-- default gateway `192.168.2.1`;
-- untagged VLAN 1 in the current design;
-- HP ProCurve switch port **21** validated as the current physical uplink;
-- host MAC `80:E8:2C:1C:55:D2`;
-- switch link observed at 1 Gbps full duplex.
-
-Guest bridge MACs are also learned on port 21.
+The actual node hostname is `PROXMOX`; “Proxmox-1” is only a human-friendly diagram label.
 
 ## Current guests
 
-Validated current placement:
-
-| ID | Guest | Type | Status |
+| ID | Guest | Type | State |
 |---:|---|---|---|
 | 100 | `dns-02` | LXC | running |
 | 102 | `mail-relay-01` | LXC | running |
+| 104 | `komodo-01` | LXC | running |
+| 105 | `zabbix-01` | LXC | running |
 | 200 | `cloud-01` | VM | running |
 | 201 | `sensor-01` | VM | running |
-| 9000 | Debian template | VM template | stopped |
+| 204 | `home-01` | VM | running / protected |
+| 9000 | Debian cloud template | VM template | stopped |
 | 9001 | Debian/QGA template | VM template | stopped |
 
-The former Zabbix workload from the original audit is no longer part of the current guest inventory.
+Production guest disks remain node-local. Cluster membership does not by itself provide automatic guest-data HA after loss of this node or its storage.
 
 ## Host services
 
-Current validated platform services include:
+Current platform services include:
 
-- Proxmox management services healthy;
-- Node Exporter active on TCP/9100;
-- Chrony active as the primary LAN NTP endpoint;
-- Docker not installed on the hypervisor.
+- Proxmox cluster services / Corosync;
+- `corosync-qdevice`;
+- Chrony / NTP (`ntp-01.jameshouse`);
+- Node Exporter;
+- Grafana Alloy;
+- Zabbix Agent 2.
 
-Docker should remain off the Proxmox host itself. Application containers belong inside explicitly provisioned guests.
-
-## Time service
-
-`PROXMOX` provides:
-
-```text
-ntp-01.jameshouse -> 192.168.2.70
-```
-
-Direct NTP validation from `admin-01` succeeded on 12 September 2026.
+Docker remains intentionally absent from the hypervisor. Application containers belong inside managed guests.
 
 ## Sensor relationship
 
-`sensor-01` VM 201 is live but has no dedicated capture NIC yet.
+`sensor-01` VM201 is operational with its dedicated passive capture interface. The HP ProCurve SPAN configuration mirrors ports 1–23 to switch port 24. The capture adapter is not a management or Corosync interface.
 
-Future design:
-
-- dedicated USB Ethernet adapter attached to `PROXMOX`;
-- direct USB passthrough into `sensor-01`;
-- switch port 24 repurposed as the SPAN destination after the physical network is repatched;
-- capture interface has no management IP/route.
-
-Do not add the future capture adapter to `vmbr0`.
+Older notes describing the capture NIC or SPAN change as future work are superseded.
 
 ## Backup posture
 
-The 12 September audit revalidated that this node has **zero scheduled Proxmox guest backup jobs**.
-
-There is no active PBS server in the estate and the 4 TB WD disk is not an active backup repository.
-
-Backup/recovery remains one of the largest platform gaps. See:
+Primary node backup target:
 
 ```text
-docs/architecture/BACKUP-STRATEGY.md
+media-01:/srv/backup/pve-proxmox
+storage: media-backup-proxmox
+job: homelab-nightly-proxmox
+schedule: 02:15
+mode: snapshot
+compression: zstd
+retention: keep-last=3
+guests: 100,102,104,105,200,201,204
 ```
 
-## Monitoring
+The backup job is reconciled through IaC. CT105 unattended evidence has been observed; CT104 and VM204 first-unattended proof remain explicit evidence items in the current record. Manual/integrity evidence exists for additional guests as documented in the backup strategy.
 
-Current monitoring includes:
+A representative QEMU restore, application-consistent `cloud-01` recovery and an independent second copy remain open recovery goals.
 
-- ICMP probe;
-- Proxmox HTTPS probe on TCP/8006;
-- Node Exporter on TCP/9100.
+## Monitoring and patching
 
-These were healthy during the latest monitoring audit.
+The node is covered by Prometheus/Node Exporter, Grafana Alloy, Zabbix Agent 2 and centralized patch telemetry.
 
-## Capacity assessment
+After the 5 October maintenance cycle:
 
-### Strong points
+- pending OS updates: 0;
+- security updates pending: 0;
+- reboot required: no;
+- automatic reboot: disabled.
 
-- six physical CPU cores with VT-x;
-- 16 GB installed RAM;
-- internal NVMe plus large SATA VM thin pool;
-- current guest estate running successfully;
-- clean hypervisor role with Docker absent;
-- current monitoring and NTP service healthy.
+The controlled maintenance validation also confirmed cluster quorum/QDevice health and expected guest state.
 
-### Constraints / risks
+## Current risks / boundaries
 
-- 16 GB is sufficient for the current estate but finite;
-- `cloud-01` and future sensor capture/logging should remain capacity-monitored;
-- single 1 GbE production NIC means no host network HA;
-- external 4 TB USB disk is risk/POC-only;
-- no scheduled guest backup coverage or proven restore path;
-- future capture NIC work must be isolated from management networking.
-
-## Current priorities
-
-1. preserve hypervisor stability and keep Docker off-host;
-2. implement and restore-test backup/recovery;
-3. monitor capacity as `cloud-01` and `sensor-01` grow;
-4. install/validate the dedicated sensor USB capture NIC only when the physical repatch/SPAN change is ready;
-5. retain the 4 TB WD disk as POC/risk storage unless a later review explicitly approves another role.
+- node-local guest storage means no automatic storage HA;
+- single main production LAN uplink remains a physical availability constraint;
+- the 4 TB USB disk remains POC/risk storage;
+- cluster link failover and controlled single-node quorum behaviour still deserve explicit test evidence;
+- keep Docker/application workloads off the hypervisor.
 
 ## Status
 
-Hardware audit: **CURRENT**  
-RAM remediation: **COMPLETE — 16 GB**  
-Current workload capacity gate: **CLEARED**  
-Scheduled Proxmox backups: **NONE**  
-4 TB WD production role: **NONE / POC-RISK ONLY**
+Hardware record: **CURRENT — 6 OCTOBER 2026**  
+Cluster role: **ACTIVE — NODE 1**  
+PVE: **9.2.21**  
+Kernel: **7.0.14-20-pve**  
+Scheduled Proxmox backups: **ACTIVE**  
+Sensor SPAN path: **OPERATIONAL**
