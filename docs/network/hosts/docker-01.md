@@ -100,7 +100,7 @@ docker-01 is a physical Raspberry Pi 4 BirdNET-Go Docker host running authoritat
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-06T18:29:38+01:00`
+- Last assessed: `2026-10-06T19:31:29+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
