@@ -190,7 +190,7 @@ No dedicated VPN VM is deployed.
 
 ### BirdNET-Go
 
-`docker-01` is deliberately a single-purpose BirdNET-Go Docker host. Do not rebuild the retired TestServer container estate on it.
+`docker-01` is deliberately a single-purpose BirdNET-Go Docker host. Do not rebuild the retired TestServer container estate on it. <!-- historical -->
 
 ### Media
 
