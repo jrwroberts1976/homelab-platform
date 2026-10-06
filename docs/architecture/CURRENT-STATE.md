@@ -50,11 +50,11 @@ The normal Ansible-managed Linux baseline is **15 hosts**. `home-01` is active b
 
 These names are historical only and must not be used as active deployment, monitoring or recovery targets:
 
-- `TestServer` -> hardware now `docker-01`;
-- `DietPi` -> hardware now `admin-01`;
-- `ids-01` -> decommissioned;
-- former `k3s-node-01` identity -> hardware now `media-01`;
-- former `dns-02` address `192.168.2.242` -> retired.
+- `TestServer` -> hardware now `docker-01`; <!-- historical -->
+- `DietPi` -> hardware now `admin-01`; <!-- historical -->
+- `ids-01` -> decommissioned; <!-- historical -->
+- former `k3s-node-01` identity -> hardware now `media-01`; <!-- historical -->
+- former `dns-02` address `192.168.2.242` -> retired. <!-- historical -->
 
 ## Proxmox platform
 
