@@ -125,7 +125,7 @@ Raspberry Pi 3 administration host running authoritative Debian GNU/Linux 13 (tr
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-06T12:43:00+01:00`
+- Last assessed: `2026-10-06T13:44:00+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
