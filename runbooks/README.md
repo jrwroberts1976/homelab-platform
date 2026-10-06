@@ -17,7 +17,7 @@ admin-01
 
 `admin-01` also supplies Corosync QNetd for the production Proxmox cluster.
 
-Retired identities `TestServer`, `DietPi`, `ids-01` and the former `k3s-node-01` identity are excluded from active runbook scope. Historical documents may retain those names as evidence only.
+Retired identities `TestServer`, `DietPi`, `ids-01` and the former `k3s-node-01` identity are excluded from active runbook scope. Historical documents may retain those names as evidence only. <!-- historical -->
 
 ## Current runbooks
 
@@ -42,7 +42,7 @@ Retired identities `TestServer`, `DietPi`, `ids-01` and the former `k3s-node-01`
 ## Current-state distinctions
 
 - `192.168.2.48` is `admin-01`; it is not a DNS resolver.
-- `192.168.2.220` is `docker-01`; the retired TestServer identity is historical only.
+- `192.168.2.220` is `docker-01`; the retired TestServer identity is historical only. <!-- historical -->
 - `PROXMOX .70` and `Proxmox-2 .71` form `jameshouse-pve`.
 - Corosync link0 is the direct `10.255.255.0/30` interconnect; management LAN is fallback link1.
 - `admin-01` supplies the QDevice/QNetd third vote.
