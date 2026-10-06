@@ -1,54 +1,54 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Homelab Monitoring Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** operational metrics, alerting and logging platform  
+**Status:** OPERATIONAL  
 **Primary host:** `monitor-01.jameshouse`  
 **IPv4:** `192.168.2.52`  
-**Placement:** VM 200 on `Proxmox-2` / `192.168.2.71`  
-**Last current-state review:** 14 September 2026
+**Placement:** VM202 on `Proxmox-2` (`192.168.2.71`)  
+**Last current-state review:** 6 October 2026
 
 ## Purpose
 
-`monitor-01` is the central monitoring and logging platform for the homelab.
+`monitor-01` is the central monitoring, logging, management-report and active network-discovery platform.
 
 Current core services:
 
-- Prometheus
-- Grafana
-- Alertmanager
-- Blackbox Exporter
-- Loki
-- Alloy
-- rsyslog receiver for ASUS router logs
-
-The earlier 12 September statement that Loki and Alloy were not deployed is superseded.
+- Prometheus;
+- Grafana;
+- Alertmanager;
+- Blackbox Exporter;
+- Loki;
+- native Grafana Alloy;
+- rsyslog receiver for ASUS router logs;
+- Network Hosts discovery/enrichment/OS-evidence/guest-refresh workflows;
+- management-report evidence collection/rendering/AI-assisted summary/mail workflow.
 
 ## VM state
-
-Current VM:
 
 ```text
 monitor-01.jameshouse
 192.168.2.52
-VM ID 200
-Proxmox-2
-Debian 13
+VM ID 202
+host: Proxmox-2
+OS: Debian 13
 ```
 
-The VM is intended to be reproducible through Git/IaC. Persistent monitoring data is useful, but configuration/dashboard authority should remain in Git wherever practical.
+VM200 references are obsolete; VM200 is `cloud-01` on `PROXMOX`.
 
-## Application versions
+## Core application versions
 
-Direct validation on 14 September 2026 found:
+Current production monitoring stack versions documented during Step 10 validation:
 
-| Service | Image/version |
+| Service | Version |
 |---|---|
-| Grafana | `grafana/grafana:13.2.1` |
-| Prometheus | `prom/prometheus:v3.14.0` |
-| Alertmanager | `prom/alertmanager:v0.34.0` |
-| Blackbox Exporter | `prom/blackbox-exporter:v0.28.0` |
-| Loki | `grafana/loki:3.7.7` |
-| Alloy | `1.19.2` native package/service |
+| Grafana | 13.2.1 |
+| Prometheus | 3.14.0 |
+| Alertmanager | 0.34.0 |
+| Blackbox Exporter | 0.28.0 |
+| Loki | 3.7.7 |
+
+Alloy was updated to 1.20.1 on `monitor-01` during the 5 October maintenance cycle. Version observations are dated operational evidence, not permanent policy pins unless the associated IaC explicitly pins them.
 
 Compose path:
 
@@ -58,17 +58,9 @@ Compose path:
 
 ## Current health
 
-Direct 14 September validation showed all five containers running:
+The production monitoring stack is live and was revalidated during the Step 10 deployment/acceptance work.
 
-```text
-monitoring-loki-1
-monitoring-grafana-1
-monitoring-prometheus-1
-monitoring-alertmanager-1
-monitoring-blackbox-1
-```
-
-Listeners were present on:
+Expected listeners include:
 
 ```text
 TCP/3000   Grafana
@@ -76,149 +68,138 @@ TCP/3100   Loki
 TCP/9090   Prometheus
 TCP/9093   Alertmanager
 TCP/9115   Blackbox Exporter
-TCP/12345  Alloy local UI/API on loopback
+TCP/12345  Alloy local UI/API
+UDP/5514   ASUS router syslog receiver
 ```
 
-Local health checks returned HTTP 200 for:
+Health/readiness checks are included in the Ansible monitoring role. The final Step 10 deployment completed with zero failures, and the repeat deployment was idempotent:
 
 ```text
-http://127.0.0.1:9090/-/healthy
-http://127.0.0.1:3000/api/health
-http://127.0.0.1:9093/-/healthy
-http://127.0.0.1:3100/ready
+changed=0
+unreachable=0
+failed=0
 ```
 
-The compact audit also reported zero failed systemd units on `monitor-01`.
+## Monitoring coverage
 
-## Metrics coverage
+The normal managed Linux baseline contains 15 reporting systems.
 
-Prometheus remains the authority for host/service metrics and Blackbox probes.
+Prometheus/Blackbox coverage includes host metrics and approved service/network probes. Zabbix Agent 2 provides the second host/service monitoring plane across the same 15 managed Linux systems.
 
-Validated target families include:
+Missing telemetry must not be interpreted as healthy state. Dashboards and reports should distinguish `no data` from a verified zero/healthy value.
 
-- DNS TCP probes;
-- ICMP probes;
-- Proxmox HTTPS probes;
-- Node Exporter across the managed estate;
-- service-specific metrics where deliberately added.
+## Grafana production dashboards
 
-The exact target count is operational data and may change as the estate evolves. Do not preserve an old target count in documentation as if it were a design constraint.
+Step 10 estate-wide Grafana work is complete. Current navigation includes:
+
+- Homelab Home / operations overview;
+- Homelab Hosts;
+- Homelab Patch & Reboot Status;
+- Node Detail;
+- Network Hosts and generated per-device dashboards.
+
+Grafana production dashboards are provisioned from Git and are not intended to be authoritative through ad-hoc UI edits.
+
+## Patch telemetry
+
+Final validated estate state after the 5 October controlled maintenance cycle:
+
+```text
+reporting hosts:             15
+pending updates:             0
+security updates pending:    0
+reboots required:            0
+unattended-upgrades present: 15
+automatic reboots enabled:   0
+```
+
+The current exporter/dashboard metric namespace is `homelab_patch_*`.
 
 ## Logging architecture
 
-Loki is now part of the monitoring Compose stack and Alloy provides the host/log forwarding layer.
-
-Current high-level path:
+High-level path:
 
 ```text
 managed hosts / service logs
         |
         v
-Alloy
+Grafana Alloy
         |
         v
 Loki on monitor-01
         |
         v
-Grafana
+Grafana / management evidence
 ```
 
-Alloy 1.19.2 is deployed across the current managed baseline, including both Proxmox nodes, DNS resolvers, cloud, mail relay, media, BirdNET, edge and administration hosts.
+Alloy is deployed across the managed estate according to inventory scope. Dedicated pipelines include router syslog, network-security evidence/logs and privacy-filtered Pi-hole event logging where configured.
 
-`admin-01` was reconciled during the 14 September audit after being identified as the one baseline host without Alloy.
+## Router syslog
 
-## Router syslog relationship
-
-`monitor-01` receives ASUS router remote syslog on UDP/5514 through rsyslog and stores the dedicated local file at:
+ASUS router remote syslog is received on UDP/5514 and retained locally at:
 
 ```text
 /var/log/homelab/router/rt-ac86u.log
 ```
 
-Alloy now ships that file to the local Loki service at:
+Alloy forwards the approved stream to Loki. Local retention remains useful as a first-receipt/recovery layer.
 
-```text
-http://127.0.0.1:3100/loki/api/v1/push
-```
+## Network discovery ownership
 
-Local file retention/rotation remains useful resilience and is not replaced by Loki.
+Since the 27 September 2026 cutover, `monitor-01` is the **sole production owner** of active network discovery/identification.
 
-See `ROUTER-SYSLOG-SERVICE.md` for the receiver and log-path details.
+Current responsibilities include:
+
+- collector;
+- selective enricher;
+- OS-evidence publisher;
+- trusted Proxmox guest refresh;
+- targeted deep profiling;
+- first-seen notifier;
+- dashboard/host-page publication;
+- bounded DNS evidence correlation.
+
+`Proxmox-2` retains source rollback/history evidence with its discovery timers disabled/inactive.
 
 ## Failure-domain placement
 
-Monitoring runs on `Proxmox-2` so loss of the primary `PROXMOX` node does not also remove central visibility.
+`monitor-01` runs on `Proxmox-2`, one member of the `jameshouse-pve` cluster. The hypervisor is **not standalone**.
 
-`Proxmox-2` remains a standalone Proxmox node by design.
+Monitoring placement on node 2 reduces coupling with workloads on `PROXMOX`, but node-local VM storage still means cluster membership alone does not provide automatic monitoring VM storage HA.
 
 ## IaC ownership
 
-Current ownership model:
-
-- Terraform/OpenTofu: monitoring VM definition;
-- Ansible: Debian baseline, Docker/Compose, Alloy, service files, persistent directories and health checks;
-- Compose: Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki;
-- Prometheus configuration: Git-managed scrape/probe targets;
-- Grafana provisioning: Git-managed datasource/dashboards where practical;
-- Loki configuration: Git-managed;
-- Alloy configuration: Git-managed through the relevant host/service roles;
-- Alertmanager configuration: Git-managed routing with protected secrets outside Git.
-
-Primary paths include:
+Primary ownership includes:
 
 ```text
 IaC/terraform/proxmox/monitor-01/
 IaC/ansible/playbooks/monitoring.yml
-IaC/ansible/playbooks/monitor-router-alloy.yml
 IaC/ansible/roles/monitoring_stack/
-IaC/ansible/roles/monitor_router_alloy/
-IaC/scripts/deploy-monitoring-platform.sh
+IaC/monitoring/
 ```
 
-Manual GUI edits are not authoritative unless reconciled back into Git.
-
-## Controller
-
-Normal deployment/reconciliation is launched from:
-
-```text
-admin-01
-192.168.2.48
-~/projects/homelab-platform
-```
-
-The retired `TestServer` identity at `.220` must not be used as the controller. `.220` is `docker-01`.
+Normal reconciliation is launched from `admin-01`. Manual Grafana/service changes are not authoritative until reconciled into Git.
 
 ## Alerting policy
 
-Alerting should remain actionable rather than comprehensive for its own sake.
+Alerts should be introduced only when the signal is stable, operator action is clear, planned maintenance is considered and duplicate/noisy alerts are avoided.
 
-New rules should be introduced only when:
+Log ingestion does not imply that every event should alert.
 
-- the underlying metric/log signal is stable;
-- the alert has a clear operator action;
-- planned maintenance/outages are considered;
-- noisy duplicates are avoided.
+## Backup / recovery
 
-Log ingestion does not imply that every log message should generate an alert.
+`monitor-01` VM202 is included in the `Proxmox-2` nightly backup selection and unattended backup evidence has been observed.
+
+Configuration/dashboard authority remains in Git wherever practical. A representative QEMU restore remains part of the wider recovery-depth backlog.
 
 ## Current follow-up work
 
-Useful next work includes:
+- cluster/QDevice/link-health telemetry where it adds actionable value;
+- `home-01` external availability monitoring;
+- useful service-specific coverage without duplicating existing signals;
+- ongoing Loki label/cardinality/privacy review;
+- recovery-depth testing as part of the wider backup programme.
 
-- continue enriched Network Hosts dashboards and device-detail views;
-- build the planned Web Platform / Analytics dashboard combining Cloudflare, Umami and origin health;
-- add service-specific metrics/log views only where operationally useful;
-- continue backup/recovery work for persistent monitoring state where justified;
-- periodically validate Loki ingestion and label cardinality.
+## Definition of operational state
 
-## Definition of current operational state
-
-The monitoring platform is operational because:
-
-- `monitor-01` exists at the intended address/placement;
-- Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki are running;
-- Prometheus, Grafana, Alertmanager and Loki health endpoints returned HTTP 200 during the 14 September validation;
-- Alloy is active on `monitor-01` and across the managed baseline;
-- router syslog has a local rsyslog path and an active Alloy/Loki ingestion path;
-- zero failed systemd units were observed on `monitor-01` during the compact audit.
+The service is considered operational because the monitoring/logging stack is healthy, 15/15 managed Linux hosts report, patch/dashboard telemetry is current, network discovery is owned by `monitor-01`, router/Loki pipelines are active, and the Git-managed deployment is idempotent.
