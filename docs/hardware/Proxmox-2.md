@@ -1,29 +1,29 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Proxmox-2 — Current Hardware Record
 
-> **Status: ACTIVE — STANDALONE PROXMOX NODE**  
-> Current-state review: 12 September 2026
+**Status:** ACTIVE — `jameshouse-pve` CLUSTER NODE 2  
+**Current-state review:** 6 October 2026  
+**Identity/address authority:** `IaC/inventory/estate.json`
 
-This page records the current physical and Proxmox-visible state of `Proxmox-2`.
-
-The earlier dated audit at `PVE2-HARDWARE-AUDIT-2026-09-08.md` is retained as historical evidence of the host before its storage/workload configuration was completed. Do not rewrite that dated audit to match today's state.
+Earlier September hardware audits remain useful dated evidence. This page records the current operational state.
 
 ## Identity
 
 | Item | Current state |
 |---|---|
 | Hostname | `Proxmox-2` |
-| FQDN | `Proxmox-2.jameshouse` |
 | Address | `192.168.2.71/24` |
 | Manufacturer | ASUSTeK COMPUTER INC. |
 | Model | ZenBook UX482EAR |
 | Chassis | Laptop |
 | OS | Debian GNU/Linux 13 (trixie) |
-| Proxmox | VE 9.2.2 |
-| Kernel | 7.0.2-6-pve |
+| Proxmox | pve-manager `9.2.21` |
+| Running kernel | `7.0.14-20-pve` |
 | Architecture | x86_64 |
-| Cluster state | Standalone by design |
+| Cluster | `jameshouse-pve`, node ID 2 |
+| QDevice | external QNetd on `admin-01` |
 
-The earlier `pve2` name remains visible in historical evidence and is accepted as a compatibility selector by some deployment tooling, but the current human-facing host identity is `Proxmox-2`.
+Latest PVE version/kernel evidence is from the controlled 5 October 2026 maintenance cycle.
 
 ## Compute
 
@@ -35,108 +35,112 @@ The earlier `pve2` name remains visible in historical evidence and is accepted a
 | RAM | approximately 15 GiB usable |
 | Swap | 8 GiB |
 
-Current capacity is adequate for the existing guest set. Continue to monitor memory/IO as monitoring and edge workloads evolve.
-
 ## Storage
 
 Physical system device:
 
 - SK hynix HFM512GD3JX013N NVMe;
-- approximately 476.9 GiB visible capacity.
+- `local` and `local-lvm` active;
+- production guest disks remain node-local.
 
-Current Proxmox storage objects validated on 12 September:
+Historical pre-cluster rollback volumes are retained only where separately documented and are not active guest disks.
 
-| Storage | Approximate capacity | State |
-|---|---:|---|
-| `local` | ~98 GiB | active |
-| `local-lvm` | ~348.8 GiB | active |
+## Cluster networking
 
-The earlier 8 September audit recorded `local-lvm` as not yet registered. That was true at the time; the current state above supersedes it operationally.
+Management:
 
-## Network
+```text
+192.168.2.71/24
+normal LAN / Proxmox bridge
+```
 
-Primary management path:
+Corosync:
 
-- management address `192.168.2.71/24`;
-- bridge/LAN path through the host's wired Ethernet interface;
-- current switch mapping: HP ProCurve port 18;
-- physical MAC observed: `00:1A:9F:0C:30:3B`;
-- switch link observed at 1 Gbps full duplex.
+```text
+link0: 10.255.255.2/30 — preferred direct point-to-point interconnect
+link1: 192.168.2.71    — management-LAN fallback
+```
 
-Guest MAC addresses are learned behind the same switch port because the Proxmox bridge carries guest traffic.
+`admin-01` supplies the external QDevice vote. Validated steady state is two cluster nodes, three total votes, quorum two and QDevice present.
 
 ## Current guests
 
-Validated 12 September 2026:
-
 | Type | ID | Guest | State |
 |---|---:|---|---|
-| VM | 200 | `monitor-01` | running |
 | LXC | 101 | `dns-01` | running |
 | LXC | 103 | `edge-01` | running |
+| VM | 202 | `monitor-01` | running |
+| VM | 203 | `greenbone-01` | running / protected |
 
-### `monitor-01`
+`monitor-01` is VM202. The older VM200 reference is obsolete.
 
-Current VM allocation observed:
-
-- 6144 MiB RAM;
-- 80 GiB disk;
-- central Prometheus/Grafana/Alertmanager/Blackbox platform.
-
-### `dns-01`
-
-CT 101 provides Pi-hole + Unbound at `192.168.2.51`.
-
-### `edge-01`
-
-CT 103 exists at `192.168.2.56` as a reserved edge host. The Cloudflare Tunnel workload is not deployed; no `cloudflared` package/service/process was found during the estate audit.
+Production guest disks remain node-local. Cluster membership does not by itself provide automatic guest-data HA after loss of this node or its storage.
 
 ## Host services
 
-Validated current host services:
+Current platform services include:
 
-- Proxmox management services healthy;
-- Chrony active;
-- Node Exporter active on TCP/9100;
-- Alloy inactive;
-- zero failed systemd units.
+- Proxmox cluster services / Corosync;
+- `corosync-qdevice`;
+- Chrony / NTP (`ntp-02.jameshouse`);
+- Node Exporter;
+- Grafana Alloy;
+- Zabbix Agent 2.
 
-The host provides the secondary LAN NTP endpoint:
+Docker/application workloads should remain inside explicit guests rather than on the hypervisor.
 
-```text
-ntp-02.jameshouse -> 192.168.2.71
-```
+## Network-discovery relationship
 
-## Monitoring
+`Proxmox-2` is the **former** Network Host Collector source.
 
-Current monitoring includes:
+The production discovery/identification owner moved to `monitor-01` on 27 September 2026. The source-side collector/enricher/OS-evidence/guest-refresh discovery timers are disabled/inactive. Retained source files and protected snapshots are rollback/history evidence only.
 
-- ICMP probe;
-- Proxmox HTTPS probe on TCP/8006;
-- Node Exporter scrape on TCP/9100.
-
-All were healthy in the 12 September monitoring audit.
+Do not re-enable source scanning while `monitor-01` owns production discovery.
 
 ## Backup posture
 
-No scheduled Proxmox guest backup jobs were configured on this node during the 12 September audit.
+Primary node backup target:
 
-There is no PBS server on this host today.
+```text
+media-01:/srv/backup/pve-proxmox-2
+storage: media-backup-proxmox-2
+job: homelab-nightly-proxmox-2
+schedule: 03:15
+mode: snapshot
+compression: zstd
+retention: keep-last=3
+guests: 101,103,202,203
+```
 
-Backup/recovery therefore remains an explicit platform gap; see `docs/architecture/BACKUP-STRATEGY.md`.
+The backup job is reconciled through IaC. Unattended evidence has been observed for CT101, CT103, VM202 and VM203. VM203 also has manual snapshot/integrity proof and Proxmox protection enabled.
 
-## Role boundaries
+## Monitoring and patching
 
-`Proxmox-2` is a hypervisor/core-infrastructure host. Do not turn it into a general-purpose application/Docker server merely because spare resources are available.
+The node is covered by Prometheus/Node Exporter, Grafana Alloy, Zabbix Agent 2 and centralized patch telemetry.
 
-Application services should remain in explicitly managed guests.
+After the 5 October maintenance cycle:
+
+- pending OS updates: 0;
+- security updates pending: 0;
+- reboot required: no;
+- automatic reboot: disabled.
+
+The maintenance validation confirmed expected guest state, no failed systemd units, Alloy/Zabbix health and cluster quorum/QDevice health.
+
+## Current risks / boundaries
+
+- node-local guest storage means no automatic storage HA;
+- the laptop platform is a non-server chassis and should remain capacity/thermal monitored;
+- retained pre-cluster rollback volumes should be removed only after explicit backup/recovery confidence;
+- cluster link failover and controlled single-node quorum behaviour still deserve explicit test evidence;
+- former discovery state is rollback evidence, not an active service role.
 
 ## Status
 
-Hardware record: **CURRENT**  
-Standalone Proxmox role: **ACTIVE**  
-Current guest placement: **VALIDATED 12 SEPTEMBER 2026**  
-Node Exporter: **ACTIVE**  
-Chrony/NTP: **ACTIVE**  
-Alloy: **INACTIVE**  
-Scheduled PVE backups: **NONE**
+Hardware record: **CURRENT — 6 OCTOBER 2026**  
+Cluster role: **ACTIVE — NODE 2**  
+PVE: **9.2.21**  
+Kernel: **7.0.14-20-pve**  
+Grafana Alloy: **ACTIVE**  
+Scheduled Proxmox backups: **ACTIVE**  
+Network discovery: **FORMER SOURCE / TIMERS DISABLED**
