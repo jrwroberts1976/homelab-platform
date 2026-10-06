@@ -1,34 +1,37 @@
 # Migration Tracker
 
+**Status:** CORE MIGRATION PROGRAMME SUBSTANTIALLY COMPLETE  
+**Reviewed:** 6 October 2026
+
 This tracker records the controlled migration from the former consolidated/legacy homelab layout into the current `homelab-platform` operating model.
 
-**Network discovery migration is IN PROGRESS: read-only preflight and protected staging passed on 26 September; the single-owner cutover is NOT complete.** See the [verified preflight and gated staging plan](../operations/network-discovery-monitor01-migration.md).
+Detailed staging and cutover evidence remains in dated migration/audit documents. This page records the **current migration status**, not the intermediate state observed during earlier gates.
 
 ## Safety boundary
 
-- Do not delete a historical repository until its unique useful content has been identified and migrated or deliberately archived.
-- Do not retire a workload until persistence, secrets, monitoring and rollback/recovery requirements are understood.
-- Do not treat a retired hostname as a live target.
-- Do not retire backup data until replacement coverage and restore testing are proven.
+- Do not delete historical repositories until unique useful content has been identified and migrated or deliberately archived.
+- Do not retire workloads until persistence, secrets, monitoring and rollback/recovery requirements are understood.
+- Do not treat retired hostnames as live targets.
+- Do not retire backup/rollback evidence until replacement coverage and recovery confidence are explicit.
 - Preserve accepted production data when reconciling Terraform or Ansible state.
-- Treat the production `jameshouse-pve` cluster as current state; do not replay standalone-host procedures without an explicit disaster-recovery reason.
+- Treat the production `jameshouse-pve` cluster as current state; do not replay standalone-host procedures without an explicit recovery reason.
 
-## Current programme
+## Programme status
 
-| Phase | Status | Current position / exit criteria |
+| Phase | Status | Current position / remaining outcome |
 |---|---|---|
-| 1. Hardware inventory | SUBSTANTIALLY COMPLETE | Active compute estate identified; device-depth and physical network mapping remain lifecycle work |
-| 2. Workload inventory | COMPLETE FOR CORE ESTATE | Core DNS, cloud, monitoring, mail, sensor, edge, media and BirdNET placements are explicit |
-| 3. Target architecture | CORE PLACEMENT IMPLEMENTED | Remaining decisions focus on recovery depth, HA/storage, second-copy resilience and hardening |
-| 4. Public website migration | COMPLETE | Public site no longer depends on normal homelab hosting |
-| 5. Proxmox IaC / clustering | CLUSTER IMPLEMENTED | `jameshouse-pve`, dual Corosync links, QDevice and cluster-unique VMIDs are live; resilience testing remains follow-up work |
-| 6. Komodo / container operations | IN PROGRESS / REVIEW | Move routine Docker operations to the approved Komodo workflow and retire redundant paths only after proof |
-| 7. Workload migration | SUBSTANTIALLY COMPLETE | Former consolidated TestServer/ids-01 roles redistributed; remaining work is cleanup and recovery proof |
-| 8. Monitoring/security separation | COMPLETE BASELINE | `monitor-01` and `sensor-01` are live; Suricata/Zeek capture and Loki/Alloy pipelines are operational |
-| 9. Jenkins / legacy delivery retirement | REVIEW REQUIRED | Retire only after replacement delivery workflow is proven |
-| 10. Legacy repo cleanup | IN PROGRESS | Remove/archive only after authority and unique-content review |
-| 11. Public-readiness review | NOT STARTED | Repository safe and polished for optional public visibility |
-| 12. Password manager | NOT STARTED | Product selected, IaC deployed, backed up, monitored and recovery-tested |
+| 1. Hardware inventory | SUBSTANTIALLY COMPLETE | Active compute estate known; refresh physical network mapping as lifecycle work |
+| 2. Workload inventory | COMPLETE FOR CORE ESTATE | Current host/VMID/address placement is canonical in `estate.json` / `CURRENT-STATE.md` |
+| 3. Target architecture | CORE PLACEMENT IMPLEMENTED | Remaining work is recovery depth, resilience proof and hardening |
+| 4. Public website migration | COMPLETE | Public portfolio does not depend on normal homelab availability |
+| 5. Proxmox IaC / clustering | COMPLETE BASELINE | `jameshouse-pve`, dual Corosync links and QDevice are live; resilience testing remains |
+| 6. Komodo / container operations | OPERATIONAL / MATURING | Core and Periphery commissioning complete on explicitly managed hosts; HTTPS/update-rollback maturity remains |
+| 7. Workload migration | SUBSTANTIALLY COMPLETE | Legacy consolidated roles redistributed; remaining work is cleanup/recovery proof |
+| 8. Monitoring/security separation | COMPLETE BASELINE | `monitor-01` and `sensor-01` are operational; logging/security pipelines live |
+| 9. Jenkins / legacy delivery retirement | COMPLETE | Jenkins already removed; do not recreate a retirement task |
+| 10. Legacy repo/state cleanup | IN PROGRESS / REVIEW | Remove/archive only after authority and unique-content/rollback review |
+| 11. Documentation reconciliation | IN PROGRESS | 5 October audit complete; current-looking stale docs being reconciled |
+| 12. Password manager | PLANNED / OPTIONAL | Product/design selection remains future work |
 
 ## Current core estate
 
@@ -37,217 +40,157 @@ This tracker records the controlled migration from the former consolidated/legac
 | `admin-01` | `192.168.2.48` | Administration / IaC controller / Corosync QNetd |
 | `dns-02` | `192.168.2.50` | Pi-hole + Unbound, CT100 on `PROXMOX` |
 | `dns-01` | `192.168.2.51` | Pi-hole + Unbound, CT101 on `Proxmox-2` |
-| `monitor-01` | `192.168.2.52` | Monitoring/logging VM202 on `Proxmox-2` |
-| `cloud-01` | `192.168.2.53` | Production Nextcloud VM200 on `PROXMOX` |
+| `monitor-01` | `192.168.2.52` | Monitoring/logging + active network discovery, VM202 on `Proxmox-2` |
+| `cloud-01` | `192.168.2.53` | Nextcloud/PostgreSQL/Redis VM200 on `PROXMOX` |
 | `mail-relay-01` | `192.168.2.54` | Postfix relay, CT102 on `PROXMOX` |
-| `sensor-01` | `192.168.2.55` | Active Suricata/Zeek VM201 on `PROXMOX` |
-| `edge-01` | `192.168.2.56` | Reserved edge CT103 on `Proxmox-2`; cloudflared not deployed |
-| `PROXMOX` | `192.168.2.70` | `jameshouse-pve` node 1 / cluster anchor |
-| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` node 2 / Network Host Collector |
-| `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / primary Proxmox NFS backup target |
-| `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
+| `sensor-01` | `192.168.2.55` | Suricata/Zeek VM201 on `PROXMOX` |
+| `edge-01` | `192.168.2.56` | Reserved edge CT103 on `Proxmox-2`; `cloudflared` absent |
+| `greenbone-01` | `192.168.2.57` | Greenbone VM203 on `Proxmox-2` |
+| `komodo-01` | `192.168.2.58` | Komodo Core CT104 on `PROXMOX` |
+| `zabbix-01` | `192.168.2.59` | Zabbix CT105 on `PROXMOX` |
+| `home-01` | `192.168.2.60` | Home Assistant OS VM204 on `PROXMOX` |
+| `PROXMOX` | `192.168.2.70` | `jameshouse-pve` node 1 |
+| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` node 2; former discovery source retained for rollback/history |
+| `media-01` | `192.168.2.195` | Kodi endpoint / primary Proxmox NFS backup target |
+| `docker-01` | `192.168.2.220` | BirdNET-Go Docker host |
 
 ## Retired identities
 
-- `TestServer` — retired; its Pi 4 hardware is now `docker-01`.
-- `DietPi` — retired; its Pi 3 hardware is now `admin-01`.
-- `ids-01` — decommissioned.
-- `k3s-node-01` identity at `.195` — retired; host is `media-01`.
-- old `dns-02` at `.242` — retired.
+- `TestServer` -> retired; Pi 4 hardware is now `docker-01`.
+- `DietPi` -> retired; Pi 3 hardware is now `admin-01`.
+- `ids-01` -> decommissioned.
+- former `k3s-node-01` identity -> retired; hardware is now `media-01`.
+- old `dns-02` at `.242` -> retired.
 
-Historical repositories and audit documents may still contain these names. Their presence in history must not be interpreted as current placement.
+Historical repositories and dated audit documents may contain these names. Their presence in history does not make them current targets.
 
-## Authority migration
+## Proxmox cluster migration
 
-For migrated areas, `homelab-platform/IaC/` is the current desired-state authority.
-
-Legacy repositories remain migration/reference sources until their unique content is deliberately reconciled or retired. Do not delete a legacy source merely because an equivalent-looking file now exists here.
-
-The 14 September development/documentation branch set has been consolidated into `main`; all remaining branch heads are now ancestors of `main` and contain no commits ahead of it.
-
-## Proxmox cluster state
-
-The former standalone design has been superseded by the production cluster:
+The former standalone design is superseded by the production cluster:
 
 ```text
 cluster: jameshouse-pve
+PROXMOX:   192.168.2.70 / Corosync link0 10.255.255.1
+Proxmox-2: 192.168.2.71 / Corosync link0 10.255.255.2
+admin-01:  QNetd third vote
+```
 
+Validated quorum uses 3 total votes with quorum 2 and QDevice present.
+
+Current guest placement:
+
+```text
 PROXMOX
-  management: 192.168.2.70
-  Corosync link0: 10.255.255.1/30
-  node ID: 1
+  CT100 dns-02
+  CT102 mail-relay-01
+  CT104 komodo-01
+  CT105 zabbix-01
+  VM200 cloud-01
+  VM201 sensor-01
+  VM204 home-01
+  VM9000 / VM9001 templates
 
 Proxmox-2
-  management: 192.168.2.71
-  Corosync link0: 10.255.255.2/30
-  node ID: 2
-
-admin-01
-  QNetd / third vote: 192.168.2.48:5403
+  CT101 dns-01
+  CT103 edge-01
+  VM202 monitor-01
+  VM203 greenbone-01
 ```
 
-Corosync link0 is the direct point-to-point preferred path at priority 20. The management LAN is link1 fallback at priority 5.
+Production disks remain node-local. The migration delivered cluster membership/quorum and unique VMIDs, not automatic guest-data HA.
 
-Validated quorum after QDevice setup:
-
-```text
-Expected votes: 3
-Total votes:    3
-Quorum:         2
-Flags:          Quorate Qdevice
-```
-
-### Current guest placement
-
-`PROXMOX`:
-
-```text
-CT100  dns-02
-CT102  mail-relay-01
-VM200  cloud-01
-VM201  sensor-01
-VM9000 Debian cloud template
-VM9001 Debian cloud template with QGA
-```
-
-`Proxmox-2`:
-
-```text
-CT101  dns-01
-CT103  edge-01
-VM202  monitor-01
-```
-
-The duplicate standalone VMID 200 conflict was resolved by changing `monitor-01` to VM202.
-
-Production disks remain on node-local `local-lvm`. Cluster quorum and migration capability are implemented; automatic guest HA after loss of a node-local disk owner is not.
-
-## Cluster migration rollback state
-
-The cluster cutover was performed with fresh off-node backups, preserved guest/storage/job configuration and retained local rollback volumes.
-
-The old `.71` guest volumes were renamed rather than destroyed:
-
-```text
-precluster-20260914-vm-101-disk-0
-precluster-20260914-vm-103-disk-0
-precluster-20260914-vm-200-cloudinit
-precluster-20260914-vm-200-disk-0
-```
-
-These are not active guest disks. Remove them only after fresh cluster-era backups and recovery confidence are explicit.
+Pre-cluster rollback LVs retained on `Proxmox-2` remain historical recovery evidence and should be removed only after explicit review.
 
 ## DNS migration
 
-DNS replacement and cutover are complete for the current design.
+DNS replacement/cutover is complete:
 
 ```text
 dns-01  192.168.2.51
 dns-02  192.168.2.50
 ```
 
-`192.168.2.48` is `admin-01`, not a resolver.
+`admin-01` at `.48` is not a resolver. Current IaC includes both resolver cross-records.
 
-CT101 was migrated to `Proxmox-2` after cluster formation and validated with Pi-hole, Unbound, DNS resolution, network reachability and clean quorum state.
+## Monitoring / logging migration
 
-## `cloud-01`
+`monitor-01` VM202 is the production monitoring/logging platform.
 
-`cloud-01` is the live production Nextcloud platform:
+Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki are live. Grafana Alloy is deployed across the managed estate according to inventory scope.
 
-- VM200 on `PROXMOX`;
-- Nextcloud/PostgreSQL/Redis operational;
-- dedicated 200 GiB ext4 data filesystem mounted at `/srv/cloud-01-data`;
-- application reachable on `.53:8080`;
-- VM-level snapshot backup proven;
-- application-consistent Nextcloud/PostgreSQL recovery still pending.
+### Network-discovery migration — COMPLETE
 
-The former 4 TB WD disk is not the production cloud data disk and must not be the sole trusted backup copy.
+The single-owner cutover completed on **27 September 2026**.
 
-## Monitoring and logging
+Current owner: `monitor-01`.
 
-The monitoring platform is operational on `monitor-01`, now VM202 on `Proxmox-2`.
+Current monitor-side responsibilities include collector, selective enrichment, OS-evidence publication, trusted Proxmox guest refresh, targeted profiling, first-seen notification and network-host publication.
 
-Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki are live. Native Alloy is active and router syslog is ingested into Loki while retained locally.
+`Proxmox-2` is the former source. Its source discovery timers are disabled/inactive; retained files/snapshots are rollback/history evidence.
 
-**26 September 2026 migration update:** network discovery and selective enrichment remain live on `Proxmox-2` with first-seen notifications; its deep profiler has 13 completed records but its scan timer is currently **disabled**. The read-only preflight confirmed 49 inventory records, eight saved Nmap OS matches, and a reachable `monitor-01` with `eth0` and Nmap installed. Grafana on `monitor-01` already serves the seven-panel overview and 50 individual host dashboards. Migration staging is prepared but is not confirmed live; the playbook preserves existing evidence and installs new workers with their scan timers disabled. Do not call the monitoring VM the live scanner until cutover verification. HP ProCurve telemetry remains exported to Prometheus/Grafana.
+The staged 26–27 September gate narrative in `docs/operations/network-discovery-monitor01-migration.md` remains historical evidence. Do not interpret pre-cutover paragraphs there as current timer ownership.
 
-## `sensor-01`
+## Security / sensing migration
 
-The passive sensor platform is operational:
+`sensor-01` is operational with dedicated passive capture, Suricata and Zeek. The HP ProCurve mirrors ports 1–23 to port 24.
 
-- VM201 on `PROXMOX`;
-- dedicated capture NIC active in promiscuous mode;
-- Suricata active;
-- Zeek active;
-- HP ProCurve ports 1–23 mirrored to port 24;
-- Alloy ships Suricata/Zeek logs to Loki.
+`greenbone-01` is the active LAN-only vulnerability scanner. Its managed scan/evidence path into the management report is operational.
 
-The capture interface remains dedicated to sensing and is not a Corosync or management interface.
+CrowdSec is not currently deployed and is not part of the migrated production baseline.
 
-## `edge-01`
+## Container-management migration
 
-`edge-01` is CT103 on `Proxmox-2` at `192.168.2.56`.
+`komodo-01` is the active Komodo Core control plane.
 
-The host is operational, but the Cloudflare Tunnel connector is intentionally not deployed. Future work is to deploy it only when a real service requirement is approved.
+Komodo Periphery has been commissioned on explicitly managed production Docker hosts. Adoption preserved existing application workloads rather than recreating them.
 
-## `docker-01`
+Remaining container-management work is operational hardening/update-rollback maturity, not initial platform deployment.
 
-The former TestServer Pi 4 is now `docker-01` at `192.168.2.220`.
-
-It is a deliberately single-purpose BirdNET-Go Docker host. The retired `TestServer` identity must not be used as an administration, monitoring or deployment target.
-
-## `admin-01`
-
-The former DietPi Pi 3 is now the dedicated administration and IaC controller at `192.168.2.48`.
-
-It also hosts `corosync-qnetd` for `jameshouse-pve`. It is deliberately not a DNS role.
-
-## Network state
-
-Current switch state includes:
-
-- HP ProCurve 2510G-24, firmware Y.11.52;
-- VLAN 1 untagged on ports 1–24;
-- port 24 as SPAN destination;
-- ports 1–23 as monitored sources;
-- SNMP telemetry operational;
-- unrestricted `public` SNMP community remains a hardening item;
-- Telnet-only management remains a legacy-security constraint.
-
-A refreshed physical port/cable map is still required after the sensor/cluster network changes.
-
-## Backup state
+## Backup migration
 
 The former no-backup position is superseded.
 
-`media-01` now provides the proven primary Proxmox NFS backup target:
+Primary NFS target: `media-01`.
 
 ```text
-PROXMOX   -> media-backup-proxmox   -> /srv/backup/pve-proxmox
-Proxmox-2 -> media-backup-proxmox-2 -> /srv/backup/pve-proxmox-2
+PROXMOX
+  media-backup-proxmox
+  schedule 02:15
+  guests 100,102,104,105,200,201,204
+
+Proxmox-2
+  media-backup-proxmox-2
+  schedule 03:15
+  guests 101,103,202,203
 ```
 
-All seven production guests had successful backup evidence before cluster formation and CT103 has a proven isolated LXC restore/boot test.
+Observed unattended evidence includes CT105 and VM203. Isolated LXC restore proof exists for CT103.
 
-The cluster-era backup policy has been reconciled through IaC. Current scheduled selections are `100,102,104,105,200,201,204` on `PROXMOX` and `101,103,202,203` on `Proxmox-2`. Unattended evidence has been observed for CT105 and for CT101/CT103/VM202/VM203; first unattended CT104 and VM204 proof remains open.
+Remaining recovery work belongs to normal backlog rather than migration cutover: representative QEMU restore, application-consistent `cloud-01` recovery, independent second copy and any still-missing unattended CT104/VM204 evidence.
 
-See `docs/architecture/BACKUP-STRATEGY.md` and `production docs/PROXMOX-BACKUP-RECOVERY.md`.
+## Home Assistant migration/commissioning
+
+`home-01` is commissioned as VM204 on `PROXMOX` and is no longer a planned reservation.
+
+Native backup, manual Proxmox backup/integrity proof, DNS and application reachability are proven. Remaining monitoring/recovery depth is normal operations work.
 
 ## Public website migration
 
-Production hosting cutover is complete. The public portfolio no longer depends on normal homelab availability.
-
-Retain migration documentation as historical/recovery evidence, but do not describe home hosting as the current production path.
+Complete. The public portfolio is externally hosted and independent of normal homelab availability.
 
 ## Current next actions
 
-1. Onboard managed Docker hosts to Komodo deliberately, beginning with discovery/read-only validation and then a low-risk update/rollback proof.
-2. Observe the remaining unattended CT104 and VM204 backup runs as routine maintenance evidence.
-3. Prove a representative QEMU restore and application-consistent `cloud-01` recovery when recovery-depth work is resumed.
-4. Test Corosync link0 loss and prove link1 fallback when physical access to the comms room is convenient.
-5. Perform a controlled one-node maintenance/quorum test with QDevice available after the link-fallback test.
-6. Decide whether node-local storage plus backup/manual recovery is sufficient or whether replication/shared storage and HA are justified.
-7. Remove retained pre-cluster LVs only after fresh backup confidence is explicit.
-8. Add an independent second backup copy and protect non-Proxmox persistent state when backup resilience is revisited.
-9. Finish remaining router/switch hardening and physical-port mapping work when physical access is convenient.
-10. Retire remaining legacy deployment/management paths only after replacements are proven.
+These are **post-migration maturity tasks**, not unfinished cutovers:
+
+1. continue repository documentation reconciliation from the 5 October audit;
+2. prove Corosync link0 -> link1 failover and controlled one-node quorum behaviour when scheduled;
+3. deepen backup/recovery with representative QEMU and application-level restores;
+4. add an independent second backup copy;
+5. remove retained pre-cluster rollback LVs only after explicit confidence review;
+6. continue Komodo HTTPS/update-rollback hardening where useful;
+7. refresh physical switch/cable mapping and review legacy SNMP/Telnet hardening;
+8. deploy `cloudflared` only when an approved service requires it.
+
+## Historical migration evidence
+
+Detailed intermediate gate evidence remains in the dated architecture/application audits and migration runbooks. Preserve those files as point-in-time evidence; current operational truth comes from `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md`.
