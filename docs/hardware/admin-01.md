@@ -1,7 +1,8 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # admin-01 — Current Hardware Record
 
-> **Status: ACTIVE — REBUILT**  
-> `admin-01` is the dedicated Raspberry Pi administration and SSH jump host for the homelab. It replaces the former `DietPi` role on this hardware.
+**Status:** ACTIVE — ADMINISTRATION / IaC CONTROLLER / QNETD  
+**Current-state review:** 6 October 2026
 
 ## Identity
 
@@ -11,14 +12,11 @@
 | FQDN | `admin-01.jameshouse` |
 | Address | `192.168.2.48/24` |
 | Hardware | Raspberry Pi 3 Model B Rev 1.2 |
-| OS | Debian GNU/Linux 13 (trixie), rebuilt installation |
-| Kernel | 6.18.39+rpt-rpi-v8 |
+| OS | Debian GNU/Linux 13 (trixie) |
+| Running kernel | `6.18.50+rpt-rpi-v8` |
 | Architecture | arm64 / aarch64 |
 | Login account | `james` |
-| Primary role | Administration / SSH jump host |
 | Virtualization | Bare metal |
-
-The former `DietPi` hostname and Pi-hole/Unbound role are retired and must not be used as current-state references for this host.
 
 ## Compute
 
@@ -29,13 +27,7 @@ The former `DietPi` hostname and Pi-hole/Unbound role are retired and must not b
 | L2 cache | 512 KiB |
 | RAM | approximately 1 GiB |
 
-The host is intentionally kept lightweight and dedicated to administration rather than application workloads.
-
-## Storage
-
-The pre-rebuild hardware audit recorded a 64 GB-class microSD system device. Because the operating system has since been rebuilt, current filesystem usage should be captured during the next hardware audit rather than inherited from the old DietPi installation.
-
-The former 4 TB WD USB backup disk is **not part of the admin-01 role**. That disk has been moved into the Proxmox/cloud-storage POC workflow and is documented separately.
+The host is intentionally lightweight and dedicated to administration/control-plane support rather than application workloads.
 
 ## Network
 
@@ -46,44 +38,51 @@ The former 4 TB WD USB backup disk is **not part of the admin-01 role**. That di
 | Link capability | 100 Mb/s full duplex |
 | Gateway | `192.168.2.1` |
 
-The 100 Mb/s interface is acceptable for its management/jump-host role because it is not intended to carry bulk storage, monitoring ingestion, or application traffic.
+The interface is sufficient for Git/Ansible/SSH/QNetd duties; bulk storage and telemetry ingestion belong elsewhere.
 
-## Current role
+## Current roles
 
-`admin-01` provides a stable administrative entry point into the homelab and is used for interactive SSH access and orchestration entry rather than hosting production applications.
+`admin-01` is the normal control point for:
 
-Authoritative Ansible inventory entry:
+- Git checkout and reviewed homelab changes;
+- production Ansible execution;
+- SSH jump/administrative access;
+- controller recovery tooling;
+- external Corosync QNetd/QDevice third vote for `jameshouse-pve`.
 
-```text
-IaC/ansible/inventory/hosts.yml
-```
+QNetd listens on TCP/5403 and provides the independent third vote used by `PROXMOX` and `Proxmox-2`.
 
-Current inventory policy:
+The host is **not** a DNS resolver. The active resolver pair is `dns-01` (`192.168.2.51`) and `dns-02` (`192.168.2.50`).
 
-- host: `admin-01`
-- address: `192.168.2.48`
-- user: `james`
-- tags: `homelab`, `iac`, `core`, `admin`, `jump-host`, `raspberry-pi`
+## Monitoring and patching
+
+Current baseline includes:
+
+- Node Exporter;
+- Grafana Alloy;
+- Zabbix Agent 2;
+- controlled patch-status exporter;
+- unattended security updates with automatic reboot disabled.
+
+After the controlled October maintenance cycle:
+
+- pending updates: 0;
+- security updates pending: 0;
+- reboot required: no;
+- automatic reboot: disabled.
+
+The 5 October kernel update was followed by a controlled reboot and QNetd/cluster quorum revalidation.
 
 ## Role boundaries
 
-Do not reintroduce the former DietPi service set onto this host. In particular, `admin-01` is not intended to be:
+Do not place application, DNS, backup-storage, monitoring-server or network-sensor workloads on this Raspberry Pi. Its value is as a small independent administration/quorum control point.
 
-- a Pi-hole/Unbound resolver
-- a backup/storage server
-- a Docker application host
-- a monitoring platform
-- a network sensor
-
-Those functions now belong to dedicated infrastructure.
-
-## Rebuild decision
-
-The Raspberry Pi 3 hardware has been retained but rebuilt from the former DietPi/DNS appliance into a dedicated administration host. The hardware role is therefore current and active, while the DietPi identity and workload are historical only.
+Historical identities for this hardware are retained in `IaC/inventory/estate.json` and dated audits only. <!-- historical -->
 
 ## Status
 
 Hardware role: **ACTIVE**  
-OS rebuild: **COMPLETE — Debian 13**  
-Primary service role: **ADMINISTRATION / SSH JUMP HOST**  
-Legacy DietPi role: **DECOMMISSIONED**
+OS: **Debian 13**  
+Kernel: **6.18.50+rpt-rpi-v8**  
+Primary roles: **ADMINISTRATION / SSH / IaC / QNETD**  
+DNS role: **NONE**

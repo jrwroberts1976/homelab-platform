@@ -2,25 +2,23 @@
 # Homelab Greenbone Vulnerability Scanner Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
-**Status:** operational; commissioned and protected; LAN-only  
+**Status:** OPERATIONAL — LAN-ONLY SCANNER / AUTOMATED EVIDENCE SOURCE  
 **Host:** `greenbone-01.jameshouse`  
 **IPv4:** `192.168.2.57`  
-**Placement:** VM 203 on `Proxmox-2` / `192.168.2.71`  
-**Last current-state review:** 16 September 2026
+**Placement:** VM203 on `Proxmox-2`  
+**Last current-state review:** 6 October 2026
 
 ## Purpose
 
-`greenbone-01` provides active vulnerability scanning for the homelab.
+`greenbone-01` provides active vulnerability scanning for approved homelab targets.
 
-It complements rather than replaces `sensor-01`:
+It complements `sensor-01` rather than replacing it:
 
 - `sensor-01` performs passive Suricata/Zeek observation;
-- `greenbone-01` actively probes approved targets;
-- neither service depends directly on the other.
+- `greenbone-01` performs active vulnerability assessment;
+- both feed separate evidence into central reporting.
 
 ## Platform
-
-Validated VM state:
 
 ```text
 VMID:       203
@@ -31,147 +29,133 @@ vCPU:       4
 RAM:        8192 MiB
 disk:       80 GiB local-lvm
 protection: enabled
+OS:         Debian 13
 ```
 
-The guest runs Debian 13 and the Greenbone Community Container stack through Docker Compose.
-
-The Community Container deployment is appropriate for this homelab scanner, but it must not be documented as an immutable appliance or as a general production-support commitment. Upstream rolling image tags can change between pulls.
+Greenbone Community Containers run through Docker Compose. Upstream rolling tags are runtime inputs, not immutable appliance versions.
 
 ## Exposure
 
-The approved exposure is LAN-only:
+Approved exposure is LAN/VPN only:
 
 ```text
 192.168.2.57:443  Greenbone HTTPS
-127.0.0.1:443     internal nginx binding
-127.0.0.1:9392    internal Greenbone service path
 ```
 
-There is no approved public or Cloudflare exposure.
+There is no approved public/Cloudflare exposure. The current certificate is self-signed unless separately replaced.
 
-The current HTTPS certificate is self-signed.
+## Feed / commissioning state
 
-## Feed readiness
+Commissioning required all feed families ready and a controlled self-scan. Historical commissioning evidence recorded no Critical/High/Medium findings and one Low ICMP timestamp observation.
 
-Commissioning completed only after all required feed families reported ready:
+Current vulnerability management is not limited to that commissioning scan: recurring managed scans and central evidence handling are operational.
+
+## Automated scan and evidence workflow
+
+Current production workflow:
 
 ```text
-openvas_vt_cache=READY
-gvmd_vts=READY
-scap=READY
-cert=READY
-feed_ready=4/4
+02:00 local
+  greenbone-01 managed scan
+        |
+        v
+/var/lib/homelab-greenbone-scanning/managed.json
+        |
+        | restricted SSH/SFTP evidence transfer
+        v
+monitor-01 evidence store
+        |
+        v
+schema/freshness validation
+        |
+        v
+06:00 management report / AI-assisted summary / mail delivery
 ```
 
-Commissioning evidence also recorded:
+Key controls:
 
-```text
-OpenVAS VT feed version: 202609140600
-VT count:                 187151
-Full and fast config:     available
-```
-
-## Commissioning scan
-
-A controlled self-scan of `192.168.2.57` completed successfully.
-
-```text
-Critical: 0
-High:     0
-Medium:   0
-Low:      1
-Log:      9
-```
-
-The single Low result was:
-
-```text
-ICMP Timestamp Reply Information Disclosure
-severity: 2.1
-```
-
-That item is accepted for scanner commissioning and remains a separate IaC-managed hardening follow-up. Do not apply an undocumented ad-hoc firewall rule merely to suppress the finding.
-
-The remaining nine results were informational/log observations such as service and header enumeration.
+- `homelab-greenbone-managed-scan.timer` runs the managed scan daily;
+- local `flock` and Greenbone task-state guards prevent overlapping managed scans;
+- evidence is schema-validated and freshness-checked;
+- the evidence freshness threshold is 30 hours;
+- missing/invalid/stale evidence is reported as an evidence problem, never as zero vulnerabilities;
+- evidence transfer uses a dedicated restricted identity/key and pinned receiver host key;
+- numeric vulnerability counts remain deterministic source evidence rather than AI-generated values.
 
 ## Monitoring and logging
 
 Current host observability includes:
 
 - Node Exporter;
-- Alloy 1.19.2;
-- Docker container log collection;
-- proven ingestion of Greenbone logs into Loki;
-- host/service health validation.
+- Grafana Alloy;
+- Zabbix Agent 2;
+- Docker/container logging to Loki;
+- Greenbone scan/evidence health surfaced in central reporting.
 
-Alloy requires Docker socket access for the deployed log-discovery design. Docker socket access is effectively root-equivalent privilege and must be treated accordingly.
+Alloy was updated to 1.20.1 during the 5 October controlled maintenance cycle. Docker-socket access used for container observability is root-equivalent and remains a privileged boundary.
 
 ## Backup and protection
 
-VM203 has independent backup proof on:
+VM203 backup target:
 
 ```text
-media-backup-proxmox-2
-```
-
-Two manual snapshot archives were present during final commissioning, and archive integrity was proven using `zstd -t`.
-
-The IaC-managed `Proxmox-2` nightly job is:
-
-```text
-job:       homelab-nightly-proxmox-2
-schedule:  03:15
-storage:   media-backup-proxmox-2
-guests:    101,103,202,203
-mode:      snapshot
-compress:  zstd
+storage: media-backup-proxmox-2
+job: homelab-nightly-proxmox-2
+schedule: 03:15
+guests: 101,103,202,203
+mode: snapshot
+compression: zstd
 retention: keep-last=3
 ```
 
-The reconciliation that added VM203 completed successfully and a second run was idempotent with `changed=0`.
+Current evidence includes:
 
-VM203 Proxmox protection is enabled. Terraform converged with no remaining changes after protection was applied.
+- manual VM203 snapshot backup and archive-integrity proof;
+- unattended VM203 scheduled-backup evidence;
+- Proxmox protection enabled.
 
-The temporary `pre-greenbone-stack` commissioning snapshot was removed only after the independent backup and protection gates passed.
+VM203’s first unattended run is therefore **not** pending.
 
-The first unattended 03:15 cycle including VM203 remains to be observed.
+A representative isolated QEMU restore remains part of the wider recovery-depth backlog.
 
 ## IaC ownership
 
-Primary Terraform path:
+Primary infrastructure path:
 
 ```text
 IaC/terraform/proxmox/greenbone-01/
 ```
 
-Relevant Ansible includes the Greenbone baseline/application roles and the central Proxmox backup-schedule role.
+Greenbone application/scanning/evidence and backup schedule configuration are Git/Ansible managed. Normal orchestration runs from `admin-01`.
 
-Normal controller:
+## Security boundaries
 
-```text
-admin-01
-192.168.2.48
-~/projects/homelab-platform
-```
+- administrator credentials remain outside Git;
+- scanner targets must be explicitly approved;
+- HTTPS remains LAN/VPN-only;
+- passive sensor and active scanner responsibilities stay separate;
+- Docker socket access is privileged;
+- rolling upstream image tags must not be treated as immutable pins;
+- raw credentials/evidence secrets must not enter reports or AI prompts.
 
-Terraform is the approved VM provisioning tool for this deployment.
+## 5 October maintenance state
 
-## Security decisions
+Controlled package maintenance completed with:
 
-- Greenbone administrator credentials are not stored in Git.
-- Default administrator credentials were replaced during commissioning.
-- Future deployment sequencing should rotate the default administrator credential before enabling the LAN listener.
-- HTTPS remains LAN-only.
-- Scanner targets must be deliberately approved.
-- Do not merge passive sensor and active scanner responsibilities.
-- Do not expose the Docker socket beyond the local observability requirement.
-- Do not assume rolling container tags provide image immutability.
+- Alloy 1.20.1;
+- Docker/container runtime updated and healthy;
+- Zabbix Agent 2 updated;
+- Greenbone persistent containers healthy;
+- `gvmd` healthy;
+- no remaining OS updates;
+- reboot not required;
+- no failed systemd units.
 
 ## Remaining follow-up
 
-- observe the first unattended VM203 scheduled backup;
-- manage the ICMP timestamp response through approved IaC if remediation is desired;
-- perform a representative isolated QEMU restore proof;
-- consider explicit container-image digest/update policy;
-- replace self-signed TLS only if operationally useful;
-- continue monitoring feed freshness, disk use and scanner resource impact.
+- maintain feed freshness and monitor disk/resource growth;
+- retain scan/evidence/report freshness checks;
+- decide whether ICMP timestamp remediation is worth applying through reviewed IaC;
+- consider an explicit container-image digest/update policy;
+- perform representative QEMU restore proof as part of wider DR work;
+- replace self-signed TLS only if it adds operational value.

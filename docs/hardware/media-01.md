@@ -1,26 +1,22 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # media-01 — Current Hardware Record
 
-> **Status: ACTIVE — REBUILT**  
-> `media-01` is an active Raspberry Pi 5 media endpoint. The host has been rebuilt with a fresh Debian 13 operating system and is managed from `homelab-platform` IaC.
+**Status:** ACTIVE — KODI ENDPOINT / PRIMARY PROXMOX NFS BACKUP TARGET  
+**Current-state review:** 6 October 2026
 
 ## Identity
 
 | Item | Current state |
 |---|---|
 | Hostname | `media-01` |
-| Local DNS name | `media-01.jameshouse` |
-| Host-reported `hostname -f` | `media-01` |
 | Address | `192.168.2.195/24` |
 | Hardware | Raspberry Pi 5 Model B Rev 1.0 |
-| OS | Debian GNU/Linux 13 (trixie), rebuilt installation |
+| OS | Debian GNU/Linux 13 (trixie) |
 | Architecture | arm64 / aarch64 |
 | Virtualization | Bare metal |
-| Primary role | Dedicated Kodi media endpoint |
-| Service status | Operational |
+| Primary roles | Kodi media endpoint; SMB media share; Proxmox NFS backup target |
 
-The local DNS name and the host's own FQDN configuration are deliberately distinguished: the 12 September audit showed `hostname -f` returning the short hostname only. Do not claim a host-configured FQDN unless it is separately reconciled and validated.
-
-The former `k3s-node-01` identity is historical and must not be used for this host.
+Historical identities for this hardware are retained only in canonical inventory/audit history. <!-- historical -->
 
 ## Compute
 
@@ -32,25 +28,23 @@ The former `k3s-node-01` identity is historical and must not be used for this ho
 | L3 cache | 2 MiB |
 | RAM | approximately 8 GiB |
 
-The host has ample capacity for its dedicated media role.
-
 ## Storage
 
-### Primary NVMe
+Primary NVMe:
 
-| Item | Current state |
-|---|---|
-| Device | `/dev/nvme0n1` |
-| Model | WD PC SN740 512 GB class NVMe |
-| Capacity | 476.9 GiB |
-| Filesystem | ext4 |
-| Media root | `/srv/media` |
+- WD PC SN740 512 GB-class NVMe;
+- ext4;
+- media root `/srv/media`;
+- also provides the filesystem used for the current Proxmox NFS backup namespaces.
 
-Historical SMART evidence showed the NVMe healthy with 1% lifetime used, no media/data-integrity errors and a temperature around 41 C. NVMe SMART/health metrics are planned for continuous monitoring.
+Current backup exports:
 
-### Boot/system media
+```text
+/srv/backup/pve-proxmox   -> PROXMOX 192.168.2.70
+/srv/backup/pve-proxmox-2 -> Proxmox-2 192.168.2.71
+```
 
-The pre-rebuild audit recorded a SanDisk USB device as the system disk. Because the host has since been rebuilt, boot-media layout should be treated as current-installation state and re-audited when the next hardware inventory is run rather than inferred from the old image.
+NFS is a production infrastructure role on this host, not a future proposal.
 
 ## Network
 
@@ -60,74 +54,74 @@ The pre-rebuild audit recorded a SanDisk USB device as the system disk. Because 
 | Address | `192.168.2.195/24` |
 | Link | 1 GbE full duplex |
 | Gateway | `192.168.2.1` |
-| Wi-Fi | Present but not the intended production path |
-| Current switch port | HP ProCurve port 3 |
+| Wi-Fi | present; not the intended production path |
 
-The 12 September switch/ARP correlation matched `media-01` MAC `2C:CF:67:30:BE:1F` to port 3.
+The older 12 September physical switch map is historical and must not override the current SPAN/cabling architecture without fresh physical verification.
 
-## Current service role
+## Current services
 
-`media-01` is a dedicated living-room/media endpoint. The current platform is reproducible through Git-managed Ansible.
-
-Primary workload:
+Operational workloads include:
 
 - Kodi via `kodi.service`;
 - local media under `/srv/media`;
-- authenticated SMB share `\\media-01\Media`;
-- Chrony using the homelab time sources;
-- Prometheus Node Exporter on TCP/9100.
+- authenticated SMB share;
+- NFS v4.2 backup service for both Proxmox cluster nodes;
+- Chrony client;
+- Node Exporter;
+- Grafana Alloy;
+- Zabbix Agent 2;
+- Kodi audio watchdog service/timer.
 
-Docker and k3s are not part of the intended media host design.
+Docker and k3s are not part of the intended media-host design.
 
-## IaC ownership
+## Backup role
 
-Primary deployment:
+`media-01` is the primary Proxmox guest-backup target.
 
-```text
-IaC/ansible/playbooks/media-01.yml
-```
-
-Supporting roles:
-
-```text
-IaC/ansible/roles/chrony_client/
-IaC/ansible/roles/media_endpoint/
-IaC/ansible/roles/media_smb/
-IaC/ansible/roles/node_exporter/
-IaC/ansible/roles/media_firewall/
-```
-
-Production service documentation:
+Current scheduled source jobs are:
 
 ```text
-production docs/MEDIA-SERVICE.md
+PROXMOX
+  02:15
+  storage: media-backup-proxmox
+  guests: 100,102,104,105,200,201,204
+
+Proxmox-2
+  03:15
+  storage: media-backup-proxmox-2
+  guests: 101,103,202,203
 ```
 
-## Monitoring and remaining gates
+The node-scoped NFS namespaces are deliberate. This host is therefore infrastructure-critical during Proxmox backup windows and should not be rebooted casually while backups are active.
 
-Current monitoring:
+## Monitoring and patching
 
-- ICMP probe — healthy at latest audit;
-- Node Exporter — healthy at latest audit.
+Current monitoring/logging includes:
 
-Planned/incomplete monitoring includes:
+- Prometheus Node Exporter;
+- Grafana Alloy to Loki;
+- Zabbix Agent 2;
+- service-level checks through the central monitoring platform.
 
-- Raspberry Pi temperature/throttling metrics;
-- NVMe SMART/health metrics;
-- Kodi service availability if actionable;
-- Alloy/Loki logging only after the central logging platform is deployed.
+The 5 October controlled maintenance cycle left:
 
-The nftables policy remains a follow-up work item and was not active during the 12 September audit.
+- pending updates: 0;
+- security updates pending: 0;
+- reboot required: no;
+- automatic reboot: disabled.
 
-## Rebuild decision
+Kodi, SMB/NFS and the audio watchdog were revalidated after package maintenance.
 
-The previous multi-purpose / legacy state has been replaced by a dedicated, reproducible Debian 13 media build. This hardware page represents the rebuilt host rather than the 6 September pre-rebuild workload audit.
+## Role boundaries
+
+`media-01` should remain focused on media playback, media file serving and the primary NFS backup-target function. It should not become a general Docker host, monitoring server, DNS resolver or cluster control-plane node.
 
 ## Status
 
 Hardware role: **ACTIVE**  
-OS rebuild: **COMPLETE — Debian 13**  
-Primary service: **Kodi media endpoint**  
-IaC ownership: **ACTIVE**  
-Prometheus host monitoring: **ACTIVE**  
-Host firewall: **NOT YET DEPLOYED**
+OS: **Debian 13**  
+Kodi: **ACTIVE**  
+SMB: **ACTIVE**  
+Proxmox NFS backup target: **ACTIVE / PRODUCTION**  
+Grafana Alloy: **ACTIVE**  
+Zabbix Agent 2: **ACTIVE**
