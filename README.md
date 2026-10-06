@@ -21,6 +21,7 @@ The main current-state references are:
 - [Backup Strategy](docs/architecture/BACKUP-STRATEGY.md)
 - [Migration Tracker](docs/migrations/MIGRATION-TRACKER.md)
 - [Runbook Catalogue](runbooks/README.md)
+- [5 October 2026 Documentation Audit](docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-10-05.md)
 - [14 September 2026 Estate Audit](docs/architecture/ESTATE-AUDIT-2026-09-14.md)
 - [16 September 2026 Documentation Audit](docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-09-16.md)
 - [17 September 2026 Application Audit](docs/architecture/ESTATE-APPLICATION-AUDIT-2026-09-17.md)
@@ -150,7 +151,9 @@ Pre-cluster restore evidence includes an isolated CT103 restore/boot proof. A re
 
 ### Monitoring and logging
 
-`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter, Loki, the **Network Hosts** directory and individually generated host dashboards. Native Grafana Alloy is deployed across the managed estate. Router syslog and HP ProCurve telemetry are operational. Since the 27 September cutover, `monitor-01` is the single active owner of network discovery/enrichment and saved OS evidence. Targeted Nmap profiling is active with controlled backlog spreading and weekly re-profiling of current completed devices. Automatic dual-Pi-hole DNS evidence is also active: bounded read-only evidence from `dns-01` and `dns-02` is correlated with MAC/vendor and Nmap evidence and published into Grafana. See [Automated Network-Device Identification](docs/operations/network-device-identification.md).
+`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter, Loki, the **Network Hosts** directory and individually generated host dashboards. Native Grafana Alloy is deployed across the managed estate. Router syslog and HP ProCurve telemetry are operational. Since the 27 September cutover, `monitor-01` is the single active owner of network discovery/enrichment and saved OS evidence. Targeted Nmap profiling is active with controlled backlog spreading and weekly re-profiling of current completed devices. Automatic dual-Pi-hole DNS evidence is also active: bounded read-only evidence from `dns-01` and `dns-02` is correlated with MAC/vendor and Nmap evidence and published into Grafana. Persisted host pages and bounded AI host assessments are implemented for the current Network Hosts workflow. See [Automated Network-Device Identification](docs/operations/network-device-identification.md).
+
+The Step 10 estate-wide Grafana foundation is complete. Production navigation includes the Home/operations overview, Hosts view, Patch & Reboot Status dashboard and Node Detail links. The controlled 5 October patch cycle reached the expected steady state of 15 reporting hosts, zero pending updates, zero pending security updates, zero reboot-required hosts, 15 unattended-upgrades installations and zero automatic reboots.
 
 The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/router/rt-ac86u.log` and shipped to Loki by the dedicated Alloy router-syslog pipeline. OpenVPN connection/authentication events are present in that stream.
 
@@ -160,7 +163,7 @@ The ASUS router stream is received on UDP/5514, retained in `/var/log/homelab/ro
 
 ### Komodo
 
-`komodo-01` is the commissioned Komodo control plane. Docker, MongoDB and Komodo Core are operational, application backup/isolated restore are proven, and Komodo is the preferred path for routine Docker application/version management as managed-host onboarding proceeds. Periphery onboarding and HTTPS hardening remain later work.
+`komodo-01` is the commissioned Komodo control plane. Docker, MongoDB and Komodo Core are operational, application backup/isolated restore are proven, and Komodo is the preferred path for routine Docker application/version management. Komodo Periphery has been commissioned on explicitly managed hosts including `docker-01` and `greenbone-01`; further onboarding is deliberate per host rather than an unfinished platform-wide prerequisite. HTTPS hardening remains later work.
 
 ### Home automation
 
@@ -182,7 +185,7 @@ The selected remote-access implementation is the native OpenVPN server on the AS
 
 ### Vulnerability scanning
 
-`greenbone-01` is the active LAN-only vulnerability scanner. Greenbone Community Containers are deployed on VM203, feed readiness reached 4/4, the commissioning self-scan completed with no Critical/High/Medium findings, VM backup integrity is proven and Proxmox protection is enabled. An Ansible-managed scan runner now reconciles the managed-infrastructure and full-LAN Greenbone tasks and writes machine-readable evidence for downstream reporting; the end-to-end managed-scan/evidence pipeline is being validated before scheduled execution is enabled.
+`greenbone-01` is the active LAN-only vulnerability scanner. Greenbone Community Containers are deployed on VM203, feed readiness reached 4/4, the commissioning self-scan completed with no Critical/High/Medium findings, VM backup integrity is proven and Proxmox protection is enabled. The Ansible-managed managed-infrastructure scan/evidence workflow is operational: the managed scan runs daily, machine-readable evidence is published to `monitor-01`, freshness/schema are checked there, and the evidence is incorporated into the scheduled management-report path. Missing or stale evidence is treated as an evidence problem rather than as zero vulnerabilities.
 
 ### Edge
 
@@ -206,10 +209,10 @@ Home Assistant is no longer a planned reservation: `home-01` is active and commi
 | Recovery depth | LXC restore proof exists | QEMU restore proof + application-consistent `cloud-01` recovery |
 | Second-copy resilience | Primary NFS backup target operational | Add an independent second copy for important data |
 | Zabbix | Server + 15 active-agent hosts reporting | Tune actionable templates/alerts and add service-specific coverage |
-| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational | Add useful cluster/QDevice/link health telemetry and `home-01` external availability checks |
-| Komodo / container operations | Komodo Core commissioned; application backup/restore proven | Onboard managed Docker hosts, prove update/rollback ownership, then retire superseded paths |
-| Network Hosts | `monitor-01` is the single active discovery/identification owner; targeted Nmap profiling, weekly re-profiling, dual-Pi-hole DNS correlation and Grafana publication are live | Extend reviewed device-signal rules as useful; later implement AI/manual-review/GitHub-host-page stages only after separate design and verification |
-| Vulnerability management | `greenbone-01` commissioned and protected | Tune hardening/update policy as needed |
+| Core monitoring | Prometheus/Grafana/Alertmanager/Blackbox/Loki operational; Step 10 estate overview and patch dashboard complete | Add useful cluster/QDevice/link health telemetry and `home-01` external availability checks |
+| Komodo / container operations | Komodo Core commissioned; application backup/restore proven; Periphery commissioned on explicitly managed hosts including `docker-01` and `greenbone-01` | Prove low-risk update/rollback ownership, continue only justified onboarding, then retire superseded paths |
+| Network Hosts | `monitor-01` is the single active discovery/identification owner; targeted Nmap profiling, weekly re-profiling, dual-Pi-hole DNS correlation, persisted host pages, bounded AI assessment and Grafana publication are live | Refine reviewed device-signal/AI rules and manual-review workflow without weakening evidence boundaries |
+| Vulnerability management | `greenbone-01` commissioned, protected and feeding scheduled evidence/reporting | Tune hardening/update policy and evidence quality as needed |
 | Remote-access VPN | **FULLY OPERATIONAL** — router-hosted OpenVPN accepted 18 September 2026 for external laptop administration with split tunnelling | Maintain DDNS/router recovery/client re-enrolment documentation; no operational acceptance work remains |
 | Password manager | Planned; product and placement unallocated | Compare/select product and produce deployment/recovery design |
 | Web Platform / Analytics | Cloudflare + Umami + Grafana design direction defined | Analyse `me.jrwroberts.co.uk`, record findings, then build unified dashboard |
@@ -218,6 +221,7 @@ Home Assistant is no longer a planned reservation: `home-01` is active and commi
 
 ## Active documentation tasks
 
+- **Estate documentation reconciliation** — the 5 October audit identified stale current-looking architecture, migration, runbook and hardware/service pages. Reconcile operational documents against canonical inventory and validated live state while preserving dated historical evidence.
 - **Analyse `me.jrwroberts.co.uk`** — [Issue #125](https://github.com/jrwroberts1976/homelab-platform/issues/125). Review public site structure, content, performance, accessibility, SEO, security, technical delivery and useful analytics, then feed evidence-based findings into the Web Platform / Analytics roadmap. The public site remains externally hosted and must not become dependent on homelab availability.
 
 ## Operating principles
