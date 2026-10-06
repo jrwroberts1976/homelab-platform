@@ -1,87 +1,87 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # BirdNET-Go Production Service
 
 **Authority:** `jrwroberts1976/homelab-platform`  
 **Host:** `docker-01`  
 **Primary IPv4:** `192.168.2.220`  
 **Platform:** Raspberry Pi 4 Model B Rev 1.5 / Debian 13  
-**Status:** operational  
-**Last current-state review:** 12 September 2026
+**Status:** OPERATIONAL / KOMODO-MANAGED DOCKER HOST  
+**Last current-state review:** 6 October 2026
 
 ## Purpose
 
 `docker-01` is a deliberately single-purpose Docker host for BirdNET-Go.
 
-The physical Raspberry Pi 4 formerly carried the retired `TestServer` identity and a large consolidated Docker estate. That design has been retired. Current intent is to keep this host focused on BirdNET-Go rather than rebuilding the old general-purpose workload set.
+Earlier consolidated-host identities for this hardware are historical only. <!-- historical -->
 
 ## Current live state
 
-Validated 12 September 2026:
+Current validated operating model:
 
 - Debian 13 / aarch64;
+- running kernel `6.18.50+rpt-rpi-v8` after the controlled 5 October reboot;
 - Docker active/enabled;
-- one Docker Compose project: `birdnet-go`;
-- one BirdNET-Go application container running;
-- container health: healthy;
+- BirdNET-Go production Compose workload under `/opt/birdnet-go/compose.yml`;
 - BirdNET-Go published on TCP/8080;
-- Node Exporter active on TCP/9100;
-- Prometheus ICMP and Node Exporter targets healthy;
-- zero failed systemd units.
+- Node Exporter active;
+- Grafana Alloy active;
+- Zabbix Agent 2 active;
+- Komodo Periphery active;
+- no failed systemd units after maintenance;
+- pending OS updates 0;
+- reboot required no.
 
-## Compose/application
-
-Compose path:
-
-```text
-/opt/birdnet-go/compose.yml
-```
-
-Observed application image during the audit:
-
-```text
-ghcr.io/tphakala/birdnet-go:20260823
-```
-
-The image tag above is evidence of the 12 September state, not a permanent version pin for documentation. Container version/update policy should follow the approved operational workflow, with routine Docker application/version management moving toward Komodo where appropriate.
+Exact BirdNET-Go image tags are dated runtime observations and should not be treated as permanent documentation pins.
 
 ## Network
 
-Primary documented service identity:
+Primary service identity:
 
 ```text
 docker-01
 192.168.2.220
 ```
 
-The host also had Wi-Fi active at `.221` during the audit, but the wired `.220` path is the primary service path.
+A secondary Wi-Fi address at `.221` may also be present, but `.220` is the documented production path.
 
-Current wired evidence:
-
-- Ethernet MAC `d8:3a:dd:5a:51:44`;
-- HP ProCurve port 23;
-- 1 Gbps full-duplex switch link.
-
-BirdNET-Go application listener:
+Important listeners:
 
 ```text
-TCP/8080
+22/TCP    SSH
+8080/TCP BirdNET-Go
+9100/TCP Node Exporter
 ```
 
-Node Exporter:
+The host is LAN/VPN administered and is not an Internet-facing application server.
 
-```text
-TCP/9100
-```
+## Komodo management
 
-## Monitoring
+`docker-01` is a commissioned Komodo-managed host.
 
-Current central monitoring includes:
+Current controls include:
 
-- ICMP probe to `.220`;
-- Node Exporter scrape at `.220:9100`.
+- Periphery outbound to Komodo Core on `komodo-01` (`192.168.2.58:9120`);
+- no deliberately published inbound Periphery management listener;
+- remote host/container terminals disabled;
+- persisted Periphery identity under `/config/keys`;
+- steady-state operation without retained onboarding credentials;
+- Git-managed Komodo resource definition;
+- existing BirdNET workload adopted without forced recreation.
 
-Both were healthy in the 12 September monitoring audit.
+Routine container/application version management belongs to Komodo rather than the OS patch workflow.
 
-Future service-specific monitoring should be added only where it gives useful operational signals, for example application availability, capture/audio health or storage/database growth.
+## Monitoring and logging
+
+Current central coverage includes:
+
+- ICMP/availability;
+- Node Exporter host metrics;
+- Grafana Alloy/Loki logging;
+- Zabbix Agent 2;
+- Docker/container health visibility;
+- patch telemetry.
+
+Add service-specific BirdNET checks only where they are actionable, such as web availability, audio/capture health or persistent-state growth.
 
 ## IaC ownership
 
@@ -103,75 +103,46 @@ The retained playbook filename is:
 IaC/ansible/playbooks/birdnet-01.yml
 ```
 
-The historical-looking filename does not change the current host identity; the playbook targets `docker-01` through inventory.
+The filename is an implementation interface; the current host identity remains `docker-01`.
 
-## Controller
-
-Normal reconciliation is launched from:
-
-```text
-admin-01
-192.168.2.48
-~/projects/homelab-platform
-```
-
-The retired TestServer identity must not be used as the current controller.
+Normal reconciliation runs from `admin-01`.
 
 ## Role boundary
 
-Do not silently reintroduce the former TestServer container estate onto `docker-01`.
+Keep `docker-01` focused on BirdNET-Go. Do not use the presence of Docker as justification for general-purpose workload consolidation.
 
-Additional workloads require an explicit placement decision and should not be justified merely because Docker is already installed.
+## Persistent data / backup position
 
-## Persistent data / backup gap
+The estate **does** have an operational Proxmox guest-backup platform, so the previous claim that no production backup platform exists is obsolete.
 
-The current estate does not yet have an active production backup platform.
+However, that platform does not automatically protect this physical Raspberry Pi's BirdNET-Go application state.
 
-Identify which BirdNET-Go state is not reproducible from Git/container deployment, such as:
+The current BirdNET-specific gap is to identify, protect and restore-test non-reproducible state such as:
 
-- application configuration not already managed in IaC;
+- application configuration not already managed in Git/IaC;
 - database/history;
-- recordings or analysis data intended to be retained;
-- device/audio-specific calibration/state where applicable.
+- recordings or retained analysis data;
+- audio/device calibration/state where applicable.
 
-Protect those assets through the future backup design. Do not waste primary backup capacity on reproducible container images/cache.
-
-See:
-
-```text
-docs/architecture/BACKUP-STRATEGY.md
-```
+Do not spend primary backup capacity on reproducible container images/cache.
 
 ## Recovery model
 
-Recovery should be application/data focused:
-
 1. rebuild supported Debian on the Raspberry Pi 4 if required;
-2. restore SSH/IaC access;
-3. reconcile the BirdNET host through the approved Ansible path;
-4. restore only the required persistent BirdNET-Go state;
+2. restore approved SSH/IaC access;
+3. reconcile the host through Ansible;
+4. restore only required persistent BirdNET-Go state;
 5. validate audio/device access;
-6. validate container health and TCP/8080;
-7. validate Node Exporter/central monitoring;
+6. validate Docker, BirdNET-Go and TCP/8080;
+7. validate Komodo Periphery, Node Exporter, Alloy and Zabbix;
 8. run a second reconciliation and require no unintended drift.
 
-Do not restore the former TestServer OS/container estate as the normal recovery method.
+## Definition of operational state
 
-## Definition of current operational state
+The service is operational when `docker-01` is reachable on `.220`, Docker/BirdNET-Go are healthy, TCP/8080 is available, Komodo/monitoring agents are healthy and no failed systemd units are present.
 
-The service is operational because:
+## Outstanding work
 
-- the host is live at `.220`;
-- Docker is active;
-- exactly one intended Compose project/application container is present;
-- BirdNET-Go reports healthy;
-- TCP/8080 is published;
-- Node Exporter monitoring is healthy;
-- zero failed systemd units were observed.
-
-Outstanding work:
-
-- explicit persistent-data backup policy;
-- restore testing;
-- service-specific monitoring only where useful;
-- container lifecycle integration with the approved Komodo workflow where appropriate.
+- explicit BirdNET persistent-data backup policy;
+- restore proof for that persistent state;
+- service-specific monitoring only where useful.
