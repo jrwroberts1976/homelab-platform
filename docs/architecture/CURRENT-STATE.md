@@ -42,6 +42,8 @@ The 5 October repository audit is recorded in `docs/architecture/ESTATE-DOCUMENT
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / primary Proxmox NFS backup target | ACTIVE |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host | ACTIVE |
 | ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN endpoint | ACTIVE |
+| ASUS AiMesh node | `192.168.2.181` | Wireless mesh node | ACTIVE |
+| ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
 | HP ProCurve 2510G-24 | `192.168.2.16` | Core switch / active SPAN source | ACTIVE |
 
 The normal Ansible-managed Linux baseline is **15 hosts**. `home-01` is active but is HAOS and intentionally outside that 15-host Linux/Ansible baseline.
