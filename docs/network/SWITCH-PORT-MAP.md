@@ -1,33 +1,41 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # HP ProCurve Port Map
 
-**Status:** current-state evidence snapshot plus future repatching intent  
+**Status:** HISTORICAL 12 SEPTEMBER CABLING SNAPSHOT — CURRENT SPAN STATE SUPERSEDES PORT 24 ENTRY  
 **Switch:** HP ProCurve 2510G-24 / J9279A  
-**Management address observed:** `192.168.2.16`  
+**Management address:** `192.168.2.16`  
 **Firmware:** Y.11.52  
-**Snapshot date:** 12 September 2026
+**Snapshot date:** 12 September 2026  
+**Current-state review:** 6 October 2026
 
-## Purpose
+## Read this first
 
-This document separates:
+The table below is retained as **dated physical evidence from 12 September**. It is not the current cabling authority after the sensor/SPAN repatch.
 
-1. **current observed cabling** — evidence captured from live MAC/LLDP/link tables;
-2. **future patching intent** — to be designed later when the dedicated sensor USB capture NIC arrives.
+Current validated switch monitoring state is:
 
-The current map must not be treated as the final physical layout.
+```text
+mirror destination: port 24
+mirror sources:     ports 1-23
+```
 
-## Current switch configuration evidence
+`sensor-01` is actively receiving mirrored traffic through the dedicated capture path. Therefore the old row that shows the ASUS router on port 24 and the old statement that mirroring was disabled are historical observations only.
 
-Read-only console audit confirmed:
+A fresh port-by-port physical mapping remains required if current cable placement matters operationally. Do not invent which normal switch port now carries the router uplink without new evidence.
 
-- VLAN 1 is the only observed VLAN and ports 1–24 are untagged members;
-- management addressing is configured as `dhcp-bootp`;
-- STP is disabled;
-- port mirroring is disabled;
-- SNMP community `public` is configured as `Unrestricted`;
-- Telnet management is available;
-- SSH management is not available on the current firmware/configuration.
+## 12 September switch configuration snapshot
 
-Relevant running configuration:
+At the snapshot date, read-only console evidence showed:
+
+- VLAN 1 untagged on ports 1–24;
+- management address via `dhcp-bootp`;
+- STP disabled;
+- mirroring disabled at that time;
+- SNMP community `public` configured `Unrestricted`;
+- Telnet management available;
+- SSH management unavailable on the observed firmware/configuration.
+
+Historical running configuration excerpt:
 
 ```text
 hostname "ProCurve Switch 2510G-24"
@@ -38,128 +46,61 @@ vlan 1
    ip address dhcp-bootp
 ```
 
-These facts are evidence only. Security hardening and switch rebuild decisions belong to a later controlled network change.
+## Historical evidence-backed port map — 12 September 2026
 
-## Current evidence-backed port map
-
-| Port | Link state/speed | Current observed endpoint/evidence | Confidence |
+| Port | Link state/speed | Observed endpoint/evidence at snapshot | Confidence |
 |---:|---|---|---|
-| 1 | Up / 100FDx | MAC `AC:17:02:07:0D:5D`, ARP neighbour `.149` | MAC/IP proven; device role not documented here |
-| 2 | Up / 100FDx | no learned MAC in the captured table | unresolved |
+| 1 | Up / 100FDx | MAC `AC:17:02:07:0D:5D`, ARP `.149` | MAC/IP proven |
+| 2 | Up / 100FDx | no learned MAC in captured table | unresolved |
 | 3 | Up / 1000FDx | `media-01` `.195`, MAC `2C:CF:67:30:BE:1F` | high |
-| 4 | Down | — | unused/down at snapshot |
-| 5 | Up / 10FDx | MAC `00:1C:2B:5A:6D:FD`, ARP neighbour `.7` | MAC/IP proven; device role not documented here |
-| 6 | Down | — | unused/down at snapshot |
-| 7 | Down | — | unused/down at snapshot |
-| 8 | Down | — | unused/down at snapshot |
-| 9 | Down | — | unused/down at snapshot |
-| 10 | Down | — | unused/down at snapshot |
-| 11 | Down | — | unused/down at snapshot |
-| 12 | Down | — | unused/down at snapshot |
-| 13 | Down | — | unused/down at snapshot |
-| 14 | Down | — | unused/down at snapshot |
-| 15 | Down | — | unused/down at snapshot |
-| 16 | Down | — | unused/down at snapshot |
-| 17 | Up / 1000FDx | AiMesh node `.181`; LLDP `RT-AC86U`; MAC `04:D4:C4:B8:52:28`; bridged client MACs also learned | high |
-| 18 | Up / 1000FDx | `Proxmox-2` `.71`, MAC `00:1A:9F:0C:30:3B`; guest MACs learned behind bridge | very high |
-| 19 | Up / 1000FDx | AiMesh node `.218`; LLDP `RT-AC86U`; MAC `04:D4:C4:C1:62:38`; bridged client MACs also learned | high |
+| 4 | Down | — | snapshot only |
+| 5 | Up / 10FDx | MAC `00:1C:2B:5A:6D:FD`, ARP `.7` | MAC/IP proven |
+| 6–16 | mostly down | see original 12 September evidence | snapshot only |
+| 17 | Up / 1000FDx | AiMesh `.181`, MAC `04:D4:C4:B8:52:28` | high |
+| 18 | Up / 1000FDx | `Proxmox-2` `.71`, MAC `00:1A:9F:0C:30:3B` | very high |
+| 19 | Up / 1000FDx | AiMesh `.218`, MAC `04:D4:C4:C1:62:38` | high |
 | 20 | Up / 1000FDx | `admin-01` `.48`, MAC `B8:27:EB:E8:36:CD` | very high |
-| 21 | Up / 1000FDx | `PROXMOX` `.70`, MAC `80:E8:2C:1C:55:D2`; guest MACs learned behind bridge | very high |
-| 22 | Down | — | unused/down at snapshot |
-| 23 | Up / 1000FDx | `docker-01` wired `.220`, MAC `D8:3A:DD:5A:51:44` | very high |
-| **24** | **Up / 1000FDx** | **primary ASUS router `.1`, MAC `24:4B:FE:5E:CC:C8`; LLDP `RT-AC86U`, remote port `eth4`** | **very high** |
+| 21 | Up / 1000FDx | `PROXMOX` `.70`, MAC `80:E8:2C:1C:55:D2` | very high |
+| 22 | Down | — | snapshot only |
+| 23 | Up / 1000FDx | `docker-01` `.220`, MAC `D8:3A:DD:5A:51:44` | very high |
+| 24 | Up / 1000FDx | ASUS router `.1`, MAC `24:4B:FE:5E:CC:C8` | **historical — superseded by current SPAN destination** |
 
-## Important port-24 correction
+This table must not be used to infer current physical cabling after the repatch.
 
-Port 24 is **not currently a SPAN/mirror destination**.
-
-The live command:
+## Current SPAN architecture
 
 ```text
-show monitor
-```
-
-reported:
-
-```text
-Port Mirroring is currently disabled.
-```
-
-Port 24 currently carries the primary ASUS router connection.
-
-The previous documentation that described port 24 as a confirmed current SPAN destination was incorrect.
-
-## Future repatching intent
-
-The physical patching is expected to change when the new dedicated USB capture adapter arrives.
-
-Agreed intent:
-
-- retain this 12 September table as the pre-repatch evidence snapshot;
-- design the final patch layout as a separate task;
-- move the current primary-router connection from port 24 to an approved normal LAN/uplink port;
-- reserve/repurpose port 24 as the dedicated SPAN destination;
-- connect port 24 only to the dedicated capture adapter;
-- pass that USB adapter directly to `sensor-01` through `PROXMOX`;
-- keep the capture interface free of IP/DHCP/default-route/DNS configuration;
-- configure mirroring only as part of the controlled sensor Phase 2 change;
-- validate normal LAN connectivity after repatching before activating capture;
-- prove mirrored packet arrival with `tcpdump` before enabling Suricata/Zeek.
-
-No cable should be moved purely to make the current table look tidy.
-
-## Future SPAN design
-
-Target path:
-
-```text
-selected switch source traffic
-              |
-              v
+switch ports 1-23
+      |
+      | monitored sources
+      v
 HP ProCurve mirror session
-              |
-              v
-Port 24  [future SPAN destination]
-              |
-              v
-dedicated USB Ethernet adapter on PROXMOX .70
-              |
-              v
-USB passthrough to sensor-01 VM
-              |
-              +--> Suricata
-              |
-              +--> Zeek
+      |
+      v
+port 24 — mirror destination
+      |
+      v
+dedicated USB Ethernet capture adapter
+      |
+      v
+PROXMOX USB passthrough
+      |
+      v
+sensor-01
+  +-- Suricata
+  +-- Zeek
 ```
 
-## Current MAC evidence used for infrastructure mapping
+The capture interface carries no normal management role and must remain isolated from management/Corosync routing.
 
-The 12 September ARP/MAC correlation proved:
+## Current known switch constraints
 
-```text
-192.168.2.1   -> 24:4b:fe:5e:cc:c8 -> switch port 24
-192.168.2.70  -> 80:e8:2c:1c:55:d2 -> switch port 21
-192.168.2.71  -> 00:1a:9f:0c:30:3b -> switch port 18
-192.168.2.181 -> 04:d4:c4:b8:52:28 -> switch port 17
-192.168.2.195 -> 2c:cf:67:30:be:1f -> switch port 3
-192.168.2.218 -> 04:d4:c4:c1:62:38 -> switch port 19
-192.168.2.220 -> d8:3a:dd:5a:51:44 -> switch port 23
-```
+- legacy Telnet-only management path;
+- unrestricted `public` SNMP community remains a hardening concern/risk-accepted item unless separately changed;
+- VLAN 1 remains the documented untagged baseline;
+- physical cable labels/port assignments require a fresh audit after repatching;
+- SPAN must remain operational when any cabling or switch configuration is changed.
 
-`admin-01` locally reported Ethernet MAC `b8:27:eb:e8:36:cd`, matching switch port 20.
+## Next physical-network documentation action
 
-## Discovery/hardening items for later
-
-Future network work should deliberately review:
-
-- final cable labels and patch layout;
-- management address/reservation strategy;
-- whether STP should remain disabled;
-- removal/replacement of unrestricted SNMP community `public`;
-- Telnet-only management limitations;
-- final VLAN design if segmentation is introduced;
-- switch reset/rebuild decision;
-- router reset/rebuild sequencing;
-- final SPAN source/destination configuration.
-
-Do not make these changes as part of documentation reconciliation.
+When physical access is convenient, perform a new read-only MAC/LLDP/link/console audit and create a **new dated current map**. Do not rewrite this snapshot; preserving the pre-repatch map is useful historical evidence.
