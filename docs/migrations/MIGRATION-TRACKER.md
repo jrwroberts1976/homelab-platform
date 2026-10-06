@@ -56,11 +56,11 @@ Detailed staging and cutover evidence remains in dated migration/audit documents
 
 ## Retired identities
 
-- `TestServer` -> retired; Pi 4 hardware is now `docker-01`.
-- `DietPi` -> retired; Pi 3 hardware is now `admin-01`.
-- `ids-01` -> decommissioned.
-- former `k3s-node-01` identity -> retired; hardware is now `media-01`.
-- old `dns-02` at `.242` -> retired.
+- `TestServer` -> retired; Pi 4 hardware is now `docker-01`. <!-- historical -->
+- `DietPi` -> retired; Pi 3 hardware is now `admin-01`. <!-- historical -->
+- `ids-01` -> decommissioned. <!-- historical -->
+- former `k3s-node-01` identity -> retired; hardware is now `media-01`. <!-- historical -->
+- old `dns-02` at `.242` -> retired. <!-- historical -->
 
 Historical repositories and dated audit documents may contain these names. Their presence in history does not make them current targets.
 
