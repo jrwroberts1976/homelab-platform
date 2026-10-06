@@ -22,6 +22,10 @@ GREENBONE_FRESHNESS_SECONDS = {{ management_report_greenbone_freshness_hours }} 
 SENSOR_EVIDENCE_FILE = Path("{{ management_report_sensor_evidence_file }}")
 SENSOR_FRESHNESS_SECONDS = {{ management_report_sensor_freshness_minutes }} * 60
 
+NETWORK_INVENTORY_TARGET = "{{ management_report_network_inventory_target | default('monitor-01') }}"
+NETWORK_INVENTORY_TEXTFILE = "{{ management_report_network_inventory_textfile | default('/var/lib/prometheus/node-exporter/homelab_network_hosts.prom') }}"
+NETWORK_INVENTORY_FRESHNESS_SECONDS = {{ management_report_network_inventory_freshness_minutes | default(15) }} * 60
+
 QUERIES = {
     "node_exporter_up": 'up{job="node-exporter"}',
     "firing_alerts": 'ALERTS{alertstate="firing"}',
@@ -30,6 +34,28 @@ QUERIES = {
     "reboot_required": "homelab_reboot_required",
     "unattended_upgrades_enabled": "homelab_unattended_upgrades_enabled",
     "patch_last_success": "homelab_patch_last_success_timestamp_seconds",
+    "network_inventory_total": (
+        'max(homelab_network_host_inventory_total{target_name="'
+        + NETWORK_INVENTORY_TARGET
+        + '"})'
+    ),
+    "network_online_total": (
+        'sum(homelab_network_host_up{target_name="'
+        + NETWORK_INVENTORY_TARGET
+        + '"}) or vector(0)'
+    ),
+    "network_first_seen_24h": (
+        'count(homelab_network_host_first_seen_seconds{target_name="'
+        + NETWORK_INVENTORY_TARGET
+        + '"} > time() - 86400) or vector(0)'
+    ),
+    "network_inventory_mtime": (
+        'max(node_textfile_mtime_seconds{target_name="'
+        + NETWORK_INVENTORY_TARGET
+        + '",file="'
+        + NETWORK_INVENTORY_TEXTFILE
+        + '"})'
+    ),
 }
 
 
@@ -120,6 +146,129 @@ def by_target_name(results):
     return values
 
 
+
+
+
+def prometheus_scalar(results):
+    if not isinstance(results, list) or len(results) != 1:
+        return None
+
+    try:
+        return float(results[0]["value"][1])
+    except (KeyError, IndexError, TypeError, ValueError):
+        return None
+
+
+def network_inventory_evidence(raw):
+    source = (
+        'Prometheus target_name="'
+        + NETWORK_INVENTORY_TARGET
+        + '" textfile="'
+        + NETWORK_INVENTORY_TEXTFILE
+        + '"'
+    )
+
+    inventory_total = prometheus_scalar(
+        raw.get("network_inventory_total", [])
+    )
+    online_total = prometheus_scalar(
+        raw.get("network_online_total", [])
+    )
+    first_seen_24h = prometheus_scalar(
+        raw.get("network_first_seen_24h", [])
+    )
+    source_mtime = prometheus_scalar(
+        raw.get("network_inventory_mtime", [])
+    )
+
+    values = (
+        inventory_total,
+        online_total,
+        first_seen_24h,
+        source_mtime,
+    )
+
+    if any(value is None for value in values):
+        return {
+            "status": "unavailable",
+            "source": source,
+            "reason": (
+                "One or more required Prometheus network inventory "
+                "metrics are absent"
+            ),
+            "freshness_threshold_seconds": (
+                NETWORK_INVENTORY_FRESHNESS_SECONDS
+            ),
+        }
+
+    collected_at = datetime.fromtimestamp(
+        source_mtime,
+        timezone.utc,
+    ).isoformat()
+
+    age_seconds = time.time() - source_mtime
+
+    evidence = {
+        "source": source,
+        "collected_at": collected_at,
+        "inventory_total": int(inventory_total),
+        "currently_online": int(online_total),
+        "first_seen_24h": int(first_seen_24h),
+        "source_age_seconds": int(max(0, age_seconds)),
+        "freshness_threshold_seconds": (
+            NETWORK_INVENTORY_FRESHNESS_SECONDS
+        ),
+    }
+
+    count_values = (
+        inventory_total,
+        online_total,
+        first_seen_24h,
+    )
+
+    if (
+        source_mtime <= 0
+        or any(value < 0 for value in count_values)
+        or any(not value.is_integer() for value in count_values)
+    ):
+        evidence["status"] = "invalid"
+        evidence["reason"] = (
+            "Network inventory metrics contain invalid count "
+            "or timestamp values"
+        )
+        return evidence
+
+    if age_seconds < -60:
+        evidence["status"] = "invalid"
+        evidence["reason"] = (
+            "Network inventory source timestamp is unexpectedly "
+            "in the future"
+        )
+        return evidence
+
+    if online_total > inventory_total:
+        evidence["status"] = "invalid"
+        evidence["reason"] = (
+            "Currently-online count exceeds retained inventory total"
+        )
+        return evidence
+
+    if first_seen_24h > inventory_total:
+        evidence["status"] = "invalid"
+        evidence["reason"] = (
+            "First-seen-in-24h count exceeds retained inventory total"
+        )
+        return evidence
+
+    if age_seconds > NETWORK_INVENTORY_FRESHNESS_SECONDS:
+        evidence["status"] = "stale"
+        evidence["reason"] = (
+            "Network inventory evidence exceeds freshness threshold"
+        )
+        return evidence
+
+    evidence["status"] = "ok"
+    return evidence
 
 
 def sensor_evidence():
@@ -729,6 +878,7 @@ def main():
         "schema_version": 1,
         "collected_at": collected_at,
         "greenbone": greenbone_evidence(),
+        "network_inventory": network_inventory_evidence(raw),
         "network_sensor": sensor_evidence(),
         "pihole": pihole_evidence(),
         "loki": {

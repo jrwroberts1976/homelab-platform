@@ -16,6 +16,57 @@ def number(value):
 
 
 
+
+def network_inventory_section(data):
+    evidence = data.get("network_inventory")
+
+    lines = [
+        "Network Inventory",
+        "-----------------",
+    ]
+
+    if not isinstance(evidence, dict):
+        lines.extend([
+            "Status: EVIDENCE UNAVAILABLE",
+            "Reason: Network inventory evidence section is absent",
+        ])
+        return lines
+
+    status = evidence.get("status", "unknown")
+
+    if status != "ok":
+        lines.append("Status: EVIDENCE " + str(status).upper())
+        lines.append(
+            "Reason: "
+            + str(evidence.get("reason", "No reason supplied"))
+        )
+
+        if evidence.get("collected_at"):
+            lines.append(
+                "Last evidence: "
+                + str(evidence["collected_at"])
+            )
+
+        return lines
+
+    lines.extend([
+        "Status: Evidence current",
+        "Last evidence: "
+        + str(evidence.get("collected_at", "UNKNOWN")),
+        "Inventory devices: "
+        + number(evidence.get("inventory_total")),
+        "Currently online: "
+        + number(evidence.get("currently_online")),
+        "First observed in last 24h: "
+        + number(evidence.get("first_seen_24h")),
+        "Evidence age: "
+        + number(evidence.get("source_age_seconds"))
+        + " seconds",
+    ])
+
+    return lines
+
+
 def network_sensor_section(data):
     sensor = data.get("network_sensor")
 
@@ -520,6 +571,7 @@ def evidence_provenance_section(data):
     ]
     for label, key in (
         ("Greenbone", "greenbone"),
+        ("Network inventory", "network_inventory"),
         ("Network sensor", "network_sensor"),
         ("Pi-hole", "pihole"),
     ):
@@ -601,6 +653,8 @@ def main():
     lines.extend(attention_section(data))
     lines.append("")
     lines.extend(greenbone_section(data))
+    lines.append("")
+    lines.extend(network_inventory_section(data))
     lines.append("")
     lines.extend(network_sensor_section(data))
     lines.append("")

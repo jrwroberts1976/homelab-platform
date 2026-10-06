@@ -28,6 +28,11 @@ management_report_evidence_file: "/var/lib/homelab-management-report/evidence.js
 
 management_report_patch_freshness_minutes: 90
 
+# Factual network-inventory evidence from the sole active collector owner.
+management_report_network_inventory_target: "monitor-01"
+management_report_network_inventory_textfile: "/var/lib/prometheus/node-exporter/homelab_network_hosts.prom"
+management_report_network_inventory_freshness_minutes: 15
+
 management_report_zabbix_token_file: "/etc/homelab-management-report/zabbix-api-token"
 
 # Specialist evidence received from dedicated producer hosts.
