@@ -33,7 +33,7 @@ The targeted profile provides strong embedded-platform evidence. The lwIP finger
 
 - Evidence source: `sensor-01` Zeek connection telemetry
 - Rolling window: 24 hours
-- Summary generated: `2026-10-05T00:23:30+01:00`
+- Summary generated: `2026-10-06T00:24:03+01:00`
 - MAC identity: `60:83:e7:f4:0b:2e`
 - Observed IP address(es): `192.168.2.92`
 - Connections: **4**
