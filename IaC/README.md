@@ -6,7 +6,7 @@ The normal control point is `admin-01` (`192.168.2.48`). Terraform describes sup
 
 Machine identity, addressing and lifecycle state are authoritative in `IaC/inventory/estate.json`. The Ansible inventory describes management/configuration scope and must agree with that canonical estate.
 
-**Network discovery placement (verified 26 September):** the collector, saved deep profiles and first-seen notifications remain on Proxmox-2 for now. The monitor-01 preflight passed (`eth0`, Nmap available, no colliding state files). See the [migration runbook](../docs/operations/network-discovery-monitor01-migration.md) for guarded staging and the later single-owner cutover. Do not enable source and target scanning at the same time.
+**Network discovery placement (cutover verified 27 September 2026):** `monitor-01` is the single active owner of the Network Host collector, selective enrichment, saved OS-evidence publication, trusted Proxmox guest refresh and first-seen notification path. `Proxmox-2` is the former source; its discovery timers are disabled/inactive and its retained state is rollback/history evidence only. See the [migration runbook](../docs/operations/network-discovery-monitor01-migration.md) for the guarded staging and cutover record. Do not re-enable source scanning while `monitor-01` is the production owner.
 
 ## Operating rules
 
@@ -50,14 +50,14 @@ The older top-level `terraform/` directory predates this convention. Do not add 
 
 ## Current managed estate
 
-As of 17 September 2026 the production Ansible inventory covers the following 15 Linux systems:
+The production Ansible inventory currently covers the following 15 Linux systems:
 
 | Host / service | Address | Platform / role |
 |---|---:|---|
 | `admin-01` | `192.168.2.48` | Raspberry Pi 3 administration / IaC controller / QNetd |
 | `dns-02` | `192.168.2.50` | Pi-hole + Unbound CT100 on `PROXMOX` |
 | `dns-01` | `192.168.2.51` | Pi-hole + Unbound CT101 on `Proxmox-2` |
-| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox/Loki VM202 on `Proxmox-2` |
+| `monitor-01` | `192.168.2.52` | Prometheus/Grafana/Alertmanager/Blackbox/Loki + active network discovery, VM202 on `Proxmox-2` |
 | `cloud-01` | `192.168.2.53` | Production Nextcloud/PostgreSQL/Redis VM200 on `PROXMOX` |
 | `mail-relay-01` | `192.168.2.54` | Internal Postfix relay CT102 on `PROXMOX` |
 | `sensor-01` | `192.168.2.55` | Operational Suricata/Zeek sensor VM201 on `PROXMOX` |
@@ -66,11 +66,11 @@ As of 17 September 2026 the production Ansible inventory covers the following 15
 | `komodo-01` | `192.168.2.58` | Komodo control plane CT104 on `PROXMOX` |
 | `zabbix-01` | `192.168.2.59` | Zabbix monitoring platform CT105 on `PROXMOX` |
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` cluster node 1 / NTP |
-| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / NTP / **current** Network Host Collector until verified migration |
+| `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` cluster node 2 / NTP; former discovery source retained for rollback/history |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / primary Proxmox NFS backup target |
 | `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host |
 
-The `zabbix_agents` group contains all 15 systems. Zabbix Agent 2 is deployed across that group and the matching 15 Zabbix host objects are reporting through the active-agent template.
+The `zabbix_agents` group contains all 15 systems. Zabbix Agent 2 is deployed across that group and the matching 15 Zabbix host objects report through the active-agent template.
 
 `home-01` is also an active production asset but is **not** part of the normal Ansible-managed Linux estate because HAOS is an appliance platform.
 
@@ -113,7 +113,7 @@ The 17 September application audit confirmed Nextcloud/PostgreSQL/Redis health b
 
 ### `komodo-01`
 
-CT104 is an unprivileged Debian 13 LXC with Docker, MongoDB and Komodo Core commissioned. Application backup and isolated database-restore validation are proven. CT104 is included in the IaC backup job; first unattended scheduled proof remains open from the displayed 17 September audit evidence and Proxmox protection remains a separate decision.
+CT104 is an unprivileged Debian 13 LXC with Docker, MongoDB and Komodo Core commissioned. Application backup and isolated database-restore validation are proven. Komodo Periphery is commissioned on the currently managed Docker hosts where explicitly configured, including `docker-01` and `greenbone-01`; onboarding remains deliberate per host rather than an estate-wide default. CT104 is included in the IaC backup job; first unattended scheduled proof remains open from the displayed 17 September audit evidence and Proxmox protection remains a separate decision.
 
 ### `zabbix-01`
 

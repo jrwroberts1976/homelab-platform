@@ -1,305 +1,207 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Target-State Architecture
 
-This document describes the remaining target direction for the homelab after the September 2026 estate reconciliation, production `jameshouse-pve` cluster formation, primary Proxmox guest-backup implementation, Greenbone commissioning, Komodo commissioning, Zabbix commissioning and selection of the router-hosted OpenVPN remote-access path.
+**Status:** FUTURE / REMAINING WORK ONLY  
+**Reviewed:** 6 October 2026
 
-Implemented state belongs in `CURRENT-STATE.md`; this document is intentionally limited to work that still needs to be built, hardened or proven.
+Implemented state belongs in `CURRENT-STATE.md`. This document intentionally contains only work that still needs to be built, hardened, proven or deliberately accepted.
 
 ## Design principles
 
 - Git-managed desired state wherever practical.
-- `IaC/inventory/estate.json` is the machine-readable authority for asset identity and addressing.
-- `IaC/` is the home for infrastructure, configuration and deployment automation.
+- `IaC/inventory/estate.json` is the authority for asset identity and addressing.
+- `IaC/` is the home for infrastructure/configuration automation.
 - Existing production resources are reconciled rather than recreated merely to satisfy code.
 - Production changes require identity, validation and rollback/recovery gates.
 - Stable Ansible reconciliation should be idempotent.
 - Secrets, Terraform state and recovery identities remain outside Git.
-- Monitoring, backup and recovery are part of service completion, not optional extras.
-- Current state, target state and historical evidence must remain clearly separated.
-- New addresses and VMIDs are allocated only after live/canonical collision checks; do not invent replacements for occupied identities.
+- Monitoring, backup and recovery are part of service completion.
+- Current state, future design and historical evidence remain distinct.
 
-## Implemented platform baseline
+## Implemented baseline — do not re-plan
 
-The following capabilities are implemented and must not be presented as future greenfield work:
+The following are already live and must not be treated as future greenfield work:
 
-- `admin-01` is the administration / IaC controller and external Corosync QNetd host.
-- `PROXMOX` and `Proxmox-2` are members of the two-node `jameshouse-pve` Proxmox cluster.
-- the cluster uses dedicated Corosync link0 (`10.255.255.1/30` ↔ `10.255.255.2/30`) with management-LAN link1 fallback.
-- `admin-01` supplies the QDevice third vote through `corosync-qnetd`.
-- all production guest IDs are cluster-unique.
-- current guest placement is CT100/CT102/CT104/CT105/VM200/VM201 on `PROXMOX` and CT101/CT103/VM202/VM203 on `Proxmox-2`.
-- `dns-01` and `dns-02` provide the resolver pair.
-- `monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki.
-- Grafana Alloy is deployed across the managed estate.
-- `zabbix-01` provides Zabbix 7.0 with PostgreSQL/TimescaleDB and Agent 2; all 15 managed Linux systems have corresponding Zabbix host objects and were observed reporting through the active-agent template.
-- ASUS router syslog is received on `monitor-01` and shipped to Loki through the dedicated Alloy router-log pipeline.
-- the ASUS RT-AC86U runs the production OpenVPN remote-access endpoint; external Windows laptop administration with split tunnelling was accepted as fully operational on 18 September 2026.
-- `cloud-01` provides production Nextcloud/PostgreSQL/Redis.
-- `mail-relay-01` provides the internal SMTP relay.
-- `sensor-01` is an operational passive sensor with Suricata and Zeek.
-- the HP ProCurve mirrors ports 1–23 to port 24 for sensor capture.
-- `greenbone-01` is an operational LAN-only Greenbone Community vulnerability scanner with feeds ready, commissioning scan complete, VM backup integrity proven and Proxmox protection enabled.
-- `komodo-01` is the commissioned Docker/MongoDB/Komodo Core control plane; application backup and isolated restore are proven.
-- `media-01` is the Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
-- `docker-01` is the Raspberry Pi 4 BirdNET-Go Docker host.
-- the Network Host Collector is active on `Proxmox-2` only.
-- Network Hosts enrichment, deep profiling, first-seen notification and Grafana dashboards are implemented.
-- HP ProCurve SNMP telemetry is collected on `monitor-01`.
-- the primary Proxmox guest-backup platform uses node-scoped NFS namespaces on `media-01`.
-- the `PROXMOX` backup job is IaC-reconciled to `100,102,104,105,200,201`.
-- the `Proxmox-2` backup job is IaC-reconciled to `101,103,202,203`.
-- CT103 has completed an isolated LXC restore/boot proof.
-- CT104 and CT105 each have manual snapshot-backup/integrity evidence and are included in the primary scheduled job.
-- Proxmox notification delivery through `mail-relay-01` is proven.
-- legacy identities recorded as retired in `estate.json` are not current deployment targets.
-
-These completed capabilities should be maintained and improved, not re-planned from scratch.
-
-## Priority 1 — complete backup and recovery proof
-
-Current storage design remains:
+- two-node `jameshouse-pve` cluster (`PROXMOX`, `Proxmox-2`) with dual Corosync links and QDevice/QNetd on `admin-01`;
+- current cluster-unique guest placement including CT104, CT105, VM203 and VM204;
+- Pi-hole/Unbound resolver pair on `dns-01` / `dns-02`;
+- `monitor-01` Prometheus/Grafana/Alertmanager/Blackbox/Loki platform;
+- 15-host managed Linux monitoring baseline with Zabbix Agent 2;
+- Step 10 Grafana Home/Hosts/Patch/Node Detail estate foundation;
+- Grafana Alloy logging baseline;
+- router syslog to `monitor-01` / Loki;
+- router-hosted OpenVPN remote access, operationally accepted 18 September 2026;
+- production Nextcloud/PostgreSQL/Redis on `cloud-01`;
+- `sensor-01` Suricata/Zeek passive sensing;
+- HP ProCurve SPAN with ports 1–23 mirrored to port 24;
+- `greenbone-01` vulnerability scanning and management-report evidence path;
+- `komodo-01` Komodo Core control plane and commissioned Periphery on explicitly managed hosts;
+- `home-01` Home Assistant OS VM204;
+- `media-01` Kodi endpoint and primary Proxmox NFS backup target;
+- `docker-01` BirdNET-Go host;
+- `monitor-01` as the **single active network-discovery owner** after the 27 September cutover;
+- persistent Network Hosts pages / Grafana publication / bounded host-assessment workflow;
+- node-scoped Proxmox backup jobs:
 
 ```text
-PROXMOX .70 -> media-backup-proxmox -> media-01:/srv/backup/pve-proxmox
-Proxmox-2 .71 -> media-backup-proxmox-2 -> media-01:/srv/backup/pve-proxmox-2
+PROXMOX:   100,102,104,105,200,201,204
+Proxmox-2: 101,103,202,203
 ```
 
-Current scheduled guest sets are:
+- observed unattended backup evidence for CT105 and VM203;
+- isolated LXC restore proof for CT103;
+- controlled 5 October patch cycle completed with 15/15 reporting, zero pending updates, zero security updates, zero reboot-required hosts and zero automatic reboots.
 
-```text
-PROXMOX
-  100,102,104,105,200,201
-
-Proxmox-2
-  101,103,202,203
-```
-
-The schedules are reconciled through IaC. CT104 and CT105 were added after successful manual snapshot backups and archive-integrity checks. The unattended 16 September `Proxmox-2` cycle succeeded for `101,103,202`; VM203 has separate manual snapshot and Zstandard-integrity proof and is included in the job.
+## Priority 1 — recovery depth and second-copy resilience
 
 Remaining outcomes:
 
-- observe and record the first unattended 02:15 cycle that includes CT104 and CT105;
-- observe and record the first unattended 03:15 cycle that includes VM203;
-- review capacity after several retention cycles;
-- prove at least one representative QEMU VM restore;
+- observe/record explicit first unattended proof for CT104 and VM204 if not already captured elsewhere;
+- perform a representative isolated QEMU VM restore proof;
 - prove application-consistent Nextcloud/PostgreSQL recovery for `cloud-01`;
-- add an independent second copy for important data;
-- protect BirdNET persistent data, user media and controller recovery state;
+- add an independent second physical/failure-domain copy for important data;
+- protect BirdNET persistent data, user media and controller recovery state appropriately;
 - protect recovery identities, SSH keys and SOPS/age material outside the running controller;
-- add stale/failed-backup monitoring where it produces actionable signal.
+- add backup freshness/capacity monitoring where it gives actionable signal.
 
-There is no requirement to collapse the two proven NFS namespaces merely because the hosts share a cluster, and no requirement to deploy Proxmox Backup Server merely for completeness.
+There is no requirement to collapse the two proven NFS namespaces merely because both nodes are in one cluster, and no requirement to deploy Proxmox Backup Server merely for completeness.
 
-See [Backup Strategy](BACKUP-STRATEGY.md).
+See `BACKUP-STRATEGY.md`.
 
-## Priority 2 — cluster resilience proof and HA decision
+## Priority 2 — Proxmox resilience proof
 
-Cluster creation is complete. Remaining resilience work:
+The cluster exists; the remaining work is proof and operational maturity:
 
-- deliberately test loss of Corosync link0 and prove traffic moves to link1 without loss of membership;
+- deliberately test loss of Corosync link0 and prove traffic continues over link1;
 - perform a controlled single-node outage/quorum exercise while QDevice is available;
-- monitor QDevice reachability and Corosync link health;
-- document planned maintenance behaviour for one-node shutdowns;
-- decide whether node-local storage plus backup/manual recovery is sufficient;
-- if automatic guest failover is required, design storage replication or shared storage before enabling HA;
-- do not describe the cluster as guest-HA capable while production disks remain only on node-local storage.
+- add useful QDevice/Corosync-link health telemetry;
+- document one-node maintenance behaviour;
+- keep the current node-local-storage/manual-recovery position explicit;
+- do not describe the cluster as automatic guest HA while guest disks remain node-local.
 
-The cluster itself is not a substitute for guest-data availability.
+Shared storage / automatic guest HA remains out of scope unless explicitly reopened.
 
-## Priority 3 — retire migration rollback state after fresh proof
+## Priority 3 — retire migration rollback state
 
-The cluster migration deliberately retained pre-cluster local LVs on `Proxmox-2`:
-
-```text
-precluster-20260914-vm-101-disk-0
-precluster-20260914-vm-103-disk-0
-precluster-20260914-vm-200-cloudinit
-precluster-20260914-vm-200-disk-0
-```
-
-These are rollback evidence, not active guest disks.
+Pre-cluster rollback LVs on `Proxmox-2` are historical evidence, not live guest disks.
 
 Target outcome:
 
-- confirm the renamed LVs are not referenced by any live guest;
-- preserve required off-node backup/configuration evidence;
-- remove the retained LVs deliberately once their rollback value has expired;
-- record the cleanup so they are never mistaken for active storage.
+- prove they are unreferenced by current guests;
+- retain sufficient off-node recovery evidence;
+- remove them deliberately once rollback value is accepted as expired;
+- record the cleanup so they cannot be mistaken for production storage.
 
-## Priority 4 — controlled patch and lifecycle management
+## Priority 4 — lifecycle and container operations
 
-The 14 September package-update backlog was cleared through the controlled patch workflow. Ongoing targets are:
+Ongoing targets:
 
-- process future host updates through the controlled patch workflow;
-- preserve service availability and recovery gates during clustered Proxmox maintenance;
-- deliberately manage PVE patch levels;
-- keep application/container version ownership explicit;
-- use the commissioned `komodo-01` control plane for routine Docker application/version operations as managed hosts are onboarded;
-- prove Komodo-managed update/rollback on low-risk workloads before retiring older Docker-management paths;
-- complete Komodo HTTPS hardening and deliberate Periphery onboarding without bypassing Git/IaC ownership;
-- retire older Docker-management paths only after equivalent control, secrets handling and rollback are demonstrated.
+- continue security-only unattended patching with automatic reboot disabled;
+- use controlled maintenance for full package/PVE upgrade cycles;
+- preserve cluster/DNS/service safety gates during reboots;
+- keep application/container image ownership separate from OS patching;
+- use Komodo for justified routine container application/version operations;
+- prove low-risk update/rollback ownership before retiring older Docker-management paths;
+- complete Komodo HTTPS hardening;
+- onboard additional Periphery hosts only where there is an explicit operational need.
 
-`docker-01` remains intentionally single-purpose for BirdNET-Go unless a later reviewed design explicitly changes that role.
+`docker-01` remains intentionally single-purpose for BirdNET-Go unless a later reviewed design changes that role.
 
-## Priority 5 — network hardening and remote access
+## Priority 5 — network hardening
 
 ### HP ProCurve
 
-The HP ProCurve 2510G-24 is operational as LAN switch and passive-sensor SPAN source. Remaining work:
+Remaining work:
 
-- capture a fresh physical port map after SPAN/cabling changes;
-- replace or restrict the unrestricted `public` SNMP community through a controlled change;
-- assess practical mitigations for the legacy Telnet-only management path;
-- preserve sensor capture while making management/security changes;
-- validate forwarding after physical/configuration changes.
+- refresh the physical port map after the SPAN/cabling changes;
+- review/remove unrestricted SNMP `public` where practical;
+- assess mitigations for Telnet-only management;
+- preserve sensor capture while changing management/security settings;
+- validate forwarding after any physical/configuration change.
 
-Do not invent physical switch-port assignments where they have not been validated.
+Do not invent physical port assignments that have not been observed.
 
 ### ASUS router
 
-The ASUS RT-AC86U remains DHCP authority, AiMesh controller and the selected OpenVPN remote-access endpoint.
+The router remains DHCP authority, AiMesh controller and OpenVPN endpoint.
 
-A clean firmware/factory-reset rebuild remains optional and must preserve WAN configuration, DHCP reservations, DNS advertisement, Wi-Fi/AiMesh state, OpenVPN, DDNS, required routing policy, syslog configuration and rollback access.
+A clean rebuild/reset is optional and must preserve WAN configuration, DHCP reservations, DNS advertisement, Wi-Fi/AiMesh state, OpenVPN, DDNS, routing, syslog and rollback access.
 
-Approved resolver pair:
+Remote-access service completion is **not** outstanding; remaining VPN work is maintenance/recovery documentation.
 
-```text
-192.168.2.51
-192.168.2.50
-```
+## Priority 6 — service-specific closeout
 
-`192.168.2.48` must not return as a resolver address.
+### Home Assistant
 
-### Remote-access VPN maintenance
+`home-01` is already commissioned. Remaining optional/operational work:
 
-ASUS OpenVPN Server 1 is **FULLY OPERATIONAL** for the production remote-administration use case. External Windows laptop access with a `10.8.0.x` tunnel address, homelab LAN reachability and normal split-tunnel Internet access was accepted on 18 September 2026.
+- external availability monitoring;
+- deeper native/whole-VM recovery validation;
+- explicit radio/coordinator design for Zigbee/Z-Wave/Thread/Bluetooth when needed.
 
-Remaining items are maintenance/recovery work rather than service-completion gates:
-
-- maintain/verify ASUS DDNS and the stable client endpoint;
-- retain router/OpenVPN observability through the existing router-syslog/Loki pipeline;
-- maintain router-reset/replacement recovery and client re-enrolment documentation;
-- keep OpenVPN client profiles, passwords and protected certificate material outside Git.
-
-See [VPN Remote-Access Design and Implementation Record](../network/VPN-REMOTE-ACCESS-DESIGN.md).
-
-## Priority 6 — remaining service expansion
-
-### Home Assistant / home automation
-
-Home automation is commissioned as `home-01`; it is no longer a future platform build. The remaining work is operational closeout and later device/radio integration. The implemented identity is:
-
-```text
-hostname:      home-01
-IPv4:         192.168.2.60/24
-VMID:         204
-MAC:          02:00:00:00:02:04
-Proxmox node: PROXMOX
-storage:      vm-ssd
-```
-
-The implemented deployment is a dedicated Home Assistant OS 18.2 VM rather than an LXC/container deployment or a workload on `docker-01`. It uses 2 vCPU, 4096 MiB RAM and 32 GiB disk with OVMF/UEFI, VirtIO networking/SCSI and QEMU guest agent enabled.
-
-The base-build IaC lives under `IaC/terraform/proxmox/home-01/`, with a guarded deployment entry point at `IaC/scripts/deploy-home-01.sh`. The build pins the upstream HAOS image/checksum and refuses unexpected Terraform actions.
-
-Remaining operational closeout is:
-
-- observe the first unattended backup including VM204;
-- add external HTTP/platform monitoring without unnecessarily exporting household entity/state data;
-- deepen native/whole-VM recovery validation as useful;
-- choose Zigbee/Z-Wave/Thread/Bluetooth architecture separately, preferring network-attached coordinators where practical to avoid unnecessary node affinity.
-
-No direct WAN exposure is approved. Prefer local control and use the existing router-hosted VPN for remote administration unless a later reviewed design deliberately selects another supported Home Assistant remote-access mechanism.
-
-See [Home Automation / Home Assistant Design](HOME-AUTOMATION-DESIGN.md).
+No direct WAN exposure is approved by default; use the production VPN unless a later design explicitly chooses another method.
 
 ### Password manager
 
-A self-hosted password-management service remains an optional application workstream rather than a blocker for the infrastructure build.
+A password manager remains a planned optional application workstream.
 
-Minimum design gates:
+Before deployment:
 
-- product selection based on supported clients, export/recovery capability and maintainability;
-- HTTPS and a defined trusted access path;
-- protected secrets and recovery material outside Git;
-- encrypted/off-host backup of persistent data;
-- proven restore before the service becomes the sole copy of important credentials;
-- monitored service availability;
-- documented emergency access if the homelab, DNS or VPN is unavailable;
-- MFA/passkey capability where supported and appropriate.
+- select product deliberately;
+- define trusted HTTPS access;
+- keep secrets/recovery material outside Git;
+- implement encrypted/off-host backup;
+- prove restore before it becomes the only copy of important credentials;
+- document emergency access independent of the running homelab;
+- use MFA/passkeys where supported and appropriate.
 
-No product is recorded as selected yet. Do not silently treat a candidate as approved until the choice is made.
+No password-manager product is yet authoritative merely because it has been discussed.
 
-## Priority 7 — observability and analytics expansion
+### Edge / Cloudflare Tunnel
 
-The core metrics/logging/network-observability platform and Zabbix host-monitoring platform are live. Future work should add useful operational context rather than duplicate host-up telemetry:
+`edge-01` exists, but `cloudflared` is not deployed.
 
-- add cluster-specific health for Corosync links, vote/quorum state and QDevice reachability;
-- tune Zabbix templates, dashboards and alerts so they are actionable and low-noise;
-- add service-specific Zabbix coverage only where it complements rather than duplicates Prometheus/Blackbox checks;
-- continue service-specific Prometheus/Loki telemetry where actionable;
-- correlate Network Hosts inventory, enrichment, deep profiles and switch topology;
-- analyse `me.jrwroberts.co.uk` as the first evidence-gathering step for the Web Platform / Analytics workstream; record site structure, content, performance, accessibility, SEO, security and technical-delivery findings;
-- use the site analysis to refine the planned Cloudflare edge/security, Umami visitor analytics and Grafana/Loki origin/application-health design;
-- build the unified Web Platform / Analytics dashboard after the site-analysis findings are recorded;
-- keep the public portfolio externally hosted and independent of normal homelab availability;
-- add backup freshness/storage-capacity visibility after more unattended history is available.
+Deploy a tunnel only for a real approved service requirement, with credentials outside Git, reviewed origin policy, recovery/rotation documentation and useful monitoring.
 
-## Security platform
+## Priority 7 — observability and host intelligence
 
-### Passive detection
+The core Grafana estate foundation is complete. Remaining value is in **quality and depth**, not recreating the base dashboards.
 
-The passive sensor platform is implemented. Future work is incremental tuning and hardening:
+Future work can include:
 
-- tune Suricata/Zeek outputs for useful signal;
-- retain capture-interface isolation;
-- monitor sensor/log-pipeline health;
-- manage storage/retention deliberately;
-- add detection runbooks only when there is an operational response.
+- cluster/QDevice/link telemetry;
+- low-noise service-specific Zabbix/Prometheus checks;
+- stronger backup freshness/capacity visibility;
+- refinement of Network Hosts evidence, AI confidence and manual-review workflow;
+- preserve version/history for host descriptions and avoid silently overwriting human-approved conclusions;
+- never treat unavailable telemetry as healthy;
+- never send secrets or raw sensitive DNS/client data to AI.
 
-### Vulnerability management
+CrowdSec is **not currently deployed** and must not be listed as an active signal source. Evaluate it only if future ingress exposure creates a justified need.
 
-Greenbone/OpenVAS is implemented as `greenbone-01` VM203 on `Proxmox-2`; it is not future greenfield work.
+## Priority 8 — public web / analytics
 
-Remaining vulnerability-management work is operational:
+The public portfolio should remain externally hosted so normal homelab outages do not remove public availability.
 
-- observe feed freshness and resource/storage growth;
-- retain LAN-only exposure;
-- address the low-severity ICMP timestamp finding through reviewed IaC if remediation is desired;
-- define an explicit image-digest/update policy if rolling Community Container tags become operationally undesirable;
-- observe the first unattended VM203 backup;
-- maintain a repeatable scan/remediation workflow;
-- complete validation of the Ansible-managed scan runner and machine-readable evidence pipeline before enabling recurring execution;
-- integrate the resulting Greenbone evidence with the management-report/AI-review workflow once the scan pipeline is proven.
+Future work may include:
 
-The active scanner remains separate from `sensor-01` passive detection.
-
-## Edge / Cloudflare Tunnel
-
-`edge-01` exists as CT103 on `Proxmox-2`, but the connector workload is intentionally not deployed.
-
-Deploy Cloudflare Tunnel only when a real service requirement exists. Keep connector credentials outside Git, deploy through reviewed IaC, validate outbound connectivity/origin policy, document credential rotation/recovery and add useful monitoring.
-
-## Public services
-
-Public/static workloads should continue to use external hosting where that reduces homelab dependency. The personal portfolio site is an example of a workload that does not need home infrastructure for normal public availability.
+- evidence-based review of `me.jrwroberts.co.uk`;
+- Cloudflare edge/security observations;
+- Umami or equivalent visitor analytics if justified;
+- Grafana/Loki application/origin health where useful;
+- unified dashboard only after the underlying data sources are defined.
 
 ## Completion criteria
 
-The platform can be considered operationally mature when:
+The platform can be considered operationally mature when the remaining accepted goals are either proven or explicitly risk-accepted:
 
-- post-cluster scheduled Proxmox backups have an observed unattended success record for the complete current guest selections;
-- representative LXC, QEMU VM and application restores are proven;
-- important data has an independent secondary copy;
-- controller recovery state is protected off-host;
-- Corosync link fallback and QDevice-assisted single-node maintenance behaviour are proven;
-- the HA/storage decision is explicit rather than assumed;
-- controlled patch/lifecycle management is routine;
-- physical network mapping reflects current SPAN/cabling reality;
-- remaining switch/router hardening decisions are completed or explicitly accepted;
-- remote administrative access uses the documented router-hosted VPN rather than directly exposed management services;
-- vulnerability scanning remains maintainable and recovery-aware;
-- observability remains useful and low-noise across both Prometheus/Grafana/Loki and Zabbix;
+- representative LXC, QEMU and application restore evidence;
+- independent second copy for important data;
+- off-host controller recovery material;
+- Corosync link-fallback and controlled single-node quorum proof;
+- explicit node-local-storage/manual-recovery position retained or deliberately replaced;
+- routine controlled patch/lifecycle management;
+- current physical network mapping and reviewed switch/router hardening;
+- useful, low-noise observability across metrics/logging/Zabbix;
 - service ownership and IaC authority remain unambiguous;
-- `home-01` remains an active commissioned service with monitoring and recovery evidence maintained as the platform evolves;
-- optional new services are introduced only when their operational value justifies their recovery and maintenance burden.
+- optional services are introduced only when their operational value justifies their recovery and maintenance burden.

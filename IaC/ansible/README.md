@@ -73,7 +73,7 @@ The former DNS role at `192.168.2.48` has been retired; `.48` is `admin-01` and 
 | `dns-resolver.yml` | Configure a reusable Pi-hole + Unbound resolver |
 | `dns-02.yml` | Legacy/specific entry point for the `dns-02` resolver build |
 | `dns-local-records.yml` | Reconcile managed Pi-hole local DNS records |
-| `monitoring.yml` | Reconcile Prometheus/Grafana/Alertmanager/Blackbox |
+| `monitoring.yml` | Reconcile Prometheus/Grafana/Alertmanager/Blackbox/Loki and provisioned Grafana dashboards |
 | `node-exporters.yml` | Reconcile Node Exporter on covered groups |
 | `router-syslog.yml` | Reconcile ASUS remote syslog receiver on `monitor-01` |
 | `cloud-01.yml` | Reconcile the `cloud-01` OS baseline |
@@ -87,7 +87,7 @@ The former DNS role at `192.168.2.48` has been retired; `.48` is `admin-01` and 
 | `zabbix-platform.yml` | Reconcile the dedicated Zabbix server platform under an explicit deployment gate |
 | `zabbix-agent.yml` | Reconcile Zabbix Agent 2 across `zabbix_agents` |
 
-Additional Greenbone and Komodo playbooks/roles are present under this directory and retain their service-specific approval/identity gates.
+Additional Greenbone, Komodo, network-discovery and patch-status playbooks/roles are present under this directory and retain their service-specific approval/identity gates.
 
 The `birdnet-01.yml` filename is retained as an implementation interface; its current inventory target is `docker-01`.
 
@@ -138,7 +138,14 @@ Both resolvers are Proxmox LXCs using Pi-hole + Unbound.
 
 Unbound performs recursion/DNSSEC validation; Pi-hole provides policy/blocking and local DNS. Resolver builds must be validated directly before any DHCP/client cutover.
 
-Known current parity defect: `dns-02` does not currently return the `dns-01.jameshouse` local record because the base managed host list includes `dns-02` but not the cross-record for `dns-01`. Correct that in a separate reviewed IaC change rather than through manual GUI drift.
+The earlier cross-resolver local-record parity defect is **resolved in current IaC**. The managed local-host set includes both:
+
+```text
+192.168.2.50 dns-02.jameshouse dns-02
+192.168.2.51 dns-01.jameshouse dns-01
+```
+
+Do not reintroduce the old defect through manual Pi-hole GUI drift. Any future local-record change belongs in the managed resolver role and should be validated on both resolvers.
 
 ## Time service
 
@@ -157,6 +164,10 @@ Chrony runs on the physical hypervisors so LAN time does not depend on a guest.
 
 The capture adapter is a passive-monitoring interface and must not be repurposed as a normal routed management or Corosync interface.
 
+## Network-discovery state
+
+The 27 September 2026 single-owner cutover is complete. `monitor-01` owns the active collector, selective enrichment, OS-evidence publisher, Proxmox guest refresh and first-seen notifier. `Proxmox-2` retains protected source state only for rollback/history; its source discovery timers are disabled/inactive. Do not enable both source and destination scanners concurrently.
+
 ## Zabbix state
 
 `zabbix-01` is the dedicated Zabbix server. The `zabbix_agents` group contains all 15 managed Linux systems; host objects are in `Homelab/Linux`, linked to `Linux by Zabbix agent active`, and all 15 were observed reporting on 16 September 2026.
@@ -165,7 +176,7 @@ Agent configuration normally uses `192.168.2.59` for both `Server` and `ServerAc
 
 ## Komodo state
 
-`komodo-01` is commissioned with Docker, MongoDB and Komodo Core. It is the preferred control plane for routine Docker application/version management as that workflow is adopted. Periphery onboarding and HTTPS hardening remain separate operational work.
+`komodo-01` is commissioned with Docker, MongoDB and Komodo Core. It is the preferred control plane for routine Docker application/version management as that workflow is adopted. Komodo Periphery has been commissioned on explicitly managed hosts including `docker-01` and `greenbone-01`; additional onboarding remains deliberate per host. HTTPS hardening remains separate operational work.
 
 ## Protected configuration
 
@@ -184,7 +195,7 @@ SSH automation/recovery keys live under `~/.ssh/` and are referenced by the appr
 
 ## Monitoring coverage
 
-The central Prometheus/Grafana/Loki platform remains operational on `monitor-01`. Zabbix now provides a second, host/service-oriented monitoring plane across all 15 managed Linux systems.
+The central Prometheus/Grafana/Loki platform remains operational on `monitor-01`. Zabbix provides a second, host/service-oriented monitoring plane across all 15 managed Linux systems. The Step 10 estate-wide Grafana foundation is complete, including the Home/operations view, Hosts view, Patch & Reboot Status dashboard and Node Detail navigation.
 
 Target membership does not imply complete service-level observability. Prefer actionable service health and low-noise alerts over duplicate host-up checks.
 
