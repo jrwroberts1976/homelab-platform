@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Phase A Documentation Reconciliation — 6 October 2026
 
 **Status:** COMPLETE ON BRANCH; PR/CI VALIDATION REQUIRED
