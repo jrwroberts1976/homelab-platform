@@ -14,6 +14,22 @@
 - Do not invent missing roadmap steps or names.
 - Estimates are hands-on engineering effort, excluding observation time and unexpected failures.
 
+## Programme progress snapshot
+
+As of 7 October 2026:
+
+| View | Progress | Meaning |
+|---|---:|---|
+| Authoritative delivery steps 1–10 | **10/10 complete — 100%** | All named/evidenced delivery steps currently recoverable from the repository are closed |
+| Prioritised project areas fully closed | **2/10 — 20%** | Projects 1 and 4 are fully complete |
+| Prioritised project areas with baseline/foundation complete | **4/10 — 40%** | Projects 1–4 have either closed or reached baseline/foundation-complete state |
+| Optional/deferred projects | **3/10** | Projects 5, 9 and 10 are not automatic commitments |
+| Genuine outstanding/review projects | **3/10** | Projects 6, 7 and 8 contain substantive remaining engineering work |
+
+**Practical programme estimate:** approximately **65–75% complete** when optional/deferred work is excluded and partially completed foundations are recognised. This is a planning estimate, not a formal weighted burn-down metric.
+
+The core platform is largely built. Remaining work is now concentrated in recovery proof, hardening, refinement and technical-debt cleanup rather than major missing infrastructure.
+
 ## Closed priority override — estate patching
 
 **Status:** COMPLETE — 5 October 2026
@@ -46,11 +62,32 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 | 9 | Web analytics | OPTIONAL | **1–3 days** | Portfolio/Cloudflare/Umami/Grafana-Loki evidence-led analytics work |
 | 10 | Cloudflare Tunnel | DEFERRED | **1–2 days if approved** | `edge-01` reserved; deploy `cloudflared` only for a real approved service requirement |
 
+## Choose what to do next
+
+The remaining non-optional work has different goals. Choose according to the outcome you want rather than treating the list as a mandatory sequence.
+
+| Choice | Project | Why choose it next | Effort | What completion buys |
+|---|---|---|---:|---|
+| **A — strongest resilience gain** | **#6 Backup and disaster recovery** | Biggest remaining operational-risk reduction | **2–4 days** | Proven QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and stronger recovery confidence |
+| **B — quickest useful win** | **#2 Security and monitoring tuning** | Small remaining effort on an already-working baseline | **2–4 hours** | Close demonstrated monitoring/security gaps without adding speculative tooling |
+| **C — improve day-to-day visibility** | **#3 Grafana dashboards and AI host intelligence** | Builds on a strong existing dashboard foundation | **2–5 days** | Better host intelligence, manual-review workflow and version/history quality |
+| **D — harden container operations** | **#7 Komodo hardening** | Reduces control-plane and update risk around Docker management | **1–3 days** | HTTPS plus proven low-risk update/rollback behaviour and deliberate onboarding controls |
+| **E — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
+
+### Decision shortcuts
+
+- If the priority is **resilience and recovery confidence**, choose **Project 6**.
+- If the priority is a **short, high-value session**, choose **Project 2**.
+- If the priority is **better operational visibility and host intelligence**, choose **Project 3**.
+- If the priority is **container-management security and rollback confidence**, choose **Project 7**.
+- If the priority is **reducing legacy clutter and technical debt**, choose **Project 8**.
+- Projects **5, 9 and 10 remain optional/deferred** and should only be started because you specifically want the capability.
+
 ### Current sequence
 
-1. Documentation audit/remediation is closed.
-2. Return to Project 3 host-intelligence quality/refinement if desired.
-3. Continue backup/recovery depth and Komodo hardening according to priority.
+1. Choose the next project using the decision guide above.
+2. If no preference is expressed, default engineering priority is **Project 6 (Backup/DR)**, then **Project 7 (Komodo hardening)**.
+3. Project 2 is suitable as a short tuning task; Project 3 is a larger quality/refinement stream.
 4. Optional/deferred items are not automatic commitments.
 
 ## Delivery-step history
