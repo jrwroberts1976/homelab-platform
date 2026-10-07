@@ -21,12 +21,12 @@ As of 7 October 2026:
 | View | Progress | Meaning |
 |---|---:|---|
 | Authoritative delivery steps 1–10 | **10/10 complete — 100%** | All named/evidenced delivery steps currently recoverable from the repository are closed |
-| Prioritised project areas fully closed | **2/10 — 20%** | Projects 1 and 4 are fully complete |
+| Prioritised project areas fully closed | **3/10 — 30%** | Projects 1, 2 and 4 are fully complete |
 | Prioritised project areas with baseline/foundation complete | **4/10 — 40%** | Projects 1–4 have either closed or reached baseline/foundation-complete state |
 | Optional/deferred projects | **3/10** | Projects 5, 9 and 10 are not automatic commitments |
 | Genuine outstanding/review projects | **3/10** | Projects 6, 7 and 8 contain substantive remaining engineering work |
 
-**Practical programme estimate:** approximately **65–75% complete** when optional/deferred work is excluded and partially completed foundations are recognised. This is a planning estimate, not a formal weighted burn-down metric.
+**Practical programme estimate:** approximately **70–80% complete** when optional/deferred work is excluded and partially completed foundations are recognised. This is a planning estimate, not a formal weighted burn-down metric.
 
 The core platform is largely built. Remaining work is now concentrated in recovery proof, hardening, refinement and technical-debt cleanup rather than major missing infrastructure.
 
@@ -52,7 +52,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 | # | Project | Status | Estimated effort | Remaining outcome |
 |---|---|---|---|---|
 | 1 | Greenbone and AI-assisted morning management report | COMPLETE | — | Operational factual + AI-assisted reporting with fail-safe factual fallback, source provenance and factual network-inventory v1 pinned to `monitor-01` |
-| 2 | Security and monitoring integration | BASELINE COMPLETE / TUNING | **2–4 hours when resumed** | Add only demonstrated actionable gaps; CrowdSec remains absent and must not be treated as a current source |
+| 2 | Security and monitoring integration | **COMPLETE — 7 OCTOBER 2026** | — | Monitoring core, Zabbix, Suricata/Zeek passive sensor and evidence integration closure-validated; CrowdSec remains absent/deferred and is not a current source |
 | 3 | Grafana dashboards and AI host intelligence | FOUNDATION COMPLETE / QUALITY REFINEMENT | **2–5 days** | Estate dashboard/patch/node foundation complete; continue host-intelligence/manual-review/version-history refinement without treating missing telemetry as healthy |
 | 4 | Homelab documentation audit | **COMPLETE — 6 OCTOBER 2026** | — | Audit baseline PR #182; remediation PRs #183, #184 and #185 completed and guard-validated |
 | 5 | Password manager | PLANNED / OPTIONAL | **1–2 days** | Select product/design deliberately; HTTPS/MFA, off-host backup, restore proof and emergency access required |
@@ -69,15 +69,13 @@ The remaining non-optional work has different goals. Choose according to the out
 | Choice | Project | Why choose it next | Effort | What completion buys |
 |---|---|---|---:|---|
 | **A — strongest resilience gain** | **#6 Backup and disaster recovery** | Biggest remaining operational-risk reduction | **2–4 days** | Proven QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and stronger recovery confidence |
-| **B — quickest useful win** | **#2 Security and monitoring tuning** | Small remaining effort on an already-working baseline | **2–4 hours** | Close demonstrated monitoring/security gaps without adding speculative tooling |
-| **C — improve day-to-day visibility** | **#3 Grafana dashboards and AI host intelligence** | Builds on a strong existing dashboard foundation | **2–5 days** | Better host intelligence, manual-review workflow and version/history quality |
-| **D — harden container operations** | **#7 Komodo hardening** | Reduces control-plane and update risk around Docker management | **1–3 days** | HTTPS plus proven low-risk update/rollback behaviour and deliberate onboarding controls |
-| **E — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
+| **B — improve day-to-day visibility** | **#3 Grafana dashboards and AI host intelligence** | Builds on a strong existing dashboard foundation | **2–5 days** | Better host intelligence, manual-review workflow and version/history quality |
+| **C — harden container operations** | **#7 Komodo hardening** | Reduces control-plane and update risk around Docker management | **1–3 days** | HTTPS plus proven low-risk update/rollback behaviour and deliberate onboarding controls |
+| **D — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
 
 ### Decision shortcuts
 
 - If the priority is **resilience and recovery confidence**, choose **Project 6**.
-- If the priority is a **short, high-value session**, choose **Project 2**.
 - If the priority is **better operational visibility and host intelligence**, choose **Project 3**.
 - If the priority is **container-management security and rollback confidence**, choose **Project 7**.
 - If the priority is **reducing legacy clutter and technical debt**, choose **Project 8**.
@@ -87,7 +85,7 @@ The remaining non-optional work has different goals. Choose according to the out
 
 1. Choose the next project using the decision guide above.
 2. If no preference is expressed, default engineering priority is **Project 6 (Backup/DR)**, then **Project 7 (Komodo hardening)**.
-3. Project 2 is suitable as a short tuning task; Project 3 is a larger quality/refinement stream.
+3. Project 3 remains the larger quality/refinement stream.
 4. Optional/deferred items are not automatic commitments.
 
 ## Delivery-step history
@@ -116,6 +114,25 @@ Delivered/verified:
 - live production report and provenance validated;
 - repeat deployment completed with `changed=0`, `unreachable=0`, `failed=0`;
 - implementation committed as `abb5c90`.
+
+### Security and monitoring integration — COMPLETE
+
+Completed 7 October 2026 and recorded in `docs/architecture/SECURITY-MONITORING-INTEGRATION-CLOSURE-2026-10-07.md`.
+
+Closure validation demonstrated:
+
+- Prometheus, Alertmanager, Loki, Grafana and Blackbox Exporter healthy on `monitor-01`;
+- every active Prometheus target reported `up`, with no non-healthy targets returned;
+- Zabbix core services active on `zabbix-01` with no failed units or matching recent server errors;
+- Suricata, Alloy, node exporter and managed `homelab-zeek.service` active on `sensor-01`;
+- `zeekctl status` reported the standalone worker running and live protocol logs were current;
+- Zeek capture loss was 0.0% with zero gaps;
+- Suricata kernel-drop percentage was approximately 0.0002%, far below the configured 0.1% warning level;
+- sensor evidence reported capture health `healthy`, both 24-hour coverage windows `complete`, and zero assurance gaps;
+- bounded Suricata and Zeek evidence reached the management-report evidence path;
+- the current monitoring/security/reporting pipeline contains no CrowdSec dependency.
+
+Individual Suricata/Zeek detections remain normal security-operations inputs. They may justify investigation or tuning, but they do not keep the integration project open.
 
 ### Step 9/20 — Representative integration and regression tests — COMPLETE
 
@@ -158,6 +175,7 @@ Recover/reconcile an authoritative prior checklist before using those step numbe
 | Jenkins | Already removed | CLOSED — do not create retirement task |
 | Network discovery | Single-owner cutover to `monitor-01` completed 27 September | CLOSED MIGRATION; source timers on `Proxmox-2` remain disabled/inactive |
 | Management-report network inventory v1 | Factual inventory/presence/freshness evidence pinned to `monitor-01`; no enrichment/change claims | CLOSED — future richer change detection requires a separately reviewed evidence model |
+| Security and monitoring integration | Monitoring core, Zabbix and passive Suricata/Zeek evidence path closure-validated on 7 October 2026 | CLOSED — individual detections/tuning are normal operations; new tooling requires separate scope |
 | CT105 / VM203 unattended backup evidence | Observed | CLOSED EVIDENCE GAP |
 | CrowdSec | Not installed anywhere in active estate | ABSENT / DEFERRED; do not list as current telemetry |
 | Authelia | Not deployed | ABSENT; Cloudflare remains intended MFA boundary for future public exposure |
