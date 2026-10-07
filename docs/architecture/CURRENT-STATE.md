@@ -2,7 +2,7 @@
 # Current-State Architecture
 
 **Status:** CURRENT OPERATIONAL TRUTH  
-**Current-state review:** 6 October 2026  
+**Current-state review:** 7 October 2026  
 **Identity/address authority:** `IaC/inventory/estate.json`  
 **Configuration authority:** `IaC/`
 
@@ -153,6 +153,23 @@ changed=0
 unreachable=0
 failed=0
 ```
+
+### Daily management-report network inventory
+
+Factual network-inventory v1 is live in the daily management report. It is explicitly pinned to the active discovery owner `monitor-01` and uses the existing `homelab_network_host_*` Prometheus metrics plus the `homelab_network_hosts.prom` textfile mtime for freshness.
+
+The section reports only:
+
+- retained inventory-device count;
+- hosts currently considered online by the network collector;
+- hosts first observed in the preceding 24 hours;
+- source timestamp/evidence age and freshness state.
+
+The collector runs every 5 minutes and the report uses a 15-minute freshness threshold. Missing, stale or invalid evidence suppresses the counts rather than presenting them as current facts. Guards reject impossible values such as an online count greater than the retained inventory.
+
+The implementation does **not** depend on `enrichment.json` and does not make OS-change, port-change or identity-change claims. This boundary is intentional for v1.
+
+Production validation showed current `monitor-01` evidence rendering successfully, 9 management-report regression tests passing, Ansible syntax validation passing, and a repeat deployment completing with `changed=0`, `unreachable=0`, `failed=0`. Closure evidence is recorded in `docs/architecture/MANAGEMENT-REPORT-NETWORK-V1-CLOSURE-2026-10-07.md`; implementation commit is `abb5c90`.
 
 ## Automated patching
 
