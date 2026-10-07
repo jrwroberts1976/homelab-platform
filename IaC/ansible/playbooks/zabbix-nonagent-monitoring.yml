@@ -1,1 +1,848 @@
-REPLACED_BELOW
+---
+- name: Register non-agent hosts in Zabbix and create service checks
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+    zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+
+    # ── non-agent hosts: ICMP only ──────────────────────────────────
+    nonagent_hosts:
+      - host: asus-router
+        name: "ASUS RT-AC86U router"
+        address: "192.168.2.1"
+        group: "Network devices"
+
+      - host: hp-procurve-2510g
+        name: "HP ProCurve 2510G-24 switch"
+        address: "192.168.2.16"
+        group: "Network devices"
+
+      - host: asus-aimesh-181
+        name: "ASUS AiMesh node .181"
+        address: "192.168.2.181"
+        group: "Network devices"
+
+      - host: asus-aimesh-218
+        name: "ASUS AiMesh node .218"
+        address: "192.168.2.218"
+        group: "Network devices"
+
+      - host: home-01
+        name: "Home Assistant OS"
+        address: "192.168.2.60"
+        group: "Appliances"
+
+      - host: media-01
+        name: "RPi 5 Kodi / NFS backup"
+        address: "192.168.2.195"
+        group: "Physical hosts"
+
+      - host: docker-01
+        name: "RPi 4 BirdNET-Go"
+        address: "192.168.2.220"
+        group: "Physical hosts"
+
+    # ── HTTP service checks ─────────────────────────────────────────
+    http_checks:
+      - name: "Grafana HTTP"
+        host: "192.168.2.52"
+        port: 3000
+        path: "/api/health"
+
+      - name: "Prometheus HTTP"
+        host: "192.168.2.52"
+        port: 9090
+        path: "/-/healthy"
+
+      - name: "Alertmanager HTTP"
+        host: "192.168.2.52"
+        port: 9093
+        path: "/-/healthy"
+
+      - name: "Nextcloud HTTP"
+        host: "192.168.2.53"
+        port: 8080
+        path: "/status.php"
+
+      - name: "Greenbone HTTPS"
+        host: "192.168.2.57"
+        port: 443
+        path: "/"
+        ssl: true
+
+      - name: "Komodo HTTP"
+        host: "192.168.2.58"
+        port: 9120
+        path: "/"
+
+      - name: "Zabbix HTTP"
+        host: "192.168.2.59"
+        port: 8080
+        path: "/"
+
+      - name: "Home Assistant HTTP"
+        host: "192.168.2.60"
+        port: 80
+        path: "/"
+
+      - name: "PROXMOX HTTPS"
+        host: "192.168.2.70"
+        port: 8006
+        path: "/"
+        ssl: true
+
+      - name: "Proxmox-2 HTTPS"
+        host: "192.168.2.71"
+        port: 8006
+        path: "/"
+        ssl: true
+
+      - name: "BirdNET-Go HTTP"
+        host: "192.168.2.220"
+        port: 8080
+        path: "/"
+
+    # ── TCP port checks ─────────────────────────────────────────────
+    tcp_checks:
+      - name: "DNS resolver tcp dns-01"
+        host: "192.168.2.51"
+        port: 53
+
+      - name: "DNS resolver tcp dns-02"
+        host: "192.168.2.50"
+        port: 53
+
+      - name: "Postfix SMTP"
+        host: "192.168.2.54"
+        port: 25
+
+      - name: "Zabbix trapper"
+        host: "192.168.2.59"
+        port: 10051
+
+      - name: "NFS media-01"
+        host: "192.168.2.195"
+        port: 2049
+
+      - name: "SMB media-01"
+        host: "192.168.2.195"
+        port: 445
+
+      - name: "QNetd admin-01"
+        host: "192.168.2.48"
+        port: 5403
+
+    # ── DNS checks ──────────────────────────────────────────────────
+    dns_checks:
+      - name: "DNS A record — admin-01.jameshouse"
+        dns: "192.168.2.51"
+        name_to_resolve: "admin-01.jameshouse"
+        expected: "192.168.2.48"
+
+      - name: "DNS A record — cloud-01.jameshouse"
+        dns: "192.168.2.51"
+        name_to_resolve: "cloud-01.jameshouse"
+        expected: "192.168.2.53"
+
+      - name: "DNS A record — monitor-01.jameshouse"
+        dns: "192.168.2.51"
+        name_to_resolve: "monitor-01.jameshouse"
+        expected: "192.168.2.52"
+
+      - name: "DNS A record — zabbix-01.jameshouse"
+        dns: "192.168.2.50"
+        name_to_resolve: "zabbix-01.jameshouse"
+        expected: "192.168.2.59"
+
+  pre_tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - zabbix_nonagent_allow_deploy | default(false) | bool
+        fail_msg: >
+          Non-agent host registration is disabled by default.
+          Set zabbix_nonagent_allow_deploy=true explicitly.
+
+    - name: Require runtime API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_api_token | length >= 20
+        fail_msg: HOMELAB_ZABBIX_API_TOKEN must be supplied.
+
+  tasks:
+    # ═══════════════════════════════════════════════════════════════
+    # 1. Ensure host groups exist
+    # ═══════════════════════════════════════════════════════════════
+    - name: Read existing host groups
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: hostgroup.get
+          params:
+            output:
+              - groupid
+              - name
+          id: 100
+        return_content: true
+      register: _existing_groups
+      no_log: true
+
+    - name: Build host group name → ID map
+      ansible.builtin.set_fact:
+        _group_map: "{{ _existing_groups.json.result | items2dict(key_name='name', value_name='groupid') }}"
+
+    - name: Collect unique group names needed
+      ansible.builtin.set_fact:
+        _needed_groups: "{{ (nonagent_hosts | map(attribute='group') | list) | unique }}"
+
+    - name: Create missing host groups
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: hostgroup.create
+          params:
+            name: "{{ item }}"
+          id: 101
+        return_content: true
+      loop: "{{ _needed_groups }}"
+      when: item not in _group_map
+      register: _groups_created
+      changed_when: true
+      no_log: true
+
+    - name: Refresh host group map after creation
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: hostgroup.get
+          params:
+            output:
+              - groupid
+              - name
+          id: 102
+        return_content: true
+      register: _existing_groups
+      no_log: true
+      when: _groups_created.changed | default(false)
+
+    - name: Rebuild host group name → ID map
+      ansible.builtin.set_fact:
+        _group_map: "{{ _existing_groups.json.result | items2dict(key_name='name', value_name='groupid') }}"
+
+    # ═══════════════════════════════════════════════════════════════
+    # 2. Register non-agent hosts
+    # ═══════════════════════════════════════════════════════════════
+    - name: Read existing Zabbix hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+          id: 110
+        return_content: true
+      register: _existing_hosts
+      no_log: true
+
+    - name: Build existing host name set
+      ansible.builtin.set_fact:
+        _existing_host_set: "{{ _existing_hosts.json.result | map(attribute='host') | list }}"
+
+    - name: Create non-agent hosts in Zabbix
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.create
+          params:
+            host: "{{ item.host }}"
+            name: "{{ item.name }}"
+            groups:
+              - groupid: "{{ _group_map[item.group] }}"
+            interfaces:
+              - type: 1
+                main: 1
+                useip: 1
+                ip: "{{ item.address }}"
+                dns: ""
+                port: "10050"
+          id: 111
+        return_content: true
+      loop: "{{ nonagent_hosts }}"
+      when: item.host not in _existing_host_set
+      register: _hosts_created
+      changed_when: true
+      no_log: true
+
+    - name: Refresh host list after creation
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host: "{{ nonagent_hosts | map(attribute='host') | list }}"
+          id: 112
+        return_content: true
+      register: _nonagent_host_ids
+      no_log: true
+
+    - name: Build non-agent host name → ID map
+      ansible.builtin.set_fact:
+        _host_id_map: "{{ _nonagent_host_ids.json.result | items2dict(key_name='host', value_name='hostid') }}"
+
+    # ═══════════════════════════════════════════════════════════════
+    # 3. Create ICMP ping items for each non-agent host
+    # ═══════════════════════════════════════════════════════════════
+    - name: Read existing items across all non-agent hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            hostids: "{{ _host_id_map.values() | list }}"
+            output:
+              - itemid
+              - hostid
+              - key_
+          id: 120
+        return_content: true
+      register: _existing_items
+      no_log: true
+
+    - name: Build existing-item map: hostid → key_ set
+      ansible.builtin.set_fact:
+        _item_map: >
+          {{
+            _existing_items.json.result
+            | default([])
+            | groupby('hostid')
+            | items2dict
+          }}
+
+    - name: Build existing keys per host
+      ansible.builtin.set_fact:
+        _keys_per_host: >
+          {{
+            dict(
+              _item_map.keys()
+              | map('regex_replace', '^(.*)$', '\1')
+              | zip(
+                  _item_map.values()
+                  | map('map', attribute='key_')
+                  | map('list')
+                )
+            )
+          }}
+
+    - name: Create ICMP ping item for each non-agent host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "ICMP ping"
+            key_: "icmpping"
+            hostid: "{{ _host_id_map[item.host] }}"
+            type: 3
+            value_type: 3
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: reachability
+          id: 121
+        return_content: true
+      loop: "{{ nonagent_hosts }}"
+      when: "'icmpping' not in (_keys_per_host[_host_id_map[item.host]] | default([]))"
+      register: _items_created
+      changed_when: true
+      no_log: true
+
+    - name: Create ICMP packet loss item for each non-agent host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "ICMP packet loss %"
+            key_: "icmppingloss"
+            hostid: "{{ _host_id_map[item.host] }}"
+            type: 3
+            value_type: 0
+            units: "%"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: reachability
+          id: 122
+        return_content: true
+      loop: "{{ nonagent_hosts }}"
+      when: "'icmppingloss' not in (_keys_per_host[_host_id_map[item.host]] | default([]))"
+      register: _items_created
+      changed_when: true
+      no_log: true
+
+    - name: Create ICMP response time item for each non-agent host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "ICMP response time"
+            key_: "icmppingsec"
+            hostid: "{{ _host_id_map[item.host] }}"
+            type: 3
+            value_type: 0
+            units: "s"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: reachability
+          id: 123
+        return_content: true
+      loop: "{{ nonagent_hosts }}"
+      when: "'icmppingsec' not in (_keys_per_host[_host_id_map[item.host]] | default([]))"
+      register: _items_created
+      changed_when: true
+      no_log: true
+
+    # ═══════════════════════════════════════════════════════════════
+    # 4. Create ICMP trigger for each non-agent host
+    # ═══════════════════════════════════════════════════════════════
+    - name: Read existing triggers for non-agent hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.get
+          params:
+            hostids: "{{ _host_id_map.values() | list }}"
+            output:
+              - triggerid
+              - description
+          id: 130
+        return_content: true
+      register: _existing_triggers
+      no_log: true
+
+    - name: Build existing trigger descriptions per host
+      ansible.builtin.set_fact:
+        _existing_trigger_descs: "{{ _existing_triggers.json.result | map(attribute='description') | list }}"
+
+    - name: Create unreachable trigger for each non-agent host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "Host unreachable via ICMP (3 misses)"
+            expression: "max(/{{ item.host }}/icmpping,#3)=0"
+            priority: 4
+            tags:
+              - tag: component
+                value: reachability
+          id: 131
+        return_content: true
+      loop: "{{ nonagent_hosts }}"
+      when: "'Host unreachable via ICMP (3 misses)' not in _existing_trigger_descs"
+      register: _triggers_created
+      changed_when: true
+      no_log: true
+
+    # ═══════════════════════════════════════════════════════════════
+    # 5. HTTP agent checks (on a synthetic host "Homelab Services")
+    # ═══════════════════════════════════════════════════════════════
+    - name: Ensure synthetic "Homelab Services" host exists
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host:
+                - "homelab-services"
+          id: 140
+        return_content: true
+      register: _svc_host_get
+      no_log: true
+
+    - name: Create synthetic "Homelab Services" host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.create
+          params:
+            host: "homelab-services"
+            name: "Homelab Services"
+            groups:
+              - groupid: "{{ _group_map['Appliances'] }}"
+            interfaces:
+              - type: 1
+                main: 1
+                useip: 1
+                ip: "127.0.0.1"
+                dns: ""
+                port: "10050"
+          id: 141
+        return_content: true
+      when: (_svc_host_get.json.result | default([])) | length == 0
+      register: _svc_host_create
+      changed_when: true
+      no_log: true
+
+    - name: Set synthetic host ID
+      ansible.builtin.set_fact:
+        _svc_host_id: "{{ _svc_host_get.json.result[0].hostid }}"
+      when: (_svc_host_get.json.result | default([])) | length > 0
+
+    - name: Set newly created synthetic host ID
+      ansible.builtin.set_fact:
+        _svc_host_id: "{{ _svc_host_create.json.result.hostids[0] }}"
+      when: (_svc_host_get.json.result | default([])) | length == 0
+
+    - name: Read existing items on synthetic host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            hostids:
+              - "{{ _svc_host_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+          id: 142
+        return_content: true
+      register: _svc_existing_items
+      no_log: true
+
+    - name: Build existing service item name set
+      ansible.builtin.set_fact:
+        _svc_existing_names: "{{ _svc_existing_items.json.result | map(attribute='name') | list }}"
+
+    # HTTP agent items
+    - name: Create HTTP agent check items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "{{ item.name }}"
+            key_: "web.page.get[{{ item.name | regex_replace(' ', '_') | lower }},,{{ item.host }},{{ item.port }}{{ '/' + item.path if item.path != '/' else '' }}]"
+            hostid: "{{ _svc_host_id }}"
+            type: 19
+            value_type: 3
+            delay: "1m"
+            history: "7d"
+            url: "http{{ 's' if (item.ssl | default(false)) else '' }}://{{ item.host }}:{{ item.port }}{{ item.path }}"
+            status_codes: "200,301,302"
+            timeout: "15s"
+            tags:
+              - tag: component
+                value: http_check
+              - tag: target
+                value: "{{ item.host }}:{{ item.port }}"
+          id: 143
+        return_content: true
+      loop: "{{ http_checks }}"
+      when: item.name not in _svc_existing_names
+      register: _http_items_created
+      changed_when: true
+      no_log: true
+
+    # Create triggers for HTTP checks
+    - name: Read existing triggers on synthetic host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.get
+          params:
+            hostids:
+              - "{{ _svc_host_id }}"
+            output:
+              - triggerid
+              - description
+          id: 144
+        return_content: true
+      register: _svc_existing_triggers_h
+      no_log: true
+
+    - name: Build existing service trigger description set
+      ansible.builtin.set_fact:
+        _svc_existing_trigger_descs_h: "{{ _svc_existing_triggers_h.json.result | map(attribute='description') | list }}"
+
+    - name: Create HTTP service down triggers
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "{{ item.name }} - Service down"
+            expression: "nodata(/homelab-services/web.page.get[{{ item.name | regex_replace(' ', '_') | lower }},,{{ item.host }},{{ item.port }}{{ '/' + item.path if item.path != '/' else '' }}],3m)=1"
+            priority: 4
+            tags:
+              - tag: component
+                value: http_check
+          id: 145
+        return_content: true
+      loop: "{{ http_checks }}"
+      when: (item.name + " - Service down") not in _svc_existing_trigger_descs_h
+      register: _http_triggers_created
+      changed_when: true
+      no_log: true
+
+    # ═══════════════════════════════════════════════════════════════
+    # 6. TCP port checks (simple checks on synthetic host)
+    # ═══════════════════════════════════════════════════════════════
+    - name: Create TCP port check items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "{{ item.name }}"
+            key_: "net.tcp.service[tcp,{{ item.host }},{{ item.port }}]"
+            hostid: "{{ _svc_host_id }}"
+            type: 7
+            value_type: 3
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: tcp_check
+              - tag: target
+                value: "{{ item.host }}:{{ item.port }}"
+          id: 150
+        return_content: true
+      loop: "{{ tcp_checks }}"
+      when: item.name not in _svc_existing_names
+      register: _tcp_items_created
+      changed_when: true
+      no_log: true
+
+    - name: Create TCP port down triggers
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "{{ item.name }} - Port unreachable"
+            expression: "max(/homelab-services/net.tcp.service[tcp,{{ item.host }},{{ item.port }}],#3)=0"
+            priority: 4
+            tags:
+              - tag: component
+                value: tcp_check
+          id: 151
+        return_content: true
+      loop: "{{ tcp_checks }}"
+      when: (item.name + " - Port unreachable") not in _svc_existing_trigger_descs_h
+      register: _tcp_triggers_created
+      changed_when: true
+      no_log: true
+
+    # ═══════════════════════════════════════════════════════════════
+    # 7. DNS checks
+    # ═══════════════════════════════════════════════════════════════
+    - name: Create DNS check items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "{{ item.name }}"
+            key_: "net.dns.record[0,{{ item.dns }},{{ item.name_to_resolve }},A,2,1]"
+            hostid: "{{ _svc_host_id }}"
+            type: 7
+            value_type: 1
+            delay: "5m"
+            history: "7d"
+            tags:
+              - tag: component
+                value: dns_check
+              - tag: target
+                value: "{{ item.dns }}"
+          id: 160
+        return_content: true
+      loop: "{{ dns_checks }}"
+      when: item.name not in _svc_existing_names
+      register: _dns_items_created
+      changed_when: true
+      no_log: true
+
+    - name: Create DNS resolution failure triggers
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "{{ item.name }} - Resolution failure"
+            expression: "find(/homelab-services/net.dns.record[0,{{ item.dns }},{{ item.name_to_resolve }},A,2,1],15m,like,{{ item.expected }})=0"
+            priority: 3
+            tags:
+              - tag: component
+                value: dns_check
+          id: 161
+        return_content: true
+      loop: "{{ dns_checks }}"
+      when: (item.name + " - Resolution failure") not in _svc_existing_trigger_descs_h
+      register: _dns_triggers_created
+      changed_when: true
+      no_log: true
+
+    - name: Report deployment summary
+      ansible.builtin.debug:
+        msg:
+          nonagent_hosts_registered: "{{ nonagent_hosts | map(attribute='host') | list }}"
+          http_checks: "{{ http_checks | map(attribute='name') | list }}"
+          tcp_checks: "{{ tcp_checks | map(attribute='name') | list }}"
+          dns_checks: "{{ dns_checks | map(attribute='name') | list }}"
+          synthetic_host: "homelab-services"
+          synthetic_host_id: "{{ _svc_host_id }}"
