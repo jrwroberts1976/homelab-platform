@@ -127,7 +127,7 @@ dns-01 is CT101, a managed Proxmox LXC container running authoritative Debian GN
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-07T19:12:27+01:00`
+- Last assessed: `2026-10-07T20:14:32+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
