@@ -1,1 +1,1409 @@
-REPLACED_BELOW
+---
+- name: Deploy Homelab Linux Host template to Zabbix
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+    zabbix_template_group_name: "Templates/Homelab"
+    zabbix_template_host: "Homelab Linux Host"
+    zabbix_template_name: "Homelab Linux Host"
+    zabbix_target_hosts: "{{ groups['zabbix_agents'] | default([]) | list }}"
+    zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+
+  pre_tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - zabbix_linux_host_template_allow_deploy | default(false) | bool
+        fail_msg: >
+          Homelab Linux Host template deployment is disabled by default.
+          Set zabbix_linux_host_template_allow_deploy=true explicitly.
+
+    - name: Require runtime API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_api_token | length >= 20
+        fail_msg: >
+          HOMELAB_ZABBIX_API_TOKEN must be supplied in the environment.
+
+    - name: Require expected target estate
+      ansible.builtin.assert:
+        that:
+          - zabbix_target_hosts | length > 0
+          - "'admin-01' in zabbix_target_hosts"
+          - "'monitor-01' in zabbix_target_hosts"
+          - "'zabbix-01' in zabbix_target_hosts"
+        fail_msg: >
+          Refusing deployment because the zabbix_agents inventory group
+          does not match the expected managed estate.
+
+  tasks:
+    # ── template group ──────────────────────────────────────────────
+    - name: Read existing Homelab template group
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.get
+          params:
+            output:
+              - groupid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_template_group_name }}"
+          id: 1
+        return_content: true
+      register: _tg_get
+      no_log: true
+
+    - name: Validate template group lookup
+      ansible.builtin.assert:
+        that:
+          - _tg_get.json.error is not defined
+        fail_msg: "templategroup.get failed: {{ _tg_get.json.error }}"
+
+    - name: Create Homelab template group when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.create
+          params:
+            name: "{{ zabbix_template_group_name }}"
+          id: 2
+        return_content: true
+      register: _tg_create
+      when: (_tg_get.json.result | default([])) | length == 0
+      changed_when: true
+      no_log: true
+
+    - name: Set template group ID
+      ansible.builtin.set_fact:
+        _tg_id: "{{ _tg_get.json.result[0].groupid }}"
+      when: (_tg_get.json.result | default([])) | length > 0
+
+    - name: Set newly created template group ID
+      ansible.builtin.set_fact:
+        _tg_id: "{{ _tg_create.json.result.groupids[0] }}"
+      when: (_tg_get.json.result | default([])) | length == 0
+
+    # ── template ────────────────────────────────────────────────────
+    - name: Read existing Homelab Linux Host template
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.get
+          params:
+            output:
+              - templateid
+              - host
+              - name
+            filter:
+              host:
+                - "{{ zabbix_template_host }}"
+          id: 3
+        return_content: true
+      register: _t_get
+      no_log: true
+
+    - name: Create Homelab Linux Host template when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.create
+          params:
+            host: "{{ zabbix_template_host }}"
+            name: "{{ zabbix_template_name }}"
+            groups:
+              - groupid: "{{ _tg_id }}"
+          id: 4
+        return_content: true
+      register: _t_create
+      when: (_t_get.json.result | default([])) | length == 0
+      changed_when: true
+      no_log: true
+
+    - name: Set template ID
+      ansible.builtin.set_fact:
+        _template_id: "{{ _t_get.json.result[0].templateid }}"
+      when: (_t_get.json.result | default([])) | length > 0
+
+    - name: Set newly created template ID
+      ansible.builtin.set_fact:
+        _template_id: "{{ _t_create.json.result.templateids[0] }}"
+      when: (_t_get.json.result | default([])) | length == 0
+
+    # ── items — CPU ─────────────────────────────────────────────────
+    - name: Read existing items on the template
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _template_id }}"
+            output:
+              - itemid
+              - key_
+          id: 5
+        return_content: true
+      register: _existing_items
+      no_log: true
+
+    - name: Build set of existing item keys
+      ansible.builtin.set_fact:
+        _existing_keys: "{{ _existing_items.json.result | map(attribute='key_') | list }}"
+
+    - name: Create CPU utilization item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "CPU utilization"
+            key_: "system.cpu.util"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 0
+            units: "%"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: cpu
+          id: 10
+        return_content: true
+      when: "'system.cpu.util' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create CPU load avg1 item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "CPU load (1 min average)"
+            key_: "system.cpu.load[all,avg1]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 0
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: cpu
+          id: 11
+        return_content: true
+      when: "'system.cpu.load[all,avg1]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create CPU load avg5 item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "CPU load (5 min average)"
+            key_: "system.cpu.load[all,avg5]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 0
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: cpu
+          id: 12
+        return_content: true
+      when: "'system.cpu.load[all,avg5]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create CPU load avg15 item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "CPU load (15 min average)"
+            key_: "system.cpu.load[all,avg15]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 0
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: cpu
+          id: 13
+        return_content: true
+      when: "'system.cpu.load[all,avg15]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    # ── items — memory ──────────────────────────────────────────────
+    - name: Create total memory item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Total memory"
+            key_: "vm.memory.size[total]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            units: "B"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: memory
+          id: 20
+        return_content: true
+      when: "'vm.memory.size[total]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create available memory item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Available memory"
+            key_: "vm.memory.size[available]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            units: "B"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: memory
+          id: 21
+        return_content: true
+      when: "'vm.memory.size[available]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create memory utilization item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Memory utilization"
+            key_: "vm.memory.size[pused]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 0
+            units: "%"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: memory
+          id: 22
+        return_content: true
+      when: "'vm.memory.size[pused]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create swap total item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Total swap space"
+            key_: "system.swap.size[,total]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            units: "B"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: memory
+          id: 23
+        return_content: true
+      when: "'system.swap.size[,total]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create swap percent free item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Swap space % free"
+            key_: "system.swap.size[,pfree]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 0
+            units: "%"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: memory
+          id: 24
+        return_content: true
+      when: "'system.swap.size[,pfree]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    # ── items — system ──────────────────────────────────────────────
+    - name: Create system uptime item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "System uptime"
+            key_: "system.uptime"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            units: "s"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: system
+          id: 30
+        return_content: true
+      when: "'system.uptime' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create system boot time item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "System boot time"
+            key_: "system.boottime"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            units: "unixtime"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: system
+          id: 31
+        return_content: true
+      when: "'system.boottime' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create system uname item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "System kernel information"
+            key_: "system.uname"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 1
+            delay: "1h"
+            history: "90d"
+            tags:
+              - tag: component
+                value: system
+          id: 32
+        return_content: true
+      when: "'system.uname' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create running process count item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Number of running processes"
+            key_: "proc.num[,,run]"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: system
+          id: 33
+        return_content: true
+      when: "'proc.num[,,run]' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create total process count item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Total number of processes"
+            key_: "proc.num"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: system
+          id: 34
+        return_content: true
+      when: "'proc.num' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    # ── items — Zabbix agent health ─────────────────────────────────
+    - name: Create Zabbix agent ping item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Zabbix agent availability"
+            key_: "agent.ping"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 3
+            delay: "1m"
+            history: "7d"
+            tags:
+              - tag: component
+                value: health
+          id: 40
+        return_content: true
+      when: "'agent.ping' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    - name: Create agent version item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "Zabbix agent version"
+            key_: "agent.version"
+            hostid: "{{ _template_id }}"
+            type: 7
+            value_type: 1
+            delay: "1h"
+            history: "90d"
+            tags:
+              - tag: component
+                value: health
+          id: 41
+        return_content: true
+      when: "'agent.version' not in _existing_keys"
+      register: _item_create
+      changed_when: true
+      no_log: true
+
+    # ── discovery rule — filesystems ─────────────────────────────────
+    - name: Read existing discovery rules
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.get
+          params:
+            templateids:
+              - "{{ _template_id }}"
+            output:
+              - itemid
+              - key_
+          id: 50
+        return_content: true
+      register: _existing_drules
+      no_log: true
+
+    - name: Build set of existing discovery rule keys
+      ansible.builtin.set_fact:
+        _existing_drule_keys: "{{ _existing_drules.json.result | map(attribute='key_') | list }}"
+
+    - name: Create filesystem discovery rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.create
+          params:
+            name: "Mounted filesystem discovery"
+            key_: "vfs.fs.discovery"
+            hostid: "{{ _template_id }}"
+            type: 7
+            delay: "15m"
+            filter:
+              conditions:
+                - macro: "{#FSTYPE}"
+                  value: "^(ext[234]|xfs|btrfs|zfs|tmpfs)$"
+                  formulaid: A
+              evaltype: 2
+            lifetime: "7d"
+          id: 51
+        return_content: true
+      when: "'vfs.fs.discovery' not in _existing_drule_keys"
+      register: _dr_create
+      changed_when: true
+      no_log: true
+
+    - name: Set filesystem discovery rule ID
+      ansible.builtin.set_fact:
+        _fs_drule_id: "{{ _existing_drules.json.result | selectattr('key_', 'equalto', 'vfs.fs.discovery') | map(attribute='itemid') | first }}"
+      when: "'vfs.fs.discovery' in _existing_drule_keys"
+
+    - name: Set newly created filesystem discovery rule ID
+      ansible.builtin.set_fact:
+        _fs_drule_id: "{{ _dr_create.json.result.itemids[0] }}"
+      when: "'vfs.fs.discovery' not in _existing_drule_keys"
+
+    # ── item prototypes — filesystems ────────────────────────────────
+    - name: Read existing item prototypes for filesystem rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _fs_drule_id }}"
+            output:
+              - itemid
+              - key_
+          id: 52
+        return_content: true
+      register: _existing_fs_protos
+      no_log: true
+
+    - name: Build set of existing FS prototype keys
+      ansible.builtin.set_fact:
+        _existing_fs_proto_keys: "{{ _existing_fs_protos.json.result | map(attribute='key_') | list }}"
+
+    - name: Create filesystem total size prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            name: "Filesystem {#FSNAME}: Total space"
+            key_: "vfs.fs.size[{#FSNAME},total]"
+            hostid: "{{ _template_id }}"
+            ruleid: "{{ _fs_drule_id }}"
+            type: 7
+            value_type: 3
+            units: "B"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: filesystem
+          id: 53
+        return_content: true
+      when: "'vfs.fs.size[{#FSNAME},total]' not in _existing_fs_proto_keys"
+      register: _proto_create
+      changed_when: true
+      no_log: true
+
+    - name: Create filesystem used space prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            name: "Filesystem {#FSNAME}: Used space"
+            key_: "vfs.fs.size[{#FSNAME},used]"
+            hostid: "{{ _template_id }}"
+            ruleid: "{{ _fs_drule_id }}"
+            type: 7
+            value_type: 3
+            units: "B"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: filesystem
+          id: 54
+        return_content: true
+      when: "'vfs.fs.size[{#FSNAME},used]' not in _existing_fs_proto_keys"
+      register: _proto_create
+      changed_when: true
+      no_log: true
+
+    - name: Create filesystem free space prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            name: "Filesystem {#FSNAME}: Free space"
+            key_: "vfs.fs.size[{#FSNAME},free]"
+            hostid: "{{ _template_id }}"
+            ruleid: "{{ _fs_drule_id }}"
+            type: 7
+            value_type: 3
+            units: "B"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: filesystem
+          id: 55
+        return_content: true
+      when: "'vfs.fs.size[{#FSNAME},free]' not in _existing_fs_proto_keys"
+      register: _proto_create
+      changed_when: true
+      no_log: true
+
+    - name: Create filesystem percent used prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            name: "Filesystem {#FSNAME}: Space utilization"
+            key_: "vfs.fs.size[{#FSNAME},pused]"
+            hostid: "{{ _template_id }}"
+            ruleid: "{{ _fs_drule_id }}"
+            type: 7
+            value_type: 0
+            units: "%"
+            delay: "5m"
+            history: "7d"
+            trends: "365d"
+            tags:
+              - tag: component
+                value: filesystem
+          id: 56
+        return_content: true
+      when: "'vfs.fs.size[{#FSNAME},pused]' not in _existing_fs_proto_keys"
+      register: _proto_create
+      changed_when: true
+      no_log: true
+
+    # ── discovery rule — network interfaces ──────────────────────────
+    - name: Create network interface discovery rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.create
+          params:
+            name: "Network interface discovery"
+            key_: "net.if.discovery"
+            hostid: "{{ _template_id }}"
+            type: 7
+            delay: "15m"
+            filter:
+              conditions:
+                - macro: "{#IFNAME}"
+                  value: "^lo$"
+                  formulaid: A
+              evaltype: 2
+            lifetime: "7d"
+          id: 60
+        return_content: true
+      when: "'net.if.discovery' not in _existing_drule_keys"
+      register: _dr_create
+      changed_when: true
+      no_log: true
+
+    - name: Set network interface discovery rule ID
+      ansible.builtin.set_fact:
+        _net_drule_id: "{{ _existing_drules.json.result | selectattr('key_', 'equalto', 'net.if.discovery') | map(attribute='itemid') | first }}"
+      when: "'net.if.discovery' in _existing_drule_keys"
+
+    - name: Set newly created network interface discovery rule ID
+      ansible.builtin.set_fact:
+        _net_drule_id: "{{ _dr_create.json.result.itemids[0] }}"
+      when: "'net.if.discovery' not in _existing_drule_keys"
+
+    # ── item prototypes — network interfaces ─────────────────────────
+    - name: Read existing item prototypes for network interface rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _net_drule_id }}"
+            output:
+              - itemid
+              - key_
+          id: 61
+        return_content: true
+      register: _existing_net_protos
+      no_log: true
+
+    - name: Build set of existing net prototype keys
+      ansible.builtin.set_fact:
+        _existing_net_proto_keys: "{{ _existing_net_protos.json.result | map(attribute='key_') | list }}"
+
+    - name: Create network inbound bits prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            name: "Interface {#IFNAME}: Bits received"
+            key_: "net.if.in[{#IFNAME}]"
+            hostid: "{{ _template_id }}"
+            ruleid: "{{ _net_drule_id }}"
+            type: 7
+            value_type: 3
+            units: "bps"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            preprocessing:
+              - type: 8
+                parameters:
+                  - ""
+                  - "8"
+            tags:
+              - tag: component
+                value: network
+          id: 62
+        return_content: true
+      when: "'net.if.in[{#IFNAME}]' not in _existing_net_proto_keys"
+      register: _proto_create
+      changed_when: true
+      no_log: true
+
+    - name: Create network outbound bits prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            name: "Interface {#IFNAME}: Bits sent"
+            key_: "net.if.out[{#IFNAME}]"
+            hostid: "{{ _template_id }}"
+            ruleid: "{{ _net_drule_id }}"
+            type: 7
+            value_type: 3
+            units: "bps"
+            delay: "1m"
+            history: "7d"
+            trends: "365d"
+            preprocessing:
+              - type: 8
+                parameters:
+                  - ""
+                  - "8"
+            tags:
+              - tag: component
+                value: network
+          id: 63
+        return_content: true
+      when: "'net.if.out[{#IFNAME}]' not in _existing_net_proto_keys"
+      register: _proto_create
+      changed_when: true
+      no_log: true
+
+    # ── triggers ─────────────────────────────────────────────────────
+    - name: Read existing triggers on the template
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.get
+          params:
+            templateids:
+              - "{{ _template_id }}"
+            output:
+              - triggerid
+              - description
+          id: 70
+        return_content: true
+      register: _existing_triggers
+      no_log: true
+
+    - name: Build set of existing trigger descriptions
+      ansible.builtin.set_fact:
+        _existing_trigger_descs: "{{ _existing_triggers.json.result | map(attribute='description') | list }}"
+
+    - name: Create high CPU utilization trigger
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "High CPU utilization (>90% for 5 min)"
+            expression: "avg(/{{ zabbix_template_host }}/system.cpu.util,5m)>90"
+            priority: 3
+            tags:
+              - tag: component
+                value: cpu
+          id: 71
+        return_content: true
+      when: "'High CPU utilization (>90% for 5 min)' not in _existing_trigger_descs"
+      register: _trig_create
+      changed_when: true
+      no_log: true
+
+    - name: Create high load avg15 trigger
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "System load is high (>5 for 15 min)"
+            expression: "avg(/{{ zabbix_template_host }}/system.cpu.load[all,avg15],15m)>5"
+            priority: 3
+            tags:
+              - tag: component
+                value: cpu
+          id: 72
+        return_content: true
+      when: "'System load is high (>5 for 15 min)' not in _existing_trigger_descs"
+      register: _trig_create
+      changed_when: true
+      no_log: true
+
+    - name: Create high memory utilization trigger
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "High memory utilization (>90% for 5 min)"
+            expression: "avg(/{{ zabbix_template_host }}/vm.memory.size[pused],5m)>90"
+            priority: 3
+            tags:
+              - tag: component
+                value: memory
+          id: 73
+        return_content: true
+      when: "'High memory utilization (>90% for 5 min)' not in _existing_trigger_descs"
+      register: _trig_create
+      changed_when: true
+      no_log: true
+
+    - name: Create low swap space trigger
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "Low swap space (<20% free)"
+            expression: "last(/{{ zabbix_template_host }}/system.swap.size[,pfree])<20"
+            priority: 2
+            tags:
+              - tag: component
+                value: memory
+          id: 74
+        return_content: true
+      when: "'Low swap space (<20% free)' not in _existing_trigger_descs"
+      register: _trig_create
+      changed_when: true
+      no_log: true
+
+    - name: Create host restarted trigger
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "Host has been restarted"
+            expression: "last(/{{ zabbix_template_host }}/system.uptime)<600"
+            priority: 2
+            tags:
+              - tag: component
+                value: system
+          id: 75
+        return_content: true
+      when: "'Host has been restarted' not in _existing_trigger_descs"
+      register: _trig_create
+      changed_when: true
+      no_log: true
+
+    - name: Create agent unreachable trigger
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: trigger.create
+          params:
+            description: "Zabbix agent is unreachable for 3 minutes"
+            expression: "nodata(/{{ zabbix_template_host }}/agent.ping,3m)=1"
+            priority: 4
+            tags:
+              - tag: component
+                value: health
+          id: 76
+        return_content: true
+      when: "'Zabbix agent is unreachable for 3 minutes' not in _existing_trigger_descs"
+      register: _trig_create
+      changed_when: true
+      no_log: true
+
+    # ── trigger prototypes — filesystem ──────────────────────────────
+    - name: Read existing trigger prototypes for filesystem rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: triggerprototype.get
+          params:
+            discoveryids:
+              - "{{ _fs_drule_id }}"
+            output:
+              - triggerid
+              - description
+          id: 80
+        return_content: true
+      register: _existing_fs_trigger_protos
+      no_log: true
+
+    - name: Build set of existing FS trigger prototype descriptions
+      ansible.builtin.set_fact:
+        _existing_fs_trigger_proto_descs: "{{ _existing_fs_trigger_protos.json.result | map(attribute='description') | list }}"
+
+    - name: Create low disk space trigger prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: triggerprototype.create
+          params:
+            description: "Filesystem {#FSNAME}: Low disk space (<10% free)"
+            expression: "last(/{{ zabbix_template_host }}/vfs.fs.size[{#FSNAME},pused])>90"
+            priority: 3
+            tags:
+              - tag: component
+                value: filesystem
+          id: 81
+        return_content: true
+      when: "'Filesystem {#FSNAME}: Low disk space (<10% free)' not in _existing_fs_trigger_proto_descs"
+      register: _tproto_create
+      changed_when: true
+      no_log: true
+
+    - name: Create critically low disk space trigger prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: triggerprototype.create
+          params:
+            description: "Filesystem {#FSNAME}: Critically low disk space (<5% free)"
+            expression: "last(/{{ zabbix_template_host }}/vfs.fs.size[{#FSNAME},pused])>95"
+            priority: 4
+            tags:
+              - tag: component
+                value: filesystem
+          id: 82
+        return_content: true
+      when: "'Filesystem {#FSNAME}: Critically low disk space (<5% free)' not in _existing_fs_trigger_proto_descs"
+      register: _tproto_create
+      changed_when: true
+      no_log: true
+
+    # ── link template to all managed hosts ────────────────────────────
+    - name: Read target hosts and current template links
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+            selectParentTemplates:
+              - templateid
+              - name
+          id: 90
+        return_content: true
+      register: _target_hosts_get
+      no_log: true
+
+    - name: Require all inventory targets to exist in Zabbix
+      ansible.builtin.assert:
+        that:
+          - _target_hosts_get.json.result | length == zabbix_target_hosts | length
+        fail_msg: >
+          Not every zabbix_agents host was returned by the Zabbix API.
+
+    - name: Build host link list (skip already-linked hosts)
+      ansible.builtin.set_fact:
+        _template_link_hosts: >
+          {{
+            (_template_link_hosts | default([]))
+            + [{'hostid': item.hostid}]
+          }}
+      loop: "{{ _target_hosts_get.json.result }}"
+      when: >
+        _template_id not in
+        (item.parentTemplates | default([]) | map(attribute='templateid') | list)
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Link template to unlinked managed hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.massadd
+          params:
+            hosts: "{{ _template_link_hosts }}"
+            templates:
+              - templateid: "{{ _template_id }}"
+          id: 91
+        return_content: true
+      register: _host_massadd
+      when: (_template_link_hosts | default([])) | length > 0
+      changed_when: true
+      no_log: true
+
+    - name: Verify template links on all managed hosts
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+            selectParentTemplates:
+              - templateid
+              - name
+          id: 92
+        return_content: true
+      register: _verify_links
+      no_log: true
+
+    - name: Assert template is linked to every managed host
+      ansible.builtin.assert:
+        that:
+          - >
+            _template_id in
+            (item.parentTemplates | default([]) | map(attribute='templateid') | list)
+        fail_msg: "Homelab Linux Host template is not linked to {{ item.host }}."
+      loop: "{{ _verify_links.json.result }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Report deployment summary
+      ansible.builtin.debug:
+        msg:
+          template: "{{ zabbix_template_name }}"
+          template_id: "{{ _template_id }}"
+          target_hosts: "{{ zabbix_target_hosts | sort }}"
+          items: "CPU util, CPU loads, memory total/avail/pused, swap, uptime, boottime, uname, procs, agent ping/version"
+          discovery: "filesystems ({#FSNAME}), network interfaces ({#IFNAME})"
+          triggers: "high CPU, high load, high memory, low swap, host restarted, agent unreachable"
+          trigger_prototypes: "low disk space (<10%), critically low disk space (<5%)"
