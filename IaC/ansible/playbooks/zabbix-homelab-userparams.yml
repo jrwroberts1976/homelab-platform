@@ -1,1 +1,150 @@
-REPLACED_BELOW
+---
+- name: Deploy homelab-specific Zabbix UserParameters
+  hosts: all
+  become: true
+  gather_facts: true
+
+  vars:
+    zabbix_userparam_conf: /etc/zabbix/zabbix_agent2.d/homelab-userparams.conf
+    userparam_owner: root
+    userparam_group: root
+    userparam_mode: "0644"
+
+  tasks:
+    - name: Require target is in a managed group
+      ansible.builtin.assert:
+        that:
+          - "inventory_hostname in groups['zabbix_agents'] | default([])"
+        fail_msg: "Host {{ inventory_hostname }} is not in the zabbix_agents group."
+
+    - name: Install homelab UserParameter configuration
+      ansible.builtin.copy:
+        content: |
+          # homelab-platform Zabbix Agent 2 UserParameters
+          # Managed by Ansible — do not edit by hand.
+          # Deployed: {{ ansible_date_time.iso8601 }}
+
+          # ── OS facts (existing template keys — preserved) ──────────
+          UserParameter=system.sw.os[name],grep -oP '^PRETTY_NAME="\K[^"]+' /etc/os-release 2>/dev/null || echo "unknown"
+          UserParameter=system.sw.os.get,cat /etc/os-release 2>/dev/null | head -n 20
+          UserParameter=system.sw.arch,uname -m
+
+          # ── package / patch state ──────────────────────────────────
+          UserParameter=homelab.patch.pending,apt-get -s dist-upgrade 2>/dev/null | grep -c '^Inst ' || echo "0"
+          UserParameter=homelab.patch.security,apt-get -s dist-upgrade 2>/dev/null | grep -ci security || echo "0"
+          UserParameter=homelab.patch.reboot_required,test -f /var/run/reboot-required && echo 1 || echo 0
+          UserParameter=homelab.patch.unattended_status,systemctl is-active unattended-upgrades 2>/dev/null || echo "inactive"
+          UserParameter=homelab.patch.last_run,stat -c %Y /var/log/unattended-upgrades/unattended-upgrades.log 2>/dev/null || echo "0"
+
+          # ── service health — key daemons ───────────────────────────
+          UserParameter=homelab.service.active[*],systemctl is-active "$1" 2>/dev/null || echo "unknown"
+
+          # ── Proxmox cluster health (PROXMOX / Proxmox-2 only) ─────
+          UserParameter=homelab.pve.quorate,pvecm status 2>/dev/null | grep -c 'Quorate:.*Yes' || echo "0"
+          UserParameter=homelab.pve.node_count,pvecm status 2>/dev/null | grep -c 'Member' || echo "0"
+          UserParameter=homelab.pve.member_info[*],pvecm status 2>/dev/null | grep -A 5 "Name: $1" | grep -E 'Address|State' | tr '\n' ' ' || echo "missing"
+          UserParameter=homelab.pve.vm_count,qm list 2>/dev/null | grep -c running || echo "0"
+          UserParameter=homelab.pve.ct_count,pct list 2>/dev/null | grep -c running || echo "0"
+
+          # ── Corosync link health (PROXMOX / Proxmox-2 only) ───────
+          UserParameter=homelab.corosync.link0,corosync-cfgtool -s 2>/dev/null | grep 'link 0' | grep -c 'OK' || echo "0"
+          UserParameter=homelab.corosync.link1,corosync-cfgtool -s 2>/dev/null | grep 'link 1' | grep -c 'OK' || echo "0"
+
+          # ── QDevice / QNetd health (admin-01 only) ─────────────────
+          UserParameter=homelab.qdevice.service,systemctl is-active corosync-qnetd 2>/dev/null || echo "inactive"
+          UserParameter=homelab.qdevice.port,ss -tlnp 2>/dev/null | grep -c ':5403' || echo "0"
+
+          # ── backup freshness — media-01 ────────────────────────────
+          UserParameter=homelab.backup.newest_proxmox,find /srv/backup/proxmox -name '*.vma.zst' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | awk '{print $1}' || echo "0"
+          UserParameter=homelab.backup.newest_proxmox2,find /srv/backup/proxmox-2 -name '*.vma.zst' -printf '%T@ %p\n' 2>/dev/null | sort -rn | head -1 | awk '{print $1}' || echo "0"
+          UserParameter=homelab.backup.count_proxmox,find /srv/backup/proxmox -name '*.vma.zst' -mtime -3 2>/dev/null | wc -l || echo "0"
+          UserParameter=homelab.backup.count_proxmox2,find /srv/backup/proxmox-2 -name '*.vma.zst' -mtime -3 2>/dev/null | wc -l || echo "0"
+
+          # ── DNS resolver health (dns-01 / dns-02 only) ─────────────
+          UserParameter=homelab.dns.pihole_status,pihole status 2>/dev/null | grep -c 'Enabled' || echo "0"
+          UserParameter=homelab.dns.unbound_status,systemctl is-active unbound 2>/dev/null || echo "inactive"
+          UserParameter=homelab.dns.queries_today,curl -s http://127.0.0.1/admin/api.php?summary 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('dns_queries_today',0))" || echo "0"
+          UserParameter=homelab.dns.blocked_today,curl -s http://127.0.0.1/admin/api.php?summary 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('ads_blocked_today',0))" || echo "0"
+          UserParameter=homelab.dns.blocked_pct,curl -s http://127.0.0.1/admin/api.php?summary 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print(d.get('ads_percentage_today',0))" || echo "0"
+
+          # ── sensor capture health (sensor-01 only) ─────────────────
+          UserParameter=homelab.sensor.suricata_drops,grep -oP 'kernel_drop: \K[0-9.]+' /var/log/suricata/stats.log 2>/dev/null | tail -1 || echo "0"
+          UserParameter=homelab.sensor.zeek_gaps,grep -c 'gap' /opt/zeek/logs/current/capture_loss.log 2>/dev/null | tail -1 || echo "0"
+          UserParameter=homelab.sensor.suricata_service,systemctl is-active suricata 2>/dev/null || echo "inactive"
+          UserParameter=homelab.sensor.zeek_service,systemctl is-active homelab-zeek 2>/dev/null || echo "inactive"
+
+          # ── Zabbix server health (zabbix-01 only) ──────────────────
+          UserParameter=homelab.zabbix.queue,curl -s -H "Content-Type: application/json-rpc" -d '{"jsonrpc":"2.0","method":"proxy.get","params":{"output":["proxyid"]},"id":1}' http://127.0.0.1:8080/api_jsonrpc.php 2>/dev/null | python3 -c "import sys,json;d=json.load(sys.stdin);print('ok' if 'result' in d else 'error')" || echo "error"
+          UserParameter=homelab.zabbix.db_size,psql -U zabbix -d zabbix -tAc "SELECT pg_size_pretty(pg_database_size('zabbix'));" 2>/dev/null || echo "unknown"
+
+          # ── media-01: Kodi / SMB / NFS ─────────────────────────────
+          UserParameter=homelab.media.kodi_service,systemctl --user is-active kodi 2>/dev/null || echo "inactive"
+          UserParameter=homelab.media.smb_check,smbclient -L localhost -N 2>/dev/null | grep -c 'Disk' || echo "0"
+          UserParameter=homelab.media.nfs_rpcs,showmount -e 127.0.0.1 2>/dev/null | grep -c 'Export' || echo "0"
+
+          # ── docker-01: BirdNET-Go ──────────────────────────────────
+          UserParameter=homelab.birdnet.service,systemctl is-active docker 2>/dev/null || echo "inactive"
+          UserParameter=homelab.birdnet.http,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ 2>/dev/null || echo "0"
+
+          # ── komodo-01: Komodo Core ─────────────────────────────────
+          UserParameter=homelab.komodo.http,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9120/ 2>/dev/null || echo "0"
+          UserParameter=homelab.komodo.mongo,systemctl is-active mongod 2>/dev/null || echo "inactive"
+
+          # ── cloud-01: Nextcloud ────────────────────────────────────
+          UserParameter=homelab.cloud.http,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/status.php 2>/dev/null || echo "0"
+          UserParameter=homelab.cloud.postgres,systemctl is-active postgresql 2>/dev/null || echo "inactive"
+
+          # ── mail-relay-01: Postfix ─────────────────────────────────
+          UserParameter=homelab.mail.queue_size,postqueue -p 2>/dev/null | tail -1 | grep -oP '\d+' || echo "0"
+          UserParameter=homelab.mail.postfix_service,systemctl is-active postfix 2>/dev/null || echo "inactive"
+
+          # ── greenbone-01: Greenbone ────────────────────────────────
+          UserParameter=homelab.greenbone.http,curl -s -o /dev/null -w '%{http_code}' -k https://127.0.0.1/ 2>/dev/null || echo "0"
+
+          # ── certificate expiry (all HTTPS endpoints) ───────────────
+          UserParameter=homelab.cert.expiry[*],echo | openssl s_client -servername "$1" -connect "$1:$2" 2>/dev/null | openssl x509 -noout -enddate 2>/dev/null | cut -d= -f2 | xargs -I{} date -d '{}' +%s 2>/dev/null || echo "0"
+        dest: "{{ zabbix_userparam_conf }}"
+        owner: "{{ userparam_owner }}"
+        group: "{{ userparam_group }}"
+        mode: "{{ userparam_mode }}"
+      register: _userparams_deployed
+
+    - name: Validate UserParameter config syntax
+      ansible.builtin.command:
+        argv:
+          - zabbix_agent2
+          - -t
+          - agent.ping
+      changed_when: false
+      failed_when: false
+
+    - name: Reload Zabbix Agent 2 after UserParameter changes
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: reloaded
+      when: _userparams_deployed.changed
+
+    - name: Verify Agent 2 is running after reload
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: started
+        enabled: true
+
+    - name: Test a homelab UserParameter
+      ansible.builtin.command:
+        argv:
+          - zabbix_agent2
+          - -t
+          - homelab.patch.reboot_required
+      register: _test_userparam
+      changed_when: false
+      failed_when: false
+
+    - name: Warn if UserParameter test returned unexpected output
+      ansible.builtin.debug:
+        msg: >
+          UserParameter homelab.patch.reboot_required returned:
+          {{ _test_userparam.stdout }}
+          (expected ZBX_NOTSUPPORTED or a value — check the agent log
+          if this persists)
+      when: "'ZBX_NOTSUPPORTED' in _test_userparam.stdout"
