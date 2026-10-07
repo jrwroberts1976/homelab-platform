@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 2026-10-06  
+**Last reconciled:** 2026-10-07  
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** repository-wide documentation audit/remediation COMPLETE through PRs #182–#185.
 
@@ -35,7 +35,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 
 | # | Project | Status | Estimated effort | Remaining outcome |
 |---|---|---|---|---|
-| 1 | Greenbone and AI-assisted morning management report | COMPLETE | — | Operational factual + AI-assisted reporting with fail-safe factual fallback and source provenance |
+| 1 | Greenbone and AI-assisted morning management report | COMPLETE | — | Operational factual + AI-assisted reporting with fail-safe factual fallback, source provenance and factual network-inventory v1 pinned to `monitor-01` |
 | 2 | Security and monitoring integration | BASELINE COMPLETE / TUNING | **2–4 hours when resumed** | Add only demonstrated actionable gaps; CrowdSec remains absent and must not be treated as a current source |
 | 3 | Grafana dashboards and AI host intelligence | FOUNDATION COMPLETE / QUALITY REFINEMENT | **2–5 days** | Estate dashboard/patch/node foundation complete; continue host-intelligence/manual-review/version-history refinement without treating missing telemetry as healthy |
 | 4 | Homelab documentation audit | **COMPLETE — 6 OCTOBER 2026** | — | Audit baseline PR #182; remediation PRs #183, #184 and #185 completed and guard-validated |
@@ -60,6 +60,25 @@ The repository backlog contains authoritative named/evidenced entries through St
 ### Steps 1–8
 
 **COMPLETE.** Management-report verification, AI-assisted interpretation/fallback, source provenance, end-to-end delivery, security-signal audit, Zabbix/Loki freshness, and privacy-safe Pi-hole evidence integration were implemented and verified during 23–24 September 2026. Detailed evidence remains in Git history and dated records.
+
+### Management-report network inventory v1 extension — COMPLETE
+
+Completed 7 October 2026 and recorded in `docs/architecture/MANAGEMENT-REPORT-NETWORK-V1-CLOSURE-2026-10-07.md`.
+
+Delivered/verified:
+
+- factual network inventory sourced only from the active `monitor-01` network collector;
+- retained inventory total, currently-online count and first-observed-in-24h count;
+- freshness derived from the `homelab_network_hosts.prom` textfile mtime with a 15-minute threshold;
+- stale, missing or invalid evidence suppresses counts instead of presenting them as current facts;
+- explicit guards against impossible counts such as online hosts exceeding retained inventory;
+- no `enrichment.json` dependency;
+- no OS-change, port-change or device-identity-change claims;
+- 9 management-report tests passed;
+- Ansible syntax check passed;
+- live production report and provenance validated;
+- repeat deployment completed with `changed=0`, `unreachable=0`, `failed=0`;
+- implementation committed as `abb5c90`.
 
 ### Step 9/20 — Representative integration and regression tests — COMPLETE
 
@@ -101,6 +120,7 @@ Recover/reconcile an authoritative prior checklist before using those step numbe
 | Home Assistant | `home-01` commissioned and operational | NORMAL OPERATIONS; only explicitly requested monitoring/recovery work |
 | Jenkins | Already removed | CLOSED — do not create retirement task |
 | Network discovery | Single-owner cutover to `monitor-01` completed 27 September | CLOSED MIGRATION; source timers on `Proxmox-2` remain disabled/inactive |
+| Management-report network inventory v1 | Factual inventory/presence/freshness evidence pinned to `monitor-01`; no enrichment/change claims | CLOSED — future richer change detection requires a separately reviewed evidence model |
 | CT105 / VM203 unattended backup evidence | Observed | CLOSED EVIDENCE GAP |
 | CrowdSec | Not installed anywhere in active estate | ABSENT / DEFERRED; do not list as current telemetry |
 | Authelia | Not deployed | ABSENT; Cloudflare remains intended MFA boundary for future public exposure |
