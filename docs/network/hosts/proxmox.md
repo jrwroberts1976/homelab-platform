@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:43:45+01:00`
+- Assessed: `2026-10-08T15:00:50+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `80:e8:2c:1c:55:d2`
 - Identity confidence: **high**
@@ -82,23 +82,27 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-PROXMOX is an online Hewlett Packard physical Proxmox VE cluster node at 192.168.2.70. Authoritative Zabbix inventory identifies Debian GNU/Linux 13 (trixie) with kernel 7.0.14-17-pve. Open services include corroborated OpenSSH on 22/tcp and the Proxmox Virtual Environment REST API on 3128/tcp; 111/tcp and 9100/tcp are also open. No matching actionable Greenbone findings were reported, which is not proof of vulnerability-free status.
+PROXMOX is a Hewlett Packard physical Proxmox VE cluster node and cluster anchor at 192.168.2.70. Authoritative Zabbix Agent 2 facts identify Proxmox VE / Debian GNU/Linux 13 (trixie), with OpenSSH and the Proxmox Virtual Environment REST API detected. No matching actionable Greenbone findings were reported; patch telemetry is unavailable.
 
 ### Confirmed facts
 
-- The canonical estate identifies the device as PROXMOX, a physical Proxmox VE cluster node and cluster anchor.
-- The device is online at 192.168.2.70 and has hostname proxmox.jameshouse.
+- The canonical estate identifies the device as PROXMOX.
+- The device is documented as physical.
+- The documented role is Proxmox VE cluster node 1 and cluster anchor.
+- The device is managed by Ansible.
 - The vendor is Hewlett Packard.
-- Authoritative Zabbix Agent 2 facts identify the OS as Proxmox VE / Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-17-pve.
-- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 3128 is open and provides the corroborated Proxmox Virtual Environment REST API, version 3.0.
-- TCP ports 111 and 9100 are open; their service labels were omitted.
-- Greenbone reported zero matching actionable findings for the current IP in the supplied scan data.
+- The IP address is 192.168.2.70 and the host is online.
+- Authoritative Zabbix Agent 2 facts identify the OS as Proxmox VE / Debian GNU/Linux 13 (trixie) on x86_64 with kernel 7.0.14-20-pve.
+- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 evidence.
+- TCP port 3128 is open and provides corroborated Proxmox Virtual Environment REST API 3.0 evidence.
+- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
+- Greenbone reported zero matching actionable findings for the current host IP.
+- Patch telemetry status is unavailable.
 
 ### Inferences
 
-- The device is the primary or anchor node for the documented Proxmox VE cluster.
-- The host is managed by Ansible, as recorded by the canonical estate metadata.
+- The host identity is strongly consistent with a Proxmox virtualization server because the canonical estate role and authoritative OS identify it as a Proxmox VE cluster node.
+- The device is likely a managed infrastructure host, based on its canonical estate role and Ansible management.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

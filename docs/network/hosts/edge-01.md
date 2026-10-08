@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:33:55+01:00`
+- Assessed: `2026-10-08T15:00:50+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Identity confidence: **high**
@@ -97,24 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-edge-01 is CT103, a managed Debian GNU/Linux 13 LXC on Proxmox-2. SSH is provided by OpenSSH 10.0p2; TCP port 9100 is open with no service label supplied. No actionable Greenbone findings currently match this host.
+Managed Debian 13 LXC container edge-01 (CT103) on Proxmox-2. OpenSSH is exposed on TCP/22 and TCP/9100 is open. No actionable Greenbone findings or pending security updates were reported; sampled logs include SSH authentication failures and network-wait errors.
 
 ### Confirmed facts
 
-- The canonical estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
-- Proxmox inventory identifies the guest type as LXC and the vendor as Proxmox Server Solutions GmbH.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-17-pve.
-- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP port 9100 is open; its Nmap service label was omitted.
-- No actionable Greenbone findings match 192.168.2.56.
-- Patch telemetry reports zero available updates and no reboot required at collection time.
-- The sampled logs include repeated SSH authentication failures and network-online timeout/protocol error messages.
+- The canonical estate identity is edge-01, a reserved edge LXC, CT103 on Proxmox-2.
+- The container is managed by Ansible.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
+- The vendor is Proxmox Server Solutions GmbH.
+- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
+- TCP/9100 is open; its Nmap service label was omitted.
+- Greenbone reported zero matching actionable findings for 192.168.2.56.
+- Patch telemetry reports zero available updates, zero available security updates, and no reboot required.
+- The sampled 24-hour logs include SSH authentication failures and network connectivity wait errors.
 
 ### Inferences
 
-- This host is a managed Linux container rather than a standalone physical device or VM.
-- The reserved edge role is operational metadata; cloudflared is documented as not deployed.
-- The SSH authentication failures merit review, but the bounded log sample does not establish compromise.
+- The host is a Debian Linux guest environment running as a Proxmox LXC container rather than a physical device.
+- The exposed SSH service supports administrative access, but no additional function is inferred from TCP/9100.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
