@@ -110,7 +110,7 @@ PROXMOX is an online Hewlett Packard physical Proxmox VE cluster node at 192.168
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T02:39:44+01:00`
+- Last assessed: `2026-10-08T03:40:05+01:00`
 - Pending updates: **8**
 - Security updates pending: **2**
 - Reboot required: **No**
