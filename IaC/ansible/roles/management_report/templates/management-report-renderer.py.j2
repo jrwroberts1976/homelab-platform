@@ -268,7 +268,6 @@ def list_length(value):
 def management_summary(data):
     prometheus = data.get("prometheus", {})
     zabbix = data.get("zabbix", {})
-    alertmanager = data.get("alertmanager", {})
     greenbone = data.get("greenbone", {})
 
     lines = [
@@ -331,22 +330,11 @@ def management_summary(data):
 
     zabbix_count = zabbix.get("active_problem_count")
     prometheus_count = prometheus.get("firing_alert_count")
-    alertmanager_count = alertmanager.get("active_alert_count")
 
-    counts = [
-        value
-        for value in (
-            zabbix_count,
-            prometheus_count,
-            alertmanager_count,
-        )
-        if isinstance(value, int)
-    ]
-
-    if len(counts) == 3:
+    if isinstance(zabbix_count, int) and isinstance(prometheus_count, int):
         lines.append(
             "Active infrastructure problems/alerts: "
-            + str(sum(counts))
+            + str(zabbix_count + prometheus_count)
         )
     else:
         lines.append(
@@ -359,11 +347,9 @@ def management_summary(data):
 def attention_section(data):
     prometheus = data.get("prometheus", {})
     zabbix = data.get("zabbix", {})
-    alertmanager = data.get("alertmanager", {})
 
     zabbix_problems = zabbix.get("active_problems", [])
     prometheus_alerts = prometheus.get("firing_alerts", [])
-    alertmanager_alerts = alertmanager.get("active_alerts", [])
 
     lines = [
         "Attention Required",
@@ -371,6 +357,15 @@ def attention_section(data):
     ]
 
     issue_found = False
+
+    zabbix_severity_names = {
+        "0": "Not classified",
+        "1": "Information",
+        "2": "Warning",
+        "3": "Average",
+        "4": "High",
+        "5": "Disaster",
+    }
 
     if isinstance(zabbix_problems, list):
         for problem in zabbix_problems:
@@ -389,8 +384,9 @@ def attention_section(data):
                 problem.get("name", "Unnamed Zabbix problem")
             )
 
-            severity = str(
-                problem.get("severity", "unknown")
+            severity = zabbix_severity_names.get(
+                str(problem.get("severity", "")),
+                "Unknown",
             )
 
             lines.append(
@@ -398,7 +394,7 @@ def attention_section(data):
                 + host
                 + " - "
                 + name
-                + " (severity "
+                + " ("
                 + severity
                 + ")"
             )
@@ -418,27 +414,6 @@ def attention_section(data):
                 name = str(alert)
 
             lines.append("Prometheus: " + str(name))
-
-    if isinstance(alertmanager_alerts, list):
-        for alert in alertmanager_alerts:
-            issue_found = True
-
-            if isinstance(alert, dict):
-                labels = alert.get("labels", {})
-                name = (
-                    alert.get("alertname")
-                    or alert.get("name")
-                    or (
-                        labels.get("alertname")
-                        if isinstance(labels, dict)
-                        else None
-                    )
-                    or "Unnamed Alertmanager alert"
-                )
-            else:
-                name = str(alert)
-
-            lines.append("Alertmanager: " + str(name))
 
     if not issue_found:
         lines.append("No active infrastructure problems or alerts.")
