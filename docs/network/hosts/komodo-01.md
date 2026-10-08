@@ -110,7 +110,7 @@ komodo-01 is CT104 on PROXMOX, serving as the Komodo container-management contro
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T05:09:23+01:00`
+- Last assessed: `2026-10-08T06:13:44+01:00`
 - Pending updates: **2**
 - Security updates pending: **2**
 - Reboot required: **No**
