@@ -127,7 +127,7 @@ Authoritative inventory identifies monitor-01 as VM202 on Proxmox-2, running Deb
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T19:00:41+01:00`
+- Last assessed: `2026-10-08T20:02:11+01:00`
 - Pending updates: **2**
 - Security updates pending: **2**
 - Reboot required: **No**
