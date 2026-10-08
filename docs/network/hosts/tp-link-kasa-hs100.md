@@ -52,33 +52,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:07:35+01:00`
+- Assessed: `2026-10-08T13:03:48+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `68:ff:7b:1b:1e:ab`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-HS100 is likely a TP-Link HS100 smart plug. Its exact operating system cannot be identified from the available evidence; manual review is recommended.
+Likely a TP-Link HS100 smart plug at 192.168.2.76. The host exposes TCP/9999; no exact OS evidence is available. No matching actionable Greenbone findings were reported, which does not establish that the device is vulnerability-free.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.76.
-- The documented hostname is HS100.
+- The device hostname is HS100.
 - The inventory and Nmap vendor are TP-Link Technologies.
+- The device is online at 192.168.2.76.
 - TCP port 9999 is open.
-- Nmap has no OS matches and reports missing OS evidence.
-- Nmap tentatively labels port 9999 as the abyss service.
-- No actionable Greenbone findings currently match this IP.
+- No authoritative OS fact or Nmap OS match is available.
+- Greenbone reported zero matching actionable findings for this IP.
 
 ### Inferences
 
-- The HS100 hostname combined with the TP-Link vendor is consistent with a TP-Link HS100 smart plug.
-- The device likely runs embedded IoT firmware, but the specific operating system is unsupported by the evidence.
-- The Nmap abyss label is uncorroborated and should not be treated as a confirmed product or host function.
+- The HS100 hostname combined with the TP-Link vendor strongly suggests a TP-Link HS100 smart-plug device.
+- The device likely runs embedded IoT firmware, but the exact operating system is unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

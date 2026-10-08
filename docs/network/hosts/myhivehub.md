@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:06:08+01:00`
+- Assessed: `2026-10-08T13:03:48+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1c:2b:5a:6d:fd`
 - Identity confidence: **medium**
@@ -60,22 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely an AlertMe-associated home automation hub based on its hostname and vendor. Exact operating system and service profile are unavailable; manual review is required.
+Online AlertMe-vendor device identified from its myHiveHub hostname as a likely home automation hub. No exact operating system is supported by the supplied evidence; manual review is required.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.7.
 - The recorded hostname is myhivehub.jameshouse, with DHCP hostname myHivehub.
-- The inventory vendor and Nmap vendor are Alertme.com Limited.
+- The reported vendor is Alertme.com Limited.
 - The MAC address is 00:1c:2b:5a:6d:fd.
-- Nmap OS and port evidence is unavailable because the scan is partial and reports os_evidence_missing.
-- No actionable Greenbone findings currently match this IP.
-- Patch telemetry is unavailable.
+- Nmap status is partial and reports missing OS evidence; no ports or OS matches were supplied.
+- No matching actionable Greenbone findings were reported for the current IP.
 
 ### Inferences
 
-- The hostname and AlertMe vendor are consistent with a home automation hub.
-- The device likely uses embedded IoT firmware, but the specific operating system is unsupported by the supplied evidence.
+- The hostname and vendor are consistent with an AlertMe/Hive-style home automation hub.
+- The device likely runs embedded IoT firmware, but the specific operating system is unsupported.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

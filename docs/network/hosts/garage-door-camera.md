@@ -50,32 +50,33 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:06:08+01:00`
+- Assessed: `2026-10-08T13:03:48+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `78:8c:b5:38:16:83`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo/KC420WS garage-door security camera at 192.168.2.49. TP-Link cloud/Tapo DNS activity and the KC420WS DHCP hostname support the device identity, but the exact operating system is not established.
+Likely a TP-Link/Tapo network camera associated with the garage door. The exact model and operating system are not established; Nmap OS results are inconsistent and only one TCP port is confirmed open.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.49 with MAC address 78:8c:b5:38:16:83.
-- Inventory identifies the vendor as TP-Link Limited and the hostname as garage-door-camera.jameshouse.
-- The router reports DHCP hostname KC420WS.
-- Observed DNS signals include TP-Link/Tapo-related domains such as tplinkcloud.com, api.tplinkra.com, tp-link.com, and stun.tplinkcloud.com.
-- Nmap completed and reported TCP port 9999 open with the tentative service name abyss.
-- Greenbone reported zero matching actionable findings for this current IP; this is not proof that the host is vulnerability-free or fully scanned.
+- The device hostname is garage-door-camera.jameshouse.
+- The device vendor is identified as TP-Link Limited.
+- The DHCP hostname is KC420WS.
+- DNS activity includes TP-Link/Tapo-related endpoints such as tplinkcloud.com and api.tplinkra.com.
+- TCP port 9999 is open.
+- No actionable Greenbone findings match the current IP; this does not prove the host is vulnerability-free.
+- Patch telemetry is unavailable.
 
 ### Inferences
 
-- The device is likely a TP-Link Tapo KC420WS or closely related TP-Link security camera.
-- The platform is best classified broadly as embedded IoT firmware.
-- Nmap produced conflicting Linux, OpenWrt, Android, and Philips Hue Bridge fingerprints; these are not sufficient to identify the exact operating system.
+- The device is likely a TP-Link/Tapo network camera, based on its hostname, vendor, and TP-Link/Tapo DNS signals.
+- The platform is best classified cautiously as embedded IoT firmware.
+- The DHCP hostname may be model-like, but the supplied evidence does not establish the exact device model.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
