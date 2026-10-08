@@ -276,21 +276,21 @@ def management_summary(data):
         "------------------",
     ]
 
-    expected = prometheus.get("expected_hosts")
-    reporting = prometheus.get("node_exporter_reporting_hosts")
+    expected = zabbix.get("expected_hosts")
+    available = zabbix.get("available_hosts")
     patch_reporting = prometheus.get("patch_reporting_hosts")
     patch_fresh = prometheus.get("patch_fresh_hosts")
 
-    if isinstance(reporting, int) and isinstance(expected, int):
+    if isinstance(available, int) and isinstance(expected, int):
         lines.append(
-            "Estate monitoring: "
-            + str(reporting)
+            "Estate availability (Zabbix): "
+            + str(available)
             + "/"
             + str(expected)
-            + " hosts reporting"
+            + " hosts available"
         )
     else:
-        lines.append("Estate monitoring: UNKNOWN")
+        lines.append("Estate availability (Zabbix): UNKNOWN")
 
     if (
         isinstance(patch_fresh, int)
@@ -464,17 +464,11 @@ def monitoring_section(data):
                 + number(prometheus.get("expected_hosts"))
             ),
             (
-                "Node exporter reporting hosts: "
+                "Prometheus telemetry hosts: "
                 + number(
                     prometheus.get(
                         "node_exporter_reporting_hosts"
                     )
-                )
-            ),
-            (
-                "Node exporter UP hosts: "
-                + number(
-                    prometheus.get("node_exporter_up_hosts")
                 )
             ),
             (
@@ -508,8 +502,12 @@ def monitoring_section(data):
     if isinstance(zabbix, dict):
         lines.extend([
             (
-                "Zabbix reporting hosts: "
+                "Zabbix configured hosts: "
                 + number(zabbix.get("reporting_hosts"))
+            ),
+            (
+                "Zabbix available hosts: "
+                + number(zabbix.get("available_hosts"))
             ),
             (
                 "Zabbix active problems: "
@@ -525,6 +523,18 @@ def monitoring_section(data):
                 + (
                     ", ".join(str(x) for x in missing)
                     if missing
+                    else "none"
+                )
+            )
+
+        unavailable = zabbix.get("unavailable_hosts", [])
+
+        if isinstance(unavailable, list):
+            lines.append(
+                "Zabbix unavailable hosts: "
+                + (
+                    ", ".join(str(x) for x in unavailable)
+                    if unavailable
                     else "none"
                 )
             )

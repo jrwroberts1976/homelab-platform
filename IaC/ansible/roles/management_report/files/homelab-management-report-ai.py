@@ -162,7 +162,9 @@ def safe_summary(evidence):
             "firing_alert_count",
         ),
         "zabbix": (
+            "expected_hosts",
             "reporting_hosts",
+            "available_hosts",
             "active_problem_count",
         ),
         "alertmanager": ("active_alert_count",),
@@ -293,6 +295,8 @@ def generate(summary, api_key, model, request_post=requests.post):
             "Use exactly four short labelled paragraphs: Overall:, Needs attention:, Security:, Suggested priority:. "
             "Use only the supplied aggregate facts. A source marked not_assessed was omitted from the input, NOT confirmed unavailable. "
             "Use management_state.distinct_condition_count as the total number of current conditions when it is present. "
+            "Treat zabbix.available_hosts versus zabbix.expected_hosts as the authoritative managed-host availability result. "
+            "Prometheus node_exporter_reporting_hosts is telemetry coverage only and must not be described as host availability. "
             "Alertmanager confirms/delivers Prometheus alerts and must never be added to the Prometheus count as extra incidents. "
             "Mention monitoring_alert_names exactly when useful, but do not invent hostnames or issue details that are not supplied. "
             "Do not say the estate is fully healthy merely because monitoring coverage is complete when active conditions exist. "

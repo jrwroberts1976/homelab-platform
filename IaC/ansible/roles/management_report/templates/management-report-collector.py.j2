@@ -12,6 +12,7 @@ ALERTMANAGER_URL = "{{ management_report_alertmanager_url }}"
 LOKI_URL = "{{ management_report_loki_url }}"
 ZABBIX_URL = "{{ management_report_zabbix_url }}"
 ZABBIX_TOKEN_FILE = Path("{{ management_report_zabbix_token_file }}")
+ZABBIX_AGENT_PING_FRESHNESS_SECONDS = {{ management_report_zabbix_agent_ping_freshness_seconds }}
 EXPECTED_HOSTS = {{ management_report_expected_hosts | to_json }}
 EXPECTED_HOST_COUNT = len(EXPECTED_HOSTS)
 PATCH_FRESHNESS_SECONDS = {{ management_report_patch_freshness_minutes }} * 60
@@ -785,6 +786,112 @@ def main():
     )
     zabbix_host_names = sorted(host["host"] for host in zabbix_hosts)
 
+    zabbix_agent_ping_items = zabbix_api(
+        "item.get",
+        {
+            "output": [
+                "itemid",
+                "type",
+                "status",
+                "state",
+                "lastclock",
+                "lastvalue",
+                "error",
+            ],
+            "groupids": [zabbix_group_id],
+            "filter": {"key_": ["agent.ping"]},
+            "selectHosts": ["host"],
+        },
+    )
+
+    zabbix_ping_by_host = {}
+
+    for item in zabbix_agent_ping_items:
+        hosts = item.get("hosts", [])
+        if not isinstance(hosts, list) or len(hosts) != 1:
+            continue
+
+        host = hosts[0].get("host")
+        if not host:
+            continue
+
+        zabbix_ping_by_host.setdefault(host, []).append(item)
+
+    zabbix_availability = {}
+    zabbix_now = int(time.time())
+
+    for host in EXPECTED_HOSTS:
+        items = zabbix_ping_by_host.get(host, [])
+
+        result = {
+            "available": False,
+            "status": "unknown",
+            "lastvalue": None,
+            "age_seconds": None,
+            "error": "",
+        }
+
+        if len(items) == 0:
+            result["status"] = "missing_agent_ping_item"
+
+        elif len(items) > 1:
+            result["status"] = "duplicate_agent_ping_items"
+
+        else:
+            item = items[0]
+
+            lastclock = int(item.get("lastclock") or 0)
+            lastvalue = item.get("lastvalue")
+            age_seconds = (
+                zabbix_now - lastclock
+                if lastclock > 0
+                else None
+            )
+
+            result["lastvalue"] = lastvalue
+            result["age_seconds"] = (
+                max(0, age_seconds)
+                if age_seconds is not None
+                else None
+            )
+            result["error"] = str(item.get("error") or "")
+
+            if item.get("status") != "0":
+                result["status"] = "item_disabled"
+
+            elif item.get("state") != "0":
+                result["status"] = "not_supported"
+
+            elif lastclock <= 0:
+                result["status"] = "no_data"
+
+            elif age_seconds < -60:
+                result["status"] = "future_timestamp"
+
+            elif age_seconds > ZABBIX_AGENT_PING_FRESHNESS_SECONDS:
+                result["status"] = "stale"
+
+            elif lastvalue != "1":
+                result["status"] = "unavailable"
+
+            else:
+                result["status"] = "available"
+                result["available"] = True
+
+        zabbix_availability[host] = result
+
+    zabbix_available_hosts = sorted(
+        host
+        for host, item in zabbix_availability.items()
+        if item["available"]
+    )
+
+    zabbix_unavailable_hosts = sorted(
+        host
+        for host, item in zabbix_availability.items()
+        if not item["available"]
+    )
+
     zabbix_missing_hosts = sorted(
         set(EXPECTED_HOSTS) - set(zabbix_host_names)
     )
@@ -901,6 +1008,10 @@ def main():
             "missing_hosts": zabbix_missing_hosts,
             "unexpected_hosts": zabbix_unexpected_hosts,
             "hosts": zabbix_host_names,
+            "agent_ping_freshness_threshold_seconds": ZABBIX_AGENT_PING_FRESHNESS_SECONDS,
+            "available_hosts": len(zabbix_available_hosts),
+            "unavailable_hosts": zabbix_unavailable_hosts,
+            "availability": zabbix_availability,
             "active_problem_count": len(zabbix_problems),
             "active_problems": zabbix_problems,
         },

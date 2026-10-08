@@ -35,6 +35,9 @@ management_report_network_inventory_freshness_minutes: 15
 
 management_report_zabbix_token_file: "/etc/homelab-management-report/zabbix-api-token"
 
+# Active Zabbix Agent 2 host-availability evidence.
+management_report_zabbix_agent_ping_freshness_seconds: 180
+
 # Specialist evidence received from dedicated producer hosts.
 management_report_evidence_sources_directory: "{{ management_report_state_directory }}/evidence-sources"
 
