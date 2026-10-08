@@ -1,0 +1,878 @@
+---
+- name: Manage HP ProCurve SNMP monitoring in Zabbix
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+
+    zabbix_hp_snmp_allow_deploy: false
+
+    zabbix_hp_snmp_group_name: "Homelab/Network"
+    zabbix_hp_snmp_template_group_name: "Templates/Homelab"
+
+    zabbix_hp_snmp_reporting_user_group: "Homelab Reporting"
+    zabbix_hp_snmp_reporting_permission: 2
+
+    zabbix_hp_snmp_template_name: "Homelab HP ProCurve SNMP"
+    zabbix_hp_snmp_template_host: "Homelab HP ProCurve SNMP"
+
+    zabbix_hp_snmp_host: "hp-switch"
+    zabbix_hp_snmp_visible_name: "HP ProCurve 2510G-24"
+    zabbix_hp_snmp_address: "192.168.2.16"
+    zabbix_hp_snmp_port: "161"
+
+    zabbix_hp_snmp_community_macro: "{$SNMP_COMMUNITY}"
+
+    zabbix_api_token: >-
+      {{
+        lookup(
+          'ansible.builtin.env',
+          'HOMELAB_ZABBIX_API_TOKEN'
+        )
+        | default('', true)
+      }}
+
+  pre_tasks:
+    - name: Require explicit deployment approval
+      ansible.builtin.assert:
+        that:
+          - zabbix_hp_snmp_allow_deploy | bool
+        fail_msg: >-
+          Deployment is disabled. Set
+          zabbix_hp_snmp_allow_deploy=true explicitly.
+
+    - name: Require privileged runtime Zabbix API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_api_token | length >= 20
+        fail_msg: >-
+          HOMELAB_ZABBIX_API_TOKEN must contain a privileged
+          runtime Zabbix API token.
+      no_log: true
+
+    - name: Read protected existing HP switch SNMP community
+      ansible.builtin.shell: |
+        set -e
+        test -f /etc/homelab-switch-collector/snmp/snmp.conf
+        sed -n \
+          's/^defCommunity[[:space:]]*//p' \
+          /etc/homelab-switch-collector/snmp/snmp.conf |
+          head -n 1
+      args:
+        executable: /bin/bash
+      register: zabbix_hp_snmp_existing_community
+      changed_when: false
+      no_log: true
+
+    - name: Require protected SNMP community
+      ansible.builtin.assert:
+        that:
+          - >-
+            zabbix_hp_snmp_existing_community.stdout
+            | default('')
+            | length > 0
+        fail_msg: >-
+          Existing protected HP switch SNMP community could
+          not be read from monitor-01.
+      no_log: true
+
+  tasks:
+    - name: Read target host group
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: hostgroup.get
+          params:
+            output:
+              - groupid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_group_name }}"
+          id: 1
+        return_content: true
+      register: _network_group
+      no_log: true
+
+    - name: Create target host group when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: hostgroup.create
+          params:
+            name: "{{ zabbix_hp_snmp_group_name }}"
+          id: 2
+        return_content: true
+      register: _network_group_create
+      when: (_network_group.content | from_json).result | length == 0
+      changed_when: true
+      failed_when: >-
+        (_network_group_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read final target host group
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: hostgroup.get
+          params:
+            output:
+              - groupid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_group_name }}"
+          id: 3
+        return_content: true
+      register: _network_group_final
+      no_log: true
+
+    - name: Require exactly one target host group
+      ansible.builtin.assert:
+        that:
+          - (_network_group_final.content | from_json).result | length == 1
+        fail_msg: >-
+          Expected exactly one {{ zabbix_hp_snmp_group_name }}
+          host group.
+
+    - name: Set target host group ID
+      ansible.builtin.set_fact:
+        _network_group_id: >-
+          {{
+            (_network_group_final.content | from_json).result[0].groupid
+          }}
+
+    - name: Read reporting user group rights
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usergroup.get
+          params:
+            output:
+              - usrgrpid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_reporting_user_group }}"
+            selectHostGroupRights: extend
+            selectTemplateGroupRights: extend
+          id: 101
+        return_content: true
+      register: _reporting_user_group
+      no_log: true
+
+    - name: Require exactly one reporting user group
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_reporting_user_group.content | from_json).result
+            | length == 1
+        fail_msg: >-
+          Expected exactly one
+          {{ zabbix_hp_snmp_reporting_user_group }}
+          user group.
+      no_log: true
+
+    - name: Resolve current reporting host-group permission
+      ansible.builtin.set_fact:
+        _reporting_current_network_right: >-
+          {{
+            (
+              (_reporting_user_group.content | from_json)
+              .result[0].hostgroup_rights
+              | selectattr(
+                  'id',
+                  'equalto',
+                  _network_group_id
+                )
+              | list
+              | first
+            )
+            | default({})
+          }}
+        _reporting_hostgroup_rights_merged: >-
+          {{
+            (
+              (_reporting_user_group.content | from_json)
+              .result[0].hostgroup_rights
+              | rejectattr(
+                  'id',
+                  'equalto',
+                  _network_group_id
+                )
+              | list
+            )
+            +
+            [
+              {
+                'id': _network_group_id,
+                'permission':
+                  zabbix_hp_snmp_reporting_permission
+              }
+            ]
+          }}
+      no_log: true
+
+    - name: Ensure reporting group has read-only network access
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usergroup.update
+          params:
+            usrgrpid: >-
+              {{
+                (_reporting_user_group.content | from_json)
+                .result[0].usrgrpid
+              }}
+            hostgroup_rights: >-
+              {{
+                _reporting_hostgroup_rights_merged
+              }}
+          id: 102
+        return_content: true
+      register: _reporting_user_group_update
+      when: >-
+        (
+          _reporting_current_network_right.permission
+          | default(0)
+          | int
+        )
+        !=
+        (zabbix_hp_snmp_reporting_permission | int)
+      changed_when: true
+      failed_when: >-
+        (_reporting_user_group_update.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final reporting user group rights
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usergroup.get
+          params:
+            output:
+              - usrgrpid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_reporting_user_group }}"
+            selectHostGroupRights: extend
+            selectTemplateGroupRights: extend
+          id: 103
+        return_content: true
+      register: _reporting_user_group_final
+      no_log: true
+
+    - name: Require reporting read access to Homelab Network
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              (_reporting_user_group_final.content | from_json)
+              .result[0].hostgroup_rights
+              | selectattr(
+                  'id',
+                  'equalto',
+                  _network_group_id
+                )
+              | map(attribute='permission')
+              | map('int')
+              | list
+            )
+            ==
+            [
+              zabbix_hp_snmp_reporting_permission | int
+            ]
+        fail_msg: >-
+          Homelab Reporting does not have the required
+          read-only access to Homelab/Network.
+      no_log: true
+
+    - name: Read target template group
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.get
+          params:
+            output:
+              - groupid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_template_group_name }}"
+          id: 4
+        return_content: true
+      register: _template_group
+      no_log: true
+
+    - name: Create target template group when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.create
+          params:
+            name: "{{ zabbix_hp_snmp_template_group_name }}"
+          id: 5
+        return_content: true
+      register: _template_group_create
+      when: (_template_group.content | from_json).result | length == 0
+      changed_when: true
+      failed_when: >-
+        (_template_group_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read final target template group
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: templategroup.get
+          params:
+            output:
+              - groupid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_template_group_name }}"
+          id: 8
+        return_content: true
+      register: _template_group_final
+      no_log: true
+
+    - name: Require exactly one target template group
+      ansible.builtin.assert:
+        that:
+          - (_template_group_final.content | from_json).result | length == 1
+        fail_msg: >-
+          Expected exactly one
+          {{ zabbix_hp_snmp_template_group_name }}
+          template group.
+
+    - name: Set target template group ID
+      ansible.builtin.set_fact:
+        _template_group_id: >-
+          {{
+            (_template_group_final.content | from_json).result[0].groupid
+          }}
+
+    - name: Resolve current reporting template-group permission
+      ansible.builtin.set_fact:
+        _reporting_current_template_right: >-
+          {{
+            (
+              (_reporting_user_group_final.content | from_json)
+              .result[0].templategroup_rights
+              | selectattr(
+                  'id',
+                  'equalto',
+                  _template_group_id
+                )
+              | list
+              | first
+            )
+            | default({})
+          }}
+        _reporting_template_group_rights_merged: >-
+          {{
+            (
+              (_reporting_user_group_final.content | from_json)
+              .result[0].templategroup_rights
+              | rejectattr(
+                  'id',
+                  'equalto',
+                  _template_group_id
+                )
+              | list
+            )
+            +
+            [
+              {
+                'id': _template_group_id,
+                'permission':
+                  zabbix_hp_snmp_reporting_permission
+              }
+            ]
+          }}
+      no_log: true
+
+    - name: Ensure reporting group has read-only template access
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usergroup.update
+          params:
+            usrgrpid: >-
+              {{
+                (_reporting_user_group_final.content | from_json)
+                .result[0].usrgrpid
+              }}
+            templategroup_rights: >-
+              {{
+                _reporting_template_group_rights_merged
+              }}
+          id: 104
+        return_content: true
+      register: _reporting_template_group_update
+      when: >-
+        (
+          _reporting_current_template_right.permission
+          | default(0)
+          | int
+        )
+        !=
+        (zabbix_hp_snmp_reporting_permission | int)
+      changed_when: true
+      failed_when: >-
+        (_reporting_template_group_update.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final reporting template-group rights
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usergroup.get
+          params:
+            output:
+              - usrgrpid
+              - name
+            filter:
+              name:
+                - "{{ zabbix_hp_snmp_reporting_user_group }}"
+            selectTemplateGroupRights: extend
+          id: 105
+        return_content: true
+      register: _reporting_template_group_final
+      no_log: true
+
+    - name: Require reporting read access to Homelab templates
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              (_reporting_template_group_final.content | from_json)
+              .result[0].templategroup_rights
+              | selectattr(
+                  'id',
+                  'equalto',
+                  _template_group_id
+                )
+              | map(attribute='permission')
+              | map('int')
+              | list
+            )
+            ==
+            [
+              zabbix_hp_snmp_reporting_permission | int
+            ]
+        fail_msg: >-
+          Homelab Reporting does not have the required
+          read-only access to Templates/Homelab.
+      no_log: true
+
+    - name: Read HP ProCurve SNMP template
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.get
+          params:
+            output:
+              - templateid
+              - host
+              - name
+            filter:
+              host:
+                - "{{ zabbix_hp_snmp_template_host }}"
+          id: 4
+        return_content: true
+      register: _snmp_template
+      no_log: true
+
+    - name: Create HP ProCurve SNMP template when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.create
+          params:
+            host: "{{ zabbix_hp_snmp_template_host }}"
+            name: "{{ zabbix_hp_snmp_template_name }}"
+            groups:
+              - groupid: "{{ _template_group_id }}"
+          id: 9
+        return_content: true
+      register: _snmp_template_create
+      when: (_snmp_template.content | from_json).result | length == 0
+      changed_when: true
+      failed_when: >-
+        (_snmp_template_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read final HP ProCurve SNMP template
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.get
+          params:
+            output:
+              - templateid
+              - host
+              - name
+            filter:
+              host:
+                - "{{ zabbix_hp_snmp_template_host }}"
+          id: 6
+        return_content: true
+      register: _snmp_template_final
+      no_log: true
+
+    - name: Require exactly one HP ProCurve SNMP template
+      ansible.builtin.assert:
+        that:
+          - (_snmp_template_final.content | from_json).result | length == 1
+
+    - name: Set HP ProCurve template ID
+      ansible.builtin.set_fact:
+        _snmp_template_id: >-
+          {{
+            (_snmp_template_final.content | from_json).result[0].templateid
+          }}
+
+    - name: Read template scalar SNMP items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - snmp_oid
+              - type
+          id: 7
+        return_content: true
+      register: _template_items
+      no_log: true
+
+    - name: Create initial scalar SNMP items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "{{ item.name }}"
+            key_: "{{ item.key }}"
+            hostid: "{{ _snmp_template_id }}"
+            # Zabbix 7.0 item type 20 = SNMP agent.
+            type: 20
+            value_type: "{{ item.value_type }}"
+            snmp_oid: "{{ item.oid }}"
+            delay: "{{ item.delay }}"
+            history: "30d"
+            trends: "{{ item.trends }}"
+          id: 10
+        return_content: true
+      loop:
+        - name: "SNMP system name"
+          key: "hp.snmp.sysname"
+          oid: "1.3.6.1.2.1.1.5.0"
+          value_type: 1
+          delay: "5m"
+          trends: "0"
+        - name: "SNMP system description"
+          key: "hp.snmp.sysdescr"
+          oid: "1.3.6.1.2.1.1.1.0"
+          value_type: 1
+          delay: "1h"
+          trends: "0"
+        - name: "SNMP system uptime"
+          key: "hp.snmp.sysuptime"
+          oid: "1.3.6.1.2.1.1.3.0"
+          value_type: 3
+          delay: "1m"
+          trends: "365d"
+      when: >-
+        item.key not in
+        (
+          (_template_items.content | from_json).result
+          | map(attribute='key_')
+          | list
+        )
+      register: _scalar_item_create
+      changed_when: true
+      failed_when: >-
+        (_scalar_item_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read target HP switch host
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+              - name
+              - status
+            filter:
+              host:
+                - "{{ zabbix_hp_snmp_host }}"
+            selectInterfaces:
+              - interfaceid
+              - type
+              - main
+              - useip
+              - ip
+              - dns
+              - port
+            selectParentTemplates:
+              - templateid
+              - name
+          id: 11
+        return_content: true
+      register: _switch_host
+      no_log: true
+
+    - name: Create HP switch SNMP host when absent
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.create
+          params:
+            host: "{{ zabbix_hp_snmp_host }}"
+            name: "{{ zabbix_hp_snmp_visible_name }}"
+            groups:
+              - groupid: "{{ _network_group_id }}"
+            templates:
+              - templateid: "{{ _snmp_template_id }}"
+            macros:
+              - macro: "{{ zabbix_hp_snmp_community_macro }}"
+                value: >-
+                  {{
+                    zabbix_hp_snmp_existing_community.stdout
+                  }}
+                type: 1
+                description: >-
+                  Protected SNMP v2c community for the HP
+                  ProCurve switch.
+            interfaces:
+              - main: 1
+                type: 2
+                useip: 1
+                ip: "{{ zabbix_hp_snmp_address }}"
+                dns: ""
+                port: "{{ zabbix_hp_snmp_port }}"
+                details:
+                  version: 2
+                  bulk: 1
+                  community: >-
+                    {{ zabbix_hp_snmp_community_macro }}
+          id: 12
+        return_content: true
+      register: _switch_host_create
+      when: (_switch_host.content | from_json).result | length == 0
+      changed_when: true
+      failed_when: >-
+        (_switch_host_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read final HP switch state
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+              - name
+              - status
+            filter:
+              host:
+                - "{{ zabbix_hp_snmp_host }}"
+            selectInterfaces:
+              - interfaceid
+              - type
+              - main
+              - useip
+              - ip
+              - dns
+              - port
+              - available
+              - error
+            selectParentTemplates:
+              - templateid
+              - name
+            selectMacros:
+              - hostmacroid
+              - macro
+              - type
+          id: 13
+        return_content: true
+      register: _switch_host_final
+      no_log: true
+
+    - name: Require final HP switch host structure
+      ansible.builtin.assert:
+        that:
+          - (_switch_host_final.content | from_json).result | length == 1
+          - >-
+            (
+              (_switch_host_final.content | from_json).result[0].interfaces
+              | selectattr('type', 'equalto', '2')
+              | list
+              | length
+            ) == 1
+          - >-
+            (
+              (_switch_host_final.content | from_json).result[0].parentTemplates
+              | map(attribute='templateid')
+              | list
+            )
+            is contains(_snmp_template_id)
+          - >-
+            (
+              (_switch_host_final.content | from_json).result[0].macros
+              | selectattr(
+                  'macro',
+                  'equalto',
+                  zabbix_hp_snmp_community_macro
+                )
+              | list
+              | length
+            ) == 1
+        fail_msg: >-
+          Final HP switch Zabbix structure did not validate.
+
+    - name: Report HP switch SNMP structure
+      ansible.builtin.debug:
+        msg:
+          host: "{{ zabbix_hp_snmp_host }}"
+          address: "{{ zabbix_hp_snmp_address }}"
+          host_group: "{{ zabbix_hp_snmp_group_name }}"
+          template_group: "{{ zabbix_hp_snmp_template_group_name }}"
+          template: "{{ zabbix_hp_snmp_template_name }}"
+          reporting_user_group: >-
+            {{ zabbix_hp_snmp_reporting_user_group }}
+          reporting_permission: "Read"
+          secret_macro: "{{ zabbix_hp_snmp_community_macro }}"
+          secret_value_exposed: false
