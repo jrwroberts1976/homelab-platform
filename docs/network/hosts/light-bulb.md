@@ -50,32 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T12:04:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `40:ed:00:7c:7b:80`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link L510 smart light bulb at 192.168.2.252. No OS or service fingerprint is available, so the exact firmware platform requires review.
+Likely a TP-Link smart light bulb at 192.168.2.252. The device identity is supported by its hostname and vendor data, but no exact operating system or firmware evidence is available.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.252.
-- The inventory hostname is light-bulb.jameshouse and the telemetry hostname is light-bulb.
-- The DHCP hostname is L510.
+- The recorded hostname is light-bulb.jameshouse, with telemetry hostname light-bulb.
+- The MAC address is 40:ed:00:7c:7b:80.
 - The recorded vendor is TP-Link Limited.
-- Nmap has no port or OS-match results; the scan profile is baseline with a host-matching error.
-- No actionable Greenbone findings match this IP.
-- Patch telemetry is unavailable.
+- The DHCP hostname is L510.
+- No Nmap TCP or UDP ports were recorded.
+- No matching actionable Greenbone findings were reported; this is not proof that the host is vulnerability-free.
 
 ### Inferences
 
-- The device is likely a TP-Link L510 smart light bulb based on the hostname, DHCP identifier, and vendor.
-- The device likely uses embedded IoT firmware, but the exact operating system is unsupported by the supplied evidence.
+- The device is likely a TP-Link smart light bulb.
+- It likely runs embedded IoT firmware, but the exact operating system and version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

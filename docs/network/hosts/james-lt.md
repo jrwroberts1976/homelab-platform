@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T12:04:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `24:b2:b9:30:f8:55`
 - Identity confidence: **medium**
@@ -60,25 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online endpoint at 192.168.2.183 identified by DHCP and inventory hostname as James-LT. Its laptop-like role is inferred from the hostname; no OS, vendor, service, or Nmap fingerprint evidence is available.
+James-LT is an online network endpoint at 192.168.2.183. Its hostname is consistently reported by DHCP, the router, inventory, and Nmap, but no vendor, OS, port, or service evidence is available. Manual review is required to determine the device type and platform.
 
 ### Confirmed facts
 
-- The current IP is 192.168.2.183.
-- The device is online according to inventory and router data.
-- The documented inventory hostname is james-lt.jameshouse, with telemetry hostname james-lt.
-- The DHCP hostname is James-LT.
+- The device is online at 192.168.2.183.
+- The router DHCP hostname and hostname are both James-LT.
+- Inventory reports hostname james-lt.jameshouse and telemetry hostname james-lt.
 - The MAC address is 24:b2:b9:30:f8:55.
-- Nmap OS and port evidence is unavailable; the scan status is partial with os_evidence_missing.
-- No enriched services, Zeek connections, or top ports/services were reported.
-- Greenbone reported zero matching actionable findings for the current IP; this is not proof that the host is vulnerability-free or fully scanned.
-- Patch telemetry is unavailable.
-- No sampled Loki entries or warning/error samples were reported for the bounded 24-hour sample.
+- Nmap collection is partial and reports no OS matches or ports; the TCP scan also reported an error.
+- No authoritative OS information is available.
+- Greenbone reported zero matching actionable findings; this does not prove the host is vulnerability-free or fully scanned.
+- No sampled Loki entries or recent high-risk DNS policy matches were reported.
 
 ### Inferences
 
-- The hostname convention suggests a laptop-like endpoint.
-- The operating system and hardware vendor cannot be determined from the supplied evidence.
+- The consistent James-LT naming supports identifying this host as the James-LT endpoint.
+- The available evidence is insufficient to determine whether this is a laptop, desktop, or another client device.
+- The operating system and platform family cannot be identified from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T12:04:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `58:02:05:fd:e1:8b`
 - Identity confidence: **medium**
@@ -60,25 +60,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely the Rosie laptop at 192.168.2.6. DHCP identifies it as LAPTOP-SRR7CFCE, while inventory and Nmap use rosie-laptop.jameshouse. Microsoft Windows Update-related DNS signals support a cautious Windows-like endpoint classification, but no exact OS is confirmed. Manual review is recommended.
+Likely a Windows laptop identified as rosie-laptop, with DHCP hostname LAPTOP-SRR7CFCE. Exact OS and services could not be established from the available evidence.
 
 ### Confirmed facts
 
-- The device IP is 192.168.2.6.
-- The MAC address is 58:02:05:fd:e1:8b.
-- Inventory hostname and Nmap hostname are rosie-laptop.jameshouse.
-- The router reports DHCP hostname LAPTOP-SRR7CFCE and currently reports the host online.
-- Nmap completed without an error and reported no TCP ports or OS matches.
-- Nmap reported UDP ports 53, 67, 68, 69, 123, 137, 138, 161, 500, 514, 1900, 4500, 5353, and 5683 as open|filtered with tentative service labels.
-- DNS evidence includes Windows Update / Microsoft delivery endpoint signals.
-- No matching actionable Greenbone findings were present for this IP.
-- Patch telemetry is unavailable.
+- The device is associated with IP address 192.168.2.6.
+- The inventory hostname is rosie-laptop.jameshouse.
+- The router reports DHCP hostname LAPTOP-SRR7CFCE.
+- DNS telemetry included Windows Update and Microsoft delivery endpoints.
+- Nmap status is partial with no OS matches and no recorded ports.
+- No actionable Greenbone findings matched the current IP in the supplied scan result.
 
 ### Inferences
 
-- The hostname strongly suggests this is a laptop associated with Rosie.
-- The Microsoft Update-related DNS signals are consistent with a Windows-associated endpoint.
-- The platform remains ambiguous because no authoritative OS, product/version, MAC vendor, or Nmap OS match is supplied.
+- The hostname and DHCP name support identifying the device as a laptop.
+- The Windows Update DNS signal and LAPTOP-style DHCP hostname suggest a Microsoft Windows platform.
+- The exact Windows edition, release, and version are unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
