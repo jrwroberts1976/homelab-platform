@@ -1,0 +1,806 @@
+---
+- name: Enable automatic Zabbix inventory for managed Linux hosts
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+    zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+    zabbix_target_hosts: "{{ groups['zabbix_agents'] | default([]) | list }}"
+
+  pre_tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - zabbix_managed_inventory_allow_enable | default(false) | bool
+        fail_msg: >-
+          Automatic Zabbix host inventory enablement is disabled by default.
+          Set zabbix_managed_inventory_allow_enable=true explicitly.
+
+    - name: Require expected managed estate
+      ansible.builtin.assert:
+        that:
+          - zabbix_target_hosts | length == 15
+          - "'admin-01' in zabbix_target_hosts"
+          - "'monitor-01' in zabbix_target_hosts"
+          - "'zabbix-01' in zabbix_target_hosts"
+          - "'PROXMOX' in zabbix_target_hosts"
+          - "'Proxmox-2' in zabbix_target_hosts"
+        fail_msg: >-
+          Refusing inventory enablement because zabbix_agents does not
+          contain the expected 15-host managed estate.
+
+    - name: Require privileged runtime Zabbix API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_api_token | length >= 20
+        fail_msg: >-
+          HOMELAB_ZABBIX_API_TOKEN must contain the privileged
+          runtime Zabbix API token. The management-report token
+          is intentionally read-only and must not be used here.
+      no_log: true
+
+  tasks:
+    - name: Read managed hosts and inventory modes
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+              - inventory_mode
+            selectInventory:
+              - name
+              - os
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+          id: 1
+        return_content: true
+      register: _target_hosts_get
+      no_log: true
+
+    - name: Validate managed host lookup
+      ansible.builtin.assert:
+        that:
+          - _target_hosts_get.json.error is not defined
+          - >-
+            (_target_hosts_get.json.result
+             | map(attribute='host')
+             | list
+             | sort)
+            ==
+            (zabbix_target_hosts | sort)
+        fail_msg: >-
+          Zabbix did not return exactly the expected managed hosts.
+
+    - name: Reject manual or unexpected inventory modes
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_target_hosts_get.json.result
+             | selectattr('inventory_mode', 'equalto', '0')
+             | list
+             | length) == 0
+          - >-
+            (
+              (_target_hosts_get.json.result
+               | selectattr('inventory_mode', 'equalto', '-1')
+               | list
+               | length)
+              +
+              (_target_hosts_get.json.result
+               | selectattr('inventory_mode', 'equalto', '1')
+               | list
+               | length)
+            ) == (zabbix_target_hosts | length)
+        fail_msg: >-
+          A managed host has manual or unexpected inventory mode.
+          Refusing to alter inventory settings.
+
+    - name: Build managed Zabbix host ID list
+      ansible.builtin.set_fact:
+        _target_hostids: >-
+          {{
+            _target_hosts_get.json.result
+            | map(attribute='hostid')
+            | list
+          }}
+
+    - name: Read inventory source templates
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: template.get
+          params:
+            output:
+              - templateid
+              - host
+              - name
+            filter:
+              host:
+                - "Linux by Zabbix agent active"
+                - "Homelab Linux OS Facts"
+            selectHosts:
+              - hostid
+              - host
+          id: 20
+        return_content: true
+      register: _inventory_source_templates
+      no_log: true
+
+    - name: Validate inventory source templates
+      ansible.builtin.assert:
+        that:
+          - _inventory_source_templates.json.error is not defined
+          - _inventory_source_templates.json.result | length == 2
+          - >-
+            (_inventory_source_templates.json.result
+             | map(attribute='host')
+             | list
+             | sort)
+            ==
+            ([
+              'Linux by Zabbix agent active',
+              'Homelab Linux OS Facts'
+            ] | sort)
+        fail_msg: >-
+          Expected exactly the stock Linux active-agent template and
+          Homelab Linux OS Facts template.
+
+    - name: Set inventory source template facts
+      ansible.builtin.set_fact:
+        _stock_linux_template: >-
+          {{
+            _inventory_source_templates.json.result
+            | selectattr(
+                'host',
+                'equalto',
+                'Linux by Zabbix agent active'
+              )
+            | first
+          }}
+        _homelab_os_template: >-
+          {{
+            _inventory_source_templates.json.result
+            | selectattr(
+                'host',
+                'equalto',
+                'Homelab Linux OS Facts'
+              )
+            | first
+          }}
+
+    - name: Require exact managed-host template scope
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_stock_linux_template.hosts
+             | map(attribute='host')
+             | list
+             | sort)
+            ==
+            (zabbix_target_hosts | sort)
+          - >-
+            (_homelab_os_template.hosts
+             | map(attribute='host')
+             | list
+             | sort)
+            ==
+            (zabbix_target_hosts | sort)
+        fail_msg: >-
+          Refusing inventory mapping changes because one of the
+          source templates is not linked to exactly the expected
+          managed-host estate.
+
+    - name: Read stock full OS inventory source
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _stock_linux_template.templateid }}"
+            output:
+              - itemid
+              - key_
+              - status
+              - inventory_link
+            filter:
+              key_:
+                - system.sw.os
+          id: 21
+        return_content: true
+      register: _stock_os_source
+      no_log: true
+
+    - name: Read friendly OS inventory source
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _homelab_os_template.templateid }}"
+            output:
+              - itemid
+              - key_
+              - status
+              - inventory_link
+            filter:
+              key_:
+                - "system.sw.os[name]"
+          id: 22
+        return_content: true
+      register: _friendly_os_source
+      no_log: true
+
+    - name: Validate root OS inventory sources
+      ansible.builtin.assert:
+        that:
+          - _stock_os_source.json.error is not defined
+          - _friendly_os_source.json.error is not defined
+          - _stock_os_source.json.result | length == 1
+          - _friendly_os_source.json.result | length == 1
+          - _stock_os_source.json.result[0].status == '0'
+          - _friendly_os_source.json.result[0].status == '0'
+          - >-
+            _stock_os_source.json.result[0].inventory_link
+            in ['0', '5']
+          - >-
+            _friendly_os_source.json.result[0].inventory_link
+            in ['0', '5']
+        fail_msg: >-
+          Inventory source item state is not the expected safe
+          pre-migration or post-migration configuration.
+
+    - name: Remove OS inventory mapping from full kernel string
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.update
+          params:
+            itemid: "{{ _stock_os_source.json.result[0].itemid }}"
+            inventory_link: 0
+          id: 23
+        return_content: true
+      register: _stock_os_unmap
+      when: _stock_os_source.json.result[0].inventory_link != '0'
+      changed_when: true
+      failed_when: _stock_os_unmap.json.error is defined
+      no_log: true
+
+    - name: Map friendly OS name to native OS inventory field
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.update
+          params:
+            itemid: "{{ _friendly_os_source.json.result[0].itemid }}"
+            inventory_link: 5
+          id: 24
+        return_content: true
+      register: _friendly_os_map
+      when: _friendly_os_source.json.result[0].inventory_link != '5'
+      changed_when: true
+      failed_when: _friendly_os_map.json.error is defined
+      no_log: true
+
+    - name: Read final root inventory mappings
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            itemids:
+              - "{{ _stock_os_source.json.result[0].itemid }}"
+              - "{{ _friendly_os_source.json.result[0].itemid }}"
+            output:
+              - itemid
+              - key_
+              - inventory_link
+          id: 25
+        return_content: true
+      register: _inventory_mapping_verify
+      no_log: true
+
+    - name: Require final root inventory mappings
+      ansible.builtin.assert:
+        that:
+          - _inventory_mapping_verify.json.error is not defined
+          - >-
+            (
+              _inventory_mapping_verify.json.result
+              | selectattr('key_', 'equalto', 'system.sw.os')
+              | map(attribute='inventory_link')
+              | list
+            ) == ['0']
+          - >-
+            (
+              _inventory_mapping_verify.json.result
+              | selectattr(
+                  'key_',
+                  'equalto',
+                  'system.sw.os[name]'
+                )
+              | map(attribute='inventory_link')
+              | list
+            ) == ['5']
+        fail_msg: >-
+          Final Zabbix OS inventory source mapping verification failed.
+
+    - name: Read mapped hostname inventory items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            hostids: "{{ _target_hostids }}"
+            output:
+              - itemid
+              - hostid
+              - key_
+              - status
+              - state
+              - lastvalue
+              - inventory_link
+            filter:
+              key_:
+                - system.hostname
+          id: 2
+        return_content: true
+      register: _hostname_items
+      no_log: true
+
+    - name: Validate hostname inventory sources
+      ansible.builtin.assert:
+        that:
+          - _hostname_items.json.error is not defined
+          - >-
+            (_hostname_items.json.result | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_hostname_items.json.result
+             | selectattr('inventory_link', 'equalto', '3')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_hostname_items.json.result
+             | selectattr('status', 'equalto', '0')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_hostname_items.json.result
+             | selectattr('state', 'equalto', '0')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_hostname_items.json.result
+             | rejectattr('lastvalue', 'equalto', '')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+        fail_msg: >-
+          Hostname inventory source validation failed.
+          Refusing to enable automatic inventory.
+
+    - name: Require one hostname source per managed host
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_hostname_items.json.result
+             | selectattr('hostid', 'equalto', item.hostid)
+             | list
+             | length) == 1
+        fail_msg: >-
+          Expected exactly one system.hostname source item for
+          {{ item.host }}.
+      loop: "{{ _target_hosts_get.json.result }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Build native Name bootstrap list
+      ansible.builtin.set_fact:
+        _inventory_name_bootstrap_hosts: >-
+          {{
+            (_inventory_name_bootstrap_hosts | default([]))
+            + [{
+                'hostid': item.hostid,
+                'host': item.host,
+                'name': (
+                  _hostname_items.json.result
+                  | selectattr('hostid', 'equalto', item.hostid)
+                  | map(attribute='lastvalue')
+                  | first
+                )
+              }]
+          }}
+      loop: "{{ _target_hosts_get.json.result }}"
+      when: >-
+        (
+          (item.inventory | default({})).name
+          | default('')
+          | trim
+          | length
+        ) == 0
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Validate native Name bootstrap values
+      ansible.builtin.assert:
+        that:
+          - item.name | length > 0
+          - item.name | length <= 128
+        fail_msg: >-
+          Refusing native Name bootstrap for {{ item.host }}
+          because system.hostname is empty or too long.
+      loop: "{{ _inventory_name_bootstrap_hosts | default([]) }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Seed native Name fields in manual inventory mode
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.update
+          params:
+            hostid: "{{ item.hostid }}"
+            inventory_mode: 0
+            inventory:
+              name: "{{ item.name }}"
+          id: 30
+        return_content: true
+      loop: "{{ _inventory_name_bootstrap_hosts | default([]) }}"
+      loop_control:
+        label: "{{ item.host }}"
+      register: _inventory_name_seed
+      when: (_inventory_name_bootstrap_hosts | default([])) | length > 0
+      changed_when: >-
+        _inventory_name_seed.json is defined
+        and _inventory_name_seed.json.error is not defined
+      failed_when: false
+      no_log: true
+
+    - name: Restore automatic inventory after Name bootstrap
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.update
+          params:
+            hostid: "{{ item.hostid }}"
+            inventory_mode: 1
+          id: 31
+        return_content: true
+      loop: "{{ _inventory_name_bootstrap_hosts | default([]) }}"
+      loop_control:
+        label: "{{ item.host }}"
+      register: _inventory_name_restore
+      when: (_inventory_name_bootstrap_hosts | default([])) | length > 0
+      changed_when: >-
+        _inventory_name_restore.json is defined
+        and _inventory_name_restore.json.error is not defined
+      failed_when: false
+      no_log: true
+
+    - name: Validate native Name seed responses
+      no_log: true
+      ansible.builtin.assert:
+        that:
+          - item.json is defined
+          - item.json.error is not defined
+          - item.json.result is defined
+          - item.json.result.hostids | length == 1
+        fail_msg: >-
+          A Zabbix host.update call failed while seeding
+          native Name inventory.
+      loop: "{{ _inventory_name_seed.results | default([]) }}"
+      when:
+        - not (item.skipped | default(false))
+      loop_control:
+        label: "seed response"
+
+    - name: Validate automatic inventory restore responses
+      no_log: true
+      ansible.builtin.assert:
+        that:
+          - item.json is defined
+          - item.json.error is not defined
+          - item.json.result is defined
+          - item.json.result.hostids | length == 1
+        fail_msg: >-
+          A Zabbix host.update call failed while restoring
+          Automatic inventory after Name bootstrap.
+      loop: "{{ _inventory_name_restore.results | default([]) }}"
+      when:
+        - not (item.skipped | default(false))
+      loop_control:
+        label: "restore response"
+
+    - name: Verify native Name bootstrap state
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+              - inventory_mode
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+            selectInventory:
+              - name
+              - os
+          id: 32
+        return_content: true
+      register: _inventory_name_verify
+      no_log: true
+
+    - name: Require populated native Name on every managed host
+      ansible.builtin.assert:
+        that:
+          - item.inventory is defined
+          - item.inventory.name | default('') | length > 0
+          - item.inventory_mode == '1'
+          - >-
+            item.inventory.name
+            ==
+            (
+              _hostname_items.json.result
+              | selectattr('hostid', 'equalto', item.hostid)
+              | map(attribute='lastvalue')
+              | first
+            )
+        fail_msg: >-
+          Native Name inventory verification failed for
+          {{ item.host }}.
+      loop: "{{ _inventory_name_verify.json.result }}"
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Read mapped OS inventory items
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            hostids: "{{ _target_hostids }}"
+            output:
+              - itemid
+              - hostid
+              - key_
+              - status
+              - state
+              - lastvalue
+              - inventory_link
+            filter:
+              key_:
+                - "system.sw.os[name]"
+          id: 3
+        return_content: true
+      register: _os_items
+      no_log: true
+
+    - name: Validate OS inventory sources
+      ansible.builtin.assert:
+        that:
+          - _os_items.json.error is not defined
+          - >-
+            (_os_items.json.result | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_os_items.json.result
+             | selectattr('inventory_link', 'equalto', '5')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_os_items.json.result
+             | selectattr('status', 'equalto', '0')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_os_items.json.result
+             | selectattr('state', 'equalto', '0')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+          - >-
+            (_os_items.json.result
+             | rejectattr('lastvalue', 'equalto', '')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+        fail_msg: >-
+          OS inventory source validation failed.
+          Refusing to enable automatic inventory.
+
+    - name: Require OS values to fit native inventory field
+      ansible.builtin.assert:
+        that:
+          - item.lastvalue | length > 0
+          - item.lastvalue | length <= 128
+        fail_msg: >-
+          Friendly OS value for host ID {{ item.hostid }}
+          does not fit the native Zabbix OS inventory field.
+      loop: "{{ _os_items.json.result }}"
+      loop_control:
+        label: "{{ item.hostid }}"
+
+    - name: Build hosts requiring automatic inventory
+      ansible.builtin.set_fact:
+        _inventory_enable_hosts: >-
+          {{
+            (_inventory_enable_hosts | default([]))
+            + [{
+                'hostid': item.hostid,
+                'host': item.host
+              }]
+          }}
+      loop: "{{ _target_hosts_get.json.result }}"
+      when: item.inventory_mode == '-1'
+      loop_control:
+        label: "{{ item.host }}"
+
+    - name: Enable automatic inventory
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.update
+          params:
+            hostid: "{{ item.hostid }}"
+            inventory_mode: 1
+          id: 10
+        return_content: true
+      loop: "{{ _inventory_enable_hosts | default([]) }}"
+      loop_control:
+        label: "{{ item.host }}"
+      register: _inventory_updates
+      when: (_inventory_enable_hosts | default([])) | length > 0
+      changed_when: _inventory_updates.json.error is not defined
+      failed_when: _inventory_updates.json.error is defined
+      no_log: true
+
+    - name: Verify automatic inventory modes
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+              - inventory_mode
+            filter:
+              host: "{{ zabbix_target_hosts }}"
+            selectInventory:
+              - name
+              - os
+          id: 11
+        return_content: true
+      register: _inventory_verify
+      no_log: true
+
+    - name: Require automatic inventory on every managed host
+      ansible.builtin.assert:
+        that:
+          - _inventory_verify.json.error is not defined
+          - >-
+            (_inventory_verify.json.result
+             | selectattr('inventory_mode', 'equalto', '1')
+             | list
+             | length)
+            == (zabbix_target_hosts | length)
+        fail_msg: >-
+          Automatic inventory verification failed for one or more
+          managed hosts.
+
+    - name: Report inventory enablement
+      ansible.builtin.debug:
+        msg:
+          managed_hosts: "{{ zabbix_target_hosts | length }}"
+          automatic_inventory_hosts: >-
+            {{
+              _inventory_verify.json.result
+              | selectattr('inventory_mode', 'equalto', '1')
+              | list
+              | length
+            }}
+          changed_hosts: >-
+            {{
+              _inventory_enable_hosts
+              | default([])
+              | map(attribute='host')
+              | list
+              | sort
+            }}
