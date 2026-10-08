@@ -110,13 +110,13 @@ PROXMOX is an online Hewlett Packard physical Proxmox VE cluster node at 192.168
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T05:42:09+01:00`
-- Pending updates: **8**
-- Security updates pending: **2**
+- Last assessed: `2026-10-08T06:45:44+01:00`
+- Pending updates: **6**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-06T06:25:43+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-08T06:10:41+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
