@@ -129,7 +129,7 @@ dns-02 is CT100, a Proxmox LXC container running Debian GNU/Linux 13. It is docu
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T16:09:52+01:00`
+- Last assessed: `2026-10-08T17:12:51+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
