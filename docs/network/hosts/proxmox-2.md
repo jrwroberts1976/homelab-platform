@@ -96,13 +96,13 @@ Proxmox-2 is a confirmed physical Proxmox VE cluster node running the authoritat
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T00:15:55+01:00`
-- Pending updates: **0**
-- Security updates pending: **0**
+- Last assessed: `2026-10-08T01:20:25+01:00`
+- Pending updates: **8**
+- Security updates pending: **2**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-05T18:14:49+01:00`
-- Patch state: **Healthy**
+- Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
