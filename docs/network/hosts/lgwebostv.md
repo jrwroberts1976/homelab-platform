@@ -40,32 +40,31 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `14:7f:67:6d:e5:98`
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely an LG webOS television based on the documented hostname and LG Innotek vendor attribution. Exact OS/version is not established; Nmap OS identification is incomplete. No matching actionable Greenbone findings were reported, which does not prove the device is vulnerability-free.
+Likely an LG webOS smart TV at 192.168.2.130. The hostname and LG Innotek MAC vendor support the identity, but no exact OS evidence or open-service data is available.
 
 ### Confirmed facts
 
+- The device hostname is LGwebOSTV.
+- The inventory and DHCP hostname are both LGwebOSTV.
+- The reported MAC vendor is LG Innotek.
 - The device is online at 192.168.2.130.
-- The documented DHCP, inventory, router, telemetry, and Nmap hostname is LGwebOSTV.
-- The recorded vendor is LG Innotek.
-- Nmap OS identification is incomplete and reports os_evidence_missing.
-- Nmap reported no TCP or UDP ports in the supplied evidence.
-- No matching actionable Greenbone findings were reported for this IP.
-- Patch telemetry is unavailable.
+- Nmap returned no OS matches and no port data.
+- No matching actionable Greenbone findings were reported for the current IP.
 
 ### Inferences
 
-- The hostname strongly suggests an LG webOS television.
-- The device is most appropriately grouped as embedded IoT firmware rather than assigned a specific operating system.
+- The device is likely an LG webOS smart television based on its documented hostname and vendor association.
+- The device likely uses embedded IoT firmware, but the exact operating system is unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

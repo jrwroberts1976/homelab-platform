@@ -51,33 +51,33 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `ec:91:61:9c:a4:45`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a work laptop, with DNS activity matching Microsoft Windows Update and delivery endpoints. Exact OS is unconfirmed because Nmap returned no OS or service evidence; manual review is required.
+Online work-laptop endpoint at 192.168.2.219. Hostname and Microsoft/Windows Update DNS activity suggest a Windows laptop, but no authoritative or Nmap OS evidence is available; manual review is required.
 
 ### Confirmed facts
 
-- The observed hostname is work-laptop.jameshouse.
+- The inventory hostname is work-laptop.jameshouse.
 - The DHCP hostname is APL-PF5F6D28.
+- The device is online at 192.168.2.219.
+- The MAC address is ec:91:61:9c:a4:45.
 - The recorded vendor is Cloud Network Technology Singapore PTE.
-- DNS observations included Windows Update and Microsoft delivery endpoints.
-- Nmap completed only partially and reported missing OS evidence, with no detected TCP or UDP ports.
-- No matching actionable Greenbone findings were reported for 192.168.2.219.
-- The host was online at the time of the supplied inventory evidence.
+- Observed DNS signals include Windows Update and Microsoft delivery endpoints.
+- Nmap collection is partial and contains no OS matches or scanned ports.
+- Greenbone reported zero actionable findings matching this IP; this does not prove the host is vulnerability-free.
 
 ### Inferences
 
-- The hostname indicates this is probably a work laptop.
-- The Windows Update DNS signal makes a Windows-based endpoint plausible, but does not establish the exact operating system or version.
-- The device may use embedded or vendor-specific networking hardware; the supplied evidence does not identify its operating system.
+- The device is likely a Windows-based laptop or similar desktop/laptop endpoint.
+- The APL-PF5F6D28 hostname may be a vendor or device-generated identifier, but its exact meaning is unsupported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

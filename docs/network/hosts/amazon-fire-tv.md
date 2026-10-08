@@ -58,32 +58,32 @@ Only bounded application/service evidence is retained here.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `94:3a:91:cd:4c:51`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-192.168.2.8 is an Amazon Technologies device with an Android/Android TV-like Nmap fingerprint and TCP port 8009 open. DNS inventory includes firetvcaptiveportal.com, which is consistent with an Amazon/Fire TV ecosystem, but the device identity and exact OS remain ambiguous.
+Likely Amazon Fire TV or Fire TV Stick at 192.168.2.8. Amazon/Fire TV DNS activity and an Amazon media-device Nmap fingerprint support the identity, but the exact OS and model are not established.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.8 with MAC address 94:3a:91:cd:4c:51.
-- Inventory and Nmap identify the vendor as Amazon Technologies.
-- Nmap reports TCP port 8009 as open and labels the service tcpwrapped.
-- Nmap produced competing fingerprints for Android 5.0.1/Linux 3.10 and Android TV OS 11/Linux 4.19, among other Linux matches.
-- The DNS server data lists firetvcaptiveportal.com among its top domains.
-- No canonical estate role, hostname, authoritative OS fact, or direct service product/version is supplied.
+- The device is online at 192.168.2.8.
+- The recorded vendor is Amazon Technologies.
+- Nmap reports a 99% match for Amazon Fire TV or Kindle Paperwhite and classifies it as an Amazon embedded media device.
+- TCP port 8009 is open.
+- DNS evidence includes Amazon Fire TV, Amazon Video, and Alexa endpoints, with a corroborated Fire TV device hint.
+- No matching actionable Greenbone findings were reported for the current IP; this does not establish that the host is vulnerability-free.
 
 ### Inferences
 
-- The device is likely an Android-based embedded media device, potentially associated with the Amazon/Fire TV ecosystem.
-- The DNS domain signal supports, but does not prove, a Fire TV identity.
-- The exact operating system cannot be established from the conflicting Nmap candidates.
+- The device is more likely an Amazon Fire TV or Fire TV Stick than a Kindle Paperwhite because the bounded DNS activity specifically indicates Fire TV, Amazon Video, and Alexa services.
+- The platform is best classified cautiously as embedded IoT firmware; the supplied Nmap alternatives do not establish an exact OS.
+- NordVPN-related DNS activity may indicate VPN-related software or traffic, but it does not establish a specific installed function or user intent.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

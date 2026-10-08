@@ -40,7 +40,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `92:8b:32:14:8b:e9`
 - Identity confidence: **medium**
@@ -50,22 +50,21 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 ### Assessment summary
 
-Likely an iPhone based on the DHCP and inventory hostname, but vendor and exact operating system are not confirmed. No network services, Nmap OS matches, or vulnerability findings were observed in the supplied evidence.
+Host is identified as an iPhone by its DHCP and telemetry hostname, but no vendor, service, or OS fingerprint evidence is available. Exact OS remains undetermined.
 
 ### Confirmed facts
 
-- The device is identified as "iPhone" by the inventory hostname and telemetry hostname.
-- The router reports DHCP hostname "iPhone" for 192.168.2.182.
-- The device MAC address is 92:8b:32:14:8b:e9.
-- Nmap OS identification is pending with no OS matches or detected ports.
-- Greenbone reported zero matching actionable findings for the current IP.
-- The router reports the device as online, while inventory reports it as offline.
+- The DHCP hostname and telemetry hostname are both "iPhone".
+- The host used IP address 192.168.2.182 and MAC address 92:8b:32:14:8b:e9.
+- The host was reported offline by inventory telemetry.
+- Nmap has no recorded TCP or UDP ports or OS matches.
+- No actionable Greenbone findings match this IP.
+- No locally blocked high-risk DNS policy matches were recorded in the recent one-hour sample.
 
 ### Inferences
 
-- The device is likely a smartphone, probably an iPhone, based on the repeated hostname.
-- The platform is cautiously classified as mobile device firmware; the exact OS is unsupported by the supplied evidence.
-- The MAC address does not provide a reliable vendor identification here.
+- The device is likely a mobile device, probably an iPhone, based on the documented hostname.
+- The MAC address does not provide a usable vendor identification in the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

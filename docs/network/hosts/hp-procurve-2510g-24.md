@@ -55,7 +55,7 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:9c:02:45:39:00`
 - Identity confidence: **high**
@@ -65,23 +65,22 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 
 ### Assessment summary
 
-Identified as the HP ProCurve 2510G-24 core managed switch and SPAN source at 192.168.2.16. Telnet and the HP ProCurve web configuration service are exposed. Exact firmware OS is not established; Nmap suggests VxWorks but the fingerprint is not definitive.
+HP ProCurve 2510G-24 managed switch at 192.168.2.16. Corroborated HTTP evidence identifies the model and HP switch software; TCP 23 and 80 are open. Exact OS is not established.
 
 ### Confirmed facts
 
-- The canonical estate record identifies the device as an HP ProCurve 2510G-24 network device named hp-procurve-2510g-24.
-- The documented estate role is core managed switch and SPAN source.
-- The inventory vendor is Hewlett Packard.
-- TCP/23 is open and identified as Telnet.
-- TCP/80 is open and identified as eHTTP 2.0 with HP ProCurve Switch 2510G-24 HTTP configuration metadata.
-- Nmap completed OS identification and reported no need for additional OS identification.
-- Greenbone reported zero actionable findings matching 192.168.2.16 in the supplied scan results.
+- The canonical estate record identifies the device as an HP ProCurve 2510G-24 and assigns it the role of core managed switch and SPAN source.
+- The device is online at 192.168.2.16 with hostname hp-switch.jameshouse.
+- The vendor is recorded as Hewlett Packard.
+- TCP port 23 is open; the Nmap service label is omitted.
+- TCP port 80 is open and has corroborated HTTP evidence: eHTTP 2.0 with extra information identifying an HP ProCurve Switch 2510G-24 HTTP configuration service.
+- Greenbone reported zero actionable findings matching this current IP; this is not proof that the host is vulnerability-free or fully scanned.
 
 ### Inferences
 
 - The device is an embedded network-switch platform rather than a general-purpose host.
-- VxWorks is a leading Nmap fingerprint, but it is not sufficiently corroborated to establish the exact operating system.
-- The exposed Telnet service may warrant security review.
+- Nmap produced a VxWorks match and several alternative embedded-device matches, but these are not sufficient to establish the exact operating system.
+- Manual review is required because the platform and exact OS remain ambiguous.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
