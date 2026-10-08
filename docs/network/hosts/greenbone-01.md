@@ -126,7 +126,7 @@ greenbone-01 is a managed Debian 13 VM on Proxmox-2, documented as the Greenbone
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T03:54:51+01:00`
+- Last assessed: `2026-10-08T04:59:13+01:00`
 - Pending updates: **2**
 - Security updates pending: **2**
 - Reboot required: **No**
