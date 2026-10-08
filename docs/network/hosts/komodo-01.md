@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:32:47+01:00`
+- Assessed: `2026-10-08T14:00:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:04`
 - Identity confidence: **high**
@@ -82,23 +82,24 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-komodo-01 is CT104 on PROXMOX, serving as the Komodo container-management control-plane host. Authoritative Zabbix inventory identifies Debian GNU/Linux 13 (trixie) on x86_64. Open services include corroborated OpenSSH on TCP/22 and an unlabeled open TCP/9100 port. Eight security updates and 36 total updates are pending; no matching actionable Greenbone findings were reported.
+komodo-01 is CT104, an Ansible-managed Debian 13 LXC control-plane host on PROXMOX. OpenSSH 10.0p2 is exposed on TCP/22; TCP/9100 is also open. No actionable Greenbone findings or pending security updates were reported in the supplied snapshot.
 
 ### Confirmed facts
 
-- The device hostname is komodo-01.jameshouse and its IP address is 192.168.2.58.
-- The canonical estate record identifies it as komodo-01, an LXC container, CT104 on PROXMOX.
-- The canonical role is Komodo container-management control-plane host.
-- Authoritative Zabbix Agent 2 facts identify Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-17-pve.
-- TCP/22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4.
+- The documented device name is komodo-01, with hostname komodo-01.jameshouse.
+- The canonical estate role is Komodo container-management control-plane host, CT104 on PROXMOX.
+- The Proxmox guest type is LXC, with VMID 104 on node PROXMOX.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
+- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 service evidence.
 - TCP/9100 is open; its Nmap service label was omitted.
-- No matching actionable Greenbone findings were reported for the current host IP.
-- Patch telemetry reports 8 security updates and 36 total updates available, with no reboot required.
+- Greenbone reports zero actionable findings matching the current host IP.
+- Patch telemetry reports zero available security updates and zero available general updates; unattended upgrades are enabled and no reboot is required.
+- The host is online at 192.168.2.58.
 
 ### Inferences
 
-- The host is a Linux-based managed infrastructure server running inside an LXC guest.
-- The PROXMOX and LXC records indicate virtualization/container hosting rather than a standalone physical endpoint.
+- The host is best classified as an embedded application/control-plane server running as a Debian-based LXC guest rather than a physical network appliance.
+- The documented commissioning of Docker, MongoDB, and Komodo Core indicates that this LXC provides application-management control-plane functions.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
