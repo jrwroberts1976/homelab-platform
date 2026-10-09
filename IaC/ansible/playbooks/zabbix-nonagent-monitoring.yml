@@ -358,7 +358,7 @@
       register: _existing_items
       no_log: true
 
-    - name: Build existing-item map: hostid → key_ set
+    - name: "Build existing-item map: hostid → key_ set"
       ansible.builtin.set_fact:
         _item_map: >
           {{
