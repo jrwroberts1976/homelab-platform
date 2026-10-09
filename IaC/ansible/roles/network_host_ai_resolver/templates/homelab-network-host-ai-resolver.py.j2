@@ -778,6 +778,36 @@ def response_text(payload):
     raise RuntimeError("Responses API returned no output_text")
 
 
+def enforce_manual_review_policy(result, evidence):
+    """Derive operator review from identity certainty, not OS uncertainty."""
+    normalized = dict(result)
+
+    identity_confidence = str(
+        normalized.get("identity_confidence") or ""
+    ).strip().lower()
+
+    canonical = (
+        evidence.get("canonical_estate", {})
+        if isinstance(evidence, dict)
+        else {}
+    )
+
+    canonical_identified = (
+        isinstance(canonical, dict)
+        and any(
+            str(canonical.get(field) or "").strip()
+            for field in ("name", "document_label", "kind", "role")
+        )
+    )
+
+    normalized["manual_review_required"] = (
+        not canonical_identified
+        and identity_confidence != "high"
+    )
+
+    return normalized
+
+
 def ask_model(evidence):
     if not API_KEY:
         raise RuntimeError("OPENAI_API_KEY is not configured")
@@ -858,7 +888,8 @@ def ask_model(evidence):
         "merit review; do not claim a package fixes a specific CVE without "
         "explicit package-to-CVE evidence. Write a concise "
         "summary suitable for a Grafana host page. Set manual_review_required "
-        "when identity or platform remains ambiguous."
+        "only when device identity is unresolved or conflicting. Unknown exact "
+        "OS or firmware alone is not a reason for manual review."
     )
 
     request_body = {
@@ -911,7 +942,7 @@ def ask_model(evidence):
     result = json.loads(response_text(payload))
     if not isinstance(result, dict):
         raise RuntimeError("Structured model result is not an object")
-    return result
+    return enforce_manual_review_policy(result, evidence)
 
 
 def main():
@@ -1016,6 +1047,22 @@ def main():
         prior = devices_state.get(mac, {})
         if not isinstance(prior, dict):
             prior = {}
+
+        # Re-evaluate the deterministic operator-review policy on every run,
+        # even when the stored AI assessment is not yet due for refresh.
+        # This allows policy corrections to take effect without unnecessary
+        # model calls and keeps OS uncertainty separate from identity review.
+        prior_result = prior.get("result")
+        if isinstance(prior_result, dict):
+            normalized_result = enforce_manual_review_policy(
+                prior_result,
+                evidence,
+            )
+            if normalized_result != prior_result:
+                prior = dict(prior)
+                prior["result"] = normalized_result
+                devices_state[mac] = prior
+
         prior_time = int(prior.get("assessed_at", 0) or 0)
         first_seen = int(inv.get("first_seen", 0) or 0)
 
