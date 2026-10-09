@@ -26,9 +26,18 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Zeek flow evidence is not configured for this estate.
+- Evidence source: `sensor-01` Zeek connection telemetry
+- Rolling window: 24 hours
+- Summary generated: `2026-10-09T00:23:16+01:00`
+- MAC identity: `14:7f:67:6d:e5:98`
+- Observed IP address(es): `192.168.2.130`
+- Connections: **47**
+- Traffic sent: **93.7 KiB**
+- Traffic received: **192.6 KiB**
+- Top services: `ssl` (18), `dns` (4), `http` (3)
+- Top destination ports: `tcp/443` (20), `udp/1900` (11), `udp/5353` (4), `tcp/80` (3), `udp/9999` (3), `icmp/3` (2)
 
-> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
+> This bounded summary intentionally excludes raw packet data and external destination IP history.
 <!-- END AUTO:ZEEK-FLOW -->
 
 ## Internet / DNS activity
