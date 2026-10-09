@@ -64,7 +64,7 @@ Only bounded application/service evidence is retained here.
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 

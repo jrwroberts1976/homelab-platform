@@ -46,7 +46,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 

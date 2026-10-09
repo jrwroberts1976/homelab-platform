@@ -61,7 +61,7 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 

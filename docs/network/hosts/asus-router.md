@@ -65,7 +65,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 

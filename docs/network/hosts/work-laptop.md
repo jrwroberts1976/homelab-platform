@@ -57,7 +57,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
