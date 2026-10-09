@@ -243,6 +243,82 @@ class InventoryTests(unittest.TestCase):
         self.assertIn('nmap_vendor="Apple"', card)
         self.assertIn('nmap_accuracy="96%"', card)
 
+    def test_ai_follows_current_mac_record_across_ip_changes(self):
+        mac = "2c:cf:67:30:be:1f"
+
+        stale = {
+            "ip": "192.168.2.196",
+            "mac": mac,
+            "online": False,
+            "last_seen": 100,
+            "os_evidence": "unknown",
+        }
+
+        current = {
+            "ip": "192.168.2.195",
+            "mac": mac,
+            "online": True,
+            "last_seen": 200,
+            "os_evidence": "authoritative",
+        }
+
+        hosts = {
+            stale["ip"]: stale,
+            current["ip"]: current,
+        }
+
+        ai_state = {
+            "devices": {
+                mac: {
+                    "assessed_at": 1791464432,
+                    "model": "test-model",
+                    "result": {
+                        "summary": "Known Raspberry Pi endpoint",
+                        "device_type":
+                            "physical Raspberry Pi 5 endpoint/server",
+                        "platform_family": "Linux",
+                        "identity_confidence": "high",
+                        "os_confidence": "high",
+                        "manual_review_required": False,
+                        "confirmed_facts": ["Known host"],
+                        "inferences": [],
+                    },
+                }
+            }
+        }
+
+        inventory.attach_ai_assessments(
+            hosts,
+            ai_state,
+        )
+
+        self.assertIs(
+            inventory.best_host_for_mac(hosts, mac),
+            current,
+        )
+
+        self.assertEqual(
+            current["ai_identity_confidence"],
+            "high",
+        )
+        self.assertEqual(
+            current["ai_manual_review_required"],
+            "false",
+        )
+        self.assertEqual(
+            current["ai_device_type"],
+            "physical Raspberry Pi 5 endpoint/server",
+        )
+
+        self.assertEqual(
+            stale.get("ai_identity_confidence", ""),
+            "",
+        )
+        self.assertEqual(
+            stale.get("ai_manual_review_required", ""),
+            "",
+        )
+
     def test_mac_card_is_unique_across_ip_changes(self):
         from copy import deepcopy
         template = {

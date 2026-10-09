@@ -52,6 +52,95 @@ def labels(fields):
                     for key, value in fields.items())
 
 
+def normalized_mac(value):
+    """Return a stable lower-case colon-separated MAC representation."""
+    return str(value or "").strip().lower().replace("-", ":")
+
+
+def host_freshness(host):
+    """Rank duplicate MAC records exactly as the card view does."""
+    return (
+        1 if host.get("online") is True else 0,
+        int(host.get("last_seen") or 0),
+        1 if host.get("os_evidence") == "documented" else 0,
+    )
+
+
+def best_host_for_mac(hosts, mac):
+    """Return the same MAC record that the device-card view would retain."""
+    source_mac = normalized_mac(mac)
+    if not source_mac:
+        return None
+
+    candidates = [
+        item
+        for item in hosts.values()
+        if normalized_mac(item.get("mac")) == source_mac
+    ]
+
+    if not candidates:
+        return None
+
+    return max(candidates, key=host_freshness)
+
+
+def attach_ai_assessments(hosts, ai_state):
+    """Attach advisory AI evidence to the current winning MAC record."""
+    ai_devices = ai_state.get("devices", {})
+
+    if not isinstance(ai_devices, dict):
+        return
+
+    for mac, assessment in ai_devices.items():
+        if not isinstance(assessment, dict):
+            continue
+
+        h = best_host_for_mac(hosts, mac)
+
+        if h is None:
+            continue
+
+        result = assessment.get("result", {})
+
+        if not isinstance(result, dict):
+            continue
+
+        h["ai_summary"] = result.get("summary", "")
+        h["ai_device_type"] = result.get("device_type", "")
+        h["ai_platform_family"] = result.get("platform_family", "")
+        h["ai_identity_confidence"] = result.get(
+            "identity_confidence", ""
+        )
+        h["ai_os_confidence"] = result.get(
+            "os_confidence", ""
+        )
+        h["ai_manual_review_required"] = str(
+            bool(result.get("manual_review_required", False))
+        ).lower()
+
+        assessed_at = int(
+            assessment.get("assessed_at", 0) or 0
+        )
+
+        if assessed_at:
+            h["ai_assessed_at"] = time.strftime(
+                "%Y-%m-%d %H:%M UTC",
+                time.gmtime(assessed_at),
+            )
+
+        h["ai_model"] = assessment.get("model", "")
+        h["ai_confirmed_facts"] = "; ".join(
+            str(x)
+            for x in result.get("confirmed_facts", [])[:6]
+            if x
+        )
+        h["ai_inferences"] = "; ".join(
+            str(x)
+            for x in result.get("inferences", [])[:6]
+            if x
+        )
+
+
 def prometheus(expr):
     url = PROMETHEUS + "?" + urlencode({"query": expr})
     with urlopen(url, timeout=12) as response:
@@ -534,49 +623,15 @@ def populate():
             })
 
     # AI host intelligence is advisory only. Correlate by stable MAC and
-    # expose the assessment without changing deterministic identity, OS,
-    # presence, port or vulnerability facts.
+    # attach it to the same current/fresh record selected by the MAC-backed
+    # card view. Historical DHCP/IP records for the same MAC must not cause
+    # otherwise valid AI evidence to be discarded.
     if AI_IDENTIFICATION.is_file():
-        ai_state = load_json(AI_IDENTIFICATION)
-        ai_devices = ai_state.get("devices", {})
-        if isinstance(ai_devices, dict):
-            for mac, assessment in ai_devices.items():
-                if not isinstance(assessment, dict):
-                    continue
-                source_mac = str(mac).strip().lower().replace("-", ":")
-                candidates = [
-                    item for item in hosts.values()
-                    if str(item.get("mac") or "").strip().lower()
-                    .replace("-", ":") == source_mac
-                ]
-                if len(candidates) != 1:
-                    continue
-                h = candidates[0]
-                result = assessment.get("result", {})
-                if not isinstance(result, dict):
-                    continue
-                h["ai_summary"] = result.get("summary", "")
-                h["ai_device_type"] = result.get("device_type", "")
-                h["ai_platform_family"] = result.get("platform_family", "")
-                h["ai_identity_confidence"] = result.get(
-                    "identity_confidence", "")
-                h["ai_os_confidence"] = result.get("os_confidence", "")
-                h["ai_manual_review_required"] = str(
-                    bool(result.get("manual_review_required", False))
-                ).lower()
-                assessed_at = int(assessment.get("assessed_at", 0) or 0)
-                if assessed_at:
-                    h["ai_assessed_at"] = time.strftime(
-                        "%Y-%m-%d %H:%M UTC", time.gmtime(assessed_at))
-                h["ai_model"] = assessment.get("model", "")
-                h["ai_confirmed_facts"] = "; ".join(
-                    str(x) for x in result.get("confirmed_facts", [])[:6]
-                    if x
-                )
-                h["ai_inferences"] = "; ".join(
-                    str(x) for x in result.get("inferences", [])[:6]
-                    if x
-                )
+        attach_ai_assessments(
+            hosts,
+            load_json(AI_IDENTIFICATION),
+        )
+
 
     return hosts
 
@@ -657,14 +712,10 @@ def render(hosts):
     cards = {}
     valid_mac = re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
     for ip, h in hosts.items():
-        mac = str(h.get("mac") or "").strip().lower().replace("-", ":")
+        mac = normalized_mac(h.get("mac"))
         device_key = "mac:" + mac if valid_mac.fullmatch(mac) else "ip:" + ip
         old = cards.get(device_key)
-        freshness = (
-            1 if h.get("online") is True else 0,
-            int(h.get("last_seen") or 0),
-            1 if h.get("os_evidence") == "documented" else 0,
-        )
+        freshness = host_freshness(h)
         if old is None or freshness > old[0]:
             cards[device_key] = (freshness, h)
 
@@ -676,8 +727,7 @@ def render(hosts):
     for device_key in sorted(cards):
         h = cards[device_key][1]
         ip = h["ip"]
-        mac = (str(h.get("mac") or "").strip().lower()
-               .replace("-", ":"))
+        mac = normalized_mac(h.get("mac"))
         if not valid_mac.fullmatch(mac):
             mac = ""
         # User-facing Grafana names are hostnames. Fall back to IP rather
