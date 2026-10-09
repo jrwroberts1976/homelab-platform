@@ -126,13 +126,13 @@ Managed Debian 13 LXC container edge-01 (CT103) on Proxmox-2. OpenSSH is exposed
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-09T05:45:40+01:00`
-- Pending updates: **2**
-- Security updates pending: **2**
+- Last assessed: `2026-10-09T06:48:20+01:00`
+- Pending updates: **0**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-05T19:56:23+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-09T06:26:16+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
