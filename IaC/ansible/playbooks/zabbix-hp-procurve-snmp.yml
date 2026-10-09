@@ -259,6 +259,45 @@
             error_handler: 0
             error_handler_params: ""
 
+    zabbix_hp_snmp_value_maps:
+      - key: "admin"
+        name: "IF-MIB administrative status"
+        mappings:
+          - type: "0"
+            value: "1"
+            newvalue: "UP"
+          - type: "0"
+            value: "2"
+            newvalue: "DOWN"
+          - type: "0"
+            value: "3"
+            newvalue: "TESTING"
+
+      - key: "oper"
+        name: "IF-MIB operational status"
+        mappings:
+          - type: "0"
+            value: "1"
+            newvalue: "UP"
+          - type: "0"
+            value: "2"
+            newvalue: "DOWN"
+          - type: "0"
+            value: "3"
+            newvalue: "TESTING"
+          - type: "0"
+            value: "4"
+            newvalue: "UNKNOWN"
+          - type: "0"
+            value: "5"
+            newvalue: "DORMANT"
+          - type: "0"
+            value: "6"
+            newvalue: "NOT PRESENT"
+          - type: "0"
+            value: "7"
+            newvalue: "LOWER LAYER DOWN"
+
     zabbix_api_token: >-
       {{
         lookup(
@@ -856,6 +895,218 @@
           {{
             (_snmp_template_final.content | from_json).result[0].templateid
           }}
+
+    - name: Read HP ProCurve template value maps
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: valuemap.get
+          params:
+            hostids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - valuemapid
+              - name
+            selectMappings:
+              - type
+              - value
+              - newvalue
+          id: 501
+        return_content: true
+      register: _hp_value_maps
+      no_log: true
+
+    - name: Create missing HP ProCurve value maps
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: valuemap.create
+          params:
+            hostid: "{{ _snmp_template_id }}"
+            name: "{{ item.name }}"
+            mappings: "{{ item.mappings }}"
+          id: 502
+        return_content: true
+      loop: "{{ zabbix_hp_snmp_value_maps }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _hp_value_map_create
+      when: >-
+        item.name not in
+        (
+          (_hp_value_maps.content | from_json).result
+          | map(attribute='name')
+          | list
+        )
+      changed_when: true
+      failed_when: >-
+        (_hp_value_map_create.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read HP ProCurve value maps after creation
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: valuemap.get
+          params:
+            hostids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - valuemapid
+              - name
+            selectMappings:
+              - type
+              - value
+              - newvalue
+          id: 503
+        return_content: true
+      register: _hp_value_maps_created
+      no_log: true
+
+    - name: Reconcile HP ProCurve value-map mappings
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: valuemap.update
+          params:
+            valuemapid: >-
+              {{
+                (
+                  (_hp_value_maps_created.content | from_json).result
+                  | selectattr('name', 'equalto', item.name)
+                  | first
+                ).valuemapid
+              }}
+            name: "{{ item.name }}"
+            mappings: "{{ item.mappings }}"
+          id: 504
+        return_content: true
+      loop: "{{ zabbix_hp_snmp_value_maps }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: _hp_value_map_update
+      when: >-
+        (
+          (
+            (_hp_value_maps_created.content | from_json).result
+            | selectattr('name', 'equalto', item.name)
+            | first
+          ).mappings
+        )
+        !=
+        item.mappings
+      changed_when: true
+      failed_when: >-
+        (_hp_value_map_update.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final HP ProCurve template value maps
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: valuemap.get
+          params:
+            hostids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - valuemapid
+              - name
+            selectMappings:
+              - type
+              - value
+              - newvalue
+          id: 505
+        return_content: true
+      register: _hp_value_maps_final
+      no_log: true
+
+    - name: Require exact HP ProCurve value maps
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              (_hp_value_maps_final.content | from_json).result
+              | selectattr('name', 'equalto', item.name)
+              | list
+              | length
+            ) == 1
+          - >-
+            (
+              (
+                (_hp_value_maps_final.content | from_json).result
+                | selectattr('name', 'equalto', item.name)
+                | first
+              ).mappings
+            )
+            ==
+            item.mappings
+        fail_msg: >-
+          HP ProCurve value map {{ item.name }} does not
+          match the IaC definition.
+      loop: "{{ zabbix_hp_snmp_value_maps }}"
+      loop_control:
+        label: "{{ item.name }}"
+      no_log: true
+
+    - name: Resolve HP ProCurve value-map IDs
+      ansible.builtin.set_fact:
+        _hp_admin_valuemap_id: >-
+          {{
+            (
+              (_hp_value_maps_final.content | from_json).result
+              | selectattr(
+                  'name',
+                  'equalto',
+                  'IF-MIB administrative status'
+                )
+              | first
+            ).valuemapid
+          }}
+        _hp_oper_valuemap_id: >-
+          {{
+            (
+              (_hp_value_maps_final.content | from_json).result
+              | selectattr(
+                  'name',
+                  'equalto',
+                  'IF-MIB operational status'
+                )
+              | first
+            ).valuemapid
+          }}
+      no_log: true
 
     - name: Read template scalar SNMP items
       ansible.builtin.uri:
@@ -1572,6 +1823,199 @@
     # verify that an existing GUI/API object still matches the IaC model
     # rather than accepting an object merely because its key exists.
     # -----------------------------------------------------------------
+
+    - name: Read HP ProCurve status prototypes for value maps
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - key_
+              - valuemapid
+            filter:
+              key_:
+                - >-
+                  hp.snmp.port.admin[
+                  {{- zabbix_hp_snmp_lld_index_macro -}}
+                  ]
+                - >-
+                  hp.snmp.port.oper[
+                  {{- zabbix_hp_snmp_lld_index_macro -}}
+                  ]
+          id: 506
+        return_content: true
+      register: _hp_status_prototypes
+      no_log: true
+
+    - name: Resolve HP ProCurve status prototypes
+      ansible.builtin.set_fact:
+        _hp_admin_prototype: >-
+          {{
+            (
+              (_hp_status_prototypes.content | from_json).result
+              | selectattr(
+                  'key_',
+                  'equalto',
+                  'hp.snmp.port.admin['
+                  ~ zabbix_hp_snmp_lld_index_macro
+                  ~ ']'
+                )
+              | first
+            )
+          }}
+        _hp_oper_prototype: >-
+          {{
+            (
+              (_hp_status_prototypes.content | from_json).result
+              | selectattr(
+                  'key_',
+                  'equalto',
+                  'hp.snmp.port.oper['
+                  ~ zabbix_hp_snmp_lld_index_macro
+                  ~ ']'
+                )
+              | first
+            )
+          }}
+      no_log: true
+
+    - name: Attach administrative status value map
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.update
+          params:
+            itemid: "{{ _hp_admin_prototype.itemid }}"
+            valuemapid: "{{ _hp_admin_valuemap_id }}"
+          id: 507
+        return_content: true
+      register: _hp_admin_valuemap_attach
+      when: >-
+        (_hp_admin_prototype.valuemapid | string)
+        !=
+        (_hp_admin_valuemap_id | string)
+      changed_when: true
+      failed_when: >-
+        (_hp_admin_valuemap_attach.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Attach operational status value map
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.update
+          params:
+            itemid: "{{ _hp_oper_prototype.itemid }}"
+            valuemapid: "{{ _hp_oper_valuemap_id }}"
+          id: 508
+        return_content: true
+      register: _hp_oper_valuemap_attach
+      when: >-
+        (_hp_oper_prototype.valuemapid | string)
+        !=
+        (_hp_oper_valuemap_id | string)
+      changed_when: true
+      failed_when: >-
+        (_hp_oper_valuemap_attach.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final HP ProCurve status value-map assignments
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - key_
+              - valuemapid
+            filter:
+              key_:
+                - >-
+                  hp.snmp.port.admin[
+                  {{- zabbix_hp_snmp_lld_index_macro -}}
+                  ]
+                - >-
+                  hp.snmp.port.oper[
+                  {{- zabbix_hp_snmp_lld_index_macro -}}
+                  ]
+          id: 509
+        return_content: true
+      register: _hp_status_prototypes_final
+      no_log: true
+
+    - name: Require HP ProCurve status value-map assignments
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              (
+                (_hp_status_prototypes_final.content | from_json).result
+                | selectattr(
+                    'key_',
+                    'equalto',
+                    'hp.snmp.port.admin['
+                    ~ zabbix_hp_snmp_lld_index_macro
+                    ~ ']'
+                  )
+                | first
+              ).valuemapid
+              | string
+            )
+            ==
+            (_hp_admin_valuemap_id | string)
+          - >-
+            (
+              (
+                (_hp_status_prototypes_final.content | from_json).result
+                | selectattr(
+                    'key_',
+                    'equalto',
+                    'hp.snmp.port.oper['
+                    ~ zabbix_hp_snmp_lld_index_macro
+                    ~ ']'
+                  )
+                | first
+              ).valuemapid
+              | string
+            )
+            ==
+            (_hp_oper_valuemap_id | string)
+        fail_msg: >-
+          HP ProCurve status prototypes are not attached to
+          the expected value maps.
 
     - name: Read strict HP ProCurve SNMP master configuration
       ansible.builtin.uri:
