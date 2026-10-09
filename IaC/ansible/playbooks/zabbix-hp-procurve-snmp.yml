@@ -25,6 +25,240 @@
 
     zabbix_hp_snmp_community_macro: "{$SNMP_COMMUNITY}"
 
+    zabbix_hp_snmp_port_walk_key: "hp.snmp.port.walk"
+    zabbix_hp_snmp_port_discovery_key: "hp.snmp.port.discovery"
+
+    zabbix_hp_snmp_lld_index_macro: >-
+      {{ '{' ~ '#' ~ 'SNMPINDEX' ~ '}' }}
+    zabbix_hp_snmp_lld_descr_macro: >-
+      {{ '{' ~ '#' ~ 'IFDESCR' ~ '}' }}
+
+    zabbix_hp_snmp_port_walk_oids:
+      # ifDescr
+      - "1.3.6.1.2.1.2.2.1.2"
+      # ifAdminStatus
+      - "1.3.6.1.2.1.2.2.1.7"
+      # ifOperStatus
+      - "1.3.6.1.2.1.2.2.1.8"
+      # ifSpeed
+      - "1.3.6.1.2.1.2.2.1.5"
+      # ifHCInOctets
+      - "1.3.6.1.2.1.31.1.1.1.6"
+      # ifHCOutOctets
+      - "1.3.6.1.2.1.31.1.1.1.10"
+      # ifInErrors
+      - "1.3.6.1.2.1.2.2.1.14"
+      # ifOutErrors
+      - "1.3.6.1.2.1.2.2.1.20"
+      # ifInDiscards
+      - "1.3.6.1.2.1.2.2.1.13"
+      # ifOutDiscards
+      - "1.3.6.1.2.1.2.2.1.19"
+
+    zabbix_hp_snmp_port_metric_prototypes:
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          administrative status
+        key: >-
+          hp.snmp.port.admin[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 3
+        units: ""
+        history: "30d"
+        trends: "0"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.7.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          operational status
+        key: >-
+          hp.snmp.port.oper[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 3
+        units: ""
+        history: "30d"
+        trends: "0"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.8.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          interface speed
+        key: >-
+          hp.snmp.port.speed[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 3
+        units: "bps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.5.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          received traffic
+        key: >-
+          hp.snmp.port.rx[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 0
+        units: "bps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.31.1.1.1.6.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+          - type: 10
+            params: ""
+            error_handler: 0
+            error_handler_params: ""
+          - type: 1
+            params: "8"
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          transmitted traffic
+        key: >-
+          hp.snmp.port.tx[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 0
+        units: "bps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.31.1.1.1.10.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+          - type: 10
+            params: ""
+            error_handler: 0
+            error_handler_params: ""
+          - type: 1
+            params: "8"
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          receive errors
+        key: >-
+          hp.snmp.port.rx.errors[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 0
+        units: "pps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.14.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+          - type: 10
+            params: ""
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          transmit errors
+        key: >-
+          hp.snmp.port.tx.errors[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 0
+        units: "pps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.20.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+          - type: 10
+            params: ""
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          receive discards
+        key: >-
+          hp.snmp.port.rx.discards[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 0
+        units: "pps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.13.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+          - type: 10
+            params: ""
+            error_handler: 0
+            error_handler_params: ""
+
+      - name: >-
+          Port {{ zabbix_hp_snmp_lld_index_macro }}:
+          transmit discards
+        key: >-
+          hp.snmp.port.tx.discards[
+          {{- zabbix_hp_snmp_lld_index_macro -}}
+          ]
+        value_type: 0
+        units: "pps"
+        history: "30d"
+        trends: "365d"
+        preprocessing:
+          - type: 28
+            params: |-
+              1.3.6.1.2.1.2.2.1.19.{{ zabbix_hp_snmp_lld_index_macro }}
+              0
+            error_handler: 0
+            error_handler_params: ""
+          - type: 10
+            params: ""
+            error_handler: 0
+            error_handler_params: ""
+
     zabbix_api_token: >-
       {{
         lookup(
@@ -704,6 +938,1107 @@
         (_scalar_item_create.content | from_json).error is defined
       no_log: true
 
+    - name: Read HP ProCurve port SNMP walk master item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - snmp_oid
+              - delay
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_walk_key }}"
+          id: 201
+        return_content: true
+      register: _port_walk_item
+      no_log: true
+
+    - name: Create HP ProCurve port SNMP walk master item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            name: "HP ProCurve physical port SNMP walk"
+            key_: "{{ zabbix_hp_snmp_port_walk_key }}"
+            hostid: "{{ _snmp_template_id }}"
+            # Zabbix 7.0 item type 20 = SNMP agent.
+            type: 20
+            # Raw walk output is text.
+            value_type: 4
+            snmp_oid: >-
+              walk[{{ zabbix_hp_snmp_port_walk_oids | join(',') }}]
+            delay: "1m"
+            # Keep one hour of the raw master walk for
+            # troubleshooting. Long-term data is retained by
+            # dependent items rather than this transport item.
+            history: "1h"
+            trends: "0"
+          id: 202
+        return_content: true
+      register: _port_walk_item_create
+      when: (_port_walk_item.content | from_json).result | length == 0
+      changed_when: true
+      failed_when: >-
+        (_port_walk_item_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read final HP ProCurve port SNMP walk master item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - snmp_oid
+              - delay
+              - history
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_walk_key }}"
+          id: 203
+        return_content: true
+      register: _port_walk_item_final
+      no_log: true
+
+    - name: Reconcile HP ProCurve port walk history retention
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.update
+          params:
+            itemid: >-
+              {{
+                (_port_walk_item_final.content | from_json)
+                .result[0].itemid
+              }}
+            history: "1h"
+          id: 207
+        return_content: true
+      register: _port_walk_history_update
+      when:
+        - >-
+          (_port_walk_item_final.content | from_json).result
+          | length == 1
+        - >-
+          (
+            (_port_walk_item_final.content | from_json)
+            .result[0].history
+          ) != "1h"
+      changed_when: true
+      failed_when: >-
+        (_port_walk_history_update.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read reconciled HP ProCurve port SNMP walk master item
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - snmp_oid
+              - delay
+              - history
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_walk_key }}"
+          id: 208
+        return_content: true
+      register: _port_walk_item_reconciled
+      no_log: true
+
+    - name: Require one HP ProCurve port SNMP walk master item
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_port_walk_item_reconciled.content | from_json).result
+            | length == 1
+          - >-
+            (
+              (_port_walk_item_reconciled.content | from_json)
+              .result[0].type
+              | int
+            ) == 20
+          - >-
+            (
+              (_port_walk_item_reconciled.content | from_json)
+              .result[0].history
+            ) == "1h"
+          - >-
+            (
+              (_port_walk_item_reconciled.content | from_json)
+              .result[0].snmp_oid
+            )
+            ==
+            (
+              'walk['
+              ~
+              (zabbix_hp_snmp_port_walk_oids | join(','))
+              ~
+              ']'
+            )
+        fail_msg: >-
+          HP ProCurve port SNMP walk master item did not
+          validate.
+
+    - name: Set HP ProCurve port walk master item ID
+      ansible.builtin.set_fact:
+        _port_walk_item_id: >-
+          {{
+            (_port_walk_item_reconciled.content | from_json)
+            .result[0].itemid
+          }}
+
+    - name: Read HP ProCurve physical port discovery rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.get
+          params:
+            hostids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - master_itemid
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_discovery_key }}"
+          id: 204
+        return_content: true
+      register: _port_discovery_rule
+      no_log: true
+
+    - name: Create HP ProCurve physical port discovery rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.create
+          params:
+            name: "HP ProCurve physical port discovery"
+            key_: "{{ zabbix_hp_snmp_port_discovery_key }}"
+            hostid: "{{ _snmp_template_id }}"
+            # Zabbix type 18 = dependent item.
+            type: 18
+            master_itemid: "{{ _port_walk_item_id }}"
+            preprocessing:
+              # Zabbix preprocessing type 29 =
+              # SNMP walk to JSON.
+              - type: 29
+                params: |-
+                  {{ zabbix_hp_snmp_lld_descr_macro }}
+                  1.3.6.1.2.1.2.2.1.2
+                  0
+                error_handler: 0
+                error_handler_params: ""
+            filter:
+              # AND; currently only one condition.
+              evaltype: 1
+              conditions:
+                - macro: "{{ zabbix_hp_snmp_lld_index_macro }}"
+                  # Physical interfaces are exactly ifIndex 1-24.
+                  # Excludes DEFAULT_VLAN (97) and loopback (4192).
+                  value: "^(?:[1-9]|1[0-9]|2[0-4])$"
+                  operator: 8
+          id: 205
+        return_content: true
+      register: _port_discovery_rule_create
+      when: >-
+        (_port_discovery_rule.content | from_json).result
+        | length == 0
+      changed_when: true
+      failed_when: >-
+        (_port_discovery_rule_create.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final HP ProCurve physical port discovery rule
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.get
+          params:
+            hostids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - master_itemid
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_discovery_key }}"
+          id: 206
+        return_content: true
+      register: _port_discovery_rule_final
+      no_log: true
+
+    - name: Require one HP ProCurve physical port discovery rule
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_port_discovery_rule_final.content | from_json).result
+            | length == 1
+          - >-
+            (
+              (_port_discovery_rule_final.content | from_json)
+              .result[0].type
+              | int
+            ) == 18
+          - >-
+            (
+              (_port_discovery_rule_final.content | from_json)
+              .result[0].master_itemid
+            )
+            ==
+            (_port_walk_item_id | string)
+        fail_msg: >-
+          HP ProCurve physical port discovery rule did not
+          validate.
+
+    - name: Set HP ProCurve physical port discovery rule ID
+      ansible.builtin.set_fact:
+        _port_discovery_rule_id: >-
+          {{
+            (_port_discovery_rule_final.content | from_json)
+            .result[0].itemid
+          }}
+
+    - name: Read HP ProCurve port description item prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - master_itemid
+            selectPreprocessing: extend
+          id: 301
+        return_content: true
+      register: _port_descr_prototypes
+      no_log: true
+
+    - name: Create HP ProCurve port description item prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            hostid: "{{ _snmp_template_id }}"
+            ruleid: "{{ _port_discovery_rule_id }}"
+            name: >-
+              Port {{ zabbix_hp_snmp_lld_index_macro }}
+              description
+            key_: >-
+              hp.snmp.port.descr[
+              {{- zabbix_hp_snmp_lld_index_macro -}}
+              ]
+            type: 18
+            value_type: 1
+            master_itemid: "{{ _port_walk_item_id }}"
+            history: "7d"
+            trends: "0"
+            preprocessing:
+              # Zabbix preprocessing type 28 =
+              # SNMP walk value.
+              - type: 28
+                params: |-
+                  1.3.6.1.2.1.2.2.1.2.{{ zabbix_hp_snmp_lld_index_macro }}
+                  0
+                error_handler: 0
+                error_handler_params: ""
+          id: 302
+        return_content: true
+      register: _port_descr_prototype_create
+      when: >-
+        (
+          _port_descr_prototypes.content | from_json
+        ).result
+        | selectattr(
+            'key_',
+            'equalto',
+            'hp.snmp.port.descr['
+            ~ zabbix_hp_snmp_lld_index_macro
+            ~ ']'
+          )
+        | list
+        | length == 0
+      changed_when: true
+      failed_when: >-
+        (_port_descr_prototype_create.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final HP ProCurve port description item prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - master_itemid
+            selectPreprocessing: extend
+          id: 303
+        return_content: true
+      register: _port_descr_prototypes_final
+      no_log: true
+
+    - name: Resolve final HP ProCurve port description prototype
+      ansible.builtin.set_fact:
+        _port_descr_prototype_final: >-
+          {{
+            (
+              (_port_descr_prototypes_final.content | from_json)
+              .result
+              | selectattr(
+                  'key_',
+                  'equalto',
+                  'hp.snmp.port.descr['
+                  ~ zabbix_hp_snmp_lld_index_macro
+                  ~ ']'
+                )
+              | list
+            )
+          }}
+      no_log: true
+
+    - name: Require one HP ProCurve port description prototype
+      ansible.builtin.assert:
+        that:
+          - _port_descr_prototype_final | length == 1
+          - >-
+            (_port_descr_prototype_final[0].type | int) == 18
+          - >-
+            (_port_descr_prototype_final[0].value_type | int) == 1
+          - >-
+            (_port_descr_prototype_final[0].master_itemid | string)
+            ==
+            (_port_walk_item_id | string)
+          - >-
+            (
+              _port_descr_prototype_final[0].preprocessing
+              | selectattr('type', 'equalto', '28')
+              | list
+              | length
+            ) == 1
+        fail_msg: >-
+          HP ProCurve port description item prototype did not
+          validate.
+
+    - name: Read HP ProCurve port metric item prototypes
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - units
+              - history
+              - trends
+              - master_itemid
+            selectPreprocessing: extend
+          id: 304
+        return_content: true
+      register: _port_metric_prototypes
+      no_log: true
+
+    - name: Resolve existing HP ProCurve port metric keys
+      ansible.builtin.set_fact:
+        _port_metric_existing_keys: >-
+          {{
+            (_port_metric_prototypes.content | from_json)
+            .result
+            | map(attribute='key_')
+            | list
+          }}
+
+    - name: Create HP ProCurve port metric item prototypes
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.create
+          params:
+            hostid: "{{ _snmp_template_id }}"
+            ruleid: "{{ _port_discovery_rule_id }}"
+            name: "{{ item.name }}"
+            key_: "{{ item.key }}"
+            type: 18
+            value_type: "{{ item.value_type }}"
+            master_itemid: "{{ _port_walk_item_id }}"
+            units: "{{ item.units }}"
+            history: "{{ item.history }}"
+            trends: "{{ item.trends }}"
+            preprocessing: "{{ item.preprocessing }}"
+          id: 305
+        return_content: true
+      loop: "{{ zabbix_hp_snmp_port_metric_prototypes }}"
+      when: item.key not in _port_metric_existing_keys
+      register: _port_metric_create
+      changed_when: true
+      failed_when: >-
+        (_port_metric_create.content | from_json).error is defined
+      no_log: true
+
+    - name: Read final HP ProCurve port metric item prototypes
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - units
+              - history
+              - trends
+              - master_itemid
+            selectPreprocessing: extend
+          id: 306
+        return_content: true
+      register: _port_metric_prototypes_final
+      no_log: true
+
+    - name: Resolve final HP ProCurve port metric keys
+      ansible.builtin.set_fact:
+        _port_metric_final_keys: >-
+          {{
+            (_port_metric_prototypes_final.content | from_json)
+            .result
+            | map(attribute='key_')
+            | list
+          }}
+        _port_metric_expected_keys: >-
+          {{
+            zabbix_hp_snmp_port_metric_prototypes
+            | map(attribute='key')
+            | list
+          }}
+
+    - name: Require all HP ProCurve port metric prototypes
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              _port_metric_expected_keys
+              | difference(_port_metric_final_keys)
+              | length
+            ) == 0
+        fail_msg: >-
+          One or more HP ProCurve port metric prototypes
+          are missing.
+
+    # -----------------------------------------------------------------
+    # Fail-closed drift validation.
+    #
+    # Creation tasks above are intentionally conservative.  These reads
+    # verify that an existing GUI/API object still matches the IaC model
+    # rather than accepting an object merely because its key exists.
+    # -----------------------------------------------------------------
+
+    - name: Read strict HP ProCurve SNMP master configuration
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            templateids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - status
+              - delay
+              - history
+              - trends
+              - snmp_oid
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_walk_key }}"
+          id: 401
+        return_content: true
+      register: _port_strict_master_read
+      no_log: true
+
+    - name: Resolve strict HP ProCurve SNMP master configuration
+      ansible.builtin.set_fact:
+        _port_strict_master: >-
+          {{
+            (_port_strict_master_read.content | from_json)
+            .result
+          }}
+      no_log: true
+
+    - name: Require exact HP ProCurve SNMP master configuration
+      ansible.builtin.assert:
+        that:
+          - _port_strict_master | length == 1
+          - (_port_strict_master[0].type | int) == 20
+          - (_port_strict_master[0].value_type | int) == 4
+          - (_port_strict_master[0].status | int) == 0
+          - _port_strict_master[0].delay == "1m"
+          - _port_strict_master[0].history == "1h"
+          - _port_strict_master[0].trends == "0"
+          - >-
+            _port_strict_master[0].snmp_oid
+            ==
+            (
+              'walk['
+              ~
+              (zabbix_hp_snmp_port_walk_oids | join(','))
+              ~
+              ']'
+            )
+        fail_msg: >-
+          HP ProCurve SNMP master walk has drifted from
+          the IaC definition.
+
+    - name: Read strict HP ProCurve SNMP LLD configuration
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.get
+          params:
+            templateids:
+              - "{{ _snmp_template_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - status
+              - state
+              - master_itemid
+            filter:
+              key_:
+                - "{{ zabbix_hp_snmp_port_discovery_key }}"
+            selectFilter: extend
+            selectPreprocessing: extend
+          id: 402
+        return_content: true
+      register: _port_strict_lld_read
+      no_log: true
+
+    - name: Resolve strict HP ProCurve SNMP LLD configuration
+      ansible.builtin.set_fact:
+        _port_strict_lld: >-
+          {{
+            (_port_strict_lld_read.content | from_json)
+            .result
+          }}
+      no_log: true
+
+    - name: Require exact HP ProCurve SNMP LLD configuration
+      ansible.builtin.assert:
+        that:
+          - _port_strict_lld | length == 1
+          - (_port_strict_lld[0].type | int) == 18
+          - (_port_strict_lld[0].value_type | int) == 4
+          - (_port_strict_lld[0].status | int) == 0
+          - (_port_strict_lld[0].state | int) == 0
+          - >-
+            (_port_strict_lld[0].master_itemid | string)
+            ==
+            (_port_walk_item_id | string)
+
+          - _port_strict_lld[0].preprocessing | length == 1
+          - >-
+            (
+              _port_strict_lld[0]
+              .preprocessing[0].type
+              | int
+            ) == 29
+          - >-
+            _port_strict_lld[0]
+            .preprocessing[0].params
+            ==
+            (
+              zabbix_hp_snmp_lld_descr_macro
+              ~ '\n'
+              ~ '1.3.6.1.2.1.2.2.1.2'
+              ~ '\n0'
+            )
+          - >-
+            (
+              _port_strict_lld[0]
+              .preprocessing[0].error_handler
+              | int
+            ) == 0
+
+          - >-
+            (_port_strict_lld[0].filter.evaltype | int)
+            == 1
+          - >-
+            _port_strict_lld[0]
+            .filter.conditions
+            | length
+            == 1
+          - >-
+            _port_strict_lld[0]
+            .filter.conditions[0].macro
+            ==
+            zabbix_hp_snmp_lld_index_macro
+          - >-
+            (
+              _port_strict_lld[0]
+              .filter.conditions[0].operator
+              | int
+            ) == 8
+          - >-
+            _port_strict_lld[0]
+            .filter.conditions[0].value
+            ==
+            '^(?:[1-9]|1[0-9]|2[0-4])$'
+        fail_msg: >-
+          HP ProCurve physical-port discovery rule has
+          drifted from the IaC definition.
+
+    - name: Read strict HP ProCurve SNMP item prototypes
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: itemprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+              - status
+              - units
+              - history
+              - trends
+              - master_itemid
+            selectPreprocessing: extend
+          id: 403
+        return_content: true
+      register: _port_strict_prototypes_read
+      no_log: true
+
+    - name: Resolve strict HP ProCurve SNMP item prototypes
+      ansible.builtin.set_fact:
+        _port_strict_prototypes: >-
+          {{
+            (_port_strict_prototypes_read.content | from_json)
+            .result
+          }}
+        _port_strict_canary_key: >-
+          {{
+            'hp.snmp.port.descr['
+            ~ zabbix_hp_snmp_lld_index_macro
+            ~ ']'
+          }}
+      no_log: true
+
+    - name: Resolve expected HP ProCurve SNMP prototype keys
+      ansible.builtin.set_fact:
+        _port_strict_expected_keys: >-
+          {{
+            _port_metric_expected_keys
+            +
+            [_port_strict_canary_key]
+          }}
+        _port_strict_actual_keys: >-
+          {{
+            _port_strict_prototypes
+            | map(attribute='key_')
+            | list
+          }}
+
+    - name: Require exact HP ProCurve SNMP prototype set
+      ansible.builtin.assert:
+        that:
+          - _port_strict_prototypes | length == 10
+          - >-
+            (
+              _port_strict_expected_keys
+              | difference(_port_strict_actual_keys)
+              | length
+            ) == 0
+          - >-
+            (
+              _port_strict_actual_keys
+              | difference(_port_strict_expected_keys)
+              | length
+            ) == 0
+        fail_msg: >-
+          HP ProCurve SNMP prototype set has drifted from
+          the IaC definition.
+
+    - name: Resolve strict HP ProCurve description prototype
+      ansible.builtin.set_fact:
+        _port_strict_canary: >-
+          {{
+            _port_strict_prototypes
+            | selectattr(
+                'key_',
+                'equalto',
+                _port_strict_canary_key
+              )
+            | list
+          }}
+      no_log: true
+
+    - name: Require exact HP ProCurve description prototype
+      ansible.builtin.assert:
+        that:
+          - _port_strict_canary | length == 1
+          - >-
+            _port_strict_canary[0].name
+            ==
+            (
+              'Port '
+              ~ zabbix_hp_snmp_lld_index_macro
+              ~ ' description'
+            )
+          - (_port_strict_canary[0].type | int) == 18
+          - (_port_strict_canary[0].value_type | int) == 1
+          - (_port_strict_canary[0].status | int) == 0
+          - _port_strict_canary[0].units == ""
+          - _port_strict_canary[0].history == "7d"
+          - _port_strict_canary[0].trends == "0"
+          - >-
+            (_port_strict_canary[0].master_itemid | string)
+            ==
+            (_port_walk_item_id | string)
+          - >-
+            _port_strict_canary[0].preprocessing
+            | length
+            == 1
+          - >-
+            (
+              _port_strict_canary[0]
+              .preprocessing[0].type
+              | int
+            ) == 28
+          - >-
+            _port_strict_canary[0]
+            .preprocessing[0].params
+            ==
+            (
+              '1.3.6.1.2.1.2.2.1.2.'
+              ~ zabbix_hp_snmp_lld_index_macro
+              ~ '\n0'
+            )
+          - >-
+            (
+              _port_strict_canary[0]
+              .preprocessing[0].error_handler
+              | int
+            ) == 0
+        fail_msg: >-
+          HP ProCurve port-description prototype has
+          drifted from the IaC definition.
+
+    - name: Require exact HP ProCurve production metric prototypes
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              _port_strict_prototypes
+              | selectattr('key_', 'equalto', item.key)
+              | list
+              | length
+            ) == 1
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).name
+            ) == item.name
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).type
+              | int
+            ) == 18
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).value_type
+              | int
+            ) == (item.value_type | int)
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).status
+              | int
+            ) == 0
+
+          - >-
+            (
+              _port_strict_prototypes
+              | selectattr('key_', 'equalto', item.key)
+              | first
+            ).units
+            == item.units
+
+          - >-
+            (
+              _port_strict_prototypes
+              | selectattr('key_', 'equalto', item.key)
+              | first
+            ).history
+            == item.history
+
+          - >-
+            (
+              _port_strict_prototypes
+              | selectattr('key_', 'equalto', item.key)
+              | first
+            ).trends
+            == item.trends
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).master_itemid
+              | string
+            )
+            ==
+            (_port_walk_item_id | string)
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).preprocessing
+              | map(attribute='type')
+              | map('int')
+              | list
+            )
+            ==
+            (
+              item.preprocessing
+              | map(attribute='type')
+              | map('int')
+              | list
+            )
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).preprocessing
+              | map(attribute='params')
+              | list
+            )
+            ==
+            (
+              item.preprocessing
+              | map(attribute='params')
+              | list
+            )
+
+          - >-
+            (
+              (
+                _port_strict_prototypes
+                | selectattr('key_', 'equalto', item.key)
+                | first
+              ).preprocessing
+              | map(attribute='error_handler')
+              | map('int')
+              | list
+            )
+            ==
+            (
+              item.preprocessing
+              | map(attribute='error_handler')
+              | map('int')
+              | list
+            )
+        fail_msg: >-
+          HP ProCurve production metric prototype
+          {{ item.key }} has drifted from the IaC definition.
+      loop: "{{ zabbix_hp_snmp_port_metric_prototypes }}"
+      loop_control:
+        label: "{{ item.key }}"
+
     - name: Read target HP switch host
       ansible.builtin.uri:
         url: "{{ zabbix_api_url }}"
@@ -874,5 +2209,17 @@
           reporting_user_group: >-
             {{ zabbix_hp_snmp_reporting_user_group }}
           reporting_permission: "Read"
+          port_walk_master: "{{ zabbix_hp_snmp_port_walk_key }}"
+          port_discovery_rule: >-
+            {{ zabbix_hp_snmp_port_discovery_key }}
+          physical_port_filter: "ifIndex 1-24"
+          discovery_canary: >-
+            hp.snmp.port.descr[
+            {{- zabbix_hp_snmp_lld_index_macro -}}
+            ]
+          port_metric_prototypes: >-
+            {{ zabbix_hp_snmp_port_metric_prototypes | length }}
+          collection_model: >-
+            single SNMP walk with dependent LLD items
           secret_macro: "{{ zabbix_hp_snmp_community_macro }}"
           secret_value_exposed: false
