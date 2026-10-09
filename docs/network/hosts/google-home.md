@@ -50,33 +50,35 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:04:46+01:00`
+- Assessed: `2026-10-08T12:04:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `a4:77:33:5f:94:fe`
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Highly likely Google Home/Chromecast-family device. Identity is supported by the documented Google-Home hostname, Google vendor data, Nmap's Google Home device fingerprint, and a Chromecast Audio Assist TLS certificate. Exact OS is not established; Nmap Linux matches are fingerprint results only. No matching Greenbone findings were reported, which does not establish that the host is vulnerability-free.
+Identified with high confidence as a Google Home device, based on the DHCP hostname, Google vendor data, Nmap classification, and a Google Chromecast certificate. Exact OS is not established.
 
 ### Confirmed facts
 
-- The host is online at 192.168.2.17.
-- The documented hostname is google-home.jameshouse, with DHCP hostname Google-Home.
+- The device is online at 192.168.2.17.
+- The DHCP and inventory hostname is Google-Home / google-home.jameshouse.
 - Inventory and Nmap identify the vendor as Google.
-- Nmap reports a Google Home device fingerprint with 98% accuracy.
-- The TLS certificate on TCP port 8443 has Google organization details and issuer common name Chromecast ICA 6 (Audio Assist).
-- TCP ports 8008, 8009, and 8443 were observed open by Nmap; enrichment also reports services on 8443 and 9000.
-- Greenbone reported zero actionable findings matching this current IP.
-- Patch telemetry is unavailable.
+- Nmap classifies the device as a Google Home device and an embedded media device.
+- TCP ports 8008, 8009, and 8443 are open.
+- TCP ports 8443 and 9000 have corroborated HTTPS-alt and cslistener service records, respectively.
+- The TLS certificate on port 8443 is issued by Chromecast ICA 6 (Audio Assist) for a Google Inc. certificate subject.
+- DNS activity includes Google, YouTube, and connectivity-check domains.
+- No actionable Greenbone findings currently match this IP.
 
 ### Inferences
 
-- The device is most likely a Google Home or closely related Chromecast-family smart speaker/media device.
-- The device likely uses embedded firmware with a Linux-derived networking environment, but the exact operating system and version are unsupported by the supplied evidence.
+- The device is most likely a Google Home or closely related Google Chromecast-based home media device.
+- The device likely uses embedded IoT firmware, but the exact operating system and version are unsupported by the supplied evidence.
+- Nmap Linux kernel matches are fingerprint-based possibilities rather than confirmed OS facts.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

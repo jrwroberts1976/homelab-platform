@@ -59,33 +59,35 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `24:4b:fe:5e:cc:c8`
 - Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-ASUS RT-AC86U network device at 192.168.2.1, serving as the documented router, DHCP server, AiMesh controller, and OpenVPN endpoint. Embedded firmware platform is likely, but the exact OS is not identified by the supplied evidence.
+Identified as the ASUS RT-AC86U router at 192.168.2.1, serving as the documented router, DHCP, AiMesh controller, and OpenVPN endpoint. Exact operating system is not established by the supplied evidence.
 
 ### Confirmed facts
 
-- The canonical estate record identifies the device as an ASUS RT-AC86U named asus-router.
-- Its documented kind is network, with the role of router, DHCP server, AiMesh controller, and OpenVPN remote-access endpoint.
-- The device is online at 192.168.2.1 with hostname _gateway.
-- The inventory vendor is ASUSTek Computer.
+- The canonical estate record identifies this device as an ASUS RT-AC86U named asus-router.
+- Its documented role is Router, DHCP, AiMesh controller and OpenVPN remote-access endpoint.
+- The device is online at 192.168.2.1 and has vendor ASUSTek Computer.
 - TCP port 22 exposes Dropbear sshd protocol 2.0.
-- TCP ports 53, 80, and 8443 are reported open; port 8443 has an HTTPS certificate for jrwroberts1976.asuscomm.com.
-- Nmap OS identification is incomplete and reports os_evidence_missing.
-- Greenbone reports zero actionable findings matching this current IP; this does not establish that the host is vulnerability-free or fully scanned.
+- TCP port 53 exposes Cloudflare public DNS.
+- TCP port 80 is open.
+- TCP port 8443 exposes HTTPS-alt with TLS.
+- The TLS certificate for port 8443 is for jrwroberts1976.asuscomm.com and is issued by Let's Encrypt.
+- No matching actionable Greenbone findings were reported for the current IP; this does not establish that the device is vulnerability-free.
+- The supplied Nmap profile has no OS matches and reports missing OS evidence.
 
 ### Inferences
 
-- The device is consistent with an embedded router firmware platform.
-- The Dropbear SSH service and web services are consistent with network-device firmware, but do not identify an exact OS or firmware version.
+- The device is consistent with embedded router firmware associated with the ASUS RT-AC86U.
+- The exact operating system and firmware version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:02:06+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:02:04`
 - Identity confidence: **high**
@@ -82,24 +82,24 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-Confirmed Home Assistant OS 18.2 VM204 on Proxmox, observed at 192.168.2.60. HTTP/aiohttp and rpcbind are open; Nmap identifies a Linux-family stack. Greenbone has no matching actionable findings, while patch telemetry is unavailable and should be reviewed.
+Home Assistant OS 18.2 virtual machine home-01, hosted as QEMU VM204 on PROXMOX. The host exposes a corroborated aiohttp HTTP service on TCP/80; TCP/111 is also open. No matching actionable Greenbone findings were reported, but this is not proof of full vulnerability coverage.
 
 ### Confirmed facts
 
-- The canonical estate record identifies this device as home-01, a VM running Home Assistant OS 18.2, Home Assistant Core 2026.9.2, VM204 on PROXMOX.
-- The Proxmox enrichment identifies guest type qemu, name home-01, and VMID 204.
-- The device is online at 192.168.2.60 with MAC address 02:00:00:00:02:04.
-- The router reports DHCP hostname homeassistant; inventory and Nmap report home-01.jameshouse.
-- TCP port 80 is open and directly identified as aiohttp 3.14.3 with Python 3.14.
-- TCP port 111 is open and identified as rpcbind.
-- Nmap reports Linux OS matches, primarily Linux 4.15–5.19, with an OpenWrt 22.03 match at lower confidence.
-- Greenbone reports zero matching actionable findings for the current IP; this is not proof that the host is vulnerability-free.
-- Patch telemetry is unavailable, with no update or reboot status reported.
+- The canonical estate identifies home-01 as a Home Assistant OS 18.2 VM204 on PROXMOX.
+- The Proxmox cluster API identifies the guest as a QEMU VM named home-01 with VMID 204 on node PROXMOX.
+- The DHCP hostname and inventory hostname are homeassistant and home-01.jameshouse, respectively.
+- The VM has IP address 192.168.2.60 and MAC address 02:00:00:00:02:04.
+- TCP/80 is open and is identified with corroborated evidence as aiohttp 3.14.3 using Python 3.14.
+- TCP/111 is open; its Nmap service label was omitted.
+- Greenbone reported zero actionable findings matching the current IP in the supplied scan result.
+- No authoritative OS record is available in the authoritative_os field.
 
 ### Inferences
 
-- The host is likely a Home Assistant appliance workload rather than a general-purpose server, based on the authoritative estate role and Home Assistant-specific DNS activity.
-- The Nmap Linux results are consistent with the documented Home Assistant OS VM but do not establish an exact kernel version.
+- The device identity is consistent with a Home Assistant virtual appliance.
+- The Nmap fingerprint is broadly consistent with a Linux-based platform, but does not establish a more precise kernel or operating-system version.
+- The locally administered MAC address is consistent with a VM-assigned address.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

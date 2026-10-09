@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:34:03+01:00`
+- Assessed: `2026-10-08T15:00:50+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:a5:cb:28`
 - Identity confidence: **high**
@@ -97,23 +97,25 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Proxmox LXC container CT102 providing the internal Postfix SMTP relay. Authoritative Zabbix inventory identifies Debian GNU/Linux 13 (trixie), x86_64. Open services include SSH on 22/tcp, Postfix SMTP on 25/tcp, and an unidentified open service on 9100/tcp.
+Managed Proxmox LXC container CT102 running Debian GNU/Linux 13 as the internal Postfix SMTP relay. SSH and SMTP are corroborated open services; TCP/9100 is also open. No matching actionable Greenbone findings or pending security updates are reported.
 
 ### Confirmed facts
 
-- Canonical estate identity is mail-relay-01, CT102, an LXC container on PROXMOX.
-- The documented role is Internal Postfix SMTP relay.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), kernel 7.0.14-17-pve, and x86_64 architecture.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is open on 22/tcp.
-- Postfix smtpd is open on 25/tcp.
-- Port 9100/tcp is open; its Nmap service label was omitted.
-- No actionable Greenbone findings match the current host IP.
-- Patch telemetry reports zero available updates, zero security updates, and no reboot required.
+- The canonical estate identity is mail-relay-01, an LXC container managed by Ansible.
+- The container is CT102 on PROXMOX.
+- The authoritative OS inventory reports Debian GNU/Linux 13 (trixie) on x86_64 with kernel 7.0.14-20-pve.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is running on TCP/22.
+- Postfix smtpd is running on TCP/25.
+- TCP/9100 is open; its Nmap service label was omitted.
+- The inventory vendor is Proxmox Server Solutions GmbH.
+- Greenbone reports zero matching actionable findings for the current host IP.
+- Patch telemetry reports zero available updates and no reboot required.
 
 ### Inferences
 
-- The host is a Debian-based mail-relay workload running inside a Proxmox LXC container.
-- The Proxmox vendor attribution reflects the virtualization/container platform rather than the application workload vendor.
+- The host is an internal mail-relay server based on its canonical role and corroborated Postfix SMTP service.
+- The Debian userland is running within a Proxmox LXC environment.
+- Observed SSH authentication failures and malformed SMTP command warnings merit operational review.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -125,13 +127,13 @@ Managed Proxmox LXC container CT102 providing the internal Postfix SMTP relay. A
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T06:51:34+01:00`
-- Pending updates: **2**
-- Security updates pending: **2**
+- Last assessed: `2026-10-09T15:22:34+01:00`
+- Pending updates: **0**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-05T19:57:15+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-08T07:03:09+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->

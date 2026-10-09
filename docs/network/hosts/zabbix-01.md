@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:32:55+01:00`
+- Assessed: `2026-10-08T14:00:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:05`
 - Identity confidence: **high**
@@ -82,24 +82,22 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-Authoritative inventory identifies this host as zabbix-01, an LXC container CT105 on PROXMOX running Debian GNU/Linux 13 (trixie). It serves the Zabbix monitoring platform with PostgreSQL/TimescaleDB, Zabbix Server, Agent 2 and Nginx. SSH, HTTP on ports 80 and 8080, and an open port 9100 are present.
+Managed Debian 13 LXC container CT105 on PROXMOX providing the Zabbix monitoring platform. OpenSSH and Nginx are confirmed; TCP/9100 is open without a supplied service label. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The hostname is zabbix-01.jameshouse and the IP address is 192.168.2.59.
-- The canonical estate record identifies zabbix-01 as LXC container CT105 on PROXMOX.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-17-pve.
-- The canonical role is a Zabbix monitoring platform with PostgreSQL, TimescaleDB, Zabbix Server, Agent 2 and Nginx active.
-- TCP ports 22, 80, 8080 and 9100 are open.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is confirmed on TCP port 22.
-- Nginx is confirmed on TCP ports 80 and 8080.
-- Greenbone reported zero matching actionable findings for the current host IP at collection time.
-- Patch telemetry reports 8 security updates and 36 total updates available; a reboot is not required.
+- Canonical estate identity is zabbix-01, an LXC container and Zabbix monitoring platform, CT105 on PROXMOX.
+- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie) on x86_64.
+- The container is managed by Ansible and has Proxmox VMID 105 on node PROXMOX.
+- TCP/22 is open with corroborated OpenSSH 10.0p2 Debian 7+deb13u4 evidence.
+- TCP/80 and TCP/8080 are open with corroborated Nginx HTTP service evidence.
+- TCP/9100 is open; its Nmap service label was omitted.
+- Greenbone reported zero matching actionable findings for the current host IP.
+- No security updates are currently available, and unattended upgrades are enabled.
 
 ### Inferences
 
-- This is a managed Linux monitoring server hosted as a Proxmox LXC guest.
-- Port 9100 may support a monitoring or printing-related service, but its service identity is not established by the supplied evidence.
+- The host is a server-oriented monitoring container rather than an end-user device, based on its documented estate role and active management context.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -111,7 +109,7 @@ Authoritative inventory identifies this host as zabbix-01, an LXC container CT10
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T06:41:47+01:00`
+- Last assessed: `2026-10-09T15:09:26+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**

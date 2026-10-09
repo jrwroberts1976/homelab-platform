@@ -50,34 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:07:35+01:00`
+- Assessed: `2026-10-08T14:00:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `60:83:e7:f3:c1:92`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo P110 IoT device, probably a smart plug. It exposes HTTP and was fingerprinted only as lwIP; no supported exact OS is established.
+Likely a TP-Link Tapo P110 smart plug at 192.168.2.95. Its identity is supported by the DHCP hostname, TP-Link vendor data, and Tapo cloud DNS signals. The TCP fingerprint indicates lwIP, but this is only a networking stack and does not establish an exact OS.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.95.
-- The documented hostname is acer-lights.jameshouse, with telemetry hostname acer-lights.
-- The DHCP hostname is P110.
+- The DHCP hostname is P110; the inventory hostname is acer-lights.jameshouse.
 - The recorded vendor is TP-Link PTE.
-- DNS activity includes TP-Link cloud/Tapo endpoints, including security.iot.i.tplinknbu.com and euw1-device-cloudgateway.iot.i.tplinknbu.com.
-- TCP port 80 is open and identified by Nmap as HTTP.
-- Nmap matched lwIP 1.4.1–2.0.3 with a 100% match accuracy.
-- Greenbone reported zero matching actionable findings for the current IP; this is not proof that the host is vulnerability-free or fully scanned.
+- DNS telemetry includes TP-Link/Tapo cloud endpoints.
+- TCP port 80 is open.
+- Nmap reported an lwIP 1.4.1–2.0.3 fingerprint with 100% match accuracy.
 
 ### Inferences
 
-- The DHCP hostname P110 and Tapo-related DNS signals indicate a likely TP-Link Tapo P110 device.
-- The likely device function is a smart plug based on the P110 model association, but this function is not directly confirmed by the supplied evidence.
-- lwIP is treated as a TCP/IP stack, not as a complete operating-system identification.
+- The device is likely a TP-Link Tapo P110 smart plug.
+- The device likely uses embedded IoT firmware rather than a general-purpose operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

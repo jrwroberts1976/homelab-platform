@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T11:05:00+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `ac:17:02:07:0d:5d`
 - Identity confidence: **high**
@@ -60,23 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely an Amazon Fire TV/Fire Stick streaming device based on its documented hostname and Amazon Fire TV/Video DNS activity. Nmap reports conflicting Android/Linux fingerprints, so the exact OS is not established. The recorded Fibar vendor and conflicting online-state fields merit review.
+Likely an Amazon Fire TV Stick or related Amazon streaming device. The hostname and Amazon Fire TV/Video DNS signals strongly support this identity, while Nmap only provides broad Android/Linux candidates and does not establish an exact OS. Reported Fibar Group vendor data is inconsistent and merits review.
 
 ### Confirmed facts
 
-- The inventory hostname is fire-stick.jameshouse and the telemetry hostname is fire-stick.
-- The inventory vendor is recorded as Fibar Group sp. z o.o.
-- DNS activity includes Amazon Fire TV, Amazon Video, Alexa, and NordVPN-related domains.
-- Nmap completed OS detection and identified TCP port 8009 as open with a tcpwrapped service label.
-- Nmap produced multiple Android and Linux OS matches, including Android 4.1–6.0, Android 9–10, and Linux kernel ranges.
-- Greenbone reported zero matching actionable findings for 192.168.2.149; this is not proof that the host is vulnerability-free.
-- Router telemetry reports the host online, while inventory telemetry reports it offline.
+- The device IP is 192.168.2.149 and its hostname is fire-stick.jameshouse.
+- Inventory reports the vendor as Fibar Group sp. z o.o.
+- DNS evidence includes Amazon Fire TV, Amazon Video, Alexa, and NordVPN endpoint signals.
+- Nmap reported TCP port 8009 as open.
+- Nmap returned candidate Android and Linux fingerprint matches, including Android 4.1–6.0, Android 9–10, and Android 4.2.2.
+- No matching actionable Greenbone findings were recorded for this current IP; this does not establish that the host is vulnerability-free.
+- Authoritative OS evidence is unavailable.
 
 ### Inferences
 
-- The device is likely an Amazon Fire TV/Fire Stick or closely related Amazon streaming endpoint.
-- The platform is likely embedded Android/Linux-based firmware, but the supplied evidence does not support a precise OS or version.
-- The Nmap service label alone does not establish the host function.
+- The documented hostname and Amazon-specific DNS activity strongly suggest an Amazon Fire TV Stick or closely related Amazon streaming device.
+- The device likely uses Android-derived or embedded Linux-based firmware, but the exact OS and version are unsupported by the supplied evidence.
+- The Fibar Group vendor report conflicts with the apparent Amazon device identity and should be manually validated.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

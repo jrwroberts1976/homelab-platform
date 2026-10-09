@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:33:32+01:00`
+- Assessed: `2026-10-08T14:00:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:3b:b9:e4`
 - Identity confidence: **high**
@@ -97,23 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-sensor-01 is VM201 on PROXMOX, managed by Ansible and used as a Suricata/Zeek passive network sensor. It runs authoritative Debian GNU/Linux 13 (trixie) on x86_64. Open services include corroborated OpenSSH on TCP/22 and an open TCP/9100 port with no usable Nmap service label. Three updates are available and a reboot is required; no matching actionable Greenbone findings were reported.
+sensor-01 is an online QEMU VM (VMID 201) on PROXMOX, managed by Ansible as a Suricata and Zeek passive network sensor. It runs authoritative Debian GNU/Linux 13 (trixie) on x86_64 with kernel 6.12.107+deb13-amd64. SSH is exposed on TCP 22; TCP 9100 is also open. No actionable Greenbone findings or pending updates were reported.
 
 ### Confirmed facts
 
-- Canonical estate identity is sensor-01, a VM with role Suricata and Zeek passive network sensor, VM201 on PROXMOX.
-- The Proxmox inventory identifies the guest as QEMU VM201 named sensor-01.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, kernel 6.12.107+deb13-amd64.
-- The host is online at 192.168.2.55 and has hostname sensor-01.jameshouse.
-- TCP/22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP/9100 is open; the supplied Nmap evidence omits its service label.
-- Patching telemetry reports three updates available, zero security updates available, and a reboot required.
-- Greenbone reported zero matching actionable findings for the current host IP.
+- The canonical estate name is sensor-01 and its role is a Suricata and Zeek passive network sensor.
+- The device is a VM, specifically a QEMU guest with VMID 201 on PROXMOX.
+- The VM is managed by Ansible and is currently online at 192.168.2.55.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, kernel 6.12.107+deb13-amd64.
+- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
+- TCP port 9100 is open; its Nmap service label was omitted.
+- Greenbone reported zero actionable findings matching this current IP.
+- Patch telemetry reports zero available updates, zero security updates, no reboot required, and enabled unattended upgrades.
+- The bounded 24-hour Loki sample contains 1,263 entries from the network-security job.
 
 ### Inferences
 
-- The host is a Linux-based managed infrastructure VM supporting network-security monitoring workloads.
-- The Proxmox vendor attribution and QEMU guest metadata indicate virtualization rather than a physical endpoint.
+- The platform is a managed Debian-based network-monitoring VM consistent with its documented Suricata and Zeek sensor role.
+- The Proxmox vendor and QEMU guest metadata identify the virtualization platform, not the guest operating-system vendor.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -125,12 +126,12 @@ sensor-01 is VM201 on PROXMOX, managed by Ansible and used as a Suricata/Zeek pa
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T06:52:23+01:00`
+- Last assessed: `2026-10-09T15:09:12+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-05T20:08:49+01:00`
+- Last APT transaction activity: `2026-10-09T06:28:14+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.

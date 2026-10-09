@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:04:46+01:00`
+- Assessed: `2026-10-08T13:03:48+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f0:ef:86:35:bc:55`
 - Identity confidence: **high**
@@ -60,23 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Google Home Mini identified with high confidence from DHCP hostname, Google vendor data, Nmap fingerprinting, and a Google Chromecast Audio Assist certificate. Exact OS is not supported by the evidence; Nmap Linux labels are tentative. No matching actionable Greenbone findings were reported for this IP.
+Likely a Google Home Mini smart speaker. Identity is strongly supported by the DHCP hostname, Google vendor metadata, Google Home Nmap fingerprint, and a Chromecast/Google TLS certificate. The exact operating system is not established.
 
 ### Confirmed facts
 
-- The device hostname is google-home-mini.jameshouse and the DHCP hostname is Google-Home-Mini.
+- The device hostname is Google-Home-Mini / google-home-mini.jameshouse.
 - The inventory and Nmap vendor fields identify Google.
-- Nmap reported a Google Home device fingerprint with 98% accuracy.
-- The device has open TCP ports 8008, 8009, and 8443; Nmap labeled them http, ajp13 over SSL, and https-alt respectively.
-- The TLS certificate on port 8443 has issuer Chromecast ICA 7 (Audio Assist 2) and a Google Inc. organization.
-- No actionable Greenbone findings matched 192.168.2.249 in the supplied report.
-- Patch telemetry is unavailable and provides no update status.
+- Nmap reports a Google Home device fingerprint.
+- TCP ports 8008, 8009, and 8443 are open; Nmap service labels for these ports were omitted.
+- TCP port 8443 has corroborated HTTPS-alt service evidence.
+- A TLS certificate on port 8443 is issued by Google Inc. with issuer CN Chromecast ICA 7 (Audio Assist 2).
+- The certificate subject identifies Google Inc. and the device-specific subject CN LQJ8EH FA8FCA6B2CFB.
+- The exact OS is unavailable from authoritative inventory and no authoritative OS fact is present.
 
 ### Inferences
 
-- The device is most consistent with a Google Home Mini smart speaker or closely related Google Home/Chromecast Audio Assist hardware.
-- It likely runs embedded firmware with a Linux-derived network implementation, but the exact operating system and version are unsupported.
-- The Nmap Linux kernel matches are fingerprint-based estimates and should not be treated as authoritative OS identification.
+- The device is most consistent with a Google Home Mini or closely related Google smart-speaker platform.
+- The platform is best classified broadly as embedded IoT firmware.
+- Nmap Linux kernel matches are fingerprints and do not establish the exact underlying OS or kernel version.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

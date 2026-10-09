@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:04:46+01:00`
+- Assessed: `2026-10-08T13:03:48+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:82:e1:f2:f9:9f`
 - Identity confidence: **medium**
@@ -60,23 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a Tuya Smart embedded IoT device at 192.168.2.30. No exposed services, Nmap OS match, DNS identity signal, or OS telemetry were collected; exact device type and OS require manual review.
+Online Tuya Smart device at 192.168.2.30, identified from inventory and vendor data. No service, DNS, or OS fingerprint evidence is available; exact OS remains unknown.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.30.
-- The recorded hostname is patio.jameshouse and the telemetry hostname is patio.
-- The DHCP/router hostname is wlan0.
-- The recorded vendor is Tuya Smart.
-- The MAC address is c4:82:e1:f2:f9:9f.
-- Nmap OS identification is incomplete because OS evidence is missing; no TCP or UDP ports were reported.
-- No Zeek connections or top services were reported in the supplied sample.
-- No matching actionable Greenbone findings were reported for this IP; this does not establish that the host is vulnerability-free.
+- The device IP is 192.168.2.30.
+- The inventory hostname is patio.jameshouse and the telemetry hostname is patio.
+- The reported vendor is Tuya Smart.
+- The device is currently online.
+- No actionable Greenbone findings match this IP.
+- Nmap OS and port data are unavailable; the Nmap profile is partial with os_evidence_missing.
+- No sampled Loki entries or recent high-risk DNS policy matches were reported.
 
 ### Inferences
 
-- The Tuya Smart vendor attribution supports classifying the device as an embedded IoT device.
-- The supplied evidence does not support identifying a specific Tuya product, function, operating system, or OS version.
+- The device is likely a Tuya-based embedded smart-home or IoT device.
+- The platform is best described generically as embedded IoT firmware; no precise operating system is supported.
+- The DHCP/router hostname wlan0 may be a separate naming signal, but its device meaning is unresolved.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T11:33:16+01:00`
+- Assessed: `2026-10-08T14:00:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `b8:27:eb:e8:36:cd`
 - Identity confidence: **high**
@@ -97,23 +97,23 @@ complete household browsing history.
 
 ### Assessment summary
 
-Raspberry Pi 3 administration host running authoritative Debian GNU/Linux 13 (trixie) on aarch64. It serves as an SSH jump/IaC controller and Corosync QNetd host. OpenSSH is exposed on TCP/22; TCP/111 and TCP/9100 are also open. Patch telemetry reports 19 security updates and 135 total updates available, with no reboot required.
+admin-01 is a managed Raspberry Pi 3 administration and SSH jump host running authoritative Debian GNU/Linux 13 (trixie) on aarch64. OpenSSH is confirmed on TCP/22; TCP/111 and TCP/9100 are also open. No matching actionable Greenbone findings or pending security updates were reported.
 
 ### Confirmed facts
 
-- Canonical estate identity is admin-01, a physical host managed by Ansible.
-- The documented role is Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), kernel 6.18.39+rpt-rpi-v8, and architecture aarch64.
-- The vendor is Raspberry Pi Foundation, and the MAC address is b8:27:eb:e8:36:cd.
-- TCP/22 is open and provides OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP/111 and TCP/9100 are open; no service labels are asserted for these ports.
-- Greenbone reports zero matching actionable findings for the current IP.
-- Patch telemetry reports 19 security updates and 135 total updates available; unattended upgrades are disabled and a reboot is not required.
+- The canonical estate identifies admin-01 as a physical Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host.
+- The device vendor is Raspberry Pi Foundation.
+- The authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), kernel 6.18.50+rpt-rpi-v8, and architecture aarch64.
+- The hostname is admin-01.jameshouse and the current IP is 192.168.2.48.
+- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
+- TCP/111 and TCP/9100 are open; their Nmap service labels were omitted.
+- Greenbone reports zero matching actionable findings for the current host IP.
+- Patch telemetry reports zero available security updates, no reboot required, and enabled unattended upgrades.
 
 ### Inferences
 
-- The host is best classified as a Raspberry Pi-based Debian administration/server node rather than a general-purpose workstation.
-- The open SSH service is consistent with its documented SSH jump and infrastructure-management role.
+- The host is a Raspberry Pi 3 running 64-bit Debian Linux, consistent with the authoritative architecture and canonical role.
+- The device is likely a centrally managed infrastructure administration host, consistent with its Ansible management and documented estate role.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -125,8 +125,8 @@ Raspberry Pi 3 administration host running authoritative Debian GNU/Linux 13 (tr
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-08T07:33:30+01:00`
-- Pending updates: **0**
+- Last assessed: `2026-10-09T14:47:30+01:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**

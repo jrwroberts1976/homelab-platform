@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-01T10:03:30+01:00`
+- Assessed: `2026-10-08T12:04:32+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `5c:34:00:50:df:b3`
 - Identity confidence: **high**
@@ -60,24 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a Hisense smart TV using embedded IoT firmware. The hostname and vendor data support the identity, while Nmap found no OS evidence or exposed services. Vidaa and Netflix-related DNS activity is consistent with TV use but does not establish an exact OS.
+Likely Hisense smart TV using VIDAA-related services. Exact operating system is unavailable; Nmap provided no OS evidence.
 
 ### Confirmed facts
 
-- The documented hostname is main-tv.jameshouse, with telemetry hostname main-tv.
-- The inventory vendor is Hisense Electric.
-- The MAC address is 5c:34:00:50:df:b3.
-- The device has IP address 192.168.2.234.
-- Nmap status is partial and reports os_evidence_missing; no TCP or UDP ports were recorded.
-- The DNS sample includes Vidaa-related domains, YouTube, and Netflix domains.
-- No matching actionable Greenbone findings were reported for this IP.
-- Patch telemetry is unavailable.
+- The inventory hostname is main-tv.jameshouse.
+- The recorded vendor is Hisense Electric.
+- DNS samples include multiple vidaahub.com domains, plus YouTube and Netflix domains.
+- The device is currently online at 192.168.2.234.
+- Nmap status is partial with no OS matches or port results.
+- No actionable Greenbone findings currently match this IP; this is not proof that the host is vulnerability-free.
 
 ### Inferences
 
-- The device is likely a Hisense smart TV based on its hostname, vendor, and Vidaa-related DNS activity.
-- The platform is likely embedded IoT firmware, but the exact operating system is unsupported by the supplied evidence.
-- The Vidaa and streaming-related DNS activity is consistent with smart-TV usage, but does not prove a specific firmware or OS.
+- The device is most likely a Hisense smart TV.
+- The observed VIDAA-related DNS activity is consistent with embedded TV firmware, but does not establish an exact operating system or version.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
