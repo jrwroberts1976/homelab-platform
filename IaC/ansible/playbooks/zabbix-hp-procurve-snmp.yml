@@ -259,6 +259,37 @@
             error_handler: 0
             error_handler_params: ""
 
+    # Ports proven to be persistent infrastructure/device links.
+    # Port 2 is deliberately excluded until its attached device
+    # is positively identified.
+    zabbix_hp_snmp_expected_link_ports:
+      - "1"
+      - "5"
+      - "9"
+      - "13"
+      - "15"
+      - "18"
+      - "20"
+      - "21"
+      - "23"
+      - "24"
+
+    zabbix_hp_snmp_expected_link_regex: >-
+      ^(?:{{ zabbix_hp_snmp_expected_link_ports | join('|') }})$
+
+    zabbix_hp_snmp_link_trigger_name: >-
+      Port {{ zabbix_hp_snmp_lld_index_macro }}:
+      expected link is down for 5 minutes
+
+    zabbix_hp_snmp_link_trigger_expression: >-
+      min(/{{ zabbix_hp_snmp_template_host }}/hp.snmp.port.oper[{{ zabbix_hp_snmp_lld_index_macro }}],5m)<>1
+
+    # Zabbix priority 3 = Average.
+    zabbix_hp_snmp_link_trigger_priority: 3
+
+    zabbix_hp_snmp_link_override_name: >-
+      Enable expected persistent port link alerts
+
     zabbix_hp_snmp_value_maps:
       - key: "admin"
         name: "IF-MIB administrative status"
@@ -2016,6 +2047,526 @@
         fail_msg: >-
           HP ProCurve status prototypes are not attached to
           the expected value maps.
+
+    - name: Read HP ProCurve expected-link trigger prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: triggerprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - triggerid
+              - description
+              - expression
+              - priority
+              - status
+              - discover
+            expandExpression: true
+            selectFunctions: extend
+            selectItems:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+            selectTags: extend
+            filter:
+              description:
+                - "{{ zabbix_hp_snmp_link_trigger_name }}"
+          id: 601
+        return_content: true
+      register: _hp_link_trigger_prototype
+      no_log: true
+
+    - name: Create HP ProCurve expected-link trigger prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: triggerprototype.create
+          params:
+            description: "{{ zabbix_hp_snmp_link_trigger_name }}"
+            expression: "{{ zabbix_hp_snmp_link_trigger_expression }}"
+            priority: "{{ zabbix_hp_snmp_link_trigger_priority }}"
+            # Fail safe: without the LLD override this prototype
+            # creates no enabled live triggers.
+            status: 1
+            discover: 1
+            tags:
+              - tag: scope
+                value: availability
+              - tag: component
+                value: network
+              - tag: port
+                value: "{{ zabbix_hp_snmp_lld_index_macro }}"
+          id: 602
+        return_content: true
+      register: _hp_link_trigger_prototype_create
+      when: >-
+        (_hp_link_trigger_prototype.content | from_json).result
+        | length == 0
+      changed_when: true
+      failed_when: >-
+        (_hp_link_trigger_prototype_create.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final HP ProCurve expected-link trigger prototype
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: triggerprototype.get
+          params:
+            discoveryids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - triggerid
+              - description
+              - expression
+              - priority
+              - status
+              - discover
+            expandExpression: true
+            selectFunctions: extend
+            selectItems:
+              - itemid
+              - name
+              - key_
+              - type
+              - value_type
+            selectTags: extend
+            filter:
+              description:
+                - "{{ zabbix_hp_snmp_link_trigger_name }}"
+          id: 603
+        return_content: true
+      register: _hp_link_trigger_prototype_final
+      no_log: true
+
+    - name: Require exact HP ProCurve expected-link trigger prototype
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_hp_link_trigger_prototype_final.content | from_json).result
+            | length == 1
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].description
+            )
+            ==
+            zabbix_hp_snmp_link_trigger_name
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].expression
+            )
+            ==
+            zabbix_hp_snmp_link_trigger_expression
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].priority
+              | int
+            )
+            ==
+            (zabbix_hp_snmp_link_trigger_priority | int)
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].status
+              | int
+            ) == 1
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].discover
+              | int
+            ) == 1
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].functions
+              | length
+            ) == 1
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].functions[0].function
+            ) == "min"
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].functions[0].parameter
+            ) == "$,5m"
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0].functions[0].itemid
+              | string
+            )
+            ==
+            (_hp_oper_prototype.itemid | string)
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0]['items']
+              | length
+            ) == 1
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0]['items'][0].itemid
+              | string
+            )
+            ==
+            (_hp_oper_prototype.itemid | string)
+          - >-
+            (
+              (_hp_link_trigger_prototype_final.content | from_json)
+              .result[0]['items'][0].key_
+            )
+            ==
+            (
+              'hp.snmp.port.oper['
+              ~ zabbix_hp_snmp_lld_index_macro
+              ~ ']'
+            )
+        fail_msg: >-
+          HP ProCurve expected-link trigger prototype does not
+          match the fail-safe IaC definition.
+
+    - name: Read HP ProCurve discovery overrides
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.get
+          params:
+            itemids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - key_
+            selectOverrides: extend
+          id: 604
+        return_content: true
+      register: _hp_link_overrides
+      no_log: true
+
+    - name: Resolve current HP ProCurve link-alert override
+      ansible.builtin.set_fact:
+        _hp_link_overrides_current: >-
+          {{
+            (_hp_link_overrides.content | from_json)
+            .result[0].overrides
+          }}
+        _hp_link_override_current: >-
+          {{
+            (
+              (_hp_link_overrides.content | from_json)
+              .result[0].overrides
+              | first
+            )
+            | default({})
+          }}
+      no_log: true
+
+    - name: Require no unexpected HP ProCurve LLD override
+      ansible.builtin.assert:
+        that:
+          - >-
+            (_hp_link_overrides_current | length) in [0, 1]
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.name
+              ==
+              zabbix_hp_snmp_link_override_name
+            )
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.step | int
+            ) == 1
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.stop | int
+            ) == 1
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.filter.conditions
+              | length
+            ) == 1
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.filter.conditions[0].macro
+              ==
+              zabbix_hp_snmp_lld_index_macro
+            )
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.filter.conditions[0].operator
+              | int
+            ) == 8
+          - >-
+            (_hp_link_overrides_current | length == 0)
+            or
+            (
+              _hp_link_override_current.filter.conditions[0].value
+              ==
+              zabbix_hp_snmp_expected_link_regex
+            )
+        fail_msg: >-
+          Unexpected HP ProCurve LLD override detected.
+          Refusing to replace GUI or unmanaged override state.
+      no_log: true
+
+    - name: Install HP ProCurve expected-link LLD override
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.update
+          params:
+            itemid: "{{ _port_discovery_rule_id }}"
+            overrides:
+              - name: "{{ zabbix_hp_snmp_link_override_name }}"
+                step: 1
+                stop: 1
+                filter:
+                  evaltype: 1
+                  conditions:
+                    - macro: "{{ zabbix_hp_snmp_lld_index_macro }}"
+                      value: "{{ zabbix_hp_snmp_expected_link_regex }}"
+                      operator: 8
+                operations:
+                  # Trigger prototype: enable creation.
+                  - operationobject: 1
+                    operator: 2
+                    value: "expected link is down for 5 minutes"
+                    opstatus:
+                      status: 0
+
+                  # Trigger prototype: permit discovery.
+                  - operationobject: 1
+                    operator: 2
+                    value: "expected link is down for 5 minutes"
+                    opdiscover:
+                      discover: 0
+          id: 605
+        return_content: true
+      register: _hp_link_override_create
+      when: _hp_link_overrides_current | length == 0
+      changed_when: true
+      failed_when: >-
+        (_hp_link_override_create.content | from_json).error
+        is defined
+      no_log: true
+
+    - name: Read final HP ProCurve discovery override
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: discoveryrule.get
+          params:
+            itemids:
+              - "{{ _port_discovery_rule_id }}"
+            output:
+              - itemid
+              - key_
+            selectOverrides: extend
+          id: 606
+        return_content: true
+      register: _hp_link_overrides_final
+      no_log: true
+
+    - name: Resolve final HP ProCurve link-alert override
+      ansible.builtin.set_fact:
+        _hp_link_override_final: >-
+          {{
+            (
+              (_hp_link_overrides_final.content | from_json)
+              .result[0].overrides
+              | first
+            )
+            | default({})
+          }}
+      no_log: true
+
+    - name: Require exact HP ProCurve expected-link override
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              (_hp_link_overrides_final.content | from_json)
+              .result[0].overrides
+              | length
+            ) == 1
+          - >-
+            _hp_link_override_final.name
+            ==
+            zabbix_hp_snmp_link_override_name
+          - >-
+            (_hp_link_override_final.step | int) == 1
+          - >-
+            (_hp_link_override_final.stop | int) == 1
+          - >-
+            (
+              _hp_link_override_final.filter.conditions
+              | length
+            ) == 1
+          - >-
+            _hp_link_override_final.filter.conditions[0].macro
+            ==
+            zabbix_hp_snmp_lld_index_macro
+          - >-
+            (
+              _hp_link_override_final.filter.conditions[0].operator
+              | int
+            ) == 8
+          - >-
+            _hp_link_override_final.filter.conditions[0].value
+            ==
+            zabbix_hp_snmp_expected_link_regex
+          - >-
+            (
+              _hp_link_override_final.operations
+              | length
+            ) == 2
+          - >-
+            (
+              _hp_link_override_final.operations
+              | selectattr('opstatus', 'defined')
+              | list
+              | length
+            ) == 1
+          - >-
+            (
+              (
+                _hp_link_override_final.operations
+                | selectattr('opstatus', 'defined')
+                | first
+              ).operationobject
+              | int
+            ) == 1
+          - >-
+            (
+              (
+                _hp_link_override_final.operations
+                | selectattr('opstatus', 'defined')
+                | first
+              ).operator
+              | int
+            ) == 2
+          - >-
+            (
+              _hp_link_override_final.operations
+              | selectattr('opstatus', 'defined')
+              | first
+            ).value
+            ==
+            "expected link is down for 5 minutes"
+          - >-
+            (
+              (
+                _hp_link_override_final.operations
+                | selectattr('opstatus', 'defined')
+                | first
+              ).opstatus.status
+              | int
+            ) == 0
+          - >-
+            (
+              _hp_link_override_final.operations
+              | selectattr('opdiscover', 'defined')
+              | list
+              | length
+            ) == 1
+          - >-
+            (
+              (
+                _hp_link_override_final.operations
+                | selectattr('opdiscover', 'defined')
+                | first
+              ).operationobject
+              | int
+            ) == 1
+          - >-
+            (
+              (
+                _hp_link_override_final.operations
+                | selectattr('opdiscover', 'defined')
+                | first
+              ).operator
+              | int
+            ) == 2
+          - >-
+            (
+              _hp_link_override_final.operations
+              | selectattr('opdiscover', 'defined')
+              | first
+            ).value
+            ==
+            "expected link is down for 5 minutes"
+          - >-
+            (
+              (
+                _hp_link_override_final.operations
+                | selectattr('opdiscover', 'defined')
+                | first
+              ).opdiscover.discover
+              | int
+            ) == 0
+        fail_msg: >-
+          HP ProCurve expected-link LLD override does not match
+          the IaC definition.
+      no_log: true
 
     - name: Read strict HP ProCurve SNMP master configuration
       ansible.builtin.uri:
