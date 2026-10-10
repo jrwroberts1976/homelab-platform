@@ -1,8 +1,8 @@
 # Host AI Intelligence and CVE Correlation Work Plan
 
-**Status:** ACTIVE DEVELOPMENT  
+**Status:** COMPLETE — CLOSED 10 OCTOBER 2026
 **Opened:** 2026-09-30  
-**Authority:** This document tracks the current host-intelligence development phase. It does not supersede `docs/architecture/CURRENT-STATE.md` or `IaC/inventory/estate.json`. AI output is advisory and must never replace deterministic infrastructure facts.
+**Authority:** This document records the completed Project 3 host-intelligence development phase. It does not supersede `docs/architecture/CURRENT-STATE.md` or `IaC/inventory/estate.json`. AI output remains advisory and must never replace deterministic infrastructure facts.
 
 ## Goal
 
@@ -245,29 +245,48 @@ Implemented in development:
 - AI fields exposed through the MAC-keyed device-card metric;
 - conditional Grafana `AI host intelligence — advisory` panel.
 
-The first controlled production assessment was run for admin-01 on 2026-10-01 with the timer disabled. The model correctly kept the exact OS unconfirmed and requested manual review, but the run exposed an evidence-label mismatch: inventory used the FQDN admin-01.jameshouse while Prometheus and Loki use admin-01. This caused patch telemetry to appear unavailable and prevented the intended Loki host match. The resolver now normalizes the .jameshouse suffix for telemetry lookups and includes canonical estate plus available authoritative OS/kernel fields in the AI evidence packet. A second controlled validation is required before scheduling is enabled.
+## Production closure — 10 October 2026
 
-The AI timer remains disabled by default while development and validation continue.
+The initial `admin-01` validation exposed the `.jameshouse` telemetry-label
+mismatch and led to the resolver normalisation fix. Subsequent production
+validation completed the reviewed host-intelligence workflow.
 
-## Work sequence from here
+Closure evidence includes:
 
-1. **CVE extraction from Greenbone — COMPLETE**
-2. **Production CVE evidence regeneration — COMPLETE**
-3. **Add host-level CVE exposure to correlated metrics/Grafana — DEPLOYED 2026-09-30**
-4. **Add deterministic patch status to the AI evidence packet — LIVE VALIDATED 2026-09-30**
-5. **Complete the one-hour suspicious/blocked DNS classification path — LIVE VALIDATED 2026-10-01**
-6. **Validate bounded 24-hour Loki evidence — LIVE VALIDATED 2026-10-01**
-7. **Run isolated AI assessments against representative hosts — CURRENT; first admin-01 assessment completed, evidence-normalization fixes in progress**
-8. Review hallucination/overreach behaviour and confidence handling.
-9. Deploy resolver to `monitor-01` with timer disabled.
-10. Run manual production evidence tests.
-11. Enable the hourly resolver timer only after review.
-12. Observe new-host one-hour analysis and weekly refresh behaviour.
-13. Reconcile `ACTIVE-INFRASTRUCTURE-BACKLOG.md` and formally close this Project 3 phase when proven.
+- the `homelab-network-host-ai-resolver.timer` is enabled and active on
+  `monitor-01`;
+- repeated scheduled resolver executions completed successfully with exit
+  status 0;
+- zero eligible devices during a scheduled run is treated as a normal
+  no-work result;
+- managed-host OS evidence uses authoritative fresh Zabbix Agent 2 facts
+  where available;
+- managed Zabbix OS source state is explicit as `fresh`, `stale`, `missing`
+  or `not_expected`;
+- source freshness is separate from the `os_evidence` strength used for the
+  displayed operating system;
+- Zabbix OS last-observed time is exported as a numeric Prometheus gauge;
+- closure validation found 15 managed hosts fresh, 0 stale and 0 missing,
+  with all 15 carrying authoritative OS evidence;
+- exactly 15 Zabbix OS timestamp series were present;
+- all 50 generated host dashboards parsed successfully;
+- the managed OS evidence state is shown on all generated host dashboards;
+- the conditional last-observed panel appeared on exactly the 15 devices
+  with timestamp evidence;
+- bounded AI assessment change history remains deployed;
+- repeat production deployment completed with `changed=0`,
+  `unreachable=0`, `failed=0`;
+- the full monitoring regression suite passed 143 tests;
+- the 26-panel host template had no duplicate panel IDs and no required
+  Project 3 panels missing.
 
-## Completion criteria
+The hourly resolver schedule is therefore part of the production state.
+Project 3 is closed. Further host-intelligence work requires separately
+reviewed scope and does not keep this phase open.
 
-This phase is complete when:
+## Closure criteria
+
+Project 3 closure was accepted after proving:
 
 - CVE references are captured and correlated to host findings;
 - patch and vulnerability state are visible per host;

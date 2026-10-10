@@ -16,12 +16,12 @@
 
 ## Programme progress snapshot
 
-As of 7 October 2026:
+As of 10 October 2026:
 
 | View | Progress | Meaning |
 |---|---:|---|
 | Authoritative delivery steps 1–10 | **10/10 complete — 100%** | All named/evidenced delivery steps currently recoverable from the repository are closed |
-| Prioritised project areas fully closed | **3/10 — 30%** | Projects 1, 2 and 4 are fully complete |
+| Prioritised project areas fully closed | **4/10 — 40%** | Projects 1, 2, 3 and 4 are fully complete |
 | Prioritised project areas with baseline/foundation complete | **4/10 — 40%** | Projects 1–4 have either closed or reached baseline/foundation-complete state |
 | Optional/deferred projects | **3/10** | Projects 5, 9 and 10 are not automatic commitments |
 | Genuine outstanding/review projects | **3/10** | Projects 6, 7 and 8 contain substantive remaining engineering work |
@@ -53,7 +53,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 |---|---|---|---|---|
 | 1 | Greenbone and AI-assisted morning management report | COMPLETE | — | Operational factual + AI-assisted reporting with fail-safe factual fallback, source provenance and factual network-inventory v1 pinned to `monitor-01` |
 | 2 | Security and monitoring integration | **COMPLETE — 7 OCTOBER 2026** | — | Monitoring core, Zabbix, Suricata/Zeek passive sensor and evidence integration closure-validated; CrowdSec remains absent/deferred and is not a current source |
-| 3 | Grafana dashboards and AI host intelligence | FOUNDATION COMPLETE / QUALITY REFINEMENT | **1–3 days** | Estate dashboard/patch/node foundation, manual-review policy and bounded AI assessment change history complete; next refine stale/missing/unknown semantics, then estate regression/closure |
+| 3 | Grafana dashboards and AI host intelligence | **COMPLETE — 10 OCTOBER 2026** | — | Production host-intelligence evidence semantics, scheduled AI resolver, bounded assessment history, conditional Grafana presentation and estate-wide regression closure proven |
 | 4 | Homelab documentation audit | **COMPLETE — 6 OCTOBER 2026** | — | Audit baseline PR #182; remediation PRs #183, #184 and #185 completed and guard-validated |
 | 5 | Password manager | PLANNED / OPTIONAL | **1–2 days** | Select product/design deliberately; HTTPS/MFA, off-host backup, restore proof and emergency access required |
 | 6 | Backup and disaster recovery | OUTSTANDING | **2–4 days** | Representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and protected recovery identities |
@@ -69,14 +69,12 @@ The remaining non-optional work has different goals. Choose according to the out
 | Choice | Project | Why choose it next | Effort | What completion buys |
 |---|---|---|---:|---|
 | **A — strongest resilience gain** | **#6 Backup and disaster recovery** | Biggest remaining operational-risk reduction | **2–4 days** | Proven QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and stronger recovery confidence |
-| **B — improve day-to-day visibility** | **#3 Grafana dashboards and AI host intelligence** | Builds on a strong existing dashboard and host-intelligence foundation | **1–3 days** | Explicit stale/missing/unknown semantics plus final estate regression and closure |
 | **C — harden container operations** | **#7 Komodo hardening** | Reduces control-plane and update risk around Docker management | **1–3 days** | HTTPS plus proven low-risk update/rollback behaviour and deliberate onboarding controls |
 | **D — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
 
 ### Decision shortcuts
 
 - If the priority is **resilience and recovery confidence**, choose **Project 6**.
-- If the priority is **better operational visibility and host intelligence**, choose **Project 3**.
 - If the priority is **container-management security and rollback confidence**, choose **Project 7**.
 - If the priority is **reducing legacy clutter and technical debt**, choose **Project 8**.
 - Projects **5, 9 and 10 remain optional/deferred** and should only be started because you specifically want the capability.
@@ -85,7 +83,7 @@ The remaining non-optional work has different goals. Choose according to the out
 
 1. Choose the next project using the decision guide above.
 2. If no preference is expressed, default engineering priority is **Project 6 (Backup/DR)**, then **Project 7 (Komodo hardening)**.
-3. Project 3 remains the larger quality/refinement stream.
+3. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
 4. Optional/deferred items are not automatic commitments.
 
 ## Delivery-step history
@@ -157,27 +155,31 @@ Delivered/verified:
 
 **Step 10 status: CLOSED.**
 
-### Project 3 — host-intelligence quality refinement — IN PROGRESS
+### Project 3 — host-intelligence quality refinement — COMPLETE
 
-Completed through 10 October 2026:
+Closed 10 October 2026.
 
-- managed-host OS, architecture and kernel evidence is sourced from fresh Zabbix Agent 2 facts and carried through the consolidated Prometheus inventory into AI assessment;
-- authoritative managed-host OS facts override weaker Nmap OS inference;
-- manual-review policy is identity-confidence driven rather than OS-uncertainty driven;
-- historical-IP correlation for AI identity was corrected;
-- bounded AI assessment change history is implemented with a maximum of five derived changes per device;
-- history exposes only selected structured fields and does not publish raw historical summaries, evidence, confirmed facts, inferences or evidence hashes;
-- live validation reported 15 authoritative managed hosts, 75 history series across 47 devices and zero forbidden historical fields;
-- generated dashboards contained the advisory change-history panel for exactly 47 expected devices, with zero missing, unexpected or malformed panel definitions;
+Closure-validated outcomes:
+
+- managed-host OS, architecture and kernel evidence comes from fresh Zabbix Agent 2 facts;
+- authoritative managed OS evidence overrides weaker Nmap inference;
+- bounded AI assessment change history is retained;
+- the AI resolver timer is enabled and active on `monitor-01`;
+- managed Zabbix OS source state is explicit as `fresh`, `stale`, `missing` or `not_expected`;
+- Zabbix OS last-observed time is published as a numeric Prometheus gauge;
+- live validation found 15 managed hosts fresh, 0 stale, 0 missing, all 15 authoritative;
+- exactly 15 Zabbix OS timestamp series were present;
+- all 50 generated host dashboards parsed successfully;
+- panel 26 appeared on exactly the 15 devices with timestamp evidence;
 - repeat deployment completed with `changed=0`, `unreachable=0`, `failed=0`;
-- bounded change history merged to `main` as `26409916`;
-- Grafana deployment validation now tolerates a stale bootstrap admin credential without resetting it, while retaining health and in-container provisioning checks; merged as `027b319a`.
+- the full monitoring regression suite passed 143 tests;
+- the 26-panel host template had no duplicate IDs and no required Project 3 panels missing.
 
-Remaining Project 3 work:
+Key implementation commits include `26409916`, `027b319a`, `712126b2`,
+`6330dd9a`, with the reconciled feature reaching `main` through `96b6a2ff`.
 
-1. define and implement explicit stale / missing / unknown semantics so absent or aged evidence cannot appear healthy or current;
-2. run estate-wide regression and closure validation;
-3. reconcile any Project 3 documentation that still describes completed host-intelligence work as pending.
+Future host-intelligence improvements are separate enhancements and do not keep
+Project 3 open.
 
 ### Steps 11–20
 

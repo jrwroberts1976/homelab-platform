@@ -2,7 +2,7 @@
 # Current-State Architecture
 
 **Status:** CURRENT OPERATIONAL TRUTH  
-**Current-state review:** 7 October 2026  
+**Current-state review:** 10 October 2026
 **Identity/address authority:** `IaC/inventory/estate.json`  
 **Configuration authority:** `IaC/`
 
@@ -205,7 +205,41 @@ Active responsibilities on `monitor-01` include:
 - Network Hosts Grafana publication;
 - persistent host-page generation;
 - bounded DNS evidence correlation;
-- bounded AI host assessment where enabled by the reviewed workflow.
+- bounded AI host assessment with the reviewed hourly resolver timer enabled.
+
+### Host-intelligence evidence state
+
+Project 3 host-intelligence quality refinement closed on 10 October 2026.
+
+The production AI resolver timer on `monitor-01` is enabled and active.
+Scheduled runs complete successfully; a run with zero eligible devices is a
+normal no-work result.
+
+Managed Zabbix OS evidence now has an explicit source state:
+
+- `fresh` — expected usable OS-name evidence is within the freshness threshold;
+- `stale` — expected OS-name evidence exists but is older than the threshold;
+- `missing` — Zabbix OS evidence is expected but no usable OS-name evidence exists;
+- `not_expected` — Zabbix OS evidence is not expected for that device.
+
+This state is separate from the `os_evidence` classification used for the
+displayed operating system. Offline state is also independent of evidence
+freshness.
+
+The numeric `homelab_network_device_zabbix_os_last_seen_seconds` gauge records
+the latest Zabbix OS-name observation.
+
+Closure validation found:
+
+- 15 managed hosts `fresh`;
+- 0 `stale`;
+- 0 `missing`;
+- all 15 managed hosts with authoritative OS evidence;
+- exactly 15 Zabbix OS timestamp series;
+- 50 generated host dashboards parsed successfully;
+- the conditional last-observed panel present on exactly those 15 devices;
+- repeat production deployment with `changed=0`, `unreachable=0`, `failed=0`;
+- 143 monitoring regression tests passing.
 
 `Proxmox-2` is the former source. Its discovery timers are disabled/inactive and its retained files are rollback/history evidence. Do not re-enable source scanning while `monitor-01` is the active owner.
 
