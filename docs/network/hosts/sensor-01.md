@@ -126,7 +126,7 @@ sensor-01 is an online QEMU VM (VMID 201) on PROXMOX, managed by Ansible as a Su
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-10T20:35:44+01:00`
+- Last assessed: `2026-10-10T21:36:07+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
