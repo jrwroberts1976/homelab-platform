@@ -84,6 +84,128 @@ def best_host_for_mac(hosts, mac):
     return max(candidates, key=host_freshness)
 
 
+AI_CHANGE_HISTORY_LIMIT = 5
+
+AI_CHANGE_FIELDS = (
+    ("device_name", "Device name"),
+    ("device_type", "Device type"),
+    ("vendor", "Vendor"),
+    ("platform_family", "Platform family"),
+    ("exact_os", "Exact OS"),
+    ("identity_confidence", "Identity confidence"),
+    ("os_confidence", "OS confidence"),
+    ("manual_review_required", "Manual review"),
+)
+
+
+def ai_change_display(field, value):
+    """Return a compact operator-facing value for a version comparison."""
+    if field == "manual_review_required":
+        if value is True:
+            return "true"
+        if value is False:
+            return "false"
+        return "unknown"
+
+    text = " ".join(str(value or "").split())
+    return text or "unknown"
+
+
+def ai_change_compare(field, value):
+    """Normalize values so cosmetic wording/spacing changes are ignored."""
+    display = ai_change_display(field, value)
+
+    if field == "manual_review_required":
+        return display
+
+    normalized = display.casefold()
+    normalized = re.sub(r"\s*/\s*", "/", normalized)
+    normalized = re.sub(r"\s+", " ", normalized).strip()
+
+    if normalized in ("unknown", "not established"):
+        return "unknown"
+
+    return normalized
+
+
+def ai_assessment_changes(assessment):
+    """Derive bounded structured changes without exporting raw history."""
+    if not isinstance(assessment, dict):
+        return []
+
+    history = assessment.get("history", [])
+
+    if not isinstance(history, list):
+        history = []
+
+    versions = []
+
+    for entry in history[-AI_CHANGE_HISTORY_LIMIT:]:
+        if not isinstance(entry, dict):
+            continue
+
+        result = entry.get("result", {})
+
+        if not isinstance(result, dict):
+            continue
+
+        versions.append((
+            int(entry.get("assessed_at", 0) or 0),
+            result,
+        ))
+
+    current = assessment.get("result", {})
+
+    if isinstance(current, dict):
+        versions.append((
+            int(assessment.get("assessed_at", 0) or 0),
+            current,
+        ))
+
+    changes = []
+
+    for older, newer in zip(versions, versions[1:]):
+        older_result = older[1]
+        newer_time, newer_result = newer
+        differences = []
+
+        for field, label in AI_CHANGE_FIELDS:
+            old_value = older_result.get(field)
+            new_value = newer_result.get(field)
+
+            if (
+                ai_change_compare(field, old_value)
+                == ai_change_compare(field, new_value)
+            ):
+                continue
+
+            differences.append(
+                "%s: %s -> %s" % (
+                    label,
+                    ai_change_display(field, old_value),
+                    ai_change_display(field, new_value),
+                )
+            )
+
+        if not differences:
+            continue
+
+        assessed = (
+            time.strftime(
+                "%Y-%m-%d %H:%M UTC",
+                time.gmtime(newer_time),
+            )
+            if newer_time
+            else "Historical (time not recorded)"
+        )
+
+        changes.append({
+            "version_assessed_at": assessed,
+            "changes": "; ".join(differences)[:500],
+        })
+
+    return changes[-AI_CHANGE_HISTORY_LIMIT:]
+
 def attach_ai_assessments(hosts, ai_state):
     """Attach advisory AI evidence to the current winning MAC record."""
     ai_devices = ai_state.get("devices", {})
@@ -139,6 +261,8 @@ def attach_ai_assessments(hosts, ai_state):
             for x in result.get("inferences", [])[:6]
             if x
         )
+
+        h["ai_changes"] = ai_assessment_changes(assessment)
 
 
 def prometheus(expr):
@@ -313,6 +437,7 @@ def populate():
                              ai_manual_review_required="",
                              ai_assessed_at="", ai_model="",
                              ai_confirmed_facts="", ai_inferences="",
+                             ai_changes=[],
                              greenbone_report_id="",
                              greenbone_collected_at="",
                              greenbone_findings=[])
@@ -658,6 +783,8 @@ def render(hosts):
         "# TYPE homelab_network_device_card_last_seen_seconds gauge",
         "# HELP homelab_network_device_card_port_info Positively observed open service port for the device's current known address.",
         "# TYPE homelab_network_device_card_port_info gauge",
+        "# HELP homelab_network_device_ai_assessment_change_info Bounded structured changes between consecutive advisory AI assessment versions.",
+        "# TYPE homelab_network_device_ai_assessment_change_info gauge",
         "# HELP homelab_network_device_vulnerability_finding_info Current actionable Greenbone finding correlated to the device's current IP.",
         "# TYPE homelab_network_device_vulnerability_finding_info gauge",
         "# HELP homelab_network_device_vulnerability_findings_total Number of current actionable Greenbone findings evidenced for this device; absent metric means not evidenced, not zero.",
@@ -810,6 +937,23 @@ def render(hosts):
             "homelab_network_device_card_info{" +
             labels(info) + "} 1"
         )
+        for index, change in enumerate(
+            h.get("ai_changes", [])[-AI_CHANGE_HISTORY_LIMIT:],
+            start=1,
+        ):
+            fields = {
+                "device_key": device_key,
+                "change_index": str(index),
+                "version_assessed_at": change.get(
+                    "version_assessed_at",
+                    "",
+                ),
+                "changes": change.get("changes", ""),
+            }
+            lines.append(
+                "homelab_network_device_ai_assessment_change_info{" +
+                labels(fields) + "} 1"
+            )
         lines.append(
             "homelab_network_device_card_online{" +
             labels(common) + "} " +

@@ -136,7 +136,19 @@ def collect_availability():
         for s in query_vector(
             'homelab_network_device_card_online{target_name="monitor-01"}')
     }
-    return available, port_keys, last_seen_keys, presence_keys
+    ai_change_keys = {
+        s.get("metric", {}).get("device_key", "")
+        for s in query_vector(
+            'homelab_network_device_ai_assessment_change_info'
+            '{target_name="monitor-01"}')
+    }
+    return (
+        available,
+        port_keys,
+        last_seen_keys,
+        presence_keys,
+        ai_change_keys,
+    )
 
 
 def os_requires_fingerprint(metric, live_os_available):
@@ -158,7 +170,8 @@ def os_requires_fingerprint(metric, live_os_available):
 
 
 def select_panel_ids(key, metric, availability):
-    metrics, port_keys, last_seen_keys, presence_keys = availability
+    metrics, port_keys, last_seen_keys, presence_keys = availability[:4]
+    ai_change_keys = availability[4] if len(availability) > 4 else set()
     host = metric.get("hostname", "")
     present = lambda name: host in metrics[name]
     # Keep a zero-valued update/security metric if it was observed.
@@ -188,6 +201,8 @@ def select_panel_ids(key, metric, availability):
         selected.add(22)  # Only when OS identification needs investigation.
     if metric.get("ai_summary", "").strip():
         selected.add(23)  # Advisory AI assessment; deterministic facts remain authoritative.
+    if key in ai_change_keys:
+        selected.add(25)  # Bounded structured AI assessment changes only.
     if metric.get("greenbone_findings", "").strip():
         selected.add(24)  # Deterministic actionable Greenbone findings only.
     if present("disk"):
@@ -244,6 +259,7 @@ def compact_panels(template_panels, selected):
     add_row((14,), 6)
     add_row((22,), 8)
     add_row((23,), 8)
+    add_row((25,), 8)
     add_row((24,), 8)
     add_row((15,), 7)
     add_row((16,), 6)

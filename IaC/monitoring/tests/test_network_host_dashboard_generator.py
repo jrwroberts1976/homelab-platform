@@ -372,5 +372,114 @@ class GeneratorTests(unittest.TestCase):
                 generator.query_cards()
 
 
+
+    def test_ai_change_history_panel_requires_change_metric(self):
+        template_path = (
+            Path(__file__).resolve().parents[2]
+            / "ansible/roles/monitoring_stack/files/"
+              "host-profile-template.json"
+        )
+
+        template = json.loads(
+            template_path.read_text()
+        )
+
+        panel = next(
+            item
+            for item in template["panels"]
+            if item.get("id") == 25
+        )
+
+        self.assertEqual(
+            panel["title"],
+            "AI assessment changes — advisory",
+        )
+
+        self.assertIn(
+            "homelab_network_device_ai_assessment_change_info",
+            panel["targets"][0]["expr"],
+        )
+
+        exposed = json.dumps({
+            "targets": panel["targets"],
+            "transformations": panel["transformations"],
+        })
+
+        for private_field in (
+            "confirmed_facts",
+            "inferences",
+            "evidence_summary",
+            "summary",
+            "evidence_hash",
+        ):
+            self.assertNotIn(
+                private_field,
+                exposed,
+            )
+
+        self.assertIn(
+            "remain private",
+            panel["description"],
+        )
+
+        key = "mac:aa:bb:cc:dd:ee:25"
+
+        metric = {
+            "hostname": "test-device",
+            "ip": "192.168.2.125",
+            "status": "Online",
+            "dns_hint": "",
+            "ai_summary": "Current advisory assessment",
+        }
+
+        metrics = {
+            name: set()
+            for name in generator.AVAILABILITY_QUERIES
+        }
+
+        without_history = (
+            metrics,
+            set(),
+            set(),
+            {key},
+            set(),
+        )
+
+        with_history = (
+            metrics,
+            set(),
+            set(),
+            {key},
+            {key},
+        )
+
+        selected_without = generator.select_panel_ids(
+            key,
+            metric,
+            without_history,
+        )
+
+        selected_with = generator.select_panel_ids(
+            key,
+            metric,
+            with_history,
+        )
+
+        self.assertIn(23, selected_without)
+        self.assertNotIn(25, selected_without)
+
+        self.assertIn(23, selected_with)
+        self.assertIn(25, selected_with)
+
+        panels = generator.compact_panels(
+            template["panels"],
+            selected_with,
+        )
+
+        self.assertEqual(
+            {item["id"] for item in panels},
+            selected_with,
+        )
+
 if __name__ == "__main__":
     unittest.main()

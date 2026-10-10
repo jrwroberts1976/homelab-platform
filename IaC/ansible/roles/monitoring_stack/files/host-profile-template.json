@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-mac-device-detail",
-  "title": "Homelab — Host Detail",
+  "title": "Homelab \u2014 Host Detail",
   "description": "Per-host Grafana dashboard matching the Production Hosts layout, with OS evidence, open ports, DNS clues and Linux charts when available. Host selection by hostname.",
   "tags": [
     "homelab",
@@ -1050,7 +1050,7 @@
     },
     {
       "id": 16,
-      "title": "DNS evidence — device and cloud identification",
+      "title": "DNS evidence \u2014 device and cloud identification",
       "type": "table",
       "description": "Dated DNS evidence used as an identification clue. It can corroborate device type or ecosystem but does not override authoritative OS facts.",
       "gridPos": {
@@ -1474,7 +1474,7 @@
     },
     {
       "id": 22,
-      "title": "Nmap OS fingerprint — inferred evidence",
+      "title": "Nmap OS fingerprint \u2014 inferred evidence",
       "type": "table",
       "description": "Shown only when a saved Nmap OS match is correlated by MAC and scanned IP. Time source distinguishes an exact TCP scan timestamp from an older profile-completion timestamp or an undated legacy record. Nmap accuracy is the tool's reported match score, not a probability. Documented OS takes precedence.",
       "gridPos": {
@@ -1597,7 +1597,7 @@
     },
     {
       "id": 23,
-      "title": "AI host intelligence — advisory",
+      "title": "AI host intelligence \u2014 advisory",
       "type": "table",
       "description": "Evidence-bounded AI interpretation. Confirmed infrastructure facts, live telemetry, Greenbone findings, Nmap evidence and observed services remain authoritative; AI fields are advisory and never overwrite them.",
       "gridPos": {
@@ -1774,6 +1774,77 @@
               "oid": "NVT OID",
               "collected_at": "Evidence collected",
               "report_id": "Greenbone report"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "align": "auto",
+            "filterable": true
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "enablePagination": true
+      }
+    },
+    {
+      "id": 25,
+      "title": "AI assessment changes \u2014 advisory",
+      "type": "table",
+      "description": "Bounded structured changes between advisory AI assessments. Only selected identity, platform, OS, confidence and manual-review fields are exposed. Cosmetic case/spacing differences are suppressed. Raw historical summaries, evidence, confirmed facts and inferences remain private.",
+      "gridPos": {
+        "x": 0,
+        "y": 102,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_ai_assessment_change_info{device_key=\"$device\"}",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        },
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "Value": true,
+              "__name__": true,
+              "instance": true,
+              "job": true,
+              "target_name": true,
+              "device_key": true
+            },
+            "indexByName": {
+              "change_index": 0,
+              "version_assessed_at": 1,
+              "changes": 2
+            },
+            "renameByName": {
+              "change_index": "Sequence",
+              "version_assessed_at": "Assessment version",
+              "changes": "Changes"
             }
           }
         }

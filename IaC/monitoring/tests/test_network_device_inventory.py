@@ -376,5 +376,139 @@ class InventoryTests(unittest.TestCase):
                          'foo \\"bar\\"')
 
 
+
+    def test_ai_assessment_changes_ignore_cosmetic_and_are_bounded(self):
+        assessment = {
+            "assessed_at": 300,
+            "result": {
+                "device_type": "wireless / mesh node",
+                "vendor": "unknown",
+                "identity_confidence": "high",
+                "manual_review_required": False,
+            },
+            "history": [
+                {
+                    "assessed_at": 100,
+                    "result": {
+                        "device_type": "Wireless / mesh node",
+                        "vendor": "Unknown",
+                        "identity_confidence": "medium",
+                        "manual_review_required": True,
+                    },
+                },
+                {
+                    "assessed_at": 200,
+                    "result": {
+                        "device_type": "wireless/mesh node",
+                        "vendor": "Not established",
+                        "identity_confidence": "medium",
+                        "manual_review_required": True,
+                    },
+                },
+            ],
+        }
+
+        changes = inventory.ai_assessment_changes(assessment)
+
+        self.assertEqual(len(changes), 1)
+        self.assertEqual(
+            changes[0]["version_assessed_at"],
+            "1970-01-01 00:05 UTC",
+        )
+        self.assertIn(
+            "Identity confidence: medium -> high",
+            changes[0]["changes"],
+        )
+        self.assertIn(
+            "Manual review: true -> false",
+            changes[0]["changes"],
+        )
+        self.assertNotIn(
+            "Device type",
+            changes[0]["changes"],
+        )
+        self.assertNotIn(
+            "Vendor",
+            changes[0]["changes"],
+        )
+
+        long_history = {
+            "assessed_at": 900,
+            "result": {"device_name": "device-8"},
+            "history": [
+                {
+                    "assessed_at": (index + 1) * 100,
+                    "result": {"device_name": "device-%d" % index},
+                }
+                for index in range(8)
+            ],
+        }
+
+        self.assertEqual(
+            len(inventory.ai_assessment_changes(long_history)),
+            inventory.AI_CHANGE_HISTORY_LIMIT,
+        )
+
+    def test_render_publishes_structured_ai_change_metric(self):
+        host = {
+            "ip": "192.168.2.50",
+            "mac": "aa:bb:cc:dd:ee:01",
+            "hostname": "test-device",
+            "vendor": "",
+            "kind": "endpoint",
+            "role": "",
+            "os": "Unknown",
+            "os_source": "Not determined",
+            "os_evidence": "unknown",
+            "dns_hint": "",
+            "dns_observed": "",
+            "online": True,
+            "last_seen": 123,
+            "ports": {},
+            "scan_timed_out": False,
+            "ai_changes": [
+                {
+                    "version_assessed_at": "2026-10-10 04:00 UTC",
+                    "changes":
+                        "Identity confidence: medium -> high; "
+                        "Manual review: true -> false",
+                }
+            ],
+        }
+
+        metrics = inventory.render({
+            host["ip"]: host,
+        })
+
+        rows = [
+            line
+            for line in metrics.splitlines()
+            if line.startswith(
+                "homelab_network_device_ai_assessment_change_info{"
+            )
+        ]
+
+        self.assertEqual(len(rows), 1)
+        self.assertIn(
+            'device_key="mac:aa:bb:cc:dd:ee:01"',
+            rows[0],
+        )
+        self.assertIn(
+            'change_index="1"',
+            rows[0],
+        )
+        self.assertIn(
+            'version_assessed_at="2026-10-10 04:00 UTC"',
+            rows[0],
+        )
+        self.assertIn(
+            "Identity confidence: medium -> high",
+            rows[0],
+        )
+        self.assertIn(
+            "Manual review: true -> false",
+            rows[0],
+        )
+
 if __name__ == "__main__":
     unittest.main()
