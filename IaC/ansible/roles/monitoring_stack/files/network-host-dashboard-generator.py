@@ -235,7 +235,7 @@ def compact_panels(template_panels, selected):
     if missing:
         raise ValueError("Host template missing panels: %r" % sorted(missing))
     chosen = []
-    top_order = (1, 2, 3, 4, 9, 10, 11)
+    top_order = (1, 2, 3, 4, 9, 10, 11, 26)
     current_y = 0
     stats = [panels[i] for i in top_order if i in selected]
     for start in range(0, len(stats), 4):

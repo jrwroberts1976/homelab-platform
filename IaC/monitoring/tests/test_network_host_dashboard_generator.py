@@ -364,6 +364,18 @@ class GeneratorTests(unittest.TestCase):
             ),
         )
 
+        dashboard = generator.profile(
+            template,
+            key,
+            metric,
+            with_zabbix,
+        )
+        generated_ids = {
+            item["id"]
+            for item in dashboard["panels"]
+        }
+        self.assertIn(26, generated_ids)
+
     def test_nmap_fingerprint_only_when_exact_os_unresolved(self):
         template_path = (Path(__file__).resolve().parents[2] /
                          "ansible/roles/monitoring_stack/files/"
