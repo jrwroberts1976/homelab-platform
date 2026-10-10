@@ -127,7 +127,7 @@ dns-01 is CT101 on Proxmox-2, running Debian GNU/Linux 13 (trixie) and providing
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-10T13:34:05+01:00`
+- Last assessed: `2026-10-10T14:37:04+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
