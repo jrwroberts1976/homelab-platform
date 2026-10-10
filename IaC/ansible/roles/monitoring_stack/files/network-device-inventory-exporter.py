@@ -309,19 +309,26 @@ def zabbix_api(method, params):
 
 
 def zabbix_os_facts(target_names):
-    """Return fresh authoritative Agent 2 OS facts keyed by Zabbix host name."""
+    """Return fresh Agent 2 OS facts plus source state by expected host."""
+    target_names = set(target_names)
+    states = {
+        name: {"state": "missing", "lastclock": 0}
+        for name in target_names
+    }
+
     hosts = zabbix_api("host.get", {
         "output": ["hostid", "host"],
     })
     if hosts is None:
-        return {}
+        return {}, states
+
     wanted = {
         item["hostid"]: item["host"]
         for item in hosts
         if item.get("host") in target_names
     }
     if not wanted:
-        return {}
+        return {}, states
 
     items = zabbix_api("item.get", {
         "hostids": list(wanted),
@@ -334,24 +341,46 @@ def zabbix_os_facts(target_names):
             ],
         },
     })
+
     now = int(time.time())
     facts = {}
+
     for item in items or []:
         host_name = wanted.get(item.get("hostid"))
         if not host_name:
             continue
+
         try:
             lastclock = int(item.get("lastclock") or 0)
         except (TypeError, ValueError):
             lastclock = 0
+
+        key = item.get("key_")
+        value = item.get("lastvalue") or ""
+
+        # Source health is based on the OS-name fact because that is the
+        # required fact for promoting a managed host to authoritative OS
+        # evidence. Architecture/kernel alone cannot establish the OS.
+        if key == "system.sw.os[name]" and lastclock and value:
+            state = states[host_name]
+            if lastclock >= state["lastclock"]:
+                state["lastclock"] = lastclock
+                state["state"] = (
+                    "fresh"
+                    if now - lastclock <= ZABBIX_MAX_AGE_SECONDS
+                    else "stale"
+                )
+
+        # Preserve the existing evidence contract: only fresh values may be
+        # used as authoritative operating-system facts.
         if not lastclock or now - lastclock > ZABBIX_MAX_AGE_SECONDS:
             continue
-        value = item.get("lastvalue") or ""
         if not value:
             continue
+
         fact = facts.setdefault(host_name, {"lastclock": 0})
         fact["lastclock"] = max(fact["lastclock"], lastclock)
-        key = item.get("key_")
+
         if key == "system.sw.os[name]":
             fact["os_name"] = value
         elif key == "system.sw.arch":
@@ -362,9 +391,13 @@ def zabbix_os_facts(target_names):
             except json.JSONDecodeError:
                 continue
             fact["details"] = details
-            fact.setdefault("architecture", details.get("architecture") or "")
+            fact.setdefault(
+                "architecture",
+                details.get("architecture") or "",
+            )
             fact["kernel"] = details.get("kernel") or ""
-    return facts
+
+    return facts, states
 
 
 def router_inventory():
@@ -421,7 +454,8 @@ def populate():
                              kind="", role="", os="Unknown",
                              os_source="Not determined",
                              os_evidence="unknown", architecture="",
-                             kernel="", dns_hint="",
+                             kernel="", zabbix_os_state="not_expected",
+                             zabbix_os_lastclock=0, dns_hint="",
                              dns_observed="", online=None, last_seen=0,
                              ports={}, scan_timed_out=False,
                              nmap_name="", nmap_accuracy="",
@@ -445,6 +479,7 @@ def populate():
 
     # Documented infrastructure is included even when temporarily offline.
     estate_hosts = {}
+    zabbix_expected_hosts = set()
     for asset in estate.get("assets", []):
         if asset.get("state") != "active":
             continue
@@ -457,6 +492,12 @@ def populate():
         name = asset.get("name")
         if name:
             estate_hosts[name] = h
+        if name and (
+            asset.get("managed_by_ansible")
+            or name in ("PROXMOX", "Proxmox-2")
+        ):
+            zabbix_expected_hosts.add(name)
+            h["zabbix_os_state"] = "missing"
         if name == "home-01":
             h.update(os="Home Assistant OS 18.2",
                      os_source="Canonical estate (2026-09)",
@@ -474,7 +515,22 @@ def populate():
     # IaC classification or inferred Nmap/DNS evidence. Proxmox remains
     # explicitly identified as the platform while using Zabbix for its Debian,
     # architecture and kernel facts.
-    zabbix_facts = zabbix_os_facts(set(estate_hosts))
+    zabbix_facts, zabbix_states = zabbix_os_facts(
+        zabbix_expected_hosts
+    )
+
+    for name in zabbix_expected_hosts:
+        h = estate_hosts.get(name)
+        state = zabbix_states.get(
+            name,
+            {"state": "missing", "lastclock": 0},
+        )
+        if h is not None:
+            h["zabbix_os_state"] = state["state"]
+            h["zabbix_os_lastclock"] = int(
+                state.get("lastclock") or 0
+            )
+
     for name, fact in zabbix_facts.items():
         h = estate_hosts.get(name)
         if h is None or not fact.get("os_name"):
@@ -781,6 +837,8 @@ def render(hosts):
         "# TYPE homelab_network_device_card_online gauge",
         "# HELP homelab_network_device_card_last_seen_seconds Last known observation of the MAC-keyed device.",
         "# TYPE homelab_network_device_card_last_seen_seconds gauge",
+        "# HELP homelab_network_device_zabbix_os_last_seen_seconds Last Zabbix Agent 2 OS-name observation for this device.",
+        "# TYPE homelab_network_device_zabbix_os_last_seen_seconds gauge",
         "# HELP homelab_network_device_card_port_info Positively observed open service port for the device's current known address.",
         "# TYPE homelab_network_device_card_port_info gauge",
         "# HELP homelab_network_device_ai_assessment_change_info Bounded structured changes between consecutive advisory AI assessment versions.",
@@ -809,7 +867,7 @@ def render(hosts):
         info = {key: h.get(key, "") for key in
                 ("ip", "mac", "hostname", "vendor", "kind", "role",
                  "os", "os_source", "os_evidence", "architecture", "kernel",
-                 "dns_hint", "dns_observed")}
+                 "zabbix_os_state", "dns_hint", "dns_observed")}
         info.update(status=status, observed_open_ports=summary)
         lines.append("homelab_network_device_inventory_info{" +
                      labels(info) + "} 1")
@@ -902,6 +960,10 @@ def render(hosts):
             "role": h["role"],
             "kind": h["kind"],
             "os_source": h["os_source"],
+            "zabbix_os_state": h.get(
+                "zabbix_os_state",
+                "not_expected",
+            ),
             "dns_hint": h["dns_hint"],
             "dns_observed": h["dns_observed"],
             "observed_open_ports": summary,
@@ -937,6 +999,20 @@ def render(hosts):
             "homelab_network_device_card_info{" +
             labels(info) + "} 1"
         )
+
+        zabbix_os_lastclock = int(
+            h.get("zabbix_os_lastclock") or 0
+        )
+        if zabbix_os_lastclock:
+            lines.append(
+                "homelab_network_device_zabbix_os_last_seen_seconds{" +
+                labels({
+                    "device_key": device_key,
+                    "ip": ip,
+                }) + "} " +
+                str(zabbix_os_lastclock)
+            )
+
         for index, change in enumerate(
             h.get("ai_changes", [])[-AI_CHANGE_HISTORY_LIMIT:],
             start=1,

@@ -142,12 +142,19 @@ def collect_availability():
             'homelab_network_device_ai_assessment_change_info'
             '{target_name="monitor-01"}')
     }
+    zabbix_os_last_seen_keys = {
+        s.get("metric", {}).get("device_key", "")
+        for s in query_vector(
+            'homelab_network_device_zabbix_os_last_seen_seconds'
+            '{target_name="monitor-01"}')
+    }
     return (
         available,
         port_keys,
         last_seen_keys,
         presence_keys,
         ai_change_keys,
+        zabbix_os_last_seen_keys,
     )
 
 
@@ -172,6 +179,9 @@ def os_requires_fingerprint(metric, live_os_available):
 def select_panel_ids(key, metric, availability):
     metrics, port_keys, last_seen_keys, presence_keys = availability[:4]
     ai_change_keys = availability[4] if len(availability) > 4 else set()
+    zabbix_os_last_seen_keys = (
+        availability[5] if len(availability) > 5 else set()
+    )
     host = metric.get("hostname", "")
     present = lambda name: host in metrics[name]
     # Keep a zero-valued update/security metric if it was observed.
@@ -203,6 +213,8 @@ def select_panel_ids(key, metric, availability):
         selected.add(23)  # Advisory AI assessment; deterministic facts remain authoritative.
     if key in ai_change_keys:
         selected.add(25)  # Bounded structured AI assessment changes only.
+    if key in zabbix_os_last_seen_keys:
+        selected.add(26)  # Timestamp exists only after a Zabbix OS observation.
     if metric.get("greenbone_findings", "").strip():
         selected.add(24)  # Deterministic actionable Greenbone findings only.
     if present("disk"):

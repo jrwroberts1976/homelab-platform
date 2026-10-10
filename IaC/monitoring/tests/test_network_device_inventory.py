@@ -101,6 +101,8 @@ class InventoryTests(unittest.TestCase):
 
         self.assertEqual(hosts["192.168.2.52"]["os"], "Linux (IaC-managed)")
         self.assertEqual(hosts["192.168.2.52"]["os_evidence"], "documented")
+        self.assertEqual(hosts["192.168.2.52"]["zabbix_os_state"], "missing")
+        self.assertEqual(hosts["192.168.2.60"]["zabbix_os_state"], "not_expected")
         self.assertEqual(hosts["192.168.2.52"]["nmap_name"], "Linux 6.X")
         self.assertEqual(hosts["192.168.2.52"]["nmap_accuracy"], "95%")
         self.assertEqual(hosts["192.168.2.52"]["nmap_time_basis"],
@@ -119,6 +121,41 @@ class InventoryTests(unittest.TestCase):
         metrics = inventory.render(hosts)
         self.assertIn("homelab_network_device_inventory_info", metrics)
         self.assertIn('homelab_network_device_card_info{device_key="mac:02:00:00:00:02:02"', metrics)
+
+        monitor_card = next(
+            line for line in metrics.splitlines()
+            if line.startswith("homelab_network_device_card_info{")
+            and 'ip="192.168.2.52"' in line
+        )
+        home_card = next(
+            line for line in metrics.splitlines()
+            if line.startswith("homelab_network_device_card_info{")
+            and 'ip="192.168.2.60"' in line
+        )
+
+        self.assertIn('zabbix_os_state="missing"', monitor_card)
+        self.assertIn('zabbix_os_state="not_expected"', home_card)
+
+        # A known Zabbix OS observation timestamp is a numeric gauge, not a
+        # label. This lets Grafana show when stale evidence was last observed
+        # without creating a new Prometheus series as the timestamp changes.
+        hosts["192.168.2.52"]["zabbix_os_state"] = "stale"
+        hosts["192.168.2.52"]["zabbix_os_lastclock"] = 123456
+
+        timestamp_metrics = inventory.render(hosts)
+
+        self.assertIn(
+            'homelab_network_device_zabbix_os_last_seen_seconds'
+            '{device_key="mac:02:00:00:00:02:02",ip="192.168.2.52"} '
+            '123456',
+            timestamp_metrics,
+        )
+        self.assertNotIn(
+            'homelab_network_device_zabbix_os_last_seen_seconds'
+            '{device_key="ip:192.168.2.60"',
+            timestamp_metrics,
+        )
+
         self.assertIn('homelab_network_device_card_online{device_key="mac:02:00:00:00:02:02"', metrics)
         self.assertIn('homelab_network_device_card_port_info{device_key="mac:02:00:00:00:02:02"', metrics)
         self.assertIn("No open ports evidenced", metrics)
@@ -509,6 +546,85 @@ class InventoryTests(unittest.TestCase):
             "Manual review: true -> false",
             rows[0],
         )
+
+class ZabbixOsEvidenceStateTests(unittest.TestCase):
+    def test_zabbix_os_facts_distinguish_fresh_stale_and_missing(self):
+        now = 1_000_000
+
+        hosts = [
+            {"hostid": "1", "host": "fresh-host"},
+            {"hostid": "2", "host": "stale-host"},
+            {"hostid": "3", "host": "missing-host"},
+        ]
+
+        items = [
+            {
+                "hostid": "1",
+                "key_": "system.sw.os[name]",
+                "lastvalue": "Debian GNU/Linux 13 (trixie)",
+                "lastclock": str(now - 60),
+            },
+            {
+                "hostid": "1",
+                "key_": "system.sw.arch",
+                "lastvalue": "x86_64",
+                "lastclock": str(now - 60),
+            },
+            {
+                "hostid": "2",
+                "key_": "system.sw.os[name]",
+                "lastvalue": "Debian GNU/Linux 13 (trixie)",
+                "lastclock": str(
+                    now - inventory.ZABBIX_MAX_AGE_SECONDS - 1
+                ),
+            },
+        ]
+
+        def fake_zabbix_api(method, params):
+            if method == "host.get":
+                return hosts
+            if method == "item.get":
+                return items
+            raise AssertionError("Unexpected Zabbix method: " + method)
+
+        with patch.object(
+            inventory,
+            "zabbix_api",
+            side_effect=fake_zabbix_api,
+        ), patch.object(
+            inventory.time,
+            "time",
+            return_value=now,
+        ):
+            facts, states = inventory.zabbix_os_facts({
+                "fresh-host",
+                "stale-host",
+                "missing-host",
+            })
+
+        self.assertEqual(
+            facts["fresh-host"]["os_name"],
+            "Debian GNU/Linux 13 (trixie)",
+        )
+        self.assertEqual(
+            facts["fresh-host"]["architecture"],
+            "x86_64",
+        )
+
+        self.assertEqual(states["fresh-host"]["state"], "fresh")
+        self.assertEqual(states["fresh-host"]["lastclock"], now - 60)
+
+        self.assertNotIn("stale-host", facts)
+        self.assertEqual(states["stale-host"]["state"], "stale")
+        self.assertEqual(
+            states["stale-host"]["lastclock"],
+            now - inventory.ZABBIX_MAX_AGE_SECONDS - 1,
+        )
+
+        self.assertNotIn("missing-host", facts)
+        self.assertEqual(states["missing-host"]["state"], "missing")
+        self.assertEqual(states["missing-host"]["lastclock"], 0)
+
 
 if __name__ == "__main__":
     unittest.main()

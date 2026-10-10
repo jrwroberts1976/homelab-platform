@@ -242,6 +242,128 @@ class GeneratorTests(unittest.TestCase):
                 for y in sorted({p["gridPos"]["y"] for p in panels}))
         )
 
+    def test_identity_panel_exposes_managed_os_evidence_state(self):
+        template_path = (
+            Path(__file__).resolve().parents[2]
+            / "ansible/roles/monitoring_stack/files/"
+            "host-profile-template.json"
+        )
+        template = json.loads(template_path.read_text())
+
+        panel = next(
+            item
+            for item in template["panels"]
+            if item.get("id") == 14
+        )
+
+        organize = next(
+            item
+            for item in panel["transformations"]
+            if item.get("id") == "organize"
+        )["options"]
+
+        self.assertEqual(
+            organize["renameByName"]["zabbix_os_state"],
+            "Managed OS evidence state",
+        )
+        self.assertIn(
+            "zabbix_os_state",
+            organize["indexByName"],
+        )
+        self.assertNotIn(
+            "zabbix_os_state",
+            organize["excludeByName"],
+        )
+        self.assertIn(
+            "fresh",
+            panel["description"],
+        )
+        self.assertIn(
+            "stale",
+            panel["description"],
+        )
+        self.assertIn(
+            "missing",
+            panel["description"],
+        )
+        self.assertIn(
+            "not_expected",
+            panel["description"],
+        )
+
+    def test_managed_os_last_observed_panel_is_conditional(self):
+        template_path = (
+            Path(__file__).resolve().parents[2]
+            / "ansible/roles/monitoring_stack/files/"
+            "host-profile-template.json"
+        )
+        template = json.loads(template_path.read_text())
+
+        panel = next(
+            item
+            for item in template["panels"]
+            if item.get("id") == 26
+        )
+
+        self.assertEqual(
+            panel["title"],
+            "Managed OS evidence last observed",
+        )
+        self.assertEqual(
+            panel["targets"][0]["expr"],
+            'homelab_network_device_zabbix_os_last_seen_seconds'
+            '{device_key="$device"} * 1000',
+        )
+        self.assertEqual(
+            panel["fieldConfig"]["defaults"]["unit"],
+            "dateTimeAsIso",
+        )
+
+        key = "mac:aa:bb:cc:dd:ee:ff"
+        metrics = {
+            name: set()
+            for name in generator.AVAILABILITY_QUERIES
+        }
+
+        without_zabbix = (
+            metrics,
+            set(),
+            set(),
+            set(),
+            set(),
+            set(),
+        )
+        with_zabbix = (
+            metrics,
+            set(),
+            set(),
+            set(),
+            set(),
+            {key},
+        )
+
+        metric = {
+            "hostname": "monitor-01",
+            "status": "Online",
+        }
+
+        self.assertNotIn(
+            26,
+            generator.select_panel_ids(
+                key,
+                metric,
+                without_zabbix,
+            ),
+        )
+        self.assertIn(
+            26,
+            generator.select_panel_ids(
+                key,
+                metric,
+                with_zabbix,
+            ),
+        )
+
     def test_nmap_fingerprint_only_when_exact_os_unresolved(self):
         template_path = (Path(__file__).resolve().parents[2] /
                          "ansible/roles/monitoring_stack/files/"

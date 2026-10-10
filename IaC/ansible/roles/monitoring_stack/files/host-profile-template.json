@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-mac-device-detail",
-  "title": "Homelab \u2014 Host Detail",
+  "title": "Homelab — Host Detail",
   "description": "Per-host Grafana dashboard matching the Production Hosts layout, with OS evidence, open ports, DNS clues and Linux charts when available. Host selection by hostname.",
   "tags": [
     "homelab",
@@ -662,6 +662,62 @@
       }
     },
     {
+      "id": 26,
+      "title": "Managed OS evidence last observed",
+      "type": "stat",
+      "gridPos": {
+        "x": 18,
+        "y": 23,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_network_device_zabbix_os_last_seen_seconds{device_key=\"$device\"} * 1000",
+          "instant": true,
+          "range": false,
+          "format": "time_series"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Not recorded",
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      },
+      "description": "Last Zabbix Agent 2 OS-name observation for this managed device. This timestamp is evidence provenance only; use Managed OS evidence state in the identity panel to determine whether the source is fresh or stale."
+    },
+    {
       "id": 11,
       "title": "Observed open ports",
       "type": "stat",
@@ -804,7 +860,7 @@
       "id": 14,
       "title": "Host identity and operating system",
       "type": "table",
-      "description": "A single selected hostname. No MAC addresses are displayed; stable identity is maintained behind the scenes.",
+      "description": "A single selected hostname. No MAC addresses are displayed; stable identity is maintained behind the scenes. Managed OS evidence state reports Zabbix Agent 2 source health as fresh, stale, missing or not_expected; it is separate from the OS evidence strength used for the displayed operating system.",
       "gridPos": {
         "x": 0,
         "y": 30,
@@ -890,9 +946,10 @@
               "os": 4,
               "os_evidence": 7,
               "os_source": 8,
-              "observed_open_ports": 9,
-              "vendor": 10,
-              "role": 11,
+              "zabbix_os_state": 9,
+              "observed_open_ports": 10,
+              "vendor": 11,
+              "role": 12,
               "architecture": 5,
               "kernel": 6
             },
@@ -904,6 +961,7 @@
               "os": "Operating system",
               "os_evidence": "OS evidence",
               "os_source": "OS source",
+              "zabbix_os_state": "Managed OS evidence state",
               "observed_open_ports": "Observed open ports",
               "vendor": "Vendor",
               "role": "Role",
@@ -1050,7 +1108,7 @@
     },
     {
       "id": 16,
-      "title": "DNS evidence \u2014 device and cloud identification",
+      "title": "DNS evidence — device and cloud identification",
       "type": "table",
       "description": "Dated DNS evidence used as an identification clue. It can corroborate device type or ecosystem but does not override authoritative OS facts.",
       "gridPos": {
@@ -1474,7 +1532,7 @@
     },
     {
       "id": 22,
-      "title": "Nmap OS fingerprint \u2014 inferred evidence",
+      "title": "Nmap OS fingerprint — inferred evidence",
       "type": "table",
       "description": "Shown only when a saved Nmap OS match is correlated by MAC and scanned IP. Time source distinguishes an exact TCP scan timestamp from an older profile-completion timestamp or an undated legacy record. Nmap accuracy is the tool's reported match score, not a probability. Documented OS takes precedence.",
       "gridPos": {
@@ -1597,7 +1655,7 @@
     },
     {
       "id": 23,
-      "title": "AI host intelligence \u2014 advisory",
+      "title": "AI host intelligence — advisory",
       "type": "table",
       "description": "Evidence-bounded AI interpretation. Confirmed infrastructure facts, live telemetry, Greenbone findings, Nmap evidence and observed services remain authoritative; AI fields are advisory and never overwrite them.",
       "gridPos": {
@@ -1795,7 +1853,7 @@
     },
     {
       "id": 25,
-      "title": "AI assessment changes \u2014 advisory",
+      "title": "AI assessment changes — advisory",
       "type": "table",
       "description": "Bounded structured changes between advisory AI assessments. Only selected identity, platform, OS, confidence and manual-review fields are exposed. Cosmetic case/spacing differences are suppressed. Raw historical summaries, evidence, confirmed facts and inferences remain private.",
       "gridPos": {
