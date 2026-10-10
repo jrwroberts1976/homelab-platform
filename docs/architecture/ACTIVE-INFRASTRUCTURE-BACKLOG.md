@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 2026-10-07  
+**Last reconciled:** 2026-10-10
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** repository-wide documentation audit/remediation COMPLETE through PRs #182–#185.
 
@@ -53,7 +53,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 |---|---|---|---|---|
 | 1 | Greenbone and AI-assisted morning management report | COMPLETE | — | Operational factual + AI-assisted reporting with fail-safe factual fallback, source provenance and factual network-inventory v1 pinned to `monitor-01` |
 | 2 | Security and monitoring integration | **COMPLETE — 7 OCTOBER 2026** | — | Monitoring core, Zabbix, Suricata/Zeek passive sensor and evidence integration closure-validated; CrowdSec remains absent/deferred and is not a current source |
-| 3 | Grafana dashboards and AI host intelligence | FOUNDATION COMPLETE / QUALITY REFINEMENT | **2–5 days** | Estate dashboard/patch/node foundation complete; continue host-intelligence/manual-review/version-history refinement without treating missing telemetry as healthy |
+| 3 | Grafana dashboards and AI host intelligence | FOUNDATION COMPLETE / QUALITY REFINEMENT | **1–3 days** | Estate dashboard/patch/node foundation, manual-review policy and bounded AI assessment change history complete; next refine stale/missing/unknown semantics, then estate regression/closure |
 | 4 | Homelab documentation audit | **COMPLETE — 6 OCTOBER 2026** | — | Audit baseline PR #182; remediation PRs #183, #184 and #185 completed and guard-validated |
 | 5 | Password manager | PLANNED / OPTIONAL | **1–2 days** | Select product/design deliberately; HTTPS/MFA, off-host backup, restore proof and emergency access required |
 | 6 | Backup and disaster recovery | OUTSTANDING | **2–4 days** | Representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and protected recovery identities |
@@ -69,7 +69,7 @@ The remaining non-optional work has different goals. Choose according to the out
 | Choice | Project | Why choose it next | Effort | What completion buys |
 |---|---|---|---:|---|
 | **A — strongest resilience gain** | **#6 Backup and disaster recovery** | Biggest remaining operational-risk reduction | **2–4 days** | Proven QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and stronger recovery confidence |
-| **B — improve day-to-day visibility** | **#3 Grafana dashboards and AI host intelligence** | Builds on a strong existing dashboard foundation | **2–5 days** | Better host intelligence, manual-review workflow and version/history quality |
+| **B — improve day-to-day visibility** | **#3 Grafana dashboards and AI host intelligence** | Builds on a strong existing dashboard and host-intelligence foundation | **1–3 days** | Explicit stale/missing/unknown semantics plus final estate regression and closure |
 | **C — harden container operations** | **#7 Komodo hardening** | Reduces control-plane and update risk around Docker management | **1–3 days** | HTTPS plus proven low-risk update/rollback behaviour and deliberate onboarding controls |
 | **D — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
 
@@ -156,6 +156,28 @@ Delivered/verified:
 - PRs #179, #180 and #181 merged.
 
 **Step 10 status: CLOSED.**
+
+### Project 3 — host-intelligence quality refinement — IN PROGRESS
+
+Completed through 10 October 2026:
+
+- managed-host OS, architecture and kernel evidence is sourced from fresh Zabbix Agent 2 facts and carried through the consolidated Prometheus inventory into AI assessment;
+- authoritative managed-host OS facts override weaker Nmap OS inference;
+- manual-review policy is identity-confidence driven rather than OS-uncertainty driven;
+- historical-IP correlation for AI identity was corrected;
+- bounded AI assessment change history is implemented with a maximum of five derived changes per device;
+- history exposes only selected structured fields and does not publish raw historical summaries, evidence, confirmed facts, inferences or evidence hashes;
+- live validation reported 15 authoritative managed hosts, 75 history series across 47 devices and zero forbidden historical fields;
+- generated dashboards contained the advisory change-history panel for exactly 47 expected devices, with zero missing, unexpected or malformed panel definitions;
+- repeat deployment completed with `changed=0`, `unreachable=0`, `failed=0`;
+- bounded change history merged to `main` as `26409916`;
+- Grafana deployment validation now tolerates a stale bootstrap admin credential without resetting it, while retaining health and in-container provisioning checks; merged as `027b319a`.
+
+Remaining Project 3 work:
+
+1. define and implement explicit stale / missing / unknown semantics so absent or aged evidence cannot appear healthy or current;
+2. run estate-wide regression and closure validation;
+3. reconcile any Project 3 documentation that still describes completed host-intelligence work as pending.
 
 ### Steps 11–20
 
