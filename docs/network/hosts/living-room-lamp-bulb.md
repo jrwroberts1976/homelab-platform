@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-11T00:25:17+01:00`
-- MAC identity: `68:ff:7b:1b:33:c0`
-- Observed IP address(es): `192.168.2.91`
-- Connections: **771**
-- Traffic sent: **133.0 KiB**
-- Traffic received: **78.5 KiB**
-- Top services: `dns` (54), `ntp` (30), `ssl` (12), `dhcp` (8)
-- Top destination ports: `udp/9999` (652), `udp/53` (54), `udp/123` (30), `tcp/443` (24), `udp/67` (8), `tcp/48152` (1)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
