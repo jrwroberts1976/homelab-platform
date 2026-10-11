@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-linux-estate",
-  "title": "Homelab — Hosts",
+  "title": "Homelab \u2014 Hosts",
   "description": "Single-host health, resource diagnostics and patch status. Select exactly one host; estate-wide totals belong on Home.",
   "tags": [
     "homelab",
@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 4,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -67,6 +67,14 @@
       "title": "Logs",
       "type": "link",
       "url": "/d/homelab-observability",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Router Devices (MAC Inventory)",
+      "type": "link",
+      "url": "/d/homelab-router-devices",
       "keepTime": true,
       "includeVars": false,
       "targetBlank": false
@@ -645,6 +653,143 @@
         }
       },
       "description": "Inbound and outbound network throughput for the selected host, excluding loopback and virtual interfaces."
+    },
+    {
+      "id": 29,
+      "type": "stat",
+      "title": "Last Seen",
+      "description": "Last successful network observation of this host.",
+      "gridPos": {
+        "x": 0,
+        "y": 23,
+        "w": 8,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "(label_replace(homelab_lan_presence_host_info{exported_target_name=~\"$host\"}, \"target_name\", \"$1\", \"exported_target_name\", \"(.+)\") * on(mac) group_left() homelab_lan_presence_last_seen_seconds) * 1000",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "dateTimeAsIso",
+          "noValue": "Not yet observed"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "auto",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 39,
+      "type": "stat",
+      "title": "Operating System",
+      "description": "OS reported directly by the selected host's Node Exporter.",
+      "gridPos": {
+        "x": 8,
+        "y": 23,
+        "w": 10,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "node_os_info{job=\"node-exporter\",target_name=~\"$host\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{pretty_name}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "none",
+          "noValue": "OS unavailable"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
+    },
+    {
+      "id": 40,
+      "type": "stat",
+      "title": "Nmap OS Check",
+      "description": "Independent Nmap OS match accuracy, if scanned. This is not a statistical confidence probability.",
+      "gridPos": {
+        "x": 18,
+        "y": 23,
+        "w": 6,
+        "h": 4
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_router_device_os_estimate_accuracy_percent * on(mac) group_left(exported_target_name) homelab_lan_presence_host_info{exported_target_name=~\"$host\"}",
+          "instant": true,
+          "range": false,
+          "legendFormat": "{{os}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "noValue": "Not fingerprinted"
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "values": false,
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": ""
+        },
+        "orientation": "auto",
+        "textMode": "value_and_name",
+        "colorMode": "none",
+        "graphMode": "none",
+        "justifyMode": "auto"
+      }
     }
   ]
 }

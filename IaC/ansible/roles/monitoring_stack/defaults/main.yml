@@ -107,6 +107,9 @@ monitoring_alert_smtp_smarthost: "192.168.2.54:25"
 
 monitoring_grafana_dashboard_files:
   - "homelab-network-hosts.json"
+  - "homelab-router-devices.json"
+  - "homelab-router-device-profile.json"
+  - "homelab-router-device-scan.json"
   - "homelab-physical-network.json"
   - "homelab-service-availability.json"
   - "homelab-observability.json"
@@ -121,6 +124,9 @@ monitoring_grafana_production_dashboard_files:
 monitoring_grafana_dashboard_uids:
   - "homelab-operations"
   - "homelab-network-hosts"
+  - "homelab-router-devices"
+  - "homelab-router-device-profile"
+  - "homelab-router-device-scan"
   - "homelab-physical-network"
   - "homelab-linux-estate"
   - "homelab-availability"

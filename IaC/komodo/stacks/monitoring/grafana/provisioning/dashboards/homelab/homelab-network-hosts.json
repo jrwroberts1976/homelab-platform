@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-network-hosts",
-  "title": "Homelab \u2014 Network Hosts",
+  "title": "Homelab — Network Hosts",
   "description": "Network inventory, lifecycle, latency, enrichment and one-time deep profiling.",
   "tags": [
     "homelab",
@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 1,
+  "version": 2,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -23,7 +23,16 @@
   "annotations": {
     "list": []
   },
-  "links": [],
+  "links": [
+    {
+      "title": "Router Devices (MAC Inventory)",
+      "type": "link",
+      "url": "/d/homelab-router-devices",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    }
+  ],
   "panels": [
     {
       "id": 1,
@@ -370,7 +379,7 @@
     {
       "id": 7,
       "type": "table",
-      "title": "Host Inventory \u2014 Identity",
+      "title": "Host Inventory — Identity",
       "gridPos": {
         "x": 0,
         "y": 4,
