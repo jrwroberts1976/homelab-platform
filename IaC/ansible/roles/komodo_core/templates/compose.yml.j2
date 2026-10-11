@@ -47,6 +47,10 @@ services:
       KOMODO_HOST: "{{ komodo_core_host_url }}"
       KOMODO_TITLE: "{{ komodo_core_title }}"
 
+      KOMODO_SSL_ENABLED: "{{ komodo_core_tls_enabled | ternary('true', 'false') }}"
+      KOMODO_SSL_KEY_FILE: "/config/ssl/key.pem"
+      KOMODO_SSL_CERT_FILE: "/config/ssl/cert.pem"
+
       KOMODO_DATABASE_ADDRESS: "mongo:27017"
       KOMODO_DATABASE_USERNAME: "{{ komodo_core_database_username }}"
       KOMODO_DATABASE_PASSWORD_FILE: /run/secrets/komodo_database_password
@@ -74,6 +78,8 @@ services:
     volumes:
       - komodo-keys:/config/keys
       - "{{ komodo_core_backup_root }}:/backups"
+      - "{{ komodo_core_tls_key_path }}:/config/ssl/key.pem:ro"
+      - "{{ komodo_core_tls_cert_path }}:/config/ssl/cert.pem:ro"
 
     networks:
       - komodo_backend

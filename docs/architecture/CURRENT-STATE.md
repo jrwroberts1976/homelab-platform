@@ -2,7 +2,7 @@
 # Current-State Architecture
 
 **Status:** CURRENT OPERATIONAL TRUTH  
-**Current-state review:** 10 October 2026
+**Current-state review:** 11 October 2026
 **Identity/address authority:** `IaC/inventory/estate.json`  
 **Configuration authority:** `IaC/`
 
@@ -277,6 +277,8 @@ Missing, invalid or stale evidence is an evidence problem and must not be repres
 
 `komodo-01` runs Komodo Core and MongoDB and is the container-management control plane.
 
+Komodo Core now serves strict HTTPS at `https://komodo-01.jameshouse:9120/` using the dedicated internal Komodo CA. `cloud-01`, `monitor-01`, `docker-01` and `greenbone-01` connect outbound over WSS with certificate verification enabled (`PERIPHERY_CORE_TLS_INSECURE_SKIP_VERIFY=false`). Repeat Core, Periphery and Zabbix reconciliation completed with `changed=0`, and the Zabbix HTTPS check returns HTTP 200.
+
 Komodo Periphery is commissioned on explicitly managed Docker hosts, including the currently documented production hosts. Additional onboarding is a deliberate per-host decision rather than a platform prerequisite.
 
 Komodo adoption must not silently recreate existing production Compose workloads.
@@ -372,7 +374,7 @@ CrowdSec is not currently deployed and must not be listed as an active signal so
 | Loki | `http://192.168.2.52:3100/` |
 | Nextcloud | `http://192.168.2.53:8080/` |
 | Greenbone | `https://192.168.2.57/` |
-| Komodo | `http://192.168.2.58:9120/` |
+| Komodo | `https://komodo-01.jameshouse:9120/` |
 | Zabbix | `http://192.168.2.59:8080/` |
 | Home Assistant | `http://192.168.2.60/` |
 | PROXMOX | `https://192.168.2.70:8006/` |

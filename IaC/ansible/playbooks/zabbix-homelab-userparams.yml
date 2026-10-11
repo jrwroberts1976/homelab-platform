@@ -10,6 +10,10 @@
     userparam_group: root
     userparam_mode: "0644"
 
+    komodo_zabbix_ca_source: >-
+      {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/pki/komodo/komodo-ca.crt
+    komodo_zabbix_ca_path: /etc/zabbix/komodo-ca.crt
+
   tasks:
     - name: Require target is in a managed group
       ansible.builtin.assert:
@@ -17,17 +21,43 @@
           - "inventory_hostname in groups['zabbix_agents'] | default([])"
         fail_msg: "Host {{ inventory_hostname }} is not in the zabbix_agents group."
 
+    - name: Check Komodo CA source on controller
+      ansible.builtin.stat:
+        path: "{{ komodo_zabbix_ca_source }}"
+      delegate_to: localhost
+      become: false
+      register: _komodo_zabbix_ca_source
+      when: inventory_hostname == "komodo-01"
+
+    - name: Require Komodo CA source for Zabbix
+      ansible.builtin.assert:
+        that:
+          - _komodo_zabbix_ca_source.stat.exists
+          - _komodo_zabbix_ca_source.stat.isreg
+        fail_msg: >-
+          Komodo CA source is missing on the controller:
+          {{ komodo_zabbix_ca_source }}
+      when: inventory_hostname == "komodo-01"
+
+    - name: Install public Komodo CA for Zabbix
+      ansible.builtin.copy:
+        src: "{{ komodo_zabbix_ca_source }}"
+        dest: "{{ komodo_zabbix_ca_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+      when: inventory_hostname == "komodo-01"
+
     - name: Install homelab UserParameter configuration
       ansible.builtin.copy:
         content: |
           # homelab-platform Zabbix Agent 2 UserParameters
           # Managed by Ansible — do not edit by hand.
-          # Deployed: {{ ansible_date_time.iso8601 }}
+          # Source: IaC/ansible/playbooks/zabbix-homelab-userparams.yml
 
           # ── OS facts (existing template keys — preserved) ──────────
-          UserParameter=system.sw.os[name],grep -oP '^PRETTY_NAME="\K[^"]+' /etc/os-release 2>/dev/null || echo "unknown"
-          UserParameter=system.sw.os.get,cat /etc/os-release 2>/dev/null | head -n 20
-          UserParameter=system.sw.arch,uname -m
+          # Native Zabbix Agent 2 keys are used for OS/architecture facts.
+          # Do not redefine system.sw.os[], system.sw.os.get or system.sw.arch.
 
           # ── package / patch state ──────────────────────────────────
           UserParameter=homelab.patch.pending,apt-get -s dist-upgrade 2>/dev/null | grep -c '^Inst ' || echo "0"
@@ -87,7 +117,7 @@
           UserParameter=homelab.birdnet.http,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:8080/ 2>/dev/null || echo "0"
 
           # ── komodo-01: Komodo Core ─────────────────────────────────
-          UserParameter=homelab.komodo.http,curl -s -o /dev/null -w '%{http_code}' http://127.0.0.1:9120/ 2>/dev/null || echo "0"
+          UserParameter=homelab.komodo.http,curl -sS --connect-timeout 5 --cacert /etc/zabbix/komodo-ca.crt -o /dev/null -w '%{http_code}' https://komodo-01.jameshouse:9120/ 2>/dev/null || echo "0"
           UserParameter=homelab.komodo.mongo,systemctl is-active mongod 2>/dev/null || echo "inactive"
 
           # ── cloud-01: Nextcloud ────────────────────────────────────
@@ -109,22 +139,22 @@
         mode: "{{ userparam_mode }}"
       register: _userparams_deployed
 
-    - name: Validate UserParameter config syntax
+    - name: Validate Zabbix Agent 2 configuration
       ansible.builtin.command:
         argv:
           - zabbix_agent2
-          - -t
-          - agent.ping
+          - -T
+          - -c
+          - /etc/zabbix/zabbix_agent2.conf
       changed_when: false
-      failed_when: false
 
-    - name: Reload Zabbix Agent 2 after UserParameter changes
+    - name: Restart Zabbix Agent 2 after UserParameter changes
       ansible.builtin.service:
         name: zabbix-agent2
-        state: reloaded
+        state: restarted
       when: _userparams_deployed.changed
 
-    - name: Verify Agent 2 is running after reload
+    - name: Verify Agent 2 is running after configuration change
       ansible.builtin.service:
         name: zabbix-agent2
         state: started
@@ -136,9 +166,10 @@
           - zabbix_agent2
           - -t
           - homelab.patch.reboot_required
+          - -c
+          - /etc/zabbix/zabbix_agent2.conf
       register: _test_userparam
       changed_when: false
-      failed_when: false
 
     - name: Warn if UserParameter test returned unexpected output
       ansible.builtin.debug:

@@ -5,8 +5,15 @@ komodo_periphery_expected_ipv4: "{{ ansible_host }}"
 komodo_periphery_root: /etc/komodo
 komodo_periphery_image: "ghcr.io/moghtech/komodo-periphery:2.3.3"
 
-komodo_periphery_core_address: "http://192.168.2.58:9120"
+komodo_periphery_core_address: "https://komodo-01.jameshouse:9120"
 komodo_periphery_connect_as: "{{ inventory_hostname }}"
+
+komodo_periphery_tls_insecure_skip_verify: false
+
+komodo_periphery_ca_source: >-
+  {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/pki/komodo/komodo-ca.crt
+
+komodo_periphery_ca_path: "{{ komodo_periphery_root }}/trust/komodo-ca.crt"
 
 komodo_periphery_onboarding_key_file: >-
   {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/{{ inventory_hostname }}-komodo-onboarding.key

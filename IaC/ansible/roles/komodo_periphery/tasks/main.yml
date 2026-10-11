@@ -56,6 +56,38 @@
     group: root
     mode: "0700"
 
+- name: Ensure Komodo Periphery trust directory exists
+  ansible.builtin.file:
+    path: "{{ komodo_periphery_root }}/trust"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check Komodo CA source file on controller
+  ansible.builtin.stat:
+    path: "{{ komodo_periphery_ca_source }}"
+  delegate_to: localhost
+  become: false
+  register: komodo_periphery_ca_source_stat
+
+- name: Require Komodo CA source file
+  ansible.builtin.assert:
+    that:
+      - komodo_periphery_ca_source_stat.stat.exists
+      - komodo_periphery_ca_source_stat.stat.isreg
+    fail_msg: >-
+      Required Komodo CA certificate is missing on the Ansible controller:
+      {{ komodo_periphery_ca_source }}
+
+- name: Install Komodo CA certificate for Periphery
+  ansible.builtin.copy:
+    src: "{{ komodo_periphery_ca_source }}"
+    dest: "{{ komodo_periphery_ca_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Install protected Komodo Periphery environment
   ansible.builtin.copy:
     dest: "{{ komodo_periphery_root }}/periphery.env"

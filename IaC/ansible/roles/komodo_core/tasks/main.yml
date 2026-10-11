@@ -50,6 +50,50 @@
       mode: "0700"
     - path: "{{ komodo_core_secret_root }}"
       mode: "0700"
+    - path: "{{ komodo_core_tls_root }}"
+      mode: "0700"
+
+- name: Check Komodo TLS source files on controller
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  delegate_to: localhost
+  become: false
+  register: komodo_core_tls_source_stats
+  loop:
+    - "{{ komodo_core_tls_ca_source }}"
+    - "{{ komodo_core_tls_cert_source }}"
+    - "{{ komodo_core_tls_key_source }}"
+
+- name: Require Komodo TLS source files
+  ansible.builtin.assert:
+    that:
+      - item.stat.exists
+      - item.stat.isreg
+    fail_msg: >-
+      Required Komodo TLS source file is missing on the Ansible controller:
+      {{ item.item }}
+  loop: "{{ komodo_core_tls_source_stats.results }}"
+  loop_control:
+    label: "{{ item.item }}"
+
+- name: Install Komodo TLS material
+  ansible.builtin.copy:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "{{ item.mode }}"
+  loop:
+    - src: "{{ komodo_core_tls_ca_source }}"
+      dest: "{{ komodo_core_tls_ca_path }}"
+      mode: "0644"
+    - src: "{{ komodo_core_tls_cert_source }}"
+      dest: "{{ komodo_core_tls_cert_path }}"
+      mode: "0644"
+    - src: "{{ komodo_core_tls_key_source }}"
+      dest: "{{ komodo_core_tls_key_path }}"
+      mode: "0600"
+  no_log: true
 
 - name: Install protected MongoDB database secret
   ansible.builtin.copy:
@@ -141,12 +185,13 @@
     or 'Started' in komodo_core_compose_up.stderr
   no_log: true
 
-- name: Wait for Komodo Core HTTP endpoint
+- name: Wait for Komodo Core HTTPS endpoint
   ansible.builtin.uri:
-    url: >-
-      http://{{ komodo_core_http_bind }}:{{ komodo_core_http_port }}/
+    url: "{{ komodo_core_host_url }}/"
     status_code: 200
     return_content: false
+    validate_certs: true
+    ca_path: "{{ komodo_core_tls_ca_path }}"
   register: komodo_core_http_status
   until:
     - komodo_core_http_status.status == 200

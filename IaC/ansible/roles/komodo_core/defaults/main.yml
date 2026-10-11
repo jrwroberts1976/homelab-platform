@@ -18,7 +18,23 @@ komodo_core_mongo_image: "mongo:8.0.32"
 
 komodo_core_http_bind: "192.168.2.58"
 komodo_core_http_port: 9120
-komodo_core_host_url: "http://192.168.2.58:9120"
+komodo_core_host_url: "https://komodo-01.jameshouse:9120"
+
+komodo_core_tls_enabled: true
+komodo_core_tls_root: "{{ komodo_core_stack_root }}/tls"
+
+komodo_core_tls_ca_source: >-
+  {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/pki/komodo/komodo-ca.crt
+
+komodo_core_tls_cert_source: >-
+  {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/pki/komodo/komodo-01.crt
+
+komodo_core_tls_key_source: >-
+  {{ lookup('ansible.builtin.env', 'HOME') }}/.config/homelab-iac/pki/komodo/komodo-01.key
+
+komodo_core_tls_ca_path: "{{ komodo_core_tls_root }}/komodo-ca.crt"
+komodo_core_tls_cert_path: "{{ komodo_core_tls_root }}/komodo-01.crt"
+komodo_core_tls_key_path: "{{ komodo_core_tls_root }}/komodo-01.key"
 
 komodo_core_title: "Komodo"
 komodo_core_timezone: "Europe/London"

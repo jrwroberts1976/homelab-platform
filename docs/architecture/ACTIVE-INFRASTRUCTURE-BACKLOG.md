@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 2026-10-10
+**Last reconciled:** 2026-10-11
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** repository-wide documentation audit/remediation COMPLETE through PRs #182–#185.
 
@@ -57,7 +57,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 | 4 | Homelab documentation audit | **COMPLETE — 6 OCTOBER 2026** | — | Audit baseline PR #182; remediation PRs #183, #184 and #185 completed and guard-validated |
 | 5 | Password manager | PLANNED / OPTIONAL | **1–2 days** | Select product/design deliberately; HTTPS/MFA, off-host backup, restore proof and emergency access required |
 | 6 | Backup and disaster recovery | OUTSTANDING | **2–4 days** | Representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and protected recovery identities |
-| 7 | Komodo hardening | OUTSTANDING | **1–3 days** | HTTPS, low-risk update/rollback proof and only justified additional onboarding |
+| 7 | Komodo hardening | **PARTIAL — HTTPS/WSS COMPLETE 11 OCTOBER 2026** | **1–2 days remaining** | Strict Core HTTPS and CA-validated Periphery WSS complete; remaining work is low-risk update/rollback proof and only justified additional onboarding |
 | 8 | Legacy infrastructure cleanup | REVIEW REQUIRED | **1–2 days** | Remove unreferenced pre-cluster rollback LVs only after explicit confidence review; reconcile superseded paths where still justified; Jenkins already removed |
 | 9 | Web analytics | OPTIONAL | **1–3 days** | Portfolio/Cloudflare/Umami/Grafana-Loki evidence-led analytics work |
 | 10 | Cloudflare Tunnel | DEFERRED | **1–2 days if approved** | `edge-01` reserved; deploy `cloudflared` only for a real approved service requirement |
