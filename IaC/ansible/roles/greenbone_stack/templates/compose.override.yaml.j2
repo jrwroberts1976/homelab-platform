@@ -1,5 +1,50 @@
 ---
 services:
+  vulnerability-tests:
+    deploy:
+      restart_policy:
+        condition: any
+
+  notus-data:
+    deploy:
+      restart_policy:
+        condition: any
+
+  scap-data:
+    deploy:
+      restart_policy:
+        condition: any
+
+  cert-bund-data:
+    deploy:
+      restart_policy:
+        condition: any
+
+  dfn-cert-data:
+    deploy:
+      restart_policy:
+        condition: any
+
+  data-objects:
+    deploy:
+      restart_policy:
+        condition: any
+
+  report-formats:
+    deploy:
+      restart_policy:
+        condition: any
+
+  gsa:
+    deploy:
+      restart_policy:
+        condition: any
+
+  openvas:
+    deploy:
+      restart_policy:
+        condition: any
+
   gvm-config:
     environment:
       NGINX_HOST: "{{ greenbone_stack_bind_ipv4 }}"
