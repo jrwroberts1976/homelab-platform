@@ -98,13 +98,13 @@ media-01 is a managed physical Raspberry Pi 5 running authoritative Debian GNU/L
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-12T05:59:10+01:00`
-- Pending updates: **7**
-- Security updates pending: **4**
+- Last assessed: `2026-10-12T07:02:32+01:00`
+- Pending updates: **3**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-08T06:40:27+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-12T06:39:04+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
