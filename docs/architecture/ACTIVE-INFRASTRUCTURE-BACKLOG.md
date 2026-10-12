@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 2026-10-11
+**Last reconciled:** 2026-10-12
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** repository-wide documentation audit/remediation COMPLETE through PRs #182–#185.
 
@@ -57,7 +57,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 | 4 | Homelab documentation audit | **COMPLETE — 6 OCTOBER 2026** | — | Audit baseline PR #182; remediation PRs #183, #184 and #185 completed and guard-validated |
 | 5 | Password manager | PLANNED / OPTIONAL | **1–2 days** | Select product/design deliberately; HTTPS/MFA, off-host backup, restore proof and emergency access required |
 | 6 | Backup and disaster recovery | OUTSTANDING | **2–4 days** | Representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and protected recovery identities |
-| 7 | Komodo hardening | **PARTIAL — HTTPS/WSS COMPLETE 11 OCTOBER 2026** | **1–2 days remaining** | Strict Core HTTPS and CA-validated Periphery WSS complete; remaining work is low-risk update/rollback proof and only justified additional onboarding |
+| 7 | Komodo hardening and Docker image lifecycle | **PARTIAL — HTTPS/WSS COMPLETE 11 OCTOBER 2026** | **1–2 days remaining** | Strict Core HTTPS and CA-validated Periphery WSS complete; remaining work is an estate-wide Docker image/update audit, release-note and dependency review, controlled low-risk update/rollback proof, phased container updates, and only justified additional Periphery onboarding |
 | 8 | Legacy infrastructure cleanup | REVIEW REQUIRED | **1–2 days** | Remove unreferenced pre-cluster rollback LVs only after explicit confidence review; reconcile superseded paths where still justified; Jenkins already removed |
 | 9 | Web analytics | OPTIONAL | **1–3 days** | Portfolio/Cloudflare/Umami/Grafana-Loki evidence-led analytics work |
 | 10 | Cloudflare Tunnel | DEFERRED | **1–2 days if approved** | `edge-01` reserved; deploy `cloudflared` only for a real approved service requirement |
@@ -69,7 +69,7 @@ The remaining non-optional work has different goals. Choose according to the out
 | Choice | Project | Why choose it next | Effort | What completion buys |
 |---|---|---|---:|---|
 | **A — strongest resilience gain** | **#6 Backup and disaster recovery** | Biggest remaining operational-risk reduction | **2–4 days** | Proven QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and stronger recovery confidence |
-| **C — harden container operations** | **#7 Komodo hardening** | Reduces control-plane and update risk around Docker management | **1–3 days** | HTTPS plus proven low-risk update/rollback behaviour and deliberate onboarding controls |
+| **C — harden container operations** | **#7 Komodo hardening and Docker image lifecycle** | Reduces control-plane and container-update risk across the managed Docker estate | **1–2 days** | HTTPS/WSS plus a current image inventory, deliberate version decisions, phased updates and proven low-risk rollback behaviour |
 | **D — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
 
 ### Decision shortcuts
@@ -81,10 +81,25 @@ The remaining non-optional work has different goals. Choose according to the out
 
 ### Current sequence
 
-1. Choose the next project using the decision guide above.
-2. If no preference is expressed, default engineering priority is **Project 6 (Backup/DR)**, then **Project 7 (Komodo hardening)**.
-3. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
-4. Optional/deferred items are not automatic commitments.
+1. **Current user-selected priority: Project 7 — audit and update Docker containers safely across the Komodo-managed estate.**
+2. Inventory running containers/images first; classify stateless, application and stateful/high-risk updates; check upstream release notes and dependency constraints before changing versions.
+3. Apply updates in small batches with service validation and rollback evidence; use a low-risk canary to complete the Komodo update/rollback proof.
+4. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless James reprioritises.
+5. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
+6. Optional/deferred items are not automatic commitments.
+
+### Project 7 — Docker container lifecycle extension — PLANNED 12 OCTOBER 2026
+
+Requested scope:
+
+- produce a read-only inventory of running containers, Compose projects, image tags and digests across `docker-01`, `monitor-01`, `cloud-01`, `greenbone-01` and the Komodo management stack on `komodo-01`;
+- identify floating tags, stale images, deliberate pins and application/version dependencies;
+- check current upstream releases and release notes before changing production images;
+- classify updates by operational risk, with stateful services such as Nextcloud/PostgreSQL/Redis, Greenbone and Komodo/Mongo requiring explicit backup/compatibility checks;
+- update in small batches rather than blanket-pulling the estate;
+- validate service health after each batch and retain a clear rollback path to the previously proven image/tag/digest;
+- use the work to complete Project 7's outstanding low-risk Komodo update/rollback proof;
+- do not add extra Periphery hosts unless there is a demonstrated management benefit.
 
 ## Delivery-step history
 
