@@ -81,14 +81,21 @@ The remaining non-optional work has different goals. Choose according to the out
 
 ### Current sequence
 
-1. **Current user-selected priority: Project 7 — audit and update Docker containers safely across the Komodo-managed estate.**
-2. Inventory running containers/images first; classify stateless, application and stateful/high-risk updates; check upstream release notes and dependency constraints before changing versions.
-3. Apply updates in small batches with service validation and rollback evidence; use a low-risk canary to complete the Komodo update/rollback proof.
-4. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless James reprioritises.
-5. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
-6. Optional/deferred items are not automatic commitments.
+1. **Current user-selected priority: investigate Greenbone vulnerability-detection coverage before performing further production container upgrades.**
+2. Determine whether the current Greenbone feed contains detection coverage for known relevant vulnerabilities such as `CVE-2026-15815`, whether affected product/version evidence is being discovered, and whether scan configuration/authentication/QoD prevents applicable findings from being reported.
+3. Correct any Greenbone feed, scanner, credential, target, VT-selection or product/version-detection problem found and prove the fix with a controlled validation scan.
+4. Do not perform further production Docker image upgrades until the Greenbone investigation and validation scan are complete.
+5. After Greenbone detection confidence is restored, resume Project 7's estate-wide image review and phased container updates using the completed BirdNET-Go lifecycle canary as the reference process.
+6. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless James reprioritises.
+7. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
+8. Optional/deferred items are not automatic commitments.
 
 ### Project 7 — Docker container lifecycle extension — IN PROGRESS 12 OCTOBER 2026
+
+**Current gate:** further production image upgrades are paused pending the
+Greenbone vulnerability-detection investigation and a successful validation
+scan. The purpose is to avoid applying known fixes before understanding why the
+existing vulnerability-management control did not surface them.
 
 Requested scope:
 
@@ -98,7 +105,8 @@ Requested scope:
 - classify updates by operational risk, with stateful services such as Nextcloud/PostgreSQL/Redis, Greenbone and Komodo/Mongo requiring explicit backup/compatibility checks;
 - update in small batches rather than blanket-pulling the estate;
 - validate service health after each batch and retain a clear rollback path to the previously proven image/tag/digest;
-- use the work to complete Project 7's outstanding low-risk Komodo update/rollback proof;
+- codify a repeatable Docker image-lifecycle process using automatic update detection and visibility, human approval before changing Git desired state or deploying, scoped Komodo ResourceSync, post-change health validation and retained rollback images; do not enable blanket unattended container upgrades;
+- use the completed BirdNET-Go canary as the reference implementation for that lifecycle process across the remaining managed estate;
 - do not add extra Periphery hosts unless there is a demonstrated management benefit.
 
 ### BirdNET-Go controlled lifecycle canary — COMPLETE 12 OCTOBER 2026
