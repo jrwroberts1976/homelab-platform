@@ -1,5 +1,7 @@
 # garden-room.jameshouse
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 > Automatically created provisional host record from bounded discovery and AI evidence on 2026-10-10. Canonical inventory and direct telemetry remain authoritative.
 
 ## Identity
