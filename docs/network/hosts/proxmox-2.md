@@ -99,8 +99,8 @@ Proxmox-2 is a managed physical Proxmox VE cluster node running the authoritativ
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-12T23:49:57+01:00`
-- Pending updates: **6**
+- Last assessed: `2026-10-13T00:54:27+01:00`
+- Pending updates: **7**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
