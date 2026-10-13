@@ -111,12 +111,12 @@ komodo-01 is CT104, an Ansible-managed Debian 13 LXC control-plane host on PROXM
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-13T08:12:17+01:00`
-- Pending updates: **5**
+- Last assessed: `2026-10-13T09:16:45+01:00`
+- Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-08T07:28:11+01:00`
+- Last APT transaction activity: `2026-10-13T08:20:12+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
