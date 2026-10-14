@@ -1,5 +1,7 @@
 # Project 11 — Certificate & Reverse Proxy Management
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 **Status:** PLANNED  
 **Priority:** Start after the current Greenbone validation/remediation work is closed.  
 **Preferred candidate:** Nginx Proxy Manager (NPM), subject to design validation before deployment.  
