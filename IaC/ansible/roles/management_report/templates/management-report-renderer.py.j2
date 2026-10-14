@@ -265,6 +265,31 @@ def list_length(value):
     return None
 
 
+def zabbix_attention_problems(zabbix):
+    """Return Zabbix problems that require management attention.
+
+    Severity 1 is Information. These events remain visible in raw
+    monitoring evidence but do not count as infrastructure faults.
+    Unknown severities remain visible rather than being silently hidden.
+    """
+    if not isinstance(zabbix, dict):
+        return None
+
+    problems = zabbix.get("active_problems")
+
+    if not isinstance(problems, list):
+        return None
+
+    return [
+        problem
+        for problem in problems
+        if not (
+            isinstance(problem, dict)
+            and str(problem.get("severity", "")) == "1"
+        )
+    ]
+
+
 def management_summary(data):
     prometheus = data.get("prometheus", {})
     zabbix = data.get("zabbix", {})
@@ -328,7 +353,15 @@ def management_summary(data):
             + status
         )
 
-    zabbix_count = zabbix.get("active_problem_count")
+    zabbix_attention = zabbix_attention_problems(zabbix)
+
+    if isinstance(zabbix_attention, list):
+        zabbix_count = len(zabbix_attention)
+    else:
+        # Compatibility fallback for older evidence without
+        # active_problems detail.
+        zabbix_count = zabbix.get("active_problem_count")
+
     prometheus_count = prometheus.get("firing_alert_count")
 
     if isinstance(zabbix_count, int) and isinstance(prometheus_count, int):
@@ -348,7 +381,11 @@ def attention_section(data):
     prometheus = data.get("prometheus", {})
     zabbix = data.get("zabbix", {})
 
-    zabbix_problems = zabbix.get("active_problems", [])
+    zabbix_problems = zabbix_attention_problems(zabbix)
+
+    if zabbix_problems is None:
+        zabbix_problems = zabbix.get("active_problems", [])
+
     prometheus_alerts = prometheus.get("firing_alerts", [])
 
     lines = [
@@ -485,7 +522,7 @@ def monitoring_section(data):
                 + number(zabbix.get("available_hosts"))
             ),
             (
-                "Zabbix active problems: "
+                "Zabbix active problems (all severities): "
                 + number(zabbix.get("active_problem_count"))
             ),
         ])

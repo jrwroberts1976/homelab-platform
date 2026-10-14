@@ -39,6 +39,30 @@ def source_alert_names(value, key):
     return [alert_name(alert) for alert in alerts]
 
 
+def zabbix_attention_problems(zabbix):
+    """Return Zabbix problems that require management attention.
+
+    Information events remain part of raw monitoring evidence but
+    should not be described as infrastructure faults.
+    """
+    if not isinstance(zabbix, dict):
+        return None
+
+    problems = zabbix.get("active_problems")
+
+    if not isinstance(problems, list):
+        return None
+
+    return [
+        problem
+        for problem in problems
+        if not (
+            isinstance(problem, dict)
+            and str(problem.get("severity", "")) == "1"
+        )
+    ]
+
+
 def management_state(evidence):
     prometheus = evidence.get("prometheus", {})
     alertmanager = evidence.get("alertmanager", {})
@@ -94,11 +118,8 @@ def management_state(evidence):
         confirmation_count = None
         alertmanager_only_count = None
 
-    active_problems = (
-        zabbix.get("active_problems")
-        if isinstance(zabbix, dict)
-        else None
-    )
+    active_problems = zabbix_attention_problems(zabbix)
+
     if isinstance(active_problems, list):
         zabbix_problem_count = len(active_problems)
     else:
@@ -165,7 +186,6 @@ def safe_summary(evidence):
             "expected_hosts",
             "reporting_hosts",
             "available_hosts",
-            "active_problem_count",
         ),
         "alertmanager": ("active_alert_count",),
         "loki": ("reporting_hosts",),
@@ -323,6 +343,39 @@ def generate(summary, api_key, model, request_post=requests.post):
     return extract_text(response.json())
 
 
+
+def validate_briefing(briefing):
+    """Reject management claims that are not supported by the safe evidence."""
+
+    if not isinstance(briefing, str) or not briefing.strip():
+        raise ValueError("empty AI briefing")
+
+    unsupported_patterns = (
+        # Prometheus telemetry coverage is not host availability.
+        r"(?i)\b(?:online|available|availability|fully reporting)\b"
+        r"[^.\n]{0,100}\bprometheus\b",
+        r"(?i)\bprometheus\b[^.\n]{0,100}"
+        r"\b(?:online|available|availability)\b",
+
+        # Sensor coverage does not prove absence of attacks/detections.
+        r"(?i)\bno (?:critical )?threats?\b",
+        r"(?i)\bno (?:security )?detections?\b",
+        r"(?i)\bno security incidents?\b",
+
+        # Dropped/silent event claims are not part of the safe summary.
+        r"(?i)\bno\b[^.\n]{0,80}\bdropped\b",
+        r"(?i)\bno\b[^.\n]{0,80}\bsilent\b",
+    )
+
+    for pattern in unsupported_patterns:
+        if re.search(pattern, briefing):
+            raise ValueError(
+                "AI briefing contains unsupported management claim"
+            )
+
+    return briefing
+
+
 def write_atomic(path, content):
     path.parent.mkdir(parents=True, exist_ok=True, mode=0o750)
     temp = path.with_name(path.name + ".tmp")
@@ -359,6 +412,8 @@ def build(
         briefing = generator(summary, api_key, model)
         if not briefing.strip() or len(briefing) > MAX_BRIEFING_CHARS:
             raise ValueError("invalid briefing")
+
+        briefing = validate_briefing(briefing)
         write_atomic(
             output_path,
             "AI Management Briefing (interpretation; verify against facts below)\n"

@@ -30,6 +30,7 @@ def load_collector():
             "management_report_loki_url": "http://loki",
             "management_report_zabbix_url": "http://zabbix",
             "management_report_zabbix_token_file": "/tmp/zabbix-token",
+            "management_report_zabbix_agent_ping_freshness_seconds": 180,
             "management_report_expected_hosts": ["monitor-01"],
             "management_report_patch_freshness_minutes": 90,
             "management_report_evidence_hours": 24,
