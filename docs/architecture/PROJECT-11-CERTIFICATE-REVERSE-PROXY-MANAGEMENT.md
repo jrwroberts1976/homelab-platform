@@ -2,9 +2,9 @@
 
 <!-- estate-authority: IaC/inventory/estate.json -->
 
-**Status:** PLANNED  
-**Priority:** Start after the current Greenbone validation/remediation work is closed.  
-**Preferred candidate:** Nginx Proxy Manager (NPM), subject to design validation before deployment.  
+**Status:** ACTIVE — 14 OCTOBER 2026
+**Priority:** CURRENT ACTIVE PROJECT — Greenbone validation/remediation gate closed 14 October 2026.
+**Preferred candidate:** Nginx Proxy Manager (NPM), subject to design validation before deployment.
 **Purpose:** Replace ad-hoc browser-facing self-signed certificates with a centrally managed, renewable TLS and reverse-proxy design while preserving separate service-to-service trust where appropriate.
 
 ## Why this project exists
@@ -225,4 +225,16 @@ Project 11 is complete only when all of the following are true:
 
 ## Current status
 
-**PLANNED.** No NPM deployment or `proxy-01` host is claimed yet. The immediate active work remains the Greenbone validation scan and vulnerability remediation already in progress on 14 October 2026.
+**ACTIVE — 14 OCTOBER 2026.**
+
+The Greenbone validation/remediation prerequisite is complete. Final managed
+report `b37422c3-1fbc-4619-895b-70bb839d92af` produced 0 Critical, 0 High,
+1 actionable Medium, 0 Low and 30 accepted findings.
+
+The sole remaining actionable finding is cleartext Zabbix HTTP on
+`zabbix-01:8080`. It is not an accepted risk and is the first Project 11
+migration target.
+
+No Nginx Proxy Manager deployment or `proxy-01` host is claimed yet. The active
+phase is endpoint/certificate inventory, trust classification, host-placement
+and NPM design validation before any production deployment.

@@ -21,12 +21,12 @@ As of 14 October 2026:
 | View | Progress | Meaning |
 |---|---:|---|
 | Authoritative delivery steps 1–10 | **10/10 complete — 100%** | All named/evidenced delivery steps currently recoverable from the repository are closed |
-| Prioritised project areas fully closed | **4/10 — 40%** | Projects 1, 2, 3 and 4 are fully complete |
-| Prioritised project areas with baseline/foundation complete | **4/10 — 40%** | Projects 1–4 have either closed or reached baseline/foundation-complete state |
-| Optional/deferred projects | **3/10** | Projects 5, 9 and 10 are not automatic commitments |
-| Genuine outstanding/review projects | **3/10** | Projects 6, 7 and 8 contain substantive remaining engineering work |
+| Prioritised project areas fully closed | **4/11 — 36%** | Projects 1, 2, 3 and 4 are fully complete |
+| Prioritised project areas with baseline/foundation complete | **4/11 — 36%** | Projects 1–4 have either closed or reached baseline/foundation-complete state |
+| Optional/deferred projects | **3/11** | Projects 5, 9 and 10 are not automatic commitments |
+| Genuine outstanding/review projects | **4/11** | Projects 6, 7, 8 and 11 contain substantive remaining engineering work |
 
-**Practical programme estimate:** approximately **70–80% complete** when optional/deferred work is excluded and partially completed foundations are recognised. This is a planning estimate, not a formal weighted burn-down metric.
+**Practical programme estimate:** approximately **65–75% complete** when optional/deferred work is excluded and partially completed foundations are recognised. This is a planning estimate, not a formal weighted burn-down metric.
 
 The core platform is largely built. Remaining work is now concentrated in recovery proof, hardening, refinement and technical-debt cleanup rather than major missing infrastructure.
 
@@ -61,6 +61,7 @@ Both PVE nodes were upgraded one at a time and validated at pve-manager 9.2.21 /
 | 8 | Legacy infrastructure cleanup | REVIEW REQUIRED | **1–2 days** | Remove unreferenced pre-cluster rollback LVs only after explicit confidence review; reconcile superseded paths where still justified; Jenkins already removed |
 | 9 | Web analytics | OPTIONAL | **1–3 days** | Portfolio/Cloudflare/Umami/Grafana-Loki evidence-led analytics work |
 | 10 | Cloudflare Tunnel | DEFERRED | **1–2 days if approved** | `edge-01` reserved; deploy `cloudflared` only for a real approved service requirement |
+| 11 | Certificate and reverse proxy management | **ACTIVE — 14 OCTOBER 2026** | **TBD after endpoint/certificate inventory** | Central trusted browser-facing HTTPS, automated certificate renewal and removal of the remaining Zabbix cleartext management path |
 
 ## Choose what to do next
 
@@ -69,11 +70,13 @@ The remaining non-optional work has different goals. Choose according to the out
 | Choice | Project | Why choose it next | Effort | What completion buys |
 |---|---|---|---:|---|
 | **A — strongest resilience gain** | **#6 Backup and disaster recovery** | Biggest remaining operational-risk reduction | **2–4 days** | Proven QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and stronger recovery confidence |
+| **B — close current TLS/security gap** | **#11 Certificate and reverse proxy management** | Resolves the sole remaining actionable Greenbone finding and establishes centrally managed browser-facing HTTPS | **TBD after inventory** | Trusted renewable HTTPS, controlled reverse-proxy access and removal of direct cleartext Zabbix exposure |
 | **C — harden container operations** | **#7 Komodo hardening and Docker image lifecycle** | Reduces control-plane and container-update risk across the managed Docker estate | **1–2 days** | HTTPS/WSS plus a current image inventory, deliberate version decisions, phased updates and proven low-risk rollback behaviour |
 | **D — reduce technical debt** | **#8 Legacy infrastructure cleanup** | Removes old rollback/superseded state after confidence review | **1–2 days** | Cleaner estate and less ambiguity, without changing active architecture |
 
 ### Decision shortcuts
 
+- The **current selected priority is Project 11**, closing the remaining Zabbix cleartext/TLS gap and establishing certificate/reverse-proxy management.
 - If the priority is **resilience and recovery confidence**, choose **Project 6**.
 - If the priority is **container-management security and rollback confidence**, choose **Project 7**.
 - If the priority is **reducing legacy clutter and technical debt**, choose **Project 8**.
@@ -81,48 +84,49 @@ The remaining non-optional work has different goals. Choose according to the out
 
 ### Current sequence
 
-1. **Current user-selected priority: complete Greenbone vulnerability-management validation before performing further production container upgrades.**
-2. Management-report Zabbix attention semantics and the expected-down `media-01` WLAN alert have been corrected and live-validated; these no longer block the current work.
-3. The current managed Greenbone evidence grouped into 44 actionable findings: 2 Medium and 42 Low. Thirteen Low findings were the same weak SSH MAC issue across 13 managed hosts.
-4. The weak SSH MAC issue has been remediated live across all 13 affected hosts by removing `umac-64-etm@openssh.com` and `umac-64@openssh.com`; effective `sshd -T` output was validated on every affected host. Scanner confirmation is still pending.
-5. Detailed Greenbone report retrieval has been changed live to use `ignore_pagination="1"` so validation evidence is not limited by report pagination. The repository change remains part of the current Greenbone WIP until committed.
-6. A fresh managed Greenbone validation scan started on 14 October 2026 at 08:33 BST with report ID `d22c813d-04a1-4c6e-93f3-ce21a9d7958a`. Do not mark SSH remediation closed in vulnerability evidence until that scan completes and OID `1.3.6.1.4.1.25623.1.0.105610` is absent.
-7. Review the remaining 29 timestamp findings for formal accepted-risk treatment and remediate or explicitly disposition the 2 Medium findings.
-8. Do not perform further production Docker image upgrades until the Greenbone investigation and validation scan are complete.
-9. After Greenbone detection confidence is restored, resume Project 7's estate-wide image review and phased container updates using the completed BirdNET-Go lifecycle canary as the reference process.
-10. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless James reprioritises.
-11. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
-12. Optional/deferred items are not automatic commitments.
+1. **Current user-selected priority: Project 11 — Certificate & Reverse Proxy Management.**
+2. The Greenbone vulnerability-management validation gate is **COMPLETE as of 14 October 2026**.
+3. Final managed validation report `b37422c3-1fbc-4619-895b-70bb839d92af` completed with **Critical=0, High=0, Medium=1, Low=0, Log=457, Accepted=30**.
+4. The weak SSH MAC finding is remediated and scanner-validated absent. The managed SSH policy removes only `umac-64-etm@openssh.com` and `umac-64@openssh.com`.
+5. Thirty reviewed findings are formally separated from actionable vulnerabilities: 29 TCP/ICMP timestamp findings plus the BirdNET-Go CSRF-cookie finding.
+6. The sole remaining actionable Greenbone finding is **cleartext HTTP on `zabbix-01:8080`**, score 4.8. It is **not accepted** and remediation is transferred directly to Project 11.
+7. Management-report Greenbone evidence confirms `actionable_count=1` and `accepted_risk_count=30`.
+8. SSH hardening, complete Greenbone report retrieval and accepted-risk IaC are committed on `main` as `5165756a`.
+9. Project 11 starts with endpoint/certificate inventory, trust classification and reverse-proxy design validation; **Zabbix is the first migration target**.
+10. The former Greenbone gate on Project 7 is cleared. Project 7 may resume after Project 11 unless James reprioritises.
+11. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless reprioritised.
+12. Projects 5, 9 and 10 remain optional/deferred and are not automatic commitments.
 
-### Greenbone and management-report remediation — IN PROGRESS 14 OCTOBER 2026
+### Greenbone and management-report remediation — COMPLETE 14 OCTOBER 2026
 
-Validated today:
+Closure evidence:
 
-- management-report Zabbix `Information` severity events remain visible in raw evidence but no longer count as management attention;
-- the factual management report was live-validated at `15/15` Zabbix hosts available, `15/15` patch evidence current and `0` active infrastructure problems/alerts after the expected `media-01` WLAN condition was handled;
-- `media-01` uses the host-specific Zabbix context macro `{$IFCONTROL:"wlan0"}=0`, because `wlan0` is intentionally down whenever Ethernet is connected; the override is idempotent and is committed as `1666dad8`;
-- management-report informational-event filtering and AI fail-safe validation are committed as `4e8cefe2`;
-- the 44 current Greenbone actionable findings were reduced to five distinct classes: cleartext HTTP on `zabbix-01:8080`, missing `HttpOnly` on `docker-01:8080`, ICMP timestamps, TCP timestamps and weak SSH MAC algorithms;
-- the weak SSH MAC configuration was remediated live on all 13 affected hosts using a managed OpenSSH drop-in that subtracts only the two 64-bit UMAC algorithms;
-- both socket-activated and conventional SSH service models were tested; socket-activated Debian hosts require an SSH service restart rather than reload to avoid the known bind failure while `ssh.socket` owns port 22;
-- fresh SSH connectivity and effective MAC policy were validated after the change;
-- the Greenbone scanner template now requests the complete detailed report using `ignore_pagination="1"`, and that implementation is deployed live on `greenbone-01`.
+- management-report Zabbix `Information` events remain available as raw evidence but do not count as management attention;
+- the expected-down `media-01` WLAN condition is handled through `{$IFCONTROL:"wlan0"}=0`;
+- complete Greenbone detailed-report retrieval uses `ignore_pagination="1"`, eliminating the earlier incomplete/paginated evidence limitation;
+- the pagination correction exposed `monitor-01` as an additional weak-SSH-MAC host, bringing the validated hardened set to 14 hosts;
+- all known affected hosts were hardened through a managed OpenSSH drop-in removing only the two 64-bit UMAC algorithms;
+- both conventional SSH and Debian socket-activated SSH service models were safely handled and fresh SSH connectivity was verified;
+- final validation report `b37422c3-1fbc-4619-895b-70bb839d92af` completed at 15:06 BST on 14 October 2026;
+- final Greenbone result: **Critical=0, High=0, Medium=1, Low=0, Log=457, Accepted=30**;
+- weak-MAC OID `1.3.6.1.4.1.25623.1.0.105610` is absent from the final actionable evidence;
+- 29 TCP/ICMP timestamp findings are formally accepted for the trusted internal LAN and remain visible as accepted evidence;
+- BirdNET-Go's `csrf` cookie finding is separately accepted because the client-readable CSRF token is part of the application's CSRF-header mechanism and is not its session cookie;
+- the only remaining actionable finding is `192.168.2.59:8080` / `zabbix-01`, OID `1.3.6.1.4.1.25623.1.0.108440`, **Cleartext Transmission of Sensitive Information via HTTP**, score 4.8;
+- the Zabbix finding is explicitly **not accepted** and is transferred to Project 11 for trusted HTTPS/reverse-proxy remediation;
+- management-report evidence confirms `actionable_count=1` and `accepted_risk_count=30`;
+- the validated security IaC is committed on `main` as `5165756a`.
 
-Still open before this remediation is considered closed:
+**Greenbone vulnerability-management validation gate: CLOSED.**
 
-- wait for managed validation scan `d22c813d-04a1-4c6e-93f3-ce21a9d7958a` to complete;
-- prove weak-MAC OID `1.3.6.1.4.1.25623.1.0.105610` falls from 13 findings to 0;
-- classify and codify accepted-risk handling for the ICMP/TCP timestamp findings only after review;
-- remediate or explicitly disposition the two Medium HTTP findings;
-- commit and push the SSH-hardening and Greenbone pagination IaC changes after validation;
-- run the final management-report evidence refresh and confirm accepted risks are separated from actionable findings.
+The remaining Zabbix HTTP finding is now Project 11 implementation work rather than an open Greenbone-control-validation issue.
 
 ### Project 7 — Docker container lifecycle extension — IN PROGRESS 12 OCTOBER 2026
 
-**Current gate:** further production image upgrades are paused pending the
-Greenbone vulnerability-detection investigation and a successful validation
-scan. The purpose is to avoid applying known fixes before understanding why the
-existing vulnerability-management control did not surface them.
+**Current gate:** the Greenbone vulnerability-detection gate was successfully
+closed on 14 October 2026. Project 7 is no longer security-blocked, but remains
+queued behind the currently selected Project 11 certificate/reverse-proxy work
+unless James explicitly reprioritises.
 
 Requested scope:
 
@@ -273,6 +277,7 @@ Recover/reconcile an authoritative prior checklist before using those step numbe
 | Network discovery | Single-owner cutover to `monitor-01` completed 27 September | CLOSED MIGRATION; source timers on `Proxmox-2` remain disabled/inactive |
 | Management-report network inventory v1 | Factual inventory/presence/freshness evidence pinned to `monitor-01`; no enrichment/change claims | CLOSED — future richer change detection requires a separately reviewed evidence model |
 | Management-report Zabbix attention semantics | Zabbix Information events remain raw evidence but are excluded from management attention; unknown severity stays visible | CLOSED refinement — committed as `4e8cefe2` and live-validated 14 October 2026 |
+| Greenbone vulnerability-management validation | Final managed scan: 0 Critical, 0 High, 1 actionable Medium, 0 Low, 30 accepted; weak SSH MAC remediation scanner-validated | CLOSED CONTROL VALIDATION — sole remaining Zabbix cleartext HTTP finding transferred to Project 11 |
 | Security and monitoring integration | Monitoring core, Zabbix and passive Suricata/Zeek evidence path closure-validated on 7 October 2026 | CLOSED — individual detections/tuning are normal operations; new tooling requires separate scope |
 | CT105 / VM203 unattended backup evidence | Observed | CLOSED EVIDENCE GAP |
 | CrowdSec | Not installed anywhere in active estate | ABSENT / DEFERRED; do not list as current telemetry |
