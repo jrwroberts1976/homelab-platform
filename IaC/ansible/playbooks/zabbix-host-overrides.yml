@@ -1,0 +1,190 @@
+---
+- name: Manage host-specific Zabbix monitoring overrides
+  hosts: localhost
+  gather_facts: false
+
+  vars:
+    zabbix_api_url: "http://192.168.2.59:8080/api_jsonrpc.php"
+    zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+
+    media01_host: "media-01"
+    media01_wlan_macro: '{$IFCONTROL:"wlan0"}'
+    media01_wlan_value: "0"
+
+  pre_tasks:
+    - name: Require privileged Zabbix API token
+      ansible.builtin.assert:
+        that:
+          - zabbix_api_token | length >= 20
+        fail_msg: >-
+          HOMELAB_ZABBIX_API_TOKEN must contain a Zabbix API token
+          with permission to manage host macros.
+
+  tasks:
+    - name: Find media-01 in Zabbix
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output:
+              - hostid
+              - host
+            filter:
+              host:
+                - "{{ media01_host }}"
+          id: 1
+        return_content: true
+      register: _media01_host
+      no_log: true
+      failed_when:
+        - _media01_host.json.error is defined
+
+    - name: Require exactly one media-01 host
+      ansible.builtin.assert:
+        that:
+          - _media01_host.json.result | length == 1
+        fail_msg: "Expected exactly one media-01 host in Zabbix."
+
+    - name: Record media-01 host ID
+      ansible.builtin.set_fact:
+        _media01_hostid: "{{ _media01_host.json.result[0].hostid }}"
+
+    - name: Read current media-01 macros
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usermacro.get
+          params:
+            output:
+              - hostmacroid
+              - macro
+              - value
+            hostids:
+              - "{{ _media01_hostid }}"
+          id: 2
+        return_content: true
+      register: _media01_macros
+      no_log: true
+      failed_when:
+        - _media01_macros.json.error is defined
+
+    - name: Find media-01 wlan0 override
+      ansible.builtin.set_fact:
+        _media01_wlan_matches: >-
+          {{
+            _media01_macros.json.result
+            | selectattr('macro', 'equalto', media01_wlan_macro)
+            | list
+          }}
+
+    - name: Require no duplicate wlan0 overrides
+      ansible.builtin.assert:
+        that:
+          - _media01_wlan_matches | length <= 1
+        fail_msg: "Duplicate wlan0 IFCONTROL macros found on media-01."
+
+    - name: Create media-01 wlan0 override
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usermacro.create
+          params:
+            hostid: "{{ _media01_hostid }}"
+            macro: "{{ media01_wlan_macro }}"
+            value: "{{ media01_wlan_value }}"
+            description: >-
+              wlan0 is intentionally down while media-01 uses wired Ethernet.
+          id: 3
+        return_content: true
+      register: _media01_macro_create
+      when: _media01_wlan_matches | length == 0
+      no_log: true
+      changed_when: true
+      failed_when:
+        - _media01_macro_create.json.error is defined
+
+    - name: Correct existing media-01 wlan0 override
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usermacro.update
+          params:
+            hostmacroid: "{{ _media01_wlan_matches[0].hostmacroid }}"
+            value: "{{ media01_wlan_value }}"
+            description: >-
+              wlan0 is intentionally down while media-01 uses wired Ethernet.
+          id: 4
+        return_content: true
+      register: _media01_macro_update
+      when:
+        - _media01_wlan_matches | length == 1
+        - _media01_wlan_matches[0].value != media01_wlan_value
+      no_log: true
+      changed_when: true
+      failed_when:
+        - _media01_macro_update.json.error is defined
+
+    - name: Read final media-01 macros
+      ansible.builtin.uri:
+        url: "{{ zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: usermacro.get
+          params:
+            output:
+              - hostmacroid
+              - macro
+              - value
+            hostids:
+              - "{{ _media01_hostid }}"
+          id: 5
+        return_content: true
+      register: _media01_macros_final
+      no_log: true
+      failed_when:
+        - _media01_macros_final.json.error is defined
+
+    - name: Verify media-01 wlan0 override
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              _media01_macros_final.json.result
+              | selectattr('macro', 'equalto', media01_wlan_macro)
+              | selectattr('value', 'equalto', media01_wlan_value)
+              | list
+              | length
+            ) == 1
+        fail_msg: "media-01 wlan0 IFCONTROL override was not applied."
+        success_msg: >-
+          media-01 wlan0 link-down monitoring is intentionally disabled.
