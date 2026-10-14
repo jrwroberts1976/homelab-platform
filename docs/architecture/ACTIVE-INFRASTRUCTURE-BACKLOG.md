@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 2026-10-12
+**Last reconciled:** 2026-10-14
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** repository-wide documentation audit/remediation COMPLETE through PRs #182–#185.
 
@@ -16,7 +16,7 @@
 
 ## Programme progress snapshot
 
-As of 10 October 2026:
+As of 14 October 2026:
 
 | View | Progress | Meaning |
 |---|---:|---|
@@ -81,14 +81,41 @@ The remaining non-optional work has different goals. Choose according to the out
 
 ### Current sequence
 
-1. **Current user-selected priority: investigate Greenbone vulnerability-detection coverage before performing further production container upgrades.**
-2. Determine whether the current Greenbone feed contains detection coverage for known relevant vulnerabilities such as `CVE-2026-15815`, whether affected product/version evidence is being discovered, and whether scan configuration/authentication/QoD prevents applicable findings from being reported.
-3. Correct any Greenbone feed, scanner, credential, target, VT-selection or product/version-detection problem found and prove the fix with a controlled validation scan.
-4. Do not perform further production Docker image upgrades until the Greenbone investigation and validation scan are complete.
-5. After Greenbone detection confidence is restored, resume Project 7's estate-wide image review and phased container updates using the completed BirdNET-Go lifecycle canary as the reference process.
-6. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless James reprioritises.
-7. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
-8. Optional/deferred items are not automatic commitments.
+1. **Current user-selected priority: complete Greenbone vulnerability-management validation before performing further production container upgrades.**
+2. Management-report Zabbix attention semantics and the expected-down `media-01` WLAN alert have been corrected and live-validated; these no longer block the current work.
+3. The current managed Greenbone evidence grouped into 44 actionable findings: 2 Medium and 42 Low. Thirteen Low findings were the same weak SSH MAC issue across 13 managed hosts.
+4. The weak SSH MAC issue has been remediated live across all 13 affected hosts by removing `umac-64-etm@openssh.com` and `umac-64@openssh.com`; effective `sshd -T` output was validated on every affected host. Scanner confirmation is still pending.
+5. Detailed Greenbone report retrieval has been changed live to use `ignore_pagination="1"` so validation evidence is not limited by report pagination. The repository change remains part of the current Greenbone WIP until committed.
+6. A fresh managed Greenbone validation scan started on 14 October 2026 at 08:33 BST with report ID `d22c813d-04a1-4c6e-93f3-ce21a9d7958a`. Do not mark SSH remediation closed in vulnerability evidence until that scan completes and OID `1.3.6.1.4.1.25623.1.0.105610` is absent.
+7. Review the remaining 29 timestamp findings for formal accepted-risk treatment and remediate or explicitly disposition the 2 Medium findings.
+8. Do not perform further production Docker image upgrades until the Greenbone investigation and validation scan are complete.
+9. After Greenbone detection confidence is restored, resume Project 7's estate-wide image review and phased container updates using the completed BirdNET-Go lifecycle canary as the reference process.
+10. After Project 7 closes, default engineering priority returns to **Project 6 (Backup/DR)**, then **Project 8 (legacy cleanup)** unless James reprioritises.
+11. Project 3 is closed; future host-intelligence changes require a separately reviewed scope.
+12. Optional/deferred items are not automatic commitments.
+
+### Greenbone and management-report remediation — IN PROGRESS 14 OCTOBER 2026
+
+Validated today:
+
+- management-report Zabbix `Information` severity events remain visible in raw evidence but no longer count as management attention;
+- the factual management report was live-validated at `15/15` Zabbix hosts available, `15/15` patch evidence current and `0` active infrastructure problems/alerts after the expected `media-01` WLAN condition was handled;
+- `media-01` uses the host-specific Zabbix context macro `{$IFCONTROL:"wlan0"}=0`, because `wlan0` is intentionally down whenever Ethernet is connected; the override is idempotent and is committed as `1666dad8`;
+- management-report informational-event filtering and AI fail-safe validation are committed as `4e8cefe2`;
+- the 44 current Greenbone actionable findings were reduced to five distinct classes: cleartext HTTP on `zabbix-01:8080`, missing `HttpOnly` on `docker-01:8080`, ICMP timestamps, TCP timestamps and weak SSH MAC algorithms;
+- the weak SSH MAC configuration was remediated live on all 13 affected hosts using a managed OpenSSH drop-in that subtracts only the two 64-bit UMAC algorithms;
+- both socket-activated and conventional SSH service models were tested; socket-activated Debian hosts require an SSH service restart rather than reload to avoid the known bind failure while `ssh.socket` owns port 22;
+- fresh SSH connectivity and effective MAC policy were validated after the change;
+- the Greenbone scanner template now requests the complete detailed report using `ignore_pagination="1"`, and that implementation is deployed live on `greenbone-01`.
+
+Still open before this remediation is considered closed:
+
+- wait for managed validation scan `d22c813d-04a1-4c6e-93f3-ce21a9d7958a` to complete;
+- prove weak-MAC OID `1.3.6.1.4.1.25623.1.0.105610` falls from 13 findings to 0;
+- classify and codify accepted-risk handling for the ICMP/TCP timestamp findings only after review;
+- remediate or explicitly disposition the two Medium HTTP findings;
+- commit and push the SSH-hardening and Greenbone pagination IaC changes after validation;
+- run the final management-report evidence refresh and confirm accepted risks are separated from actionable findings.
 
 ### Project 7 — Docker container lifecycle extension — IN PROGRESS 12 OCTOBER 2026
 
@@ -240,11 +267,12 @@ Recover/reconcile an authoritative prior checklist before using those step numbe
 | Router VPN | ASUS router-hosted OpenVPN operational and accepted | CLOSED; maintenance/recovery documentation only |
 | Proxmox storage / HA | Node-local guest storage + two-node cluster + QDevice; manual backup-based recovery accepted | SHARED STORAGE / AUTOMATIC HA OUT OF SCOPE unless explicitly reopened |
 | Legacy HP ProCurve | Existing hardware retained; legacy management risk acknowledged | HARDENING only if deliberately reopened |
-| `media-01` | Kodi/media service operational; NFS backup-target role retained | NORMAL OPERATIONS |
+| `media-01` | Kodi/media service operational; NFS backup-target role retained; `wlan0` is intentionally down when Ethernet is connected and its Zabbix link-down trigger is disabled with a host-specific context macro | NORMAL OPERATIONS |
 | Home Assistant | `home-01` commissioned and operational | NORMAL OPERATIONS; only explicitly requested monitoring/recovery work |
 | Jenkins | Already removed | CLOSED — do not create retirement task |
 | Network discovery | Single-owner cutover to `monitor-01` completed 27 September | CLOSED MIGRATION; source timers on `Proxmox-2` remain disabled/inactive |
 | Management-report network inventory v1 | Factual inventory/presence/freshness evidence pinned to `monitor-01`; no enrichment/change claims | CLOSED — future richer change detection requires a separately reviewed evidence model |
+| Management-report Zabbix attention semantics | Zabbix Information events remain raw evidence but are excluded from management attention; unknown severity stays visible | CLOSED refinement — committed as `4e8cefe2` and live-validated 14 October 2026 |
 | Security and monitoring integration | Monitoring core, Zabbix and passive Suricata/Zeek evidence path closure-validated on 7 October 2026 | CLOSED — individual detections/tuning are normal operations; new tooling requires separate scope |
 | CT105 / VM203 unattended backup evidence | Observed | CLOSED EVIDENCE GAP |
 | CrowdSec | Not installed anywhere in active estate | ABSENT / DEFERRED; do not list as current telemetry |
