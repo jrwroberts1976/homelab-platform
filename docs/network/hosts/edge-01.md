@@ -126,7 +126,7 @@ Managed Debian 13 LXC container edge-01 (CT103) on Proxmox-2. OpenSSH is exposed
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-14T05:57:22+01:00`
+- Last assessed: `2026-10-14T06:58:13+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
