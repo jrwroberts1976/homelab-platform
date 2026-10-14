@@ -1,0 +1,61 @@
+---
+- name: Harden SSH MAC algorithms
+  hosts:
+    - media-01
+    - monitor-01
+    - docker-01
+    - admin-01
+    - dns-02
+    - dns-01
+    - cloud-01
+    - mail-relay-01
+    - sensor-01
+    - edge-01
+    - greenbone-01
+    - komodo-01
+    - zabbix-01
+    - Proxmox-2
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Check whether SSH socket activation is active
+      ansible.builtin.command:
+        cmd: systemctl is-active ssh.socket
+      register: ssh_socket_state
+      changed_when: false
+      failed_when: false
+
+    - name: Remove weak 64-bit SSH MAC algorithms
+      ansible.builtin.copy:
+        dest: /etc/ssh/sshd_config.d/90-homelab-crypto.conf
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by homelab-platform
+          # Remove 64-bit MAC algorithms flagged by Greenbone.
+          MACs -umac-64-etm@openssh.com,umac-64@openssh.com
+      register: ssh_crypto_policy
+      notify: Apply SSH configuration
+
+    - name: Validate complete SSH configuration
+      ansible.builtin.command:
+        cmd: /usr/sbin/sshd -t
+      changed_when: false
+      when: ssh_crypto_policy.changed
+
+  handlers:
+    - name: Restart socket-activated SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+      when: ssh_socket_state.stdout == "active"
+      listen: Apply SSH configuration
+
+    - name: Reload conventional SSH
+      ansible.builtin.service:
+        name: ssh
+        state: reloaded
+      when: ssh_socket_state.stdout != "active"
+      listen: Apply SSH configuration

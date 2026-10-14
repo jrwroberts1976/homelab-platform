@@ -223,7 +223,7 @@ def wait_for_scan(report_id):
 
 def get_report(report_id):
     response = gmp(
-        f'<get_reports report_id="{report_id}" details="1"/>'
+        f'<get_reports report_id="{report_id}" details="1" ignore_pagination="1"/>'
     )
     root = ET.fromstring(response)
 
