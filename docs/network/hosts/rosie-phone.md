@@ -50,33 +50,30 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T12:04:32+01:00`
+- Assessed: `2026-10-15T13:01:53+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `92:ff:53:0a:16:e9`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Likely a POCO C75 smartphone, identified from its DHCP hostname. Exact OS is unavailable; the Nmap scan was incomplete and returned no OS or port evidence.
+Likely a POCO C75 smartphone, identified from the DHCP hostname and matching phone-oriented inventory hostname. Exact OS/firmware is not available.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.224.
-- The router reports DHCP hostname POCO-C75.
-- Inventory records the hostnames rosie-phone.jameshouse and rosie-phone.
-- The MAC address is 92:ff:53:0a:16:e9; no vendor was identified from the supplied evidence.
-- Nmap status is partial, with a scan error and no OS or port results.
-- No actionable Greenbone findings matched this IP; this does not prove the device is vulnerability-free.
-- No sampled Loki entries or recent high-risk DNS policy matches were reported.
+- The router reports DHCP hostname POCO-C75 for 192.168.2.224.
+- Inventory records hostname rosie-phone.jameshouse and telemetry hostname rosie-phone.
+- The router currently reports the device as online at 192.168.2.224.
+- No authoritative OS fact or Nmap OS match is available.
+- No actionable Greenbone findings match the current IP; this does not establish that the device is vulnerability-free.
 
 ### Inferences
 
-- POCO-C75 is likely the device model or model-derived hostname.
-- The device is likely a POCO/Xiaomi smartphone using Android-based firmware.
-- The differing inventory and DHCP hostnames create some identity ambiguity.
+- The device is likely a POCO C75 smartphone.
+- POCO is a Xiaomi mobile-device brand, and the device likely uses an Android-based mobile platform; this is not directly confirmed by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T12:04:32+01:00`
+- Assessed: `2026-10-15T13:01:53+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f8:17:2d:64:ca:04`
 - Identity confidence: **medium**
@@ -60,25 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online host 192.168.2.167 is identified by its inventory and Nmap hostname as kitchen-light-switch.jameshouse, suggesting a smart light switch. No OS, vendor, port, service, or DNS evidence is available; manual review is required.
+Online device at 192.168.2.167 identified primarily by its kitchen-light-switch hostname. The DHCP hostname is wlan0, creating an identity conflict; no OS, vendor, port, or service evidence is available.
 
 ### Confirmed facts
 
-- The host is online at 192.168.2.167.
-- The inventory and Nmap hostnames are kitchen-light-switch.jameshouse.
-- The telemetry hostname is kitchen-light-switch.
+- The device is online at 192.168.2.167.
+- Inventory and telemetry hostname are kitchen-light-switch.jameshouse and kitchen-light-switch, respectively.
 - The router reports DHCP hostname wlan0 for this IP.
-- The MAC address is f8:17:2d:64:ca:04.
-- Nmap status is partial with missing OS evidence and no TCP or UDP ports listed.
-- No authoritative OS evidence is available.
-- No actionable Greenbone findings match this current IP.
-- No sampled Loki entries or warning/error samples are available for the bounded 24-hour window.
+- No authoritative OS, inventory OS, or Nmap OS evidence is available.
+- No TCP or UDP ports were reported by Nmap.
+- No matching actionable Greenbone findings were reported for the current IP.
 
 ### Inferences
 
-- The hostname suggests the device is a kitchen smart light switch.
-- The device likely uses embedded IoT firmware, but the exact operating system is unsupported by the supplied evidence.
-- The conflicting DHCP hostname wlan0 reduces identity confidence.
+- The kitchen-light-switch hostname suggests this is a smart light-switch device.
+- The device likely uses embedded IoT firmware, but the operating system is not identified.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

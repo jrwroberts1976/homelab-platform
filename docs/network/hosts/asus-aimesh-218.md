@@ -55,7 +55,7 @@ Use bounded domain/service summaries only.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T12:04:32+01:00`
+- Assessed: `2026-10-15T13:01:53+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `04:d4:c4:c1:62:38`
 - Identity confidence: **high**
@@ -65,24 +65,23 @@ Use bounded domain/service summaries only.
 
 ### Assessment summary
 
-ASUS RT-AC86U-class wireless mesh node, identified by the canonical estate role, ASUS vendor data, DHCP hostname, and matching TLS certificate. It exposes Dropbear SSH plus web management ports; the exact embedded OS/firmware is not established.
+ASUS AiMesh wireless mesh node identified as an RT-AC86U-family device. It exposes Dropbear SSH and web management services; the exact firmware/OS is not established.
 
 ### Confirmed facts
 
-- The canonical estate identifies this host as an ASUS AiMesh node with the role Wireless mesh node.
-- The inventory and Nmap data identify the vendor as ASUSTek Computer.
+- The canonical estate role is ASUS AiMesh node / Wireless mesh node.
 - The DHCP and inventory hostname is RT-AC86U-6238.
-- The TLS certificate identifies the device as RT-AC86U-6238 and includes ASUS router, repeater, and access-point domains.
-- TCP port 22 is open and runs Dropbear sshd, protocol 2.0.
-- TCP ports 80 and 8443 are open.
-- The 8443 service is identified as HTTPS-alt over TLS.
-- No authoritative OS fact is available.
+- The recorded vendor is ASUSTek Computer.
+- TCP/22 is open and provides corroborated Dropbear SSH service, protocol 2.0.
+- TCP/80 is open; its Nmap service label was omitted.
+- TCP/8443 is open and is corroborated as HTTPS-alt.
+- The TLS certificate subject identifies RT-AC86U-6238 and includes ASUS router/repeater management DNS names.
+- Greenbone reported zero actionable findings matching the current host IP; this is not proof that the host is vulnerability-free.
 
 ### Inferences
 
-- The device is an ASUS RT-AC86U-class router or mesh node operating embedded firmware.
-- The available evidence is consistent with a Linux-based embedded platform, but Nmap fingerprint alternatives do not establish an exact kernel or operating system.
-- DNS activity involving routerahs.asus.com and fwupdate.asuswrt-merlin.net is consistent with an ASUS router firmware ecosystem, but does not prove a specific firmware build.
+- The device is very likely an ASUS RT-AC86U-family AiMesh node, supported by the hostname, canonical role, vendor, and TLS certificate.
+- The platform is likely embedded ASUS router firmware built on a Linux-derived stack; Nmap OS matches are not sufficient to establish an exact OS or firmware version.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

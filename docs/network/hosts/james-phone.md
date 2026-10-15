@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T12:04:32+01:00`
+- Assessed: `2026-10-15T13:01:53+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `16:c1:05:ad:4b:8a`
 - Identity confidence: **medium**
@@ -60,23 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely James's mobile phone, identified from the inventory and DHCP hostnames. No vendor, OS, open-port, or service evidence is available; manual review is required for platform identification.
+Likely James's smartphone, identified from the inventory hostname and DHCP hostname `james-s-A13`. Exact OS and vendor are not established. No actionable Greenbone findings were reported for 192.168.2.206.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.206.
-- The inventory hostname is james-phone.jameshouse and the telemetry hostname is james-phone.
-- The DHCP hostname is james-s-A13.
-- Nmap completed with baseline status but found no TCP or UDP ports and no OS matches.
-- No authoritative OS information is available.
-- No matching actionable Greenbone findings were reported for this IP; this does not establish that the host is vulnerability-free.
-- No sampled Loki entries or recent high-risk DNS policy matches were present.
+- The device is associated with IP address 192.168.2.206.
+- The inventory hostname is `james-phone.jameshouse`, with telemetry hostname `james-phone`.
+- The router reports DHCP hostname `james-s-A13`.
+- Authoritative OS data is unavailable.
+- Nmap did not obtain an OS match or port data; the scan reported an expected-single-host error.
+- No actionable Greenbone findings matched this IP.
+- No Zeek connections or top ports/services were recorded in the supplied data.
 
 ### Inferences
 
-- The host is likely a smartphone or other mobile phone.
-- The DHCP hostname may indicate a device model or user-assigned naming convention, but it is not sufficient to identify the vendor or exact model.
-- The operating system and exact platform cannot be determined from the supplied evidence.
+- The host is likely a smartphone.
+- The `A13` suffix may be a model-related DHCP hostname component, but the exact manufacturer and model are unconfirmed.
+- The platform is likely mobile embedded firmware, but Android or another specific OS is not established.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

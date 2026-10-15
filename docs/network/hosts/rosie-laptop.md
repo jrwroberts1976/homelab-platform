@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T12:04:32+01:00`
+- Assessed: `2026-10-15T13:01:53+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `58:02:05:fd:e1:8b`
 - Identity confidence: **medium**
@@ -60,22 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a Windows laptop identified as rosie-laptop, with DHCP hostname LAPTOP-SRR7CFCE. Exact OS and services could not be established from the available evidence.
+Likely a Windows-based laptop identified by the estate hostname and DHCP name. Exact OS is unconfirmed; Nmap provided no OS or service evidence.
 
 ### Confirmed facts
 
-- The device is associated with IP address 192.168.2.6.
-- The inventory hostname is rosie-laptop.jameshouse.
-- The router reports DHCP hostname LAPTOP-SRR7CFCE.
-- DNS telemetry included Windows Update and Microsoft delivery endpoints.
-- Nmap status is partial with no OS matches and no recorded ports.
-- No actionable Greenbone findings matched the current IP in the supplied scan result.
+- The device is associated with IP address 192.168.2.6 and MAC address 58:02:05:fd:e1:8b.
+- The inventory hostname is rosie-laptop.jameshouse and the telemetry hostname is rosie-laptop.
+- The router reports DHCP hostname LAPTOP-SRR7CFCE for this IP.
+- Observed DNS signals include Windows Update and Microsoft delivery endpoints.
+- Nmap status is partial with no OS matches, ports, or services reported.
+- No actionable Greenbone findings currently match this IP.
+- The device is currently reported online by the router, while inventory marks it offline.
 
 ### Inferences
 
-- The hostname and DHCP name support identifying the device as a laptop.
-- The Windows Update DNS signal and LAPTOP-style DHCP hostname suggest a Microsoft Windows platform.
-- The exact Windows edition, release, and version are unsupported by the supplied evidence.
+- The host is likely a laptop based on the inventory hostname, telemetry hostname, and DHCP hostname.
+- The Windows Update DNS signal and LAPTOP-style DHCP hostname cautiously suggest a Windows-based platform.
+- The exact operating system and version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

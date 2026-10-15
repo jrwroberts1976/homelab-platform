@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T12:04:32+01:00`
+- Assessed: `2026-10-15T13:01:53+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `5c:34:00:50:df:b3`
 - Identity confidence: **high**
@@ -60,21 +60,20 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely Hisense smart TV using VIDAA-related services. Exact operating system is unavailable; Nmap provided no OS evidence.
+Likely a Hisense VIDAA smart TV. Identity is well supported by the hostname, vendor attribution, and VIDAA-related DNS activity; no exact OS or firmware is established.
 
 ### Confirmed facts
 
-- The inventory hostname is main-tv.jameshouse.
-- The recorded vendor is Hisense Electric.
-- DNS samples include multiple vidaahub.com domains, plus YouTube and Netflix domains.
-- The device is currently online at 192.168.2.234.
-- Nmap status is partial with no OS matches or port results.
-- No actionable Greenbone findings currently match this IP; this is not proof that the host is vulnerability-free.
+- The device hostname is main-tv.jameshouse.
+- The inventory and Nmap records identify the vendor as Hisense Electric.
+- Observed DNS domains include multiple vidaahub.com endpoints.
+- Nmap OS identification is incomplete, with no OS matches or port evidence.
+- No actionable Greenbone findings matched the current IP at scan time.
 
 ### Inferences
 
-- The device is most likely a Hisense smart TV.
-- The observed VIDAA-related DNS activity is consistent with embedded TV firmware, but does not establish an exact operating system or version.
+- The device is likely a Hisense smart television using the VIDAA platform.
+- The platform is best classified as embedded IoT firmware; the exact OS and firmware version are unknown.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
