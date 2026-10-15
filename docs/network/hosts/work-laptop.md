@@ -51,7 +51,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T11:05:00+01:00`
+- Assessed: `2026-10-15T12:02:16+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `ec:91:61:9c:a4:45`
 - Identity confidence: **high**
@@ -61,23 +61,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online work-laptop endpoint at 192.168.2.219. Hostname and Microsoft/Windows Update DNS activity suggest a Windows laptop, but no authoritative or Nmap OS evidence is available; manual review is required.
+Online laptop identified as work-laptop.jameshouse at 192.168.2.219. DNS activity includes Windows Update and Microsoft delivery endpoints, but no authoritative or Nmap OS evidence is available. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The inventory hostname is work-laptop.jameshouse.
-- The DHCP hostname is APL-PF5F6D28.
+- Inventory hostname is work-laptop.jameshouse.
+- DHCP hostname is APL-PF5F6D28.
 - The device is online at 192.168.2.219.
 - The MAC address is ec:91:61:9c:a4:45.
-- The recorded vendor is Cloud Network Technology Singapore PTE.
-- Observed DNS signals include Windows Update and Microsoft delivery endpoints.
-- Nmap collection is partial and contains no OS matches or scanned ports.
-- Greenbone reported zero actionable findings matching this IP; this does not prove the host is vulnerability-free.
+- The recorded MAC vendor is Cloud Network Technology Singapore PTE.
+- DNS telemetry included Windows Update / Microsoft delivery endpoint signals.
+- Nmap status is partial with no OS matches and no listed TCP or UDP ports.
+- Greenbone reported zero matching actionable findings for this host IP.
 
 ### Inferences
 
-- The device is likely a Windows-based laptop or similar desktop/laptop endpoint.
-- The APL-PF5F6D28 hostname may be a vendor or device-generated identifier, but its exact meaning is unsupported by the evidence.
+- The device is a laptop based on its documented hostname.
+- The DNS pattern is consistent with a Windows-oriented endpoint, but does not establish an exact Windows version or OS.
+- The platform is likely a general-purpose desktop/laptop endpoint rather than a specialized embedded device.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -55,7 +55,7 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T11:05:00+01:00`
+- Assessed: `2026-10-15T12:02:16+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:9c:02:45:39:00`
 - Identity confidence: **high**
@@ -65,22 +65,23 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 
 ### Assessment summary
 
-HP ProCurve 2510G-24 managed switch at 192.168.2.16. Corroborated HTTP evidence identifies the model and HP switch software; TCP 23 and 80 are open. Exact OS is not established.
+HP ProCurve 2510G-24 core managed switch and SPAN source at 192.168.2.16. HTTP configuration service is confirmed; TCP/23 is open. No actionable Greenbone findings matched this IP. Exact operating system is not established.
 
 ### Confirmed facts
 
-- The canonical estate record identifies the device as an HP ProCurve 2510G-24 and assigns it the role of core managed switch and SPAN source.
-- The device is online at 192.168.2.16 with hostname hp-switch.jameshouse.
-- The vendor is recorded as Hewlett Packard.
-- TCP port 23 is open; the Nmap service label is omitted.
-- TCP port 80 is open and has corroborated HTTP evidence: eHTTP 2.0 with extra information identifying an HP ProCurve Switch 2510G-24 HTTP configuration service.
-- Greenbone reported zero actionable findings matching this current IP; this is not proof that the host is vulnerability-free or fully scanned.
+- The canonical estate identity is HP ProCurve 2510G-24.
+- The device is classified as a network device with the role Core managed switch and SPAN source.
+- The vendor is Hewlett Packard.
+- The device is online at 192.168.2.16.
+- TCP port 80 is open and identified as HTTP with corroborated HP ProCurve Switch 2510G-24 configuration evidence.
+- TCP port 23 is open.
+- Greenbone reported zero matching actionable findings for the current IP.
 
 ### Inferences
 
-- The device is an embedded network-switch platform rather than a general-purpose host.
-- Nmap produced a VxWorks match and several alternative embedded-device matches, but these are not sufficient to establish the exact operating system.
-- Manual review is required because the platform and exact OS remain ambiguous.
+- The device uses embedded network-switch firmware.
+- Nmap results are consistent with an embedded switch, but do not establish the exact operating system.
+- The Nmap VxWorks match is tentative and is not sufficient to populate exact_os.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

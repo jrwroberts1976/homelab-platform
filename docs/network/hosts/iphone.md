@@ -40,7 +40,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T11:05:00+01:00`
+- Assessed: `2026-10-15T12:02:16+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `92:8b:32:14:8b:e9`
 - Identity confidence: **medium**
@@ -50,21 +50,21 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 ### Assessment summary
 
-Host is identified as an iPhone by its DHCP and telemetry hostname, but no vendor, service, or OS fingerprint evidence is available. Exact OS remains undetermined.
+Host 192.168.2.182 is identified as an iPhone primarily from its documented DHCP and inventory hostname. No exact iOS version or other OS evidence is available.
 
 ### Confirmed facts
 
-- The DHCP hostname and telemetry hostname are both "iPhone".
-- The host used IP address 192.168.2.182 and MAC address 92:8b:32:14:8b:e9.
-- The host was reported offline by inventory telemetry.
-- Nmap has no recorded TCP or UDP ports or OS matches.
-- No actionable Greenbone findings match this IP.
-- No locally blocked high-risk DNS policy matches were recorded in the recent one-hour sample.
+- The device hostname is documented as "iPhone" in DHCP, router, inventory, and Nmap records.
+- The device was assigned IP address 192.168.2.182.
+- The MAC address is 92:8b:32:14:8b:e9.
+- Nmap is pending after fresh ARP presence detection failed and reports no ports or OS matches.
+- No actionable Greenbone findings match this IP in the supplied report.
+- No sampled Loki entries or recent high-risk DNS policy matches are present.
 
 ### Inferences
 
-- The device is likely a mobile device, probably an iPhone, based on the documented hostname.
-- The MAC address does not provide a usable vendor identification in the supplied evidence.
+- The device is likely an Apple iPhone based on the repeated documented hostname.
+- The platform is likely mobile device firmware, but the exact operating system is unsupported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
