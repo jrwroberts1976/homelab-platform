@@ -127,13 +127,13 @@ dns-01 is CT101 on Proxmox-2, running Debian GNU/Linux 13 (trixie) and providing
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T07:07:03+01:00`
-- Pending updates: **3**
-- Security updates pending: **3**
+- Last assessed: `2026-10-15T08:11:03+01:00`
+- Pending updates: **0**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-09T07:52:10+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-15T07:25:36+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->

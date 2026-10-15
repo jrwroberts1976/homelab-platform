@@ -109,9 +109,9 @@ Managed Debian 13 LXC container CT105 on PROXMOX providing the Zabbix monitoring
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T07:21:09+01:00`
-- Pending updates: **2**
-- Security updates pending: **2**
+- Last assessed: `2026-10-15T08:22:09+01:00`
+- Pending updates: **4**
+- Security updates pending: **4**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-04T12:39:26+01:00`
