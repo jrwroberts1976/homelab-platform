@@ -112,12 +112,12 @@ PROXMOX is a confirmed physical Proxmox VE cluster node and cluster anchor runni
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T17:45:36+01:00`
-- Pending updates: **1**
+- Last assessed: `2026-10-15T19:11:52+01:00`
+- Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-15T06:37:32+01:00`
+- Last APT transaction activity: `2026-10-15T18:57:02+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
