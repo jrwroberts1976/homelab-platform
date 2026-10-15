@@ -127,7 +127,7 @@ Managed Proxmox LXC container CT102 running Debian GNU/Linux 13 as the internal 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T03:06:36+01:00`
+- Last assessed: `2026-10-15T04:07:30+01:00`
 - Pending updates: **2**
 - Security updates pending: **2**
 - Reboot required: **No**
