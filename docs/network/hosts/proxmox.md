@@ -123,8 +123,8 @@ PROXMOX is a Hewlett Packard physical Proxmox VE cluster node and cluster anchor
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T02:12:27+01:00`
-- Pending updates: **3**
+- Last assessed: `2026-10-15T03:16:07+01:00`
+- Pending updates: **4**
 - Security updates pending: **3**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
