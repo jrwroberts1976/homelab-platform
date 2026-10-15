@@ -1,0 +1,10 @@
+[Unit]
+Description=Publish Greenbone vulnerability metrics for Prometheus
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/homelab-greenbone-metrics
+User=root
+Group=root

@@ -1,0 +1,16 @@
+---
+- name: Install production Hosts dashboard
+  ansible.builtin.copy:
+    src: grafana/dashboards/production/homelab-linux-estate.json
+    dest: "{{ monitoring_root }}/grafana/provisioning/dashboards/production/homelab-linux-estate.json"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate production Hosts dashboard JSON
+  ansible.builtin.command:
+    argv:
+      - jq
+      - empty
+      - "{{ monitoring_root }}/grafana/provisioning/dashboards/production/homelab-linux-estate.json"
+  changed_when: false

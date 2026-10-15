@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-linux-estate",
-  "title": "Homelab — Hosts",
+  "title": "Homelab \u2014 Hosts",
   "description": "Single-host health, resource diagnostics and patch status. Select exactly one host; estate-wide totals belong on Home.",
   "tags": [
     "homelab",
@@ -67,6 +67,14 @@
       "title": "Logs",
       "type": "link",
       "url": "/d/homelab-observability",
+      "keepTime": true,
+      "includeVars": false,
+      "targetBlank": false
+    },
+    {
+      "title": "Vulnerabilities",
+      "type": "link",
+      "url": "/d/homelab-vulnerability-management",
       "keepTime": true,
       "includeVars": false,
       "targetBlank": false
@@ -920,6 +928,79 @@
         "showHeader": true,
         "cellHeight": "sm",
         "enablePagination": false
+      }
+    },
+    {
+      "id": 32,
+      "type": "table",
+      "title": "Vulnerabilities for Selected Host",
+      "description": "Current actionable Greenbone findings for the host selected at the top of this dashboard.",
+      "gridPos": {
+        "x": 0,
+        "y": 44,
+        "w": 24,
+        "h": 12
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sort_desc(homelab_greenbone_actionable_finding_score{hostname=~\"$host\"})",
+          "format": "table",
+          "instant": true,
+          "range": false
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {
+              "Time": true,
+              "__name__": true,
+              "cves": true,
+              "finding_id": true,
+              "ip": true,
+              "oid": true,
+              "hostname": true
+            },
+            "indexByName": {
+              "category": 0,
+              "severity": 1,
+              "reference": 2,
+              "Value": 3,
+              "finding": 4,
+              "port": 5
+            },
+            "renameByName": {
+              "category": "Type",
+              "severity": "Severity",
+              "reference": "CVE / Advisory",
+              "Value": "Score",
+              "finding": "Finding",
+              "port": "Port"
+            }
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {
+          "show": false,
+          "reducer": [
+            "sum"
+          ],
+          "countRows": false,
+          "fields": ""
+        }
       }
     }
   ]

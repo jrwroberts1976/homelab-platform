@@ -16,3 +16,10 @@
 
   roles:
     - role: greenbone_scan_account
+      vars:
+        greenbone_scan_extra_source_ips: >-
+          {{
+            ['172.18.0.0/16']
+            if inventory_hostname == 'greenbone-01'
+            else []
+          }}

@@ -1,0 +1,17 @@
+---
+- name: Install Greenbone vulnerability management dashboard
+  ansible.builtin.copy:
+    src: grafana/dashboards/production/homelab-vulnerability-management.json
+    dest: "{{ monitoring_root }}/grafana/provisioning/dashboards/production/homelab-vulnerability-management.json"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Validate Greenbone vulnerability management dashboard JSON
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - json.tool
+      - "{{ monitoring_root }}/grafana/provisioning/dashboards/production/homelab-vulnerability-management.json"
+  changed_when: false

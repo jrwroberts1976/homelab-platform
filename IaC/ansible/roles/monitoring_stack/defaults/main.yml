@@ -121,6 +121,7 @@ monitoring_grafana_production_dashboard_files:
   - "homelab-operations-overview.json"
   - "homelab-linux-estate.json"
   - "homelab-patching.json"
+  - "homelab-vulnerability-management.json"
 
 monitoring_grafana_dashboard_uids:
   - "homelab-network-host-tiles"
@@ -136,3 +137,7 @@ monitoring_grafana_dashboard_uids:
   - "homelab-node-detail"
   - "homelab-network-device-detail"
   - "homelab-patching"
+
+# Greenbone vulnerability evidence exported into the node-exporter textfile collector.
+monitoring_greenbone_evidence_file: "/var/lib/homelab-management-report/evidence-sources/greenbone-01/incoming/managed.json"
+monitoring_greenbone_metrics_file: "{{ monitoring_node_exporter_textfile_directory }}/homelab_greenbone.prom"

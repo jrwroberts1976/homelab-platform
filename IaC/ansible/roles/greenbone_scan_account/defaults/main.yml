@@ -3,3 +3,4 @@ greenbone_scan_username: greenbone-scan
 greenbone_scan_home: /home/greenbone-scan
 greenbone_scan_source_ip: 192.168.2.57
 greenbone_scan_public_key: ""
+greenbone_scan_extra_source_ips: []

@@ -29,5 +29,5 @@
     group: "{{ greenbone_scan_username }}"
     mode: "0600"
     content: >-
-      from="{{ greenbone_scan_source_ip }}",no-agent-forwarding,no-port-forwarding,no-X11-forwarding
+      from="{{ ([greenbone_scan_source_ip] + greenbone_scan_extra_source_ips) | join(',') }}",no-agent-forwarding,no-port-forwarding,no-X11-forwarding
       {{ greenbone_scan_public_key }}

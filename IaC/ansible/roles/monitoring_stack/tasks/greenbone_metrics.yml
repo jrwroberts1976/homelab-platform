@@ -1,0 +1,45 @@
+---
+- name: Install Greenbone Prometheus metrics exporter
+  ansible.builtin.template:
+    src: greenbone-metrics-exporter.py.j2
+    dest: /usr/local/sbin/homelab-greenbone-metrics
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Validate Greenbone metrics exporter Python syntax
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - py_compile
+      - /usr/local/sbin/homelab-greenbone-metrics
+  changed_when: false
+
+- name: Install Greenbone metrics service
+  ansible.builtin.template:
+    src: homelab-greenbone-metrics.service.j2
+    dest: /etc/systemd/system/homelab-greenbone-metrics.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Greenbone metrics timer
+  ansible.builtin.template:
+    src: homelab-greenbone-metrics.timer.j2
+    dest: /etc/systemd/system/homelab-greenbone-metrics.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable Greenbone metrics timer
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+    name: homelab-greenbone-metrics.timer
+    enabled: true
+    state: started
+
+- name: Publish Greenbone metrics immediately
+  ansible.builtin.systemd_service:
+    name: homelab-greenbone-metrics.service
+    state: started

@@ -1,0 +1,11 @@
+---
+- name: Deploy Greenbone vulnerability metrics
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Deploy Greenbone metrics integration
+      ansible.builtin.include_role:
+        name: monitoring_stack
+        tasks_from: greenbone_metrics

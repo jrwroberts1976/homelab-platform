@@ -1,0 +1,203 @@
+#!/usr/bin/env python3
+
+import json
+import os
+import re
+from collections import Counter
+from datetime import datetime
+from pathlib import Path
+
+SOURCE = Path("{{ monitoring_greenbone_evidence_file }}")
+DESTINATION = Path("{{ monitoring_greenbone_metrics_file }}")
+
+SEVERITIES = ("Critical", "High", "Medium", "Low", "Log")
+
+HOSTNAMES = {
+{% for inventory_host in groups['zabbix_agents'] | default([]) %}
+    "{{ hostvars[inventory_host].ansible_host | default(inventory_host) }}": "{{ inventory_host }}",
+{% endfor %}
+}
+
+
+def finding_category(name, port):
+    name = str(name).lower()
+    port = str(port).lower()
+
+    if "debian: security advisory" in name or port == "package":
+        return "Patch"
+
+    if "cookie attribute" in name:
+        return "Configuration"
+
+    if "missing linux kernel mitigations" in name:
+        return "Mitigation"
+
+    return "Vulnerability"
+
+
+def prometheus_label(value):
+    return (
+        str(value)
+        .replace("\\", "\\\\")
+        .replace("\n", "\\n")
+        .replace('"', '\\"')
+    )
+
+
+def iso_timestamp(value):
+    return datetime.fromisoformat(
+        str(value).replace("Z", "+00:00")
+    ).timestamp()
+
+
+payload = json.loads(SOURCE.read_text(encoding="utf-8"))
+
+if payload.get("schema_version") != 1:
+    raise RuntimeError(
+        "Unsupported Greenbone evidence schema: "
+        + repr(payload.get("schema_version"))
+    )
+
+severity_counts = payload.get("severity_counts")
+if not isinstance(severity_counts, dict):
+    raise RuntimeError("severity_counts is missing or invalid")
+
+actionable_findings = payload.get("actionable_findings", [])
+if not isinstance(actionable_findings, list):
+    raise RuntimeError("actionable_findings must be a list")
+
+collected_at = iso_timestamp(payload["collected_at"])
+
+lines = [
+    "# HELP homelab_greenbone_evidence_timestamp_seconds Unix timestamp of the Greenbone evidence.",
+    "# TYPE homelab_greenbone_evidence_timestamp_seconds gauge",
+    f"homelab_greenbone_evidence_timestamp_seconds {collected_at:.0f}",
+    "",
+    "# HELP homelab_greenbone_actionable_findings_total Actionable Greenbone findings.",
+    "# TYPE homelab_greenbone_actionable_findings_total gauge",
+    "homelab_greenbone_actionable_findings_total "
+    + str(int(payload.get("actionable_count", 0))),
+    "",
+    "# HELP homelab_greenbone_accepted_risks_total Greenbone findings recorded as accepted risk.",
+    "# TYPE homelab_greenbone_accepted_risks_total gauge",
+    "homelab_greenbone_accepted_risks_total "
+    + str(int(payload.get("accepted_risk_count", 0))),
+    "",
+    "# HELP homelab_greenbone_findings_total Greenbone findings by severity.",
+    "# TYPE homelab_greenbone_findings_total gauge",
+]
+
+for severity in SEVERITIES:
+    count = int(severity_counts.get(severity, 0))
+    labels = '{severity="' + prometheus_label(severity) + '"}'
+    lines.append(
+        "homelab_greenbone_findings_total"
+        + labels
+        + " "
+        + str(count)
+    )
+
+host_severity = Counter()
+
+for finding in actionable_findings:
+    if not isinstance(finding, dict):
+        continue
+
+    host = finding.get("host")
+    severity = finding.get("severity")
+
+    if not host or not severity:
+        continue
+
+    host_severity[(str(host), str(severity))] += 1
+
+lines.extend(
+    [
+        "",
+        "# HELP homelab_greenbone_host_actionable_findings Actionable findings by host and severity.",
+        "# TYPE homelab_greenbone_host_actionable_findings gauge",
+    ]
+)
+
+for (host, severity), count in sorted(host_severity.items()):
+    labels = (
+        '{host="'
+        + prometheus_label(host)
+        + '",severity="'
+        + prometheus_label(severity)
+        + '"}'
+    )
+
+    lines.append(
+        "homelab_greenbone_host_actionable_findings"
+        + labels
+        + " "
+        + str(count)
+    )
+
+lines.append("")
+
+
+lines.extend(
+    [
+        "",
+        "# HELP homelab_greenbone_actionable_finding_score Actionable Greenbone finding with CVSS score and metadata.",
+        "# TYPE homelab_greenbone_actionable_finding_score gauge",
+    ]
+)
+
+for finding_id, finding in enumerate(actionable_findings, start=1):
+    if not isinstance(finding, dict):
+        continue
+
+    ip = str(finding.get("host") or "")
+    hostname = HOSTNAMES.get(ip, ip)
+    severity = str(finding.get("severity") or "")
+    name = str(finding.get("name") or "")
+    oid = str(finding.get("oid") or "")
+    port = str(finding.get("port") or "")
+    score = float(finding.get("score") or 0)
+
+    raw_cves = finding.get("cves", [])
+    if isinstance(raw_cves, list):
+        cves = ",".join(str(cve) for cve in raw_cves if cve)
+    else:
+        cves = str(raw_cves or "")
+
+    category = finding_category(name, port)
+
+    reference = cves
+    if not reference:
+        advisory = re.search(r"\((DSA-\d+-\d+)\)", name, re.IGNORECASE)
+        if advisory:
+            reference = advisory.group(1).upper()
+
+    labels = (
+        '{finding_id="' + prometheus_label(finding_id)
+        + '",hostname="' + prometheus_label(hostname)
+        + '",ip="' + prometheus_label(ip)
+        + '",severity="' + prometheus_label(severity)
+        + '",cves="' + prometheus_label(cves)
+        + '",reference="' + prometheus_label(reference)
+        + '",finding="' + prometheus_label(name)
+        + '",category="' + prometheus_label(category)
+        + '",port="' + prometheus_label(port)
+        + '",oid="' + prometheus_label(oid)
+        + '"}'
+    )
+
+    lines.append(
+        "homelab_greenbone_actionable_finding_score"
+        + labels
+        + " "
+        + str(score)
+    )
+
+lines.append("")
+
+DESTINATION.parent.mkdir(parents=True, exist_ok=True)
+
+temporary = DESTINATION.with_suffix(DESTINATION.suffix + ".tmp")
+temporary.write_text("\n".join(lines), encoding="utf-8")
+os.chmod(temporary, 0o644)
+temporary.replace(DESTINATION)

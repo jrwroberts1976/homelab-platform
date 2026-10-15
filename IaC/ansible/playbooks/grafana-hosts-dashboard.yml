@@ -1,0 +1,11 @@
+---
+- name: Deploy production Hosts dashboard
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Deploy Hosts dashboard
+      ansible.builtin.include_role:
+        name: monitoring_stack
+        tasks_from: hosts_dashboard
