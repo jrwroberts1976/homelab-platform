@@ -59,7 +59,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T14:00:32+01:00`
+- Assessed: `2026-10-15T15:01:28+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `2c:cf:67:30:be:1f`
 - Identity confidence: **high**
@@ -69,24 +69,27 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-media-01 is a managed physical Raspberry Pi 5 running authoritative Debian GNU/Linux 13 (trixie). It serves SSH and Samba, and is documented as the Kodi endpoint and primary Proxmox NFS backup target. No actionable Greenbone findings or pending updates are reported.
+media-01 is a managed physical Raspberry Pi 5 running authoritative Debian 13 (trixie) on aarch64. It serves SSH and Samba and is documented as a Kodi endpoint and primary Proxmox NFS backup target. Nine updates are available, with no pending security updates or reboot requirement.
 
 ### Confirmed facts
 
-- The device hostname is media-01 and its IP address is 192.168.2.195.
+- The canonical device name is media-01.
 - The device is a physical host managed by Ansible.
-- The canonical device role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
+- The canonical role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
 - The vendor is Raspberry Pi (Trading).
-- The authoritative operating system is Debian GNU/Linux 13 (trixie), with aarch64 architecture and kernel 6.18.50+rpt-rpi-2712.
+- The host is online at 192.168.2.195 and uses the hostname media-01.jameshouse.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture aarch64, with kernel 6.18.50+rpt-rpi-2712.
 - TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
 - TCP port 445 is open and provides corroborated Samba smbd version 4.
-- TCP port 9100 is open; its Nmap service label was omitted.
-- Greenbone reports zero matching actionable findings for the current host IP.
-- Patch telemetry reports zero available updates and no reboot required.
+- TCP port 9100 is open; no service label is supplied for this port.
+- No actionable Greenbone findings match the current host IP.
+- Nine total updates are available, including zero security updates; unattended upgrades are enabled and no reboot is required.
+- The bounded 24-hour Loki sample contains authentication and media-device permission error messages.
 
 ### Inferences
 
-- The host functions as both a media endpoint and network file-service target, consistent with its documented estate role and exposed SSH/Samba services.
+- The host is serving both remote administration through SSH and file sharing through Samba.
+- Its documented Kodi role is consistent with the sampled media-device log errors, although those errors indicate permission failures rather than a confirmed device malfunction.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

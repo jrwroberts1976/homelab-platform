@@ -59,7 +59,7 @@ Use bounded domain/service summaries only.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T14:00:32+01:00`
+- Assessed: `2026-10-15T15:01:28+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1a:9f:0c:30:3b`
 - Identity confidence: **high**
@@ -69,25 +69,23 @@ Use bounded domain/service summaries only.
 
 ### Assessment summary
 
-Proxmox-2 is a managed physical Proxmox VE cluster node running the authoritative Debian GNU/Linux 13 (trixie) environment. Open services include corroborated OpenSSH on TCP/22 and the Proxmox Virtual Environment REST API on TCP/3128; TCP/111 and TCP/9100 are also open. No matching actionable Greenbone findings were reported, while patch telemetry is unavailable.
+Proxmox-2 is a managed physical Proxmox VE cluster node running authoritative Debian GNU/Linux 13 (trixie) host OS facts. Open services include corroborated OpenSSH 10.0p2 and the Proxmox Virtual Environment REST API; ports 111 and 9100 are also open. No matching actionable Greenbone findings were reported, while patch telemetry is unavailable.
 
 ### Confirmed facts
 
-- The canonical estate identifies the device as Proxmox-2, a physical Proxmox VE cluster node 2.
-- The host is managed by Ansible.
-- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie), with kernel 7.0.14-20-pve on x86_64.
-- The authoritative OS facts come from the canonical estate and Zabbix Agent 2 inventory.
-- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP/3128 is open and provides the corroborated Proxmox Virtual Environment REST API, version 3.0.
-- TCP/111 and TCP/9100 are open; their Nmap service labels are omitted.
-- Greenbone reported zero matching actionable findings for this host IP.
+- The canonical estate identifies this device as Proxmox-2, a physical Proxmox VE cluster node 2.
+- The hostname is proxmox-2.jameshouse and the IP address is 192.168.2.71.
+- Authoritative Zabbix Agent 2 inventory reports Proxmox VE / Debian GNU/Linux 13 (trixie), kernel 7.0.14-20-pve, architecture x86_64.
+- TCP port 22 is open and is identified as OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 3128 is open and is identified as the Proxmox Virtual Environment REST API version 3.0.
+- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
+- The current Greenbone data contains zero matching actionable findings.
 - Patch telemetry is unavailable.
-- The host was online at the recorded observation time.
 
 ### Inferences
 
-- The device identity is strongly consistent with a Proxmox VE hypervisor or cluster node.
-- A-Link is the vendor recorded by inventory and Nmap, likely representing the observed network hardware vendor.
+- This is a managed Proxmox virtualization host rather than a general-purpose endpoint.
+- The A-Link vendor value is inventory metadata and does not identify the Proxmox software vendor.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

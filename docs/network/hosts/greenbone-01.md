@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T14:00:32+01:00`
+- Assessed: `2026-10-15T15:01:28+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:26:25:d1`
 - Identity confidence: **high**
@@ -97,25 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-Greenbone Community vulnerability scanner VM203 on Proxmox-2, running authoritative Debian 13 (trixie). SSH and HTTPS are exposed; no actionable Greenbone findings match 192.168.2.57, but feed-signature warnings require review.
+Greenbone Community vulnerability scanner VM203 on Proxmox-2, running authoritative Debian GNU/Linux 13 (trixie). OpenSSH is available on TCP/22 and nginx HTTPS on TCP/443; three security updates are available and no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- Canonical estate identity is greenbone-01.
-- The device is a VM, specifically a QEMU guest named greenbone-01 on Proxmox-2 with VMID 203.
-- Its documented role is Greenbone Community vulnerability scanner.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.111+deb13-cloud-amd64.
-- TCP ports 22, 443, and 9100 are open.
-- Port 22 is corroborated as OpenSSH 10.0p2 Debian 7+deb13u4.
-- Port 443 is corroborated as nginx 1.30.4 over TLS.
-- Greenbone reports zero actionable findings matching 192.168.2.57.
-- Patch telemetry reports zero available updates, zero security updates, and no reboot required.
-- Recent Loki samples contain repeated Greenbone feed-signature warnings because /var/lib/openvas/plugins/sha256sums.asc is missing.
+- The canonical estate identity is greenbone-01.
+- The device is classified as a VM and documented as the Greenbone Community vulnerability scanner, VM203 on Proxmox-2.
+- Proxmox inventory identifies the guest type as QEMU.
+- The authoritative OS is Debian GNU/Linux 13 (trixie), with x86_64 architecture and kernel 6.12.111+deb13-cloud-amd64.
+- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP/443 is open and provides corroborated nginx 1.30.4 over TLS.
+- TCP/9100 is open; its Nmap service label was omitted.
+- The Greenbone report has zero matching actionable findings for this host IP.
+- Patch telemetry reports three security updates and seven total updates available; reboot is not required.
 
 ### Inferences
 
-- The host is a Linux-based Debian virtual machine dedicated to vulnerability-scanning services, consistent with its documented estate role.
-- The Proxmox vendor attribution reflects the virtualization platform rather than necessarily the guest operating-system vendor.
+- The host identity is consistent with a managed Debian-based infrastructure VM running the Greenbone scanner role.
+- The Proxmox vendor attribution describes the virtualization platform or guest inventory source rather than establishing the operating-system vendor.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

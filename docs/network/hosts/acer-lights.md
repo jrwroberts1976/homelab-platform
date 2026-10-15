@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T14:00:32+01:00`
+- Assessed: `2026-10-15T15:01:28+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `60:83:e7:f3:c1:92`
 - Identity confidence: **high**
@@ -60,21 +60,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a TP-Link Tapo P110 smart plug at 192.168.2.95. Its identity is supported by the DHCP hostname, TP-Link vendor data, and Tapo cloud DNS signals. The TCP fingerprint indicates lwIP, but this is only a networking stack and does not establish an exact OS.
+Likely a TP-Link Tapo P110-class smart plug. The device uses the DHCP hostname P110, resolves TP-Link/Tapo cloud endpoints, and has an embedded lwIP fingerprint with TCP port 80 open. Exact firmware or OS is not established.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.95.
-- The DHCP hostname is P110; the inventory hostname is acer-lights.jameshouse.
+- The documented hostname is acer-lights.jameshouse and the DHCP hostname is P110.
 - The recorded vendor is TP-Link PTE.
-- DNS telemetry includes TP-Link/Tapo cloud endpoints.
+- DNS activity includes TP-Link cloud/Tapo endpoint signals.
+- Nmap reports a lwIP fingerprint in the 1.4.1–2.0.3 range.
 - TCP port 80 is open.
-- Nmap reported an lwIP 1.4.1–2.0.3 fingerprint with 100% match accuracy.
+- No actionable Greenbone findings currently match this IP.
 
 ### Inferences
 
-- The device is likely a TP-Link Tapo P110 smart plug.
-- The device likely uses embedded IoT firmware rather than a general-purpose operating system.
+- The P110 DHCP hostname and TP-Link/Tapo DNS signals strongly indicate a TP-Link Tapo P110-class smart plug.
+- The device likely runs embedded IoT firmware using lwIP as its TCP/IP stack.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T14:00:32+01:00`
+- Assessed: `2026-10-15T15:01:28+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:35:3b:11`
 - Identity confidence: **high**
@@ -97,27 +97,25 @@ complete household browsing history.
 
 ### Assessment summary
 
-dns-02 is CT100, a Proxmox LXC container running Debian GNU/Linux 13. It is documented as the Pi-hole and Unbound service host, with SSH, DNS, HTTP, HTTPS, and TCP/9100 ports open. No matching actionable Greenbone findings or pending updates were reported.
+Managed Proxmox LXC container CT100 providing Pi-hole and Unbound DNS services. Authoritative inventory identifies Debian GNU/Linux 13 (trixie); SSH and DNS services are confirmed.
 
 ### Confirmed facts
 
-- The canonical device name is dns-02.
-- The device is an LXC container, CT100, managed by Proxmox on node PROXMOX.
+- Canonical estate name is dns-02.
+- The device is an LXC guest named dns-02 on PROXMOX with VMID 100.
 - The documented role is Pi-hole and Unbound.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie) on x86_64.
-- The reported kernel is 7.0.14-20-pve.
-- The reported vendor is Proxmox Server Solutions GmbH.
-- Open TCP ports are 22, 53, 80, 443, and 9100.
-- TCP/22 is corroborated as OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP/53 is corroborated as dnsmasq 2.93 with Pi-hole information.
-- The TLS certificate on port 443 identifies pi.hole.
-- Greenbone reported zero matching actionable findings for this host IP.
-- Patch telemetry reports zero available updates and no reboot required.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie) on x86_64.
+- TCP port 22 is open and runs OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 53 is open and runs dnsmasq 2.93 with Pi-hole evidence.
+- TCP ports 80 and 9100 are open.
+- TCP port 443 is open and has a TLS certificate for pi.hole issued to pi.hole.
+- No matching actionable Greenbone findings were reported for 192.168.2.50.
+- No pending security updates or reboot requirement are reported.
 
 ### Inferences
 
-- The host identity is strongly established by the canonical estate record, Proxmox inventory, authoritative OS inventory, and matching service evidence.
-- The device is functioning as a DNS filtering/resolution service host consistent with its documented Pi-hole and Unbound role.
+- The device identity is consistent with a Debian-based DNS infrastructure container managed through Proxmox.
+- The Pi-hole role is corroborated by the DNS service metadata and pi.hole certificate.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
