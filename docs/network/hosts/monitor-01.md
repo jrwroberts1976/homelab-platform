@@ -127,13 +127,13 @@ Authoritative inventory identifies monitor-01 as VM202 on Proxmox-2, running Deb
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T06:06:03+01:00`
-- Pending updates: **3**
-- Security updates pending: **3**
+- Last assessed: `2026-10-15T07:08:06+01:00`
+- Pending updates: **0**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-09T06:20:35+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-15T06:34:16+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
