@@ -126,7 +126,7 @@ monitor-01 is a managed QEMU VM on Proxmox-2 running Debian GNU/Linux 13 (trixie
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T20:02:58+01:00`
+- Last assessed: `2026-10-15T21:22:08+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
