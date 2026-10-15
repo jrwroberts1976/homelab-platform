@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T15:00:50+01:00`
+- Assessed: `2026-10-15T16:04:13+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:c3:75:ba`
 - Identity confidence: **high**
@@ -97,25 +97,26 @@ complete household browsing history.
 
 ### Assessment summary
 
-dns-01 is CT101 on Proxmox-2, running Debian GNU/Linux 13 (trixie) and providing the documented Pi-hole/Unbound DNS role. OpenSSH and dnsmasq are confirmed; no actionable Greenbone findings matched the current IP. Sampled logs include network-online timeout warnings.
+dns-01 is the managed CT101 LXC container on Proxmox-2, providing Pi-hole and Unbound on Debian GNU/Linux 13. SSH and DNS services are confirmed; one Greenbone kernel-mitigation finding warrants review.
 
 ### Confirmed facts
 
-- The canonical estate identity is dns-01, CT101 on Proxmox-2, managed by Ansible.
-- The guest type is LXC and the Proxmox VMID is 101.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie) on x86_64 with kernel 7.0.14-20-pve.
-- The documented role is Pi-hole and Unbound.
+- Canonical estate identity is dns-01, an LXC container managed by Ansible.
+- The container is CT101 on Proxmox-2 and has the role Pi-hole and Unbound.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
 - TCP ports 22, 53, 80, 443, and 9100 are open.
 - OpenSSH 10.0p2 Debian 7+deb13u4 is confirmed on TCP port 22.
 - dnsmasq 2.93 with Pi-hole extra information is confirmed on TCP port 53.
-- The TLS certificate on port 443 has subject and issuer information identifying pi.hole.
-- No actionable Greenbone findings matched 192.168.2.51 in the supplied report.
-- Patch telemetry reports zero available updates, no reboot required, and unattended upgrades enabled.
+- A corroborated TLS service identified as webdav is reported on TCP port 443.
+- The TLS certificate on port 443 has subject and issuer common name pi.hole.
+- Greenbone reports one matching actionable finding: CVE-2022-40982, concerning missing Linux kernel mitigations for GDS/Downfall.
+- Patch telemetry reports zero available security updates, zero total updates, and no reboot required.
 
 ### Inferences
 
-- The host is an infrastructure DNS service container rather than a general-purpose endpoint.
-- The pi.hole certificate and dnsmasq evidence corroborate the documented Pi-hole identity.
+- The device is a virtualized Linux service container rather than a physical network appliance.
+- Its primary network function is DNS filtering and recursive resolution through Pi-hole and Unbound.
+- The Proxmox vendor attribution identifies the virtualization platform context rather than necessarily the software vendor of the guest services.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

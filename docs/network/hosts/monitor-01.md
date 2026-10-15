@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T15:00:50+01:00`
+- Assessed: `2026-10-15T16:04:13+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:0b:16:a2`
 - Identity confidence: **high**
@@ -97,25 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-Authoritative inventory identifies monitor-01 as VM202 on Proxmox-2, running Debian GNU/Linux 13 (trixie). It hosts the monitoring stack, with corroborated OpenSSH on port 22 and Grafana HTTP on port 3000; two security updates are pending.
+monitor-01 is a managed QEMU VM on Proxmox-2 running Debian GNU/Linux 13 (trixie), hosting the documented monitoring and discovery stack. Open services include corroborated OpenSSH on 22/tcp, Grafana HTTP on 3000/tcp, and an additional open 9100/tcp port. Greenbone reports two medium-severity Linux kernel mitigation findings; patch telemetry currently reports no available updates.
 
 ### Confirmed facts
 
-- The canonical estate record identifies the device as monitor-01, kind VM, managed by Ansible.
-- The Proxmox cluster API identifies it as QEMU guest monitor-01, VMID 202, on Proxmox-2.
-- The MAC vendor is Proxmox Server Solutions GmbH.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, kernel 6.12.111+deb13-cloud-amd64.
-- The documented estate role is Prometheus, Grafana, Alertmanager, Blackbox, Loki, and active network discovery.
-- TCP port 22 exposes corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 3000 exposes corroborated Grafana HTTP.
-- TCP port 9100 is open; its Nmap service label was omitted.
-- Greenbone reports zero matching actionable findings for the current host IP; this is not proof that the host is vulnerability-free.
-- Patching telemetry reports two available security updates, unattended upgrades enabled, and no reboot required.
+- The canonical estate identifies the device as monitor-01, kind vm, managed by Ansible.
+- The device is VM202 on Proxmox-2 and has QEMU guest type.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.111+deb13-cloud-amd64.
+- The documented role includes Prometheus, Grafana, Alertmanager, Blackbox, Loki, and active network discovery functions.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is identified on TCP port 22 with corroborated service evidence.
+- Grafana HTTP is identified on TCP port 3000 with corroborated service evidence.
+- TCP port 9100 is reported open, but its Nmap service label is omitted.
+- Greenbone reports two matching medium-severity Linux kernel mitigation findings for this host IP.
+- Patch telemetry reports zero available security updates and no reboot required.
 
 ### Inferences
 
-- The device is a managed monitoring and observability server hosted as a Proxmox QEMU VM.
-- The authoritative Debian inventory is more reliable for OS identification than the unavailable Nmap OS profile.
+- The device is a Linux-based monitoring and observability server VM.
+- The Proxmox vendor attribution is consistent with the documented QEMU VM placement and inventory vendor field.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -59,7 +59,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T15:00:50+01:00`
+- Assessed: `2026-10-15T16:04:13+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `d8:3a:dd:5a:51:44`
 - Identity confidence: **high**
@@ -69,26 +69,25 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-docker-01 is a managed physical Raspberry Pi 4 running Debian GNU/Linux 13 on aarch64 as a BirdNET-Go Docker host. Open services include corroborated OpenSSH on 22/tcp and a Golang HTTP server on 8080/tcp; 111/tcp and 9100/tcp are also open. No matching actionable Greenbone findings or pending updates were reported, while sampled logs show Loki ingestion and Docker log-streaming errors requiring review.
+docker-01 is a managed physical Raspberry Pi 4 host running Debian GNU/Linux 13 (trixie) on aarch64, hosting BirdNET-Go in Docker. OpenSSH and a Go HTTP service are exposed. Greenbone reports three medium-severity kernel mitigation findings; patch telemetry shows no pending security updates and no reboot required.
 
 ### Confirmed facts
 
-- The canonical device name is docker-01.
-- The device is documented as a physical Raspberry Pi 4 BirdNET-Go Docker host.
-- The device is managed by Ansible.
+- Canonical estate identity is docker-01, a physical Raspberry Pi 4 BirdNET-Go Docker host.
 - The vendor is Raspberry Pi Trading.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), with aarch64 architecture and kernel 6.18.50+rpt-rpi-v8.
-- 22/tcp is open and provides OpenSSH 10.0p2 Debian 7+deb13u4; the service evidence is corroborated.
-- 8080/tcp is open and provides a Golang net/http server; the service evidence is corroborated.
-- 111/tcp and 9100/tcp are open.
-- There are zero matching actionable Greenbone findings for the current host IP.
-- Patch telemetry reports zero available updates and no reboot required.
-- The sampled Loki data contains repeated log-delivery HTTP 400 errors and Docker log-streaming errors.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), aarch64, kernel 6.18.50+rpt-rpi-v8.
+- The host is online at 192.168.2.220 and uses hostname docker-01.
+- TCP ports 22, 111, 8080, and 9100 are open.
+- Port 22 provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- Port 8080 provides a corroborated Golang net/http server.
+- Greenbone reports three matching medium-severity kernel mitigation findings: CVE-2022-27672, CVE-2017-5715, and CVE-2018-3639.
+- Patch telemetry reports 0 security updates available, 10 total updates available, unattended upgrades enabled, and no reboot required.
+- Bounded Loki samples show BirdNET_V2.4 processing audio from the Garden Room USB Microphone.
 
 ### Inferences
 
-- The host is a Raspberry Pi-based Linux server used to run containerized workloads.
-- The documented Docker-host role is consistent with the observed SSH and HTTP services, but the supplied evidence does not identify the application exposed on port 8080.
+- The host is likely used as the estate's container workload node for BirdNET-Go, consistent with its canonical role and Docker-scoped logs.
+- The exposed Go HTTP service on port 8080 may be an application or management endpoint, but its specific function is not established by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

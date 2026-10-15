@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T15:00:50+01:00`
+- Assessed: `2026-10-15T16:04:13+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Identity confidence: **high**
@@ -97,24 +97,25 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Debian 13 LXC container edge-01 (CT103) on Proxmox-2. OpenSSH is exposed on TCP/22 and TCP/9100 is open. No actionable Greenbone findings or pending security updates were reported; sampled logs include SSH authentication failures and network-wait errors.
+edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. OpenSSH 10.0p2 is exposed on TCP/22 and TCP/9100 is open with no service identification supplied. Greenbone reports one matching medium-severity kernel mitigation finding; patch telemetry currently reports no pending updates.
 
 ### Confirmed facts
 
-- The canonical estate identity is edge-01, a reserved edge LXC, CT103 on Proxmox-2.
+- The canonical estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
 - The container is managed by Ansible.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
-- The vendor is Proxmox Server Solutions GmbH.
+- Authoritative Zabbix Agent 2 inventory identifies the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
+- The Proxmox cluster API identifies the guest type as LXC, name edge-01, on Proxmox-2, with VMID 103.
+- The device vendor is Proxmox Server Solutions GmbH.
 - TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP/9100 is open; its Nmap service label was omitted.
-- Greenbone reported zero matching actionable findings for 192.168.2.56.
-- Patch telemetry reports zero available updates, zero available security updates, and no reboot required.
-- The sampled 24-hour logs include SSH authentication failures and network connectivity wait errors.
+- TCP/9100 is open; no service identification was supplied.
+- Greenbone reports one matching actionable finding: CVE-2022-40982, rated Medium, concerning missing Linux kernel mitigations for GDS/Downfall.
+- Patch telemetry is fresh and reports zero available security updates, zero total updates, and no reboot required.
 
 ### Inferences
 
-- The host is a Debian Linux guest environment running as a Proxmox LXC container rather than a physical device.
-- The exposed SSH service supports administrative access, but no additional function is inferred from TCP/9100.
+- The host is a Linux-based managed infrastructure container running under Proxmox.
+- The authoritative OS inventory is stronger than the Nmap and DNS evidence for operating-system identification.
+- The Greenbone finding and the absence of pending updates are both conditions that merit review; the supplied evidence does not establish that any available package fixes the cited CVE.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
