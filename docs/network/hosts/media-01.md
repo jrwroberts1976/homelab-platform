@@ -98,7 +98,7 @@ media-01 is a managed physical Raspberry Pi 5 running authoritative Debian GNU/L
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T13:14:49+01:00`
+- Last assessed: `2026-10-15T14:18:00+01:00`
 - Pending updates: **9**
 - Security updates pending: **0**
 - Reboot required: **No**
