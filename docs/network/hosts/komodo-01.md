@@ -111,7 +111,7 @@ komodo-01 is the documented Komodo container-management control-plane LXC (CT104
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T14:45:15+01:00`
+- Last assessed: `2026-10-15T15:46:45+01:00`
 - Pending updates: **7**
 - Security updates pending: **3**
 - Reboot required: **No**
