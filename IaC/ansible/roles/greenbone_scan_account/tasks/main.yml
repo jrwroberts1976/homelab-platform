@@ -1,0 +1,33 @@
+---
+- name: Require Greenbone scan public key
+  ansible.builtin.assert:
+    that:
+      - greenbone_scan_public_key | length > 40
+    fail_msg: "Greenbone authenticated-scan public key was not supplied."
+
+- name: Create dedicated Greenbone scan account
+  ansible.builtin.user:
+    name: "{{ greenbone_scan_username }}"
+    home: "{{ greenbone_scan_home }}"
+    shell: /bin/bash
+    create_home: true
+    password_lock: true
+    state: present
+
+- name: Create Greenbone scan SSH directory
+  ansible.builtin.file:
+    path: "{{ greenbone_scan_home }}/.ssh"
+    state: directory
+    owner: "{{ greenbone_scan_username }}"
+    group: "{{ greenbone_scan_username }}"
+    mode: "0700"
+
+- name: Install dedicated Greenbone scan public key
+  ansible.builtin.copy:
+    dest: "{{ greenbone_scan_home }}/.ssh/authorized_keys"
+    owner: "{{ greenbone_scan_username }}"
+    group: "{{ greenbone_scan_username }}"
+    mode: "0600"
+    content: >-
+      from="{{ greenbone_scan_source_ip }}",no-agent-forwarding,no-port-forwarding,no-X11-forwarding
+      {{ greenbone_scan_public_key }}

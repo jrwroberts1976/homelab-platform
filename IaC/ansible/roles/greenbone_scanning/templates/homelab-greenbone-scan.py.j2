@@ -32,7 +32,7 @@ SCAN_LOCK_FILE = "/run/lock/homelab-greenbone-scan.lock"
 
 TASKS = {
     "managed": {
-        "name": "{{ greenbone_scanning_managed_task_name }}",
+        "name": "{{ greenbone_scanning_runner_managed_task_name }}",
     },
     "full-lan": {
         "name": "{{ greenbone_scanning_full_lan_task_name }}",

@@ -1,0 +1,21 @@
+---
+- name: Configure Greenbone authenticated Linux scanning
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_scanning_ssh_private_key: >-
+      {{
+        lookup(
+          'ansible.builtin.file',
+          lookup('ansible.builtin.env', 'HOME')
+          + '/.config/homelab/secrets/greenbone-scan/id_ed25519'
+        )
+      }}
+
+  tasks:
+    - name: Configure authenticated Linux vulnerability scanning
+      ansible.builtin.include_role:
+        name: greenbone_scanning
+        tasks_from: authenticated_scan

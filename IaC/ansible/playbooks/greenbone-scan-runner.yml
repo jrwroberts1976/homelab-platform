@@ -1,0 +1,11 @@
+---
+- name: Deploy Greenbone managed scan runner
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Deploy Greenbone scan runner
+      ansible.builtin.include_role:
+        name: greenbone_scanning
+        tasks_from: runner

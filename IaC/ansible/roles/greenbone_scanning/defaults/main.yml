@@ -74,3 +74,16 @@ greenbone_scanning_monitor_ed25519_host_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AA
 # Automated managed-infrastructure scan scheduling.
 greenbone_scanning_managed_schedule: "*-*-* 02:00:00"
 greenbone_scanning_managed_randomized_delay_seconds: 0
+
+# Authenticated Linux vulnerability scanning.
+greenbone_scanning_ssh_credential_name: "Homelab - Linux SSH Auth"
+greenbone_scanning_ssh_username: "greenbone-scan"
+greenbone_scanning_ssh_private_key: ""
+greenbone_scanning_ssh_private_key_runtime: /run/greenbone-auth/id_ed25519
+
+greenbone_scanning_authenticated_target_name: "Homelab - Managed Infrastructure - Authenticated"
+greenbone_scanning_authenticated_task_name: "Homelab - Managed Infrastructure - Authenticated Daily"
+
+# Task used by the automated "managed" scan runner.
+# Deliberately separate from the legacy unauthenticated task retained for history.
+greenbone_scanning_runner_managed_task_name: "{{ greenbone_scanning_authenticated_task_name }}"

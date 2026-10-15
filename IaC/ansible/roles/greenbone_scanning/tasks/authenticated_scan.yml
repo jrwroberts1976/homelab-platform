@@ -1,0 +1,54 @@
+---
+- name: Require Greenbone authenticated-scan private key
+  ansible.builtin.assert:
+    that:
+      - greenbone_scanning_ssh_private_key | length > 100
+    fail_msg: "Greenbone SSH private key was not supplied."
+  no_log: true
+
+- name: Create protected Greenbone authentication runtime directory
+  ansible.builtin.file:
+    path: /run/greenbone-auth
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install Greenbone authenticated-scan reconciler
+  ansible.builtin.template:
+    src: configure-authenticated-scan.py.j2
+    dest: /usr/local/sbin/homelab-greenbone-auth-configure
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Configure Greenbone authenticated Linux scanning
+  block:
+    - name: Stage protected Greenbone SSH private key
+      ansible.builtin.copy:
+        content: "{{ greenbone_scanning_ssh_private_key }}"
+        dest: "{{ greenbone_scanning_ssh_private_key_runtime }}"
+        owner: root
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Reconcile Greenbone SSH credential and managed target
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/homelab-greenbone-auth-configure
+      register: greenbone_authenticated_scan_result
+      changed_when: >-
+        'credential_created=true' in greenbone_authenticated_scan_result.stdout
+        or 'target_created=true' in greenbone_authenticated_scan_result.stdout
+        or 'task_created=true' in greenbone_authenticated_scan_result.stdout
+
+    - name: Show authenticated scan configuration
+      ansible.builtin.debug:
+        var: greenbone_authenticated_scan_result.stdout_lines
+
+  always:
+    - name: Remove staged Greenbone SSH private key
+      ansible.builtin.file:
+        path: "{{ greenbone_scanning_ssh_private_key_runtime }}"
+        state: absent

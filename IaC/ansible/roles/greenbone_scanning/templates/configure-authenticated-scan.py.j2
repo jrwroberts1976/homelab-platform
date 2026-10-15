@@ -1,0 +1,401 @@
+#!/usr/bin/env python3
+
+import os
+import subprocess
+import xml.etree.ElementTree as ET
+from pathlib import Path
+
+COMPOSE_ROOT = "{{ greenbone_scanning_root }}"
+RUNTIME_ENV = Path("{{ greenbone_scanning_runtime_env }}")
+PRIVATE_KEY = Path("{{ greenbone_scanning_ssh_private_key_runtime }}")
+GMP_CONFIG = Path("/run/greenbone-auth/gvm-tools.conf")
+
+CREDENTIAL_NAME = "{{ greenbone_scanning_ssh_credential_name }}"
+SSH_LOGIN = "{{ greenbone_scanning_ssh_username }}"
+
+TARGET_NAME = "{{ greenbone_scanning_authenticated_target_name }}"
+TASK_NAME = "{{ greenbone_scanning_authenticated_task_name }}"
+
+HOSTS = "{{ groups['zabbix_agents'] | map('extract', hostvars, 'ansible_host') | join(',') }}"
+
+PORT_LIST_ID = "{{ greenbone_scanning_port_list_id }}"
+CONFIG_ID = "{{ greenbone_scanning_scan_config_id }}"
+SCANNER_ID = "{{ greenbone_scanning_scanner_id }}"
+
+
+def load_runtime_env():
+    values = {}
+
+    for line in RUNTIME_ENV.read_text().splitlines():
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+
+        key, value = line.split("=", 1)
+        values[key] = value
+
+    username = values.get("GREENBONE_ADMIN_USERNAME", "")
+    password = values.get("GREENBONE_ADMIN_PASSWORD", "")
+
+    if not username or not password:
+        raise RuntimeError(
+            "Greenbone administrator credentials are incomplete"
+        )
+
+    return username, password
+
+
+def write_gmp_config(username, password):
+    GMP_CONFIG.parent.mkdir(
+        parents=True,
+        exist_ok=True,
+        mode=0o700,
+    )
+
+    GMP_CONFIG.write_text(
+        "[gmp]\n"
+        f"username = {username}\n"
+        f"password = {password}\n"
+    )
+
+    os.chmod(GMP_CONFIG, 0o640)
+    os.chown(GMP_CONFIG, 0, 1001)
+
+
+def gmp(xml):
+    command = [
+        "docker", "compose",
+        "-f", f"{COMPOSE_ROOT}/compose.yaml",
+        "-f", f"{COMPOSE_ROOT}/compose.override.yaml",
+        "run", "--rm", "--no-deps",
+        "--volume", f"{GMP_CONFIG}:/run/gvm-tools.conf:ro",
+        "gvm-tools",
+        "gvm-cli",
+        "--config", "/run/gvm-tools.conf",
+        "socket",
+        "-X", xml,
+    ]
+
+    result = subprocess.run(
+        command,
+        cwd=COMPOSE_ROOT,
+        text=True,
+        capture_output=True,
+        timeout=120,
+        check=False,
+    )
+
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"GMP command failed: {result.stderr.strip()}"
+        )
+
+    return result.stdout
+
+
+def ensure_credential():
+    root = ET.fromstring(
+        gmp('<get_credentials details="1"/>')
+    )
+
+    matches = [
+        item
+        for item in root.findall(".//credential")
+        if item.findtext("name", "").strip()
+        == CREDENTIAL_NAME
+    ]
+
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Multiple credentials named {CREDENTIAL_NAME!r}"
+        )
+
+    if matches:
+        return matches[0].get("id"), False
+
+    private_key = PRIVATE_KEY.read_text()
+
+    request = ET.Element("create_credential")
+
+    ET.SubElement(request, "name").text = CREDENTIAL_NAME
+    ET.SubElement(request, "comment").text = (
+        "Dedicated SSH credential for authenticated "
+        "Linux vulnerability scanning"
+    )
+    ET.SubElement(request, "type").text = "usk"
+    ET.SubElement(request, "login").text = SSH_LOGIN
+
+    key = ET.SubElement(request, "key")
+    ET.SubElement(key, "private").text = private_key
+
+    response = ET.fromstring(
+        gmp(
+            ET.tostring(
+                request,
+                encoding="unicode",
+            )
+        )
+    )
+
+    if response.get("status") != "201":
+        raise RuntimeError(
+            "Credential creation failed: "
+            f"{response.get('status')} "
+            f"{response.get('status_text')}"
+        )
+
+    credential_id = response.get("id")
+
+    if not credential_id:
+        raise RuntimeError(
+            "Greenbone returned no credential UUID"
+        )
+
+    return credential_id, True
+
+
+def ensure_target(credential_id):
+    root = ET.fromstring(
+        gmp('<get_targets details="1"/>')
+    )
+
+    matches = [
+        item
+        for item in root.findall(".//target")
+        if item.findtext("name", "").strip()
+        == TARGET_NAME
+    ]
+
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Multiple targets named {TARGET_NAME!r}"
+        )
+
+    if matches:
+        target = matches[0]
+
+        ssh = target.find("ssh_credential")
+        current_credential = (
+            ssh.get("id", "")
+            if ssh is not None
+            else ""
+        )
+
+        if current_credential != credential_id:
+            raise RuntimeError(
+                "Existing authenticated target has "
+                "unexpected SSH credential"
+            )
+
+        return target.get("id"), False
+
+    request = ET.Element("create_target")
+
+    ET.SubElement(request, "name").text = TARGET_NAME
+    ET.SubElement(request, "comment").text = (
+        "Authenticated Linux vulnerability scanning target"
+    )
+    ET.SubElement(request, "hosts").text = HOSTS
+
+    ssh = ET.SubElement(
+        request,
+        "ssh_credential",
+        {"id": credential_id},
+    )
+    ET.SubElement(ssh, "port").text = "22"
+
+    ET.SubElement(
+        request,
+        "port_list",
+        {"id": PORT_LIST_ID},
+    )
+
+    ET.SubElement(
+        request,
+        "alive_tests",
+    ).text = "Scan Config Default"
+
+    response = ET.fromstring(
+        gmp(
+            ET.tostring(
+                request,
+                encoding="unicode",
+            )
+        )
+    )
+
+    if response.get("status") != "201":
+        raise RuntimeError(
+            "Target creation failed: "
+            f"{response.get('status')} "
+            f"{response.get('status_text')}"
+        )
+
+    target_id = response.get("id")
+
+    if not target_id:
+        raise RuntimeError(
+            "Greenbone returned no target UUID"
+        )
+
+    return target_id, True
+
+
+def ensure_task(target_id):
+    root = ET.fromstring(
+        gmp('<get_tasks details="1"/>')
+    )
+
+    matches = [
+        item
+        for item in root.findall(".//task")
+        if item.findtext("name", "").strip()
+        == TASK_NAME
+    ]
+
+    if len(matches) > 1:
+        raise RuntimeError(
+            f"Multiple tasks named {TASK_NAME!r}"
+        )
+
+    if matches:
+        task = matches[0]
+
+        target = task.find("target")
+        current_target = (
+            target.get("id", "")
+            if target is not None
+            else ""
+        )
+
+        if current_target != target_id:
+            raise RuntimeError(
+                "Existing authenticated task references "
+                "an unexpected target"
+            )
+
+        return task.get("id"), False
+
+    request = ET.Element("create_task")
+
+    ET.SubElement(request, "name").text = TASK_NAME
+    ET.SubElement(request, "comment").text = (
+        "Daily authenticated Linux package and CVE scan"
+    )
+
+    # Allows us to point the task at a replacement target later
+    # without destroying historical reports.
+    ET.SubElement(request, "alterable").text = "1"
+
+    ET.SubElement(
+        request,
+        "config",
+        {"id": CONFIG_ID},
+    )
+
+    ET.SubElement(
+        request,
+        "target",
+        {"id": target_id},
+    )
+
+    ET.SubElement(
+        request,
+        "scanner",
+        {"id": SCANNER_ID},
+    )
+
+    response = ET.fromstring(
+        gmp(
+            ET.tostring(
+                request,
+                encoding="unicode",
+            )
+        )
+    )
+
+    if response.get("status") != "201":
+        raise RuntimeError(
+            "Task creation failed: "
+            f"{response.get('status')} "
+            f"{response.get('status_text')}"
+        )
+
+    task_id = response.get("id")
+
+    if not task_id:
+        raise RuntimeError(
+            "Greenbone returned no task UUID"
+        )
+
+    return task_id, True
+
+
+def main():
+    username, password = load_runtime_env()
+
+    try:
+        write_gmp_config(
+            username,
+            password,
+        )
+
+        credential_id, credential_created = (
+            ensure_credential()
+        )
+
+        target_id, target_created = ensure_target(
+            credential_id
+        )
+
+        task_id, task_created = ensure_task(
+            target_id
+        )
+
+        print(
+            f"credential_name={CREDENTIAL_NAME}"
+        )
+        print(
+            f"credential_id={credential_id}"
+        )
+        print(
+            "credential_created="
+            + str(credential_created).lower()
+        )
+
+        print(
+            f"target_name={TARGET_NAME}"
+        )
+        print(
+            f"target_id={target_id}"
+        )
+        print(
+            "target_created="
+            + str(target_created).lower()
+        )
+
+        print(
+            f"task_name={TASK_NAME}"
+        )
+        print(
+            f"task_id={task_id}"
+        )
+        print(
+            "task_created="
+            + str(task_created).lower()
+        )
+
+        print(
+            f"ssh_login={SSH_LOGIN}"
+        )
+        print(
+            f"host_count={len(HOSTS.split(','))}"
+        )
+
+    finally:
+        GMP_CONFIG.unlink(
+            missing_ok=True
+        )
+
+
+if __name__ == "__main__":
+    main()

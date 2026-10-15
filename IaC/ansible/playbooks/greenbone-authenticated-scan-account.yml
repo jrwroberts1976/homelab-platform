@@ -1,0 +1,18 @@
+---
+- name: Configure Greenbone authenticated scan accounts
+  hosts: zabbix_agents
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_scan_public_key: >-
+      {{
+        lookup(
+          'ansible.builtin.file',
+          lookup('ansible.builtin.env', 'HOME')
+          + '/.config/homelab/secrets/greenbone-scan/id_ed25519.pub'
+        )
+      }}
+
+  roles:
+    - role: greenbone_scan_account

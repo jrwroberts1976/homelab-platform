@@ -1,0 +1,17 @@
+---
+- name: Install Greenbone automated scan runner
+  ansible.builtin.template:
+    src: homelab-greenbone-scan.py.j2
+    dest: "{{ greenbone_scanning_runner }}"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Validate rendered Greenbone scan runner
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -m
+      - py_compile
+      - "{{ greenbone_scanning_runner }}"
+  changed_when: false
