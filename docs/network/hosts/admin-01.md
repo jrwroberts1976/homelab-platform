@@ -134,7 +134,7 @@ admin-01 is a managed Raspberry Pi 3 administration and SSH jump host running au
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-15T01:17:01+01:00`
+- Last assessed: `2026-10-15T02:21:06+01:00`
 - Pending updates: **49**
 - Security updates pending: **3**
 - Reboot required: **No**
