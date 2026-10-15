@@ -50,33 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T13:03:48+01:00`
+- Assessed: `2026-10-15T14:01:33+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `78:8c:b5:38:16:83`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Likely a TP-Link/Tapo network camera associated with the garage door. The exact model and operating system are not established; Nmap OS results are inconsistent and only one TCP port is confirmed open.
+Likely a TP-Link/Tapo garage-door security camera. Hostname, DHCP identifier, vendor data, and TP-Link cloud/Tapo DNS activity support the identity; the exact firmware OS is not established. TCP port 9999 is open.
 
 ### Confirmed facts
 
-- The device hostname is garage-door-camera.jameshouse.
-- The device vendor is identified as TP-Link Limited.
+- The inventory hostname is garage-door-camera.jameshouse and the telemetry hostname is garage-door-camera.
 - The DHCP hostname is KC420WS.
-- DNS activity includes TP-Link/Tapo-related endpoints such as tplinkcloud.com and api.tplinkra.com.
-- TCP port 9999 is open.
-- No actionable Greenbone findings match the current IP; this does not prove the host is vulnerability-free.
-- Patch telemetry is unavailable.
+- The reported vendor is TP-Link Limited.
+- DNS telemetry includes TP-Link/Tapo-related endpoints such as tplinkcloud.com, api.tplinkra.com, and tp-link.com.
+- Nmap reports TCP port 9999 as open, with the service label omitted.
+- No actionable Greenbone findings match the current IP 192.168.2.49.
 
 ### Inferences
 
-- The device is likely a TP-Link/Tapo network camera, based on its hostname, vendor, and TP-Link/Tapo DNS signals.
-- The platform is best classified cautiously as embedded IoT firmware.
-- The DHCP hostname may be model-like, but the supplied evidence does not establish the exact device model.
+- The device is likely a TP-Link/Tapo security camera used for garage-door monitoring.
+- The device likely runs embedded IoT firmware, but the exact operating system and firmware version are unsupported by the evidence.
+- Nmap produced several conflicting Linux, OpenWrt, embedded, and Android candidates; these are insufficient to identify the exact OS.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

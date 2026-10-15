@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T13:03:48+01:00`
+- Assessed: `2026-10-15T14:01:33+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f0:ef:86:35:bc:55`
 - Identity confidence: **high**
@@ -60,24 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a Google Home Mini smart speaker. Identity is strongly supported by the DHCP hostname, Google vendor metadata, Google Home Nmap fingerprint, and a Chromecast/Google TLS certificate. The exact operating system is not established.
+Identified as a Google Home Mini smart speaker/media device at 192.168.2.249. Google-specific hostname, vendor data, Nmap fingerprint, and Chromecast certificate corroborate the identity; exact OS is not established.
 
 ### Confirmed facts
 
-- The device hostname is Google-Home-Mini / google-home-mini.jameshouse.
-- The inventory and Nmap vendor fields identify Google.
-- Nmap reports a Google Home device fingerprint.
-- TCP ports 8008, 8009, and 8443 are open; Nmap service labels for these ports were omitted.
-- TCP port 8443 has corroborated HTTPS-alt service evidence.
-- A TLS certificate on port 8443 is issued by Google Inc. with issuer CN Chromecast ICA 7 (Audio Assist 2).
-- The certificate subject identifies Google Inc. and the device-specific subject CN LQJ8EH FA8FCA6B2CFB.
-- The exact OS is unavailable from authoritative inventory and no authoritative OS fact is present.
+- The device is online at 192.168.2.249.
+- The DHCP hostname is Google-Home-Mini.
+- Inventory and Nmap vendor fields identify Google.
+- Nmap identifies the host as a Google Home device with 99% fingerprint accuracy.
+- TCP ports 8008, 8009, and 8443 are open.
+- Port 8443 provides HTTPS-related service evidence and presents a certificate issued by Google Inc. with a Chromecast ICA issuer.
+- The enrichment data reports TCP port 9000 with the cslistener service over SSL.
+- No matching actionable Greenbone findings were reported for the current IP; this is not proof that the host is vulnerability-free.
 
 ### Inferences
 
-- The device is most consistent with a Google Home Mini or closely related Google smart-speaker platform.
-- The platform is best classified broadly as embedded IoT firmware.
-- Nmap Linux kernel matches are fingerprints and do not establish the exact underlying OS or kernel version.
+- The device is most likely a Google Home Mini smart speaker or closely related Google media device.
+- It uses embedded IoT firmware, but the exact operating system and firmware version are unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

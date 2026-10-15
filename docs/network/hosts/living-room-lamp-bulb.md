@@ -50,34 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T13:03:48+01:00`
+- Assessed: `2026-10-15T14:01:33+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `68:ff:7b:1b:33:c0`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link HS100 smart-home device based on its DHCP hostname and vendor data. The host exposes TCP port 9999, but no service label or operating-system evidence is available. No actionable Greenbone findings matched this IP.
+Online TP-Link smart-home endpoint at 192.168.2.91, identified by the hostname and DHCP name HS100. Exact firmware or operating system is not available. TCP port 9999 is open; no actionable Greenbone findings matched this IP.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.91.
-- The documented inventory hostname is living-room-lamp-bulb.jameshouse, with telemetry hostname living-room-lamp-bulb.
+- The recorded hostname is living-room-lamp-bulb.jameshouse.
 - The DHCP hostname is HS100.
-- The reported vendor is TP-Link Technologies.
-- The MAC address is 68:ff:7b:1b:33:c0.
+- The MAC vendor is TP-Link Technologies.
 - TCP port 9999 is open.
-- Nmap provided no OS matches and reported missing OS evidence.
 - No actionable Greenbone findings matched this current IP.
-- No recent locally blocked high-risk DNS policy matches were recorded.
+- No authoritative operating-system fact is available.
 
 ### Inferences
 
-- The DHCP hostname HS100 and TP-Link vendor strongly suggest a TP-Link HS100 smart-home device, commonly a smart plug.
-- The device likely uses embedded IoT firmware, but the operating system and firmware version are unsupported by the supplied evidence.
+- The device is likely a TP-Link home-automation endpoint, potentially HS100-class based on the DHCP hostname.
+- The device likely runs embedded IoT firmware, but the exact firmware and operating system are unknown.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

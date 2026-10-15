@@ -50,31 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T13:03:48+01:00`
+- Assessed: `2026-10-15T14:01:33+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1c:2b:5a:6d:fd`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Online AlertMe-vendor device identified from its myHiveHub hostname as a likely home automation hub. No exact operating system is supported by the supplied evidence; manual review is required.
+myHivehub is an online AlertMe smart-home hub at 192.168.2.7. The hostname and vendor identify the device, but no operating-system or service evidence is available.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.7.
-- The recorded hostname is myhivehub.jameshouse, with DHCP hostname myHivehub.
-- The reported vendor is Alertme.com Limited.
-- The MAC address is 00:1c:2b:5a:6d:fd.
-- Nmap status is partial and reports missing OS evidence; no ports or OS matches were supplied.
-- No matching actionable Greenbone findings were reported for the current IP.
+- The router DHCP hostname is myHivehub.
+- The inventory hostname is myhivehub.jameshouse and the telemetry hostname is myhivehub.
+- The recorded vendor is Alertme.com Limited.
+- Nmap collection is partial and reports no TCP or UDP ports or OS matches.
+- No authoritative operating-system fact is available.
+- No matching actionable Greenbone findings were reported for this IP; this does not establish that the host is vulnerability-free.
 
 ### Inferences
 
-- The hostname and vendor are consistent with an AlertMe/Hive-style home automation hub.
-- The device likely runs embedded IoT firmware, but the specific operating system is unsupported.
+- The device is likely an AlertMe-branded smart-home hub based on its hostname and recorded vendor.
+- It likely runs embedded IoT firmware, but the specific operating system and version are unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

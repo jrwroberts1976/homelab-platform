@@ -50,32 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T13:03:48+01:00`
+- Assessed: `2026-10-15T14:01:33+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `68:ff:7b:1b:2d:07`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Likely a TP-Link HS100 smart plug or related IoT device. The exact operating system is not identified from the supplied evidence.
+Likely a TP-Link HS100-class embedded IoT device, based on the documented DHCP hostname and TP-Link vendor identity. Exact firmware/OS is not available; TCP port 9999 is open.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.233.
-- The inventory hostname is lava-lamp.jameshouse and the telemetry hostname is lava-lamp.
-- The DHCP/router hostname is HS100.
-- The recorded vendor is TP-Link Technologies.
-- No authoritative operating-system fact is available.
-- Nmap OS and port evidence is unavailable or incomplete.
-- No matching actionable Greenbone findings were reported; this does not establish that the host is vulnerability-free.
+- The documented hostname is lava-lamp.jameshouse, with telemetry hostname lava-lamp.
+- The router reports DHCP hostname HS100.
+- The reported vendor is TP-Link Technologies.
+- TCP port 9999 is open.
+- No matching actionable Greenbone findings were reported for the current IP.
 
 ### Inferences
 
-- The HS100 hostname and TP-Link vendor strongly suggest a TP-Link HS100-family smart plug or similar IoT device.
-- The device likely runs embedded IoT firmware, but the specific operating system and version are unsupported by the evidence.
+- The HS100 hostname combined with the TP-Link vendor strongly suggests an HS100-class smart plug.
+- The device likely runs embedded IoT firmware, but the exact OS and firmware version are unsupported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-08T13:03:48+01:00`
+- Assessed: `2026-10-15T14:01:33+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:82:e1:f2:f9:9f`
 - Identity confidence: **medium**
@@ -60,23 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online Tuya Smart device at 192.168.2.30, identified from inventory and vendor data. No service, DNS, or OS fingerprint evidence is available; exact OS remains unknown.
+Online Tuya Smart device at 192.168.2.30, likely a patio smart-home device. Exact firmware/OS is unavailable; the DHCP hostname "wlan0" conflicts with the inventory and telemetry hostname, so identity should be reviewed.
 
 ### Confirmed facts
 
-- The device IP is 192.168.2.30.
+- The device is online at 192.168.2.30.
+- Inventory and Nmap identify the vendor as Tuya Smart.
 - The inventory hostname is patio.jameshouse and the telemetry hostname is patio.
-- The reported vendor is Tuya Smart.
-- The device is currently online.
-- No actionable Greenbone findings match this IP.
-- Nmap OS and port data are unavailable; the Nmap profile is partial with os_evidence_missing.
-- No sampled Loki entries or recent high-risk DNS policy matches were reported.
+- The router reports DHCP hostname wlan0.
+- Nmap is partial, with no OS matches and no TCP or UDP ports reported.
+- No actionable Greenbone findings match this IP in the supplied report.
 
 ### Inferences
 
-- The device is likely a Tuya-based embedded smart-home or IoT device.
-- The platform is best described generically as embedded IoT firmware; no precise operating system is supported.
-- The DHCP/router hostname wlan0 may be a separate naming signal, but its device meaning is unresolved.
+- The device is likely a Tuya-based embedded smart-home device associated with the patio.
+- The platform is best classified broadly as embedded IoT firmware; no exact OS or firmware is supported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
