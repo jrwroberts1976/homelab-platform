@@ -1,0 +1,11 @@
+---
+- name: Configure Zabbix backend listener
+  hosts: zabbix_servers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Apply Zabbix backend listener
+      ansible.builtin.include_role:
+        name: zabbix_server
+        tasks_from: listener

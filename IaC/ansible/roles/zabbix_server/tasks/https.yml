@@ -1,0 +1,53 @@
+---
+- name: Verify Zabbix HTTPS certificate
+  ansible.builtin.stat:
+    path: "{{ zabbix_server_https_certificate }}"
+  register: zabbix_https_certificate_file
+
+- name: Verify Zabbix HTTPS private key
+  ansible.builtin.stat:
+    path: "{{ zabbix_server_https_private_key }}"
+  register: zabbix_https_private_key_file
+  no_log: true
+
+- name: Require Zabbix HTTPS certificate material
+  ansible.builtin.assert:
+    that:
+      - zabbix_server_https_fqdn | length > 0
+      - zabbix_https_certificate_file.stat.exists
+      - zabbix_https_private_key_file.stat.exists
+    fail_msg: "Zabbix HTTPS certificate material is missing."
+
+- name: Configure Zabbix HTTPS frontend
+  ansible.builtin.template:
+    src: zabbix-https.conf.j2
+    dest: /etc/nginx/conf.d/zabbix-https.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: zabbix_https_nginx_config
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    argv:
+      - nginx
+      - -t
+  changed_when: false
+
+- name: Reload Nginx after HTTPS configuration change
+  ansible.builtin.service:
+    name: nginx
+    state: reloaded
+  when: zabbix_https_nginx_config.changed
+
+- name: Install Certbot deploy hook to reload Nginx
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/10-reload-nginx
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      /usr/sbin/nginx -t >/dev/null 2>&1
+      /usr/bin/systemctl reload nginx

@@ -1,0 +1,94 @@
+---
+- name: Obtain trusted HTTPS certificate for Zabbix
+  hosts: zabbix-01
+  become: true
+  gather_facts: false
+
+  vars:
+    zabbix_https_fqdn: "zabbix.home.jrwroberts.co.uk"
+    zabbix_cloudflare_credentials: "/etc/letsencrypt/cloudflare-zabbix.ini"
+    zabbix_cloudflare_token: "{{ lookup('env', 'HOMELAB_CERTBOT_CLOUDFLARE_TOKEN') }}"
+    zabbix_letsencrypt_email: "{{ lookup('env', 'HOMELAB_LETSENCRYPT_EMAIL') }}"
+
+  pre_tasks:
+    - name: Require certificate credentials
+      ansible.builtin.assert:
+        that:
+          - zabbix_cloudflare_token | length >= 20
+          - "'@' in zabbix_letsencrypt_email"
+        fail_msg: >-
+          HOMELAB_CERTBOT_CLOUDFLARE_TOKEN and
+          HOMELAB_LETSENCRYPT_EMAIL must be set.
+
+  tasks:
+    - name: Install Certbot and Cloudflare DNS plugin
+      ansible.builtin.apt:
+        name:
+          - certbot
+          - python3-certbot-dns-cloudflare
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+
+    - name: Install protected Cloudflare credentials
+      ansible.builtin.copy:
+        dest: "{{ zabbix_cloudflare_credentials }}"
+        owner: root
+        group: root
+        mode: "0600"
+        content: |
+          dns_cloudflare_api_token = {{ zabbix_cloudflare_token }}
+      no_log: true
+
+    - name: Obtain Let's Encrypt certificate using DNS-01
+      ansible.builtin.command:
+        argv:
+          - certbot
+          - certonly
+          - --dns-cloudflare
+          - --dns-cloudflare-credentials
+          - "{{ zabbix_cloudflare_credentials }}"
+          - --dns-cloudflare-propagation-seconds
+          - "30"
+          - --non-interactive
+          - --agree-tos
+          - --email
+          - "{{ zabbix_letsencrypt_email }}"
+          - --cert-name
+          - "{{ zabbix_https_fqdn }}"
+          - -d
+          - "{{ zabbix_https_fqdn }}"
+      args:
+        creates: "/etc/letsencrypt/live/{{ zabbix_https_fqdn }}/fullchain.pem"
+
+    - name: Validate certificate files
+      ansible.builtin.stat:
+        path: "/etc/letsencrypt/live/{{ zabbix_https_fqdn }}/{{ item }}"
+      loop:
+        - fullchain.pem
+        - privkey.pem
+      register: zabbix_certificate_files
+
+    - name: Require certificate files
+      ansible.builtin.assert:
+        that:
+          - zabbix_certificate_files.results | map(attribute='stat.exists') | min
+        fail_msg: "Let's Encrypt certificate files were not created."
+
+    - name: Read issued certificate
+      ansible.builtin.command:
+        argv:
+          - openssl
+          - x509
+          - -in
+          - "/etc/letsencrypt/live/{{ zabbix_https_fqdn }}/fullchain.pem"
+          - -noout
+          - -subject
+          - -issuer
+          - -dates
+      register: zabbix_https_certificate
+      changed_when: false
+
+    - name: Show issued certificate
+      ansible.builtin.debug:
+        var: zabbix_https_certificate.stdout_lines

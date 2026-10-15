@@ -216,3 +216,7 @@
     group: www-data
     mode: "0640"
   no_log: true
+
+- name: Configure trusted Zabbix HTTPS frontend
+  ansible.builtin.include_tasks: https.yml
+  when: zabbix_server_https_enabled | bool

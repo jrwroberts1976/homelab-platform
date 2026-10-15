@@ -1,0 +1,11 @@
+---
+- name: Configure Zabbix trusted HTTPS frontend
+  hosts: zabbix_servers
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Apply Zabbix HTTPS frontend configuration
+      ansible.builtin.include_role:
+        name: zabbix_server
+        tasks_from: https

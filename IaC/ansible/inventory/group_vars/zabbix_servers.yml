@@ -32,7 +32,7 @@ timescaledb_databases:
 
 zabbix_timescaledb_database: zabbix
 
-zabbix_server_nginx_listen: 8080
+zabbix_server_nginx_listen: "127.0.0.1:8080"
 zabbix_server_nginx_server_name: _
 
 
@@ -47,3 +47,11 @@ lxc_systemd_mount_baseline_units:
   - tmp.mount
   - run-lock.mount
   - dev-mqueue.mount
+
+# Trusted internal HTTPS frontend.
+zabbix_server_https_enabled: true
+zabbix_server_https_fqdn: "zabbix.home.jrwroberts.co.uk"
+zabbix_server_https_listen: 443
+zabbix_server_https_certificate: "/etc/letsencrypt/live/zabbix.home.jrwroberts.co.uk/fullchain.pem"
+zabbix_server_https_private_key: "/etc/letsencrypt/live/zabbix.home.jrwroberts.co.uk/privkey.pem"
+zabbix_server_https_backend: "http://127.0.0.1:8080"

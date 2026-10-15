@@ -19,3 +19,11 @@ zabbix_server_nginx_listen: 8080
 zabbix_server_nginx_server_name: _
 zabbix_server_service_name: zabbix-server
 zabbix_server_agent_service_name: zabbix-agent2
+
+# Optional trusted HTTPS frontend.
+zabbix_server_https_enabled: false
+zabbix_server_https_fqdn: ""
+zabbix_server_https_listen: 443
+zabbix_server_https_certificate: ""
+zabbix_server_https_private_key: ""
+zabbix_server_https_backend: "http://127.0.0.1:8080"

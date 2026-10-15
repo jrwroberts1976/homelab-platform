@@ -1,0 +1,20 @@
+---
+- name: Configure packaged Zabbix Nginx listener
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/nginx.conf
+    regexp: '^\s*#?\s*listen\s+'
+    line: "        listen {{ zabbix_server_nginx_listen }};"
+  register: zabbix_nginx_listener
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    argv:
+      - nginx
+      - -t
+  changed_when: false
+
+- name: Restart Nginx after listener change
+  ansible.builtin.service:
+    name: nginx
+    state: restarted
+  when: zabbix_nginx_listener.changed
