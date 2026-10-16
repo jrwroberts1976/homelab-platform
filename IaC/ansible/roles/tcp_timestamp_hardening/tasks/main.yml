@@ -1,0 +1,30 @@
+---
+- name: Disable TCP timestamps persistently
+  ansible.builtin.copy:
+    dest: "{{ tcp_timestamp_sysctl_file }}"
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      # Managed by Ansible
+      net.ipv4.tcp_timestamps = 0
+  when: tcp_timestamp_hardening_enabled
+
+- name: Apply TCP timestamp setting immediately
+  ansible.builtin.sysctl:
+    name: net.ipv4.tcp_timestamps
+    value: "0"
+    state: present
+    sysctl_file: "{{ tcp_timestamp_sysctl_file }}"
+    reload: true
+  when: tcp_timestamp_hardening_enabled
+
+- name: Verify TCP timestamps are disabled
+  ansible.builtin.command:
+    argv:
+      - sysctl
+      - -n
+      - net.ipv4.tcp_timestamps
+  register: tcp_timestamp_value
+  changed_when: false
+  failed_when: tcp_timestamp_value.stdout | trim != "0"

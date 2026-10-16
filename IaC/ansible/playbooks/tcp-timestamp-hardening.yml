@@ -1,0 +1,23 @@
+---
+- name: Disable TCP timestamps on Greenbone-flagged Linux hosts
+  hosts:
+    - admin-01
+    - dns-01
+    - dns-02
+    - monitor-01
+    - greenbone-01
+    - zabbix-01
+    - PROXMOX
+    - Proxmox-2
+    - docker-01
+    - mail-relay-01
+    - sensor-01
+    - cloud-01
+    - komodo-01
+    - edge-01
+    - media-01
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: tcp_timestamp_hardening

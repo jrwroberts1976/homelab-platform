@@ -1,0 +1,3 @@
+---
+tcp_timestamp_hardening_enabled: true
+tcp_timestamp_sysctl_file: /etc/sysctl.d/60-homelab-tcp-timestamps.conf
