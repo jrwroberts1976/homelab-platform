@@ -333,6 +333,7 @@ def write_evidence(mode, task_name, report_id, counts, actionable, accepted):
         "severity_counts": counts,
         "actionable_count": len(non_log_actionable),
         "accepted_risk_count": len(accepted),
+        "accepted_risk_findings": accepted,
         "actionable_findings": non_log_actionable,
     }
 
