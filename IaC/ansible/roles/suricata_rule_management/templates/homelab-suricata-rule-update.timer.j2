@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily Homelab Suricata threat rule refresh
+
+[Timer]
+OnCalendar=*-*-* 01:15:00
+RandomizedDelaySec=300
+Persistent=true
+Unit=homelab-suricata-rule-update.service
+
+[Install]
+WantedBy=timers.target

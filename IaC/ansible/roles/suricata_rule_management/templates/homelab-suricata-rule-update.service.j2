@@ -1,0 +1,12 @@
+[Unit]
+Description=Homelab Suricata threat rule refresh
+Documentation=https://docs.suricata.io/
+Wants=network-online.target
+After=network-online.target suricata.service
+
+[Service]
+Type=oneshot
+ExecStart={{ suricata_rule_management_update_script }}
+User=root
+Group=root
+Nice=10

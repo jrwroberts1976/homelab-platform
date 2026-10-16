@@ -1,0 +1,62 @@
+---
+- name: Verify Suricata executable exists
+  ansible.builtin.stat:
+    path: /usr/bin/suricata
+  register: suricata_rule_management_suricata_binary
+
+- name: Verify suricata-update executable exists
+  ansible.builtin.stat:
+    path: /usr/bin/suricata-update
+  register: suricata_rule_management_update_binary
+
+- name: Assert Suricata rule-management prerequisites
+  ansible.builtin.assert:
+    that:
+      - suricata_rule_management_suricata_binary.stat.exists
+      - suricata_rule_management_update_binary.stat.exists
+    fail_msg: >-
+      sensor-01 must already have Suricata and suricata-update installed.
+
+- name: Create Suricata rule backup directory
+  ansible.builtin.file:
+    path: "{{ suricata_rule_management_backup_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install guarded Suricata rule updater
+  ansible.builtin.template:
+    src: homelab-suricata-rule-update.sh.j2
+    dest: "{{ suricata_rule_management_update_script }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install Suricata rule update service
+  ansible.builtin.template:
+    src: homelab-suricata-rule-update.service.j2
+    dest: /etc/systemd/system/homelab-suricata-rule-update.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Suricata rule update timer
+  ansible.builtin.template:
+    src: homelab-suricata-rule-update.timer.j2
+    dest: /etc/systemd/system/homelab-suricata-rule-update.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable Suricata rule update timer
+  ansible.builtin.systemd:
+    name: homelab-suricata-rule-update.timer
+    enabled: true
+    state: started
+    daemon_reload: true
+
+- name: Run initial guarded Suricata rule refresh
+  ansible.builtin.systemd:
+    name: homelab-suricata-rule-update.service
+    state: started

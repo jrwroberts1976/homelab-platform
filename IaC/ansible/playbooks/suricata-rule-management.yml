@@ -1,0 +1,8 @@
+---
+- name: Manage Suricata threat intelligence rules
+  hosts: sensor_hosts
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: suricata_rule_management

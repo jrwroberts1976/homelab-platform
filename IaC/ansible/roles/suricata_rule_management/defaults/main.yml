@@ -1,0 +1,13 @@
+---
+suricata_rule_management_sources:
+  - et/open
+  - abuse.ch/urlhaus
+  - abuse.ch/feodotracker
+  - stamus/lateral
+
+suricata_rule_management_config: /etc/suricata/suricata.yaml
+suricata_rule_management_rules: /var/lib/suricata/rules/suricata.rules
+suricata_rule_management_backup_dir: /var/lib/suricata/rules/homelab-backups
+
+suricata_rule_management_update_script: /usr/local/sbin/homelab-suricata-rule-update
+suricata_rule_management_backup_days: 7

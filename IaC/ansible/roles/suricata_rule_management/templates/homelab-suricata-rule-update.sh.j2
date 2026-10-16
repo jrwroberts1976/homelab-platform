@@ -1,0 +1,109 @@
+#!/usr/bin/env bash
+set -Eeuo pipefail
+
+CONFIG="{{ suricata_rule_management_config }}"
+RULES="{{ suricata_rule_management_rules }}"
+BACKUP_DIR="{{ suricata_rule_management_backup_dir }}"
+BACKUP_DAYS="{{ suricata_rule_management_backup_days }}"
+
+SOURCES=(
+{% for source in suricata_rule_management_sources %}
+  "{{ source }}"
+{% endfor %}
+)
+
+timestamp="$(date '+%Y%m%d-%H%M%S')"
+backup="${BACKUP_DIR}/suricata.rules.${timestamp}"
+
+log()
+{
+    logger -t homelab-suricata-rule-update -- "$*"
+    echo "$*"
+}
+
+rollback()
+{
+    if [[ -f "$backup" ]]; then
+        log "Restoring known-good Suricata rules from $backup"
+        cp -a "$backup" "$RULES"
+
+        if ! /usr/bin/suricata -T -c "$CONFIG"; then
+            log "ERROR: restored ruleset also failed validation"
+            exit 2
+        fi
+    fi
+}
+
+mkdir -p "$BACKUP_DIR"
+
+log "Refreshing Suricata source index"
+/usr/bin/suricata-update update-sources
+
+enabled="$(
+    /usr/bin/suricata-update list-enabled-sources 2>/dev/null || true
+)"
+
+for source in "${SOURCES[@]}"; do
+    if printf '%s\n' "$enabled" | grep -Fq "$source"; then
+        log "Source already enabled: $source"
+    else
+        log "Enabling source: $source"
+        /usr/bin/suricata-update enable-source "$source"
+    fi
+done
+
+if [[ -f "$RULES" ]]; then
+    log "Backing up current ruleset to $backup"
+    cp -a "$RULES" "$backup"
+fi
+
+log "Downloading and building Suricata rules"
+
+if ! /usr/bin/suricata-update; then
+    log "ERROR: suricata-update failed"
+    rollback
+    exit 1
+fi
+
+log "Validating candidate ruleset"
+
+if ! /usr/bin/suricata -T -c "$CONFIG"; then
+    log "ERROR: new Suricata ruleset failed validation"
+    rollback
+    exit 1
+fi
+
+rule_count="$(
+    grep -cE '^[[:space:]]*(alert|drop|reject|pass)[[:space:]]' \
+      "$RULES" || true
+)"
+
+log "Validated ruleset contains ${rule_count} active rule lines"
+
+pid="$(pidof suricata | awk '{print $1}')"
+
+if [[ -z "$pid" ]]; then
+    log "ERROR: Suricata process not found"
+    rollback
+    exit 1
+fi
+
+log "Hot-reloading Suricata rules using USR2"
+kill -USR2 "$pid"
+
+sleep 5
+
+if ! /usr/bin/systemctl is-active --quiet suricata; then
+    log "ERROR: Suricata is not active after rule reload"
+    rollback
+    /usr/bin/systemctl restart suricata
+    exit 1
+fi
+
+find "$BACKUP_DIR" \
+    -type f \
+    -name 'suricata.rules.*' \
+    -mtime "+${BACKUP_DAYS}" \
+    -delete
+
+log "Suricata rule update completed successfully"
