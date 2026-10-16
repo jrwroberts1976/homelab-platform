@@ -13,6 +13,7 @@ monitoring_prometheus_retention: 30d
 monitoring_loki_retention: 336h
 monitoring_loki_schema_from: "2020-10-24"
 monitoring_grafana_admin_user: admin
+monitoring_grafana_https_fqdn: "grafana.home.jrwroberts.co.uk"
 
 monitoring_node_exporter_textfile_directory: /var/lib/prometheus/node-exporter
 monitoring_alloy_heartbeat_hosts:

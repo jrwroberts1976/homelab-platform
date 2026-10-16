@@ -1,0 +1,11 @@
+---
+- name: Finalise Grafana HTTPS hardening
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Finalise Grafana HTTPS
+      ansible.builtin.include_role:
+        name: monitoring_stack
+        tasks_from: grafana_https_finalize.yml

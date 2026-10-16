@@ -1,0 +1,9 @@
+---
+- name: Issue trusted HTTPS certificate for Grafana
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: homelab_certificate
+      homelab_certificate_fqdn: "grafana.home.jrwroberts.co.uk"

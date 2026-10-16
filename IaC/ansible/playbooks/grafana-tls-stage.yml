@@ -1,0 +1,14 @@
+---
+- name: Configure trusted HTTPS proxy for Grafana
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+
+  vars:
+    monitoring_grafana_https_fqdn: "grafana.home.jrwroberts.co.uk"
+
+  tasks:
+    - name: Configure Grafana HTTPS
+      ansible.builtin.include_role:
+        name: monitoring_stack
+        tasks_from: https.yml

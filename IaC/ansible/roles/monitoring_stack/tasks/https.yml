@@ -1,0 +1,82 @@
+---
+- name: Validate Grafana HTTPS configuration
+  ansible.builtin.assert:
+    that:
+      - monitoring_grafana_https_fqdn | length > 0
+    fail_msg: "Grafana HTTPS FQDN is not configured."
+
+- name: Verify Grafana certificate
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ monitoring_grafana_https_fqdn }}/fullchain.pem"
+  register: grafana_https_certificate
+
+- name: Verify Grafana private key
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ monitoring_grafana_https_fqdn }}/privkey.pem"
+  register: grafana_https_private_key
+  no_log: true
+
+- name: Require Grafana certificate material
+  ansible.builtin.assert:
+    that:
+      - grafana_https_certificate.stat.exists
+      - grafana_https_private_key.stat.exists
+    fail_msg: "Grafana Let's Encrypt certificate material is missing."
+
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+
+- name: Disable default Nginx site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+
+- name: Install Grafana HTTPS reverse proxy
+  ansible.builtin.template:
+    src: grafana-nginx.conf.j2
+    dest: /etc/nginx/conf.d/grafana-https.conf
+    owner: root
+    group: root
+    mode: "0644"
+  register: grafana_nginx_config
+
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    argv:
+      - nginx
+      - -t
+  changed_when: false
+
+- name: Ensure Nginx is enabled and running
+  ansible.builtin.systemd:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Reload Nginx when configuration changes
+  ansible.builtin.systemd:
+    name: nginx
+    state: reloaded
+  when: grafana_nginx_config.changed
+
+- name: Install Certbot deploy hook for Grafana
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/35-grafana-nginx
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+
+      EXPECTED="/etc/letsencrypt/live/{{ monitoring_grafana_https_fqdn }}"
+
+      if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$EXPECTED" ]; then
+          exit 0
+      fi
+
+      /usr/sbin/nginx -t >/dev/null 2>&1
+      /usr/bin/systemctl reload nginx

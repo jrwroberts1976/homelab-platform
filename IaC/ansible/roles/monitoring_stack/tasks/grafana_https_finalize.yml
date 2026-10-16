@@ -1,0 +1,89 @@
+---
+- name: Validate Grafana HTTPS finalisation settings
+  ansible.builtin.assert:
+    that:
+      - monitoring_grafana_https_fqdn | length > 0
+    fail_msg: "Grafana HTTPS FQDN is not configured."
+
+- name: Install hardened Docker Compose definition
+  ansible.builtin.template:
+    src: docker-compose.yml.j2
+    dest: "{{ monitoring_root }}/docker-compose.yml"
+    owner: root
+    group: root
+    mode: "0644"
+  register: grafana_compose_definition
+
+- name: Validate Docker Compose configuration
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - config
+      - --quiet
+  changed_when: false
+
+- name: Reconcile Grafana only
+  ansible.builtin.command:
+    argv:
+      - docker
+      - compose
+      - --project-directory
+      - "{{ monitoring_root }}"
+      - up
+      - -d
+      - --no-deps
+      - grafana
+  register: grafana_compose_up
+  changed_when: >-
+    'Creating' in grafana_compose_up.stderr
+    or 'Created' in grafana_compose_up.stderr
+    or 'Recreating' in grafana_compose_up.stderr
+    or 'Recreated' in grafana_compose_up.stderr
+    or 'Starting' in grafana_compose_up.stderr
+    or 'Started' in grafana_compose_up.stderr
+
+- name: Wait for Grafana localhost listener
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: 3000
+    timeout: 30
+
+- name: Verify Grafana local HTTP endpoint
+  ansible.builtin.uri:
+    url: http://127.0.0.1:3000/
+    follow_redirects: none
+    status_code:
+      - 200
+      - 302
+
+- name: Verify trusted Grafana HTTPS endpoint
+  ansible.builtin.uri:
+    url: "https://{{ monitoring_grafana_https_fqdn }}/"
+    follow_redirects: none
+    validate_certs: true
+    status_code:
+      - 200
+      - 302
+
+- name: Read Grafana TCP listeners
+  ansible.builtin.shell: |
+    set -o pipefail
+    ss -lntH |
+      awk '$4 ~ /:3000$/ { print $4 }'
+  args:
+    executable: /bin/bash
+  register: grafana_port_listeners
+  changed_when: false
+
+- name: Require Grafana to listen only on localhost
+  ansible.builtin.assert:
+    that:
+      - grafana_port_listeners.stdout_lines | length == 1
+      - grafana_port_listeners.stdout_lines[0] == '127.0.0.1:3000'
+    fail_msg: >-
+      Grafana port 3000 is still exposed unexpectedly:
+      {{ grafana_port_listeners.stdout_lines }}
+  when: not ansible_check_mode
