@@ -1,0 +1,9 @@
+---
+- name: Issue trusted HTTPS certificate for Proxmox-2
+  hosts: Proxmox-2
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: homelab_certificate
+      homelab_certificate_fqdn: "proxmox-2.home.jrwroberts.co.uk"

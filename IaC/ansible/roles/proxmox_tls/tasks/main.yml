@@ -1,0 +1,71 @@
+---
+- name: Validate Proxmox TLS configuration
+  ansible.builtin.assert:
+    that:
+      - proxmox_tls_fqdn | length > 0
+    fail_msg: "Proxmox TLS FQDN is not configured."
+
+- name: Verify Let's Encrypt certificate
+  ansible.builtin.stat:
+    path: "{{ proxmox_tls_lineage }}/fullchain.pem"
+  register: proxmox_tls_certificate
+
+- name: Verify Let's Encrypt private key
+  ansible.builtin.stat:
+    path: "{{ proxmox_tls_lineage }}/privkey.pem"
+  register: proxmox_tls_private_key
+  no_log: true
+
+- name: Require Let's Encrypt certificate material
+  ansible.builtin.assert:
+    that:
+      - proxmox_tls_certificate.stat.exists
+      - proxmox_tls_private_key.stat.exists
+    fail_msg: "Let's Encrypt certificate material is missing."
+
+- name: Install Proxmox certificate deployment helper
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/homelab-proxmox-cert-deploy
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+
+      LINEAGE="{{ proxmox_tls_lineage }}"
+
+      if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$LINEAGE" ]; then
+          exit 0
+      fi
+
+      pvenode cert set \
+          "$LINEAGE/fullchain.pem" \
+          "$LINEAGE/privkey.pem" \
+          --force 1 \
+          --restart 1
+
+- name: Install Certbot deploy hook for Proxmox
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/40-proxmox-pveproxy
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      exec /usr/local/sbin/homelab-proxmox-cert-deploy
+
+- name: Install trusted certificate into pveproxy
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-proxmox-cert-deploy
+  register: proxmox_tls_install
+  changed_when: true
+
+- name: Wait for pveproxy HTTPS listener
+  ansible.builtin.wait_for:
+    host: "{{ ansible_host }}"
+    port: 8006
+    timeout: 60
+    state: started

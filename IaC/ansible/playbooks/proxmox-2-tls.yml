@@ -1,0 +1,9 @@
+---
+- name: Configure trusted HTTPS for Proxmox-2
+  hosts: Proxmox-2
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: proxmox_tls
+      proxmox_tls_fqdn: "proxmox-2.home.jrwroberts.co.uk"

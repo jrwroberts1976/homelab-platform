@@ -1,0 +1,3 @@
+---
+proxmox_tls_fqdn: ""
+proxmox_tls_lineage: "/etc/letsencrypt/live/{{ proxmox_tls_fqdn }}"
