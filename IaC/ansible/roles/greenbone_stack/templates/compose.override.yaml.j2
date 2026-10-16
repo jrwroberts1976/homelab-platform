@@ -47,9 +47,12 @@ services:
 
   gvm-config:
     environment:
-      NGINX_HOST: "{{ greenbone_stack_bind_ipv4 }}"
-      NGINX_ACCESS_CONTROL_ALLOW_ORIGIN_HEADER: "https://{{ greenbone_stack_bind_ipv4 }}"
+      ENABLE_TLS_GENERATION: "false"
+      NGINX_HOST: "{{ greenbone_stack_https_fqdn }}"
+      NGINX_ACCESS_CONTROL_ALLOW_ORIGIN_HEADER: "https://{{ greenbone_stack_https_fqdn }}"
 
   nginx:
     ports:
       - "{{ greenbone_stack_bind_ipv4 }}:{{ greenbone_stack_https_port }}:443"
+    volumes:
+      - "{{ greenbone_stack_tls_dir }}:/etc/nginx/certs:ro"

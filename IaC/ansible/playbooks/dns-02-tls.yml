@@ -1,0 +1,18 @@
+---
+- name: Configure trusted HTTPS for dns-02
+  hosts: dns-02
+  become: true
+  gather_facts: false
+
+  vars:
+    pihole_https_fqdn: "dns-02.home.jrwroberts.co.uk"
+    pihole_https_lineage: "/etc/letsencrypt/live/dns-02.home.jrwroberts.co.uk"
+    pihole_https_fullchain: "{{ pihole_https_lineage }}/fullchain.pem"
+    pihole_https_private_key: "{{ pihole_https_lineage }}/privkey.pem"
+    pihole_https_combined_pem: "/etc/pihole/tls-letsencrypt.pem"
+
+  tasks:
+    - name: Apply Pi-hole trusted HTTPS configuration
+      ansible.builtin.include_role:
+        name: dns_resolver
+        tasks_from: tls.yml

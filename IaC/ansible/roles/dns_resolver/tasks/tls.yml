@@ -1,0 +1,129 @@
+---
+- name: Validate Pi-hole HTTPS variables
+  ansible.builtin.assert:
+    that:
+      - pihole_https_fqdn | length > 0
+      - pihole_https_fullchain | length > 0
+      - pihole_https_private_key | length > 0
+    fail_msg: "Pi-hole HTTPS certificate configuration is incomplete."
+
+- name: Verify Let's Encrypt full chain
+  ansible.builtin.stat:
+    path: "{{ pihole_https_fullchain }}"
+  register: pihole_https_fullchain_file
+
+- name: Verify Let's Encrypt private key
+  ansible.builtin.stat:
+    path: "{{ pihole_https_private_key }}"
+  register: pihole_https_private_key_file
+  no_log: true
+
+- name: Require Let's Encrypt certificate material
+  ansible.builtin.assert:
+    that:
+      - pihole_https_fullchain_file.stat.exists
+      - pihole_https_private_key_file.stat.exists
+    fail_msg: "Let's Encrypt certificate material is missing."
+
+- name: Preserve original Pi-hole configuration
+  ansible.builtin.copy:
+    src: /etc/pihole/pihole.toml
+    dest: /etc/pihole/pihole.toml.pre-letsencrypt
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+
+- name: Preserve original Pi-hole TLS certificate
+  ansible.builtin.copy:
+    src: /etc/pihole/tls.pem
+    dest: /etc/pihole/tls.pem.pre-letsencrypt
+    remote_src: true
+    owner: root
+    group: root
+    mode: "0600"
+    force: false
+
+- name: Install Pi-hole certificate deployment helper
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/homelab-pihole-cert-deploy
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+
+      LINEAGE="{{ pihole_https_lineage }}"
+      DEST="{{ pihole_https_combined_pem }}"
+
+      if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$LINEAGE" ]; then
+          exit 0
+      fi
+
+      TMP="$(mktemp /etc/pihole/.tls-letsencrypt.XXXXXX)"
+      trap 'rm -f "$TMP"' EXIT
+
+      cat "$LINEAGE/fullchain.pem" "$LINEAGE/privkey.pem" > "$TMP"
+      chown root:pihole "$TMP"
+      chmod 0640 "$TMP"
+
+      if [ -f "$DEST" ] && cmp -s "$TMP" "$DEST"; then
+          exit 0
+      fi
+
+      mv -f "$TMP" "$DEST"
+      trap - EXIT
+
+      systemctl restart pihole-FTL
+
+- name: Install Certbot deploy hook for Pi-hole
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/20-pihole-ftl
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      exec /usr/local/sbin/homelab-pihole-cert-deploy
+
+- name: Build initial Pi-hole Let's Encrypt PEM
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-pihole-cert-deploy
+  changed_when: true
+
+- name: Configure Pi-hole HTTPS domain
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - webserver.domain
+      - "{{ pihole_https_fqdn }}"
+  changed_when: false
+
+- name: Configure Pi-hole TLS certificate
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - webserver.tls.cert
+      - "{{ pihole_https_combined_pem }}"
+  changed_when: false
+
+- name: Disable Pi-hole self-signed certificate regeneration
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/pihole-FTL
+      - --config
+      - webserver.tls.validity
+      - "0"
+  changed_when: false
+
+- name: Restart Pi-hole FTL with trusted certificate
+  ansible.builtin.systemd_service:
+    name: pihole-FTL
+    state: restarted
+    enabled: true

@@ -1,0 +1,82 @@
+---
+- name: Validate Greenbone HTTPS configuration
+  ansible.builtin.assert:
+    that:
+      - greenbone_stack_https_fqdn | length > 0
+      - greenbone_stack_tls_dir | length > 0
+    fail_msg: "Greenbone HTTPS configuration is incomplete."
+
+- name: Verify Greenbone Let's Encrypt certificate
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ greenbone_stack_https_fqdn }}/fullchain.pem"
+  register: greenbone_tls_certificate
+
+- name: Verify Greenbone Let's Encrypt private key
+  ansible.builtin.stat:
+    path: "/etc/letsencrypt/live/{{ greenbone_stack_https_fqdn }}/privkey.pem"
+  register: greenbone_tls_private_key
+  no_log: true
+
+- name: Require Greenbone Let's Encrypt material
+  ansible.builtin.assert:
+    that:
+      - greenbone_tls_certificate.stat.exists
+      - greenbone_tls_private_key.stat.exists
+    fail_msg: "Greenbone Let's Encrypt certificate material is missing."
+
+- name: Ensure Greenbone TLS directory exists
+  ansible.builtin.file:
+    path: "{{ greenbone_stack_tls_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Install Greenbone certificate deployment helper
+  ansible.builtin.copy:
+    dest: /usr/local/sbin/homelab-greenbone-cert-deploy
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+
+      LINEAGE="/etc/letsencrypt/live/{{ greenbone_stack_https_fqdn }}"
+      DEST="{{ greenbone_stack_tls_dir }}"
+      STACK="{{ greenbone_stack_root }}"
+
+      if [ -n "${RENEWED_LINEAGE:-}" ] && [ "$RENEWED_LINEAGE" != "$LINEAGE" ]; then
+          exit 0
+      fi
+
+      install -o root -g root -m 0644 \
+          "$LINEAGE/fullchain.pem" \
+          "$DEST/server.cert.pem"
+
+      install -o root -g root -m 0600 \
+          "$LINEAGE/privkey.pem" \
+          "$DEST/server.key"
+
+      if [ "${1:-}" != "--no-restart" ]; then
+          cd "$STACK"
+          docker compose restart nginx
+      fi
+
+- name: Install Certbot deploy hook for Greenbone
+  ansible.builtin.copy:
+    dest: /etc/letsencrypt/renewal-hooks/deploy/30-greenbone-nginx
+    owner: root
+    group: root
+    mode: "0755"
+    content: |
+      #!/bin/sh
+      set -eu
+      exec /usr/local/sbin/homelab-greenbone-cert-deploy
+
+- name: Stage Greenbone Let's Encrypt certificate
+  ansible.builtin.command:
+    argv:
+      - /usr/local/sbin/homelab-greenbone-cert-deploy
+      - --no-restart
+  changed_when: true

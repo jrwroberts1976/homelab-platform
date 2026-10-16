@@ -1,0 +1,11 @@
+---
+- name: Stage trusted HTTPS certificate for Greenbone
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Stage Greenbone TLS material
+      ansible.builtin.include_role:
+        name: greenbone_stack
+        tasks_from: tls.yml

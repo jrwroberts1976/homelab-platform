@@ -1,0 +1,11 @@
+---
+- name: Obtain trusted HTTPS certificate for dns-01
+  hosts: dns-01
+  become: true
+  gather_facts: false
+
+  vars:
+    homelab_certificate_fqdn: "dns-01.home.jrwroberts.co.uk"
+
+  roles:
+    - homelab_certificate

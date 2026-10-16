@@ -1,4 +1,6 @@
 ---
+greenbone_stack_https_fqdn: "greenbone.home.jrwroberts.co.uk"
+
 # Reviewed Greenbone accepted risks.
 # Timestamp disclosure is accepted for the internal homelab LAN.
 # Findings remain visible but are excluded from actionable counts.

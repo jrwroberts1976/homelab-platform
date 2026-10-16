@@ -1,0 +1,115 @@
+---
+- name: Validate homelab certificate configuration
+  ansible.builtin.assert:
+    that:
+      - homelab_certificate_fqdn | length > 0
+      - homelab_certificate_domains | length > 0
+    fail_msg: >-
+      Certificate configuration is incomplete.
+      A certificate FQDN and at least one domain must be supplied.
+
+- name: Install Certbot and Cloudflare DNS plugin
+  ansible.builtin.apt:
+    name:
+      - certbot
+      - python3-certbot-dns-cloudflare
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Ensure Let's Encrypt configuration directory exists
+  ansible.builtin.file:
+    path: /etc/letsencrypt
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Check controller Cloudflare credentials
+  ansible.builtin.stat:
+    path: "{{ homelab_certificate_cloudflare_credentials_source }}"
+  delegate_to: localhost
+  become: false
+  register: homelab_certificate_controller_credentials
+
+- name: Require controller Cloudflare credentials
+  ansible.builtin.assert:
+    that:
+      - homelab_certificate_controller_credentials.stat.exists
+      - homelab_certificate_controller_credentials.stat.isreg
+    fail_msg: >-
+      Protected Cloudflare credentials were not found at
+      {{ homelab_certificate_cloudflare_credentials_source }}.
+  delegate_to: localhost
+  become: false
+
+- name: Install protected Cloudflare credentials
+  ansible.builtin.copy:
+    src: "{{ homelab_certificate_cloudflare_credentials_source }}"
+    dest: "{{ homelab_certificate_cloudflare_credentials }}"
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Ensure Certbot renewal timer is enabled
+  ansible.builtin.systemd:
+    name: certbot.timer
+    enabled: true
+    state: started
+
+- name: Obtain Let's Encrypt certificate using Cloudflare DNS-01
+  ansible.builtin.command:
+    argv:
+      - certbot
+      - certonly
+      - --dns-cloudflare
+      - --dns-cloudflare-credentials
+      - "{{ homelab_certificate_cloudflare_credentials }}"
+      - --dns-cloudflare-propagation-seconds
+      - "{{ homelab_certificate_dns_propagation_seconds | string }}"
+      - --non-interactive
+      - --agree-tos
+      - --register-unsafely-without-email
+      - --cert-name
+      - "{{ homelab_certificate_cert_name }}"
+      - --domains
+      - "{{ homelab_certificate_domains | join(',') }}"
+  args:
+    creates: "{{ homelab_certificate_fullchain }}"
+
+- name: Check issued certificate files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ homelab_certificate_fullchain }}"
+    - "{{ homelab_certificate_private_key }}"
+  register: homelab_certificate_files
+
+- name: Require issued certificate files
+  ansible.builtin.assert:
+    that:
+      - homelab_certificate_files.results | map(attribute='stat.exists') | min
+    fail_msg: >-
+      Let's Encrypt certificate material was not created for
+      {{ homelab_certificate_fqdn }}.
+
+- name: Read issued certificate
+  ansible.builtin.command:
+    argv:
+      - openssl
+      - x509
+      - -in
+      - "{{ homelab_certificate_fullchain }}"
+      - -noout
+      - -subject
+      - -issuer
+      - -dates
+      - -ext
+      - subjectAltName
+  register: homelab_certificate_details
+  changed_when: false
+
+- name: Show issued certificate
+  ansible.builtin.debug:
+    var: homelab_certificate_details.stdout_lines

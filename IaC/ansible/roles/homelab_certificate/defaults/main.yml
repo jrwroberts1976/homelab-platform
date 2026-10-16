@@ -1,0 +1,26 @@
+---
+# Public DNS name to place on the certificate.
+homelab_certificate_fqdn: ""
+
+# Certbot certificate name. Normally the same as the FQDN.
+homelab_certificate_cert_name: "{{ homelab_certificate_fqdn }}"
+
+# Additional names can be added later if a service needs SANs.
+homelab_certificate_domains:
+  - "{{ homelab_certificate_fqdn }}"
+
+# Let's Encrypt / Cloudflare DNS-01 credentials.
+homelab_certificate_letsencrypt_email: ""
+homelab_certificate_cloudflare_credentials_source: "{{ lookup('env', 'HOME') }}/.config/homelab/cloudflare.ini"
+homelab_certificate_cloudflare_credentials: "/etc/letsencrypt/cloudflare-homelab.ini"
+homelab_certificate_dns_propagation_seconds: 30
+
+# Resulting certificate paths.
+homelab_certificate_live_dir: "/etc/letsencrypt/live/{{ homelab_certificate_cert_name }}"
+homelab_certificate_fullchain: "{{ homelab_certificate_live_dir }}/fullchain.pem"
+homelab_certificate_private_key: "{{ homelab_certificate_live_dir }}/privkey.pem"
+
+# Optional service-specific deploy hook.
+# Leave empty when the consuming service manages reload/restart separately.
+homelab_certificate_deploy_hook_name: ""
+homelab_certificate_deploy_hook_content: ""
