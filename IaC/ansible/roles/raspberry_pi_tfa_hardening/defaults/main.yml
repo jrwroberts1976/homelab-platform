@@ -1,0 +1,12 @@
+---
+raspberry_pi_tfa_expected_hostname: docker-01
+raspberry_pi_tfa_expected_model: "Raspberry Pi 4 Model B Rev 1.5"
+raspberry_pi_tfa_expected_revision: "c03115"
+raspberry_pi_tfa_expected_architecture: "aarch64"
+
+raspberry_pi_tfa_version: "2.15.0"
+raspberry_pi_tfa_filename: "bl31-tfa-2.15.0-release.bin"
+raspberry_pi_tfa_sha256: "b1d31e5094c692b41ee9418a20216176bd1c2764f27e18a5fdc4d6187a307405"
+
+raspberry_pi_tfa_boot_directory: /boot/firmware
+raspberry_pi_tfa_config: /boot/firmware/config.txt

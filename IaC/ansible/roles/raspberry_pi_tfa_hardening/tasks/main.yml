@@ -1,0 +1,206 @@
+---
+- name: Read Raspberry Pi model
+  ansible.builtin.shell: |
+    tr -d '\\000' < /proc/device-tree/model
+  args:
+    executable: /bin/bash
+  register: raspberry_pi_tfa_model
+  changed_when: false
+  check_mode: false
+
+- name: Read Raspberry Pi revision
+  ansible.builtin.command:
+    argv:
+      - awk
+      - '/^Revision/ {print $3}'
+      - /proc/cpuinfo
+  register: raspberry_pi_tfa_revision
+  changed_when: false
+  check_mode: false
+
+- name: Show detected TF-A target identity
+  ansible.builtin.debug:
+    msg:
+      - "Hostname: {{ ansible_facts.hostname }}"
+      - "Distribution: {{ ansible_facts.distribution }} {{ ansible_facts.distribution_major_version }}"
+      - "Architecture: {{ ansible_facts.architecture }}"
+      - "Model: {{ raspberry_pi_tfa_model.stdout }}"
+      - "Revision: {{ raspberry_pi_tfa_revision.stdout | trim }}"
+
+- name: Validate TF-A target
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.hostname == raspberry_pi_tfa_expected_hostname
+      - ansible_facts.architecture == raspberry_pi_tfa_expected_architecture
+      - raspberry_pi_tfa_expected_model in raspberry_pi_tfa_model.stdout
+      - (raspberry_pi_tfa_revision.stdout | trim) == raspberry_pi_tfa_expected_revision
+    fail_msg: >-
+      Refusing TF-A hardening: expected Debian 13
+      {{ raspberry_pi_tfa_expected_hostname }},
+      {{ raspberry_pi_tfa_expected_model }},
+      revision {{ raspberry_pi_tfa_expected_revision }},
+      architecture {{ raspberry_pi_tfa_expected_architecture }}.
+
+- name: Verify vendored TF-A artifact on controller
+  ansible.builtin.stat:
+    path: "{{ role_path }}/files/{{ raspberry_pi_tfa_filename }}"
+    checksum_algorithm: sha256
+  delegate_to: localhost
+  become: false
+  register: raspberry_pi_tfa_controller_artifact
+
+- name: Require validated vendored TF-A artifact
+  ansible.builtin.assert:
+    that:
+      - raspberry_pi_tfa_controller_artifact.stat.exists
+      - raspberry_pi_tfa_controller_artifact.stat.checksum == raspberry_pi_tfa_sha256
+    fail_msg: >-
+      Vendored TF-A artifact is missing or its SHA-256 does not match
+      the validated value.
+
+- name: Read existing Raspberry Pi boot configuration
+  ansible.builtin.slurp:
+    src: "{{ raspberry_pi_tfa_config }}"
+  register: raspberry_pi_tfa_config_before
+
+- name: Record pre-change TF-A state
+  ansible.builtin.set_fact:
+    raspberry_pi_tfa_was_configured: >-
+      {{
+        'enable_uart=1' in (raspberry_pi_tfa_config_before.content | b64decode)
+        and 'enable_gic=1' in (raspberry_pi_tfa_config_before.content | b64decode)
+        and
+        (
+          'armstub=' ~ raspberry_pi_tfa_filename
+        ) in (raspberry_pi_tfa_config_before.content | b64decode)
+      }}
+
+- name: Validate that all is the final boot configuration section
+  ansible.builtin.assert:
+    that:
+      - >-
+        (
+          (raspberry_pi_tfa_config_before.content | b64decode)
+          | regex_findall('(?m)^\[[^]]+\]$')
+          | last
+        ) == '[all]'
+    fail_msg: >-
+      Refusing to modify {{ raspberry_pi_tfa_config }} because [all]
+      is not the final section.
+
+- name: Deploy validated TF-A firmware
+  ansible.builtin.copy:
+    src: "{{ raspberry_pi_tfa_filename }}"
+    dest: "{{ raspberry_pi_tfa_boot_directory }}/{{ raspberry_pi_tfa_filename }}"
+    owner: root
+    group: root
+    mode: "0755"
+  register: raspberry_pi_tfa_binary
+
+- name: Verify installed TF-A firmware
+  ansible.builtin.stat:
+    path: "{{ raspberry_pi_tfa_boot_directory }}/{{ raspberry_pi_tfa_filename }}"
+    checksum_algorithm: sha256
+  register: raspberry_pi_tfa_installed
+
+- name: Require validated installed TF-A firmware
+  ansible.builtin.assert:
+    that:
+      - raspberry_pi_tfa_installed.stat.exists
+      - raspberry_pi_tfa_installed.stat.checksum == raspberry_pi_tfa_sha256
+    fail_msg: >-
+      Installed TF-A artifact does not match the validated SHA-256.
+
+- name: Check for TF-A pre-IaC boot configuration backup
+  ansible.builtin.stat:
+    path: "{{ raspberry_pi_tfa_config }}.pre-tfa-iac"
+  register: raspberry_pi_tfa_config_backup
+
+- name: Create FAT-safe TF-A boot configuration backup
+  ansible.builtin.copy:
+    src: "{{ raspberry_pi_tfa_config }}"
+    dest: "{{ raspberry_pi_tfa_config }}.pre-tfa-iac"
+    remote_src: true
+    owner: root
+    group: root
+    mode: preserve
+  when: not raspberry_pi_tfa_config_backup.stat.exists
+
+- name: Adopt existing manual TF-A configuration
+  ansible.builtin.replace:
+    path: "{{ raspberry_pi_tfa_config }}"
+    regexp: '(?m)^# Trusted Firmware-A for Cortex-A72 speculative execution mitigations\nenable_uart=1\nenable_gic=1\narmstub={{ raspberry_pi_tfa_filename }}$'
+    replace: |-
+      # BEGIN ANSIBLE MANAGED BLOCK: Raspberry Pi TF-A hardening
+      # Trusted Firmware-A for Cortex-A72 speculative execution mitigations
+      enable_uart=1
+      enable_gic=1
+      armstub={{ raspberry_pi_tfa_filename }}
+      # END ANSIBLE MANAGED BLOCK: Raspberry Pi TF-A hardening
+  when: >-
+    'BEGIN ANSIBLE MANAGED BLOCK: Raspberry Pi TF-A hardening'
+    not in (raspberry_pi_tfa_config_before.content | b64decode)
+  register: raspberry_pi_tfa_adopt
+
+- name: Manage TF-A boot configuration
+  ansible.builtin.blockinfile:
+    path: "{{ raspberry_pi_tfa_config }}"
+    marker: "# {mark} ANSIBLE MANAGED BLOCK: Raspberry Pi TF-A hardening"
+    insertafter: EOF
+    block: |
+      # Trusted Firmware-A for Cortex-A72 speculative execution mitigations
+      enable_uart=1
+      enable_gic=1
+      armstub={{ raspberry_pi_tfa_filename }}
+  when: not raspberry_pi_tfa_adopt.changed
+  register: raspberry_pi_tfa_boot_config
+
+- name: Determine whether reboot is required
+  ansible.builtin.set_fact:
+    raspberry_pi_tfa_reboot_required: >-
+      {{
+        raspberry_pi_tfa_binary.changed
+        or not (raspberry_pi_tfa_was_configured | bool)
+      }}
+
+- name: Read Spectre v2 mitigation state
+  ansible.builtin.command:
+    argv:
+      - cat
+      - /sys/devices/system/cpu/vulnerabilities/spectre_v2
+  register: raspberry_pi_tfa_spectre_v2
+  changed_when: false
+  check_mode: false
+  when: not (raspberry_pi_tfa_reboot_required | bool)
+
+- name: Read speculative store bypass state
+  ansible.builtin.command:
+    argv:
+      - cat
+      - /sys/devices/system/cpu/vulnerabilities/spec_store_bypass
+  register: raspberry_pi_tfa_ssb
+  changed_when: false
+  check_mode: false
+  when: not (raspberry_pi_tfa_reboot_required | bool)
+
+- name: Report TF-A hardening state
+  ansible.builtin.debug:
+    msg:
+      - "TF-A artifact SHA-256: {{ raspberry_pi_tfa_sha256 }}"
+      - "Reboot required: {{ raspberry_pi_tfa_reboot_required | bool }}"
+      - >-
+        Spectre v2:
+        {{
+          raspberry_pi_tfa_spectre_v2.stdout
+          if not (raspberry_pi_tfa_reboot_required | bool)
+          else 'verification deferred until reboot'
+        }}
+      - >-
+        Speculative Store Bypass:
+        {{
+          raspberry_pi_tfa_ssb.stdout
+          if not (raspberry_pi_tfa_reboot_required | bool)
+          else 'verification deferred until reboot'
+        }}
