@@ -2,7 +2,7 @@
 # Current-State Architecture
 
 **Status:** CURRENT OPERATIONAL TRUTH  
-**Current-state review:** 11 October 2026
+**Current-state review:** 16 October 2026  
 **Identity/address authority:** `IaC/inventory/estate.json`  
 **Configuration authority:** `IaC/`
 
@@ -18,8 +18,6 @@ Use this precedence when documents disagree:
 4. Git-managed IaC for intended/deployed configuration;
 5. production service/runbook documents;
 6. dated audits and historical migration evidence.
-
-The 5 October repository audit is recorded in `docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-10-05.md`.
 
 ## Active estate
 
@@ -46,7 +44,7 @@ The 5 October repository audit is recorded in `docs/architecture/ESTATE-DOCUMENT
 | ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
 | HP ProCurve 2510G-24 | `192.168.2.16` | Core switch / active SPAN source | ACTIVE |
 
-The normal Ansible-managed Linux baseline is **15 hosts**. `home-01` is active but is HAOS and intentionally outside that 15-host Linux/Ansible baseline.
+The normal Ansible-managed Linux baseline is **15 hosts**. `home-01` is active but HAOS and intentionally outside that 15-host Linux/Ansible baseline.
 
 ## Retired identities
 
@@ -60,196 +58,124 @@ These names are historical only and must not be used as active deployment, monit
 
 ## Proxmox platform
 
-The live virtualization platform is the two-node cluster:
+The live virtualization platform is the two-node `jameshouse-pve` cluster:
 
 ```text
-cluster: jameshouse-pve
-node 1:  PROXMOX    192.168.2.70
-node 2:  Proxmox-2  192.168.2.71
+PROXMOX    192.168.2.70
+Proxmox-2  192.168.2.71
 ```
 
-Corosync links:
+Corosync uses the preferred direct `10.255.255.0/30` interconnect with management-LAN fallback. `admin-01` runs QNetd and supplies the external third vote. Current quorum is healthy with QDevice present.
+
+Latest controlled maintenance evidence from 16 October 2026:
 
 ```text
-link0 — preferred direct interconnect
-  PROXMOX:   10.255.255.1/30
-  Proxmox-2: 10.255.255.2/30
-
-link1 — fallback
-  management LAN 192.168.2.0/24
+pve-manager: 9.2.21
+running kernel: 7.0.14-24-pve
+quorum: healthy / QDevice present
+pending packages: 0
+reboot required: no
 ```
 
-`admin-01` runs QNetd and supplies the external third vote. Validated quorum is 3 total votes with quorum 2 and QDevice present.
+Production guest disks remain node-local. Cluster membership and quorum do not provide automatic guest-data HA after loss of the node that owns a guest disk.
 
-Latest controlled maintenance evidence from 5 October 2026:
-
-```text
-PROXMOX:   pve-manager 9.2.21, running kernel 7.0.14-20-pve
-Proxmox-2: pve-manager 9.2.21, running kernel 7.0.14-20-pve
-```
-
-Current production guest placement:
-
-```text
-PROXMOX
-  CT100 dns-02
-  CT102 mail-relay-01
-  CT104 komodo-01
-  CT105 zabbix-01
-  VM200 cloud-01
-  VM201 sensor-01
-  VM204 home-01
-  VM9000 / VM9001 templates
-
-Proxmox-2
-  CT101 dns-01
-  CT103 edge-01
-  VM202 monitor-01
-  VM203 greenbone-01
-```
-
-Production guest disks remain node-local. Cluster membership and quorum do not by themselves provide automatic guest-data HA after loss of the node that owns a guest disk.
+A GDS kernel mitigation is active on the PVE hosts through `gather_data_sampling=force`. The live mitigation is proven, but the GRUB/kernel-parameter change still needs to be encoded in IaC before that item is considered fully reproducible.
 
 ## DNS
 
-Current resolver pair:
+Approved resolver pair:
 
 ```text
 dns-01  192.168.2.51
 dns-02  192.168.2.50
 ```
 
-Both run Pi-hole + Unbound and forward Pi-hole to local Unbound at `127.0.0.1#5335`.
-
-`admin-01` at `.48` is **not** a DNS resolver.
-
-The former cross-resolver local-record parity defect is resolved in current IaC. The managed host set contains both `dns-01.jameshouse` and `dns-02.jameshouse`.
+Both run Pi-hole + Unbound and forward Pi-hole to local Unbound at `127.0.0.1#5335`. `admin-01` is not a DNS resolver.
 
 ## Monitoring, logging and dashboards
 
-`monitor-01` hosts the production monitoring/logging stack:
+`monitor-01` hosts Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki. The 15 managed Linux systems report through the host-monitoring baseline and Zabbix Agent 2; Zabbix Server runs on `zabbix-01`.
 
-- Prometheus;
-- Grafana;
-- Alertmanager;
-- Blackbox Exporter;
-- Loki;
-- Grafana Alloy pipelines.
+Production Grafana includes the operations overview, host dashboards, patch/reboot status, network-host views and accepted-risk detail reporting. Factual network inventory remains owned by `monitor-01`.
 
-The 15 managed Linux systems report through the host-monitoring baseline and Zabbix Agent 2. Zabbix Server runs on `zabbix-01`.
-
-Step 10 estate-wide Grafana work is complete. Production navigation includes:
-
-- Homelab Home / operations overview;
-- Homelab Hosts;
-- Homelab Patch & Reboot Status;
-- Node Detail;
-- Network Hosts / per-device views.
-
-The monitoring playbook was deployed successfully and a repeat run completed idempotently with:
-
-```text
-changed=0
-unreachable=0
-failed=0
-```
-
-### Daily management-report network inventory
-
-Factual network-inventory v1 is live in the daily management report. It is explicitly pinned to the active discovery owner `monitor-01` and uses the existing `homelab_network_host_*` Prometheus metrics plus the `homelab_network_hosts.prom` textfile mtime for freshness.
-
-The section reports only:
-
-- retained inventory-device count;
-- hosts currently considered online by the network collector;
-- hosts first observed in the preceding 24 hours;
-- source timestamp/evidence age and freshness state.
-
-The collector runs every 5 minutes and the report uses a 15-minute freshness threshold. Missing, stale or invalid evidence suppresses the counts rather than presenting them as current facts. Guards reject impossible values such as an online count greater than the retained inventory.
-
-The implementation does **not** depend on `enrichment.json` and does not make OS-change, port-change or identity-change claims. This boundary is intentional for v1.
-
-Production validation showed current `monitor-01` evidence rendering successfully, 9 management-report regression tests passing, Ansible syntax validation passing, and a repeat deployment completing with `changed=0`, `unreachable=0`, `failed=0`. Closure evidence is recorded in `docs/architecture/MANAGEMENT-REPORT-NETWORK-V1-CLOSURE-2026-10-07.md`; implementation commit is `abb5c90`.
+The Network Host discovery single-owner cutover remains `monitor-01`; former source timers on `Proxmox-2` remain disabled/inactive.
 
 ## Automated patching
 
-The managed Linux estate uses security-only unattended upgrades with **automatic reboot disabled**.
+The managed Linux estate uses security-only unattended upgrades with **automatic reboot disabled**. A full controlled patch session completed on **16 October 2026**.
 
-Final validated 5 October 2026 estate telemetry after controlled patching:
+Final validated estate state:
 
 ```text
-reporting hosts:            15
+Ansible-managed hosts:      15
+reachable:                  15
 pending updates:            0
-security updates pending:   0
 reboots required:           0
-unattended-upgrades present:15
-automatic reboots enabled:  0
 ```
 
-Current exporter metrics use the `homelab_patch_*` namespace. Retired dashboard metrics must not be reintroduced.
+Patch telemetry was refreshed across all 15 hosts. No patch-induced service regression was found. Known pre-existing failed one-shot/helper units remain separate operational debt and are not patch failures.
 
-## Network discovery and host identification
+The Proxmox Ceph enterprise repository was found enabled although Ceph is not in use. It is now explicitly disabled through the `proxmox_repositories` Ansible role (`9dc60394` after rebase), allowing normal package maintenance without an enterprise Ceph subscription.
 
-The single-owner migration completed on **27 September 2026**.
+## Trusted HTTPS and certificate management
 
-Production owner: `monitor-01`.
+Trusted browser-facing HTTPS is now deployed and renewal-tested for the managed administration endpoints below. Certificates use Let's Encrypt with Cloudflare DNS validation and service-specific deploy hooks.
 
-Active responsibilities on `monitor-01` include:
+| Service | Trusted URL | Renewal/deploy behaviour |
+|---|---|---|
+| Pi-hole dns-01 | `https://dns-01.home.jrwroberts.co.uk/` | rebuild combined Pi-hole PEM; restart FTL |
+| Pi-hole dns-02 | `https://dns-02.home.jrwroberts.co.uk/` | rebuild combined Pi-hole PEM; restart FTL |
+| Greenbone | `https://greenbone.home.jrwroberts.co.uk/` | deploy cert/key into Greenbone TLS path; restart nginx container |
+| Grafana | `https://grafana.home.jrwroberts.co.uk/` | nginx reverse proxy; reload nginx |
+| Zabbix | `https://zabbix.home.jrwroberts.co.uk/` | nginx reverse proxy; reload nginx |
+| PROXMOX | `https://proxmox.home.jrwroberts.co.uk:8006/` | install custom `pveproxy` certificate; restart pveproxy |
+| Proxmox-2 | `https://proxmox-2.home.jrwroberts.co.uk:8006/` | install custom `pveproxy` certificate; restart pveproxy |
 
-- network collector;
-- selective enricher;
-- read-only OS-evidence publisher;
-- trusted Proxmox guest refresh;
-- targeted deep profiling;
-- first-seen notifier;
-- Network Hosts Grafana publication;
-- persistent host-page generation;
-- bounded DNS evidence correlation;
-- bounded AI host assessment with the reviewed hourly resolver timer enabled.
+All seven certificate renewal paths were exercised with Certbot dry-runs on 16 October 2026 and the corresponding service remained healthy afterwards.
 
-### Host-intelligence evidence state
+Grafana's Docker listener is hardened to `127.0.0.1:3000`; direct LAN access to `192.168.2.52:3000` is no longer available. Grafana is configured with its canonical HTTPS domain/root URL and secure cookies. Implementation is committed on `main` as `bb5aecd9`.
 
-Project 3 host-intelligence quality refinement closed on 10 October 2026.
+The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-runs is non-fatal today, but dependency version control should be reviewed before an incompatible Cloudflare Python 3.x transition.
 
-The production AI resolver timer on `monitor-01` is enabled and active.
-Scheduled runs complete successfully; a run with zero eligible devices is a
-normal no-work result.
+## Vulnerability management
 
-Managed Zabbix OS evidence now has an explicit source state:
+`greenbone-01` is the active LAN-only Greenbone scanner. The operating model includes managed scans, machine-readable evidence, restricted evidence transfer to `monitor-01`, schema/freshness validation, accepted-risk separation and management-report integration.
 
-- `fresh` — expected usable OS-name evidence is within the freshness threshold;
-- `stale` — expected OS-name evidence exists but is older than the threshold;
-- `missing` — Zabbix OS evidence is expected but no usable OS-name evidence exists;
-- `not_expected` — Zabbix OS evidence is not expected for that device.
+The 14 October managed validation had:
 
-This state is separate from the `os_evidence` classification used for the
-displayed operating system. Offline state is also independent of evidence
-freshness.
+```text
+Critical:      0
+High:          0
+Medium:        1 actionable
+Low:           0
+Accepted risk: 30
+```
 
-The numeric `homelab_network_device_zabbix_os_last_seen_seconds` gauge records
-the latest Zabbix OS-name observation.
+The prior actionable finding was cleartext Zabbix management HTTP. Trusted Zabbix HTTPS/reverse-proxy remediation is now implemented. The final post-remediation Greenbone scan is **currently pending completion** and is the remaining validation gate before the vulnerability-remediation section is marked fully closed.
 
-Closure validation found:
+The accepted-risk dashboard/export path now exposes the accepted-risk details rather than only a count.
 
-- 15 managed hosts `fresh`;
-- 0 `stale`;
-- 0 `missing`;
-- all 15 managed hosts with authoritative OS evidence;
-- exactly 15 Zabbix OS timestamp series;
-- 50 generated host dashboards parsed successfully;
-- the conditional last-observed panel present on exactly those 15 devices;
-- repeat production deployment with `changed=0`, `unreachable=0`, `failed=0`;
-- 143 monitoring regression tests passing.
+Missing, invalid or stale Greenbone evidence must never be represented as zero vulnerabilities.
 
-`Proxmox-2` is the former source. Its discovery timers are disabled/inactive and its retained files are rollback/history evidence. Do not re-enable source scanning while `monitor-01` is the active owner.
+## Raspberry Pi speculative-execution hardening
 
-The detailed staged migration and cutover evidence remains in `docs/operations/network-discovery-monitor01-migration.md` and dated audit records. Pre-cutover statements in those files are historical evidence only.
+`docker-01` is Raspberry Pi 4 Model B Rev 1.5 (`c03115`), Debian 13/aarch64. Trusted Firmware-A v2.15.0 is active for Cortex-A72 speculative-execution mitigations.
+
+Validated live state:
+
+```text
+TF-A artifact SHA-256:
+b1d31e5094c692b41ee9418a20216176bd1c2764f27e18a5fdc4d6187a307405
+
+Spectre v2: Mitigation: Branch predictor hardening, BHB
+Speculative Store Bypass: Not affected
+```
+
+The mitigation is now fully managed through `roles/raspberry_pi_tfa_hardening`, including the validated firmware artifact, checksum, licence/provenance, guarded Pi model/revision/architecture checks, FAT-safe boot-config backup and managed `config.txt` block. Repeat reconciliation completed with `changed=0`, `failed=0`. Implementation is committed as `b3047742`.
 
 ## Network sensor and switch SPAN
 
 `sensor-01` is the active passive sensor. Suricata and Zeek consume the dedicated capture interface.
-
-Current switch monitoring design:
 
 ```text
 HP ProCurve 2510G-24
@@ -257,155 +183,75 @@ mirror destination: port 24
 mirror sources:     ports 1-23
 ```
 
-The older 12 September switch-port map that shows port 24 as the router uplink is a historical pre-repatch snapshot and must not be used as current cabling authority.
-
-## Vulnerability management
-
-`greenbone-01` is the active LAN-only Greenbone scanner.
-
-Current operating model includes:
-
-- managed daily vulnerability scan;
-- machine-readable evidence generation;
-- restricted evidence transfer to `monitor-01`;
-- schema/freshness validation;
-- management-report integration.
-
-Missing, invalid or stale evidence is an evidence problem and must not be represented as zero vulnerabilities.
+The older switch-port map that shows port 24 as a router uplink is historical pre-repatch evidence only.
 
 ## Container management
 
-`komodo-01` runs Komodo Core and MongoDB and is the container-management control plane.
-
-Komodo Core now serves strict HTTPS at `https://komodo-01.jameshouse:9120/` using the dedicated internal Komodo CA. `cloud-01`, `monitor-01`, `docker-01` and `greenbone-01` connect outbound over WSS with certificate verification enabled (`PERIPHERY_CORE_TLS_INSECURE_SKIP_VERIFY=false`). Repeat Core, Periphery and Zabbix reconciliation completed with `changed=0`, and the Zabbix HTTPS check returns HTTP 200.
-
-Komodo Periphery is commissioned on explicitly managed Docker hosts, including the currently documented production hosts. Additional onboarding is a deliberate per-host decision rather than a platform prerequisite.
+`komodo-01` runs Komodo Core and MongoDB. Komodo Core uses strict HTTPS and managed Periphery hosts connect over certificate-validated WSS. The BirdNET-Go controlled image/update/rollback canary is proven; the remaining estate-wide image lifecycle review is still open.
 
 Komodo adoption must not silently recreate existing production Compose workloads.
 
+## Backup platform
+
+Primary Proxmox guest backups use NFS on `media-01` with node-scoped backup namespaces and `keep-last=3` retention.
+
+An isolated LXC restore proof exists for CT103. A representative QEMU restore, application-consistent `cloud-01`/PostgreSQL recovery and an independent second backup copy remain open.
+
 ## Remote access
 
-The production remote-access path is the native OpenVPN server on the ASUS RT-AC86U.
-
-Production acceptance completed on 18 September 2026 from a Windows laptop on an external network. The client established the tunnel, reached the homelab LAN and retained normal split-tunnel Internet access.
-
-DDNS and router/client recovery checks remain maintenance/recovery work rather than blockers to operational acceptance.
-
-No dedicated `vpn-01` VM is allocated.
+The production remote-access path is the native OpenVPN server on the ASUS RT-AC86U. External split-tunnel acceptance was completed from a Windows laptop on 18 September 2026.
 
 ## Cloud / Nextcloud
 
-`cloud-01` is the production Nextcloud platform:
-
-- VM200 on `PROXMOX`;
-- dedicated 200 GiB application-data disk;
-- `/srv/cloud-01-data`;
-- Nextcloud + PostgreSQL + Redis + cron;
-- service endpoint `192.168.2.53:8080`;
-- SMTP through `mail-relay-01`.
-
-VM-level backup is proven. Application-consistent Nextcloud/PostgreSQL recovery remains outstanding.
+`cloud-01` hosts Nextcloud, PostgreSQL, Redis and cron on VM200 with a dedicated application-data disk. VM-level backup is proven; application-consistent recovery remains outstanding.
 
 ## Home Assistant
 
-`home-01` is active as VM204 on `PROXMOX` using Home Assistant OS.
-
-Commissioned evidence includes:
-
-- fixed production identity at `192.168.2.60`;
-- HTTP service on port 80;
-- DNS on both managed resolvers;
-- native Home Assistant backup;
-- manual Proxmox snapshot/integrity proof;
-- Proxmox protection enabled;
-- inclusion in the nightly `PROXMOX` backup schedule.
-
-Still open: first unattended VM204 schedule proof, external monitoring and deeper recovery validation.
-
-## Backup platform
-
-Primary Proxmox guest backups use NFS on `media-01`.
-
-Current schedule:
-
-```text
-PROXMOX
-  job: homelab-nightly-proxmox
-  schedule: 02:15
-  storage: media-backup-proxmox
-  guests: 100,102,104,105,200,201,204
-
-Proxmox-2
-  job: homelab-nightly-proxmox-2
-  schedule: 03:15
-  storage: media-backup-proxmox-2
-  guests: 101,103,202,203
-
-mode: snapshot
-compression: zstd
-retention: keep-last=3
-```
-
-Observed evidence includes unattended CT105 and VM203 backups. CT104 and VM204 still require explicit first-unattended-run proof in the current evidence set.
-
-An isolated LXC restore proof exists for CT103. A representative QEMU restore, application-consistent `cloud-01` recovery and an independent second copy remain open.
+`home-01` is active as VM204 on `PROXMOX` using Home Assistant OS. Native backup, Proxmox protection and scheduled backup inclusion are established. Deeper recovery proof and external availability monitoring remain future work.
 
 ## Administration and recovery control plane
 
-`admin-01` is the normal Git/Ansible controller and QNetd host. It is intentionally lightweight and should not become an application server, DNS resolver, monitoring server or backup target.
-
-Protected recovery state and secret material remain outside Git.
+`admin-01` is the normal Git/Ansible controller and QNetd host. It should remain lightweight and should not become a general application server, DNS resolver, monitoring server or backup target. Protected recovery state and secret material remain outside Git.
 
 ## Public / edge services
 
-`edge-01` exists as CT103 but `cloudflared` is not deployed. Do not describe a Cloudflare Tunnel as live until it is explicitly deployed and validated.
-
-Authelia is not part of the deployed architecture. Cloudflare is the intended MFA boundary for future public service exposure unless that decision is changed explicitly.
-
-CrowdSec is not currently deployed and must not be listed as an active signal source.
+`edge-01` exists as CT103 but `cloudflared` is not deployed. Authelia and CrowdSec are not deployed. Do not describe any of them as active services until explicitly implemented and validated.
 
 ## Important service endpoints
 
-| Service | URL |
+| Service | Current administration/service URL |
 |---|---|
-| Grafana | `http://192.168.2.52:3000/` |
+| Grafana | `https://grafana.home.jrwroberts.co.uk/` |
 | Prometheus | `http://192.168.2.52:9090/` |
 | Alertmanager | `http://192.168.2.52:9093/` |
 | Loki | `http://192.168.2.52:3100/` |
 | Nextcloud | `http://192.168.2.53:8080/` |
-| Greenbone | `https://192.168.2.57/` |
+| Greenbone | `https://greenbone.home.jrwroberts.co.uk/` |
 | Komodo | `https://komodo-01.jameshouse:9120/` |
-| Zabbix | `http://192.168.2.59:8080/` |
+| Zabbix | `https://zabbix.home.jrwroberts.co.uk/` |
 | Home Assistant | `http://192.168.2.60/` |
-| PROXMOX | `https://192.168.2.70:8006/` |
-| Proxmox-2 | `https://192.168.2.71:8006/` |
+| PROXMOX | `https://proxmox.home.jrwroberts.co.uk:8006/` |
+| Proxmox-2 | `https://proxmox-2.home.jrwroberts.co.uk:8006/` |
 | BirdNET-Go | `http://192.168.2.220:8080/` |
 
-These are LAN/VPN administration/service endpoints unless another document explicitly defines public exposure.
+These are LAN/VPN administration/service endpoints unless another authoritative document explicitly defines public exposure.
 
-## Open architecture/recovery items
+## Open architecture / engineering items
 
-The following remain genuine future work and must not be confused with completed migrations:
+The following are genuine future work and must not be confused with completed migrations:
 
-- Proxmox link0 -> link1 failover proof and controlled one-node quorum testing;
-- first unattended CT104 and VM204 backup evidence;
+- wait for the final post-remediation Greenbone scan and reconcile its findings;
+- encode the already-proven Proxmox GDS boot mitigation in IaC;
+- review/pin the Cloudflare Python dependency used by Certbot DNS validation before a future incompatible major version;
+- complete the remaining estate-wide Docker image/update lifecycle review;
 - representative QEMU restore proof;
 - application-consistent Nextcloud/PostgreSQL restore proof;
 - independent second backup copy/failure domain;
-- `home-01` external availability monitoring and deeper recovery proof;
+- controlled legacy-infrastructure cleanup where still justified;
+- Raspberry Pi overclocking feasibility/thermal/power review before any clock changes are approved;
 - Cloudflare Tunnel only when a real service requirement exists;
-- password-manager product/design selection;
-- network/switch hardening where separately reviewed.
+- password-manager product/design selection only if deliberately prioritised.
 
 ## Historical evidence
 
-Detailed evidence is intentionally retained in dated files, including:
-
-- `docs/architecture/ESTATE-AUDIT-2026-09-14.md`;
-- `docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-09-16.md`;
-- `docs/architecture/ESTATE-APPLICATION-AUDIT-2026-09-17.md`;
-- `docs/architecture/ESTATE-DOCUMENT-AUDIT-2026-10-05.md`;
-- `docs/operations/network-discovery-monitor01-migration.md`;
-- migration/commissioning records under `docs/` and `production docs/`.
-
-Those records should preserve the state observed at the time. They must not be read as current deployment authority when they conflict with this document or `IaC/inventory/estate.json`.
+Dated audits, migrations and commissioning records under `docs/` and `production docs/` remain point-in-time evidence. They should preserve the state observed at the time and must not be rewritten to look current when they conflict with this document or `IaC/inventory/estate.json`.
