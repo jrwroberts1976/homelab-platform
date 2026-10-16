@@ -128,7 +128,7 @@ dns-01 is the managed CT101 LXC container on Proxmox-2, providing Pi-hole and Un
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-16T03:18:33+01:00`
+- Last assessed: `2026-10-16T04:20:32+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
