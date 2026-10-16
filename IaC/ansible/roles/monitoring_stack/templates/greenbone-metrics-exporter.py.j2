@@ -50,6 +50,43 @@ def iso_timestamp(value):
     ).timestamp()
 
 
+def finding_metric_labels(finding_id, finding):
+    ip = str(finding.get("host") or "")
+    hostname = HOSTNAMES.get(ip, ip)
+    severity = str(finding.get("severity") or "")
+    name = str(finding.get("name") or "")
+    oid = str(finding.get("oid") or "")
+    port = str(finding.get("port") or "")
+
+    raw_cves = finding.get("cves", [])
+    if isinstance(raw_cves, list):
+        cves = ",".join(str(cve) for cve in raw_cves if cve)
+    else:
+        cves = str(raw_cves or "")
+
+    category = finding_category(name, port)
+
+    reference = cves
+    if not reference:
+        advisory = re.search(r"\((DSA-\d+-\d+)\)", name, re.IGNORECASE)
+        if advisory:
+            reference = advisory.group(1).upper()
+
+    return (
+        '{finding_id="' + prometheus_label(finding_id)
+        + '",hostname="' + prometheus_label(hostname)
+        + '",ip="' + prometheus_label(ip)
+        + '",severity="' + prometheus_label(severity)
+        + '",cves="' + prometheus_label(cves)
+        + '",reference="' + prometheus_label(reference)
+        + '",finding="' + prometheus_label(name)
+        + '",category="' + prometheus_label(category)
+        + '",port="' + prometheus_label(port)
+        + '",oid="' + prometheus_label(oid)
+        + '"}'
+    )
+
+
 payload = json.loads(SOURCE.read_text(encoding="utf-8"))
 
 if payload.get("schema_version") != 1:
@@ -65,6 +102,10 @@ if not isinstance(severity_counts, dict):
 actionable_findings = payload.get("actionable_findings", [])
 if not isinstance(actionable_findings, list):
     raise RuntimeError("actionable_findings must be a list")
+
+accepted_risk_findings = payload.get("accepted_risk_findings", [])
+if not isinstance(accepted_risk_findings, list):
+    raise RuntimeError("accepted_risk_findings must be a list")
 
 collected_at = iso_timestamp(payload["collected_at"])
 
@@ -135,9 +176,6 @@ for (host, severity), count in sorted(host_severity.items()):
         + str(count)
     )
 
-lines.append("")
-
-
 lines.extend(
     [
         "",
@@ -150,44 +188,33 @@ for finding_id, finding in enumerate(actionable_findings, start=1):
     if not isinstance(finding, dict):
         continue
 
-    ip = str(finding.get("host") or "")
-    hostname = HOSTNAMES.get(ip, ip)
-    severity = str(finding.get("severity") or "")
-    name = str(finding.get("name") or "")
-    oid = str(finding.get("oid") or "")
-    port = str(finding.get("port") or "")
     score = float(finding.get("score") or 0)
-
-    raw_cves = finding.get("cves", [])
-    if isinstance(raw_cves, list):
-        cves = ",".join(str(cve) for cve in raw_cves if cve)
-    else:
-        cves = str(raw_cves or "")
-
-    category = finding_category(name, port)
-
-    reference = cves
-    if not reference:
-        advisory = re.search(r"\((DSA-\d+-\d+)\)", name, re.IGNORECASE)
-        if advisory:
-            reference = advisory.group(1).upper()
-
-    labels = (
-        '{finding_id="' + prometheus_label(finding_id)
-        + '",hostname="' + prometheus_label(hostname)
-        + '",ip="' + prometheus_label(ip)
-        + '",severity="' + prometheus_label(severity)
-        + '",cves="' + prometheus_label(cves)
-        + '",reference="' + prometheus_label(reference)
-        + '",finding="' + prometheus_label(name)
-        + '",category="' + prometheus_label(category)
-        + '",port="' + prometheus_label(port)
-        + '",oid="' + prometheus_label(oid)
-        + '"}'
-    )
+    labels = finding_metric_labels(finding_id, finding)
 
     lines.append(
         "homelab_greenbone_actionable_finding_score"
+        + labels
+        + " "
+        + str(score)
+    )
+
+lines.extend(
+    [
+        "",
+        "# HELP homelab_greenbone_accepted_risk_score Accepted Greenbone finding with CVSS score and metadata.",
+        "# TYPE homelab_greenbone_accepted_risk_score gauge",
+    ]
+)
+
+for finding_id, finding in enumerate(accepted_risk_findings, start=1):
+    if not isinstance(finding, dict):
+        continue
+
+    score = float(finding.get("score") or 0)
+    labels = finding_metric_labels(finding_id, finding)
+
+    lines.append(
+        "homelab_greenbone_accepted_risk_score"
         + labels
         + " "
         + str(score)
