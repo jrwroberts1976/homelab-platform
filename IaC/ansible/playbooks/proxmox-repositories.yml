@@ -1,0 +1,10 @@
+---
+- name: Manage Proxmox APT repository policy
+  hosts:
+    - PROXMOX
+    - Proxmox-2
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: proxmox_repositories
