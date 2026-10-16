@@ -34,3 +34,14 @@ birdnet_go_longitude: -1.890218
 birdnet_go_threshold: 0.8
 birdnet_go_sensitivity: 1.0
 birdnet_go_overlap: 0.0
+
+# HTTPS reverse proxy
+birdnet_go_bind_address: "127.0.0.1"
+birdnet_go_fqdn: "birdnet.home.jrwroberts.co.uk"
+
+birdnet_go_nginx_site: "/etc/nginx/sites-available/birdnet-go.conf"
+birdnet_go_nginx_site_enabled: "/etc/nginx/sites-enabled/birdnet-go.conf"
+
+
+birdnet_go_certificate_fullchain: "/etc/letsencrypt/live/birdnet.home.jrwroberts.co.uk/fullchain.pem"
+birdnet_go_certificate_private_key: "/etc/letsencrypt/live/birdnet.home.jrwroberts.co.uk/privkey.pem"

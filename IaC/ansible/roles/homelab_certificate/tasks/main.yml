@@ -113,3 +113,22 @@
 - name: Show issued certificate
   ansible.builtin.debug:
     var: homelab_certificate_details.stdout_lines
+
+- name: Ensure Certbot renewal hooks directory exists
+  ansible.builtin.file:
+    path: /etc/letsencrypt/renewal-hooks/deploy
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install certificate deploy hook
+  ansible.builtin.copy:
+    content: "{{ homelab_certificate_deploy_hook_content }}"
+    dest: "/etc/letsencrypt/renewal-hooks/deploy/{{ homelab_certificate_deploy_hook_name }}"
+    owner: root
+    group: root
+    mode: "0755"
+  when:
+    - homelab_certificate_deploy_hook_name | length > 0
+    - homelab_certificate_deploy_hook_content | length > 0

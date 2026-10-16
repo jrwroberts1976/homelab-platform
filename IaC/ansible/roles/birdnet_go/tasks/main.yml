@@ -326,3 +326,70 @@
   register: birdnet_go_failed_units
   changed_when: false
   failed_when: birdnet_go_failed_units.stdout | trim | length > 0
+
+- name: Install nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install BirdNET nginx virtual host
+  ansible.builtin.template:
+    src: nginx-birdnet.conf.j2
+    dest: "{{ birdnet_go_nginx_site }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: birdnet_go_nginx_config
+
+- name: Enable BirdNET nginx virtual host
+  ansible.builtin.file:
+    src: "{{ birdnet_go_nginx_site }}"
+    dest: "{{ birdnet_go_nginx_site_enabled }}"
+    state: link
+  register: birdnet_go_nginx_enabled
+
+- name: Disable nginx default site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  register: birdnet_go_nginx_default
+
+- name: Validate nginx configuration
+  ansible.builtin.command:
+    argv:
+      - nginx
+      - -t
+  changed_when: false
+
+- name: Restart nginx after configuration change
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: restarted
+  when: >-
+    birdnet_go_nginx_config.changed
+    or birdnet_go_nginx_enabled.changed
+    or birdnet_go_nginx_default.changed
+
+- name: Ensure nginx is running
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Verify BirdNET HTTPS endpoint locally
+  ansible.builtin.uri:
+    url: "https://127.0.0.1/"
+    headers:
+      Host: "{{ birdnet_go_fqdn }}"
+    validate_certs: false
+    status_code:
+      - 200
+      - 302
+      - 307
+  register: birdnet_go_https
+  retries: 10
+  delay: 2
+  until: birdnet_go_https.status in [200, 302, 307]

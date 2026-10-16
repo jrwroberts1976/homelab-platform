@@ -4,6 +4,20 @@
   become: true
   gather_facts: true
 
+  pre_tasks:
+    - name: Obtain BirdNET HTTPS certificate
+      ansible.builtin.include_role:
+        name: homelab_certificate
+      vars:
+        homelab_certificate_fqdn: "birdnet.home.jrwroberts.co.uk"
+        homelab_certificate_cert_name: "birdnet.home.jrwroberts.co.uk"
+        homelab_certificate_domains:
+          - "birdnet.home.jrwroberts.co.uk"
+        homelab_certificate_deploy_hook_name: "reload-birdnet-nginx"
+        homelab_certificate_deploy_hook_content: |
+          #!/bin/sh
+          systemctl reload nginx
+
   roles:
     - role: birdnet_baseline
     - role: chrony_client
