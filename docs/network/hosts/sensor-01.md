@@ -127,7 +127,7 @@ sensor-01 is a managed QEMU VM on Proxmox, serving as the Suricata and Zeek pass
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-16T16:13:42+01:00`
+- Last assessed: `2026-10-16T17:14:42+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
