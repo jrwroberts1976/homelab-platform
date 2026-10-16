@@ -1,13 +1,11 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Installed Solutions Catalogue
 
-**Purpose:** Human-readable catalogue of the major solutions currently used by the homelab, what they do, why they are present, where they run and which ports matter operationally.  
+**Purpose:** Human-readable catalogue of the major solutions currently used by the homelab, what they do, where they run and which ports matter operationally.  
 **Current-state authority:** `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md`  
-**Reviewed:** 6 October 2026
+**Reviewed:** 16 October 2026
 
 This page lists **currently installed/operational** solutions. Planned, deferred or retired products are called out separately and must not be inferred as deployed.
-
-For terminology such as STUN, NAT, CVE, QoD, SPAN and quorum, see `docs/network/TERMS-AND-REFERENCE.md`.
 
 ## Port-scope rule
 
@@ -23,106 +21,71 @@ Port information below is descriptive, not a firewall allow-list.
 
 | Solution | Purpose | Runs on / address | Main port(s) / scope |
 |---|---|---|---|
-| Proxmox VE | VM/LXC virtualisation and cluster management | `PROXMOX .70`, `Proxmox-2 .71` | 8006/TCP LAN/VPN; 22/TCP SSH |
+| Proxmox VE | VM/LXC virtualisation and cluster management | `PROXMOX .70`, `Proxmox-2 .71` | 8006/TCP trusted HTTPS LAN/VPN; 22/TCP SSH |
 | Corosync / Kronosnet | Cluster membership/messaging | both PVE nodes | dedicated cluster links |
 | QDevice / QNetd | Third quorum vote | `admin-01 .48` | 5403/TCP |
 | Chrony | LAN NTP service | `.70`, `.71` | 123/UDP |
-| Pi-hole | DNS filtering/local DNS | `dns-01 .51`, `dns-02 .50` | 53/TCP+UDP |
+| Pi-hole | DNS filtering/local DNS + trusted web UI | `dns-01 .51`, `dns-02 .50` | 53/TCP+UDP; 443/TCP LAN/VPN |
 | Unbound | Recursive DNS behind Pi-hole | both DNS LXCs | 127.0.0.1:5335 |
 | ASUS RT-AC86U | Router/DHCP/AiMesh/OpenVPN | `.1` | LAN admin; OpenVPN UDP transport |
 | HP ProCurve 2510G-24 | Core switch / SPAN | `.16` | legacy LAN management; mirror ports 1–23 -> 24 |
 | OpenVPN | Remote administration | ASUS router | router-controlled UDP listener |
-| Prometheus | Metrics | `monitor-01 .52` | 9090/TCP |
-| Grafana | Dashboards | `monitor-01 .52` | 3000/TCP |
-| Alertmanager | Alert routing | `monitor-01 .52` | 9093/TCP |
+| Prometheus | Metrics | `monitor-01 .52` | 9090/TCP LAN/VPN |
+| Grafana | Dashboards | `monitor-01 .52` | 443/TCP trusted HTTPS; 3000/TCP loopback only |
+| Alertmanager | Alert routing | `monitor-01 .52` | 9093/TCP LAN/VPN |
 | Blackbox Exporter | Reachability/service probes | `monitor-01 .52` | 9115/TCP |
 | Loki | Central log store | `monitor-01 .52` | 3100/TCP |
 | Grafana Alloy | Log/telemetry forwarding | managed estate | 12345/TCP local/API where enabled |
 | Node Exporter | Linux host metrics | 15 managed Linux hosts | 9100/TCP |
-| Zabbix | Agent-oriented monitoring | `zabbix-01 .59` | 8080/TCP web; 10051/TCP server |
+| Zabbix | Agent-oriented monitoring | `zabbix-01 .59` | 443/TCP trusted HTTPS; 10051/TCP server |
 | Zabbix Agent 2 | Host telemetry | 15 managed Linux hosts | 10050/TCP passive where used; active to `.59:10051` |
 | Network Host discovery | LAN inventory/enrichment/OS evidence/first-seen | **`monitor-01 .52`** | no user-facing listener |
 | Suricata | IDS/signature detection | `sensor-01 .55` | passive capture |
 | Zeek | Network metadata/behaviour analysis | `sensor-01 .55` | passive capture |
-| Greenbone Community | Vulnerability scanning | `greenbone-01 .57` | 443/TCP LAN/VPN |
-| Komodo Core | Container-management control plane | `komodo-01 .58` | 9120/TCP LAN/VPN |
-| Komodo Periphery | Managed Docker-host agent | explicitly commissioned Docker hosts | outbound management path; no general public listener |
+| Greenbone Community | Vulnerability scanning | `greenbone-01 .57` | 443/TCP trusted HTTPS LAN/VPN |
+| Komodo Core | Container-management control plane | `komodo-01 .58` | 9120/TCP trusted HTTPS LAN/VPN |
+| Komodo Periphery | Managed Docker-host agent | explicitly commissioned Docker hosts | outbound certificate-validated WSS |
 | Docker | Application container runtime | selected application hosts | daemon not LAN-published |
 | MongoDB | Komodo database | internal `komodo-01` stack | 27017/TCP internal |
-| Nextcloud | Private cloud application | `cloud-01 .53` | 8080/TCP |
+| Nextcloud | Private cloud application | `cloud-01 .53` | 8080/TCP LAN/VPN |
 | PostgreSQL | Application database | `cloud-01`, `zabbix-01` | 5432/TCP internal/local |
 | Redis | Nextcloud cache/locking | `cloud-01` | 6379/TCP internal |
 | Home Assistant OS/Core | Home automation | `home-01 .60` | 80/TCP LAN/VPN |
-| BirdNET-Go | Bird-call identification | `docker-01 .220` | 8080/TCP |
+| BirdNET-Go | Bird-call identification | `docker-01 .220` | 8080/TCP LAN/VPN |
 | Postfix | Internal SMTP relay | `mail-relay-01 .54` | 25/TCP LAN; outbound 587/TCP TLS |
 | NFS | Proxmox guest-backup storage | `media-01 .195` | 2049/TCP |
 | Samba / SMB | Media sharing | `media-01 .195` | 445/TCP |
 | Kodi | Local media endpoint | `media-01 .195` | local application |
-| Ansible | Configuration management | run from `admin-01 .48` | SSH to targets |
-| Terraform/OpenTofu source | Infrastructure provisioning | run from `admin-01 .48` | provider/API access |
-| Git / GitHub | Desired-state/change authority | external repository service | HTTPS/SSH outbound |
+| Certbot + Let's Encrypt | Trusted certificate issuance/renewal using Cloudflare DNS validation | dns-01, dns-02, greenbone-01, monitor-01, zabbix-01, both PVE nodes | automated renewal; service-specific deploy hooks |
+| Ansible + Git | Reviewed, repeatable configuration and infrastructure change from `admin-01` | controller + GitHub | SSH/HTTPS as required |
 | GitHub Actions | CI validation | GitHub-hosted | external HTTPS |
 | Cloudflare Pages | Public portfolio hosting | external | HTTPS/443 |
 
 ## Virtualisation and cluster
 
-The two physical nodes form `jameshouse-pve`. Corosync uses a preferred direct `10.255.255.0/30` link and management-LAN fallback. `admin-01` supplies QNetd/QDevice.
+The two physical nodes form `jameshouse-pve`. Corosync uses the preferred direct `10.255.255.0/30` link and management-LAN fallback. `admin-01` supplies QNetd/QDevice. Guest disks remain node-local; the cluster does not provide automatic guest-data HA.
 
-Current guest disks remain node-local. Cluster membership and quorum therefore do **not** mean automatic guest-data HA.
+Both nodes completed the 16 October patch session at pve-manager 9.2.21 with running kernel `7.0.14-24-pve`, no pending packages, no reboot requirement and healthy quorum. The unused Ceph enterprise repository is disabled through IaC.
 
-Current production guest placement:
-
-```text
-PROXMOX
-  CT100 dns-02
-  CT102 mail-relay-01
-  CT104 komodo-01
-  CT105 zabbix-01
-  VM200 cloud-01
-  VM201 sensor-01
-  VM204 home-01
-
-Proxmox-2
-  CT101 dns-01
-  CT103 edge-01
-  VM202 monitor-01
-  VM203 greenbone-01
-```
+A GDS kernel mitigation is active but its GRUB/kernel-parameter configuration still needs to be encoded in IaC.
 
 ## DNS
 
-Pi-hole provides filtering/local DNS while Unbound performs recursive resolution on localhost port 5335.
+Pi-hole provides filtering/local DNS while Unbound performs recursive resolution on localhost port 5335. The approved resolver pair is `dns-01 .51` and `dns-02 .50`; `admin-01 .48` is not a resolver.
 
-Approved resolver pair:
-
-```text
-192.168.2.51  dns-01
-192.168.2.50  dns-02
-```
-
-`admin-01 .48` is not a resolver. The earlier resolver cross-record parity issue is fixed in current IaC.
+Both Pi-hole web interfaces use trusted Let's Encrypt HTTPS and renewal hooks rebuild the Pi-hole combined PEM before restarting FTL.
 
 ## Monitoring, logging and dashboards
 
-`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki. Alloy forwards logs/telemetry from managed systems according to inventory/role scope.
+`monitor-01` provides Prometheus, Grafana, Alertmanager, Blackbox Exporter and Loki. Alloy forwards logs/telemetry according to inventory/role scope. The production Grafana foundation includes operations, host, patch/reboot, network-host and accepted-risk detail views.
 
-The production Grafana estate foundation includes:
+Grafana is exposed through nginx at `https://grafana.home.jrwroberts.co.uk/`; the Docker port is bound only to `127.0.0.1:3000`.
 
-- Home/operations overview;
-- Hosts overview;
-- Patch & Reboot Status;
-- Node Detail navigation;
-- Network Hosts overview and per-device pages.
-
-The 15 managed Linux systems are also covered by Zabbix Agent 2 with the dedicated server on `zabbix-01`.
+Zabbix administration uses `https://zabbix.home.jrwroberts.co.uk/`. The final post-remediation Greenbone scan is pending to confirm the prior cleartext-management finding has disappeared from scanner evidence.
 
 ## Network Host discovery
 
-The active Network Host discovery platform is on **`monitor-01`**, following the verified single-owner cutover on 27 September 2026.
-
-It includes collector/enrichment, OS-evidence publication, trusted Proxmox guest identity refresh, targeted Nmap profiling, first-seen notification, persistent host-page generation, Grafana publication, DNS evidence correlation and bounded host assessment.
-
-`Proxmox-2` is the former source; its source timers are disabled/inactive and retained state is rollback/history evidence.
+The active Network Host discovery platform is on `monitor-01`, following the verified single-owner cutover on 27 September 2026. `Proxmox-2` is the former source; its source timers remain disabled/inactive.
 
 ## Security platforms
 
@@ -132,85 +95,81 @@ It includes collector/enrichment, OS-evidence publication, trusted Proxmox guest
 
 ### Greenbone
 
-`greenbone-01` performs active vulnerability scanning. The managed-infrastructure scan/evidence path is operational and feeds the management-report evidence store on `monitor-01`.
+`greenbone-01` performs active vulnerability scanning. Managed scan evidence feeds the management-report path on `monitor-01`; accepted risks are separated from actionable findings and accepted-risk details are exported to Grafana.
 
-Greenbone and `sensor-01` are complementary; there is no requirement for a direct sensor-to-Greenbone feed.
+The final 16 October post-hardening scan is currently running/pending completion.
+
+### Raspberry Pi TF-A hardening
+
+`docker-01` uses a validated Trusted Firmware-A v2.15.0 release artifact for Cortex-A72 speculative-execution mitigation. The artifact, SHA-256, licence, provenance and boot configuration are managed by `raspberry_pi_tfa_hardening`; repeat reconciliation is idempotent.
 
 ### CrowdSec
 
-**Not deployed.** CrowdSec is not a current production signal source. Evaluate it only if a future ingress/public-exposure design creates a justified need.
+**Not deployed.** CrowdSec is not a current production signal source.
+
+## Trusted HTTPS / certificate lifecycle
+
+Trusted Let's Encrypt certificate renewal has been dry-run validated end-to-end for:
+
+- `dns-01.home.jrwroberts.co.uk`;
+- `dns-02.home.jrwroberts.co.uk`;
+- `greenbone.home.jrwroberts.co.uk`;
+- `grafana.home.jrwroberts.co.uk`;
+- `zabbix.home.jrwroberts.co.uk`;
+- `proxmox.home.jrwroberts.co.uk`;
+- `proxmox-2.home.jrwroberts.co.uk`.
+
+Each endpoint has a service-specific deploy hook. The Cloudflare Python 2.20.x warning seen during Certbot testing is non-fatal but should be addressed through deliberate dependency version management before a future incompatible major release.
 
 ## Container management
 
-`komodo-01` runs Komodo Core and MongoDB. Periphery is commissioned on explicitly managed Docker hosts and existing application stacks were adopted without recreation during commissioning.
-
-Container application/version updates belong to the approved Komodo/container workflow, not the OS patch process.
+`komodo-01` runs Komodo Core and MongoDB. Periphery is commissioned on explicitly managed Docker hosts. The BirdNET-Go controlled update/rollback canary is complete; the remaining estate-wide Docker image lifecycle audit/update work remains open.
 
 ## Automated patching
 
 Managed Linux hosts publish `homelab_patch_*` telemetry. Security-only unattended upgrades are enabled; automatic reboot is disabled.
 
-The controlled 5 October 2026 maintenance cycle ended at:
-
-```text
-15 reporting
-0 pending updates
-0 security updates
-0 reboot required
-15 unattended-upgrades installed
-0 automatic reboot
-```
+The controlled **16 October 2026** maintenance cycle ended with all 15 Ansible-managed hosts reachable, `0` pending updates and `0` reboot requirements. Docker application/version updates remain owned by the Komodo/container workflow rather than OS patching.
 
 ## Backup platform
 
-`media-01` provides node-scoped NFS backup namespaces.
-
-```text
-PROXMOX   -> media-backup-proxmox   -> guests 100,102,104,105,200,201,204
-Proxmox-2 -> media-backup-proxmox-2 -> guests 101,103,202,203
-```
-
-Mode is snapshot, compression zstd, retention keep-last=3. CT103 has an isolated LXC restore proof; unattended CT105 and VM203 evidence is observed. Recovery-depth and second-copy work remain separate backlog items.
+`media-01` provides node-scoped NFS backup namespaces. An isolated LXC restore proof exists for CT103. Representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery and an independent second copy remain backlog items.
 
 ## Remote access
 
-The ASUS router's OpenVPN server is the accepted production remote-administration path. External Windows-laptop access with split tunnelling was accepted on 18 September 2026.
-
-No dedicated VPN VM is deployed.
+The ASUS router's OpenVPN server is the accepted production remote-administration path. No dedicated VPN VM is deployed.
 
 ## Application platforms
 
 ### Nextcloud
 
-`cloud-01` hosts Nextcloud, PostgreSQL, Redis and cron. It uses a dedicated 200 GiB data disk mounted at `/srv/cloud-01-data`. VM-level backup is proven; application-consistent restore remains open.
+`cloud-01` hosts Nextcloud, PostgreSQL, Redis and cron. VM-level backup is proven; application-consistent restore remains open.
 
 ### Home Assistant
 
-`home-01` runs HAOS VM204. Native backup and manual Proxmox backup/integrity evidence exist and VM204 is included in the nightly backup schedule.
+`home-01` runs HAOS VM204. Native backup and Proxmox backup/protection are established; deeper recovery validation remains open.
 
 ### BirdNET-Go
 
-`docker-01` is deliberately a single-purpose BirdNET-Go Docker host. Do not rebuild the retired TestServer container estate on it. <!-- historical -->
+`docker-01` is the dedicated BirdNET-Go Docker host. Do not rebuild the retired TestServer container estate on it. <!-- historical -->
 
 ### Media
 
-`media-01` runs Kodi/Samba and provides the Proxmox NFS backup target. User media requires independent protection because writing another copy to the same NVMe does not create a separate failure domain.
+`media-01` runs Kodi/Samba and provides the Proxmox NFS backup target.
 
 ## Tooling / desired-state authority
 
-`admin-01` is the normal Git/Ansible/Terraform control point. Secrets, Terraform state and recovery identities remain outside Git.
-
-Stable Ansible reconciliation should normally produce a second real run with `changed=0`, `failed=0` and `unreachable=0`.
+`admin-01` is the normal Git/Ansible control point. Secrets, Terraform state and recovery identities remain outside Git. Stable Ansible reconciliation should normally produce a second real run with `changed=0`, `failed=0` and `unreachable=0`.
 
 ## Planned / deferred / absent — not installed
 
 The following must not be presented as deployed merely because designs or backlog items exist:
 
 - Cloudflare Tunnel / `cloudflared` on `edge-01` — deferred until a real service requirement exists;
-- Authelia — not deployed; Cloudflare is the intended MFA boundary for future public exposure unless explicitly changed;
+- Authelia — not deployed;
 - CrowdSec — not deployed;
 - Nginx Proxy Manager — not deployed;
-- password-manager/Vaultwarden candidate — product/design not yet authoritative;
+- password-manager candidate — product/design not yet authoritative;
 - automatic guest HA/shared storage — not part of current design.
 
 ## Documentation rule
