@@ -39,7 +39,21 @@ kodi.service: active
 process: /usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone
 ```
 
-Kodi also provides the host's built-in UPnP/DLNA capability. LAN SSDP discovery is explicitly permitted through the managed nftables policy on UDP port `1900`.
+Kodi also provides the host's built-in UPnP/DLNA capability. The following listeners were observed while the service was working on 17 October 2026:
+
+```text
+UDP/1900   SSDP discovery
+TCP/1255   Kodi UPnP/DLNA service port (observed)
+TCP/1879   Kodi UPnP/DLNA service port (observed)
+```
+
+The two TCP UPnP ports are recorded as observed runtime ports, not guaranteed permanent assignments. If Kodi is restarted and DLNA stops working, re-check Kodi's listeners before changing the firewall:
+
+```bash
+ss -lntup | grep -i kodi
+```
+
+Do not assume `1255` and `1879` will remain unchanged across every Kodi restart or upgrade.
 
 ## Kodi audio watchdog
 
@@ -124,6 +138,8 @@ Current explicitly authorised inbound services include:
 | `192.168.2.0/24` | TCP/445 | SMB |
 | `192.168.2.0/24` | TCP/8081 | qBittorrent Web UI |
 | `192.168.2.0/24` | UDP/1900 | Kodi SSDP/DLNA discovery |
+| `192.168.2.0/24` | TCP/1255 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
+| `192.168.2.0/24` | TCP/1879 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
 | `192.168.2.70` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.71` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.52` | TCP/9100 | Prometheus node_exporter |
@@ -135,6 +151,8 @@ IaC/ansible/roles/media_firewall/
 ```
 
 Do not add persistent firewall rules directly on the host; encode them in the Ansible role.
+
+Because Kodi's observed UPnP TCP ports may change, validate Kodi listeners after a Kodi restart or upgrade. If the ports change, update the managed firewall deliberately rather than adding unmanaged host rules.
 
 ## Ansible management
 
@@ -157,16 +175,20 @@ The full media playbook requires the `MEDIA_SMB_PASSWORD` controller environment
 
 ## Validation snapshot — 17 October 2026
 
-The following were confirmed after the qBittorrent installation:
+The following were confirmed after the qBittorrent installation and DLNA firewall remediation:
 
 ```text
 Kodi:                 enabled / active
+Kodi UPnP server:     enabled / active
+Kodi SSDP:            UDP/1900
+Kodi UPnP TCP:        1255 and 1879 observed
 SMB:                  enabled / active
 Kodi audio watchdog:  enabled / active
 qBittorrent:          enabled / active
 qBittorrent Web UI:   listening on TCP/8081
 systemd failed units: 0
 media firewall:       active, default-drop
+DLNA client access:   working after UPnP TCP firewall allowance
 ```
 
-The qBittorrent installation did not disrupt Kodi, SMB or the Kodi audio watchdog.
+The qBittorrent installation did not disrupt Kodi, SMB or the Kodi audio watchdog. Kodi DLNA connectivity was restored by allowing SSDP discovery and the two observed Kodi UPnP TCP service ports through the managed LAN firewall.
