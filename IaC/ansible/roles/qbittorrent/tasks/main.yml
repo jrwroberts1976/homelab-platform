@@ -1,0 +1,69 @@
+---
+- name: Install qBittorrent headless package
+  ansible.builtin.apt:
+    name: qbittorrent-nox
+    state: present
+    update_cache: true
+
+- name: Create qBittorrent group
+  ansible.builtin.group:
+    name: "{{ qbittorrent_group }}"
+    system: true
+    state: present
+
+- name: Create qBittorrent service user
+  ansible.builtin.user:
+    name: "{{ qbittorrent_user }}"
+    group: "{{ qbittorrent_group }}"
+    system: true
+    home: "{{ qbittorrent_home }}"
+    create_home: true
+    shell: /usr/sbin/nologin
+    state: present
+
+- name: Create qBittorrent directories
+  ansible.builtin.file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ qbittorrent_user }}"
+    group: "{{ qbittorrent_group }}"
+    mode: "0775"
+  loop:
+    - "{{ qbittorrent_home }}"
+    - "{{ qbittorrent_download_root }}"
+    - "{{ qbittorrent_complete_dir }}"
+    - "{{ qbittorrent_incomplete_dir }}"
+
+- name: Install qBittorrent systemd service
+  ansible.builtin.copy:
+    dest: /etc/systemd/system/qbittorrent.service
+    owner: root
+    group: root
+    mode: "0644"
+    content: |
+      [Unit]
+      Description=qBittorrent-nox
+      After=network-online.target
+      Wants=network-online.target
+
+      [Service]
+      Type=simple
+      User={{ qbittorrent_user }}
+      Group={{ qbittorrent_group }}
+      UMask=002
+      ExecStart=/usr/bin/qbittorrent-nox --webui-port={{ qbittorrent_webui_port }}
+      Restart=on-failure
+      RestartSec=5
+
+      [Install]
+      WantedBy=multi-user.target
+  notify:
+    - Reload systemd
+    - Restart qBittorrent
+
+- name: Enable and start qBittorrent
+  ansible.builtin.systemd:
+    name: qbittorrent
+    enabled: true
+    state: started
+    daemon_reload: true

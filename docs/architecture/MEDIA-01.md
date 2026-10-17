@@ -39,7 +39,15 @@ kodi.service: active
 process: /usr/lib/aarch64-linux-gnu/kodi/kodi.bin --standalone
 ```
 
-Kodi also provides the host's built-in UPnP/DLNA capability. LAN SSDP discovery is explicitly permitted through the managed nftables policy on UDP port `1900`.
+Kodi also provides the host's built-in UPnP/DLNA capability.
+
+Validated UPnP/DLNA listeners on 17 October 2026:
+
+- UDP/1900 — SSDP discovery
+- TCP/1255 — Kodi UPnP service
+- TCP/1879 — Kodi UPnP service
+
+The managed nftables policy permits these ports from the LAN. TCP/1255 and TCP/1879 are observed runtime ports and may change after a Kodi restart or upgrade. If DLNA stops working after a restart, re-check them with `ss -lntup | grep -i kodi`.
 
 ## Kodi audio watchdog
 
@@ -124,6 +132,8 @@ Current explicitly authorised inbound services include:
 | `192.168.2.0/24` | TCP/445 | SMB |
 | `192.168.2.0/24` | TCP/8081 | qBittorrent Web UI |
 | `192.168.2.0/24` | UDP/1900 | Kodi SSDP/DLNA discovery |
+| `192.168.2.0/24` | TCP/1255 | Kodi UPnP service — observed runtime port |
+| `192.168.2.0/24` | TCP/1879 | Kodi UPnP service — observed runtime port |
 | `192.168.2.70` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.71` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.52` | TCP/9100 | Prometheus node_exporter |

@@ -1,0 +1,10 @@
+---
+qbittorrent_user: qbittorrent
+qbittorrent_group: qbittorrent
+qbittorrent_home: /var/lib/qbittorrent
+
+qbittorrent_webui_port: 8081
+
+qbittorrent_download_root: /srv/downloads
+qbittorrent_complete_dir: "{{ qbittorrent_download_root }}/complete"
+qbittorrent_incomplete_dir: "{{ qbittorrent_download_root }}/incomplete"

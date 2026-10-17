@@ -1,0 +1,7 @@
+---
+- name: Install and configure qBittorrent
+  hosts: media-01
+  become: true
+
+  roles:
+    - qbittorrent
