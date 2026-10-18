@@ -1,0 +1,129 @@
+---
+# Passive investigation after GMP_CHECK_STAGE=querying_managed_task (rc=124).
+# No GMP call, helper creation, credential reads, service changes or scans.
+- name: Inspect Greenbone GMP request path without making a GMP request
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+  vars:
+    gmp_probe_root: /opt/greenbone-community
+  tasks:
+    - name: Inspect managed scan service state
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-greenbone-managed-scan.service, "--property=ActiveState,SubState,Result,ExecMainStatus"]
+      register: gmp_probe_scan
+      changed_when: false
+      failed_when: false
+
+    - name: Check transient GMP credentials metadata without reading contents
+      ansible.builtin.stat:
+        path: /run/greenbone-scanning/runner-gvm-tools.conf
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: gmp_probe_config
+
+    - name: List existing helper containers without creating any
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 20s
+          - docker
+          - ps
+          - --all
+          - --filter
+          - label=com.docker.compose.service=gvm-tools
+          - --format
+          - "{% raw %}{{.Names}} | {{.Status}} | {{.CreatedAt}}{% endraw %}"
+      register: gmp_probe_helpers
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect gvmd socket permissions from its existing container
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 20s
+          - docker
+          - compose
+          - -f
+          - "{{ gmp_probe_root }}/compose.yaml"
+          - -f
+          - "{{ gmp_probe_root }}/compose.override.yaml"
+          - exec
+          - -T
+          - gvmd
+          - sh
+          - -c
+          - 'test -S /run/gvmd/gvmd.sock && stat -c "socket_mode=%a uid=%u gid=%g" /run/gvmd/gvmd.sock'
+      register: gmp_probe_socket
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect shared socket volume mounted by existing gvmd container
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 20s
+          - docker
+          - inspect
+          - --format
+          - '{% raw %}{{range .Mounts}}{{if eq .Destination "/run/gvmd"}}{{.Name}} -> {{.Destination}}{{end}}{{end}}{% endraw %}'
+          - greenbone-community-edition-gvmd-1
+      register: gmp_probe_mount
+      changed_when: false
+      failed_when: false
+
+    - name: Read bounded recent gvmd and PostgreSQL logs
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 20s
+          - docker
+          - compose
+          - -f
+          - "{{ gmp_probe_root }}/compose.yaml"
+          - -f
+          - "{{ gmp_probe_root }}/compose.override.yaml"
+          - logs
+          - --since
+          - "2026-10-18T16:00:00Z"
+          - --tail
+          - "45"
+          - --no-color
+          - gvmd
+          - pg-gvm
+      register: gmp_probe_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Read bounded Docker journal after preflight deployment
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 20s
+          - journalctl
+          - -u
+          - docker.service
+          - --since
+          - "2026-10-18 17:00:00"
+          - --no-pager
+          - --output=short-iso
+          - -n
+          - "45"
+      register: gmp_probe_journal
+      changed_when: false
+      failed_when: false
+
+    - name: Report passive request-path evidence
+      ansible.builtin.debug:
+        msg:
+          - "Scan unit: {{ gmp_probe_scan.stdout_lines | default([]) }}"
+          - "Transient GMP credentials absent: {{ not (gmp_probe_config.stat.exists | default(false)) }}"
+          - "Old helper containers (rc={{ gmp_probe_helpers.rc }}): {{ gmp_probe_helpers.stdout_lines | default([]) }}"
+          - "gvmd socket metadata (rc={{ gmp_probe_socket.rc }}): {{ gmp_probe_socket.stdout_lines | default([]) }} {{ gmp_probe_socket.stderr_lines | default([]) }}"
+          - "gvmd socket volume (rc={{ gmp_probe_mount.rc }}): {{ gmp_probe_mount.stdout_lines | default([]) }}"
+          - "gvmd/pg-gvm recent logs (rc={{ gmp_probe_logs.rc }}): {{ gmp_probe_logs.stdout_lines | default([]) }}"
+          - "Docker daemon recent journal (rc={{ gmp_probe_journal.rc }}): {{ gmp_probe_journal.stdout_lines | default([]) }}"
+          - "No get_tasks/GMP call, new helper container or vulnerability scan was initiated."
