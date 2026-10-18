@@ -1,0 +1,158 @@
+---
+# One-time, explicitly invoked, safety-gated removal of an orphaned GMP
+# configuration file after external timeout. Does not restart services,
+# alter Greenbone database/containers, or launch a scan.
+# Uses the same flock path as the scheduled scan runner.
+- name: Clean up orphaned Greenbone GMP runtime credentials safely
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_cleanup_file: /run/greenbone-scanning/runner-gvm-tools.conf
+    greenbone_cleanup_lock: /run/lock/homelab-greenbone-scan.lock
+
+  tasks:
+    - name: Inspect old managed scan service state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-greenbone-managed-scan.service]
+      register: cleanup_scan_active
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect temporary credential file metadata only
+      ansible.builtin.stat:
+        path: "{{ greenbone_cleanup_file }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: cleanup_credential
+
+    - name: Inspect existing shared lock metadata
+      ansible.builtin.stat:
+        path: "{{ greenbone_cleanup_lock }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: cleanup_lock
+
+    - name: Check shared scan lock users
+      ansible.builtin.command:
+        argv: [fuser, "{{ greenbone_cleanup_lock }}"]
+      register: cleanup_lock_users
+      failed_when: false
+      changed_when: false
+
+    - name: Check temporary file users
+      ansible.builtin.command:
+        argv: [fuser, "{{ greenbone_cleanup_file }}"]
+      register: cleanup_credential_users
+      failed_when: false
+      changed_when: false
+      when: cleanup_credential.stat.exists | default(false)
+
+    - name: List running temporary GMP helper containers
+      ansible.builtin.command:
+        argv:
+          - docker
+          - ps
+          - --filter
+          - label=com.docker.compose.service=gvm-tools
+          - --format
+          - "{% raw %}{{.ID}}{% endraw %}"
+      register: cleanup_running_helpers
+      changed_when: false
+
+    - name: Find potentially related active processes without displaying arguments
+      ansible.builtin.command:
+        argv:
+          - ps
+          - -C
+          - python3,docker,flock,timeout,gvm-cli
+          - -o
+          - pid,comm
+          - --no-headers
+      register: cleanup_active_processes
+      failed_when: false
+      changed_when: false
+
+    - name: Require safe orphan-cleanup conditions
+      ansible.builtin.assert:
+        that:
+          - cleanup_scan_active.stdout | trim != "active"
+          - cleanup_lock.stat.isreg | default(false)
+          - cleanup_lock_users.rc == 1
+          - cleanup_running_helpers.stdout | trim == ""
+          - cleanup_active_processes.rc in [0, 1]
+          - cleanup_active_processes.stdout | trim == ""
+          - >-
+            not (cleanup_credential.stat.exists | default(false))
+            or (
+              (cleanup_credential.stat.isreg | default(false))
+              and (cleanup_credential.stat.uid | default(-1) | int == 0)
+              and (cleanup_credential.stat.mode | default('') == '0640')
+            )
+          - >-
+            not (cleanup_credential.stat.exists | default(false))
+            or (cleanup_credential_users.rc | default(1) == 1)
+        fail_msg: >-
+          Conditions do not prove credentials are orphaned.
+          Refusing removal; review read-only evidence and any active scan
+          or GMP process before proceeding.
+
+    - name: Remove only old, regular root-owned orphan credentials while holding the scan lock
+      ansible.builtin.command:
+        argv:
+          - flock
+          - --nonblock
+          - "{{ greenbone_cleanup_lock }}"
+          - python3
+          - -c
+          - |
+            import os
+            import stat
+            import time
+            from pathlib import Path
+
+            path = Path("/run/greenbone-scanning/runner-gvm-tools.conf")
+            try:
+                details = path.lstat()
+            except FileNotFoundError:
+                print("ALREADY_ABSENT")
+                raise SystemExit(0)
+            if not stat.S_ISREG(details.st_mode):
+                raise SystemExit("REFUSED: not a regular file")
+            if details.st_uid != 0 or stat.S_IMODE(details.st_mode) != 0o640:
+                raise SystemExit("REFUSED: unexpected owner or permissions")
+            if details.st_nlink != 1:
+                raise SystemExit("REFUSED: multiple hard links")
+            if time.time() - details.st_mtime < 60:
+                raise SystemExit("REFUSED: credentials created less than 60 seconds ago")
+            os.unlink(path)
+            print("REMOVED_ORPHANED_GMP_CONFIG")
+      register: cleanup_action
+      changed_when: "'REMOVED_ORPHANED_GMP_CONFIG' in cleanup_action.stdout"
+
+    - name: Verify credentials file is absent without reading it
+      ansible.builtin.stat:
+        path: "{{ greenbone_cleanup_file }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: cleanup_after
+
+    - name: Require removal or previously absent credentials
+      ansible.builtin.assert:
+        that:
+          - not (cleanup_after.stat.exists | default(false))
+        fail_msg: "Unexpected GMP file still present after guarded cleanup."
+
+    - name: Report cleanup outcome
+      ansible.builtin.debug:
+        msg:
+          - "Guarded orphan cleanup: {{ cleanup_action.stdout | trim }}"
+          - "Temporary GMP credential file absent: {{ not (cleanup_after.stat.exists | default(false)) }}"
+          - "No scan, restart, helper container or Greenbone service was initiated."
