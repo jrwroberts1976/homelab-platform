@@ -1,0 +1,106 @@
+---
+# Read-only Greenbone managed scan inspection. No scan is started and no host configuration changes.
+- name: Inspect Greenbone managed vulnerability scan evidence
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_readonly_evidence_path: /var/lib/homelab-greenbone-scanning/managed.json
+    greenbone_readonly_service: homelab-greenbone-managed-scan.service
+    greenbone_readonly_timer: homelab-greenbone-managed-scan.timer
+
+  tasks:
+    - name: Assert expected scan host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+        fail_msg: "This inspection is restricted to greenbone-01."
+
+    - name: Read managed scan service state without starting it
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ greenbone_readonly_service }}"
+          - --property=ActiveState,SubState,Result,ExecMainStatus,ExecMainExitTimestamp
+      register: greenbone_readonly_service_state
+      changed_when: false
+      check_mode: false
+
+    - name: Read scheduled managed scans
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - list-timers
+          - --all
+          - --no-pager
+          - "{{ greenbone_readonly_timer }}"
+      register: greenbone_readonly_timer_state
+      changed_when: false
+      check_mode: false
+
+    - name: Read recent scan log metadata
+      ansible.builtin.command:
+        argv:
+          - journalctl
+          - -u
+          - "{{ greenbone_readonly_service }}"
+          - -n
+          - "25"
+          - --no-pager
+      register: greenbone_readonly_recent_log
+      changed_when: false
+      check_mode: false
+
+    - name: Check latest managed evidence file
+      ansible.builtin.stat:
+        path: "{{ greenbone_readonly_evidence_path }}"
+      register: greenbone_readonly_evidence
+
+    - name: Parse latest managed evidence including finding details
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json
+            import sys
+            from pathlib import Path
+
+            evidence = json.loads(Path(sys.argv[1]).read_text(encoding="utf-8"))
+            required = (
+                "schema_version", "collected_at", "mode", "task_name",
+                "report_id", "severity_counts", "actionable_count",
+                "accepted_risk_count", "actionable_findings", "accepted_risk_findings",
+            )
+            missing = [key for key in required if key not in evidence]
+            if missing:
+                print("INVALID_EVIDENCE: missing " + ", ".join(missing))
+                raise SystemExit(2)
+            if evidence["mode"] != "managed":
+                print("INVALID_EVIDENCE: not a managed scan")
+                raise SystemExit(2)
+            for key in required[:8]:
+                print(f"{key}: {json.dumps(evidence[key], sort_keys=True)}")
+            for name in ("actionable_findings", "accepted_risk_findings"):
+                findings = evidence[name]
+                print(f"{name}_entries: {len(findings)}")
+                for index, finding in enumerate(findings, 1):
+                    print(f"{name}[{index}]: {json.dumps(finding, sort_keys=True)}")
+          - "{{ greenbone_readonly_evidence_path }}"
+      register: greenbone_readonly_report
+      changed_when: false
+      check_mode: false
+      when:
+        - greenbone_readonly_evidence.stat.exists | default(false)
+        - greenbone_readonly_evidence.stat.isreg | default(false)
+
+    - name: Display read-only managed scan status and findings
+      ansible.builtin.debug:
+        msg:
+          - "SERVICE: {{ greenbone_readonly_service_state.stdout_lines }}"
+          - "TIMER: {{ greenbone_readonly_timer_state.stdout_lines }}"
+          - "RECENT LOG: {{ greenbone_readonly_recent_log.stdout_lines }}"
+          - "EVIDENCE PRESENT: {{ greenbone_readonly_evidence.stat.isreg | default(false) }}"
+          - "LATEST EVIDENCE (not automatically proof of a completed/fresh scan): {{ greenbone_readonly_report.stdout_lines | default(['UNAVAILABLE: do not interpret as zero findings']) }}"
