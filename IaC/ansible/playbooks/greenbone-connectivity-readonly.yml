@@ -29,8 +29,8 @@
       ansible.builtin.debug:
         msg: >-
           {{ item.item.label }} {{ item.item.address }} TCP/22:
-          {{ 'OPEN' if not item.failed | default(false) else 'UNREACHABLE/TIMED OUT' }}
-          ({{ item.msg | default('connection established') }})
+          {{ item.msg | default('CONNECTED (no timeout or connection error reported)') }}
+          (elapsed={{ item.elapsed | default('unknown') }}s)
       loop: "{{ greenbone_connectivity_ssh.results }}"
       loop_control:
         label: "{{ item.item.label }}"
