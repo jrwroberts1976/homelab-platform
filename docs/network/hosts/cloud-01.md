@@ -126,13 +126,13 @@ cloud-01 is the managed QEMU VM cloud-01 on Proxmox VM200, running Debian GNU/Li
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-16T17:14:52+01:00`
+- Last assessed: `2026-10-18T16:11:09+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
-- Reboot required: **No**
+- Reboot required: **Yes**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-16T10:17:39+01:00`
-- Patch state: **Healthy**
+- Last APT transaction activity: `2026-10-18T06:19:31+01:00`
+- Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->

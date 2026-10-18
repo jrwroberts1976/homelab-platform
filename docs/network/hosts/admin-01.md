@@ -126,12 +126,12 @@ admin-01 is a managed Raspberry Pi 3 administration host running authoritative D
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-16T17:16:31+01:00`
-- Pending updates: **0**
+- Last assessed: `2026-10-18T16:18:07+01:00`
+- Pending updates: **20**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-16T11:59:46+01:00`
+- Last APT transaction activity: `2026-10-17T07:00:39+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
