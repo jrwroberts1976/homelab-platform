@@ -90,7 +90,7 @@ The 16 October 06:50 scan reported successful evidence publication at 08:43 with
 
 **Direct authenticated GMP success, 18 October 2026:** user ran `greenbone-gmp-direct-auth-readonly.yml` from `admin-01` after Python and Ansible syntax checks passed. Run `greenbone-01 ok=6 changed=0 failed=0`. The in-memory, direct host Unix socket client reported `DIRECT_GMP_AUTH_STATUS=200`, `DIRECT_GMP_TASKS_STATUS=200`, `DIRECT_GMP_MANAGED_TASK_MATCHES=1` and `DIRECT_GMP_CHECK=PASS`. The GMP server, credentials and managed task are healthy; a Docker Compose helper/attach-path issue remains strongly suspected but not conclusively root-caused. No vulnerability scan or production configuration change occurred.
 
-**Staged IaC (not yet deployed):** `greenbone_scanning` runner template now authenticates directly using Python's Unix socket/ElementTree and existing root-only `runtime.env`, returning parsed XML to the existing managed/full-LAN scan/report logic. It does not create a Docker helper or a transient credentials config. Request/reply has a deadline and 128 MiB response cap. The default socket path is declared in role defaults, and `greenbone-gmp-preflight.yml` is adjusted for a 60-second outer timeout with direct socket semantics. **These are Git changes only**: neither controller Python render/syntax checks nor live deployment has occurred; report retrieval and complete scan are likewise unverified. The systemd boot timing defect is still open.
+**Staged IaC (not yet deployed):** `greenbone_scanning` runner template now authenticates directly using Python's Unix socket/ElementTree and existing root-only `runtime.env`, returning parsed XML to the existing managed/full-LAN scan/report logic. It does not create a Docker helper or a transient credentials config. Request/reply has a deadline and 128 MiB response cap. The default socket path is declared in role defaults, and `greenbone-gmp-preflight.yml` is adjusted for a 60-second outer timeout with direct socket semantics. **These are Git changes only**: neither controller render/syntax checks nor live deployment has occurred; report retrieval and complete scan are likewise unverified. New offline `scripts/validate-greenbone-runner.py` renders the template with dummy values, checks Python syntax, and simulates GMP authentication plus `get_tasks` over a temporary Unix socket; it is **committed but not yet run on admin-01**. The systemd boot timing defect is still open.
 
 First review and validate the changes on `admin-01`; do not deploy the updated runner until source review and Python/Jinja2 syntax validation pass:
 
@@ -98,7 +98,8 @@ First review and validate the changes on `admin-01`; do not deploy the updated r
 cd ~/projects/homelab-platform
 git status -sb
 git pull --ff-only || exit 1
-git show --stat HEAD
+git show --stat HEAD~1..HEAD
+python3 scripts/validate-greenbone-runner.py
 git show HEAD -- IaC/ansible/roles/greenbone_scanning/templates/homelab-greenbone-scan.py.j2 IaC/ansible/roles/greenbone_scanning/defaults/main.yml IaC/ansible/playbooks/greenbone-gmp-preflight.yml
 cd IaC/ansible
 ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-runner.yml --syntax-check
