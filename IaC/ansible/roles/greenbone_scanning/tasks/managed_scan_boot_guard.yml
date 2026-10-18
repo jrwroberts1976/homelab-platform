@@ -53,6 +53,22 @@
   ansible.builtin.meta: flush_handlers
   when: not ansible_check_mode
 
+- name: Inspect installed managed scan unit without activating it
+  ansible.builtin.command:
+    argv: [systemctl, cat, homelab-greenbone-managed-scan.service]
+  register: greenbone_guard_installed_unit
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Verify loaded unit contains bounded GMP readiness gate
+  ansible.builtin.assert:
+    that:
+      - >-
+        ('ExecStartPre=' ~ greenbone_scanning_readiness_runner)
+        in greenbone_guard_installed_unit.stdout
+    fail_msg: "Loaded managed scan unit is missing its GMP readiness gate."
+  when: not ansible_check_mode
+
 - name: Read managed scan and timer activation states
   ansible.builtin.command:
     argv: [systemctl, is-active, homelab-greenbone-managed-scan.service, homelab-greenbone-managed-scan.timer]
