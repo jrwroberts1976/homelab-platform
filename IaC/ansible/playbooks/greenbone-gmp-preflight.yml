@@ -1,0 +1,73 @@
+---
+# Bounded GMP readiness check: does not launch a vulnerability scan or modify
+# persistent configuration. Existing runner --check uses a temporary gvm-tools
+# Compose container and ephemeral root-protected credential file (cleaned up).
+- name: Verify Greenbone GMP management access after host reboot
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_gmp_preflight_runner: /usr/local/sbin/homelab-greenbone-scan
+
+  tasks:
+    - name: Inspect managed scan service state without changing it
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-greenbone-managed-scan.service]
+      register: greenbone_preflight_scan_active
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse readiness check if a managed scan is already active
+      ansible.builtin.assert:
+        that:
+          - greenbone_preflight_scan_active.stdout | trim != "active"
+        fail_msg: >-
+          Managed Greenbone scan service is active; do not run the
+          preflight concurrently because the runner uses the same
+          temporary GMP credentials path.
+
+    - name: Require the deployed scan runner
+      ansible.builtin.stat:
+        path: "{{ greenbone_gmp_preflight_runner }}"
+      register: greenbone_preflight_runner
+
+    - name: Refuse to run when the deployed runner is absent
+      ansible.builtin.assert:
+        that:
+          - greenbone_preflight_runner.stat.isreg | default(false)
+          - greenbone_preflight_runner.stat.executable | default(false)
+        fail_msg: >-
+          Expected deployed Greenbone scan runner is unavailable.
+          No remediation or scan will be started.
+
+    - name: Probe authenticated GMP task lookup without starting a scan
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 150s
+          - "{{ greenbone_gmp_preflight_runner }}"
+          - managed
+          - --check
+      register: greenbone_preflight_gmp
+      changed_when: false
+      failed_when: false
+
+    - name: Report GMP readiness result and last service state
+      ansible.builtin.debug:
+        msg:
+          - "managed scan service state: {{ greenbone_preflight_scan_active.stdout | trim }}"
+          - "GMP check exit code: {{ greenbone_preflight_gmp.rc }}"
+          - "GMP output: {{ greenbone_preflight_gmp.stdout_lines | default([]) }}"
+          - "GMP error: {{ greenbone_preflight_gmp.stderr_lines | default([]) }}"
+          - >-
+            GMP readiness: {{
+              'PASS (authenticated managed task lookup succeeded)'
+              if greenbone_preflight_gmp.rc == 0 and
+              'CHECK=PASS' in (greenbone_preflight_gmp.stdout | default(''))
+              else 'NOT VERIFIED; do not start a scan'
+            }}
+          - >-
+            The --check mode creates/removes transient GMP configuration
+            and an ephemeral gvm-tools helper container; it never starts
+            a vulnerability scan.
