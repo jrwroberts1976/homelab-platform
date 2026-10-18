@@ -1,0 +1,46 @@
+---
+- name: Stage Mayday production episode order
+  hosts: media-01
+  become: true
+  gather_facts: false
+
+  vars:
+    mayday_dir: /srv/media/TV/Mayday
+    mayday_backup: /var/backups/kodi/mayday/MyVideos131-20261018T160906Z.db
+    mayday_group_url: https://www.themoviedb.org/tv/90-mayday/episode_group/5e11c1da58361b0015c51360
+
+  tasks:
+    - name: Check Mayday directory
+      ansible.builtin.stat:
+        path: "{{ mayday_dir }}"
+      register: mayday_folder
+
+    - name: Check verified Kodi backup exists
+      ansible.builtin.stat:
+        path: "{{ mayday_backup }}"
+      register: kodi_backup
+
+    - name: Require folder and backup
+      ansible.builtin.assert:
+        that:
+          - mayday_folder.stat.isdir | default(false)
+          - kodi_backup.stat.isreg | default(false)
+
+    - name: Stage Mayday episode group NFO
+      ansible.builtin.copy:
+        dest: "{{ mayday_dir }}/tvshow.nfo"
+        content: "{{ mayday_group_url }}\n"
+        mode: "0644"
+        force: false
+
+    - name: Read staged episode group
+      ansible.builtin.slurp:
+        src: "{{ mayday_dir }}/tvshow.nfo"
+      register: mayday_nfo
+      when: not ansible_check_mode
+
+    - name: Validate episode group pointer
+      ansible.builtin.assert:
+        that:
+          - (mayday_nfo.content | b64decode | trim) == mayday_group_url
+      when: not ansible_check_mode
