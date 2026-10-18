@@ -4,7 +4,7 @@
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
-**Current status:** Greenbone is live, and the **direct authenticated GMP test passed** on 18 October 2026: auth 200, get_tasks 200, exactly one managed authenticated task, `DIRECT_GMP_CHECK=PASS` (`ok=6 changed=0 failed=0`). Docker Compose helper-based runner still times out; a direct-socket replacement is **staged in Git only**, not deployed or tested in production. Startup-readiness guard and fresh completed vulnerability scan remain pending. Last saved evidence: 16 October (0 actionable / 30 accepted).
+**Current status:** Greenbone is live, and the **direct authenticated GMP test passed** on 18 October 2026: auth 200, get_tasks 200, exactly one managed authenticated task, `DIRECT_GMP_CHECK=PASS` (`ok=6 changed=0 failed=0`). Docker Compose helper-based runner still times out; a direct-socket replacement is **staged in Git only** and **controller offline/mock-GMP validation has passed**, but it has not been deployed to greenbone-01. Startup-readiness guard and fresh completed vulnerability scan remain pending. Last saved evidence: 16 October (0 actionable / 30 accepted).
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
@@ -86,27 +86,19 @@ The 16 October 06:50 scan reported successful evidence publication at 08:43 with
 
 **Controller Git merge resolved — 18 October 2026:** `admin-01` successfully reconciled local-only `f752562f` (qBittorrent and Kodi DLNA firewall IaC) with GitHub `origin/main`. The user created protective branch `backup/media-before-sync-20261018`, retained remote `docs/architecture/MEDIA-01.md` when resolving the only merge conflict, and committed merge `9dbbacc9`. User-supplied terminal output confirmed `git push origin main` succeeded (`36f9fd20..9dbbacc9`), `python3 scripts/validate-estate.py` passed (20 active assets), `git diff --cached --check` had no warnings, and `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-evidence-readonly.yml --syntax-check` passed. **The actual Greenbone read-only inspection has NOT yet run.** The untracked Kodi-related paths `IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows` remain intentionally untouched. No change to host configuration was made during the merge.
 
-### Next action — review and validate staged direct-socket scan runner (NOT DEPLOYED)
+### Next action — deploy validated direct-socket runner only (no vulnerability scan)
 
-**Direct authenticated GMP success, 18 October 2026:** user ran `greenbone-gmp-direct-auth-readonly.yml` from `admin-01` after Python and Ansible syntax checks passed. Run `greenbone-01 ok=6 changed=0 failed=0`. The in-memory, direct host Unix socket client reported `DIRECT_GMP_AUTH_STATUS=200`, `DIRECT_GMP_TASKS_STATUS=200`, `DIRECT_GMP_MANAGED_TASK_MATCHES=1` and `DIRECT_GMP_CHECK=PASS`. The GMP server, credentials and managed task are healthy; a Docker Compose helper/attach-path issue remains strongly suspected but not conclusively root-caused. No vulnerability scan or production configuration change occurred.
+**18 October 2026 — controller validation passed:** User pulled `eeaf12db` on `admin-01`. `python3 scripts/validate-greenbone-runner.py` returned `Greenbone runner Jinja render: PASS`, `Greenbone runner Python syntax: PASS`, and `Mock Unix GMP auth and task lookup: PASS`. `python3 scripts/validate-estate.py` returned `ESTATE VALIDATION: PASS` (20 active assets, 0 planned, 5 retired guarded). Both `greenbone-scan-runner.yml` and `greenbone-gmp-preflight.yml` Ansible syntax checks passed. All tests were local and non-scanning; **the updated production runner is not yet deployed**, and report retrieval/full scan remain unverified.
 
-**Staged IaC (not yet deployed):** `greenbone_scanning` runner template now authenticates directly using Python's Unix socket/ElementTree and existing root-only `runtime.env`, returning parsed XML to the existing managed/full-LAN scan/report logic. It does not create a Docker helper or a transient credentials config. Request/reply has a deadline and 128 MiB response cap. The default socket path is declared in role defaults, and `greenbone-gmp-preflight.yml` is adjusted for a 60-second outer timeout with direct socket semantics. **These are Git changes only**: neither controller render/syntax checks nor live deployment has occurred; report retrieval and complete scan are likewise unverified. New offline `scripts/validate-greenbone-runner.py` renders the template with dummy values, checks Python syntax, and simulates GMP authentication plus `get_tasks` over a temporary Unix socket; it is **committed but not yet run on admin-01**. The systemd boot timing defect is still open.
-
-First review and validate the changes on `admin-01`; do not deploy the updated runner until source review and Python/Jinja2 syntax validation pass:
+Next deploy **only the runner** using existing Git-managed Ansible from `admin-01`, without launching a GMP check or scan in the same step:
 
 ```bash
-cd ~/projects/homelab-platform
-git status -sb
-git pull --ff-only || exit 1
-git show --stat HEAD~1..HEAD
-python3 scripts/validate-greenbone-runner.py
-git show HEAD -- IaC/ansible/roles/greenbone_scanning/templates/homelab-greenbone-scan.py.j2 IaC/ansible/roles/greenbone_scanning/defaults/main.yml IaC/ansible/playbooks/greenbone-gmp-preflight.yml
-cd IaC/ansible
-ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-runner.yml --syntax-check
-ansible-playbook -i inventory/hosts.yml playbooks/greenbone-gmp-preflight.yml --syntax-check
+cd ~/projects/homelab-platform/IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-scan-runner.yml --limit greenbone-01
 ```
 
-After reviewing the output, deliberately deploy only the scan runner with the existing scoped Ansible playbook, then run a **non-scanning** GMP readiness check. Guard systemd startup against premature boot-time scans before initiating any new full vulnerability scan. Preserve any unrelated untracked Kodi/Mayday files.
+The runner playbook installs the template and performs `python3 -m py_compile` on the target. Review the live output before proceeding. If successful, run the direct-socket **non-scanning** `greenbone-gmp-preflight.yml` in a separate step; do not run the old Docker helper check. The scheduled service startup-readiness race and fresh managed authenticated scan are still open. Preserve unrelated untracked Kodi/Mayday files.
 
 **Do not** start an additional scan while one is running. The runner is `/usr/local/sbin/homelab-greenbone-scan` and the evidence path is `/var/lib/homelab-greenbone-scanning/managed.json`. The managed scan systemd service is `homelab-greenbone-managed-scan.service`; the timer is `homelab-greenbone-managed-scan.timer`. Source: `IaC/ansible/roles/greenbone_scanning/`.
 
@@ -145,6 +137,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | Controller validated staged direct-socket Greenbone runner and preflight; deployment still pending. | On admin-01: Jinja render PASS, generated Python syntax PASS, mock GMP auth/task lookup PASS, estate PASS (20 active / 0 planned / 5 retired), Ansible syntax PASS for runner and preflight. No scans/host changes. | Deploy **only** `greenbone-scan-runner.yml --limit greenbone-01`; inspect result before non-scanning GMP preflight. |
 | 2026-10-18 | Direct authenticated GMP task lookup PASSED using Unix socket; staged direct-socket replacement for automated runner (Git only). | Python syntax PASS; Ansible direct-auth diagnostic `ok=6 changed=0 failed=0`; auth 200, task 200, exactly one managed task. Runner/preflight changes **not yet deployed or syntax-tested on controller**. | Review staged diff/syntax; deploy only after approval. Then non-scanning preflight and startup-readiness work; no scan yet. |
 | 2026-10-18 | Direct unauthenticated GMP XML query succeeded over Unix socket; staged short, credential-safe direct auth check without Docker Compose. | User Ansible returned `GMP_STATUS=200`, `GMP_VERSION=22.7` (rc=0). New direct-auth script/playbook are committed but not yet syntax/live checked. | Pull and run short non-scanning direct-auth GMP check; if PASS, consider reviewed runner direct-socket implementation. |
 | 2026-10-18 | Direct host-side Unix socket connect on greenbone-01 succeeded using Ansible. | `GMP_SOCKET_CONNECT=PASS` rc=0; no service/config change, GMP XML not sent. | One short unauthenticated `<get_version/>` request over host socket, no Docker exec or scan. |
