@@ -42,7 +42,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-10T18:04:33+01:00`
+- Assessed: `2026-10-18T16:18:20+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f8:17:2d:65:b8:98`
 - Identity confidence: **low**
@@ -52,23 +52,23 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 ### Assessment summary
 
-Online host at 192.168.2.74 with conflicting observed hostnames: garden-room.jameshouse and wlan0. No usable service, vendor, DNS, or OS fingerprint evidence is available; manual identity review is required.
+Online host at 192.168.2.74 with conflicting host labels: inventory/Nmap use garden-room.jameshouse, while DHCP reports wlan0. No vendor, service, port, or OS evidence is available; manual review is required.
 
 ### Confirmed facts
 
-- The host IP is 192.168.2.74.
-- The host is currently reported online.
-- Inventory and telemetry identify the hostname as garden-room.jameshouse.
-- The router reports DHCP hostname wlan0 for this IP.
-- MAC address f8:17:2d:65:b8:98 is recorded, but no vendor is provided.
-- Nmap has no port or OS results and reports a TCP scan error: Expected exactly one host matching 192.168.2.74.
-- No matching actionable Greenbone findings were reported for this IP.
-- No sampled Loki entries were reported in the bounded 24-hour sample.
+- The host is online at 192.168.2.74.
+- The inventory hostname and Nmap hostname are garden-room.jameshouse.
+- The DHCP hostname and router hostname are wlan0.
+- The MAC address is f8:17:2d:65:b8:98.
+- Nmap completed only partially and reports no OS matches or ports.
+- No authoritative OS information is available.
+- No matching actionable Greenbone findings are present, but the Greenbone data is marked stale.
+- The bounded Loki sample contains zero sampled entries.
 
 ### Inferences
 
-- The host is likely a local network client associated with the garden-room identity, but the conflicting DHCP hostname prevents reliable device identification.
-- The operating system and platform family cannot be determined from the supplied evidence.
+- The differing hostname values leave the device identity unresolved.
+- The available evidence does not support identifying a vendor, device class, platform family, or exact operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
