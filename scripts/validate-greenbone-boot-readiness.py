@@ -60,8 +60,25 @@ with patch.object(namespace["subprocess"], "run", side_effect=mocked_run), \
     assert namespace["wait_ready"]() == 0
 assert len(seen) == 2 and clock.current == 15
 
+# A process exit code of zero without CHECK=PASS is not sufficient:
+# the helper must fail closed at its deadline without launching a scan.
+clock = FakeClock()
+failed_attempts = []
+def mock_false_ready(argv, **kwargs):
+    failed_attempts.append(argv)
+    return types.SimpleNamespace(returncode=0, stdout="NOT_A_GMP_READINESS_PASS")
+
+with patch.object(namespace["subprocess"], "run", side_effect=mock_false_ready), \
+     patch.object(namespace["time"], "monotonic", side_effect=clock.monotonic), \
+     patch.object(namespace["time"], "sleep", side_effect=clock.sleep), \
+     patch.dict(namespace, {"WAIT_SECONDS": 31}):
+    assert namespace["wait_ready"]() == 1
+assert 2 <= len(failed_attempts) <= 4
+assert clock.current >= 31
+
 print("Greenbone readiness gate Jinja render: PASS")
 print("Greenbone readiness helper Python syntax: PASS")
 print("Greenbone systemd ExecStartPre/timeout render: PASS")
 print("Mocked non-scanning readiness retry: PASS")
+print("Fail-closed timeout without GMP proof: PASS")
 print("No Docker helper, credentials, actual GMP request or scan started.")
