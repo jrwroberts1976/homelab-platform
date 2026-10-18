@@ -1,0 +1,134 @@
+---
+# Strictly read-only follow-up after GMP --check timed out (rc=124).
+# Does not run the GMP CLI, read credentials, remove files, restart services,
+# create helper containers or start scans.
+- name: Inspect Greenbone GMP preflight timeout without modifying the host
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_timeout_gmp_file: /run/greenbone-scanning/runner-gvm-tools.conf
+    greenbone_timeout_lock: /run/lock/homelab-greenbone-scan.lock
+    greenbone_timeout_root: /opt/greenbone-community
+
+  tasks:
+    - name: Inspect last managed scan service state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - homelab-greenbone-managed-scan.service
+          - --property=ActiveState,SubState,Result,ExecMainStatus,ExecMainExitTimestamp
+      register: greenbone_timeout_service
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect temporary GMP credential file METADATA ONLY
+      ansible.builtin.stat:
+        path: "{{ greenbone_timeout_gmp_file }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: greenbone_timeout_gmp_stat
+
+    - name: Inspect existing runner lock file METADATA ONLY
+      ansible.builtin.stat:
+        path: "{{ greenbone_timeout_lock }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: greenbone_timeout_lock_stat
+
+    - name: Identify any processes holding the runner lock
+      ansible.builtin.command:
+        argv: [fuser, "{{ greenbone_timeout_lock }}"]
+      register: greenbone_timeout_fuser
+      changed_when: false
+      failed_when: false
+
+    - name: List helper containers left by GMP preflight
+      ansible.builtin.command:
+        argv:
+          - docker
+          - ps
+          - --all
+          - --filter
+          - label=com.docker.compose.service=gvm-tools
+          - --format
+          - "{% raw %}{{.Names}} | {{.Status}} | {{.ID}}{% endraw %}"
+      register: greenbone_timeout_helpers
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect process state WITHOUT arguments or environment
+      ansible.builtin.command:
+        argv:
+          - ps
+          - -C
+          - python3,docker,flock,timeout,gvm-cli
+          - -o
+          - pid,ppid,stat,etime,comm
+          - --no-headers
+      register: greenbone_timeout_processes
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect current gvmd and PostgreSQL container health
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_timeout_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_timeout_root }}/compose.override.yaml"
+          - ps
+          - --all
+          - gvmd
+          - pg-gvm
+      register: greenbone_timeout_core_ps
+      changed_when: false
+      failed_when: false
+
+    - name: Read last 15 gvmd and PostgreSQL log lines
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_timeout_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_timeout_root }}/compose.override.yaml"
+          - logs
+          - --no-color
+          - --tail=15
+          - gvmd
+          - pg-gvm
+      register: greenbone_timeout_core_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Show safe timeout diagnostic results
+      ansible.builtin.debug:
+        msg:
+          - "Scan service (rc={{ greenbone_timeout_service.rc }}): {{ greenbone_timeout_service.stdout_lines | default([]) }}"
+          - >-
+            Transient GMP config present: {{
+              greenbone_timeout_gmp_stat.stat.exists | default(false)
+            }} (owner={{ greenbone_timeout_gmp_stat.stat.pw_name | default('unknown') }},
+            mode={{ greenbone_timeout_gmp_stat.stat.mode | default('unknown') }},
+            mtime={{ greenbone_timeout_gmp_stat.stat.mtime | default('unknown') }}).
+            FILE CONTENT NOT READ.
+          - "Runner lock file present: {{ greenbone_timeout_lock_stat.stat.exists | default(false) }}"
+          - "Runner lock owners (fuser rc={{ greenbone_timeout_fuser.rc }}): {{ greenbone_timeout_fuser.stdout | default('') | trim }} {{ greenbone_timeout_fuser.stderr | default('') | trim }}"
+          - "GMP helper containers (rc={{ greenbone_timeout_helpers.rc }}): {{ greenbone_timeout_helpers.stdout_lines | default([]) }}"
+          - "Relevant processes, excluding arguments (rc={{ greenbone_timeout_processes.rc }}): {{ greenbone_timeout_processes.stdout_lines | default([]) }}"
+          - "Core containers (rc={{ greenbone_timeout_core_ps.rc }}): {{ greenbone_timeout_core_ps.stdout_lines | default([]) }}"
+          - "Core logs (rc={{ greenbone_timeout_core_logs.rc }}): {{ greenbone_timeout_core_logs.stdout_lines | default([]) }}"
+          - >-
+            If transient credentials remain, do not print their contents,
+            repeat the preflight or delete the file manually. Diagnose
+            process ownership and use reviewed Ansible IaC for any cleanup.
