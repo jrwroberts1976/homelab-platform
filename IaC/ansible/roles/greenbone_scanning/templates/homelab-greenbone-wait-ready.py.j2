@@ -1,0 +1,68 @@
+#!/usr/bin/env python3
+"""Fail-closed readiness wait before the timer-triggered managed scan.
+
+This helper never starts a vulnerability scan. It calls the deployed scan
+runner in its existing --check mode through the shared scan flock.
+No password, authenticated XML response, or subprocess output is logged.
+"""
+import subprocess
+import sys
+import time
+
+RUNNER = "{{ greenbone_scanning_runner }}"
+LOCK = "/run/lock/homelab-greenbone-scan.lock"
+WAIT_SECONDS = {{ greenbone_scanning_readiness_timeout_seconds }}
+RETRY_SECONDS = {{ greenbone_scanning_readiness_retry_seconds }}
+PROBE_TIMEOUT_SECONDS = {{ greenbone_scanning_readiness_probe_timeout_seconds }}
+
+
+def wait_ready():
+    deadline = time.monotonic() + WAIT_SECONDS
+    attempts = 0
+    print("GREENBONE_READINESS=waiting_for_authenticated_gmp", flush=True)
+
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            print(
+                "GREENBONE_READINESS=FAILED reason=deadline_exceeded "
+                f"attempts={attempts}",
+                file=sys.stderr,
+                flush=True,
+            )
+            return 1
+
+        attempts += 1
+        try:
+            result = subprocess.run(
+                [
+                    "flock", "--nonblock", LOCK,
+                    RUNNER, "managed", "--check",
+                ],
+                text=True,
+                capture_output=True,
+                check=False,
+                timeout=min(PROBE_TIMEOUT_SECONDS, remaining),
+            )
+            # A zero exit code alone is insufficient; check the runner's
+            # explicit authenticated managed-task proof.
+            if (
+                result.returncode == 0
+                and "CHECK=PASS mode=managed " in result.stdout
+            ):
+                print(
+                    f"GREENBONE_READINESS=PASS attempts={attempts}",
+                    flush=True,
+                )
+                return 0
+        except (subprocess.TimeoutExpired, OSError):
+            # Never echo exception/output: may include runtime internals.
+            pass
+
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(RETRY_SECONDS, remaining))
+
+
+if __name__ == "__main__":
+    sys.exit(wait_ready())

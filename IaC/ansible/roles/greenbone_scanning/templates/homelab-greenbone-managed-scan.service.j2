@@ -8,5 +8,9 @@ Requires=docker.service
 Type=oneshot
 User=root
 Group=root
+# Do not launch the managed scan until authenticated GMP task lookup works.
+# This check only calls the runner in --check mode; it never starts a scan.
+ExecStartPre={{ greenbone_scanning_readiness_runner }}
 ExecStart={{ greenbone_scanning_runner }} managed
-TimeoutStartSec={{ greenbone_scanning_scan_timeout_seconds + 900 }}
+# Allow the full scan timeout plus readiness wait and shutdown margin.
+TimeoutStartSec={{ greenbone_scanning_scan_timeout_seconds + greenbone_scanning_readiness_timeout_seconds + 900 }}

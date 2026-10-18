@@ -1,0 +1,13 @@
+---
+# Explicitly scoped readiness gate deployment; never call the full scanning
+# role because it also manages Greenbone objects and timer enablement.
+- name: Deploy Greenbone managed scan boot-readiness gate without starting a scan
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Deploy only managed scan readiness helper and systemd unit
+      ansible.builtin.include_role:
+        name: greenbone_scanning
+        tasks_from: managed_scan_boot_guard

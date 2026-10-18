@@ -1,0 +1,69 @@
+---
+# Deploy only the bounded readiness helper and managed scan service unit.
+# Never enable/restart the timer, clear a failed unit, or start a scan.
+- name: Verify managed Greenbone scan is not executing
+  ansible.builtin.command:
+    argv: [systemctl, is-active, homelab-greenbone-managed-scan.service]
+  register: greenbone_guard_managed_state
+  changed_when: false
+  failed_when: false
+
+- name: Refuse to modify systemd unit during a managed scan
+  ansible.builtin.assert:
+    that:
+      - greenbone_guard_managed_state.stdout | trim not in ["active", "activating"]
+    fail_msg: "Managed Greenbone scan is active; leave its systemd unit unchanged."
+
+- name: Require deployed direct GMP runner before staging readiness helper
+  ansible.builtin.stat:
+    path: "{{ greenbone_scanning_runner }}"
+  register: greenbone_guard_runner
+
+- name: Require an executable deployed scan runner
+  ansible.builtin.assert:
+    that:
+      - greenbone_guard_runner.stat.isreg | default(false)
+      - greenbone_guard_runner.stat.executable | default(false)
+    fail_msg: "No deployed scan runner. Readiness gate will not be installed."
+
+- name: Install bounded Greenbone GMP readiness helper
+  ansible.builtin.template:
+    src: homelab-greenbone-wait-ready.py.j2
+    dest: "{{ greenbone_scanning_readiness_runner }}"
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Compile deployed GMP readiness helper without executing it
+  ansible.builtin.command:
+    argv: [python3, -m, py_compile, "{{ greenbone_scanning_readiness_runner }}"]
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Install updated managed scan unit with bounded readiness gate
+  ansible.builtin.template:
+    src: homelab-greenbone-managed-scan.service.j2
+    dest: /etc/systemd/system/homelab-greenbone-managed-scan.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Reload systemd for Greenbone scanning
+
+- name: Apply systemd daemon reload only, without starting units
+  ansible.builtin.meta: flush_handlers
+  when: not ansible_check_mode
+
+- name: Read managed scan and timer activation states
+  ansible.builtin.command:
+    argv: [systemctl, is-active, homelab-greenbone-managed-scan.service, homelab-greenbone-managed-scan.timer]
+  register: greenbone_guard_unit_states
+  changed_when: false
+  failed_when: false
+
+- name: Report gate deployment without running a scan
+  ansible.builtin.debug:
+    msg:
+      - "Managed scan state before: {{ greenbone_guard_managed_state.stdout | trim }}"
+      - "Managed scan/timer states after: {{ greenbone_guard_unit_states.stdout_lines | default([]) }}"
+      - "Readiness gate timeout: {{ greenbone_scanning_readiness_timeout_seconds }} seconds"
+      - "No timer activation/restart, failed-unit reset or vulnerability scan performed."

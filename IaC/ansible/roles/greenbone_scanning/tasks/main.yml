@@ -674,6 +674,23 @@
   when: greenbone_scanning_allow_deploy | bool
 
 
+- name: Install bounded Greenbone GMP readiness helper
+  ansible.builtin.template:
+    src: homelab-greenbone-wait-ready.py.j2
+    dest: "{{ greenbone_scanning_readiness_runner }}"
+    owner: root
+    group: root
+    mode: "0750"
+  when: greenbone_scanning_allow_deploy | bool
+
+- name: Validate rendered Greenbone GMP readiness helper
+  ansible.builtin.command:
+    argv: [python3, -m, py_compile, "{{ greenbone_scanning_readiness_runner }}"]
+  changed_when: false
+  when:
+    - greenbone_scanning_allow_deploy | bool
+    - not ansible_check_mode
+
 - name: Install Greenbone managed scan systemd service
   ansible.builtin.template:
     src: homelab-greenbone-managed-scan.service.j2

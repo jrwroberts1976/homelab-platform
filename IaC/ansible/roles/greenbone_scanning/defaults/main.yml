@@ -78,6 +78,14 @@ greenbone_scanning_monitor_ed25519_host_key: "ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AA
 greenbone_scanning_managed_schedule: "*-*-* 02:00:00"
 greenbone_scanning_managed_randomized_delay_seconds: 0
 
+# Fail-closed readiness gate for persistent timer activation after a reboot.
+# A newly booted gvmd can lag behind docker.service, including feed import.
+# Gate only reads authenticated task metadata; it never starts a scan.
+greenbone_scanning_readiness_runner: /usr/local/sbin/homelab-greenbone-wait-ready
+greenbone_scanning_readiness_timeout_seconds: 1800
+greenbone_scanning_readiness_retry_seconds: 15
+greenbone_scanning_readiness_probe_timeout_seconds: 40
+
 # Authenticated Linux vulnerability scanning.
 greenbone_scanning_ssh_credential_name: "Homelab - Linux SSH Auth"
 greenbone_scanning_ssh_username: "greenbone-scan"
