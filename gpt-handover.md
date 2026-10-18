@@ -13,7 +13,8 @@
 4. Check Git status and the latest commits before editing; do not overwrite work from another session or blindly trust this handover if it is older than current changes.
 5. Distinguish **implemented/committed**, **validated live**, **pending validation**, and **accepted risk**. Never interpret missing or stale evidence as zero vulnerabilities.
 6. **Every user/assistant-driven change** to the repository, IaC, operational configuration, architecture, runbooks, security findings or project priorities requires a contemporaneous update to this file, preferably in the **same commit/PR**. Update the current status, evidence/commands, decision, next action and change log. Update canonical docs too if architecture or backlog status changed. Routine automated telemetry-only commits do not by themselves change the handover unless they alter a decision or status.
-7. Do not store passwords, keys, API tokens or raw confidential scan evidence here. Do not claim that local-only commands, tests, deployment or live verification ran unless they actually did.
+7. **Use Ansible for every host-level operation**, including inspection and read-only checks, from `admin-01` using the Git-managed inventory. **All persistent changes go into Git-managed IaC first**, validated and applied by Ansible; do not propose direct SSH/manual edits except an explicitly approved emergency exception subsequently reconciled into IaC.
+8. Do not store passwords, keys, API tokens or raw confidential scan evidence here. Do not claim that local-only commands, tests, deployment or live verification ran unless they actually did.
 
 ## Current task — finish the Greenbone remediation gate
 
@@ -38,34 +39,26 @@ Other remediation already recorded:
 
 **Decision:** Finish vulnerability validation before changing priority to Raspberry Pi overclocking, Docker lifecycle, or disaster recovery.
 
-### Next action — read-only, on the live scanner
+### Next action — Ansible-only, read-only Greenbone inspection
 
-From `admin-01`, inspect `greenbone-01` (192.168.2.57) using existing authorised SSH/Ansible access. On `greenbone-01`, run:
+**All host work is via Ansible from `admin-01`; all persistent changes are made in Git-managed IaC before deployment.** The standard reusable inspection playbook is:
+
+`IaC/ansible/playbooks/greenbone-scan-evidence-readonly.yml`
+
+From the repository checkout on `admin-01`, bring the Ansible controller's checkout up to date (check `git status` before pulling), syntax-check the playbook, then run the read-only inspection:
 
 ```bash
-echo '===== Managed scan timer ====='
-systemctl list-timers --all homelab-greenbone-managed-scan.timer
-
-echo '===== Managed scan unit (no credential contents) ====='
-systemctl status homelab-greenbone-managed-scan.service --no-pager -l
-journalctl -u homelab-greenbone-managed-scan.service -n 40 --no-pager
-
-echo '===== Most recent machine-readable managed evidence ====='
-sudo python3 - <<'PY'
-import json
-from pathlib import Path
-p = Path('/var/lib/homelab-greenbone-scanning/managed.json')
-if not p.is_file():
-    print('EVIDENCE MISSING — NOT A ZERO-VULNERABILITY RESULT')
-else:
-    d = json.loads(p.read_text())
-    for key in ('collected_at','mode','task_name','report_id',
-                'severity_counts','actionable_count','accepted_risk_count'):
-        print(f'{key}: {d.get(key, "<missing>")}')
-    for i, finding in enumerate(d.get('actionable_findings', []), 1):
-        print(f'actionable_{i}: {finding}')
-PY
+cd ~/projects/homelab-platform
+git status --short
+git pull --ff-only
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-scan-evidence-readonly.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-scan-evidence-readonly.yml
 ```
+
+This playbook uses Ansible modules to query the scanner's systemd unit, timer, last 25 journal lines and machine-readable `managed.json` evidence, including the actionable and accepted-risk findings. It **does not** launch a scan, change configuration or install anything. **Repository code was committed, but there has not yet been a live controller syntax check or execution.** If a Git working tree has local edits, reconcile them before pulling.
 
 **Do not** start an additional scan while one is running. The runner is `/usr/local/sbin/homelab-greenbone-scan` and the evidence path is `/var/lib/homelab-greenbone-scanning/managed.json`. The managed scan systemd service is `homelab-greenbone-managed-scan.service`; the timer is `homelab-greenbone-managed-scan.timer`. Source: `IaC/ansible/roles/greenbone_scanning/`.
 
@@ -81,7 +74,7 @@ After seeing the live result:
 
 - Estate inventory: `IaC/inventory/estate.json`
 - Ansible inventory: `IaC/ansible/inventory/hosts.yml`
-- Greenbone playbooks: `IaC/ansible/playbooks/greenbone-scanning.yml`, `greenbone-scan-runner.yml`, `greenbone-authenticated-scan.yml`
+- Greenbone playbooks: `IaC/ansible/playbooks/greenbone-scanning.yml`, `greenbone-scan-runner.yml`, `greenbone-authenticated-scan.yml`, **`greenbone-scan-evidence-readonly.yml`**
 - Greenbone implementation: `IaC/ansible/roles/greenbone_scanning/`
 - Greenbone host: `greenbone-01` = `192.168.2.57`
 - Evidence publisher destination: `monitor-01` via the managed reporting evidence pipeline; compare timestamp and report ID
@@ -104,6 +97,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | Confirmed Ansible-only host operations and Git-managed IaC for persistent changes; added reusable, read-only Greenbone Ansible inspection playbook. | `AGENTS.md` rule commit `98d2615269`; new `IaC/ansible/playbooks/greenbone-scan-evidence-readonly.yml` commit `4d688144a6`. **No live scanner or controller access; syntax check and playbook execution still required.** | On `admin-01`, sync the repo, syntax-check and run the playbook; return its results. |
 | 2026-10-18 | Created cross-chat handover, then updated `AGENTS.md` to require handover updates for user/agent changes. | Handover commit `c0dbfedf0232`; AGENTS commit `cba755914606`. GitHub files read back successfully; **local `validate-estate.py` and GitHub Actions result not yet verified**, and **no live scanner access / new scan result verified**. | Obtain live managed scan status and evidence; reconcile findings. |
 | 2026-10-17 | Latest existing repository work documented `media-01` service/UPnP port state. | Commits `788d8330d5` / `aecfd02d68`. | No change to Greenbone validation gate shown. |
 | 2026-10-16 | TCP timestamp hardening and Suricata updater committed. | Commits `e27b864f4d` / `827e7c9e85`; repo changes inspected on 18 October. | Verify live rollout / scan findings as appropriate. |
@@ -112,6 +106,7 @@ Pending after vulnerability review (unless reprioritised):
 
 For **every** change we make:
 - [ ] Check current Git/repository state and read the authoritative inventory/docs first.
+- [ ] Use Ansible for host-level inspection and deployment; encode any persistent host change in reviewed, Git-managed IaC before applying it.
 - [ ] State exactly what changed (including path and commit/ref) and why.
 - [ ] Record what was **tested live**, what was **tested syntactically**, and what is **not tested**.
 - [ ] Update status and next actionable step here; update canonical docs/backlog if impacted.
