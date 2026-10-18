@@ -39,17 +39,35 @@ Other remediation already recorded:
 
 **Decision:** Finish vulnerability validation before changing priority to Raspberry Pi overclocking, Docker lifecycle, or disaster recovery.
 
+**Current controller Git blocker (observed 18 October 2026):** On `admin-01`, `git pull --ff-only` fetched from GitHub but failed because local `main` and `origin/main` have **diverged**. The new `greenbone-scan-evidence-readonly.yml` was consequently absent from the local checkout and its syntax check failed with *playbook could not be found*. Two untracked paths (`IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows`) were also observed; preserve them. **Do not reset, clean, merge, rebase, pull or overwrite files until local-only commits are inspected.** Next action is **read-only local Git history comparison**, not Greenbone deployment. Local commit identities/content have not yet been supplied and should not be guessed.
+
+From `admin-01` in `~/projects/homelab-platform` run (read-only):
+
+```bash
+git status -sb
+git log --oneline --decorate origin/main..HEAD
+git log --oneline --decorate HEAD..origin/main
+git diff --stat origin/main...HEAD
+git diff --name-status origin/main...HEAD
+git log --graph --oneline --decorate --all -30
+```
+
+Inspect local-only patches, especially Greenbone, security and remediation work; agree a safe preservation/reconciliation plan **before** updating local `main`. A three-dot diff compares local changes since the merge base, unlike a two-dot diff between divergent tips.
+
+
+
 ### Next action — Ansible-only, read-only Greenbone inspection
 
 **All host work is via Ansible from `admin-01`; all persistent changes are made in Git-managed IaC before deployment.** The standard reusable inspection playbook is:
 
 `IaC/ansible/playbooks/greenbone-scan-evidence-readonly.yml`
 
-From the repository checkout on `admin-01`, bring the Ansible controller's checkout up to date (check `git status` before pulling), syntax-check the playbook, then run the read-only inspection:
+**After local Git divergence is understood and safely reconciled**, syntax-check and run the read-only inspection. Do not run the following checkout update now while branches have diverged:
 
 ```bash
 cd ~/projects/homelab-platform
 git status --short
+# Only after local commits are preserved and branch divergence reconciled:
 git pull --ff-only
 cd IaC/ansible
 ansible-playbook -i inventory/hosts.yml \
@@ -97,6 +115,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | Local `admin-01` checkout reported divergent `main` and `origin/main`; fast-forward pull failed, so the new Greenbone playbook is not local. Untracked Kodi-related directories exist. | User-supplied controller output; **local-only commits and content not yet inspected; no Ansible run or live scan verified**. Preserve all local work, run read-only Git history/diff commands before choosing merge/rebase. | Inspect local commits and identify security/vulnerability progress; reconcile safely before attempting the Greenbone playbook. |
 | 2026-10-18 | Confirmed Ansible-only host operations and Git-managed IaC for persistent changes; added reusable, read-only Greenbone Ansible inspection playbook. | `AGENTS.md` rule commit `98d2615269`; new `IaC/ansible/playbooks/greenbone-scan-evidence-readonly.yml` commit `4d688144a6`. **No live scanner or controller access; syntax check and playbook execution still required.** | On `admin-01`, sync the repo, syntax-check and run the playbook; return its results. |
 | 2026-10-18 | Created cross-chat handover, then updated `AGENTS.md` to require handover updates for user/agent changes. | Handover commit `c0dbfedf0232`; AGENTS commit `cba755914606`. GitHub files read back successfully; **local `validate-estate.py` and GitHub Actions result not yet verified**, and **no live scanner access / new scan result verified**. | Obtain live managed scan status and evidence; reconcile findings. |
 | 2026-10-17 | Latest existing repository work documented `media-01` service/UPnP port state. | Commits `788d8330d5` / `aecfd02d68`. | No change to Greenbone validation gate shown. |
