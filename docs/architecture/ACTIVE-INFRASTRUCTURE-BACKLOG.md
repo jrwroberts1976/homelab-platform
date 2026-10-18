@@ -31,7 +31,7 @@ The core homelab platform is built and operational. Current work is concentrated
 
 ### Current validation gate
 
-A **final post-remediation Greenbone scan is running/pending completion**. Do not mark the vulnerability-remediation work fully closed until that report is reviewed.
+The latest saved 16 October Greenbone managed evidence had **0 actionable findings and 30 accepted risks**, but it is now stale. After `Proxmox-2` returned on 18 October, the 16:18 BST managed-scan run **failed** because the GMP `gvmd.sock` connection was refused. Do not mark remediation closed until runtime readiness and a newer completed authenticated scan are validated.
 
 Expected validation goals:
 
@@ -76,7 +76,7 @@ Practical programme completion remains approximately **70–80%** when optional/
 
 ## Current sequence
 
-1. **Wait for and review the final Greenbone post-remediation scan.** This is the only remaining gate on the current patching/vulnerability/TLS workstream.
+1. **Diagnose Greenbone gvmd readiness after Proxmox-2 recovery, then validate a fresh completed scan.** The 18 October run failed while the latest saved evidence was from 16 October. This is the remaining gate on the current patching/vulnerability/TLS workstream.
 2. **Next user-selected investigation: Raspberry Pi overclocking feasibility.** Start read-only: inventory Pi models, cooling, power supplies, current frequencies/thermal throttling and workload headroom before proposing any clock/voltage change.
 3. **Encode the existing Proxmox GDS mitigation in IaC.** Live `gather_data_sampling=force` mitigation is proven but remains a manual GRUB/kernel-parameter configuration.
 4. **Address the Certbot Cloudflare Python dependency warning.** Decide whether to pin the currently working 2.x dependency or deliberately migrate when compatibility with 3.x is established.
@@ -125,7 +125,9 @@ Speculative Store Bypass: Not affected
 
 The accepted-risk reporting path now includes detail rather than only a count; related commits visible on `main` include the Greenbone accepted-risk detail publication, monitoring export and Grafana accepted-risk panel work.
 
-**Do not close this section until the currently running Greenbone scan is reviewed.**
+Subsequent saved authenticated-managed evidence collected **16 October 2026 14:28 UTC** (report `35dc10c3-aac0-46fa-b6ce-7c1b31440d38`) was inspected via Ansible on 18 October: **0 actionable Critical/High/Medium/Low, 828 informational, 30 accepted risks**. The accepted entries comprise 14 ICMP timestamp, 15 TCP timestamp and one missing HttpOnly cookie findings. They are accepted classifications, not demonstrated fixes; recheck TCP timestamps after IaC hardening.
+
+**New validation blocker (18 October):** `Proxmox-2` was restored and cluster quorum confirmed healthy with QDevice. A restart-associated Greenbone scan at 16:18 BST failed with `/run/gvmd/gvmd.sock` connection refused, leaving the 16 October evidence stale. Use `IaC/ansible/playbooks/greenbone-stack-health-readonly.yml` to inspect Docker, gvmd/PostgreSQL and socket readiness, then verify a newly completed managed scan and evidence publication before closing this section.
 
 ## Certificate / trusted HTTPS work — IMPLEMENTED
 

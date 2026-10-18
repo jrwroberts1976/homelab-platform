@@ -141,17 +141,17 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 `greenbone-01` is the active LAN-only Greenbone scanner. The operating model includes managed scans, machine-readable evidence, restricted evidence transfer to `monitor-01`, schema/freshness validation, accepted-risk separation and management-report integration.
 
-The 14 October managed validation had:
+The 14 October managed validation had 0 Critical, 0 High, 1 actionable Medium (Zabbix cleartext management HTTP), 0 Low and 30 accepted risks. Trusted Zabbix HTTPS/reverse-proxy remediation was implemented subsequently.
+
+The latest **available saved managed evidence**, inspected through Ansible on **18 October 2026**, was collected **16 October 2026 at 14:28 UTC** (report `35dc10c3-aac0-46fa-b6ce-7c1b31440d38`):
 
 ```text
-Critical:      0
-High:          0
-Medium:        1 actionable
-Low:           0
-Accepted risk: 30
+Critical / High / Medium / Low actionable: 0
+Log / informational:                    828
+Accepted risks:                          30
 ```
 
-The prior actionable finding was cleartext Zabbix management HTTP. Trusted Zabbix HTTPS/reverse-proxy remediation is now implemented. The final post-remediation Greenbone scan is **currently pending completion** and is the remaining validation gate before the vulnerability-remediation section is marked fully closed.
+The `Proxmox-2` outage temporarily made VM203 unreachable; the 18 October 16:29 BST cluster inspection showed both nodes online, quorum healthy with QDevice and VM203 running. **The 18 October 16:18 BST scheduled/restart-associated scan failed**, because GMP could not connect to `/run/gvmd/gvmd.sock` (`Connection refused`). The 16 October evidence is historical and stale as of the 18 October review; a fresh successful scan is still required before vulnerability-remediation closure. Inspect the Greenbone `gvmd` and PostgreSQL container readiness before any restart or new scan.
 
 The accepted-risk dashboard/export path now exposes the accepted-risk details rather than only a count.
 

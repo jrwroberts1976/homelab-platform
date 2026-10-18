@@ -1,0 +1,94 @@
+---
+# Read-only investigation of Greenbone service readiness after a Proxmox host restart.
+# No Compose up/down/restart, no scan start, and no configuration edits.
+- name: Inspect Greenbone runtime without modifying containers
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_diagnostic_root: /opt/greenbone-community
+
+  tasks:
+    - name: Check Docker daemon state
+      ansible.builtin.command:
+        argv: [systemctl, show, docker.service, "--property=ActiveState,SubState,ActiveEnterTimestamp"]
+      register: greenbone_diagnostic_docker
+      changed_when: false
+      failed_when: false
+
+    - name: Check last managed scan unit state
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-greenbone-managed-scan.service, "--property=ActiveState,SubState,Result,ExecMainStatus,ExecMainExitTimestamp"]
+      register: greenbone_diagnostic_scan
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect all Greenbone containers including exited services
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_diagnostic_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_diagnostic_root }}/compose.override.yaml"
+          - ps
+          - --all
+      register: greenbone_diagnostic_ps
+      changed_when: false
+      failed_when: false
+
+    - name: Check gvmd management socket without starting a container
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_diagnostic_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_diagnostic_root }}/compose.override.yaml"
+          - exec
+          - -T
+          - gvmd
+          - sh
+          - -c
+          - 'if test -S /run/gvmd/gvmd.sock; then echo "gvmd-socket-present"; else echo "gvmd-socket-missing"; fi'
+      register: greenbone_diagnostic_socket
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect limited logs for gvmd and PostgreSQL
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_diagnostic_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_diagnostic_root }}/compose.override.yaml"
+          - logs
+          - --no-color
+          - --tail=45
+          - gvmd
+          - pg-gvm
+      register: greenbone_diagnostic_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Check machine-readable scan evidence timestamp
+      ansible.builtin.stat:
+        path: /var/lib/homelab-greenbone-scanning/managed.json
+      register: greenbone_diagnostic_evidence
+
+    - name: Show read-only Greenbone diagnostic summary
+      ansible.builtin.debug:
+        msg:
+          - "Docker state (rc={{ greenbone_diagnostic_docker.rc }}): {{ greenbone_diagnostic_docker.stdout_lines | default([]) }}"
+          - "Scan unit (rc={{ greenbone_diagnostic_scan.rc }}): {{ greenbone_diagnostic_scan.stdout_lines | default([]) }}"
+          - "Compose ps (rc={{ greenbone_diagnostic_ps.rc }}): {{ greenbone_diagnostic_ps.stdout_lines | default([]) }}"
+          - "gvmd socket (rc={{ greenbone_diagnostic_socket.rc }}): {{ greenbone_diagnostic_socket.stdout_lines | default([]) }} {{ greenbone_diagnostic_socket.stderr_lines | default([]) }}"
+          - "gvmd/pg-gvm logs (rc={{ greenbone_diagnostic_logs.rc }}): {{ greenbone_diagnostic_logs.stdout_lines | default([]) }} {{ greenbone_diagnostic_logs.stderr_lines | default([]) }}"
+          - "Managed evidence exists: {{ greenbone_diagnostic_evidence.stat.isreg | default(false) }}"
+          - "Managed evidence mtime (Unix): {{ greenbone_diagnostic_evidence.stat.mtime | default('missing') }}"
+          - "No scans, containers or services were started/restarted by this playbook."
