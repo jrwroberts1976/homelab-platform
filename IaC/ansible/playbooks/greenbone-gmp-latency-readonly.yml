@@ -1,0 +1,108 @@
+---
+# Strictly read-only investigation of the 18 Oct 2026 GMP --check timeout.
+# Uses bounded historical Docker events, daemon journal and gvmd/PG logs.
+# No GMP requests, credentials, container creation/removal or service changes.
+- name: Inspect historical Greenbone GMP helper timeout
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    greenbone_latency_root: /opt/greenbone-community
+
+  tasks:
+    - name: Read historical Docker lifecycle events for temporary GMP helper
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 20s
+          - docker
+          - events
+          - --since
+          - "2026-10-18T15:43:00Z"
+          - --until
+          - "2026-10-18T15:51:00Z"
+          - --filter
+          - type=container
+          - --filter
+          - label=com.docker.compose.service=gvm-tools
+          - --format
+          - "{% raw %}{{.Time}} {{.Action}} {{.Actor.Attributes.name}}{% endraw %}"
+      register: greenbone_latency_events
+      changed_when: false
+      failed_when: false
+
+    - name: Read Docker daemon journal during failed GMP preflight
+      ansible.builtin.command:
+        argv:
+          - journalctl
+          - -u
+          - docker.service
+          - --since
+          - "2026-10-18 16:43:00"
+          - --until
+          - "2026-10-18 16:51:00"
+          - --no-pager
+          - --output=short-iso
+          - -n
+          - "65"
+      register: greenbone_latency_docker_journal
+      changed_when: false
+      failed_when: false
+
+    - name: Read Greenbone daemon and PostgreSQL logs during GMP preflight
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - "{{ greenbone_latency_root }}/compose.yaml"
+          - -f
+          - "{{ greenbone_latency_root }}/compose.override.yaml"
+          - logs
+          - --since
+          - "2026-10-18T15:43:00Z"
+          - --until
+          - "2026-10-18T15:51:00Z"
+          - --tail
+          - "65"
+          - --no-color
+          - gvmd
+          - pg-gvm
+      register: greenbone_latency_logs
+      changed_when: false
+      failed_when: false
+
+    - name: Check available memory without modifying state
+      ansible.builtin.command:
+        argv: [free, -m]
+      register: greenbone_latency_memory
+      changed_when: false
+
+    - name: Check Greenbone evidence and Docker disk usage
+      ansible.builtin.command:
+        argv: [df, -h, /var/lib/docker, /opt/greenbone-community]
+      register: greenbone_latency_disk
+      changed_when: false
+      failed_when: false
+
+    - name: Verify orphan GMP credentials remain absent without reading them
+      ansible.builtin.stat:
+        path: /run/greenbone-scanning/runner-gvm-tools.conf
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: greenbone_latency_temp_file
+
+    - name: Show read-only GMP latency evidence
+      ansible.builtin.debug:
+        msg:
+          - "GMP helper event history rc={{ greenbone_latency_events.rc }}: {{ greenbone_latency_events.stdout_lines | default([]) }} {{ greenbone_latency_events.stderr_lines | default([]) }}"
+          - "Docker journal rc={{ greenbone_latency_docker_journal.rc }}: {{ greenbone_latency_docker_journal.stdout_lines | default([]) }}"
+          - "gvmd/pg-gvm logs rc={{ greenbone_latency_logs.rc }}: {{ greenbone_latency_logs.stdout_lines | default([]) }}"
+          - "Memory: {{ greenbone_latency_memory.stdout_lines | default([]) }}"
+          - "Storage: {{ greenbone_latency_disk.stdout_lines | default([]) }}"
+          - "Orphan GMP credentials absent: {{ not (greenbone_latency_temp_file.stat.exists | default(false)) }}"
+          - "Event retention may omit older helper events; missing events alone do not establish inactivity."
+          - "No scan, login, helper container or service was started by this diagnostic."
