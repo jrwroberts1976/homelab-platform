@@ -10,6 +10,7 @@
 
   vars:
     greenbone_gmp_preflight_runner: /usr/local/sbin/homelab-greenbone-scan
+    greenbone_gmp_preflight_config: /run/greenbone-scanning/runner-gvm-tools.conf
 
   tasks:
     - name: Inspect managed scan service state without changing it
@@ -42,10 +43,30 @@
           Expected deployed Greenbone scan runner is unavailable.
           No remediation or scan will be started.
 
+    - name: Check that no orphaned GMP temporary configuration exists
+      ansible.builtin.stat:
+        path: "{{ greenbone_gmp_preflight_config }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: greenbone_preflight_credential_stat
+
+    - name: Refuse to overwrite an existing temporary GMP configuration
+      ansible.builtin.assert:
+        that:
+          - not (greenbone_preflight_credential_stat.stat.exists | default(false))
+        fail_msg: >-
+          Unexpected temporary GMP configuration is already present.
+          Stop and investigate using the read-only timeout diagnostic;
+          do not overwrite credentials or repeat the preflight.
+
     - name: Probe authenticated GMP task lookup without starting a scan
       ansible.builtin.command:
         argv:
           - timeout
+          - --signal=TERM
+          - --kill-after=10s
           - 150s
           - flock
           - --nonblock
@@ -57,6 +78,15 @@
       changed_when: false
       failed_when: false
 
+    - name: Confirm temporary GMP config is absent after preflight
+      ansible.builtin.stat:
+        path: "{{ greenbone_gmp_preflight_config }}"
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: greenbone_preflight_config_after
+
     - name: Report GMP readiness result and last service state
       ansible.builtin.debug:
         msg:
@@ -64,6 +94,7 @@
           - "GMP check exit code: {{ greenbone_preflight_gmp.rc }}"
           - "GMP output: {{ greenbone_preflight_gmp.stdout_lines | default([]) }}"
           - "GMP error: {{ greenbone_preflight_gmp.stderr_lines | default([]) }}"
+          - "Temporary GMP config absent: {{ not (greenbone_preflight_config_after.stat.exists | default(false)) }}"
           - >-
             GMP readiness: {{
               'PASS (authenticated managed task lookup succeeded)'
@@ -75,3 +106,14 @@
             The --check mode holds the shared scan lock, creates/removes transient GMP configuration
             and an ephemeral gvm-tools helper container; it never starts
             a vulnerability scan.
+
+    - name: Require GMP readiness and transient-credential cleanup
+      ansible.builtin.assert:
+        that:
+          - greenbone_preflight_gmp.rc == 0
+          - "'CHECK=PASS' in (greenbone_preflight_gmp.stdout | default(''))"
+          - not (greenbone_preflight_config_after.stat.exists | default(false))
+        fail_msg: >-
+          GMP check failed or transient credentials remain. Do not run a
+          vulnerability scan. If credentials remain, use the reviewed,
+          safety-gated orphan cleanup after verifying no active helper.

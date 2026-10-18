@@ -4,6 +4,7 @@ import argparse
 import fcntl
 import json
 import os
+import signal
 import subprocess
 import sys
 import tempfile
@@ -70,7 +71,7 @@ def write_gmp_config(username, password):
 
     os.chown(GMP_CONFIG, 0, 1001)
 
-def gmp(xml):
+def gmp(xml, timeout_seconds=120):
     command = [
         "docker", "compose",
         "-f", f"{COMPOSE_ROOT}/compose.yaml",
@@ -84,14 +85,19 @@ def gmp(xml):
         "-X", xml,
     ]
 
-    result = subprocess.run(
-        command,
-        cwd=COMPOSE_ROOT,
-        text=True,
-        capture_output=True,
-        timeout=120,
-        check=False,
-    )
+    try:
+        result = subprocess.run(
+            command,
+            cwd=COMPOSE_ROOT,
+            text=True,
+            capture_output=True,
+            timeout=timeout_seconds,
+            check=False,
+        )
+    except subprocess.TimeoutExpired:
+        raise TimeoutError(
+            f"Greenbone GMP helper did not finish within {timeout_seconds}s"
+        ) from None
 
     if result.returncode != 0:
         raise RuntimeError(
@@ -101,8 +107,11 @@ def gmp(xml):
 
     return result.stdout
 
-def find_task_id(task_name):
-    response = gmp('<get_tasks details="0"/>')
+def find_task_id(task_name, timeout_seconds=120):
+    response = gmp(
+        '<get_tasks details="0"/>',
+        timeout_seconds=timeout_seconds,
+    )
     root = ET.fromstring(response)
 
     matches = [
@@ -535,17 +544,42 @@ def main():
     args = parser.parse_args()
 
     if args.check:
-        username, password = load_runtime_env()
+        # The outer Ansible timeout sends SIGTERM. Convert that into a Python
+        # exception so the transient GMP configuration is cleaned in finally.
+        # Do not install this handler for the full managed scan path.
+        def handle_check_sigterm(signum, _frame):
+            raise RuntimeError(
+                f"GMP preflight interrupted by signal {signum}"
+            )
+
+        previous_sigterm = signal.signal(
+            signal.SIGTERM, handle_check_sigterm
+        )
         try:
+            print("GMP_CHECK_STAGE=loading_credentials", flush=True)
+            username, password = load_runtime_env()
+            print("GMP_CHECK_STAGE=creating_temporary_config", flush=True)
             write_gmp_config(username, password)
+            print("GMP_CHECK_STAGE=querying_managed_task", flush=True)
+            started_at = time.monotonic()
             task = TASKS[args.mode]
-            task_id = find_task_id(task["name"])
+            task_id = find_task_id(
+                task["name"],
+                timeout_seconds=75,
+            )
+            print(
+                "GMP_CHECK_STAGE=task_lookup_complete "
+                f"elapsed_seconds={time.monotonic() - started_at:.1f}",
+                flush=True,
+            )
             print(
                 f"CHECK=PASS mode={args.mode} "
-                f"task={task['name']} id={task_id}"
+                f"task={task['name']} id={task_id}",
+                flush=True,
             )
         finally:
             GMP_CONFIG.unlink(missing_ok=True)
+            signal.signal(signal.SIGTERM, previous_sigterm)
         return
 
     lock_path = Path(SCAN_LOCK_FILE)

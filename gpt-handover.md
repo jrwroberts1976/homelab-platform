@@ -4,7 +4,7 @@
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
-**Current status:** Proxmox-2 and Greenbone VM203 reachable; gvmd/PostgreSQL containers healthy. The 18 October managed scan failed before GMP readiness; the subsequent non-scanning authenticated GMP check timed out (rc=124). **Guarded Ansible cleanup succeeded**, removing the orphaned protected GMP credentials file; absence was verified. GMP timeout root cause and fresh vulnerability scan remain pending. Last saved managed evidence: 16 October (0 actionable / 30 accepted).
+**Current status:** Proxmox-2 and Greenbone VM203 recovered; gvmd/PostgreSQL healthy. A non-scanning GMP check timed out (rc=124); guarded Ansible cleanup removed and verified the orphan credentials file. Historical Docker journal shows brief gvm-tools helper activity at 16:45:46–47 BST, with no clear reason for the 150s timeout; memory/disk have ample headroom. **Instrumented GMP preflight IaC is staged in Git only, not deployed or retested.** Last saved vulnerability report: 16 October (0 actionable / 30 accepted); fresh validation pending.
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
@@ -44,6 +44,10 @@ Other remediation already recorded:
 
 **Outage update — 18 October 2026:** The user reports **`Proxmox-2` is down**; on `admin-01`, Ansible's `greenbone-scan-evidence-readonly.yml` failed at the first remote command with `ssh: connect to host 192.168.2.57 port 22: Connection timed out`. The initial `assert` ran locally (it did **not** establish SSH connectivity). This **does not** mean there are zero vulnerabilities. Greenbone VM203, monitoring VM202, `dns-01` CT101, and `edge-01` CT103 are assigned to `Proxmox-2`; guest disks are node-local, and these workloads may be unavailable while their host is down. Actual Proxmox-2 power/cluster health has not been independently verified, nor has `PROXMOX` quorum been checked after the outage. Restore/repair is **not** approved by this note; avoid rebooting/migrating guests without evidence and authorisation.
 
+**GMP latency diagnostic — 18 October 2026:** User ran `greenbone-gmp-latency-readonly.yml` from `admin-01`, syntax check PASS and live `greenbone-01 ok=7 changed=0 unreachable=0 failed=0`. Docker events API returned no historical records (not conclusive); Docker journal logged helper endpoint join at 16:45:46 BST (`greenbone-community-edition-gvm-tools-run-e5ecef008d1a`) and a containerd task-delete at 16:45:47 BST (whether the same task is not proven). No relevant error in bounded gvmd/PostgreSQL logs; one 16:47 BST PostgreSQL checkpoint entry. Available RAM ~5,619 MB, disk ~61 GB free at 47% usage. The orphan credentials file remained **absent**. The helper is known to have been launched, but **the stage causing the 150-second timeout is still unknown**.
+
+**Staged IaC diagnostics/fix (not deployed as of this note):** The `greenbone_scanning` Python runner template now logs safe stage markers only for `--check`, bounds the GMP task lookup subprocess to 75s instead of 120s for that mode, and converts SIGTERM into an exception to permit `finally` cleanup. The separate Ansible preflight refuses pre-existing orphan GMP credentials, imposes a TERM→KILL deadline, shows post-check file metadata, and **fails the playbook if the GMP check or cleanup fails**, rather than reporting a misleading green recap. Full production scan mode retains its existing default 120s per GMP command; **boot readiness guard and durable process-group cleanup have not yet been implemented**. The existing SIGTERM handler improves but does not guarantee cleanup if forcibly killed (SIGKILL or a subprocess that fails to terminate). **No host code/service modified by this Git commit**, and no new scan started.
+
 **Confirmed safe credential cleanup — 18 October 2026:** The user executed `greenbone-gmp-orphan-cleanup.yml` on `admin-01`. Git fast-forward to commit `1f3fbde4` succeeded; local untracked Kodi metadata directories remained untouched. Ansible syntax check **PASS**; live run recap `greenbone-01 ok=12 changed=1 unreachable=0 failed=0`. Scan/service/lock/helper/file safety assertions passed. The cleanup reported `REMOVED_ORPHANED_GMP_CONFIG`, then verified `Temporary GMP credential file absent: True`. No scan, restart or helper container was launched by this playbook. The `changed=1` reflects the intended removal of the transient protected config; it does not represent persistent deployment change.
 
 **Next diagnostic:** The exact source of the previous `managed --check` 150-second hang is still unknown. A new **read-only** Ansible playbook, `IaC/ansible/playbooks/greenbone-gmp-latency-readonly.yml`, inspects bounded historical Docker events for `gvm-tools` around 16:43–16:51 BST, Docker service journal, `gvmd`/PostgreSQL logs, system memory and disk, and verifies the orphan file remains absent. It makes **no authenticated GMP call**, starts no scan/helper or container, and doesn't inspect secrets. Historical Docker events may have rolled over; empty events are inconclusive. The new playbook is committed but **not yet syntax-checked or run on the controller**.
@@ -78,22 +82,24 @@ The 16 October 06:50 scan reported successful evidence publication at 08:43 with
 
 **Controller Git merge resolved — 18 October 2026:** `admin-01` successfully reconciled local-only `f752562f` (qBittorrent and Kodi DLNA firewall IaC) with GitHub `origin/main`. The user created protective branch `backup/media-before-sync-20261018`, retained remote `docs/architecture/MEDIA-01.md` when resolving the only merge conflict, and committed merge `9dbbacc9`. User-supplied terminal output confirmed `git push origin main` succeeded (`36f9fd20..9dbbacc9`), `python3 scripts/validate-estate.py` passed (20 active assets), `git diff --cached --check` had no warnings, and `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-evidence-readonly.yml --syntax-check` passed. **The actual Greenbone read-only inspection has NOT yet run.** The untracked Kodi-related paths `IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows` remain intentionally untouched. No change to host configuration was made during the merge.
 
-### Next action — inspect historical GMP helper latency via read-only Ansible
+### Next action — review staged GMP preflight instrumentation before deployment
 
-The orphan credentials file has been safely removed and verified absent. Do **not** rerun the timed-out GMP preflight or initiate a vulnerability scan yet. Inspect the Docker helper's historical lifecycle and relevant `gvmd`/database logs before making a persistent repair. The new `greenbone-gmp-latency-readonly.yml` is committed but not yet validated on the controller.
+Historical read-only checks show gvm-tools helper activity but do not identify the timeout stage. The runner/preflight IaC changes are **staged in Git only**, not deployed to `greenbone-01`. From `admin-01`, fast-forward the clean tracked branch (preserve untracked Kodi files), review the diff and validate the two Ansible playbooks before considering a scoped runner deployment:
 
 ```bash
 cd ~/projects/homelab-platform
 git status -sb
 git pull --ff-only || exit 1
+git show --stat --oneline HEAD
+git show -- IaC/ansible/roles/greenbone_scanning/templates/homelab-greenbone-scan.py.j2 IaC/ansible/playbooks/greenbone-gmp-preflight.yml
 cd IaC/ansible
 ansible-playbook -i inventory/hosts.yml \
-  playbooks/greenbone-gmp-latency-readonly.yml --syntax-check && \
+  playbooks/greenbone-scan-runner.yml --syntax-check
 ansible-playbook -i inventory/hosts.yml \
-  playbooks/greenbone-gmp-latency-readonly.yml
+  playbooks/greenbone-gmp-preflight.yml --syntax-check
 ```
 
-Interpret historical event absence cautiously (Docker may rotate event history). Next evaluate a targeted, Git-managed fix for runner signal cleanup, bounded GMP helper execution and boot readiness before re-running an authenticated preflight or launching a fresh completed scan.
+**After reviewing this output**, deploy only `greenbone-scan-runner.yml` through Ansible; no container or scan restart. Then run the non-scanning GMP preflight with stage logging, verify temporary credentials cleaned on success/failure, and inspect the exact stage before any scan. The managed systemd scan service still needs a separate, justified boot-readiness safeguard; do not close remediation without a fresh successful report.
 
 **Do not** start an additional scan while one is running. The runner is `/usr/local/sbin/homelab-greenbone-scan` and the evidence path is `/var/lib/homelab-greenbone-scanning/managed.json`. The managed scan systemd service is `homelab-greenbone-managed-scan.service`; the timer is `homelab-greenbone-managed-scan.timer`. Source: `IaC/ansible/roles/greenbone_scanning/`.
 
@@ -132,6 +138,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | Ran Greenbone historical GMP helper latency diagnostic and staged non-secret preflight instrumentation/cleanup safeguards in Git-managed IaC. | User evidence: `greenbone-gmp-latency-readonly.yml` syntax PASS, `ok=7 changed=0`; helper journal activity 16:45:46–47 BST; 5.6 GB RAM/61 GB disk available; orphan config absent. Cause still unknown. **New runner/preflight changes not deployed or validated on controller.** | Review Git diff, syntax-check runner/preflight, then deliberately deploy runner via Ansible and run guarded non-scanning GMP preflight. |
 | 2026-10-18 | Successfully removed orphan temporary Greenbone GMP credentials through guarded Ansible. Added historical helper-latency read-only diagnostic. | User output: cleanup syntax PASS, `ok=12 changed=1 failed=0`; `REMOVED_ORPHANED_GMP_CONFIG`, file absent True; no service or scan change. New latency playbook **not yet tested**. | Pull, syntax-check and execute `greenbone-gmp-latency-readonly.yml`; examine event/journal evidence before any re-scan. |
 | 2026-10-18 | Read-only Ansible confirmed orphan root-owned GMP credentials persisted after timeout, no lock owner/active helper, gvmd/pg-gvm healthy. Added fail-closed one-time orphan cleanup IaC. | `greenbone-gmp-timeout-readonly.yml` syntax PASS; live `ok=9 changed=0`; metadata root:0640, no processes/active helpers, old scan unit failure. New cleanup playbook **not yet executed**. | Run scoped Ansible cleanup with safety guards, then investigate GMP helper timeout without starting scans. |
 | 2026-10-18 | Ansible authenticated GMP `managed --check` failed to verify readiness, timing out after 150s (`rc=124`, no output). Added strictly read-only timeout-residue diagnostic. | User-pasted `greenbone-gmp-preflight.yml` syntax check PASS and run `ok=6, changed=0`; debug states `GMP readiness: NOT VERIFIED`. Whether temp credentials/helper processes remain is unknown. New diagnostic **not yet syntax/live checked**. | Pull and execute `greenbone-gmp-timeout-readonly.yml` through Ansible; decide safe IaC fix after results, no scan yet. |
