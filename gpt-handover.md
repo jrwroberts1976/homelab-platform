@@ -42,22 +42,7 @@ Other remediation already recorded:
 
 **Decision:** Finish vulnerability validation before changing priority to Raspberry Pi overclocking, Docker lifecycle, or disaster recovery.
 
-**Current controller Git blocker (observed 18 October 2026):** On `admin-01`, `git pull --ff-only` fetched from GitHub but failed because local `main` and `origin/main` have **diverged**. The new `greenbone-scan-evidence-readonly.yml` was consequently absent from the local checkout and its syntax check failed with *playbook could not be found*. Two untracked paths (`IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows`) were also observed; preserve them. **Do not reset, clean, merge, rebase, pull or overwrite files until local-only commits are inspected.** Next action is **read-only local Git history comparison**, not Greenbone deployment. Local-only commit is now identified as `f752562f` (`feat(media-01): add qBittorrent and Kodi DLNA firewall access`) based on controller output; it is **media work, not an additional Greenbone/security remediation commit**. Changes reported include qBittorrent role/playbook, media firewall template and `docs/architecture/MEDIA-01.md`; the actual local patch has not been fetched or reviewed. Both remote commit `788d8330` and local commit `f752562f` touch `MEDIA-01.md`, so a merge conflict is possible. **The main branch has not been reconciled and the Greenbone scan has not been read.**
-
-From `admin-01` in `~/projects/homelab-platform` run (read-only):
-
-```bash
-git status -sb
-git log --oneline --decorate origin/main..HEAD
-git log --oneline --decorate HEAD..origin/main
-git diff --stat origin/main...HEAD
-git diff --name-status origin/main...HEAD
-git log --graph --oneline --decorate --all -30
-```
-
-Inspect the local-only `f752562f` patch, preserve that commit with a dedicated backup branch, then fetch the latest remote state and reconcile deliberately. Expect a possible `docs/architecture/MEDIA-01.md` merge conflict and do **not** reset, clean or force push. Keep the Kodi-related untracked files. A three-dot diff compares local changes since the merge base, unlike a two-dot diff between divergent tips.
-
-
+**Controller Git merge resolved — 18 October 2026:** `admin-01` successfully reconciled local-only `f752562f` (qBittorrent and Kodi DLNA firewall IaC) with GitHub `origin/main`. The user created protective branch `backup/media-before-sync-20261018`, retained remote `docs/architecture/MEDIA-01.md` when resolving the only merge conflict, and committed merge `9dbbacc9`. User-supplied terminal output confirmed `git push origin main` succeeded (`36f9fd20..9dbbacc9`), `python3 scripts/validate-estate.py` passed (20 active assets), `git diff --cached --check` had no warnings, and `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-evidence-readonly.yml --syntax-check` passed. **The actual Greenbone read-only inspection has NOT yet run.** The untracked Kodi-related paths `IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows` remain intentionally untouched. No change to host configuration was made during the merge.
 
 ### Next action — Ansible-only, read-only Greenbone inspection
 
@@ -65,12 +50,11 @@ Inspect the local-only `f752562f` patch, preserve that commit with a dedicated b
 
 `IaC/ansible/playbooks/greenbone-scan-evidence-readonly.yml`
 
-**After local Git divergence is understood and safely reconciled**, syntax-check and run the read-only inspection. Do not run the following checkout update now while branches have diverged:
+The Git merge and push have succeeded. GitHub documentation updates can leave the controller a commit behind; check `git status -sb`, then fast-forward the clean tracked branch and run the read-only inspection:
 
 ```bash
 cd ~/projects/homelab-platform
-git status --short
-# Only after local commits are preserved and branch divergence reconciled:
+git status -sb
 git pull --ff-only
 cd IaC/ansible
 ansible-playbook -i inventory/hosts.yml \
@@ -79,7 +63,7 @@ ansible-playbook -i inventory/hosts.yml \
   playbooks/greenbone-scan-evidence-readonly.yml
 ```
 
-This playbook uses Ansible modules to query the scanner's systemd unit, timer, last 25 journal lines and machine-readable `managed.json` evidence, including the actionable and accepted-risk findings. It **does not** launch a scan, change configuration or install anything. **Repository code was committed, but there has not yet been a live controller syntax check or execution.** If a Git working tree has local edits, reconcile them before pulling.
+This playbook uses Ansible modules to query the scanner's systemd unit, timer, last 25 journal lines and machine-readable `managed.json` evidence, including the actionable and accepted-risk findings. It **does not** launch a scan, change configuration or install anything. **The controller's Ansible syntax check PASSED on 18 October 2026. The inspection itself has NOT yet been run on `greenbone-01`.** If a Git working tree has local edits, reconcile them before pulling.
 
 **Do not** start an additional scan while one is running. The runner is `/usr/local/sbin/homelab-greenbone-scan` and the evidence path is `/var/lib/homelab-greenbone-scanning/managed.json`. The managed scan systemd service is `homelab-greenbone-managed-scan.service`; the timer is `homelab-greenbone-managed-scan.timer`. Source: `IaC/ansible/roles/greenbone_scanning/`.
 
@@ -118,7 +102,8 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
-| 2026-10-18 | Resolved MEDIA-01 merge conflict, retaining remote documentation and local qBittorrent IaC. | Repository validation passed; merge commit pending. | Complete merge and resume Greenbone Ansible inspection. |
+| 2026-10-18 | Confirmed clean controller merge/push and Ansible syntax test; updated handover after merge. | Merge `9dbbacc9` on `main` verified via GitHub; controller's user-pasted syntax check PASS, estate validation PASS; **Greenbone live evidence still pending**. | From `admin-01`, fast-forward local checkout and run `greenbone-scan-evidence-readonly.yml`; assess findings and update handover. |
+| 2026-10-18 | Resolved `MEDIA-01.md` conflict retaining remote documentation, preserved local qBittorrent IaC and completed merge `9dbbacc9`; push succeeded. | Controller output: estate validation PASS (20 assets), no whitespace errors, Greenbone inspection playbook Ansible syntax PASS; no live scan inspection performed. | Pull latest handover fast-forward and run Ansible read-only Greenbone inspection. |
 | 2026-10-18 | Controller history confirms exactly one local-only commit: `f752562f` (qBittorrent and Kodi DLNA firewall / `media-01`), with 7 remote-only commits at the time of the user's last fetch; the remote has since advanced. | User-supplied `git log` and `git diff --stat`; remote `788d8330` also changes `docs/architecture/MEDIA-01.md`, so conflict is possible; **full local patch not yet inspected**. | Preserve local commit with a backup branch, refresh origin, review/merge without dropping it, then run Ansible Greenbone evidence inspection. |
 | 2026-10-18 | Local `admin-01` checkout reported divergent `main` and `origin/main`; fast-forward pull failed, so the new Greenbone playbook is not local. Untracked Kodi-related directories exist. | User-supplied controller output; **local-only commits and content not yet inspected; no Ansible run or live scan verified**. Preserve all local work, run read-only Git history/diff commands before choosing merge/rebase. | Inspect local commits and identify security/vulnerability progress; reconcile safely before attempting the Greenbone playbook. |
 | 2026-10-18 | Confirmed Ansible-only host operations and Git-managed IaC for persistent changes; added reusable, read-only Greenbone Ansible inspection playbook. | `AGENTS.md` rule commit `98d2615269`; new `IaC/ansible/playbooks/greenbone-scan-evidence-readonly.yml` commit `4d688144a6`. **No live scanner or controller access; syntax check and playbook execution still required.** | On `admin-01`, sync the repo, syntax-check and run the playbook; return its results. |
