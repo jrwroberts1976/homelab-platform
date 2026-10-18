@@ -4,7 +4,7 @@
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
-**Current status:** Proxmox-2 and Greenbone VM203 recovered; gvmd/PostgreSQL healthy. The non-scanning GMP check previously timed out (rc=124), and guarded Ansible cleanup removed the orphaned credentials. **Instrumented scan runner deployed and Python-validated live on greenbone-01**, with a successful idempotent repeat. The updated non-scanning GMP preflight then **failed**: 150s timeout (rc=124) after reaching `GMP_CHECK_STAGE=querying_managed_task`. SIGTERM-aware temporary credential cleanup **worked** (file absent); final Ansible readiness assertion correctly failed. A later passive diagnostic was interrupted at a Docker Compose exec task; this suggests a Docker exec/attach-path stall, but does not prove the cause. The diagnostic has been revised in Git to avoid Docker exec; scheduled-service readiness guard remains pending. Last saved vulnerability report: 16 October (0 actionable / 30 accepted); fresh validation pending.
+**Current status:** Proxmox-2 and Greenbone VM203 recovered; gvmd/PostgreSQL healthy. The non-scanning GMP check previously timed out (rc=124), and guarded Ansible cleanup removed the orphaned credentials. **Instrumented scan runner deployed and Python-validated live on greenbone-01**, with a successful idempotent repeat. The updated non-scanning GMP preflight then **failed**: 150s timeout (rc=124) after reaching `GMP_CHECK_STAGE=querying_managed_task`. SIGTERM-aware temporary credential cleanup **worked** (file absent); final Ansible readiness assertion correctly failed. A later passive diagnostic was interrupted at a Docker Compose exec task; this suggests a Docker exec/attach-path stall, but does not prove the cause. The revised passive diagnostic subsequently completed live (ok=9 changed=0 failed=0): the shared Unix socket exists on the host volume, transient GMP credentials are absent, and no recent helper containers remain. Actual socket connection and working GMP remain unverified; scheduled-service readiness guard is pending. Last saved vulnerability report: 16 October (0 actionable / 30 accepted); fresh validation pending.
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
@@ -86,24 +86,13 @@ The 16 October 06:50 scan reported successful evidence publication at 08:43 with
 
 **Controller Git merge resolved — 18 October 2026:** `admin-01` successfully reconciled local-only `f752562f` (qBittorrent and Kodi DLNA firewall IaC) with GitHub `origin/main`. The user created protective branch `backup/media-before-sync-20261018`, retained remote `docs/architecture/MEDIA-01.md` when resolving the only merge conflict, and committed merge `9dbbacc9`. User-supplied terminal output confirmed `git push origin main` succeeded (`36f9fd20..9dbbacc9`), `python3 scripts/validate-estate.py` passed (20 active assets), `git diff --cached --check` had no warnings, and `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-evidence-readonly.yml --syntax-check` passed. **The actual Greenbone read-only inspection has NOT yet run.** The untracked Kodi-related paths `IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows` remain intentionally untouched. No change to host configuration was made during the merge.
 
-### Next action — rerun revised passive GMP diagnostic without Docker exec
+### Next action — bounded direct Unix socket listener check via Ansible
 
-The user pulled the previous request-path playbook to `admin-01` and passed its syntax check. The first live attempt reached `Inspect gvmd socket permissions from its existing container` (`docker compose exec -T gvmd`) and was interrupted with Ctrl+C. A second attempt was started after harmless `ccd` / relative-`cd` mistakes; its output ends after listing existing helper containers, so **its completion is unknown**. No vulnerability scan was started by either passive run. This further suggests a possible Docker exec/attach stall, but is not a proven root cause.
+User completed the revised passive request-path diagnostic on 18 October: greenbone-01 ok=9 changed=0 failed=0. The socket exists and is a socket (mode 0666), its mounted volume is correct, no transient credentials remain, only a historical exited helper exists, and Docker journal observed a new helper join/task-delete at 17:17:41 BST. These results do NOT prove that gvmd accepts Unix socket connections.
 
-The playbook has been revised in Git at commit `8f4bb692` to **avoid Docker exec**, querying the existing container's socket mount via Docker inspect and using Ansible host-side `stat` for the socket. It has **not** yet been syntax-checked or executed on `admin-01`. If the old diagnostic is still running, interrupt it before updating. Preserve untracked Kodi/Mayday paths.
+Next, use one read-only ad-hoc Ansible command from admin-01 to connect to the existing host-mounted /var/lib/docker/volumes/greenbone-community-edition_gvmd_socket_vol/_data/gvmd.sock using Python's socket.AF_UNIX with a three-second timeout. Do not send GMP XML or credentials and do not start a helper container. A successful connection would suggest investigating Docker Compose helper/attach behavior; a failed connection points to gvmd socket listener problems. Avoid a new scan and avoid repeating the 150-second preflight until this is resolved.
 
-```bash
-cd ~/projects/homelab-platform
-git status -sb
-git pull --ff-only || exit 1
-cd IaC/ansible
-ansible-playbook -i inventory/hosts.yml \
-  playbooks/greenbone-gmp-request-path-readonly.yml --syntax-check && \
-ansible-playbook -i inventory/hosts.yml \
-  playbooks/greenbone-gmp-request-path-readonly.yml --limit greenbone-01
-```
-
-Do not rerun GMP preflight or launch a scan until the execution path has been diagnosed. Socket existence alone does not confirm GMP availability. Ansible's final report from the revised diagnostic is still pending.
+Last saved managed report is still 16 October; 0 actionable / 30 accepted. Scheduled scan boot-readiness safeguard remains pending.
 
 **Do not** start an additional scan while one is running. The runner is `/usr/local/sbin/homelab-greenbone-scan` and the evidence path is `/var/lib/homelab-greenbone-scanning/managed.json`. The managed scan systemd service is `homelab-greenbone-managed-scan.service`; the timer is `homelab-greenbone-managed-scan.timer`. Source: `IaC/ansible/roles/greenbone_scanning/`.
 
@@ -142,6 +131,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | Revised passive GMP request-path playbook passed live. | User output: ok=9 changed=0 failed=0; gvmd socket present (Unix socket, mode 0666), correct volume, credentials absent, no recent helper, Docker journal helper activity at 17:17:41 BST. Listener connection not tested. | Run a single bounded read-only host Unix socket connection check via Ansible. |
 | 2026-10-18 | Request-path Ansible diagnostic was interrupted while running Docker Compose exec in gvmd; replaced that task with host-volume socket inspection. | Syntax PASS; first run reached exec and Ctrl+C; second run incomplete. Revised playbook committed `8f4bb692` but not syntax/live validated. | Pull and run revised non-exec diagnostic; avoid GMP preflight and scans. |
 | 2026-10-18 | Instrumented non-scanning GMP preflight still timed out at task lookup, but SIGTERM temporary-credential cleanup succeeded. Staged read-only request-path inspection. | User terminal: `GMP_CHECK_STAGE=querying_managed_task`, `rc=124` after 150s; signal 15; config absent True; `ok=9 changed=0 failed=1` (intended). New diagnostic untested. | Pull, syntax-check and run `greenbone-gmp-request-path-readonly.yml`; do not rerun GMP or scan until cause is clearer. |
 | 2026-10-18 | Instrumented Greenbone scan runner deployed to `greenbone-01` via scoped Ansible; repeat confirmed idempotent. | Controller user output: first `greenbone-scan-runner.yml --limit greenbone-01` `ok=3 changed=1 failed=0`; `python3 -m py_compile` PASS; second `ok=3 changed=0 failed=0`. Both runner and GMP preflight syntax checks previously passed. **GMP preflight not yet rerun.** | Run `greenbone-gmp-preflight.yml --limit greenbone-01`, inspect non-secret stage markers and file cleanup; do not launch scan yet. |
