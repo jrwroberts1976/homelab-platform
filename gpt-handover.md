@@ -4,7 +4,7 @@
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
-**Current status:** Greenbone is live, and the **direct authenticated GMP test passed** on 18 October 2026: auth 200, get_tasks 200, exactly one managed authenticated task, `DIRECT_GMP_CHECK=PASS` (`ok=6 changed=0 failed=0`). Docker Compose helper-based runner still times out; a direct-socket replacement is **staged in Git only** and **controller offline/mock-GMP validation has passed**, and it **has now been deployed to greenbone-01**, with Python compilation validated on the target. The **direct-socket production preflight passed live** (`ok=10 changed=0 failed=0`, task lookup 0.1s, `CHECK=PASS`, no transient config); the managed scan unit still shows an old failed state. Actual scan and evidence publication remain pending. Startup-readiness guard and fresh completed vulnerability scan remain pending. Last saved evidence: 16 October (0 actionable / 30 accepted).
+**Current status:** Greenbone's direct-socket production runner is deployed and authenticated GMP readiness is verified live (`CHECK=PASS`, task lookup 0.1s, Ansible `ok=10 changed=0 failed=0`). The earlier failed scan unit has not been restarted or reset. **A bounded, fail-closed systemd boot-readiness gate is now staged in Git only; it has not been deployed or tested on admin-01.** No new vulnerability scan/report evidence exists yet; last saved evidence is 16 October (0 actionable / 30 accepted).
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
@@ -86,11 +86,28 @@ The 16 October 06:50 scan reported successful evidence publication at 08:43 with
 
 **Controller Git merge resolved — 18 October 2026:** `admin-01` successfully reconciled local-only `f752562f` (qBittorrent and Kodi DLNA firewall IaC) with GitHub `origin/main`. The user created protective branch `backup/media-before-sync-20261018`, retained remote `docs/architecture/MEDIA-01.md` when resolving the only merge conflict, and committed merge `9dbbacc9`. User-supplied terminal output confirmed `git push origin main` succeeded (`36f9fd20..9dbbacc9`), `python3 scripts/validate-estate.py` passed (20 active assets), `git diff --cached --check` had no warnings, and `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-evidence-readonly.yml --syntax-check` passed. **The actual Greenbone read-only inspection has NOT yet run.** The untracked Kodi-related paths `IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows` remain intentionally untouched. No change to host configuration was made during the merge.
 
-### Next action — review scheduled service boot-readiness guard (not yet deployed)
+### Next action — offline-validate bounded systemd boot-readiness gate (Git only)
 
-**Production GMP preflight passed 18 October 2026:** User ran the updated `greenbone-gmp-preflight.yml` through Ansible from `admin-01` after syntax PASS. It returned `greenbone-01 ok=10 changed=0 unreachable=0 failed=0`, `GMP check exit code: 0`, `GMP_CHECK_STAGE=task_lookup_complete elapsed_seconds=0.1`, `CHECK=PASS` for task `Homelab - Managed Infrastructure - Authenticated Daily`, and `Legacy temporary GMP config absent: True`. The GMP check did **not** launch a vulnerability scan or a Docker helper. Systemd unit `homelab-greenbone-managed-scan.service` remained in failed state from earlier failed execution; no reset or restart was made.
+The **18 October production GMP preflight passed** using the deployed direct Unix-socket runner: `ok=10 changed=0 failed=0`, GMP exit code 0, `CHECK=PASS`, managed task lookup 0.1s and legacy temp credential file absent. The old scan unit still displayed `failed` from its premature boot-time invocation. No vulnerability scan was launched.
 
-**Remaining defect:** At 16:17 BST after the Proxmox-2/VM203 restart, the persistent timer started the managed scan before `gvmd` became GMP-ready (16:19 BST). Current unit orders after Docker only. Before any new scan or service restart, design/review a Git-managed bounded GMP readiness gate for scheduled execution (with safe retry and meaningful failure handling). Need preserve existing scan lock semantics and prevent unattended scans from starting prematurely; separate deployment/validation from an actual scan. No boot guard is yet committed or deployed. A fresh completed managed report, machine-readable evidence publication and dashboard freshness check are required for closure.
+**New source-stage (NOT deployed):** The persistent systemd timer can invoke the scan service before Greenbone's GMP listener becomes ready after a reboot. Git-managed `homelab-greenbone-managed-scan.service.j2` now specifies an `ExecStartPre=` readiness helper before the existing full managed scan command. `homelab-greenbone-wait-ready.py.j2` exclusively executes the deployed `homelab-greenbone-scan managed --check` under the existing nonblocking flock. It retries every 15 seconds for up to **1800 seconds (30 minutes)** with 40-second bounds on each probe; requires the explicit `CHECK=PASS mode=managed` marker, never prints raw stdout/stderr or credentials, and fails closed if auth/task lookup never succeeds. Systemd `TimeoutStartSec` now includes readiness budget + scan budget + 900-second margin. The timer calendar and `Persistent=true` are unchanged. No network or Docker helper is invoked by the new gating code except GMP calls from the tested direct runner.
+
+A **scoped deployment playbook**, `IaC/ansible/playbooks/greenbone-managed-boot-guard.yml`, installs only the readiness helper and managed scan systemd unit through `tasks/managed_scan_boot_guard.yml`. It checks no scan is active, compiles the helper, reloads systemd only on a changed unit, verifies the installed `ExecStartPre`, and **never** starts or enables/disables the service/timer, resets its failed state, or launches a vulnerability scan. Full-role deployment is intentionally avoided because its broader flow still operates legacy Docker Compose GMP configuration and timer enablement gates. The full role main.yml now also knows how to install the helper before the unit when a separately approved full deployment is needed.
+
+Offline validator `scripts/validate-greenbone-boot-readiness.py` checks strict Jinja rendering and Python syntax, verifies unit template command/timeout, simulates a failed first check then success, and checks **fail-closed** behavior when a subprocess returns zero without `CHECK=PASS`. **All these files are committed but the validator, Ansible syntax check and live deployment have NOT been run on admin-01.** The old failed service state remains; a future successful scheduled run or explicit reset would clear it, but no reset was requested.
+
+**Next commands on admin-01 (no deployment):**
+```bash
+cd ~/projects/homelab-platform
+git status -sb
+git pull --ff-only || exit 1
+python3 scripts/validate-greenbone-boot-readiness.py
+python3 scripts/validate-estate.py
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-managed-boot-guard.yml --syntax-check
+```
+Only after these pass should the scoped playbook be considered for a separately reviewed live application. **Do not run the playbook live or launch a fresh scan as part of the syntax/offline test.** After safe gate deployment, confirm unit/timer state and run a newly completed authenticated scan and evidence publication check before closing Greenbone remediation.
 
 **Do not launch another scan yet.** Inspect/review the current `IaC/ansible/roles/greenbone_scanning/templates/homelab-greenbone-managed-scan.service.j2` and associated managed timer/role tasks, then stage a fail-safe readiness design. Preserve unrelated untracked Kodi/Mayday files.
 
@@ -131,6 +148,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | Staged fail-closed managed scan systemd boot-readiness gate in Git; offline and live validation pending. | Gate uses `ExecStartPre`, 30-minute cap/15-second retry/40-second per-probe bound with existing authenticated runner `--check`; dedicated scoped Ansible deploy path avoids timer changes. No service activation, reboot or scan. | Run offline validator, estate guard and Ansible syntax checks; deploy only after review and separately verify no scan triggered. |
 | 2026-10-18 | Deployed production direct-socket GMP preflight passed in 0.1s, no scan. | User Ansible: syntax PASS, `ok=10 changed=0 failed=0`; `GMP check exit code: 0`, `CHECK=PASS`, legacy config absent True. Managed scan unit still `failed` from earlier run. | Review and stage scheduled scan boot-readiness gate before fresh scan and evidence verification. |
 | 2026-10-18 | Direct-socket Greenbone production runner deployed through scoped Ansible, with live Python validation. | User: pulled `f621581d`, `greenbone-scan-runner.yml --limit greenbone-01` returned `ok=3 changed=1 failed=0 unreachable=0`; template installed and rendered Python compilation passed. No scan started. | Run the bounded non-scanning `greenbone-gmp-preflight.yml`; verify task lookup and legacy credential-file absence. |
 | 2026-10-18 | Controller validated staged direct-socket Greenbone runner and preflight; deployment still pending. | On admin-01: Jinja render PASS, generated Python syntax PASS, mock GMP auth/task lookup PASS, estate PASS (20 active / 0 planned / 5 retired), Ansible syntax PASS for runner and preflight. No scans/host changes. | Deploy **only** `greenbone-scan-runner.yml --limit greenbone-01`; inspect result before non-scanning GMP preflight. |
