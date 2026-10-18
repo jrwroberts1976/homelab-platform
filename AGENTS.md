@@ -49,3 +49,11 @@ python3 scripts/validate-estate.py
 For pull-request changes, the `Estate and documentation guard` workflow is expected to pass.
 
 A passing repository check does not replace live verification for infrastructure changes.
+
+## Cross-chat handover — mandatory
+
+- Before starting work in a new chat or agent session, read the root `gpt-handover.md` as a current working pointer, then reconcile it against the canonical inventory, current-state architecture, relevant IaC and live evidence. It is not a replacement for those sources of truth.
+- For **every user/agent-driven change** to source code, IaC, configuration, operational procedures, security disposition, architecture, documentation, or project priorities, update `gpt-handover.md` **as part of the same change**. Record the decision, files/commit, validation evidence or its absence, current work status and the exact next action. Do not defer the handover to a later session.
+- Update `CURRENT-STATE.md` and the active backlog too where their authoritative facts/priorities have changed. Do not claim live validation just because a commit or documentation change exists.
+- Purely automatic telemetry/status publication without a material decision or change in work status is exempt; reviewed findings and changed decisions are not.
+- Keep credentials and sensitive details out of handovers. Do not promise future handover updates if you cannot edit the repository; clearly note that limitation.
