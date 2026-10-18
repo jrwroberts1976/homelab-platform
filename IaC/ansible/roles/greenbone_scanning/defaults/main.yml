@@ -49,6 +49,9 @@ greenbone_scanning_runtime_env: /etc/greenbone-scanning/runtime.env
 
 # Automated scan runner and reporting.
 greenbone_scanning_runner: /usr/local/sbin/homelab-greenbone-scan
+# Host-side Docker volume backing gvmd's /run/gvmd Unix socket.
+# Validated directly on greenbone-01 on 18 October 2026.
+greenbone_scanning_gvmd_socket: /var/lib/docker/volumes/greenbone-community-edition_gvmd_socket_vol/_data/gvmd.sock
 greenbone_scanning_poll_seconds: 60
 greenbone_scanning_scan_timeout_seconds: 21600
 greenbone_scanning_runner_gmp_config: /run/greenbone-scanning/runner-gvm-tools.conf

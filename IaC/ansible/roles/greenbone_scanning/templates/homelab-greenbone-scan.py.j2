@@ -4,7 +4,7 @@ import argparse
 import fcntl
 import json
 import os
-import signal
+import socket
 import subprocess
 import sys
 import tempfile
@@ -13,9 +13,8 @@ import xml.etree.ElementTree as ET
 from pathlib import Path
 from datetime import datetime, timezone
 
-COMPOSE_ROOT = "{{ greenbone_scanning_root }}"
+GMP_SOCKET = "{{ greenbone_scanning_gvmd_socket }}"
 RUNTIME_ENV = Path("{{ greenbone_scanning_runtime_env }}")
-GMP_CONFIG = Path("{{ greenbone_scanning_runner_gmp_config }}")
 EVIDENCE_FILES = {
     "managed": Path("{{ greenbone_scanning_managed_evidence_file }}"),
     "full-lan": Path("{{ greenbone_scanning_full_lan_evidence_file }}"),
@@ -56,63 +55,77 @@ def load_runtime_env():
 
     return username, password
 
-def write_gmp_config(username, password):
-    GMP_CONFIG.parent.mkdir(mode=0o700, parents=True, exist_ok=True)
+def receive_gmp_xml(connection, deadline):
+    """Receive exactly one complete GMP XML response (not socket EOF)."""
+    parser = ET.XMLPullParser(events=("start", "end"))
+    depth = 0
+    total = 0
 
-    content = (
-        "[gmp]\n"
-        f"username = {username}\n"
-        f"password = {password}\n"
-    )
+    while True:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("GMP response deadline exceeded")
+        connection.settimeout(remaining)
 
-    fd = os.open(GMP_CONFIG, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o640)
-    with os.fdopen(fd, "w") as handle:
-        handle.write(content)
+        try:
+            chunk = connection.recv(65536)
+        except socket.timeout:
+            raise TimeoutError("GMP response deadline exceeded") from None
 
-    os.chown(GMP_CONFIG, 0, 1001)
+        if not chunk:
+            raise RuntimeError("GMP socket closed before response completed")
+
+        total += len(chunk)
+        if total > 128 * 1024 * 1024:
+            raise RuntimeError("GMP response exceeds 128 MiB safety limit")
+
+        parser.feed(chunk)
+        for event, node in parser.read_events():
+            depth += 1 if event == "start" else -1
+            if depth == 0:
+                return node
+
 
 def gmp(xml, timeout_seconds=120):
-    command = [
-        "docker", "compose",
-        "-f", f"{COMPOSE_ROOT}/compose.yaml",
-        "-f", f"{COMPOSE_ROOT}/compose.override.yaml",
-        "run", "--rm", "--no-deps",
-        "--volume", f"{GMP_CONFIG}:/run/gvm-tools.conf:ro",
-        "gvm-tools",
-        "gvm-cli",
-        "--config", "/run/gvm-tools.conf",
-        "socket",
-        "-X", xml,
-    ]
+    """Authenticate and run one GMP command directly over the host socket.
 
-    try:
-        result = subprocess.run(
-            command,
-            cwd=COMPOSE_ROOT,
-            text=True,
-            capture_output=True,
-            timeout=timeout_seconds,
-            check=False,
-        )
-    except subprocess.TimeoutExpired:
-        raise TimeoutError(
-            f"Greenbone GMP helper did not finish within {timeout_seconds}s"
-        ) from None
+    Credentials remain in process memory; no gvm-tools config or helper
+    container is created. All socket operations share one deadline.
+    """
+    username, password = load_runtime_env()
+    deadline = time.monotonic() + timeout_seconds
 
-    if result.returncode != 0:
-        raise RuntimeError(
-            f"Greenbone GMP command failed with exit code {result.returncode}: "
-            f"{result.stderr.strip()}"
-        )
+    with socket.socket(socket.AF_UNIX, socket.SOCK_STREAM) as connection:
+        connection.settimeout(max(0.1, deadline - time.monotonic()))
+        try:
+            connection.connect(GMP_SOCKET)
+        except socket.timeout:
+            raise TimeoutError("GMP socket connect timed out") from None
 
-    return result.stdout
+        authentication = ET.Element("authenticate")
+        credentials = ET.SubElement(authentication, "credentials")
+        ET.SubElement(credentials, "username").text = username
+        ET.SubElement(credentials, "password").text = password
+
+        connection.sendall(ET.tostring(authentication, encoding="utf-8"))
+        auth_reply = receive_gmp_xml(connection, deadline)
+        if auth_reply.get("status") != "200":
+            raise RuntimeError(
+                "GMP authentication failed (status="
+                + str(auth_reply.get("status"))
+                + ")"
+            )
+
+        connection.settimeout(max(0.1, deadline - time.monotonic()))
+        connection.sendall(xml.encode("utf-8"))
+        return receive_gmp_xml(connection, deadline)
+
 
 def find_task_id(task_name, timeout_seconds=120):
-    response = gmp(
+    root = gmp(
         '<get_tasks details="0"/>',
         timeout_seconds=timeout_seconds,
     )
-    root = ET.fromstring(response)
 
     matches = [
         task.get("id", "")
@@ -133,11 +146,9 @@ def find_task_id(task_name, timeout_seconds=120):
 
 
 def require_task_not_running(task_id, task_name):
-    root = ET.fromstring(
-        gmp(
-            f'<get_tasks task_id="{task_id}" '
-            'details="1"/>'
-        )
+    root = gmp(
+        f'<get_tasks task_id="{task_id}" '
+        'details="1"/>'
     )
 
     tasks = [
@@ -178,8 +189,7 @@ def require_task_not_running(task_id, task_name):
 
 
 def start_scan(task_id):
-    response = gmp(f'<start_task task_id="{task_id}"/>')
-    root = ET.fromstring(response)
+    root = gmp(f'<start_task task_id="{task_id}"/>')
 
     if root.get("status") != "202":
         raise RuntimeError(
@@ -197,10 +207,9 @@ def wait_for_scan(report_id):
     deadline = time.monotonic() + SCAN_TIMEOUT_SECONDS
 
     while time.monotonic() < deadline:
-        response = gmp(
+        root = gmp(
             f'<get_reports report_id="{report_id}" details="0"/>'
         )
-        root = ET.fromstring(response)
 
         reports = [
             report for report in root.findall(".//report")
@@ -231,10 +240,9 @@ def wait_for_scan(report_id):
     )
 
 def get_report(report_id):
-    response = gmp(
+    root = gmp(
         f'<get_reports report_id="{report_id}" details="1" ignore_pagination="1"/>'
     )
-    root = ET.fromstring(response)
 
     reports = [
         report for report in root.findall(".//report")
@@ -466,64 +474,63 @@ def send_email(subject, body):
 def run_scan(mode):
     task = TASKS[mode]
 
-    username, password = load_runtime_env()
+    # GMP credentials are read directly from RUNTIME_ENV per request.
+    # No temporary credentials file or Compose helper is created.
+    if not Path(GMP_SOCKET).is_socket():
+        raise RuntimeError("Greenbone GMP Unix socket is not available")
 
-    try:
-        write_gmp_config(username, password)
-        print(f"Starting Greenbone task: {task['name']}", flush=True)
+    print(f"Starting Greenbone task: {task['name']}", flush=True)
 
-        task_id = find_task_id(task["name"])
-        require_task_not_running(
-            task_id,
-            task["name"],
-        )
-        report_id = start_scan(task_id)
-        print(f"Report ID: {report_id}", flush=True)
+    task_id = find_task_id(task["name"])
+    require_task_not_running(
+        task_id,
+        task["name"],
+    )
+    report_id = start_scan(task_id)
+    print(f"Report ID: {report_id}", flush=True)
 
-        wait_for_scan(report_id)
+    wait_for_scan(report_id)
 
-        report = get_report(report_id)
-        findings = parse_results(report)
-        counts, actionable, accepted = build_summary(findings)
+    report = get_report(report_id)
+    findings = parse_results(report)
+    counts, actionable, accepted = build_summary(findings)
 
-        write_evidence(
-            mode,
-            task["name"],
-            report_id,
-            counts,
-            actionable,
-            accepted,
-        )
+    write_evidence(
+        mode,
+        task["name"],
+        report_id,
+        counts,
+        actionable,
+        accepted,
+    )
 
-        if mode == "managed":
-            publish_managed_evidence()
+    if mode == "managed":
+        publish_managed_evidence()
 
-        body = build_email(
-            task["name"],
-            report_id,
-            counts,
-            actionable,
-            accepted,
-        )
+    body = build_email(
+        task["name"],
+        report_id,
+        counts,
+        actionable,
+        accepted,
+    )
 
-        send_email(
-            f"Greenbone scan report - {task['name']}",
-            body,
-        )
+    send_email(
+        f"Greenbone scan report - {task['name']}",
+        body,
+    )
 
-        print(
-            "Scan complete: "
-            f"Critical={counts['Critical']} "
-            f"High={counts['High']} "
-            f"Medium={counts['Medium']} "
-            f"Low={counts['Low']} "
-            f"Log={counts['Log']} "
-            f"Accepted={len(accepted)}",
-            flush=True,
-        )
+    print(
+        "Scan complete: "
+        f"Critical={counts['Critical']} "
+        f"High={counts['High']} "
+        f"Medium={counts['Medium']} "
+        f"Low={counts['Low']} "
+        f"Log={counts['Log']} "
+        f"Accepted={len(accepted)}",
+        flush=True,
+    )
 
-    finally:
-        GMP_CONFIG.unlink(missing_ok=True)
 
 
 def main():
@@ -544,42 +551,27 @@ def main():
     args = parser.parse_args()
 
     if args.check:
-        # The outer Ansible timeout sends SIGTERM. Convert that into a Python
-        # exception so the transient GMP configuration is cleaned in finally.
-        # Do not install this handler for the full managed scan path.
-        def handle_check_sigterm(signum, _frame):
-            raise RuntimeError(
-                f"GMP preflight interrupted by signal {signum}"
-            )
-
-        previous_sigterm = signal.signal(
-            signal.SIGTERM, handle_check_sigterm
+        print("GMP_CHECK_STAGE=loading_credentials", flush=True)
+        # Verify credentials exist without printing them. The gmp() client
+        # authenticates directly using the existing root-only runtime file.
+        load_runtime_env()
+        print("GMP_CHECK_STAGE=querying_managed_task", flush=True)
+        started_at = time.monotonic()
+        task = TASKS[args.mode]
+        task_id = find_task_id(
+            task["name"],
+            timeout_seconds=30,
         )
-        try:
-            print("GMP_CHECK_STAGE=loading_credentials", flush=True)
-            username, password = load_runtime_env()
-            print("GMP_CHECK_STAGE=creating_temporary_config", flush=True)
-            write_gmp_config(username, password)
-            print("GMP_CHECK_STAGE=querying_managed_task", flush=True)
-            started_at = time.monotonic()
-            task = TASKS[args.mode]
-            task_id = find_task_id(
-                task["name"],
-                timeout_seconds=75,
-            )
-            print(
-                "GMP_CHECK_STAGE=task_lookup_complete "
-                f"elapsed_seconds={time.monotonic() - started_at:.1f}",
-                flush=True,
-            )
-            print(
-                f"CHECK=PASS mode={args.mode} "
-                f"task={task['name']} id={task_id}",
-                flush=True,
-            )
-        finally:
-            GMP_CONFIG.unlink(missing_ok=True)
-            signal.signal(signal.SIGTERM, previous_sigterm)
+        print(
+            "GMP_CHECK_STAGE=task_lookup_complete "
+            f"elapsed_seconds={time.monotonic() - started_at:.1f}",
+            flush=True,
+        )
+        print(
+            f"CHECK=PASS mode={args.mode} "
+            f"task={task['name']} id={task_id}",
+            flush=True,
+        )
         return
 
     lock_path = Path(SCAN_LOCK_FILE)

@@ -1,8 +1,8 @@
 ---
 # Bounded GMP readiness check: does not launch a vulnerability scan or modify
-# persistent configuration. Existing runner --check uses a temporary gvm-tools
-# Compose container and ephemeral root-protected credential file (cleaned up).
-# The same flock used by the scan runner prevents cross-mode concurrency.
+# persistent configuration. The updated runner --check authenticates over
+# the host Unix socket: no Docker Compose helper or temporary credentials file.
+# The same flock as the scan runner prevents cross-mode concurrency.
 - name: Verify Greenbone GMP management access after host reboot
   hosts: greenbone_hosts
   become: true
@@ -67,7 +67,7 @@
           - timeout
           - --signal=TERM
           - --kill-after=10s
-          - 150s
+          - 60s
           - flock
           - --nonblock
           - /run/lock/homelab-greenbone-scan.lock
@@ -94,7 +94,7 @@
           - "GMP check exit code: {{ greenbone_preflight_gmp.rc }}"
           - "GMP output: {{ greenbone_preflight_gmp.stdout_lines | default([]) }}"
           - "GMP error: {{ greenbone_preflight_gmp.stderr_lines | default([]) }}"
-          - "Temporary GMP config absent: {{ not (greenbone_preflight_config_after.stat.exists | default(false)) }}"
+          - "Legacy temporary GMP config absent: {{ not (greenbone_preflight_config_after.stat.exists | default(false)) }}"
           - >-
             GMP readiness: {{
               'PASS (authenticated managed task lookup succeeded)'
@@ -103,9 +103,10 @@
               else 'NOT VERIFIED; do not start a scan'
             }}
           - >-
-            The --check mode holds the shared scan lock, creates/removes transient GMP configuration
-            and an ephemeral gvm-tools helper container; it never starts
-            a vulnerability scan.
+            The --check mode holds the shared scan lock, reads protected runtime
+            credentials into memory and directly queries the existing gvmd Unix
+            socket; it creates no Docker helper or temporary credential file
+            and never starts a vulnerability scan.
 
     - name: Require GMP readiness and transient-credential cleanup
       ansible.builtin.assert:
