@@ -4,7 +4,7 @@
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
-**Current status:** Greenbone vulnerability review BLOCKED: `Proxmox-2` reported down, and live Ansible access to `greenbone-01` timed out on TCP/22. No new scan evidence reviewed.
+**Current status:** User reports `Proxmox-2` back online (18 October 2026). **Recovery/VM203 accessibility not yet independently verified** through Ansible; no new Greenbone scan evidence reviewed.
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
@@ -44,28 +44,35 @@ Other remediation already recorded:
 
 **Outage update — 18 October 2026:** The user reports **`Proxmox-2` is down**; on `admin-01`, Ansible's `greenbone-scan-evidence-readonly.yml` failed at the first remote command with `ssh: connect to host 192.168.2.57 port 22: Connection timed out`. The initial `assert` ran locally (it did **not** establish SSH connectivity). This **does not** mean there are zero vulnerabilities. Greenbone VM203, monitoring VM202, `dns-01` CT101, and `edge-01` CT103 are assigned to `Proxmox-2`; guest disks are node-local, and these workloads may be unavailable while their host is down. Actual Proxmox-2 power/cluster health has not been independently verified, nor has `PROXMOX` quorum been checked after the outage. Restore/repair is **not** approved by this note; avoid rebooting/migrating guests without evidence and authorisation.
 
+**Recovery update — 18 October 2026:** User reports `Proxmox-2` has returned. This is **user-reported**, not verified live. First check PVE node status/quorum/QDevice and Greenbone TCP/22 through the Ansible connectivity playbook. If VM203 is accessible, run the separate read-only Greenbone evidence playbook. Do not start/restart a scan, guest or service just on the basis of this report.
+
 **IaC diagnostic created:** `IaC/ansible/playbooks/greenbone-connectivity-readonly.yml` was initially committed at `1220e052`, then revised at `1ff5ed8d` (and probe-result display corrected at `4329652183`) to run read-only probes on `admin-01` and gather `pvecm status` and cluster resource views from surviving `PROXMOX` rather than SSHing into offline `Proxmox-2`. This playbook **has not been syntax-checked or executed on the controller yet**.
 
 
 
 **Controller Git merge resolved — 18 October 2026:** `admin-01` successfully reconciled local-only `f752562f` (qBittorrent and Kodi DLNA firewall IaC) with GitHub `origin/main`. The user created protective branch `backup/media-before-sync-20261018`, retained remote `docs/architecture/MEDIA-01.md` when resolving the only merge conflict, and committed merge `9dbbacc9`. User-supplied terminal output confirmed `git push origin main` succeeded (`36f9fd20..9dbbacc9`), `python3 scripts/validate-estate.py` passed (20 active assets), `git diff --cached --check` had no warnings, and `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-scan-evidence-readonly.yml --syntax-check` passed. **The actual Greenbone read-only inspection has NOT yet run.** The untracked Kodi-related paths `IaC/ansible/metadata.tvshows.themoviedb.org.python` and `IaC/ansible/tvshows` remain intentionally untouched. No change to host configuration was made during the merge.
 
-### Next action — diagnose Proxmox-2 outage via read-only Ansible
+### Next action — confirm recovery and inspect Greenbone via Ansible
 
-**Do not run the Greenbone scan evidence inspection until VM203 is reachable.** Use the committed playbook `IaC/ansible/playbooks/greenbone-connectivity-readonly.yml` from `admin-01`. It probes SSH TCP/22 to both PVE nodes and Greenbone, checks local QNetd service state, then queries the **surviving** `PROXMOX` node's cluster quorum, nodes and guests. No services/guests are started, migrated, restarted, or changed.
+`Proxmox-2` is reported restored, but its state and the Greenbone guest must be verified first. Run the **existing**, read-only `greenbone-connectivity-readonly.yml` playbook from `admin-01`. If the reported node/VM is reachable and surviving cluster status is healthy, run the separate **existing** read-only `greenbone-scan-evidence-readonly.yml` playbook to inspect the latest scan. **Neither playbook starts/restarts guests or launches vulnerability scans.** Stop and review failures before proceeding.
 
 ```bash
 cd ~/projects/homelab-platform
 git status -sb
-git pull --ff-only
+git pull --ff-only || exit 1
 cd IaC/ansible
+
 ansible-playbook -i inventory/hosts.yml \
-  playbooks/greenbone-connectivity-readonly.yml --syntax-check
+  playbooks/greenbone-connectivity-readonly.yml --syntax-check && \
 ansible-playbook -i inventory/hosts.yml \
   playbooks/greenbone-connectivity-readonly.yml
+
+# Only if cluster/SSH checks indicate recovery and no new issue:
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-scan-evidence-readonly.yml
 ```
 
-**Pending:** Verify whether Proxmox-2 is intentionally powered off, physically down, or network-isolated; inspect `PROXMOX` quorum/QDevice and affected guest states before planning any recovery. Do **not** assume Proxmox storage HA or automatically start VM203 elsewhere. After Proxmox-2/VM203 is back and SSH connectivity works, execute `greenbone-scan-evidence-readonly.yml` to retrieve actual post-remediation scan results.
+Record actual recovery/quorum/guest and scan evidence before closing any items. A returned TCP port alone is not proof the Greenbone scan completed successfully, and an old evidence file is not a fresh clean scan.
 
 **Do not** start an additional scan while one is running. The runner is `/usr/local/sbin/homelab-greenbone-scan` and the evidence path is `/var/lib/homelab-greenbone-scanning/managed.json`. The managed scan systemd service is `homelab-greenbone-managed-scan.service`; the timer is `homelab-greenbone-managed-scan.timer`. Source: `IaC/ansible/roles/greenbone_scanning/`.
 
@@ -104,6 +111,7 @@ Pending after vulnerability review (unless reprioritised):
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-18 | User reports `Proxmox-2` is back online after the outage. | **Reported by user only**; cluster quorum/VM203 and Greenbone SSH health not yet verified by Ansible; no scan evidence read. | Run existing Ansible connectivity diagnostics; if healthy, inspect Greenbone evidence read-only; reconcile findings. |
 | 2026-10-18 | User reported `Proxmox-2` down after Greenbone read-only playbook failed to reach VM203 on TCP/22. Added/revised read-only Ansible connectivity/cluster diagnostic. | User-provided Ansible output: `greenbone-01` SSH timeout, `unreachable=1` (host assertion passed locally only); diagnostic IaC commits `1220e052`, `1ff5ed8d`, `4329652183`; **new diagnostic not yet executed**. | Verify surviving PVE quorum/node/guest state via the new Ansible playbook; defer Greenbone findings review until VM203 access returns. |
 | 2026-10-18 | Confirmed clean controller merge/push and Ansible syntax test; updated handover after merge. | Merge `9dbbacc9` on `main` verified via GitHub; controller's user-pasted syntax check PASS, estate validation PASS; **Greenbone live evidence still pending**. | From `admin-01`, fast-forward local checkout and run `greenbone-scan-evidence-readonly.yml`; assess findings and update handover. |
 | 2026-10-18 | Resolved `MEDIA-01.md` conflict retaining remote documentation, preserved local qBittorrent IaC and completed merge `9dbbacc9`; push succeeded. | Controller output: estate validation PASS (20 assets), no whitespace errors, Greenbone inspection playbook Ansible syntax PASS; no live scan inspection performed. | Pull latest handover fast-forward and run Ansible read-only Greenbone inspection. |
