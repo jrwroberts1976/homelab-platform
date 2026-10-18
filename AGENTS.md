@@ -2,6 +2,14 @@
 
 These instructions apply to any AI assistant, coding agent or automated documentation tool working in this repository.
 
+## Ansible-first execution and IaC-only changes
+
+- **Use Ansible for all host-level operations**, including read-only diagnostics, service status checks, security validation, configuration, deployment and rollback. Run through the repository's Ansible inventory from `admin-01` rather than asking for direct SSH/manual host commands.
+- **Any persistent infrastructure or service configuration change must first be represented in Git-managed Infrastructure as Code (IaC)**, ordinarily an Ansible role/playbook under `IaC/ansible/`. Review/diff it, validate its syntax and scope, apply through Ansible, and verify live state. Do not make undocumented one-off manual changes.
+- Prefer checked-in, reusable **read-only Ansible playbooks** for investigations. Ansible ad-hoc modules are acceptable for one-time **read-only** queries, not for untracked configuration drift.
+- Keep changes targeted and idempotent, preserve rollback, and require explicit approval before disruptive/rebooting/security-sensitive actions. An emergency manual exception requires explicit user approval and immediate reconciliation into IaC and `gpt-handover.md`.
+- After each material user/agent change, update `gpt-handover.md` with implementation, test evidence (or clear absence of verification), and next action. A Git commit alone is not proof of live deployment.
+
 ## Mandatory estate preflight
 
 Before creating or changing architecture, network, deployment, migration, recovery or operational documentation:
