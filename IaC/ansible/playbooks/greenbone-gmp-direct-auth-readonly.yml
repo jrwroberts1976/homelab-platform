@@ -1,0 +1,53 @@
+---
+# One short direct read-only GMP auth + task metadata check.
+# Uses existing root-only runtime credentials in memory and the same scan lock.
+# Does not use Docker run/exec or start a vulnerability scan.
+- name: Verify direct authenticated GMP response without Docker helper
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check managed scan is not active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-greenbone-managed-scan.service]
+      register: direct_gmp_scan_state
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect transient GMP file metadata without reading contents
+      ansible.builtin.stat:
+        path: /run/greenbone-scanning/runner-gvm-tools.conf
+        follow: false
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: direct_gmp_config
+
+    - name: Refuse concurrent scan or old credentials
+      ansible.builtin.assert:
+        that:
+          - direct_gmp_scan_state.stdout | trim != "active"
+          - not (direct_gmp_config.stat.exists | default(false))
+        fail_msg: "Scan active or orphaned GMP credentials present; do not continue."
+
+    - name: Authenticate and read task names via direct GMP Unix socket
+      ansible.builtin.script: "{{ playbook_dir }}/files/greenbone-gmp-direct-auth-check.py"
+      register: direct_gmp_probe
+      changed_when: false
+      failed_when: false
+
+    - name: Report only non-secret direct GMP status
+      ansible.builtin.debug:
+        msg:
+          - "Direct GMP return code: {{ direct_gmp_probe.rc }}"
+          - "Direct GMP stages: {{ direct_gmp_probe.stdout_lines | default([]) }}"
+          - "No Docker helper, GMP credential file, or vulnerability scan started."
+
+    - name: Require successful direct GMP authentication and task lookup
+      ansible.builtin.assert:
+        that:
+          - direct_gmp_probe.rc == 0
+          - "'DIRECT_GMP_CHECK=PASS' in (direct_gmp_probe.stdout | default(''))"
+        fail_msg: >-
+          Direct GMP authentication or task lookup failed. Do not launch a scan;
+          review the safe stage markers and stop instead of retrying.
