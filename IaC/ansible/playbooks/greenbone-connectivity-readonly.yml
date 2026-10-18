@@ -1,0 +1,83 @@
+---
+# Read-only Greenbone connectivity diagnostics. Does not start/reboot a guest or change networking.
+# Authority: IaC/inventory/estate.json; CURRENT-STATE.md.
+- name: Test Greenbone SSH reachability from the Ansible controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  tasks:
+    - name: Check TCP 22 from admin-01
+      ansible.builtin.wait_for:
+        host: "{{ hostvars['greenbone-01']['ansible_host'] }}"
+        port: 22
+        state: started
+        connect_timeout: 2
+        timeout: 6
+      register: greenbone_controller_ssh
+      failed_when: false
+      changed_when: false
+
+    - name: Report controller TCP result
+      ansible.builtin.debug:
+        msg:
+          - "Ansible controller to greenbone-01 TCP/22: {{ greenbone_controller_ssh.msg | default('Connected successfully') }}"
+          - "Elapsed seconds: {{ greenbone_controller_ssh.elapsed | default('unknown') }}"
+
+- name: Inspect Greenbone VM 203 from its documented Proxmox host
+  hosts: Proxmox-2
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Read VM 203 status without changing guest state
+      ansible.builtin.command:
+        argv: [qm, status, "203"]
+      register: greenbone_vm_status
+      failed_when: false
+      changed_when: false
+
+    - name: Test ICMP to Greenbone guest from Proxmox-2
+      ansible.builtin.command:
+        argv:
+          - ping
+          - -n
+          - -c
+          - "2"
+          - -W
+          - "1"
+          - "{{ hostvars['greenbone-01']['ansible_host'] }}"
+      register: greenbone_pve_ping
+      failed_when: false
+      changed_when: false
+
+    - name: Test TCP 22 to Greenbone guest from Proxmox-2
+      ansible.builtin.wait_for:
+        host: "{{ hostvars['greenbone-01']['ansible_host'] }}"
+        port: 22
+        state: started
+        connect_timeout: 2
+        timeout: 6
+      register: greenbone_pve_ssh
+      failed_when: false
+      changed_when: false
+
+    - name: Read neighbor entry for Greenbone guest from Proxmox-2
+      ansible.builtin.command:
+        argv:
+          - ip
+          - neigh
+          - show
+          - "{{ hostvars['greenbone-01']['ansible_host'] }}"
+      register: greenbone_pve_neighbor
+      failed_when: false
+      changed_when: false
+
+    - name: Report guest and network diagnostic results
+      ansible.builtin.debug:
+        msg:
+          - "VM203 status command rc={{ greenbone_vm_status.rc }}: {{ greenbone_vm_status.stdout | default('') }} {{ greenbone_vm_status.stderr | default('') }}"
+          - "ICMP command rc={{ greenbone_pve_ping.rc }}: {{ greenbone_pve_ping.stdout_lines | default([]) }}"
+          - "Proxmox-2 to guest TCP/22: {{ greenbone_pve_ssh.msg | default('Connected successfully') }}"
+          - "Neighbor entry: {{ greenbone_pve_neighbor.stdout | default('') }}"
+          - "ICMP silence can be caused by filtering; do not treat it alone as proof that the guest is down."
