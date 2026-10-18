@@ -2,6 +2,7 @@
 # Bounded GMP readiness check: does not launch a vulnerability scan or modify
 # persistent configuration. Existing runner --check uses a temporary gvm-tools
 # Compose container and ephemeral root-protected credential file (cleaned up).
+# The same flock used by the scan runner prevents cross-mode concurrency.
 - name: Verify Greenbone GMP management access after host reboot
   hosts: greenbone_hosts
   become: true
@@ -46,6 +47,9 @@
         argv:
           - timeout
           - 150s
+          - flock
+          - --nonblock
+          - /run/lock/homelab-greenbone-scan.lock
           - "{{ greenbone_gmp_preflight_runner }}"
           - managed
           - --check
@@ -68,6 +72,6 @@
               else 'NOT VERIFIED; do not start a scan'
             }}
           - >-
-            The --check mode creates/removes transient GMP configuration
+            The --check mode holds the shared scan lock, creates/removes transient GMP configuration
             and an ephemeral gvm-tools helper container; it never starts
             a vulnerability scan.

@@ -66,7 +66,7 @@ The 16 October 06:50 scan reported successful evidence publication at 08:43 with
 
 ### Next action — verify authenticated GMP readiness without scanning
 
-After Proxmox-2 recovered, the read-only Docker/pg-gvm/gvmd diagnostic showed healthy containers and completed VT rebuild. The failed 16:18 scan was launched before gvmd's 16:19 GMP-ready event. Use **Ansible** to run the existing scan runner's **`--check` mode**, which validates GMP authentication and task lookup without starting a scan. The IaC preflight `IaC/ansible/playbooks/greenbone-gmp-preflight.yml` refuses to run concurrently with an active managed scan service and bounds the check to 150 seconds. It uses a disposable helper container and temporarily writes/cleans up a protected runtime credential config, so it is non-scanning, not literally side-effect-free.
+After Proxmox-2 recovered, the read-only Docker/pg-gvm/gvmd diagnostic showed healthy containers and completed VT rebuild. The failed 16:18 scan was launched before gvmd's 16:19 GMP-ready event. Use **Ansible** to run the existing scan runner's **`--check` mode**, which validates GMP authentication and task lookup without starting a scan. The IaC preflight `IaC/ansible/playbooks/greenbone-gmp-preflight.yml` refuses to run concurrently with an active managed scan service, additionally uses the runner's shared `flock` lock to avoid collisions with other scan modes, and bounds the check to 150 seconds. It uses a disposable helper container and temporarily writes/cleans up a protected runtime credential config, so it is non-scanning, not literally side-effect-free.
 
 ```bash
 cd ~/projects/homelab-platform
