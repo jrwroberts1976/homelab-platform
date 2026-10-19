@@ -1,0 +1,143 @@
+---
+# Diagnose the docker-01 INPUT filtering backend and reproduce its
+# ICMPv4 timestamp finding from greenbone-01. No host configuration writes.
+# Never copy the media-01 nftables ruleset onto this Docker host.
+- name: Identify effective host firewall ownership on docker-01
+  hosts: docker-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Confirm docker-01 inventory identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "docker-01"
+          - ansible_host == "192.168.2.220"
+        fail_msg: "Unexpected Docker host; refusing firewall reconnaissance."
+
+    - name: Inspect backend and selected chain indicators without leaking rule contents
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        import re
+        import shutil
+        import subprocess
+
+        def run(argv):
+            if not shutil.which(argv[0]):
+                return None, ""
+            try:
+                result = subprocess.run(
+                    argv, capture_output=True, text=True,
+                    timeout=15, check=False
+                )
+                return result.returncode, result.stdout.strip()
+            except (OSError, subprocess.TimeoutExpired):
+                return None, ""
+
+        rc, value = run(["systemctl", "is-active", "docker"])
+        print("DOCKER_SERVICE=" + ("active" if rc == 0 else "not-active-or-unknown"))
+        rc, value = run(["docker", "ps", "-q"])
+        print("RUNNING_CONTAINER_COUNT=" +
+              (str(len(value.splitlines())) if rc == 0 else "unavailable"))
+        rc, version = run(["iptables", "-V"])
+        print("IPTABLES_VERSION=" +
+              (version.replace("\n", " ")[:120] if rc == 0 else "unavailable"))
+
+        rc, rules = run(["iptables-save", "-t", "filter"])
+        print("FILTER_TABLE=" + ("readable" if rc == 0 else "unavailable"))
+        if rc == 0:
+            policies = dict(re.findall(r"^:([^\s]+) ([A-Z]+) \[", rules, re.M))
+            for name in ("INPUT", "FORWARD", "OUTPUT"):
+                print(name + "_POLICY=" + policies.get(name, "unknown"))
+            input_rules = [line for line in rules.splitlines()
+                           if line.startswith("-A INPUT ")]
+            print("INPUT_RULE_COUNT=" + str(len(input_rules)))
+            jumps = sorted(set(
+                match.group(1) for line in input_rules
+                for match in [re.search(r"(?:^| )-j ([A-Za-z0-9_-]+)", line)]
+                if match
+            ))
+            print("INPUT_JUMP_TARGETS=" + (",".join(jumps) if jumps else "none"))
+            docker_chains = re.findall(r"^:(DOCKER[^\s]*) ", rules, re.M)
+            print("DOCKER_FILTER_CHAIN_COUNT=" + str(len(docker_chains)))
+            print("INPUT_ICMP_RULE_COUNT=" +
+                  str(sum(bool(re.search(r"(?:--protocol|-p) icmp\b", s))
+                          for s in input_rules)))
+            print("TIMESTAMP_REFERENCES=" +
+                  str(rules.lower().count("timestamp-request")))
+
+        rc, nft = run(["nft", "list", "ruleset"])
+        print("NFT_RULESET=" + ("readable" if rc == 0 else "unavailable"))
+        if rc == 0:
+            print("NFT_INPUT_HOOK_COUNT=" +
+                  str(len(re.findall(r"\bhook input\b", nft))))
+            print("NFT_FORWARD_HOOK_COUNT=" +
+                  str(len(re.findall(r"\bhook forward\b", nft))))
+        print("FIREWALL_OWNER_NOT_ASSUMED=YES")
+        print("READ_ONLY=PASS")
+        PY
+      args:
+        executable: /bin/bash
+      register: docker01_firewall_audit
+      changed_when: false
+
+    - name: Report non-secret Docker firewall indicators
+      ansible.builtin.debug:
+        msg: "{{ docker01_firewall_audit.stdout_lines }}"
+
+- name: Test docker-01 ICMP timestamp replies from the Greenbone scanner
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Confirm scanner and Docker target identities
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+          - ansible_host == "192.168.2.57"
+          - hostvars["docker-01"].ansible_host == "192.168.2.220"
+        fail_msg: "Unexpected scanner or Docker target; no packets sent."
+
+    - name: Verify packet probe logic before network test
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - --self-test
+      register: docker01_icmp_selftest
+      changed_when: false
+      failed_when: >-
+        docker01_icmp_selftest.rc != 0 or
+        'ICMP_TIMESTAMP_PROBE_SELF_TEST=PASS' not in docker01_icmp_selftest.stdout
+
+    - name: Check ordinary ping reachability to docker-01
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.220"]
+      register: docker01_icmp_ping
+      changed_when: false
+      failed_when: false
+
+    - name: Send three bounded timestamp requests to docker-01
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.220"
+      register: docker01_icmp_timestamp
+      changed_when: false
+
+    - name: Report scanner-side evidence without timestamp or other packet data
+      ansible.builtin.debug:
+        msg:
+          - "DOCKER01_ECHO_BASELINE={{ 'PASS' if docker01_icmp_ping.rc == 0 else 'NO_REPLY' }}"
+          - "{{ docker01_icmp_timestamp.stdout_lines }}"
+          - >-
+            DOCKER01_TIMESTAMP_INTERPRETATION={{
+              'REPLY_CONFIRMED'
+              if 'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in docker01_icmp_timestamp.stdout
+              else 'NO_REPLY_OBSERVED_NOT_PROOF_OF_FIX'
+              if docker01_icmp_ping.rc == 0
+              else 'INCONCLUSIVE_NO_PING_OR_TIMESTAMP_REPLY'
+            }}
+          - "READ_ONLY_NETWORK_TEST=PASS no firewall, service, sysctl or scan changes"
