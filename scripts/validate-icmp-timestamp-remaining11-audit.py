@@ -51,7 +51,7 @@ for unsafe in ('iptables -I', 'iptables -D', 'iptables -F', 'nft -f', 'nft flush
                'sysctl -w', 'state: restarted', 'enabled: true'):
     assert unsafe not in source, unsafe
 assert 'CAP_NET_ADMIN' in source
-assert 'SERVICE_PVE_FIREWALL' not in source or True
+assert 'pve-firewall' in source and 'proxmox-firewall' in source
 print("Canonical 11 hosts and 11 addresses: PASS")
 print("LXC, Docker, Proxmox, iptables-nft and nftables read-only checks: PASS")
 print("Independent scanner vantage including scanner self-check via monitor-01: PASS")
