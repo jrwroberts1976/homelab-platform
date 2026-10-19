@@ -6,6 +6,7 @@
       - media_firewall_lan_subnet | length > 0
       - media_firewall_qbittorrent_https_lan_enabled | bool
       - media_firewall_qbittorrent_http_lan_enabled is defined
+      - media_firewall_icmp_timestamp_drop_enabled is boolean
       - media_firewall_monitor_ipv4 | length > 0
       - media_firewall_backup_nfs_clients | length > 0
     fail_msg: >-
@@ -65,6 +66,11 @@
       - media_firewall_lan_subnet in media_firewall_ruleset.stdout
       - media_firewall_monitor_ipv4 in media_firewall_ruleset.stdout
       - "'tcp dport 443' in media_firewall_ruleset.stdout"
+      - >-
+        (media_firewall_icmp_timestamp_drop_enabled | bool and
+        'icmp type timestamp-request drop' in media_firewall_ruleset.stdout)
+        or (not (media_firewall_icmp_timestamp_drop_enabled | bool) and
+        'icmp type timestamp-request drop' not in media_firewall_ruleset.stdout)
       - >-
         (media_firewall_qbittorrent_http_lan_enabled | bool and 'tcp dport 8081' in media_firewall_ruleset.stdout)
         or (not (media_firewall_qbittorrent_http_lan_enabled | bool) and 'tcp dport 8081' not in media_firewall_ruleset.stdout)

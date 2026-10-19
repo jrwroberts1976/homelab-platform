@@ -1,0 +1,159 @@
+---
+# Explicitly approved 19 Oct 2026. Scope: only media-01 nftables ICMPv4
+# timestamp requests. Pre/post evidence from greenbone-01 is independent.
+# No kernel modifications, scans, accepted-risk changes or service restarts.
+- name: Require live ICMP timestamp baseline before media-01 change
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require expected scanner and target
+      ansible.builtin.assert:
+        that:
+          - ansible_host == "192.168.2.57"
+          - hostvars["media-01"].ansible_host == "192.168.2.195"
+    - name: Verify ordinary ping works before modification
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.195"]
+      changed_when: false
+    - name: Confirm pre-change timestamp responses from scanner
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.195"
+      register: icmp_pre_change
+      changed_when: false
+    - name: Require confirmed baseline exposure before any rule change
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in icmp_pre_change.stdout"
+        fail_msg: Baseline no longer proves ICMP timestamp replies; refusing cutover.
+
+- name: Block only ICMPv4 type 13 timestamp requests on media-01
+  hosts: media-01
+  become: true
+  gather_facts: true
+  vars:
+    media_firewall_icmp_timestamp_drop_enabled: true
+    media_firewall_qbittorrent_https_lan_enabled: true
+    media_firewall_qbittorrent_http_lan_enabled: false
+
+  pre_tasks:
+    - name: Require critical services active before nftables reload
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - nftables
+        - nginx
+        - qbittorrent
+        - smbd
+        - nfs-kernel-server
+      register: media_icmp_services
+      changed_when: false
+      failed_when: media_icmp_services.stdout | trim != 'active'
+
+    - name: Require trusted HTTPS from Ansible controller before change
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        validate_certs: true
+        return_content: false
+        status_code: [200, 302]
+        use_proxy: false
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require direct LAN qBittorrent HTTP still blocked
+      ansible.builtin.wait_for:
+        host: 192.168.2.195
+        port: 8081
+        state: stopped
+        connect_timeout: 2
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require local qBittorrent HTTP backend still responding
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/
+        return_content: false
+        status_code: [200, 302]
+        use_proxy: false
+        timeout: 8
+      changed_when: false
+
+  tasks:
+    - name: Apply validated, Git-managed media nftables policy
+      ansible.builtin.include_role:
+        name: media_firewall
+
+    - name: Require trusted HTTPS still available after policy reload
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        validate_certs: true
+        return_content: false
+        status_code: [200, 302]
+        use_proxy: false
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Confirm LAN TCP 8081 remains blocked
+      ansible.builtin.wait_for:
+        host: 192.168.2.195
+        port: 8081
+        state: stopped
+        connect_timeout: 2
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require qBittorrent backend still available over loopback
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/
+        return_content: false
+        status_code: [200, 302]
+        use_proxy: false
+        timeout: 8
+      changed_when: false
+
+- name: Verify timestamp silence and ordinary ping from greenbone-01
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require ordinary ping after firewall rule change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "192.168.2.195"]
+      changed_when: false
+
+    - name: Probe bounded ICMPv4 timestamp requests after change
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.195"
+      register: icmp_post_change
+      changed_when: false
+
+    - name: Require no ICMP timestamp replies at scanner vantage
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in icmp_post_change.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in icmp_post_change.stdout"
+        fail_msg: "ICMP timestamp reply still observed; investigate or run scoped rollback."
+
+    - name: Report scoped media-01 ICMP remediation
+      ansible.builtin.debug:
+        msg:
+          - "MEDIA01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED"
+          - "MEDIA01_ICMP_ECHO=PASS"
+          - "HTTPS_443=PASS; LAN_HTTP_8081=BLOCKED; LOOPBACK_HTTP_8081=AVAILABLE"
+          - "No Greenbone scan or accepted-risk changes. Rollback: greenbone-icmp-timestamp-media01-rollback.yml"

@@ -8,6 +8,11 @@ media_firewall_lan_subnet: "192.168.2.0/24"
 # A scoped rollback playbook may temporarily override HTTP back to true.
 media_firewall_qbittorrent_https_lan_enabled: true
 media_firewall_qbittorrent_http_lan_enabled: false
+
+# 19 Oct 2026 authorised ICMPv4 timestamp-response mitigation on media-01.
+# Drop type 13 (timestamp-request) before the broad IPv4 ICMP accept.
+# A scoped rollback can override this to false without removing other rules.
+media_firewall_icmp_timestamp_drop_enabled: true
 media_firewall_monitor_ipv4: "192.168.2.52"
 media_firewall_dhcp_server_ipv4: "192.168.2.1"
 media_firewall_backup_nfs_clients:

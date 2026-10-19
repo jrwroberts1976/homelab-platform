@@ -27,12 +27,15 @@ base = {
     "media_firewall_backup_nfs_clients": ["192.168.2.70", "192.168.2.71"],
     "media_firewall_monitor_ipv4": "192.168.2.52",
     "media_firewall_qbittorrent_https_lan_enabled": True,
+    "media_firewall_icmp_timestamp_drop_enabled": True,
 }
 new = render.render(**{**base, "media_firewall_qbittorrent_http_lan_enabled": False})
 old = render.render(**{**base, "media_firewall_qbittorrent_http_lan_enabled": True})
 
 assert "media_firewall_qbittorrent_https_lan_enabled: true" in defaults
 assert "media_firewall_qbittorrent_http_lan_enabled: false" in defaults
+assert "media_firewall_icmp_timestamp_drop_enabled: true" in defaults
+assert "icmp type timestamp-request drop" in new
 assert 'tcp dport 443 accept comment "LAN qBittorrent HTTPS"' in new
 assert "tcp dport 8081 accept" not in new
 assert 'tcp dport 8081 accept comment "LAN qBittorrent WebUI"' in old

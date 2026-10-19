@@ -26,6 +26,7 @@ values = {
     "media_firewall_monitor_ipv4": "192.168.2.52",
     "media_firewall_qbittorrent_https_lan_enabled": True,
     "media_firewall_qbittorrent_http_lan_enabled": False,
+    "media_firewall_icmp_timestamp_drop_enabled": True,
 }
 nft = render.render(**values)
 rollback = render.render(**{**values, "media_firewall_qbittorrent_http_lan_enabled": True})
@@ -41,6 +42,8 @@ assert "policy drop;" in nft
 assert 'iifname "lo" accept' in nft
 assert "media_firewall_qbittorrent_https_lan_enabled: true" in defaults
 assert "media_firewall_qbittorrent_http_lan_enabled: false" in defaults
+assert "media_firewall_icmp_timestamp_drop_enabled: true" in defaults
+assert "icmp type timestamp-request drop" in nft
 
 cutover = (root / "IaC/ansible/playbooks/qbittorrent-https-cutover.yml").read_text()
 undo = (root / "IaC/ansible/playbooks/qbittorrent-https-http-rollback.yml").read_text()

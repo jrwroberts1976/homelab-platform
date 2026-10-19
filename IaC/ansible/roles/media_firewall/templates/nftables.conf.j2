@@ -8,6 +8,11 @@ table inet media_filter {
     type filter hook input priority filter; policy drop;
 
     ct state invalid drop
+{% if media_firewall_icmp_timestamp_drop_enabled | bool %}
+    # Reject only IPv4 ICMP timestamp requests (type 13).
+    # Must precede established/related and the later broad IPv4 ICMP accept.
+    icmp type timestamp-request drop comment "Block ICMPv4 timestamp requests"
+{% endif %}
     ct state established,related accept
 
     iifname "lo" accept

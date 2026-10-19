@@ -1,0 +1,76 @@
+---
+# Restore pre-pilot IPv4 ICMP acceptance through Git-managed media_firewall.
+# Explicitly overrides only timestamp drop; preserve HTTPS-only qBittorrent.
+- name: Roll back media-01 ICMPv4 timestamp filter only
+  hosts: media-01
+  become: true
+  gather_facts: true
+  vars:
+    media_firewall_icmp_timestamp_drop_enabled: false
+    media_firewall_qbittorrent_https_lan_enabled: true
+    media_firewall_qbittorrent_http_lan_enabled: false
+
+  tasks:
+    - name: Restore previous Git-managed ICMP allowance
+      ansible.builtin.include_role:
+        name: media_firewall
+
+    - name: Verify trusted LAN HTTPS is still reachable
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        validate_certs: true
+        return_content: false
+        status_code: [200, 302]
+        use_proxy: false
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify direct LAN port 8081 remains blocked
+      ansible.builtin.wait_for:
+        host: 192.168.2.195
+        port: 8081
+        state: stopped
+        connect_timeout: 2
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify local backend still available
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/
+        return_content: false
+        status_code: [200, 302]
+        use_proxy: false
+        timeout: 8
+      changed_when: false
+
+- name: Check restored ICMP timestamp response from scanner
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Confirm normal ping after rollback
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.195"]
+      changed_when: false
+
+    - name: Probe previous ICMP timestamp behaviour after rollback
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.195"
+      register: icmp_rollback_probe
+      changed_when: false
+
+    - name: Report reverted rule and observed response
+      ansible.builtin.debug:
+        msg:
+          - "MEDIA01_ICMP_TIMESTAMP_ROLLBACK=APPLIED"
+          - "{{ icmp_rollback_probe.stdout_lines }}"
+          - "HTTPS_443=PASS; LAN_HTTP_8081=BLOCKED; LOOPBACK_HTTP_8081=AVAILABLE"
+          - "Git defaults still enable ICMP filtering; rollback playbook must be rerun if needed."
