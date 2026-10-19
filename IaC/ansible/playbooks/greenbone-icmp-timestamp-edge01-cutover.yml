@@ -1,0 +1,101 @@
+---
+- name: Single edge LXC ICMP timestamp drop, no whole ruleset reload
+  hosts: edge-01
+  gather_facts: false
+  become: true
+  vars:
+    edge_expected_ip: 192.168.2.56
+  pre_tasks:
+    - name: Assert exact audited target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'edge-01'
+          - ansible_host == edge_expected_ip
+
+    - name: Check independent ping baseline
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "{{ edge_expected_ip }}"]
+      delegate_to: greenbone-01
+      changed_when: false
+
+    - name: Check independent pre-cutover timestamp responses
+      ansible.builtin.command:
+        argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}", "{{ edge_expected_ip }}"]
+      delegate_to: greenbone-01
+      register: edge_pre
+      changed_when: false
+
+    - name: Require either exposed host or already mitigated host
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in edge_pre.stdout or 'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in edge_pre.stdout"
+
+    - name: Confirm host SSH reachable
+      ansible.builtin.wait_for:
+        host: "{{ edge_expected_ip }}"
+        port: 22
+        timeout: 8
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require expected native nftables baseline without modifications
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, -a, list, ruleset]
+      register: edge_rules_before
+      changed_when: false
+
+    - name: Preserve audited firewall chain and forwarding baseline
+      ansible.builtin.assert:
+        that:
+          - "'table inet filter' in edge_rules_before.stdout"
+          - "'policy accept' in edge_rules_before.stdout"
+          - "'hook input priority filter' in edge_rules_before.stdout"
+          - "'hook forward priority filter' in edge_rules_before.stdout"
+
+  tasks:
+    - name: Install host-scoped safety-checked nftables helper
+      ansible.builtin.copy:
+        src: ../roles/icmp_timestamp_edge01/files/edge01_nft_timestamp.py
+        dest: /usr/local/sbin/homelab-icmp-edge01
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Apply one persistent config entry and one live tagged input rule
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-icmp-edge01, apply]
+      register: edge_apply
+      changed_when: "'CONFIG_ADDED' in edge_apply.stdout or 'RULE_ADDED' in edge_apply.stdout"
+
+    - name: Verify independent ping after cutover
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "{{ edge_expected_ip }}"]
+      delegate_to: greenbone-01
+      changed_when: false
+
+    - name: Verify no timestamp replies from greenbone scanner
+      ansible.builtin.command:
+        argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}", "{{ edge_expected_ip }}"]
+      delegate_to: greenbone-01
+      register: edge_post
+      changed_when: false
+
+    - name: Require exact scanner suppression
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in edge_post.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in edge_post.stdout"
+
+    - name: Require SSH still accessible
+      ansible.builtin.wait_for:
+        host: "{{ edge_expected_ip }}"
+        port: 22
+        timeout: 8
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Report result
+      ansible.builtin.debug:
+        msg: "EDGE01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED; rollback greenbone-icmp-timestamp-edge01-rollback.yml --limit edge-01"
