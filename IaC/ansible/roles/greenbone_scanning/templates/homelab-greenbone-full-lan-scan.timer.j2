@@ -1,0 +1,11 @@
+[Unit]
+Description=Schedule weekly Greenbone full-LAN vulnerability scan
+
+[Timer]
+OnCalendar={{ greenbone_scanning_full_lan_schedule }}
+RandomizedDelaySec=0
+Persistent=true
+Unit=homelab-greenbone-full-lan-scan.service
+
+[Install]
+WantedBy=timers.target
