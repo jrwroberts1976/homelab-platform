@@ -57,7 +57,7 @@ def validate_identity():
         raise RuntimeError("Unexpected hostname")
     address = EXPECTED[HOST]
     ip_output = run("/usr/sbin/ip", "-4", "-o", "addr", "show")
-    if not re.search(r"\\binet " + re.escape(address) + r"/24\\b", ip_output):
+    if not re.search(r"\binet " + re.escape(address) + r"/24\b", ip_output):
         raise RuntimeError("Unexpected IPv4 address")
 
 
