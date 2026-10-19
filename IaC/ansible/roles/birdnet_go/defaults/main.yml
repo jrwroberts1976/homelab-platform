@@ -45,3 +45,7 @@ birdnet_go_nginx_site_enabled: "/etc/nginx/sites-enabled/birdnet-go.conf"
 
 birdnet_go_certificate_fullchain: "/etc/letsencrypt/live/birdnet.home.jrwroberts.co.uk/fullchain.pem"
 birdnet_go_certificate_private_key: "/etc/letsencrypt/live/birdnet.home.jrwroberts.co.uk/privkey.pem"
+
+# Opt-in canary only: upstream 20260823 explicitly permits JS-readable CSRF cookie.
+# Default preserves existing working browser behaviour.
+birdnet_go_csrf_httponly_canary: false
