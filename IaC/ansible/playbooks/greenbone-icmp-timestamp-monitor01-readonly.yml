@@ -1,0 +1,143 @@
+---
+# Read-only evidence for the monitor-01 ICMP timestamp finding.
+# Inspect local INPUT policy and reproduce the finding from greenbone-01.
+# No installation, firewall changes, service restarts or vulnerability scans.
+- name: Inspect monitor-01 host filtering without changing monitoring services
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify expected monitor host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "monitor-01"
+          - ansible_host == "192.168.2.52"
+        fail_msg: "Unexpected monitor target; refusing diagnostics."
+
+    - name: Collect bounded packet-filter indicators and service health
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        import re
+        import shutil
+        import subprocess
+
+        def probe(argv):
+            if not shutil.which(argv[0]):
+                return "missing", "", ""
+            try:
+                p = subprocess.run(
+                    argv, capture_output=True, text=True,
+                    check=False, timeout=12,
+                )
+                return ("ok" if p.returncode == 0 else "failed",
+                        p.stdout, p.stderr)
+            except (subprocess.TimeoutExpired, OSError):
+                return "unavailable", "", ""
+
+        for unit in ("prometheus", "grafana-server", "loki", "alertmanager"):
+            state, out, _ = probe(["systemctl", "is-active", unit])
+            print("SERVICE_" + unit.upper().replace("-", "_") +
+                  "=" + ("active" if state == "ok" and out.strip() == "active"
+                          else "not-active-or-unknown"))
+
+        state, out, _ = probe(["iptables", "-V"])
+        print("IPTABLES_VERSION=" +
+              (out.strip()[:110] if state == "ok" else state))
+        state, rules, _ = probe(["iptables-save", "-t", "filter"])
+        print("IPTABLES_FILTER_STATUS=" + state)
+        if state == "ok":
+            policies = dict(re.findall(r"^:([^\s]+) ([A-Z]+) \[", rules, re.M))
+            for chain in ("INPUT", "FORWARD", "OUTPUT"):
+                print(chain + "_POLICY=" + policies.get(chain, "unknown"))
+            host_rules = [line for line in rules.splitlines()
+                          if line.startswith("-A INPUT ")]
+            print("INPUT_RULE_COUNT=" + str(len(host_rules)))
+            print("INPUT_ICMP_RULE_COUNT=" +
+                  str(sum(bool(re.search(r"(?:^| )-p icmp(?: |$)", x))
+                          for x in host_rules)))
+            print("TIMESTAMP_REFERENCES=" +
+                  str(rules.lower().count("timestamp-request")))
+            print("CUSTOM_CHAIN_COUNT=" +
+                  str(len(re.findall(r"^:[^\s]+ - \[", rules, re.M))))
+        state, nft, err = probe(["nft", "list", "ruleset"])
+        print("NFT_RULESET_STATUS=" + state)
+        if state == "ok":
+            print("NFT_INPUT_HOOKS=" +
+                  str(len(re.findall(r"\bhook input\b", nft))))
+            print("NFT_FORWARD_HOOKS=" +
+                  str(len(re.findall(r"\bhook forward\b", nft))))
+        else:
+            low = err.lower()
+            reason = ("permission" if "permission" in low or
+                      "operation not permitted" in low else
+                      "missing-tool" if state == "missing" else
+                      "other-or-unavailable")
+            print("NFT_READ_FAILURE_CATEGORY=" + reason)
+        print("CONFIGURATION_CHANGES=NONE")
+        PY
+      args:
+        executable: /bin/bash
+      register: monitor01_filter_indicators
+      changed_when: false
+
+    - name: Report monitoring service and host firewall indicators only
+      ansible.builtin.debug:
+        msg: "{{ monitor01_filter_indicators.stdout_lines }}"
+
+- name: Independently test monitor-01 ICMP timestamps from greenbone-01
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Verify scanner and monitor identities
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+          - ansible_host == "192.168.2.57"
+          - hostvars["monitor-01"].ansible_host == "192.168.2.52"
+        fail_msg: "Unexpected scanner/monitor addresses; no packets sent."
+
+    - name: Self-test bounded timestamp packet construction and matching
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - --self-test
+      register: monitor01_probe_selftest
+      changed_when: false
+      failed_when: >-
+        monitor01_probe_selftest.rc != 0 or
+        'ICMP_TIMESTAMP_PROBE_SELF_TEST=PASS' not in monitor01_probe_selftest.stdout
+
+    - name: Check ordinary ping to monitor-01
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.52"]
+      register: monitor01_ping
+      changed_when: false
+      failed_when: false
+
+    - name: Send exactly three timestamp requests to monitor-01
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.52"
+      register: monitor01_timestamp_result
+      changed_when: false
+
+    - name: Report timestamp observations with network context
+      ansible.builtin.debug:
+        msg:
+          - "MONITOR01_ECHO_BASELINE={{ 'PASS' if monitor01_ping.rc == 0 else 'NO_REPLY' }}"
+          - "{{ monitor01_timestamp_result.stdout_lines }}"
+          - >-
+            MONITOR01_TIMESTAMP_INTERPRETATION={{
+              'REPLY_CONFIRMED'
+              if 'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in monitor01_timestamp_result.stdout
+              else 'NO_REPLY_OBSERVED_NOT_PROOF_OF_FIX'
+              if monitor01_ping.rc == 0
+              else 'INCONCLUSIVE_UNREACHABLE'
+            }}
+          - "READ_ONLY=PASS no firewall, sysctl, service or Greenbone scan changes"
