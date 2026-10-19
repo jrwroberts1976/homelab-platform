@@ -1,0 +1,13 @@
+[Unit]
+Description=Homelab {{ inventory_hostname }} ICMPv4 timestamp host INPUT filter
+After=network-pre.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/homelab-icmp-timestamp-vm apply
+ExecStop=/usr/local/sbin/homelab-icmp-timestamp-vm remove
+
+[Install]
+WantedBy=multi-user.target
