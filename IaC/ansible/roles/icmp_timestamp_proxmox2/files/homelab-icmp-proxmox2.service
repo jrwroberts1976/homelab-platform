@@ -1,0 +1,14 @@
+[Unit]
+Description=Proxmox-2 dedicated ICMP timestamp request guard
+After=local-fs.target
+ConditionPathExists=/usr/local/sbin/homelab-icmp-proxmox2
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/homelab-icmp-proxmox2 apply
+ExecStop=/usr/local/sbin/homelab-icmp-proxmox2 rollback
+TimeoutStartSec=20
+
+[Install]
+WantedBy=multi-user.target
