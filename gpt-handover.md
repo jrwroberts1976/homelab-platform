@@ -163,10 +163,32 @@ ansible-playbook -i inventory/hosts.yml playbooks/greenbone-two-medium-readonly.
 
 After this evidence, stage targeted, reversible IaC for an HTTPS qBittorrent Web UI and Nginx Secure cookie behavior. Do not yet close any finding, change a firewall rule, restart Kodi/BirdNET or mark accepted risks fixed. Preserve the separate staged Greenbone boot-readiness gate (`greenbone-managed-boot-guard.yml`), which is still not deployed or validated.
 
+### Actionable Greenbone Med remediation — 19 October 2026
+
+**Live read-only Ansible diagnostic completed** from `admin-01` against `media-01` and `docker-01`: `greenbone-two-medium-readonly.yml` syntax PASS, `media-01 ok=3 changed=0 failed=0`, `docker-01 ok=3 changed=0 failed=0`. On media-01, `qbittorrent-nox` owns `*:8081`, `qbittorrent.service=active`, `nginx=inactive`, no `/etc/letsencrypt/live` directory, and the single qBittorrent.conf contains `WebUI\\Port=8081`. On docker-01, `nginx.service=active`, version 1.26.3, syntax PASS, proxy is local BirdNET-Go `127.0.0.1:8080`. HTTPS `GET /` returned 302 and `GET /login` 200; both emitted exactly one `csrf` cookie with `Secure=False`, `HttpOnly=False`, `SameSite=True`. The two actionable Medium scanner findings are therefore concretely explained. The remaining accepted BirdNET missing HttpOnly should be reviewed only after checking whether JavaScript requires CSRF cookie access; do not indiscriminately set HttpOnly.
+
+**IaC changes STAGED on GitHub, NOT deployed:** `birdnet_go/templates/nginx-birdnet.conf.j2` adds `proxy_cookie_flags csrf secure;` under the existing HTTPS location. New tightly scoped `birdnet_go/tasks/secure_cookie.yml` and `playbooks/birdnet-secure-cookie.yml` apply only that Nginx config, run `nginx -t`, reload Nginx only on change (do not restart BirdNET-Go), then verify `csrf; Secure` on both `/` and `/login`, outputting no cookie values. A separate **read-only** `playbooks/qbittorrent-https-readiness-readonly.yml` checks whether media-01 has a port 443 listener, existing Nginx/Certbot packages or qBittorrent HTTPS certificate, and whether both managed Pi-hole resolvers know the proposed `qbittorrent.home.jrwroberts.co.uk` name. This is preparation only; no new DNS alias/certificate was claimed or created. For qBittorrent, plan a trusted Certbot DNS-01 certificate, local Pi-hole record on BOTH resolvers, Nginx HTTPS proxy, then remove *external* plaintext WebUI access only **after** HTTPS/login verification; preserve downloads, Kodi, SMB/NFS and a rollback path. Prefer binding qBittorrent WebUI to loopback if supported and validated; do not change live listener prematurely.
+
+**Next execution on admin-01:**
+```bash
+cd ~/projects/homelab-platform
+git pull --ff-only || exit 1
+python3 scripts/validate-estate.py
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml playbooks/birdnet-secure-cookie.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml playbooks/qbittorrent-https-readiness-readonly.yml --syntax-check
+# First check preflight; then apply only the BirdNET Nginx cookie change
+ansible-playbook -i inventory/hosts.yml playbooks/birdnet-secure-cookie.yml --limit docker-01
+ansible-playbook -i inventory/hosts.yml playbooks/qbittorrent-https-readiness-readonly.yml --limit media-01
+```
+
+Do not regard BirdNET Medium as remediated until Nginx reload/live cookie flag verification succeeds and a fresh scan confirms it. qBittorrent TLS and DNS remain OPEN. Keep the separate Greenbone boot-readiness guard Git-only and not deployed. After both Medium fixes and a fresh scan, review the 15 accepted items individually (14 ICMP timestamps, one BirdNET HttpOnly cookie), and reconcile the earlier missing TCP timestamp items.
+
 ## Latest session log
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-19 | Two Mediums traced to specific live services; BirdNET Secure cookie config staged, qBittorrent TLS preflight staged. | Read-only Ansible: media-01 8081 qBittorrent, no nginx/cert; docker-01 Nginx 1.26.3 csrf cookie Secure=False/HttpOnly=False; both hosts ok=3 changed=0 failed=0. Staged Git source only. | Syntax-check, deploy narrowly scoped BirdNET Nginx change and verify live flags; run qBittorrent HTTPS prerequisites check before certificate/DNS/IaC cutover. |
 | 2026-10-19 | Identified `media-01:8081` as qBittorrent HTTP Web UI, and `docker-01:443` as BirdNET-Go Nginx; staged scoped read-only host checks. | Repository source: `docs/architecture/MEDIA-01.md`, qBittorrent and birdnet_go roles. New diagnostic playbook committed only; no Ansible live checks or remediation. | Pull/syntax/run `greenbone-two-medium-readonly.yml` on media-01 and docker-01, then plan reversible HTTPS and Secure cookie fixes. |
 | 2026-10-19 | New authenticated Greenbone report email completed with two actionable Medium findings; evidence publication not independently verified. | Gmail report `6e75928d-f251-426f-809c-991ffcbf6603`, 03:07 UTC: Critical 0, High 0, Medium 2 (`media-01`:8081 HTTP cleartext; `docker-01`:443 cookie missing Secure), Low 0, Log 789, accepted 15. No CVEs reported. | Inspect services non-invasively via Ansible, reconcile accepted findings, validate newer `managed.json` transfer/freshness, remediate in IaC. Boot guard still Git-only. |
 | 2026-10-18 | Staged fail-closed managed scan systemd boot-readiness gate in Git; offline and live validation pending. | Gate uses `ExecStartPre`, 30-minute cap/15-second retry/40-second per-probe bound with existing authenticated runner `--check`; dedicated scoped Ansible deploy path avoids timer changes. No service activation, reboot or scan. | Run offline validator, estate guard and Ansible syntax checks; deploy only after review and separately verify no scan triggered. |
