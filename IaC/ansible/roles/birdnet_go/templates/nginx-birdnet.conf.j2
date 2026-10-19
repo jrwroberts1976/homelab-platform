@@ -23,8 +23,8 @@ server {
         proxy_pass http://127.0.0.1:{{ birdnet_go_web_port }};
 
         # CSRF cookie arrives from the HTTP backend without Secure.
-        # Only add Secure; do not force HttpOnly on a JavaScript-readable token.
-        proxy_cookie_flags csrf secure;
+        # Opt-in only; verify authenticated UI behaviour before permanently enabling.
+        proxy_cookie_flags csrf secure{% if birdnet_go_csrf_httponly_canary | bool %} httponly{% endif %};
 
         proxy_http_version 1.1;
 
