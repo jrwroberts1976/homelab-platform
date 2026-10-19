@@ -29,4 +29,4 @@ for path in (source, cut, undo, unit):
     assert "nftables.service\n        state: started" not in txt
     assert "nft flush ruleset" not in txt
 print("ADMIN01 STATIC SAFETY AND SYNTAX CHECK: PASS")
-print("NOTE: no simulated live JSON/rule apply or rollback test has been completed.")
+print("Run scripts/validate-icmp-admin01-integration.py separately for mocked apply, rollback and drift checks.")
