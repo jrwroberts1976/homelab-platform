@@ -146,7 +146,13 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
-### Next action — verify media-01 ICMP timestamp replies from greenbone-01
+### Latest verified result — media-01 ICMP timestamp replies reproducible
+
+**19 October 2026 live Ansible evidence (user-provided output):** User pulled commit `5ab305da`, ran `scripts/validate-icmp-timestamp-probe.py` (RFC 792 packet/matching reply self-test PASS) and `scripts/validate-estate.py` (20 active, 0 planned, 5 retired-identity guards PASS), plus syntax check and scoped `greenbone-icmp-timestamp-media01-readonly.yml --limit greenbone-01`. Play recap `greenbone-01 ok=5 changed=0 unreachable=0 failed=0 skipped=0`. `ICMP_ECHO_BASELINE=PASS`; 3 ICMPv4 type-13 timestamp requests sent from greenbone-01 (192.168.2.57) to media-01 (192.168.2.195), **3 correctly matched ICMPv4 type-14 replies received**; `ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED` and `INTERPRETATION=TIMESTAMP_REPLY_CONFIRMED`. Confirms the prior Greenbone ICMP Timestamp Reply finding for media-01 is still genuinely reproducible; it has **not** been remediated. Neither firewalls, sysctls, services, the Greenbone task nor accepted-risk policy were modified. User explicitly rejected an ICMP firewall fix; keep media-01's low-impact disclosure **accepted** under the existing reviewed allowlist. **This is not a new completed Greenbone scan.**
+
+**Next action:** No more firewall changes for ICMP. Decide whether to extend the read-only external probe to other 13 reported hosts (only if worthwhile) or turn to the separate BirdNET-Go `csrf`/HttpOnly exception and verify exact deployed application behaviour. A fresh completed authenticated managed Greenbone scan is still necessary for the two previously actionable Medium remediation claims and overall scan freshness; do not remove the accepted entries without new evidence and decision.
+
+### Prior plan — media-01 ICMP timestamp external verification
 
 **19 October live evidence already collected:** Read-only 14-host audit limited to media-01 completed `ok=2 changed=0 failed=0`, finding Debian 13, active nftables, a broad IPv4 ICMP accept and no timestamp-specific rules. The user rejected a firewall change, and **none was made**. Previous TCP timestamp sysctl hardening (16 October) addresses another protocol.
 
