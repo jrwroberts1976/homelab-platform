@@ -1,0 +1,72 @@
+---
+# Restore previous monitor-01 host INPUT behaviour only.
+# Stop dedicated ICMP filter unit; do not touch Docker/NAT/FORWARD.
+- name: Remove only managed monitor-01 timestamp INPUT rule
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require exact monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "monitor-01"
+          - ansible_host == "192.168.2.52"
+
+    - name: Stop and disable only timestamp-filter persistence unit
+      ansible.builtin.systemd_service:
+        name: homelab-monitor01-icmp-timestamp.service
+        state: stopped
+        enabled: false
+
+    - name: Require only our tagged host INPUT rule is absent
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-monitor01-icmp-timestamp, absent]
+      changed_when: false
+
+    - name: Ensure monitoring Docker engine remains running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: monitor01_rollback_docker
+      changed_when: false
+      failed_when: monitor01_rollback_docker.stdout | trim != "active"
+
+    - name: Ensure Grafana HTTPS still responds from controller
+      ansible.builtin.uri:
+        url: https://grafana.home.jrwroberts.co.uk/
+        validate_certs: true
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 301, 302, 401, 403]
+        timeout: 12
+        use_proxy: false
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+- name: Observe restored monitor-01 ICMP timestamp response from scanner
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require normal ping after rollback
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.52"]
+      changed_when: false
+
+    - name: Probe timestamp replies following rule removal
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.52"
+      register: monitor01_rollback_probe
+      changed_when: false
+
+    - name: Report reverted host INPUT-only policy
+      ansible.builtin.debug:
+        msg:
+          - "MONITOR01_ICMP_TIMESTAMP_ROLLBACK=APPLIED"
+          - "{{ monitor01_rollback_probe.stdout_lines }}"
+          - "Docker, monitoring containers and Grafana were not restarted."
+          - "The dedicated unit is disabled; apply cutover again only after investigation."
