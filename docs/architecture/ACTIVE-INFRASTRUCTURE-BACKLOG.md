@@ -28,6 +28,9 @@
 
 ## Working rules
 
+**19 October ICMP timestamp programme expanded to remaining 11 hosts:** User authorised addressing the entire reported remainder (six LXC, three VM, admin-01 physical controller and Proxmox-2 cluster node). Git-only read-only `greenbone-icmp-timestamp-remaining11-readonly.yml` and safety validator are staged, not deployed; they collect firewall owner/capability and independently test every remaining target, using monitor-01 to probe the scanner itself. Grouped remediations will use per-host policy and rollback, no blanket firewall on LXCs or Proxmox, and protect DNS/SMTP/Nextcloud/monitoring/storage/cluster networking. Plan: `docs/security/GREENBONE-ICMP-REMAINING-ROLLOUT-2026-10-19.md`. Current live progress still **3 of 14**, 11 pending scanner/owner audit, accepted-risk register unchanged.
+
+
 **19 October docker-01 host ICMP filtering staged (not deployed):** Read-only audit verified iptables-nft host INPUT ACCEPT/zero rules, Docker-managed FORWARD DROP/four chains, two running containers and 3/3 matching timestamp replies from scanner. New Git Ansible role adds only a tagged ICMP type-13 DROP on docker-01 host INPUT via iptables-nft, with independent systemd persistence and precise rollback; Docker's forwarding, NAT and published-port rules untouched. Offline validator and scanner pre/post tests staged; do not claim completed until user runs validated scoped playbook and confirms BirdNET/containers. Existing media-01 mitigation remains live and other accepted-risk dispositions remain unchanged.
 
 
