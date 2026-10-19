@@ -1,0 +1,42 @@
+---
+- name: Remove dedicated Proxmox-2 ICMP timestamp mitigation
+  hosts: Proxmox-2
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify exact hypervisor
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_host == '192.168.2.71'
+
+    - name: Disable and stop only dedicated service
+      ansible.builtin.systemd_service:
+        name: homelab-icmp-proxmox2.service
+        state: stopped
+        enabled: false
+
+    - name: Check table removed
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, list, tables]
+      changed_when: false
+      register: tables_after
+
+    - name: Refuse success if owned table remains
+      ansible.builtin.assert:
+        that:
+          - "'homelab_icmp_proxmox2' not in tables_after.stdout"
+
+    - name: Ensure Corosync remains active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, corosync]
+      changed_when: false
+      register: c
+      failed_when: c.stdout | trim != 'active'
+
+    - name: Ensure cluster still quorate
+      ansible.builtin.command:
+        argv: [pvecm, status]
+      changed_when: false
+      register: q
+      failed_when: "'Quorate:          Yes' not in q.stdout"
