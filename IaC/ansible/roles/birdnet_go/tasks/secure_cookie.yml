@@ -64,6 +64,9 @@
                     }
                     if "secure" not in attrs:
                         raise RuntimeError("csrf Secure flag missing on " + path)
+                    expected_httponly = {{ birdnet_go_csrf_httponly_canary | bool | lower }}
+                    if expected_httponly and "httponly" not in attrs:
+                        raise RuntimeError("csrf HttpOnly flag missing on " + path)
                 print("SECURE_CSRF_COOKIE=PASS path=" + path)
             finally:
                 connection.close()
