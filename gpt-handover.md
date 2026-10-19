@@ -146,6 +146,49 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
+### Next action — apply authorised media-01 ICMP timestamp firewall pilot
+
+**19 October explicit revised user decision:** After checking `media-01`'s Pi 5 kernel 6.18.50 and finding `TIMESTAMP_SYSCTL=NOT_PRESENT`, user reversed their earlier no-firewall instruction and explicitly said **"lets add a firewall then"**. Use **the existing managed media-01 nftables firewall**; do not install another firewall, patch the kernel, reboot or disturb qBittorrent/Kodi/SMB/Proxmox NFS.
+
+**Git-staged, NOT yet applied or validated on admin-01:** 
+- `roles/media_firewall/defaults/main.yml` sets `media_firewall_icmp_timestamp_drop_enabled: true` and retains HTTPS/443 allowed, direct LAN/8081 denied.
+- `roles/media_firewall/templates/nftables.conf.j2` conditionally adds **only** `icmp type timestamp-request drop comment "Block ICMPv4 timestamp requests"` *after invalid drop but before established/related and broad IPv4 ICMP accept*. Ordinary ping, IPv6 ICMP, loopback, SSH, SMB, HTTPS, Kodi SSDP/DLNA, Proxmox TCP2049 NFS and exporter access remain as before.
+- `roles/media_firewall/tasks/main.yml` validates the new boolean and confirms the active nftables rule (the existing role already validates `nft -c -f` before reloading).
+- `playbooks/greenbone-icmp-timestamp-media01-cutover.yml` has three explicitly scoped plays: scanner-side **pre-change** normal ping and timestamp-reply baseline; media-01 service and HTTPS+loopback+8081 safety gates then existing media_firewall role; scanner-side **post-change** normal ping and no matching timestamp replies. Verify all three plays run; **do not use `--limit media-01` alone**.
+- `playbooks/greenbone-icmp-timestamp-media01-rollback.yml` explicitly sets `media_firewall_icmp_timestamp_drop_enabled: false`, retaining qBittorrent HTTPS-only policy and verifying services. **Rollback is manual**; the role does not silently revert in a failed post-probe. Do not use qBittorrent's HTTP rollback for this.
+- `scripts/validate-media01-icmp-timestamp-firewall.py` validates both rendered rule modes/order, preserved services and playbook scope; `scripts/validate-qbittorrent-lan-firewall.py` and `scripts/validate-qbittorrent-http-cutover.py` updated with new required Jinja boolean. The existing packet self-test is unchanged.
+
+**Next admin-01 commands (source-validation gates followed by explicitly approved scoped live cutover):**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-media01-icmp-timestamp-firewall.py &&
+python3 scripts/validate-icmp-timestamp-probe.py &&
+python3 scripts/validate-qbittorrent-lan-firewall.py &&
+python3 scripts/validate-qbittorrent-http-cutover.py &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-media01-cutover.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-media01-rollback.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-media01-cutover.yml \
+  --limit 'media-01:greenbone-01' --forks 1
+```
+
+**Expected proof** after active nftables reload: preflight timestamp replies confirmed; postflight `MEDIA01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `MEDIA01_ICMP_ECHO=PASS`, controller-trusted qBittorrent HTTPS/443 and loopback backend available, LAN HTTP/8081 blocked. Source validation and Ansible syntax check must pass first. Failure in either scanner postflight check means **don't claim remediation**; if networking disrupted run explicit scoped rollback:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-media01-rollback.yml \
+  --limit 'media-01:greenbone-01' --forks 1
+```
+
+**As of this handover update, only Git files changed. No live nftables, Greenbone task, risk allowlist, kernel, services or scans changed by the commit.** On success, user supplies Ansible output and Git docs are updated with live evidence; then refresh completed authenticated Greenbone scan and reconcile accepted-risk entries, not before.
+
 ### Kernel ICMP timestamp sysctl check complete — 19 October 2026
 
 **User's new read-only Ansible output:** On media-01, `/proc/sys/net/ipv4/icmp_timestamp_ignore_all` does **not** exist: `TIMESTAMP_SYSCTL=NOT_PRESENT`. The command was read-only despite the Ansible ad-hoc `CHANGED` indicator. Host runs `6.18.50+rpt-rpi-2712`; existing `icmp_echo_ignore_all=0` and `icmp_echo_ignore_broadcasts=1` do not suppress the independently confirmed **unicast** timestamp replies (3 of 3). Linux's current kernel sysctl documentation does not include `icmp_timestamp_ignore_all`. The kernel's ICMP timestamp reply handler persists upstream. A 2024 proposal to introduce this exact sysctl did not establish a standard available control (see mailing-list review, including objection questioning the impact).

@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October media-01 accepted ICMP risk mitigation — user-authorised, Git-staged only:** Following read-only verification of 3/3 unicast ICMP timestamp replies and confirmation that the Pi kernel has no `icmp_timestamp_ignore_all` sysctl, the user approved a **narrow update to the already installed nftables firewall**. Current Git default `media_firewall_icmp_timestamp_drop_enabled: true` conditionally blocks only IPv4 type-13 requests before the existing broad IPv4 ICMP accept. HTTPS/443, closed LAN HTTP/8081, ping, ICMPv6, Kodi/DLNA, SSH, SMB, Proxmox NFS, loopback and exporter rules remain preserved. `greenbone-icmp-timestamp-media01-cutover.yml` uses scanner-side baseline and post-change probes; `greenbone-icmp-timestamp-media01-rollback.yml` explicitly reverses only this rule. Offline tests also update existing qBittorrent firewall test fixtures. **No Ansible deployment, live firewall change, new scan or accepted-risk policy change yet**; run source, estate and Ansible preflights before scoped pilot.
+
+
 **19 October media-01 ICMP kernel check completed (read-only):** On running Pi kernel 6.18.50+rpt-rpi-2712, `/proc/sys/net/ipv4/icmp_timestamp_ignore_all` is absent (`TIMESTAMP_SYSCTL=NOT_PRESENT`). No supported selective unicast ICMP timestamp sysctl is exposed by this build; the previous positive 3-of-3 timestamp reply test still establishes the accepted finding. The user declined any firewall changes; no kernel package, patch, reboot, sysctl or accepted-risk configuration was modified. Retain acceptance unless a new decision is explicitly approved. The Greenbone rescan for the two previously actionable Mediums is separate.
 
 

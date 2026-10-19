@@ -44,6 +44,10 @@ A scoped Ansible diagnostic `IaC/ansible/playbooks/greenbone-icmp-timestamp-medi
 
 ## Current user decision: no firewall modification
 ## Follow-up kernel investigation — read-only evidence, 19 October 2026
+## 19 October revised decision — narrow existing media firewall pilot authorised
+
+After the no-sysctl kernel investigation, user explicitly approved **adding a firewall mitigation** for media-01. Do **not install a second firewall**: `media_firewall` already manages `/etc/nftables.conf`. A single conditional IPv4 timestamp-request (type 13) drop is Git-staged before broad ICMP allow, with a separate opt-out rollback playbook and pre/post independent scanner probes. **The user has not yet deployed it; the previously reproduced 3/3 replies remain the last live evidence.** Leave all 15 accepted-risk allowlist entries unchanged until a fresh completed Greenbone scan confirms findings are eliminated; the BirdNET HttpOnly acceptance remains separate. No kernel modifications or reboots.
+
 ## Verified downstream kernel sysctl absence — 19 October 2026
 
 User ran the read-only Ansible check on media-01: `TIMESTAMP_SYSCTL=NOT_PRESENT` for `/proc/sys/net/ipv4/icmp_timestamp_ignore_all`, on active Raspberry Pi kernel `6.18.50+rpt-rpi-2712`. Together with the independent 3/3 positive timestamp-response probe, this confirms the issue remains present and that **this build does not provide the proposed selective unicast ICMP timestamp sysctl**. Current Linux kernel sysctl documentation does not list it; the corresponding 2024 patch proposal encountered upstream review objections. TCP timestamp hardening is unrelated. No firewall/sysctl/package/kernel/service/risk disposition changes were made. The user declined a firewall change. A custom kernel modification would require a separate formal risk/maintenance review and reboot and is not being staged. Keep current low-impact risk acceptance while the user determines priorities.

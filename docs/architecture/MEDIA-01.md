@@ -128,6 +128,9 @@ The initial qBittorrent Web UI administrator password is temporary until a perma
 
 ## Firewall
 
+**19 October approved ICMP timestamp filtering — Git only, not deployed:** The existing media-01 nftables role is extended with a toggle `media_firewall_icmp_timestamp_drop_enabled: true`, adding only `icmp type timestamp-request drop` before the generic IPv4 ICMP allow. It does not disable ping/ICMPv6 or change the verified HTTPS-only qBittorrent, SSH, SMB, Kodi/DLNA, NFS and monitoring allowances. Apply via `playbooks/greenbone-icmp-timestamp-media01-cutover.yml` after offline validator and syntax checks; scanner pre/post tests run on greenbone-01. Scoped manual rollback: `playbooks/greenbone-icmp-timestamp-media01-rollback.yml`. At present the live host still responds to 3/3 timestamp requests; no firewall reload or service change has occurred from this Git staging.
+
+
 **Live change completed 19 October 2026 — HTTPS-only qBittorrent LAN WebUI:** User applied `playbooks/qbittorrent-https-cutover.yml` through admin-01. Ansible completed `media-01 ok=19 changed=2 failed=0`, verifying HTTPS `HTTP_STATUS=200`, direct LAN TCP/8081 **BLOCKED**, and local Nginx→qBittorrent `127.0.0.1:8081` **AVAILABLE**. The validated active managed policy allows LAN TCP/443 and preserves SSH, Kodi UPnP/DLNA, SMB, Proxmox NFS and monitoring access. No qBittorrent, Kodi, SMB or NFS restart occurred. An explicit, **not deployed** emergency HTTP rollback remains at `playbooks/qbittorrent-https-http-rollback.yml`. Prior notes below describe historical rollout; they are superseded by this verified state.
 
 
