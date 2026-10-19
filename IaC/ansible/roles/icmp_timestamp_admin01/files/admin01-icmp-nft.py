@@ -1,6 +1,5 @@
 #!/usr/bin/env python3
 """Strictly scoped controller ICMP type-13 rule. No nftables.service manipulation."""
-import os
 import subprocess
 import sys
 
@@ -40,8 +39,6 @@ def exact_owned_table():
     objs = [e for e in entries if "metainfo" not in e]
     if len(objs) != 3:
         raise RuntimeError("Unexpected number of owned nft objects")
-    if set(objs[0].get("table", {}).keys()) != {"family", "name", "handle"}:
-        raise RuntimeError("Unexpected table fields")
     t = objs[0]["table"]
     if t["family"] != "inet" or t["name"] != TABLE:
         raise RuntimeError("Unexpected table identity")
@@ -75,7 +72,10 @@ def run_apply():
         exact_owned_table()
         print("ALREADY_PRESENT")
         return
-    if command("/usr/sbin/nft", "list", "tables").stdout.strip():
+    tables = command("/usr/sbin/nft", "list", "tables")
+    if tables.returncode:
+        raise RuntimeError("Cannot inspect existing nftables tables")
+    if tables.stdout.strip():
         raise RuntimeError("Existing nftables tables require review")
     commands = """add table inet homelab_icmp_timestamp
 add chain inet homelab_icmp_timestamp input { type filter hook input priority 0; policy accept; }
