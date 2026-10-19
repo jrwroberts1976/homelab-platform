@@ -126,7 +126,7 @@ Greenbone Community vulnerability scanner VM203 on Proxmox-2, running authoritat
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-18T23:43:15+01:00`
+- Last assessed: `2026-10-19T00:44:45+01:00`
 - Pending updates: **1**
 - Security updates pending: **1**
 - Reboot required: **No**
