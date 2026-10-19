@@ -146,6 +146,23 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
+### Live kernel evidence and upstream sysctl investigation — 19 October 2026
+
+**Read-only Ansible output supplied by user:** `media-01` (Raspberry Pi 5, Debian 13) runs `6.18.50+rpt-rpi-2712`, package `1:6.18.50-1+rpt1`, ARM64; installed `linux-image-rpi-2712` metapackage and `linux-image-6.18.50+rpt-rpi-2712` both match that version. Earlier 6.18.34 and 6.18.39 image packages remain installed. Kernel built on 2026-09-11. `net.ipv4.icmp_echo_ignore_all=0`; `net.ipv4.icmp_echo_ignore_broadcasts=1`. That latter setting suppresses broadcast/multicast echo and timestamp requests, **not unicast type-13 requests**; independently verified 3/3 reply test remains valid. Ansible's ad-hoc shell output marked CHANGED by default, but the commands were strictly read-only (uname/cat/dpkg-query/sysctl queries); no kernel changed or rebooted.
+
+**Research:** Linux kernel official sysctl documentation does not list a standard unicast ICMP timestamp disable switch; mainline `net/ipv4/icmp.c` contains `icmp_timestamp()` response handler. A May 2024 proposal `[PATCH net-next v2] icmp: Add icmp_timestamp_ignore_all to control ICMP_TIMESTAMP` would introduce `net.ipv4.icmp_timestamp_ignore_all`, but it encountered networking maintainer objections/questions and does not appear in current standard kernel sysctl documentation. Do not assume Raspberry Pi downstream includes it without checking `/proc/sys/net/ipv4/icmp_timestamp_ignore_all` **read-only**. A simple sysctl rate limit is not equivalent to suppressing replies; custom kernel rebuild/patch is more disruptive and not approved. User explicitly requested **no firewall modification**.
+
+**Next one-time read-only Ansible command from admin-01:**
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible
+ansible media-01 -i inventory/hosts.yml -b \
+  -m ansible.builtin.shell \
+  -a 'if test -r /proc/sys/net/ipv4/icmp_timestamp_ignore_all; then printf "TIMESTAMP_SYSCTL=AVAILABLE value="; cat /proc/sys/net/ipv4/icmp_timestamp_ignore_all; else echo "TIMESTAMP_SYSCTL=NOT_PRESENT"; fi'
+```
+
+If present, decide how to stage a deliberately scoped persistent sysctl in Ansible and validate on media-01 without reboot, then repeat the scanner-side ICMP test **only with user approval**. If absent, do not attempt to write an unknown sysctl or perform a kernel upgrade solely for a low-impact accepted finding; discuss risk/benefit of a custom kernel modification versus continued acceptance. Existing risk dispositions remain unchanged.
+
 ### Follow-up decision — investigate kernel options before final ICMP disposition
 
 **19 October 2026:** User challenged the recommendation to retain the ICMP accepted risk without trying any kernel-level solution ("but we havent changed the kernel"). Acknowledge that the 3/3 positive ICMP timestamp network probe **only proved exposure**; no kernel/sysctl change was made or tested. Prior `net.ipv4.tcp_timestamps=0` hardening applies only to TCP. Linux upstream `net/ipv4/icmp.c` implements type-13 request/type-14 reply handling, and no supported dedicated sysctl to selectively disable unicast ICMP timestamp responses has been established. Kernel upgrade alone cannot be assumed to eliminate this handler. User still does **not** want a firewall change. **Before making the final accepted-risk decision**, identify live media-01 kernel version, installed image packages, and available vendor support via read-only Ansible, then assess whether any safe supported kernel-level control exists. Do not propose custom kernel rebuild, reboot, packet filtering, or risk-status changes without discussing their tradeoffs and obtaining approval. Previous note calling retention the final answer was premature.
