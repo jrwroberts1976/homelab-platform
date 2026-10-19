@@ -1,0 +1,18 @@
+---
+- name: Stage or enable only the existing Greenbone runner weekly full LAN timer
+  hosts: greenbone-01
+  gather_facts: false
+  become: true
+  vars:
+    greenbone_scanning_full_lan_enable: false
+    greenbone_scanning_full_lan_schedule: "Sun *-*-* 03:00:00"
+  tasks:
+    - name: Assert exact Greenbone endpoint
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'greenbone-01'
+          - ansible_host == '192.168.2.57'
+    - name: Reuse existing Greenbone scanning role
+      ansible.builtin.include_role:
+        name: greenbone_scanning
+        tasks_from: full_lan_weekly
