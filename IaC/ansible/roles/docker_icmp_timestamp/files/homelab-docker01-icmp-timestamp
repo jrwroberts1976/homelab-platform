@@ -1,0 +1,52 @@
+#!/bin/sh
+# Managed by homelab-platform IaC. A single IPv4 INPUT rule on docker-01.
+# Never flush or replace Docker's FORWARD, DOCKER-*, or NAT chains.
+set -eu
+IPTABLES=/usr/sbin/iptables
+TARGET=192.168.2.220/32
+COMMENT=homelab-docker01-icmp-timestamp
+
+"$IPTABLES" -V | grep -q '(nf_tables)' || {
+  echo 'Backend changed; refusing to modify iptables' >&2
+  exit 2
+}
+
+check_rule() {
+  "$IPTABLES" -w -C INPUT -d "$TARGET" -p icmp --icmp-type 13 \
+    -m comment --comment "$COMMENT" -j DROP >/dev/null 2>&1
+}
+case "${1:-}" in
+  apply)
+    if check_rule; then
+      echo RULE_PRESENT
+    else
+      "$IPTABLES" -w -I INPUT 1 -d "$TARGET" -p icmp --icmp-type 13 \
+        -m comment --comment "$COMMENT" -j DROP
+      echo RULE_ADDED
+    fi
+    ;;
+  remove)
+    if check_rule; then
+      "$IPTABLES" -w -D INPUT -d "$TARGET" -p icmp --icmp-type 13 \
+        -m comment --comment "$COMMENT" -j DROP
+      echo RULE_REMOVED
+    else
+      echo RULE_ABSENT
+    fi
+    ;;
+  present)
+    check_rule
+    echo RULE_PRESENT
+    ;;
+  absent)
+    if check_rule; then
+      echo 'Managed timestamp drop still present' >&2
+      exit 1
+    fi
+    echo RULE_ABSENT
+    ;;
+  *)
+    echo 'Usage: script {apply|remove|present|absent}' >&2
+    exit 2
+    ;;
+esac
