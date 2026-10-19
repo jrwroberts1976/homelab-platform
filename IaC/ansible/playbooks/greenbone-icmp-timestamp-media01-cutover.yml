@@ -1,7 +1,8 @@
 ---
 # Explicitly approved 19 Oct 2026. Scope: only media-01 nftables ICMPv4
 # timestamp requests. Pre/post evidence from greenbone-01 is independent.
-# No kernel modifications, scans, accepted-risk changes or service restarts.
+# No kernel modifications, scans or accepted-risk changes. The nftables
+# service is reloaded by the existing role; application services are untouched.
 - name: Require live ICMP timestamp baseline before media-01 change
   hosts: greenbone-01
   become: true
