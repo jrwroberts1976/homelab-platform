@@ -1,0 +1,130 @@
+---
+# Focused, read-only evidence gathering for the two actionable Medium findings
+# in 19 October 2026 Greenbone report 6e75928d-f251-426f-809c-991ffcbf6603.
+# No services are restarted, no settings are changed, no cookies are disclosed.
+- name: Inspect qBittorrent cleartext Web UI exposure
+  hosts: media-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Inspect TCP 8081 listener, service state and available certificate names
+      ansible.builtin.shell: |
+        set -eu
+        printf 'LISTENER_8081:\n'
+        ss -H -ltnp | awk '$4 ~ /:8081$/ { print }'
+        printf 'QBITTORRENT_SERVICE='
+        systemctl is-active qbittorrent || true
+        printf 'NGINX_SERVICE='
+        systemctl is-active nginx || true
+        printf 'CERTIFICATE_NAMES:\n'
+        if test -d /etc/letsencrypt/live; then
+          find /etc/letsencrypt/live -mindepth 1 -maxdepth 1 -type d -printf '%f\n' | sort
+        else
+          printf 'no_letsencrypt_live_directory\n'
+        fi
+      args:
+        executable: /bin/bash
+      register: medium_media_listener
+      changed_when: false
+
+    - name: Read only non-secret qBittorrent Web UI configuration flags
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        from pathlib import Path
+        root = Path("/var/lib/qbittorrent")
+        paths = list(root.glob("**/qBittorrent.conf"))
+        allowed = {
+            "WebUI\\Address", "WebUI\\Port", "WebUI\\HTTPS\\Enabled",
+            "WebUI\\HostHeaderValidation", "WebUI\\CSRFProtection",
+            "WebUI\\ReverseProxySupportEnabled",
+            "WebUI\\ReverseProxiesList", "WebUI\\LocalHostAuth",
+        }
+        print("CONFIG_FILE_COUNT=" + str(len(paths)))
+        for path in paths:
+            print("CONFIG_PATH=" + str(path))
+            for line in path.read_text(errors="replace").splitlines():
+                if "=" not in line:
+                    continue
+                key, val = line.split("=", 1)
+                if key.strip() in allowed:
+                    print(key.strip() + "=" + val.strip()[:150])
+        PY
+      args:
+        executable: /bin/bash
+      register: medium_media_config
+      changed_when: false
+
+    - name: Report non-secret qBittorrent evidence
+      ansible.builtin.debug:
+        msg:
+          - "{{ medium_media_listener.stdout_lines }}"
+          - "{{ medium_media_config.stdout_lines }}"
+
+- name: Inspect BirdNET HTTPS cookie security headers
+  hosts: docker-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check running Nginx syntax and site configuration
+      ansible.builtin.shell: |
+        printf 'NGINX_SERVICE='
+        systemctl is-active nginx || true
+        printf 'NGINX_VERSION='
+        nginx -v 2>&1 || true
+        printf 'SITE_COOKIE_PROXY_RULES:\n'
+        grep -nE 'proxy_cookie_flags|proxy_pass|proxy_set_header|listen 443'           /etc/nginx/sites-enabled/birdnet-go.conf || true
+        nginx -t 2>&1
+      args:
+        executable: /bin/bash
+      register: medium_birdnet_proxy
+      changed_when: false
+
+    - name: Inspect HTTPS responses without disclosing cookie contents
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        import http.client
+        import ssl
+
+        context = ssl._create_unverified_context()
+        for path in ("/", "/login"):
+            connection = http.client.HTTPSConnection(
+                "127.0.0.1", 443, context=context, timeout=7
+            )
+            try:
+                connection.request(
+                    "GET", path,
+                    headers={"Host": "birdnet.home.jrwroberts.co.uk"}
+                )
+                response = connection.getresponse()
+                print("PATH=" + path + " HTTP_STATUS=" + str(response.status))
+                cookies = response.headers.get_all("Set-Cookie", [])
+                print("SET_COOKIE_COUNT=" + str(len(cookies)))
+                for cookie in cookies:
+                    attributes = [
+                        part.strip().lower()
+                        for part in cookie.split(";")[1:]
+                    ]
+                    name = cookie.split("=", 1)[0].strip()
+                    flags = {attribute.split("=", 1)[0] for attribute in attributes}
+                    # No cookie values, headers or response bodies are logged.
+                    print(
+                        "COOKIE_NAME=" + name[:60]
+                        + " Secure=" + str("secure" in flags)
+                        + " HttpOnly=" + str("httponly" in flags)
+                        + " SameSite=" + str("samesite" in flags)
+                    )
+            except Exception as error:
+                print("PATH=" + path + " ERROR_TYPE=" + type(error).__name__)
+            finally:
+                connection.close()
+        PY
+      args:
+        executable: /bin/bash
+      register: medium_birdnet_cookie
+      changed_when: false
+
+    - name: Report Nginx and sanitised BirdNET cookie evidence
+      ansible.builtin.debug:
+        msg:
+          - "{{ medium_birdnet_proxy.stdout_lines }}"
+          - "{{ medium_birdnet_cookie.stdout_lines }}"

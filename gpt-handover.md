@@ -146,10 +146,28 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
+### Next action — investigate two actionable Medium findings without changing services
+
+The 19 October completed authenticated Greenbone email (report `6e75928d-f251-426f-809c-991ffcbf6603`) shows two actionable Medium findings: `media-01` `192.168.2.195:8081` HTTP cleartext sensitive information (qBittorrent Web UI, as identified by authoritative `docs/architecture/MEDIA-01.md` and `IaC/ansible/roles/qbittorrent`) and `docker-01` `192.168.2.220:443` missing Secure cookie flag (BirdNET-Go Nginx reverse proxy from `birdnet_go` role). The 15 remaining accepted entries are 14 ICMP timestamp replies and one missing HttpOnly cookie on `docker-01:443`; review them only after these two Medium findings are resolved.
+
+**Git-only diagnostic, not run on admin-01:** `IaC/ansible/playbooks/greenbone-two-medium-readonly.yml` targets both specific hosts, collects qBittorrent listener, service/certificate and safe WebUI configuration keys, Nginx version/site cookie directives and live HTTPS cookie **names/flags only** for BirdNET-Go (no cookie values, HTTP body or credentials). No service/timer/scan change. Run source validation first, then execute:
+
+```bash
+cd ~/projects/homelab-platform
+git pull --ff-only || exit 1
+python3 scripts/validate-estate.py
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml playbooks/greenbone-two-medium-readonly.yml --syntax-check && \
+ansible-playbook -i inventory/hosts.yml playbooks/greenbone-two-medium-readonly.yml --limit media-01,docker-01
+```
+
+After this evidence, stage targeted, reversible IaC for an HTTPS qBittorrent Web UI and Nginx Secure cookie behavior. Do not yet close any finding, change a firewall rule, restart Kodi/BirdNET or mark accepted risks fixed. Preserve the separate staged Greenbone boot-readiness gate (`greenbone-managed-boot-guard.yml`), which is still not deployed or validated.
+
 ## Latest session log
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- | --- |
+| 2026-10-19 | Identified `media-01:8081` as qBittorrent HTTP Web UI, and `docker-01:443` as BirdNET-Go Nginx; staged scoped read-only host checks. | Repository source: `docs/architecture/MEDIA-01.md`, qBittorrent and birdnet_go roles. New diagnostic playbook committed only; no Ansible live checks or remediation. | Pull/syntax/run `greenbone-two-medium-readonly.yml` on media-01 and docker-01, then plan reversible HTTPS and Secure cookie fixes. |
 | 2026-10-19 | New authenticated Greenbone report email completed with two actionable Medium findings; evidence publication not independently verified. | Gmail report `6e75928d-f251-426f-809c-991ffcbf6603`, 03:07 UTC: Critical 0, High 0, Medium 2 (`media-01`:8081 HTTP cleartext; `docker-01`:443 cookie missing Secure), Low 0, Log 789, accepted 15. No CVEs reported. | Inspect services non-invasively via Ansible, reconcile accepted findings, validate newer `managed.json` transfer/freshness, remediate in IaC. Boot guard still Git-only. |
 | 2026-10-18 | Staged fail-closed managed scan systemd boot-readiness gate in Git; offline and live validation pending. | Gate uses `ExecStartPre`, 30-minute cap/15-second retry/40-second per-probe bound with existing authenticated runner `--check`; dedicated scoped Ansible deploy path avoids timer changes. No service activation, reboot or scan. | Run offline validator, estate guard and Ansible syntax checks; deploy only after review and separately verify no scan triggered. |
 | 2026-10-18 | Deployed production direct-socket GMP preflight passed in 0.1s, no scan. | User Ansible: syntax PASS, `ok=10 changed=0 failed=0`; `GMP check exit code: 0`, `CHECK=PASS`, legacy config absent True. Managed scan unit still `failed` from earlier run. | Review and stage scheduled scan boot-readiness gate before fresh scan and evidence verification. |
