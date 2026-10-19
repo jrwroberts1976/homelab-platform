@@ -16,12 +16,14 @@
       ansible.builtin.command:
         argv: [ping, -n, -c, "2", -W, "2", "{{ edge_expected_ip }}"]
       delegate_to: greenbone-01
+      become: false
       changed_when: false
 
     - name: Check independent pre-cutover timestamp responses
       ansible.builtin.command:
         argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}", "{{ edge_expected_ip }}"]
       delegate_to: greenbone-01
+      become: false
       register: edge_pre
       changed_when: false
 
@@ -72,12 +74,14 @@
       ansible.builtin.command:
         argv: [ping, -n, -c, "2", -W, "2", "{{ edge_expected_ip }}"]
       delegate_to: greenbone-01
+      become: false
       changed_when: false
 
     - name: Verify no timestamp replies from greenbone scanner
       ansible.builtin.command:
         argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}", "{{ edge_expected_ip }}"]
       delegate_to: greenbone-01
+      become: false
       register: edge_post
       changed_when: false
 
