@@ -1,0 +1,13 @@
+[Unit]
+Description=Homelab monitor-01 ICMPv4 timestamp-only host INPUT filter
+After=network-pre.target
+Before=docker.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/homelab-monitor01-icmp-timestamp apply
+ExecStop=/usr/local/sbin/homelab-monitor01-icmp-timestamp remove
+
+[Install]
+WantedBy=multi-user.target
