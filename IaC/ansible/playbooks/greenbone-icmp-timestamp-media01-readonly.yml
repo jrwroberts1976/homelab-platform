@@ -1,0 +1,62 @@
+---
+# Exactly one non-mutating network probe from greenbone-01 to media-01.
+# Sends three ICMPv4 timestamp requests (type 13); observes replies type 14.
+# Does NOT change a firewall, sysctl, service, Greenbone task or accepted risk.
+- name: Independently verify whether media-01 replies to ICMPv4 timestamps
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require expected scanner and target identities
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+          - ansible_host == "192.168.2.57"
+          - hostvars["media-01"].ansible_host == "192.168.2.195"
+        fail_msg: "Unexpected scanner or target IP; no packets sent."
+
+    - name: Self-test ICMP packet construction and reply matching
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - --self-test
+      register: icmp_timestamp_selftest
+      changed_when: false
+      failed_when: >-
+        icmp_timestamp_selftest.rc != 0 or
+        "ICMP_TIMESTAMP_PROBE_SELF_TEST=PASS" not in icmp_timestamp_selftest.stdout
+
+    - name: Check ordinary IPv4 ping as network reachability context
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.195"]
+      register: icmp_timestamp_ping
+      changed_when: false
+      failed_when: false
+
+    - name: Send three bounded ICMPv4 type-13 requests and observe type-14 replies
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.195"
+      register: icmp_timestamp_observation
+      changed_when: false
+
+    - name: Report ICMP timestamp evidence without response timestamp values
+      ansible.builtin.debug:
+        msg:
+          - "ICMP_ECHO_BASELINE={{ 'PASS' if icmp_timestamp_ping.rc == 0 else 'NO_REPLY' }}"
+          - "{{ icmp_timestamp_observation.stdout_lines }}"
+          - >-
+            INTERPRETATION={{
+              'TIMESTAMP_REPLY_CONFIRMED'
+              if 'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in icmp_timestamp_observation.stdout
+              else 'NO_TIMESTAMP_REPLY_OBSERVED_NOT_PROOF_OF_FIX'
+              if icmp_timestamp_ping.rc == 0
+              else 'INCONCLUSIVE_PING_AND_TIMESTAMP_UNANSWERED'
+            }}
+          - "READ_ONLY_NETWORK_TEST=PASS no firewall/sysctl/service/scan changed"
