@@ -9,9 +9,19 @@ import sys
 import tempfile
 
 CONF = Path("/etc/nftables.conf")
-BACKUP = Path("/var/lib/homelab-icmp-edge01/nftables.conf.before")
+EXPECTED = {
+    "mail-relay-01": "192.168.2.54",
+    "dns-02": "192.168.2.50",
+    "dns-01": "192.168.2.51",
+    "zabbix-01": "192.168.2.59",
+    "komodo-01": "192.168.2.58",
+}
+HOST = Path("/etc/hostname").read_text().strip()
+if HOST not in EXPECTED:
+    raise SystemExit("Unexpected host; refusing modification")
+BACKUP = Path("/var/lib/homelab-icmp-" + HOST + "/nftables.conf.before")
 BASE_SHA = "60dac93ffe0ea440fc4a8941a080b6fb8d2c8655d47baf856e97182a0d1ca29a"
-TAG = "homelab-icmp-edge01"
+TAG = "homelab-icmp-" + HOST
 INSERT = "                ip protocol icmp icmp type timestamp-request counter drop comment \"" + TAG + "\"\n"
 ANCHOR_RE = re.compile(r"(?m)^[ \t]+type filter hook input priority filter;[ \t]*$")
 
