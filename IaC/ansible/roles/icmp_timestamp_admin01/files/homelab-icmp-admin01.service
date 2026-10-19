@@ -1,0 +1,14 @@
+[Unit]
+Description=Controller-only ICMP timestamp suppression
+After=local-fs.target
+ConditionPathExists=/usr/local/sbin/homelab-icmp-admin01
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/local/sbin/homelab-icmp-admin01 apply
+ExecStop=/usr/local/sbin/homelab-icmp-admin01 rollback
+TimeoutStartSec=20
+
+[Install]
+WantedBy=multi-user.target
