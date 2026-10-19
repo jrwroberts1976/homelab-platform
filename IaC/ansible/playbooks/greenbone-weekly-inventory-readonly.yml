@@ -1,0 +1,39 @@
+---
+- name: Inspect existing Greenbone tasks, targets and schedules safely
+  hosts: greenbone-01
+  gather_facts: false
+  become: true
+  vars_prompt:
+    - name: greenbone_username
+      prompt: Greenbone GMP username
+      private: false
+      default: admin
+    - name: greenbone_password
+      prompt: Greenbone GMP password
+      private: true
+  tasks:
+    - name: Verify exact target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'greenbone-01'
+          - ansible_host == '192.168.2.57'
+
+    - name: Retrieve read-only GMP metadata without logging credentials
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - -i
+          - greenbone-community-edition-gvmd-1
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../scripts/greenbone-gmp-inventory.py') }}"
+        stdin: "{{ greenbone_username }}\n{{ greenbone_password }}\n"
+        stdin_add_newline: false
+      register: gmp_inventory
+      no_log: true
+      changed_when: false
+
+    - name: Display non-secret inventory
+      ansible.builtin.debug:
+        msg: "{{ gmp_inventory.stdout | from_json }}"
