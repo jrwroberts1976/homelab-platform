@@ -146,7 +146,26 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
-### Next action — validate and stage qBittorrent trusted HTTPS; keep HTTP rollback
+### Next action — deploy only qBittorrent DNS alias and verify on both resolvers
+
+**Controller validation passed on 19 October 2026:** User pulled `4817c8be`; `python3 scripts/validate-qbittorrent-https.py` returned Jinja render PASS and source/safety contracts PASS. `python3 scripts/validate-estate.py` returned PASS (20 active / 0 planned / 5 retired identities guarded). Both `dns-local-records.yml` and `qbittorrent-https-stage.yml` passed Ansible syntax checks. **No DNS or media-01 deployment has occurred.**
+
+Next perform only the Pi-hole DNS phase, then verify the alias on each resolver before proceeding to any certificate or HTTPS changes:
+
+```bash
+cd ~/projects/homelab-platform
+git pull --ff-only || exit 1
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/dns-local-records.yml --limit dns-01,dns-02 || exit 1
+ansible dns_resolvers -i inventory/hosts.yml \
+  -m ansible.builtin.command \
+  -a 'dig @127.0.0.1 qbittorrent.home.jrwroberts.co.uk A +short +time=2 +tries=1'
+```
+
+Both `dns-01` and `dns-02` must return **`192.168.2.195`**. If either fails or returns another address, stop and investigate; don't stage the certificate or Nginx yet. This is DNS-only: no qBittorrent, Kodi, NFS, SMB, BirdNET or firewall changes. The following HTTPS stage still requires reviewed trusted DNS-01 certificate issuance, Nginx proxy testing and a separately approved port 8081 firewall cutover after verified access.
+
+### Previous plan — trusted qBittorrent HTTPS staging; retain HTTP rollback
 
 **19 October live evidence:** `birdnet-secure-cookie.yml` was executed on `docker-01`; Nginx syntax passed, both `csrf` cookie checks returned `SECURE_CSRF_COOKIE=PASS`, play recap `ok=7 changed=0 failed=0`, and the Nginx reload was skipped because desired config was already installed. BirdNET-Go did not restart. `qbittorrent-https-readiness-readonly.yml` on `media-01` returned `ok=3 changed=0 failed=0`, qBittorrent package `5.1.0-2`, qBittorrent active; Nginx/Certbot absent, no port 443 listener, no certificate, and both Pi-hole servers `192.168.2.50` and `.51` returned **no A record** for proposed `qbittorrent.home.jrwroberts.co.uk`.
 
