@@ -31,9 +31,9 @@ def handles(s):
         if 'comment "' + TAG + '"' not in line:
             continue
         rule = re.fullmatch(
-            r'\\s*(?:ip protocol icmp )?icmp type timestamp-request '
-            r'counter packets \\d+ bytes \\d+ drop comment "'
-            + re.escape(TAG) + r'" # handle (\\d+)\\s*',
+            r'\s*(?:ip protocol icmp )?icmp type timestamp-request '
+            r'counter packets \d+ bytes \d+ drop comment "'
+            + re.escape(TAG) + r'" # handle (\d+)\s*',
             line,
         )
         if not rule:
