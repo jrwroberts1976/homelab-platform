@@ -6,6 +6,45 @@
 
 **Current status (19 October 2026):** The last completed authenticated Greenbone report recorded **0 Critical, 0 High, 2 actionable Medium, 15 accepted risks** (14 ICMP timestamp replies and one BirdNET-Go `csrf` cookie missing HttpOnly). Former two actionable Mediums have been mitigated at the live service/network level (trusted qBittorrent HTTPS with direct LAN HTTP/8081 blocked; BirdNET-Go `csrf` Secure cookie verified) and await full scanner confirmation. **Three of the original 14 ICMP timestamp hosts now have independently tested live mitigations:** media-01 (existing Git-managed nftables input type-13 drop), docker-01 (dedicated iptables-nft host INPUT type-13 drop) and **monitor-01** (dedicated iptables-nft host INPUT type-13 drop). Newest user-run `greenbone-icmp-timestamp-monitor01-cutover.yml` completed **monitor-01 `ok=25 changed=3 unreachable=0 failed=0`; greenbone-01 `ok=8 changed=0 unreachable=0 failed=0`**. Scanner-side check reported `MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `MONITOR01_ICMP_ECHO=PASS`, `MONITOR01_FIREWALL_SCOPE=HOST_INPUT_ONLY`. Preflight and post-checks preserved Grafana HTTPS, existing monitoring container identities and Docker forwarding, without restarting containers/Docker/Greenbone scan. Dedicated systemd persistence was staged and applied on monitor-01 but **not reboot-tested**. **11 remaining ICMP host findings and the BirdNET-Go csrf HttpOnly exception** still require review. No accepted-risk allowlist entries have been removed; independently observed no-reply is operational mitigation proof, **not a fresh completed Greenbone report**. Next read-only host review should be scoped by inventory and live firewall owner; before an eventual single authenticated managed scan, check scan activity and GMP readiness.
 
+## Next live step — sensor-01 only, audited VM timestamp filter (Git STAGED)
+
+The successful 11-host read-only sweep is documented below. The now-committed **three-VM reusable `icmp_timestamp_vm_input` role** uses a host-specific exact IP/comment-tagged `iptables-nft INPUT -p icmp --icmp-type 13 DROP`, an idempotent helper, and a separate one-shot persistent unit. Git files:
+- `roles/icmp_timestamp_vm_input/templates/helper.sh.j2` and `homelab-icmp-timestamp-vm.service.j2`
+- `roles/icmp_timestamp_vm_input/tasks/main.yml`
+- `playbooks/greenbone-icmp-timestamp-vms-cutover.yml` and `greenbone-icmp-timestamp-vms-rollback.yml`
+- `scripts/validate-icmp-timestamp-vm-wave.py`.
+
+**None has been executed on a host or tested using Ansible yet.** Three eligible hosts are sensor-01 (.55, Suricata + Zeek, no Docker), cloud-01 (.53, Docker/Nextcloud) and greenbone-01 (.57, Docker/Greenbone). The playbook `serial: 1` requires a positive scanner-side timestamp baseline and ordinary ping, uses monitor-01 as the **external** probe source only when modifying greenbone-01, checks SSH access, checks Docker active/container identity or sensor capture service state, and preserves INPUT policy + full FORWARD/DOCKER rule structures. It does not restart Docker, databases, scanner or sensor. **Stage only sensor-01 first**; only progress to cloud-01 and greenbone-01 after reviewing its actual Ansible output and verifying rollback readiness.
+
+**From admin-01: validate the new source and playbook syntax, then apply sensor-01 only:**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-icmp-timestamp-vm-wave.py &&
+python3 scripts/validate-icmp-timestamp-probe.py &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-vms-cutover.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-vms-rollback.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-vms-cutover.yml \
+  --limit sensor-01 --forks 1 --ask-become-pass
+```
+
+On a failure or connectivity disruption after a rule is added, run **sensor-01 only** rollback; do not attempt to change all VM hosts automatically:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-vms-rollback.yml \
+  --limit sensor-01 --forks 1 --ask-become-pass
+```
+
+**Expected verified success:** `VM=sensor-01`, `VM_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `VM_ICMP_ECHO=PASS`; unchanged SSH, Suricata/Zeek service state, FORWARD chains. After evidence, record live outcome, then test cloud-01 and greenbone-01 **one at a time** by changing only the `--limit` argument. Do not claim 4/14 until live output arrives. For LXC/Komodo/Admin/Proxmox-2, more owner-specific review is still mandatory; don't apply VM role to them. Accepted risks and fresh scan unchanged.
+
 ## Latest verified remaining-11 compatibility sweep — SUCCESS (19 October 2026)
 
 **Complete user-uploaded Ansible log after `--ask-become-pass`:** The earlier admin-01 `Missing sudo password` issue was resolved. `greenbone-icmp-timestamp-remaining11-readonly.yml --forks 1 --ask-become-pass` completed **all 11 host audits and the independent scanner-side probe**, with `changed=0 unreachable=0 failed=0` on all hosts. 10 targets reported `ok=3`; greenbone-01 reported `ok=7`. **Every one of the 11 hosts replied to three out of three ICMPv4 timestamp requests** (33 matched replies total). The greenbone-01 self-target was correctly probed externally from monitor-01. Ping tests were executed but the playbook set `failed_when: false` and did not print their registered RCs, so do **not** assert ping PASS for all 11 from this log. No configuration, firewall, service, scan or accepted-risk change was made.

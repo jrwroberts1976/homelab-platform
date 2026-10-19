@@ -4,6 +4,10 @@
 
 **Status:** Three hosts (media-01, docker-01 and monitor-01) have now passed independent post-change ICMP timestamp suppression tests while normal ping works. Eleven reported ICMP findings and the BirdNET csrf HttpOnly exception still require separate analysis. Existing risk acceptance register is unchanged; no new completed authenticated Greenbone scan has been obtained.
 
+## Remaining 11: sweep completed; three-VM fix now Git-staged
+
+User's full `--ask-become-pass` audit finished on all eleven hosts (no changes/failures). **Every remaining ICMP timestamp target returned 3/3 matching replies (33/33 total)**. The five standard LXC resolver/mail/edge/Zabbix guests use native nftables; three VMs (cloud-01, sensor-01, greenbone-01) use iptables-nft INPUT ACCEPT/zero rules; Komodo has mixed nftables/Docker; admin-01 is the Pi IaC/QNetd controller; Proxmox-2 uses active cluster-native firewall services with legacy iptables. Do not generalise one firewall rule across all. A new **Git-only** three-VM INPUT rule/rollback with Docker, sensor and scanner verification is staged; first host sensor-01, not yet deployed. Remediation count remains 3/14; risk acceptance and completed Greenbone report unchanged.
+
 ## Confirmed live docker-01 ICMP timestamp filter — 19 October 2026
 ## Remaining 11 ICMP hosts — user-approved staged compatibility sweep
 

@@ -4,6 +4,19 @@
 
 **User decision:** Proceed with remediation across the rest of the affected estate. This authorises planning and carefully scoped changes, **not** a single unverified firewall replacement across mission-critical hosts.
 
+## Completed 11-host compatibility sweep — results
+
+**19 October full Ansible run completed after adding `--ask-become-pass`.** All eleven target host audits and the independent three-request ICMP timestamp probes passed, with `changed=0 unreachable=0 failed=0`; every target replied **3/3** (33/33 total). Normal echo probes were issued but the first version of the audit did **not display their return codes**; `greenbone-icmp-timestamp-remaining11-readonly.yml` has since been amended to show explicit `ICMP_ECHO` status on any future run. No live rules changed during the sweep.
+
+**Firewall classifications:**
+- Five native nftables LXC guests: dns-01/dns-02, mail-relay-01, edge-01, zabbix-01 (active nftables, one INPUT hook, `CAP_NET_ADMIN=yes`, iptables utilities missing). Inspect rule owners and hook priorities before editing.
+- Three VM candidates: cloud-01, sensor-01, greenbone-01 (`iptables v1.8.11 nf_tables`, INPUT ACCEPT and 0 rules). cloud-01/greenbone-01 have active Docker with forward DROP and 4/6 DOCKER chains; sensor-01 has no Docker and FORWARD ACCEPT.
+- komodo-01: LXC, active native nftables INPUT hook **and** Docker iptables-nft / forwarding, needs mixed-stack policy review.
+- admin-01: Pi controller/QNetd, nft readable but zero input hooks and no iptables; needs a standalone safe change with management recovery.
+- Proxmox-2: both Proxmox firewall services active, iptables **legacy**, no nft INPUT hook reported; native cluster policy inspection required before any edit.
+
+**Git-staged VM wave (no live host changes):** `roles/icmp_timestamp_vm_input`, `playbooks/greenbone-icmp-timestamp-vms-cutover.yml`, `playbooks/greenbone-icmp-timestamp-vms-rollback.yml`, and offline validator `scripts/validate-icmp-timestamp-vm-wave.py`. Apply only `--limit sensor-01` initially after source and syntax checks; separate rollout to cloud-01 and greenbone-01 once successful. External scanner source for greenbone-01 is monitor-01. Don't mark additional fixes complete before network/service verification.
+
 ## Verified starting point
 
 The latest completed authenticated Greenbone report recorded 14 ICMP Timestamp Reply findings (NVT `1.3.6.1.4.1.25623.1.0.103190`). Independent before/after scanner-side network probes have already validated IPv4 type-13 request suppression while ordinary ping works on **media-01, docker-01, monitor-01**. The existing accepted-risk register remains unchanged, and no new completed Greenbone report has formally closed these findings.
