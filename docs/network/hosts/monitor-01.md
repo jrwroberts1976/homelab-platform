@@ -137,6 +137,8 @@ monitor-01 is a managed QEMU VM on Proxmox-2 running Debian GNU/Linux 13 (trixie
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
 
+**19 October ICMP timestamp remediation plan — staged in Git, not deployed:** Read-only audits established `iptables v1.8.11 (nf_tables)`, INPUT ACCEPT with 0 rules, FORWARD DROP, 4 custom chains and absent nft CLI. Scanner-side tests observed 3 timestamp replies to 3 requests with normal ping. Prometheus/Grafana/Loki/Alertmanager run as containers in `/opt/monitoring/docker-compose.yml`, not standalone systemd services. Dedicated `monitor_icmp_timestamp` Ansible role and `greenbone-icmp-timestamp-monitor01-cutover.yml` propose only a comment-tagged ICMP type-13 DROP in host INPUT with persistence; preflight and after checks preserve Grafana HTTPS, running containers and Docker forwarding. Separate scoped rollback staged. **No host changes or new Greenbone scan completed.**
+
 ## Monitoring and security
 
 - Grafana host dashboard:
