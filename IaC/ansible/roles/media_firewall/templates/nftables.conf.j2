@@ -22,7 +22,12 @@ table inet media_filter {
     # Administration and media upload are LAN-only.
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 22 accept comment "LAN SSH"
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 445 accept comment "LAN SMB"
+{% if media_firewall_qbittorrent_https_lan_enabled | bool %}
+    ip saddr {{ media_firewall_lan_subnet }} tcp dport 443 accept comment "LAN qBittorrent HTTPS"
+{% endif %}
+{% if media_firewall_qbittorrent_http_lan_enabled | bool %}
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 8081 accept comment "LAN qBittorrent WebUI"
+{% endif %}
     ip saddr {{ media_firewall_lan_subnet }} udp dport 1900 accept comment "LAN Kodi SSDP/DLNA"
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 1255 accept comment "LAN Kodi UPnP server"
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 1879 accept comment "LAN Kodi UPnP server"

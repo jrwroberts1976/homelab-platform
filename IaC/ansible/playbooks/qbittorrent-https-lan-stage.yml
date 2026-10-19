@@ -1,0 +1,79 @@
+---
+# Phase 1 of the qBittorrent WebUI firewall migration.
+# Opens LAN-only HTTPS/443 while preserving LAN HTTP/8081 as tested rollback.
+# No qBittorrent/Kodi/SMB/NFS restart or Greenbone scan is requested.
+- name: Allow qBittorrent HTTPS from LAN without removing HTTP rollback
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Require running qBittorrent and Nginx before allowing HTTPS
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - qbittorrent
+        - nginx
+      register: qbt_https_lan_services
+      changed_when: false
+      failed_when: qbt_https_lan_services.stdout | trim != "active"
+
+    - name: Verify trusted local qBittorrent HTTPS before firewall deployment
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 10
+        use_proxy: false
+      changed_when: false
+
+    - name: Preserve both qBittorrent LAN access methods for this phase
+      ansible.builtin.assert:
+        that:
+          - media_firewall_qbittorrent_https_lan_enabled | bool
+          - media_firewall_qbittorrent_http_lan_enabled | bool
+        fail_msg: "Refusing HTTPS stage without both port 443 and port 8081 enabled."
+
+  roles:
+    - role: media_firewall
+
+  post_tasks:
+    - name: Confirm trusted qBittorrent HTTPS from the Ansible controller
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 12
+        use_proxy: false
+      register: qbt_https_controller
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Confirm HTTP rollback still responds from the Ansible controller
+      ansible.builtin.uri:
+        url: http://192.168.2.195:8081/
+        method: GET
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 12
+        use_proxy: false
+      register: qbt_http_controller
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Report qBittorrent LAN TLS access with HTTP rollback retained
+      ansible.builtin.debug:
+        msg:
+          - "QBITTORRENT_LAN_HTTPS=PASS HTTP_STATUS={{ qbt_https_controller.status }}"
+          - "QBITTORRENT_LEGACY_HTTP=AVAILABLE HTTP_STATUS={{ qbt_http_controller.status }}"
+          - "Only the LAN 443 firewall allowance was added; LAN 8081 remains."
+          - "Do not close 8081 until a browser login and WebUI functions are verified."
