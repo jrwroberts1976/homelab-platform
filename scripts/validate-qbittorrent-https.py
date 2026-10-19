@@ -20,7 +20,7 @@ rendered = Environment(undefined=StrictUndefined).from_string(template).render(*
 assert "server_name qbittorrent.home.jrwroberts.co.uk;" in rendered
 assert "proxy_pass http://127.0.0.1:8081;" in rendered
 assert "proxy_set_header Host $proxy_host;" in rendered
-assert "proxy_cookie_flags ~ secure;" in rendered
+assert "proxy_cookie_flags ~.* secure;" in rendered
 assert "ssl_certificate /etc/letsencrypt/live/qbittorrent." in rendered
 assert "listen 80;" not in rendered
 
