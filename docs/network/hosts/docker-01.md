@@ -111,6 +111,9 @@ docker-01 is a managed physical Raspberry Pi 4 host running Debian GNU/Linux 13 
 <!-- END AUTO:PATCHING -->
 
 ## Monitoring and security
+
+**Verified 19 October 2026 live security change:** Read-only diagnostics identified `iptables v1.8.11 (nf_tables)`, INPUT ACCEPT with zero rules before installation, and Docker-controlled FORWARD/DOCKER chains; three of three Greenbone-side ICMP timestamp probes were answered before mitigation. Then `greenbone-icmp-timestamp-docker01-cutover.yml` installed a **single host INPUT-only IPv4 ICMP timestamp-request (type 13) DROP rule** plus dedicated one-shot persistence unit. Play recap `docker-01 ok=22 changed=3 failed=0`, `greenbone-01 ok=8 changed=0 failed=0`. Scanner-side ICMP timestamp responses now `NO_REPLY_OBSERVED` and ordinary ping PASS. Two Docker containers, Docker chain definitions/policy and BirdNET HTTPS were verified, without Docker restart. Manual rollback: `playbooks/greenbone-icmp-timestamp-docker01-rollback.yml`. Reboot persistence and fresh Greenbone scan clearance remain **unverified**. Risk acceptances are unchanged.
+
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:
 - Alerting:

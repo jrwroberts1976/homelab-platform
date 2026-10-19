@@ -2,7 +2,11 @@
 
 # Greenbone accepted-risk assessment — 19 October 2026
 
-**Status:** Live media-01 ICMP timestamp pilot successfully deployed and independently verified on 19 October. The accepted-risk policy is unchanged, and no new Greenbone vulnerability scan has been completed. Other hosts remain under review.
+**Status:** Two hosts, media-01 and docker-01, have now been independently verified with ICMP timestamp replies suppressed while normal ping still works. The remaining 12 ICMP findings and the BirdNET csrf HttpOnly exception are not remediated. The accepted-risk register is unchanged; a new authenticated Greenbone vulnerability scan has not yet been completed.
+
+## Confirmed live docker-01 ICMP timestamp filter — 19 October 2026
+
+**Deployment complete:** User ran the scoped, Git-managed `greenbone-icmp-timestamp-docker01-cutover.yml`. `docker-01 ok=22 changed=3 unreachable=0 failed=0`; independent `greenbone-01 ok=8 changed=0 unreachable=0 failed=0`. Before remediation, 3/3 timestamp requests yielded replies. After the host INPUT-only iptables-nft type-13 drop was installed, the scanner-side assertion verified zero matching replies and `DOCKER01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, while `DOCKER01_ICMP_ECHO=PASS`. Docker service stayed running, container identities remained unchanged, DOCKER and FORWARD chain invariants passed, and trusted BirdNET HTTPS continued responding without Docker restart. The dedicated systemd persistence unit was installed but **has not been reboot-tested**. Explicit rollback `greenbone-icmp-timestamp-docker01-rollback.yml` remains available and unused. This is **operational mitigation 2/14**, not new Greenbone scan clearance; all risk acceptance entries remain in place until later scanner verification. Twelve more ICMP hosts and the BirdNET csrf HttpOnly exception remain outstanding.
 
 ## docker-01 audit and verification gate — 19 October 2026
 ## docker-01 timestamp responses confirmed — 19 October 2026

@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October docker-01 ICMP mitigation now deployed and independently checked:** `docker-01 ok=22 changed=3 failed=0`, `greenbone-01 ok=8 changed=0 failed=0` and zero unreachable. Git-managed Docker host iptables-nft INPUT-only type-13 rule active, with no timestamp replies seen by the scanner-side probe while normal ping passed. Docker running container identities and forwarding/DOCKER chains unchanged, BirdNET HTTPS remained reachable, no Docker restart. A dedicated service makes the rule reboot-persistent by configuration (not reboot-tested). **2/14 reported ICMP hosts now operationally mitigated** including media-01; twelve others remain. No new completed Greenbone scan or accepted-risk list change. Historical notes below describing the docker-01 rule as only Git-staged are superseded.
+
+
 **19 October Docker-safe ICMP timestamp filter — Git-staged only:** Latest docker-01 read-only audit shows 2 active containers, `iptables v1.8.11 (nf_tables)`, host INPUT policy ACCEPT with zero rules, FORWARD policy DROP with four Docker chains, no nft INPUT hook and one nft FORWARD hook. Greenbone-side independent test previously received 3 matching timestamp replies from 3 requests. A new Git-managed role `docker_icmp_timestamp` adds only a host IPv4 INPUT destination-specific type-13 DROP through `iptables -w`, with a dedicated systemd oneshot for reboot persistence and explicit deletion on rollback; no Docker FORWARD, DOCKER-*, NAT or nftables-service changes. Staged cutover and rollback playbooks verify Docker containers, trusted BirdNET HTTPS and scanner-side before/after ICMP results. **Not yet deployed or validated on admin-01**; accepted-risk records and all live Docker services remain unchanged. Syntax/offline tests and user-run scoped Ansible required before marking fixed.
 
 
