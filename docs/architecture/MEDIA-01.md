@@ -137,6 +137,7 @@ Current explicitly authorised inbound services include:
 | `192.168.2.0/24` | TCP/22 | SSH administration |
 | `192.168.2.0/24` | TCP/445 | SMB |
 | `192.168.2.0/24` | TCP/8081 | qBittorrent Web UI, HTTP rollback (still open) |
+| `192.168.2.0/24` | TCP/443 | qBittorrent trusted HTTPS via Nginx (LAN verified) |
 | `192.168.2.0/24` | UDP/1900 | Kodi SSDP/DLNA discovery |
 | `192.168.2.0/24` | TCP/1255 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
 | `192.168.2.0/24` | TCP/1879 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
@@ -144,7 +145,7 @@ Current explicitly authorised inbound services include:
 | `192.168.2.71` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.52` | TCP/9100 | Prometheus node_exporter |
 
-**19 October pending (Git-only) firewall stage:** The qBittorrent trusted HTTPS endpoint is working locally, but LAN/443 is not yet exposed. The intended first phase allows LAN/443 **and** retains LAN/8081 for rollback. After successful LAN browser login and session verification, a second, separately validated firewall-only change will disable LAN HTTP/8081. These are planned rules, not evidence of live firewall changes.
+**19 October LAN HTTPS firewall stage deployed and verified:** `qbittorrent-https-lan-stage.yml` succeeded on media-01 (`ok=16 changed=2 failed=0`), validating/reloading the nftables ruleset and confirming from admin-01 that trusted HTTPS/443 and HTTP/8081 each returned HTTP 200. Existing SSH/Kodi/SMB/NFS/monitoring rules were preserved. HTTP/8081 is still intentionally reachable as rollback until HTTPS browser login is verified. A future separate firewall-only cutover will remove the LAN/8081 rule; this has not happened.
 
 The firewall configuration is managed in:
 
