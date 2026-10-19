@@ -1,0 +1,77 @@
+---
+- name: Require expected Docker host identity and IPv4 address
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == "docker-01"
+      - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+    fail_msg: Unexpected Docker host; no firewall changes allowed.
+
+- name: Require running Docker before installing narrow INPUT policy
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service]
+  register: docker01_icmp_docker_service
+  changed_when: false
+  failed_when: docker01_icmp_docker_service.stdout | trim != "active"
+
+- name: Require Docker's existing iptables-nft backend
+  ansible.builtin.command:
+    argv: [/usr/sbin/iptables, -V]
+  register: docker01_icmp_backend
+  changed_when: false
+  failed_when: docker01_icmp_backend.rc != 0 or "nf_tables" not in docker01_icmp_backend.stdout
+
+- name: Inspect existing filter policies without exposing Docker rules
+  ansible.builtin.command:
+    argv: [/usr/sbin/iptables-save, -t, filter]
+  register: docker01_icmp_filter
+  changed_when: false
+
+- name: Preserve existing host INPUT and Docker forwarding policies
+  ansible.builtin.assert:
+    that:
+      - "':INPUT ACCEPT ' in docker01_icmp_filter.stdout"
+      - "':FORWARD DROP ' in docker01_icmp_filter.stdout"
+      - "'DOCKER' in docker01_icmp_filter.stdout"
+    fail_msg: Unexpected Docker filter state; refuse to install a rule.
+
+- name: Install narrowly scoped managed timestamp rule helper
+  ansible.builtin.copy:
+    src: homelab-docker01-icmp-timestamp
+    dest: /usr/local/sbin/homelab-docker01-icmp-timestamp
+    owner: root
+    group: root
+    mode: "0755"
+    validate: "/bin/sh -n %s"
+
+- name: Install dedicated rule persistence unit
+  ansible.builtin.copy:
+    src: homelab-docker01-icmp-timestamp.service
+    dest: /etc/systemd/system/homelab-docker01-icmp-timestamp.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start and enable only the timestamp-only persistence unit
+  ansible.builtin.systemd_service:
+    name: homelab-docker01-icmp-timestamp.service
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Enforce the idempotent INPUT rule when already enabled
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/homelab-docker01-icmp-timestamp, apply]
+  register: docker01_icmp_ensure_rule
+  changed_when: "'RULE_ADDED' in docker01_icmp_ensure_rule.stdout"
+
+- name: Verify managed timestamp-only host INPUT rule
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/homelab-docker01-icmp-timestamp, present]
+  changed_when: false
+
+- name: Verify Docker remains active after adding host INPUT rule
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service]
+  register: docker01_icmp_docker_after
+  changed_when: false
+  failed_when: docker01_icmp_docker_after.stdout | trim != "active"
