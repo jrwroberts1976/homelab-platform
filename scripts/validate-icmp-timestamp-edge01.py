@@ -2,7 +2,6 @@
 """Offline syntactic and safety checks, never invokes nft on live hosts."""
 from pathlib import Path
 import ast
-import subprocess
 import yaml
 
 root = Path(__file__).resolve().parents[1]
@@ -22,6 +21,6 @@ assert "BACKUP.read_bytes()" in text
 assert "EDGE01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED" in cut.read_text()
 assert "delegate_to: greenbone-01" in cut.read_text()
 assert "rollback" in undo.read_text()
-assert subprocess.run(["python3", "-m", "py_compile", str(helper)], capture_output=True).returncode == 0
+compile(text, str(helper), "exec")  # Syntax check in memory; avoid generating __pycache__
 print("EDGE01 offline syntax, scoped cutover, exact rollback and scanner assertions: PASS")
 print("No live firewall, Proxmox, Docker or scan changes.")
