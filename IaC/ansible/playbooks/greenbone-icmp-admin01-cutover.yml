@@ -19,7 +19,7 @@
     - name: Refuse unexpected firewall state
       ansible.builtin.assert:
         that:
-          - tables_before.stdout | trim == ''
+          - tables_before.stdout | trim == '' or tables_before.stdout | trim == 'table inet homelab_icmp_timestamp'
 
     - name: Verify QNetd is active
       ansible.builtin.command:
@@ -27,6 +27,22 @@
       changed_when: false
       register: qnetd_before
       failed_when: qnetd_before.stdout | trim != 'active'
+
+    - name: Confirm SSH remains reachable before change
+      ansible.builtin.wait_for:
+        host: 192.168.2.48
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Confirm scanner can ping controller before change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", 192.168.2.48]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
 
     - name: Install dedicated host helper
       ansible.builtin.copy:
@@ -71,6 +87,22 @@
         that:
           - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in probe_after.stdout"
           - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in probe_after.stdout"
+
+    - name: Verify independent ordinary ping after change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", 192.168.2.48]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+
+    - name: Verify independent SSH after change
+      ansible.builtin.wait_for:
+        host: 192.168.2.48
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      changed_when: false
 
     - name: Confirm QNetd remains active
       ansible.builtin.command:
