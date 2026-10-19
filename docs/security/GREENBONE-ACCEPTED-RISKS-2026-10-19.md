@@ -15,6 +15,12 @@ The user ran the existing one-host read-only firewall audit on docker-01 (Raspbe
 
 New Git-staged, **not run**, `IaC/ansible/playbooks/greenbone-icmp-timestamp-docker01-readonly.yml` reports non-secret filter policy and backend indicators on docker-01 and performs bounded scanner-side ICMP timestamp probing from greenbone-01. It changes no firewall, service, sysctl, kernel, scan or risk acceptance. Only after this evidence should a Docker-safe, narrowly scoped mitigation and rollback be designed; do not copy the media-01 nftables ruleset.
 
+## docker-01: host INPUT evidence and staged targeted mitigation
+
+**19 October latest read-only audit:** `docker-01 ok=3 changed=0 failed=0`: Docker active with two containers; `iptables v1.8.11 (nf_tables)`; filter INPUT ACCEPT with zero INPUT rules; FORWARD DROP, four DOCKER filter chains; nftables INPUT hooks 0, FORWARD hooks 1; no timestamp rule. Scanner-side probe `greenbone-01` previously confirmed 3 of 3 matching timestamp replies and ordinary ping PASS.
+
+**Git-only, not deployed or independently rechecked yet:** New Ansible role `IaC/ansible/roles/docker_icmp_timestamp` uses a single idempotent `iptables -w -I INPUT 1 -d 192.168.2.220/32 -p icmp --icmp-type 13 -m comment --comment homelab-docker01-icmp-timestamp -j DROP`, guarded by `iptables -C` and backend detection. A dedicated oneshot unit persists the rule over reboot without enabling global nftables or restarting Docker. A scoped manual rollback stops and disables only that service, removing just the exact tagged host INPUT rule; it does not alter DOCKER chains, FORWARD, or NAT. `greenbone-icmp-timestamp-docker01-cutover.yml` includes scanner pre/post tests and Docker/BirdNET invariants. `scripts/validate-docker01-icmp-timestamp-firewall.py` is the offline preflight. No live change, risk reclassification or full Greenbone rescan is claimed yet; source validation, syntax checks and scoped deployment are still required.
+
 ## Last report's 15 accepted findings
 
 | Finding | NVT OID | Count | Disposition |
