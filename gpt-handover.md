@@ -226,6 +226,8 @@ ansible-playbook -i inventory/hosts.yml playbooks/qbittorrent-https-readiness-re
 
 Do not regard BirdNET Medium as remediated until Nginx reload/live cookie flag verification succeeds and a fresh scan confirms it. qBittorrent TLS and DNS remain OPEN. Keep the separate Greenbone boot-readiness guard Git-only and not deployed. After both Medium fixes and a fresh scan, review the 15 accepted items individually (14 ICMP timestamps, one BirdNET HttpOnly cookie), and reconcile the earlier missing TCP timestamp items.
 
+**19 October 2026 offline test failure and correction (Git-only):** User pulled latest code then ran the chained qBittorrent LAN firewall checks; the offline validator stopped at Jinja2 rendering with `TemplateRuntimeError: No filter named 'bool' found`. This is a standalone Jinja2/Ansible filter mismatch in `scripts/validate-qbittorrent-lan-firewall.py`, not a problem in media-01 or nftables. The validator now registers a `bool` filter for its typed boolean fixtures (commit `06aa89b8`). The user's `&&` chain stopped before estate validation and Ansible syntax-check. **No firewall changes were made, no 443 allowance was deployed and 8081 remains open.** Next: pull and rerun all three checks; if they pass, review before separately applying the scoped LAN 443+8081 playbook. Do not use `|| exit 1` in an interactive SSH session.
+
 ## Latest session log
 
 | Date | Change / observation | Evidence and validation | Next step |
