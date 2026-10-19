@@ -8,6 +8,21 @@
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
+## Latest verified docker-01 ICMP timestamp result — 19 October 2026
+
+**User supplied the scanner portion of scoped read-only Ansible output:** `greenbone-icmp-timestamp-docker01-readonly.yml` completed `docker-01 ok=3 changed=0 unreachable=0 failed=0`; `greenbone-01 ok=5 changed=0 unreachable=0 failed=0`. From greenbone-01 (192.168.2.57), ordinary ping to docker-01 (192.168.2.220) passed and **3 of 3 matching ICMPv4 timestamp replies** were observed (`ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`, `DOCKER01_TIMESTAMP_INTERPRETATION=REPLY_CONFIRMED`). This confirms the accepted ICMP timestamp finding is still reproducible on docker-01. **No host, kernel, firewall, sysctl, service, scan or risk-acceptance changes.**
+
+**Missing output:** User pasted only the latter scanner-side tasks and the play recap, **not** `TASK [Report non-secret Docker firewall indicators]` from the earlier docker-01 play. Do not infer the actual iptables backend or INPUT/FORWARD/OUTPUT policies from success alone. Before designing a Docker-safe fix, rerun **only** the first play:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-docker01-readonly.yml \
+  --limit docker-01 --forks 1
+```
+
+Request the `TASK [Report non-secret Docker firewall indicators]` message and recap. This limited read-only run does **not** resend timestamp probes from greenbone-01. Do not copy the media-01 nftables firewall onto docker-01 or alter Docker's forwarding/chains. As previously, the successful media-01 ICMP mitigation is verified independently, but still pending a completed Greenbone rescan.
+
 ## Latest work: docker-01 ICMP timestamp reconnaissance (19 October 2026)
 
 User's read-only docker-01 audit: ok=2 changed=0 failed=0. Debian 13, nftables service inactive, nft rules readable but zero input hooks; iptables-save readable; no existing timestamp-specific rules. Docker host's actual packet filtering owner is **not established**. No host configuration changed.
