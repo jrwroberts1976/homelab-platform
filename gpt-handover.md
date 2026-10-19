@@ -9,6 +9,34 @@
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
 ## Latest monitor-01 evidence and next read-only diagnostic — 19 October 2026
+## Next action — staged monitor-01 ICMP timestamp host-only cutover (19 October 2026)
+
+Live **read-only** monitor-01 evidence: `ok=3 changed=0 failed=0`, `iptables v1.8.11 (nf_tables)`, INPUT ACCEPT/0 rules, FORWARD DROP, 4 custom chains; `nft` utility missing. The user confirmed earlier monitor-01 sent 3 valid ICMP timestamp replies from 3 requests; ordinary ping PASS. Native systemd checks for Prometheus/Grafana/Loki/Alertmanager returned `not-active-or-unknown`, **as expected for the Git-managed Docker Compose monitoring stack**, and must not be misread as an outage. Repo service definition: `roles/monitoring_stack/templates/docker-compose.yml.j2` under `/opt/monitoring`.
+
+**Git staged, not deployed:** New `roles/monitor_icmp_timestamp/` installs only idempotent comment-tagged `iptables -w -I INPUT 1 -d 192.168.2.52/32 -p icmp --icmp-type 13 -j DROP` with dedicated systemd oneshot persistence; no Docker service restart, chain flush, NAT or FORWARD alteration. `playbooks/greenbone-icmp-timestamp-monitor01-cutover.yml` checks scan-side baseline, >=5 running monitoring containers, Grafana trusted HTTPS, Docker FORWARD/DOCKER invariant before/after, then ping and three-request timestamp suppression from greenbone-01. `playbooks/greenbone-icmp-timestamp-monitor01-rollback.yml` stops the dedicated unit, deletes only the matching rule and checks ping/Grafana/Docker. `scripts/validate-monitor01-icmp-timestamp-firewall.py` is an offline gate. None of the newly staged source has been validated by the user or run live; Greenbone scan and accepted-risk register unchanged. Verified ICMP mitigations remain **2/14**.
+
+**Next commands (admin-01; syntax/source checks gate scoped deployment):**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-monitor01-icmp-timestamp-firewall.py &&
+python3 scripts/validate-icmp-timestamp-probe.py &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml playbooks/greenbone-icmp-timestamp-monitor01-cutover.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml playbooks/greenbone-icmp-timestamp-monitor01-rollback.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml playbooks/greenbone-icmp-timestamp-monitor01-cutover.yml --limit 'monitor-01:greenbone-01' --forks 1
+```
+
+If network checks or monitoring break, manual scoped rollback:
+```bash
+cd ~/projects/homelab-platform/IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml playbooks/greenbone-icmp-timestamp-monitor01-rollback.yml --limit 'monitor-01:greenbone-01' --forks 1
+```
+
+User must provide Ansible output before claiming live success. Do not remove any accepted-risk entry before a new completed Greenbone scan.
+
 ## Latest verified monitor-01 result — ICMP timestamps reproducible (19 October 2026)
 
 **User-provided live output:** Scoped `greenbone-icmp-timestamp-monitor01-readonly.yml --limit 'monitor-01:greenbone-01' --forks 1` completed `monitor-01 ok=3 changed=0 unreachable=0 failed=0` and `greenbone-01 ok=5 changed=0 unreachable=0 failed=0`. From greenbone-01, ordinary ping to `192.168.2.52` passed, and **3 of 3 ICMP type-13 timestamp requests elicited matching type-14 replies** (`ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`, `MONITOR01_TIMESTAMP_INTERPRETATION=REPLY_CONFIRMED`). This reproduces the accepted ICMP timestamp finding; no firewall/sysctl/service configuration or Greenbone scans were changed.
