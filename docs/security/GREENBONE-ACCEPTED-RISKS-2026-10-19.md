@@ -2,7 +2,7 @@
 
 # Greenbone accepted-risk assessment — 19 October 2026
 
-**Status:** Two hosts, media-01 and docker-01, have now been independently verified with ICMP timestamp replies suppressed while normal ping still works. The remaining 12 ICMP findings and the BirdNET csrf HttpOnly exception are not remediated. The accepted-risk register is unchanged; a new authenticated Greenbone vulnerability scan has not yet been completed.
+**Status:** Three hosts (media-01, docker-01 and monitor-01) have now passed independent post-change ICMP timestamp suppression tests while normal ping works. Eleven reported ICMP findings and the BirdNET csrf HttpOnly exception still require separate analysis. Existing risk acceptance register is unchanged; no new completed authenticated Greenbone scan has been obtained.
 
 ## Confirmed live docker-01 ICMP timestamp filter — 19 October 2026
 
@@ -24,6 +24,10 @@ New Git-staged, **not run**, `IaC/ansible/playbooks/greenbone-icmp-timestamp-doc
 **19 October latest read-only audit:** `docker-01 ok=3 changed=0 failed=0`: Docker active with two containers; `iptables v1.8.11 (nf_tables)`; filter INPUT ACCEPT with zero INPUT rules; FORWARD DROP, four DOCKER filter chains; nftables INPUT hooks 0, FORWARD hooks 1; no timestamp rule. Scanner-side probe `greenbone-01` previously confirmed 3 of 3 matching timestamp replies and ordinary ping PASS.
 
 **Git-only, not deployed or independently rechecked yet:** New Ansible role `IaC/ansible/roles/docker_icmp_timestamp` uses a single idempotent `iptables -w -I INPUT 1 -d 192.168.2.220/32 -p icmp --icmp-type 13 -m comment --comment homelab-docker01-icmp-timestamp -j DROP`, guarded by `iptables -C` and backend detection. A dedicated oneshot unit persists the rule over reboot without enabling global nftables or restarting Docker. A scoped manual rollback stops and disables only that service, removing just the exact tagged host INPUT rule; it does not alter DOCKER chains, FORWARD, or NAT. `greenbone-icmp-timestamp-docker01-cutover.yml` includes scanner pre/post tests and Docker/BirdNET invariants. `scripts/validate-docker01-icmp-timestamp-firewall.py` is the offline preflight. No live change, risk reclassification or full Greenbone rescan is claimed yet; source validation, syntax checks and scoped deployment are still required.
+
+## monitor-01 successfully mitigated — independent live validation (19 October 2026)
+
+User executed the scoped `greenbone-icmp-timestamp-monitor01-cutover.yml`; **monitor-01 `ok=25 changed=3 unreachable=0 failed=0`**, **greenbone-01 `ok=8 changed=0 unreachable=0 failed=0`**. Existing monitoring Docker Compose stack and Grafana HTTPS were protected by successful pre/post assertions; container identities and Docker filter/forwarding policies unchanged; no restart. Scanner-side pre-change evidence was 3/3 timestamp replies, whereas now `MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED` and `MONITOR01_ICMP_ECHO=PASS`. The only intended filtering addition is the comment-tagged IPv4 type-13 host INPUT rule, with dedicated systemd persistence configured (not reboot-tested). Exact rollback playbook remains available, unused. This is operational remediation of the third of 14 ICMP host findings, **not** formal Greenbone scan clearance. Accepted-risk entries unchanged. Eleven original ICMP hosts and one BirdNET csrf HttpOnly accepted finding remain pending.
 
 ## monitor-01 INPUT filtering plan staged — 19 October 2026
 

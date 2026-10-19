@@ -141,6 +141,9 @@ monitor-01 is a managed QEMU VM on Proxmox-2 running Debian GNU/Linux 13 (trixie
 
 ## Monitoring and security
 
+**Live security verification 19 October 2026:** Git-managed host INPUT-only `iptables-nft` ICMP type-13 rule applied using `greenbone-icmp-timestamp-monitor01-cutover.yml`. User supplied passing recap `monitor-01 ok=25 changed=3 failed=0`, scanner `greenbone-01 ok=8 changed=0 failed=0`, zero unreachable. `MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `MONITOR01_ICMP_ECHO=PASS`; Grafana HTTPS, monitoring container identities and Docker forwarding policy unchanged; no container/Docker restart. Dedicated persistent systemd unit installed (reboot resilience not tested). Explicit ICMP-only rollback `playbooks/greenbone-icmp-timestamp-monitor01-rollback.yml` remains unused. Greenbone scan confirmation and accepted-risk register reconciliation still outstanding. Previous nearby Git-staged statements are superseded by this live evidence.
+
+
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:
 - Alerting:

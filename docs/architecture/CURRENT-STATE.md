@@ -141,6 +141,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October monitor-01 ICMPv4 timestamp operational mitigation LIVE:** User applied the Git-managed host INPUT-only type-13 iptables-nft rule and dedicated service via `greenbone-icmp-timestamp-monitor01-cutover.yml`. `monitor-01 ok=25 changed=3 unreachable=0 failed=0`; independent `greenbone-01 ok=8 changed=0 unreachable=0 failed=0`. The final scanner-side probe confirmed `MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED` and ordinary ping `MONITOR01_ICMP_ECHO=PASS`. Grafana trusted HTTPS, monitoring container identities and Docker forwarding chains remained unchanged; Docker and monitoring containers were not restarted. Persistence unit installed, reboot validation outstanding. **3/14 original ICMP timestamp hosts now operationally mitigated (media-01, docker-01, monitor-01); 11 remain**, plus BirdNET csrf HttpOnly exception. No new completed Greenbone report or risk-allowlist modification. Earlier notes describing monitor-01's staged work are historical.
+
+
 **19 October monitor-01 timestamp response confirmed, read-only:** Scoped diagnostic completed `monitor-01 ok=3 changed=0 failed=0`, `greenbone-01 ok=5 changed=0 failed=0`. Normal ping passed; **3 ICMP timestamp requests received 3 matching replies** (`MONITOR01_TIMESTAMP_INTERPRETATION=REPLY_CONFIRMED`). This accepted finding is reproducible, not mitigated. The user's pasted output omitted the first play's iptables INPUT, nftables diagnostic and monitoring-service indicators. Retrieve them with `greenbone-icmp-timestamp-monitor01-readonly.yml --limit monitor-01 --forks 1` before planning any firewall change. No service, firewall, sysctl, scan or accepted-risk changes. Two of fourteen ICMP hosts operationally mitigated (media-01, docker-01); 12 still outstanding.
 
 
