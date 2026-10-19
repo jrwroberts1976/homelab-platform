@@ -2,11 +2,12 @@
 media_firewall_expected_ipv4: "192.168.2.195"
 media_firewall_lan_subnet: "192.168.2.0/24"
 
-# Two-phase qBittorrent migration. During HTTPS staging both 443 and the
-# existing HTTP 8081 Web UI are LAN reachable. Close 8081 only after verifying
-# HTTPS login from the LAN in a separate, approved firewall-only cutover.
+# qBittorrent Web UI LAN cutover approved after successful HTTPS login.
+# Keep HTTPS 443 LAN-reachable. qBittorrent's port 8081 stays accessible only
+# locally via the Nginx reverse proxy (lo is accepted earlier in nftables).
+# A scoped rollback playbook may temporarily override HTTP back to true.
 media_firewall_qbittorrent_https_lan_enabled: true
-media_firewall_qbittorrent_http_lan_enabled: true
+media_firewall_qbittorrent_http_lan_enabled: false
 media_firewall_monitor_ipv4: "192.168.2.52"
 media_firewall_dhcp_server_ipv4: "192.168.2.1"
 media_firewall_backup_nfs_clients:

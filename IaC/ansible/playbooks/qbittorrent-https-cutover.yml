@@ -1,0 +1,108 @@
+---
+# HTTPS-only LAN WebUI cutover, requested after authenticated browser login.
+# Preserve qBittorrent on port 8081 for Nginx over loopback; only remove
+# LAN inbound 8081 from the Git-managed nftables policy.
+- name: Close direct qBittorrent HTTP WebUI on the LAN
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+  vars:
+    media_firewall_qbittorrent_https_lan_enabled: true
+    media_firewall_qbittorrent_http_lan_enabled: false
+
+  pre_tasks:
+    - name: Ensure qBittorrent, Nginx and nftables services are active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - qbittorrent
+        - nginx
+        - nftables
+      register: qbt_cutover_service
+      changed_when: false
+      failed_when: qbt_cutover_service.stdout | trim != 'active'
+
+    - name: Verify trusted HTTPS on the LAN from admin-01 before cutover
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 12
+        use_proxy: false
+      register: qbt_cutover_https_before
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify Nginx still reaches qBittorrent via local port 8081
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/
+        method: GET
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 8
+        use_proxy: false
+      changed_when: false
+
+    - name: Refuse cutting over if the HTTPS allowance or HTTP disable is absent
+      ansible.builtin.assert:
+        that:
+          - media_firewall_qbittorrent_https_lan_enabled | bool
+          - not (media_firewall_qbittorrent_http_lan_enabled | bool)
+        fail_msg: The HTTPS-only LAN firewall cutover variables are not set.
+
+  tasks:
+    - name: Apply and verify only the managed media firewall
+      ansible.builtin.include_role:
+        name: media_firewall
+
+    - name: Verify HTTPS still responds from admin-01 after firewall change
+      ansible.builtin.uri:
+        url: https://qbittorrent.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 12
+        use_proxy: false
+      register: qbt_cutover_https_after
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify new LAN TCP connections cannot reach qBittorrent HTTP 8081
+      ansible.builtin.wait_for:
+        host: 192.168.2.195
+        port: 8081
+        state: stopped
+        delay: 1
+        connect_timeout: 2
+        timeout: 15
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify local backend still responds to Nginx on port 8081
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/
+        method: GET
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 8
+        use_proxy: false
+      changed_when: false
+
+    - name: Report validated qBittorrent LAN HTTPS-only state
+      ansible.builtin.debug:
+        msg:
+          - "QBITTORRENT_LAN_HTTPS=PASS HTTP_STATUS={{ qbt_cutover_https_after.status }}"
+          - "QBITTORRENT_DIRECT_LAN_HTTP_8081=BLOCKED"
+          - "QBITTORRENT_LOOPBACK_HTTP_8081=AVAILABLE"
+          - "qBittorrent, Kodi, SMB and NFS were not restarted."
+          - "For recovery: run playbooks/qbittorrent-https-http-rollback.yml."

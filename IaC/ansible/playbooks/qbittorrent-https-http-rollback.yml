@@ -1,0 +1,44 @@
+---
+# Explicit emergency rollback: restore LAN HTTP/8081 only if HTTPS cutover
+# fails. The default managed policy remains HTTPS-only in defaults/main.yml.
+- name: Temporarily restore qBittorrent LAN HTTP access as rollback
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+  vars:
+    media_firewall_qbittorrent_https_lan_enabled: true
+    media_firewall_qbittorrent_http_lan_enabled: true
+
+  pre_tasks:
+    - name: Require active qBittorrent before restoring HTTP access
+      ansible.builtin.command:
+        argv: [systemctl, is-active, qbittorrent]
+      register: qbt_rollback_active
+      changed_when: false
+      failed_when: qbt_rollback_active.stdout | trim != 'active'
+
+  tasks:
+    - name: Restore dual-port LAN firewall policy without touching downloads
+      ansible.builtin.include_role:
+        name: media_firewall
+
+    - name: Verify LAN HTTP recovery from admin-01
+      ansible.builtin.uri:
+        url: http://192.168.2.195:8081/
+        method: GET
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 302]
+        timeout: 12
+        use_proxy: false
+      register: qbt_rollback_response
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Report restored temporary WebUI HTTP access
+      ansible.builtin.debug:
+        msg:
+          - "QBITTORRENT_HTTP_ROLLBACK=PASS HTTP_STATUS={{ qbt_rollback_response.status }}"
+          - "Direct LAN 8081 re-enabled temporarily; HTTPS 443 remains allowed."
+          - "Repo policy defaults are HTTPS-only; repair the root issue before rerunning cutover."
