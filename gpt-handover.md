@@ -146,7 +146,30 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
-### Next action — Greenbone read-only evidence and GMP preflight before rescan
+### Next action — assess 15 accepted Greenbone findings before a new scan
+
+**User reprioritised on 19 October:** The last completed scan's accepted findings were 14 ICMP Timestamp Reply Information Disclosure (NVT 1.3.6.1.4.1.25623.1.0.103190) and one BirdNET-Go non-HttpOnly csrf cookie (NVT 1.3.6.1.4.1.25623.1.0.105925). The larger Git risk allowlist also retains older TCP timestamp items, which are not part of those 15. No acceptances have been removed and no new scan started.
+
+**Review:** ICMP timestamp-request type 13 can generally be selectively filtered via the existing controlled firewall without disabling ordinary ping/ICMPv6. Do not perform a blanket firewall rollout on Proxmox-2, Docker or LXC hosts: identify owner and preserve services. media-01 is a potential pilot because its Git-managed nftables policy currently broadly accepts IPv4 ICMP. The BirdNET csrf cookie intentionally omits HttpOnly in upstream, and is different from a session cookie; do not force HttpOnly until the running application's state-changing actions are verified. Details in docs/security/GREENBONE-ACCEPTED-RISKS-2026-10-19.md.
+
+**Git-only preparation:** Created IaC/ansible/playbooks/greenbone-accepted-icmp-firewall-readonly.yml targeting exactly the 14 affected hosts to report operating system, firewall service indicators and counts of existing ICMP timestamp policy references. No rulesets/secrets printed and no service or firewall changes. This playbook has **not yet run on admin-01**.
+
+**Next read-only commands:**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-accepted-icmp-firewall-readonly.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-accepted-icmp-firewall-readonly.yml
+```
+
+Review results before building a targeted media-01 pilot with rollback, and do not change accepted-risk declarations until a fresh completed Greenbone scan proves each affected host's finding is absent. Earlier plans for Greenbone evidence and GMP preflight remain pending and are not superseded as a required safety gate before another scan.
+
+### Earlier pending plan — Greenbone evidence and GMP preflight before rescan
 
 **19 October final qBittorrent cutover executed and verified:** User's targeted `ansible-playbook -i inventory/hosts.yml playbooks/qbittorrent-https-cutover.yml --limit media-01` finished `ok=19 changed=2 unreachable=0 failed=0 skipped=0 rescued=0`, reporting:
 - `QBITTORRENT_LAN_HTTPS=PASS HTTP_STATUS=200`
