@@ -22,7 +22,7 @@ server {
         proxy_set_header X-Forwarded-Proto $scheme;
 
         # Backend's HTTP-only session cookie must be Secure in the HTTPS UI.
-        proxy_cookie_flags ~ secure;
+        proxy_cookie_flags ~.* secure;
 
         client_max_body_size 16m;
         proxy_read_timeout 300s;
