@@ -191,4 +191,6 @@ media firewall:       active, default-drop
 DLNA client access:   working after UPnP TCP firewall allowance
 ```
 
+**19 October 2026 pending change (Git only, not deployed):** The latest authenticated Greenbone scan flagged this Web UI's LAN HTTP listener as a Medium cleartext finding. A scoped qBittorrent HTTPS Nginx/Let's Encrypt DNS-01 implementation is staged in Git with internal name `qbittorrent.home.jrwroberts.co.uk`, and a corresponding managed Pi-hole alias is staged for both resolvers. As of the 19 October live check, media-01 had no Nginx/Certbot, trusted cert, or HTTPS listener; the Web UI still runs on `*:8081`. No DNS, TLS, firewall or service cutover has been executed. Keep the legacy Web UI path available until HTTPS/login and rollback are tested, then change only the Web UI firewall rule.
+
 The qBittorrent installation did not disrupt Kodi, SMB or the Kodi audio watchdog. Kodi DLNA connectivity was restored by allowing SSDP discovery and the two observed Kodi UPnP TCP service ports through the managed LAN firewall.
