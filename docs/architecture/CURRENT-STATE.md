@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October monitor-01 timestamp response confirmed, read-only:** Scoped diagnostic completed `monitor-01 ok=3 changed=0 failed=0`, `greenbone-01 ok=5 changed=0 failed=0`. Normal ping passed; **3 ICMP timestamp requests received 3 matching replies** (`MONITOR01_TIMESTAMP_INTERPRETATION=REPLY_CONFIRMED`). This accepted finding is reproducible, not mitigated. The user's pasted output omitted the first play's iptables INPUT, nftables diagnostic and monitoring-service indicators. Retrieve them with `greenbone-icmp-timestamp-monitor01-readonly.yml --limit monitor-01 --forks 1` before planning any firewall change. No service, firewall, sysctl, scan or accepted-risk changes. Two of fourteen ICMP hosts operationally mitigated (media-01, docker-01); 12 still outstanding.
+
+
 **19 October monitor-01 firewall audit — live read-only:** Scoped `greenbone-accepted-icmp-firewall-readonly.yml --limit monitor-01 --forks 1` passed `ok=2 changed=0 failed=0`. Monitor host runs Debian 13; no nftables/UFW/firewalld/Proxmox service detected active; nft ruleset not readable, iptables-save readable, zero timestamp rule references. iptables backend and effective host INPUT policy are **not established** and a scanner-side type-13 probe has not yet run for this host. Git-staged `greenbone-icmp-timestamp-monitor01-readonly.yml` adds only a bounded firewall-indicator check and three-request scanner-side probe; it has not run or been syntax-validated by the user. No live firewall, monitoring, sysctl, kernel or accepted-risk change. Two of 14 original ICMP hosts (media-01, docker-01) remain operationally mitigated pending Greenbone rescan.
 
 
