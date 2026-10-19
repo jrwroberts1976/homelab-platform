@@ -26,6 +26,10 @@ assert "monitor-01" in cut and "monitor-01" in undo
 assert "'monitor-01' if inventory_hostname == 'greenbone-01'" in cut
 assert "hosts: greenbone-01" not in cut
 assert "name: icmp_timestamp_vm_input" in cut
+assert "vm_icmp_rule_before.rc == 1" in cut
+assert "vm_icmp_rule_before.rc == 0" in cut
+assert "homelab-icmp-vm-{{ inventory_hostname }}" in cut
+assert "Unexpected mismatch between scanner response and exact tagged INPUT rule" in cut
 for marker in ("ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED", "ICMP_TIMESTAMP_REPLIES_MATCHED=0",
                "VM_ICMP_ECHO=PASS", "VM_ICMP_TIMESTAMP=NO_REPLY_OBSERVED",
                "vm_icmp_containers_before", "vm_icmp_containers_after",
