@@ -1,0 +1,37 @@
+---
+- name: Exact per-host rollback for the five native nftables LXC targets
+  hosts: mail-relay-01,dns-02,dns-01,zabbix-01,komodo-01
+  serial: 1
+  any_errors_fatal: true
+  gather_facts: false
+  become: true
+  vars:
+    expected_ipv4:
+      mail-relay-01: 192.168.2.54
+      dns-02: 192.168.2.50
+      dns-01: 192.168.2.51
+      zabbix-01: 192.168.2.59
+      komodo-01: 192.168.2.58
+    base_sha256: 60dac93ffe0ea440fc4a8941a080b6fb8d2c8655d47baf856e97182a0d1ca29a
+
+  tasks:
+    - name: Assert intended rollback target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in expected_ipv4
+          - ansible_host == expected_ipv4[inventory_hostname]
+
+    - name: Remove only tagged nftables rule and restore original file
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-icmp-lxc, rollback]
+      register: undo_result
+      changed_when: "'RULE_REMOVED' in undo_result.stdout or 'CONFIG_RESTORED' in undo_result.stdout"
+
+    - name: Verify host remains reachable
+      ansible.builtin.wait_for:
+        host: "{{ expected_ipv4[inventory_hostname] }}"
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      changed_when: false
