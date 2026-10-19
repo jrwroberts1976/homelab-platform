@@ -5,7 +5,7 @@
   become: true
   vars:
     greenbone_scanning_full_lan_enable: false
-    greenbone_scanning_full_lan_schedule: "Sun *-*-* 03:00:00"
+    greenbone_scanning_full_lan_schedule: "Sun *-*-* 12:00:00"
   tasks:
     - name: Assert exact Greenbone endpoint
       ansible.builtin.assert:
