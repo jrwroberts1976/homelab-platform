@@ -8,6 +8,41 @@
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
+## Next action — validate and deploy Docker-safe ICMP timestamp INPUT rule
+
+**19 October 2026 newest live read-only evidence:** User reran `greenbone-icmp-timestamp-docker01-readonly.yml --limit docker-01 --forks 1`, `ok=3 changed=0 failed=0`. Observed Docker active (2 running containers), `iptables v1.8.11 (nf_tables)`, `INPUT_POLICY=ACCEPT`, **`INPUT_RULE_COUNT=0`**, `FORWARD_POLICY=DROP`, four Docker filter chains, no existing timestamp/INPUT ICMP rules, nftables INPUT hooks 0 and FORWARD hook 1. Earlier read-only Greenbone-side probe confirmed `docker-01` responds to 3/3 ICMP timestamp requests and ordinary ping succeeds. This confirms it is host INPUT traffic, unlike Docker container FORWARD traffic. **No live remediation applied on docker-01 yet.**
+
+**Git-staged source only, not yet checked on admin-01 or deployed:** New `roles/docker_icmp_timestamp/` includes a small idempotent `iptables -w -I INPUT 1 -d 192.168.2.220/32 -p icmp --icmp-type 13 -m comment --comment homelab-docker01-icmp-timestamp -j DROP` policy helper, with `-C` guard and `-D` removal, refuses non-nft iptables backend. A small independent `homelab-docker01-icmp-timestamp.service` oneshot systemd unit makes the **single host INPUT rule** persistent across reboot; `Before=docker.service` for boot ordering. It does not start/restart Docker, alter Docker's existing FORWARD, DOCKER-* or NAT chains, flush iptables/nftables, install packages or replace another firewall ruleset. Playbooks `greenbone-icmp-timestamp-docker01-cutover.yml` and `greenbone-icmp-timestamp-docker01-rollback.yml` explicitly scope to docker-01 and greenbone-01, with scanner-side 3-request pre/post checks, Docker running-container identity checks, trusted BirdNET HTTPS health and filter FORWARD/DOCKER chain equivalence. `scripts/validate-docker01-icmp-timestamp-firewall.py` is an offline contract validator. **Actual validation and Ansible syntax checks are pending.** Do not claim mitigation or change Greenbone accepted risks until successful live evidence and a later fresh completed Greenbone report.
+
+**Next command from admin-01 (offline validation then live scoped cutover, stop on failure):**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-docker01-icmp-timestamp-firewall.py &&
+python3 scripts/validate-icmp-timestamp-probe.py &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-docker01-cutover.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-docker01-rollback.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-docker01-cutover.yml \
+  --limit 'docker-01:greenbone-01' --forks 1
+```
+
+If the postflight fails or unexpected service effects occur, run the scoped manual rollback (this disables the dedicated unit and deletes **only** the exact comment-tagged rule, leaving Docker intact):
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-docker01-rollback.yml \
+  --limit 'docker-01:greenbone-01' --forks 1
+```
+
+The cutover should confirm `DOCKER01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED` and `DOCKER01_ICMP_ECHO=PASS` while BirdNET HTTPS/Docker containers remain available. No live work is asserted by staging the source; the user's next Ansible output is required. Keep the established media-01 ICMP filter and all accepted risks unchanged.
+
 ## Latest verified docker-01 ICMP timestamp result — 19 October 2026
 
 **User supplied the scanner portion of scoped read-only Ansible output:** `greenbone-icmp-timestamp-docker01-readonly.yml` completed `docker-01 ok=3 changed=0 unreachable=0 failed=0`; `greenbone-01 ok=5 changed=0 unreachable=0 failed=0`. From greenbone-01 (192.168.2.57), ordinary ping to docker-01 (192.168.2.220) passed and **3 of 3 matching ICMPv4 timestamp replies** were observed (`ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`, `DOCKER01_TIMESTAMP_INTERPRETATION=REPLY_CONFIRMED`). This confirms the accepted ICMP timestamp finding is still reproducible on docker-01. **No host, kernel, firewall, sysctl, service, scan or risk-acceptance changes.**
