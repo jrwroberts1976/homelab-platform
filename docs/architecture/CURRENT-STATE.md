@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October read-only ICMP timestamp confirmation (Git-staged, not yet run):** `greenbone-icmp-timestamp-media01-readonly.yml` targets only greenbone-01 as the external probe and media-01 as the target, with three RFC 792 ICMPv4 type-13 timestamp packets and matching type-14 response validation, plus one ordinary ping. The companion offline validator is `scripts/validate-icmp-timestamp-probe.py`. This test does **not** change nftables, sysctl, applications, scan tasks or accepted risks. Its results are not yet available; no-reply is not definitive evidence of remediation. User's no-firewall decision remains in force.
+
+
 **19 October ICMP review decision (no remediation approved):** media-01's read-only firewall audit succeeded (`ok=2 changed=0 failed=0`), identifying active nftables, broad IPv4 ICMP acceptance and no type-13-specific rule. The user requested **no firewall change** for these accepted ICMP timestamp findings, so the formerly suggested nftables pilot is not authorised. Existing TCP timestamp sysctl hardening is unrelated, and no supported selective Linux sysctl was identified for unicast ICMP timestamp replies. Retain risk acceptances and confirm actual scanner-perspective behaviour read-only before reconsidering; no live change or new Greenbone scan has been performed.
 
 

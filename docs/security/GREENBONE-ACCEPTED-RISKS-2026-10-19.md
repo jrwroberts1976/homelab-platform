@@ -34,6 +34,10 @@ The accepted-risk **allowlist** also contains 15 older TCP timestamp NVT 1.3.6.1
 
 PROXMOX at 192.168.2.70 is NOT in the last report's 14 ICMP findings. Its older TCP timestamp acceptance is a separate category.
 
+## 19 October scanner-perspective verification staged (not yet executed)
+
+A scoped Ansible diagnostic `IaC/ansible/playbooks/greenbone-icmp-timestamp-media01-readonly.yml` plus Python packet probe `IaC/ansible/playbooks/files/icmp-timestamp-probe.py` has been committed. It uses root raw IPv4 ICMP on **greenbone-01** to transmit **three ICMP timestamp requests (type 13)** to **media-01**; it counts only matching, checksum-valid **timestamp replies (type 14)** and runs an ordinary ping as a reachability baseline. `scripts/validate-icmp-timestamp-probe.py` checks the offline logic. It does not change firewalls, sysctl, Greenbone scans, service state or risk acceptance. The diagnostic is **Git-staged, not yet syntax-checked or executed by the user**. Positive replies confirm exposure; absence of replies does not by itself clear the accepted finding. This approach honours the user's decision against firewall changes.
+
 ## Current user decision: no firewall modification
 
 The read-only media-01 audit passed (ok=2 changed=0 failed=0) and identified active nftables with broad IPv4 ICMP acceptance and no timestamp-specific rule. The user does not want a firewall change for these accepted ICMP findings. The previously described nftables pilot is **not authorised** and remains only a historical technical option. The existing TCP timestamp sysctl role does not affect ICMP replies; documented kernel sysctls do not selectively disable unicast ICMP timestamp responses. Do not alter the 15 accepted-risk findings based on this review. Investigate from an independent scanner perspective, read-only, before revisiting the risk disposition.

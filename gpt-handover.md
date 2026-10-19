@@ -146,6 +146,28 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
+### Next action — verify media-01 ICMP timestamp replies from greenbone-01
+
+**19 October live evidence already collected:** Read-only 14-host audit limited to media-01 completed `ok=2 changed=0 failed=0`, finding Debian 13, active nftables, a broad IPv4 ICMP accept and no timestamp-specific rules. The user rejected a firewall change, and **none was made**. Previous TCP timestamp sysctl hardening (16 October) addresses another protocol.
+
+**New Git-only, not yet run on either host:** `IaC/ansible/playbooks/greenbone-icmp-timestamp-media01-readonly.yml` runs **only on greenbone-01 (192.168.2.57)** and probes only `media-01 (192.168.2.195)`. It asserts both inventory identities, runs the RFC 792 stdlib ICMP packet/reply matching self-test, attempts one ordinary IPv4 ping for context, then sends three ICMP type-13 timestamp requests and listens for matching type-14 replies (valid IPv4 source, ICMP checksum, identifier, sequence). Python source is `IaC/ansible/playbooks/files/icmp-timestamp-probe.py` and offline regression test is `scripts/validate-icmp-timestamp-probe.py`. Source file is passed via Ansible `command` with `python3 -c`, so it is not persistently installed on greenbone-01. This is a bounded active network diagnostic; it performs **no configuration change and does not run a Greenbone scan**. Only target, request/reply counts and result markers are printed (not timestamp payloads).
+
+**Next from admin-01 (no `exit 1`, stop on first failure):**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-icmp-timestamp-probe.py &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-media01-readonly.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-media01-readonly.yml --limit greenbone-01
+```
+
+Interpret `ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED` as proof media-01 still answers timestamp requests. `NO_REPLY_OBSERVED` is **not proof of remediation**: check ping baseline, network/permission errors, packet loss, and preferably scanner evidence. No accepted-risk entries or firewall configuration should be altered without a new decision. After reporting the results, choose next read-only diagnosis or retain documented low-risk acceptance.
+
 ### Latest decision — no ICMP firewall changes
 
 19 October 2026: User declined the proposed media-01 ICMP timestamp firewall pilot. No pilot was committed or deployed. Earlier read-only audit succeeded on media-01 (ok=2 changed=0 failed=0): active nftables, broad IPv4 ICMP allow, and no timestamp-specific rules. Previous TCP timestamp sysctl hardening does not cover ICMP timestamps. Linux kernel documentation provides no dedicated sysctl to disable unicast ICMP timestamp replies selectively. Preserve existing risk acceptances and working network configuration. Next review scanner evidence/read-only external ICMP behaviour rather than modifying nftables; do not propose an ICMP firewall change without renewed user approval.
