@@ -128,6 +128,9 @@ The initial qBittorrent Web UI administrator password is temporary until a perma
 
 ## Firewall
 
+**19 October ICMP timestamp mitigation — deployed and independently verified live:** User executed the Git-managed `greenbone-icmp-timestamp-media01-cutover.yml`. `media-01 ok=18 changed=2 failed=0`, `greenbone-01 ok=8 changed=0 failed=0`, no unreachable hosts. The existing `inet media_filter` input chain now drops only IPv4 `icmp type timestamp-request` before established/related and broad IPv4 ICMP allowance; ordinary ping and IPv6 ICMP remain supported. Scanner-side result was `MEDIA01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED` and `MEDIA01_ICMP_ECHO=PASS`, replacing the pre-deployment 3/3 replies. Trusted qBittorrent HTTPS/443 still responds, LAN TCP/8081 remains blocked, loopback backend TCP/8081 remains available. NFS, SMB, SSH, Kodi/DLNA and exporter firewall allowances remain in Git-managed rules; no kernel or application service changes. Rollback `playbooks/greenbone-icmp-timestamp-media01-rollback.yml` was not used. This awaits a new completed Greenbone scan before removing its accepted-risk classification. Historical plans below are superseded.
+
+
 **19 October approved ICMP timestamp filtering — Git only, not deployed:** The existing media-01 nftables role is extended with a toggle `media_firewall_icmp_timestamp_drop_enabled: true`, adding only `icmp type timestamp-request drop` before the generic IPv4 ICMP allow. It does not disable ping/ICMPv6 or change the verified HTTPS-only qBittorrent, SSH, SMB, Kodi/DLNA, NFS and monitoring allowances. Apply via `playbooks/greenbone-icmp-timestamp-media01-cutover.yml` after offline validator and syntax checks; scanner pre/post tests run on greenbone-01. Scoped manual rollback: `playbooks/greenbone-icmp-timestamp-media01-rollback.yml`. At present the live host still responds to 3/3 timestamp requests; no firewall reload or service change has occurred from this Git staging.
 
 

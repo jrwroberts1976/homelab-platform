@@ -2,7 +2,7 @@
 
 # Greenbone accepted-risk assessment — 19 October 2026
 
-**Status:** Review only. No accepted-risk policy or live firewall changes, and no new Greenbone scan completed by this review.
+**Status:** Live media-01 ICMP timestamp pilot successfully deployed and independently verified on 19 October. The accepted-risk policy is unchanged, and no new Greenbone vulnerability scan has been completed. Other hosts remain under review.
 
 ## Last report's 15 accepted findings
 
@@ -44,7 +44,11 @@ A scoped Ansible diagnostic `IaC/ansible/playbooks/greenbone-icmp-timestamp-medi
 
 ## Current user decision: no firewall modification
 ## Follow-up kernel investigation — read-only evidence, 19 October 2026
-## 19 October revised decision — narrow existing media firewall pilot authorised
+## Live pilot outcome — media-01 timestamp requests blocked
+
+**19 October 2026, user-provided Ansible evidence:** The approved `greenbone-icmp-timestamp-media01-cutover.yml` completed successfully on **media-01 (`ok=18 changed=2 failed=0`)** and independent verifier **greenbone-01 (`ok=8 changed=0 failed=0`)**, with neither unreachable. Before mitigation, the scoped scanner-side test recorded **3 matching replies from 3 unicast ICMP timestamp requests**. After activating the narrow, Git-managed `icmp type timestamp-request drop` rule, the verifier returned `MEDIA01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `MEDIA01_ICMP_ECHO=PASS`, and `HTTPS_443=PASS; LAN_HTTP_8081=BLOCKED; LOOPBACK_HTTP_8081=AVAILABLE`. This is strong independent evidence of successful operational mitigation **on media-01 only**, not confirmation from a completed new Greenbone vulnerability report. No application, kernel or sysctl change was required. Scoped manual rollback remains Git-managed but unused. **Existing risk acceptances have not been removed or reclassified.** 13 other reported ICMP hosts and the one BirdNET csrf HttpOnly finding remain for separate decisions.
+
+## Historical pilot plan — approved and now deployed
 
 After the no-sysctl kernel investigation, user explicitly approved **adding a firewall mitigation** for media-01. Do **not install a second firewall**: `media_firewall` already manages `/etc/nftables.conf`. A single conditional IPv4 timestamp-request (type 13) drop is Git-staged before broad ICMP allow, with a separate opt-out rollback playbook and pre/post independent scanner probes. **The user has not yet deployed it; the previously reproduced 3/3 replies remain the last live evidence.** Leave all 15 accepted-risk allowlist entries unchanged until a fresh completed Greenbone scan confirms findings are eliminated; the BirdNET HttpOnly acceptance remains separate. No kernel modifications or reboots.
 
