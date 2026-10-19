@@ -4,6 +4,8 @@
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** 16 October patching/TLS/security reconciliation applied to the canonical current-state and installed-solutions documents.
 
+**19 October updated risk decision:** Following the successful read-only media-01 firewall audit, the user ruled out changes to firewalls for accepted ICMP timestamp findings. The earlier firewall-pilot suggestion below is superseded. Keep existing accepted-risk entries intact, distinguish TCP sysctl hardening from ICMP timestamp handling, and prefer read-only scanner-perspective verification before further action. No live changes.
+
 ## Working rules
 
 **19 October — user-prioritised review of 15 accepted Greenbone risks:** Last report contains 14 ICMP timestamp replies and one BirdNET-Go csrf cookie missing HttpOnly; historical TCP timestamp acceptances are separate and should not be disabled based on these counts. ICMP mitigation is feasible by narrowly filtering IPv4 type-13 timestamp requests, but first audit firewall ownership for 14 hosts (particularly Proxmox-2/LXC/Docker), then test media-01 pilot with rollback. Preserve BirdNET's deliberate JavaScript-readable csrf token until compatibility of HttpOnly is demonstrated. New Git-only read-only playbook `greenbone-accepted-icmp-firewall-readonly.yml` and review `docs/security/GREENBONE-ACCEPTED-RISKS-2026-10-19.md`; no live changes, changed acceptances or new scan yet. Run audit before designing any remediation.
