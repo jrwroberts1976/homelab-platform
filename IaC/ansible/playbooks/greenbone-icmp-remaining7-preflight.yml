@@ -1,0 +1,116 @@
+---
+- name: Read-only preflight for remaining seven ICMP timestamp targets
+  hosts: dns-01,dns-02,mail-relay-01,zabbix-01,komodo-01,admin-01,Proxmox-2
+  gather_facts: false
+  become: true
+  serial: 1
+  vars:
+    expected_ipv4:
+      dns-01: 192.168.2.51
+      dns-02: 192.168.2.50
+      mail-relay-01: 192.168.2.54
+      zabbix-01: 192.168.2.59
+      komodo-01: 192.168.2.58
+      admin-01: 192.168.2.48
+      Proxmox-2: 192.168.2.71
+    native_lxc:
+      - dns-01
+      - dns-02
+      - mail-relay-01
+      - zabbix-01
+      - komodo-01
+    baseline_sha: 60dac93ffe0ea440fc4a8941a080b6fb8d2c8655d47baf856e97182a0d1ca29a
+
+  tasks:
+    - name: Require exact Ansible inventory target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in expected_ipv4
+          - ansible_host == expected_ipv4[inventory_hostname]
+        fail_msg: "Unknown target or changed Ansible address; stop."
+
+    - name: Read authoritative firewall configuration digest
+      ansible.builtin.stat:
+        path: /etc/nftables.conf
+        checksum_algorithm: sha256
+        get_checksum: true
+      register: firewall_file
+
+    - name: List active nftables tables
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, list, tables]
+      register: nft_tables
+      changed_when: false
+
+    - name: Read native INPUT chain where present
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, -a, list, chain, inet, filter, input]
+      register: nft_input
+      changed_when: false
+      failed_when: nft_input.rc not in [0, 1]
+
+    - name: Read nftables service status without changing it
+      ansible.builtin.command:
+        argv: [systemctl, is-active, nftables.service]
+      register: nft_service
+      changed_when: false
+      failed_when: false
+
+    - name: Verify audited configuration on native LXC targets
+      ansible.builtin.assert:
+        that:
+          - firewall_file.stat.exists | bool
+          - firewall_file.stat.checksum == baseline_sha
+          - nft_input.rc == 0
+          - "'hook input priority filter; policy accept' in nft_input.stdout"
+          - "'timestamp-request' not in nft_input.stdout"
+          - "'homelab-icmp-' not in nft_input.stdout"
+          - nft_service.stdout == 'active'
+        fail_msg: "Native LXC firewall drift detected; refuse to stage changes."
+      when: inventory_hostname in native_lxc
+
+    - name: Preserve special-host firewall classification
+      ansible.builtin.assert:
+        that:
+          - nft_input.rc != 0
+          - nft_tables.stdout | trim == ''
+        fail_msg: "Unexpected rules on management host; review before change."
+      when: inventory_hostname in ['admin-01', 'Proxmox-2']
+
+    - name: Verify scanner-to-target ICMP echo connectivity
+      ansible.builtin.command:
+        argv: [ping, -n, -c, '2', -W, '2', "{{ expected_ipv4[inventory_hostname] }}"]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+
+    - name: Independently probe remaining timestamp exposure
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "{{ expected_ipv4[inventory_hostname] }}"
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+      register: timestamp_probe
+
+    - name: Require expected vulnerable baseline for remaining host
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REQUESTS_SENT=3' in timestamp_probe.stdout"
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=3' in timestamp_probe.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in timestamp_probe.stdout"
+        fail_msg: "Timestamp baseline changed; investigate before cutover."
+
+    - name: Report preflight evidence
+      ansible.builtin.debug:
+        msg:
+          host: "{{ inventory_hostname }}"
+          address: "{{ expected_ipv4[inventory_hostname] }}"
+          nft_config_sha: "{{ firewall_file.stat.checksum | default('missing') }}"
+          nftables_service: "{{ nft_service.stdout }}"
+          native_input_exists: "{{ nft_input.rc == 0 }}"
+          nft_tables: "{{ nft_tables.stdout_lines }}"
+          scanner: "{{ timestamp_probe.stdout_lines }}"
