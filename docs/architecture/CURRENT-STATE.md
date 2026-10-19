@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October docker-01 accepted ICMP audit (live read-only; follow-up not run):** User executed `greenbone-accepted-icmp-firewall-readonly.yml --limit docker-01`: `ok=2 changed=0 failed=0`. Debian 13; nftables service inactive, nft rules readable with zero INPUT hooks, iptables rules readable, and no timestamp-specific rules detected. The real host INPUT backend/ownership is not yet confirmed. Git-staged `greenbone-icmp-timestamp-docker01-readonly.yml` will examine iptables backend/chain policies and independently probe timestamp replies from greenbone-01 without host configuration changes; it has **not been executed**. Do not deploy media-01's nftables role on docker-01, overwrite Docker chains, alter accepted-risk policy or claim a fix.
+
+
 **19 October confirmed media-01 ICMPv4 timestamp mitigation — LIVE:** Scoped Git-managed existing nftables-role cutover completed with `media-01 ok=18 changed=2 failed=0` and independent scanner `greenbone-01 ok=8 changed=0 failed=0`, zero unreachable hosts. Previous 3/3 timestamp replies from media-01 changed to `MEDIA01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, while `MEDIA01_ICMP_ECHO=PASS`, qBittorrent HTTPS/443 remains working, direct LAN TCP/8081 remains blocked and the loopback backend remains reachable. This is live pre/post verification, **not a new authenticated Greenbone report**. No sysctl, kernel, application services or accepted-risk allowlist changes. The 13 other accepted ICMP findings and BirdNET-Go csrf HttpOnly item still need separate analysis, and the original two Mediums still require a completed fresh vulnerability scan before scanner closure. Historical notes below are superseded where they describe the pilot as Git-only or disallowed.
 
 
