@@ -34,7 +34,11 @@ The accepted-risk **allowlist** also contains 15 older TCP timestamp NVT 1.3.6.1
 
 PROXMOX at 192.168.2.70 is NOT in the last report's 14 ICMP findings. Its older TCP timestamp acceptance is a separate category.
 
-## Recommended mitigation strategy
+## Current user decision: no firewall modification
+
+The read-only media-01 audit passed (ok=2 changed=0 failed=0) and identified active nftables with broad IPv4 ICMP acceptance and no timestamp-specific rule. The user does not want a firewall change for these accepted ICMP findings. The previously described nftables pilot is **not authorised** and remains only a historical technical option. The existing TCP timestamp sysctl role does not affect ICMP replies; documented kernel sysctls do not selectively disable unicast ICMP timestamp responses. Do not alter the 15 accepted-risk findings based on this review. Investigate from an independent scanner perspective, read-only, before revisiting the risk disposition.
+
+## Previously considered mitigation strategy (not approved)
 
 For a confirmed nftables-managed input chain, an IPv4 ICMP type 13 request drop before a broad IPv4 ICMP allow is promising. Do not drop all ICMP: preserve echo/ping, path MTU and IPv6 network/neighbor discovery. Some hosts may use Proxmox-native filtering, UFW or Docker-managed rules; these must be diagnosed separately. Never introduce an unmanaged temporary host firewall rule as the persistent fix.
 
