@@ -1,0 +1,122 @@
+---
+- name: Dedicated narrow ICMP timestamp suppression on Proxmox-2
+  hosts: Proxmox-2
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify target identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'Proxmox-2'
+          - ansible_host == '192.168.2.71'
+
+    - name: Inspect existing nftables tables without modifying them
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, list, tables]
+      changed_when: false
+      register: tables_before
+
+    - name: Reject unexpected nftables owner/state
+      ansible.builtin.assert:
+        that:
+          - tables_before.stdout | trim == '' or tables_before.stdout | trim == 'table inet homelab_icmp_proxmox2'
+
+    - name: Confirm Corosync active before cutover
+      ansible.builtin.command:
+        argv: [systemctl, is-active, corosync]
+      register: corosync_before
+      changed_when: false
+      failed_when: corosync_before.stdout | trim != 'active'
+
+    - name: Confirm cluster remains quorate before cutover
+      ansible.builtin.command:
+        argv: [pvecm, status]
+      register: quorum_before
+      changed_when: false
+      failed_when: "'Quorate:          Yes' not in quorum_before.stdout"
+
+    - name: Confirm independent scanner ping before cutover
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", 192.168.2.71]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+
+    - name: Confirm independent SSH before cutover
+      ansible.builtin.wait_for:
+        host: 192.168.2.71
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Deploy host-bound helper
+      ansible.builtin.copy:
+        src: ../roles/icmp_timestamp_proxmox2/files/proxmox2-icmp-nft.py
+        dest: /usr/local/sbin/homelab-icmp-proxmox2
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Deploy host-bound persistent systemd unit
+      ansible.builtin.copy:
+        src: ../roles/icmp_timestamp_proxmox2/files/homelab-icmp-proxmox2.service
+        dest: /etc/systemd/system/homelab-icmp-proxmox2.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd unit definitions only
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Start and enable dedicated guard only
+      ansible.builtin.systemd_service:
+        name: homelab-icmp-proxmox2.service
+        state: started
+        enabled: true
+
+    - name: Probe timestamp replies independently from scanner
+      ansible.builtin.command:
+        argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}", 192.168.2.71]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+      register: probe_after
+
+    - name: Require no timestamp replies
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in probe_after.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in probe_after.stdout"
+
+    - name: Confirm independent ordinary ping after cutover
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", 192.168.2.71]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+
+    - name: Confirm independent SSH after cutover
+      ansible.builtin.wait_for:
+        host: 192.168.2.71
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Confirm Corosync active after cutover
+      ansible.builtin.command:
+        argv: [systemctl, is-active, corosync]
+      register: corosync_after
+      changed_when: false
+      failed_when: corosync_after.stdout | trim != 'active'
+
+    - name: Confirm cluster still quorate after cutover
+      ansible.builtin.command:
+        argv: [pvecm, status]
+      register: quorum_after
+      changed_when: false
+      failed_when: "'Quorate:          Yes' not in quorum_after.stdout"
