@@ -18,6 +18,9 @@
 
 ## Working rules
 
+**19 October Docker host verification complete, chain details pending:** Read-only scanner probe reproduced `docker-01`'s accepted ICMP timestamp disclosure (normal ping PASS; 3 requests, 3 matching replies; `docker-01 ok=3 changed=0`, `greenbone-01 ok=5 changed=0`). No network changes. User's excerpt lacks the first-play iptables backend, INPUT policy and Docker chain indicators. Obtain them via `greenbone-icmp-timestamp-docker01-readonly.yml --limit docker-01 --forks 1`, then design a minimal Docker-compatible change and rollback if appropriate. No new Greenbone scan or risk acceptance changes.
+
+
 **19 October kernel-only mitigation assessed:** media-01's Raspberry Pi Linux 6.18.50 does **not** provide `net.ipv4.icmp_timestamp_ignore_all` (`TIMESTAMP_SYSCTL=NOT_PRESENT`). An upstream proposal is not a supported current kernel setting; a custom kernel patch would be a disproportionate maintenance/reboot burden for this low-impact LAN finding. User declined firewall changes, so keep the confirmed 3/3 ICMP finding accepted; no host changes. Distinguish prior TCP timestamp sysctl hardening. Greenbone scan verification of formerly actionable Medium findings remains pending.
 
 
