@@ -6,6 +6,9 @@
 
 ## Working rules
 
+**19 October — user-prioritised review of 15 accepted Greenbone risks:** Last report contains 14 ICMP timestamp replies and one BirdNET-Go csrf cookie missing HttpOnly; historical TCP timestamp acceptances are separate and should not be disabled based on these counts. ICMP mitigation is feasible by narrowly filtering IPv4 type-13 timestamp requests, but first audit firewall ownership for 14 hosts (particularly Proxmox-2/LXC/Docker), then test media-01 pilot with rollback. Preserve BirdNET's deliberate JavaScript-readable csrf token until compatibility of HttpOnly is demonstrated. New Git-only read-only playbook `greenbone-accepted-icmp-firewall-readonly.yml` and review `docs/security/GREENBONE-ACCEPTED-RISKS-2026-10-19.md`; no live changes, changed acceptances or new scan yet. Run audit before designing any remediation.
+
+
 - Work in priority order unless James explicitly reprioritises.
 - Update this file when a project closes, changes scope or is reprioritised.
 - Verify live state before marking implementation complete.
