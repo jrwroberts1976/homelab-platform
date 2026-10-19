@@ -1,0 +1,80 @@
+---
+- name: Stage controller-only ICMP timestamp protection
+  hosts: admin-01
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify target identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'admin-01'
+          - ansible_host == '192.168.2.48'
+
+    - name: Confirm current nftables tables are empty
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, list, tables]
+      register: tables_before
+      changed_when: false
+
+    - name: Refuse unexpected firewall state
+      ansible.builtin.assert:
+        that:
+          - tables_before.stdout | trim == ''
+
+    - name: Verify QNetd is active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, corosync-qnetd]
+      changed_when: false
+      register: qnetd_before
+      failed_when: qnetd_before.stdout | trim != 'active'
+
+    - name: Install dedicated host helper
+      ansible.builtin.copy:
+        src: ../roles/icmp_timestamp_admin01/files/admin01-icmp-nft.py
+        dest: /usr/local/sbin/homelab-icmp-admin01
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install dedicated persistence unit
+      ansible.builtin.copy:
+        src: ../roles/icmp_timestamp_admin01/files/homelab-icmp-admin01.service
+        dest: /etc/systemd/system/homelab-icmp-admin01.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload only systemd manager configuration
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Start controller-only unit and enable at boot
+      ansible.builtin.systemd_service:
+        name: homelab-icmp-admin01.service
+        enabled: true
+        state: started
+
+    - name: Probe type-13 suppression from Greenbone
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - 192.168.2.48
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+      register: probe_after
+
+    - name: Require no matching timestamp reply
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in probe_after.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in probe_after.stdout"
+
+    - name: Confirm QNetd remains active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, corosync-qnetd]
+      changed_when: false
+      register: qnetd_after
+      failed_when: qnetd_after.stdout | trim != 'active'
