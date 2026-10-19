@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October docker-01 ICMP finding independently reproduced (read-only):** The `greenbone-icmp-timestamp-docker01-readonly.yml` run succeeded: `docker-01 ok=3 changed=0 failed=0`, `greenbone-01 ok=5 changed=0 failed=0`. Ping passed; 3 of 3 timestamp requests received matching replies from `192.168.2.220`. Its ICMP risk remains present and accepted until properly mitigated and scanner-verified. The shared user output omits the earlier Docker iptables INPUT/chain/backend detail, so firewall ownership is still undetermined. Re-run only `--limit docker-01` read-only to get those indicators before proposing an IaC firewall fix; do not import the media-01 nftables configuration. No Docker or service changes or fresh Greenbone scan occurred.
+
+
 **19 October docker-01 accepted ICMP audit (live read-only; follow-up not run):** User executed `greenbone-accepted-icmp-firewall-readonly.yml --limit docker-01`: `ok=2 changed=0 failed=0`. Debian 13; nftables service inactive, nft rules readable with zero INPUT hooks, iptables rules readable, and no timestamp-specific rules detected. The real host INPUT backend/ownership is not yet confirmed. Git-staged `greenbone-icmp-timestamp-docker01-readonly.yml` will examine iptables backend/chain policies and independently probe timestamp replies from greenbone-01 without host configuration changes; it has **not been executed**. Do not deploy media-01's nftables role on docker-01, overwrite Docker chains, alter accepted-risk policy or claim a fix.
 
 
