@@ -4,7 +4,7 @@
   gather_facts: false
   become: true
   vars:
-    birdnet_go_csrf_httponly_canary: false
+    birdnet_go_csrf_httponly_canary: true
   tasks:
     - name: Require exact BirdNET host
       ansible.builtin.assert:
