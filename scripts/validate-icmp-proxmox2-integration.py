@@ -77,5 +77,5 @@ try:
     raise AssertionError("Failed nft table enumeration unexpectedly accepted")
 except RuntimeError:
     pass
-print("ADMIN01 MOCK APPLY / IDEMPOTENCY / ROLLBACK / DRIFT GUARDS: PASS")
+print("PROXMOX2 MOCK APPLY / IDEMPOTENCY / ROLLBACK / DRIFT GUARDS: PASS")
 print("No live nftables, systemd or remote host commands invoked")
