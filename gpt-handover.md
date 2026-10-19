@@ -8,6 +8,28 @@
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
+## Latest monitor-01 evidence and next read-only diagnostic — 19 October 2026
+
+**User's uploaded terminal log:** After the successful docker-01 ICMP timestamp remediation (already recorded), the user ran `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-accepted-icmp-firewall-readonly.yml --limit monitor-01 --forks 1`. It finished `monitor-01 ok=2 changed=0 unreachable=0 failed=0`. Reported Debian GNU/Linux 13 (Trixie), no detected active nftables/UFW/firewalld/Proxmox firewall systemd services; `NFT_RULESET=not-readable`; `IPTABLES_RULESET=readable`; `IPTABLES_TIMESTAMP_REQUEST_REFERENCES=0`; `AUDIT=READ_ONLY`. This does **not** establish the effective iptables backend/policy or whether monitor-01 responds to timestamp requests. No host change made. User's log also contained benign `-bash: command not found` errors after accidentally pasting previous Ansible report output back into the shell; the actual cutover play had already passed and no SSH failure was evidenced.
+
+**New Git-staged read-only diagnostic, NOT YET RUN:** `IaC/ansible/playbooks/greenbone-icmp-timestamp-monitor01-readonly.yml` targets only `monitor-01` (`192.168.2.52`) and `greenbone-01` (`192.168.2.57`). On monitor-01 it reports the iptables backend, filter INPUT/FORWARD/OUTPUT policy/rule counts, whether `nft` is missing/unavailable or permission denied, and brief Prometheus/Grafana/Loki/Alertmanager service indicators. On greenbone-01 it checks ordinary ping and sends three bounded ICMP timestamp requests via the existing self-tested shared packet probe. No firewall, network, kernel, monitoring service, risk acceptance or Greenbone scan changes. This playbook is committed only; source syntax and live behaviour have not yet been verified.
+
+**Next commands on admin-01:**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-monitor01-readonly.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-monitor01-readonly.yml \
+  --limit 'monitor-01:greenbone-01' --forks 1
+```
+
+Review both plays before designing any narrowly scoped host-specific ICMP mitigation. **Two hosts operationally mitigated (media-01/docker-01); 12 still outstanding, including monitor-01; no fresh authenticated Greenbone scan or allowlist change yet.**
+
 ## Latest live deployment — docker-01 ICMP timestamps suppressed (19 October 2026)
 
 **Verified user-provided Ansible output:** The scoped `greenbone-icmp-timestamp-docker01-cutover.yml --limit 'docker-01:greenbone-01' --forks 1` completed on docker-01 **`ok=22 changed=3 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`**, and on greenbone-01 **`ok=8 changed=0 unreachable=0 failed=0`**. After installing the Git-managed `docker_icmp_timestamp` host INPUT type-13-only rule, the scanner-side probe's `Require zero matching timestamp replies` assertion passed and reported `DOCKER01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `DOCKER01_ICMP_ECHO=PASS`, `DOCKER01_FIREWALL_SCOPE=HOST_INPUT_ONLY`. Before this cutover, the separately captured scanner probe had observed three matching timestamp replies from three requests, while normal ping worked. No new Greenbone scan has run.
