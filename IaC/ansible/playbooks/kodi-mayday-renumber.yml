@@ -1,0 +1,90 @@
+---
+- name: Correct confirmed Mayday episode numbers
+  hosts: media-01
+  become: true
+  gather_facts: false
+
+  vars:
+    base: /srv/media/TV/Mayday
+    fixes:
+      - season: Season 3
+        old: "Air Crash Investigations  3x05 - Mistaken Identity (Iran Air Flight 655).avi"
+        new: "Air Crash Investigations  3x06 - Mistaken Identity (Iran Air Flight 655).avi"
+      - season: Season 3
+        old: "Air Crash Investigations  3x06 - Bomb on Board (Philippine Airlines Flight 434).avi"
+        new: "Air Crash Investigations  3x05 - Bomb on Board (Philippine Airlines Flight 434).avi"
+      - season: Season 4
+        old: "Air.Crash.Investigations.S04E07.Out Of Sight.avi"
+        new: "Air.Crash.Investigations.S04E09.Out Of Sight.avi"
+      - season: Season 4
+        old: "Air.Crash.Investigations.S04E08.Inbound - Flight 21 is Missing - Fog of War.avi"
+        new: "Air.Crash.Investigations.S04E10.Inbound - Flight 21 is Missing - Fog of War.avi"
+      - season: Season 4
+        old: "Air.Crash.Investigations.S04E09.Vertigo.avi"
+        new: "Air.Crash.Investigations.S04E07.Vertigo.avi"
+      - season: Season 4
+        old: "Air.Crash.Investigations.S04E10.Ghost Plane.avi"
+        new: "Air.Crash.Investigations.S04E08.Ghost Plane.avi"
+
+  tasks:
+    - name: Check for subtitle and metadata sidecars
+      ansible.builtin.find:
+        paths:
+          - "{{ base }}/Season 3"
+          - "{{ base }}/Season 4"
+        patterns:
+          - "*.srt"
+          - "*.ass"
+          - "*.ssa"
+          - "*.sub"
+          - "*.idx"
+          - "*.nfo"
+        recurse: false
+      register: sidecars
+
+    - name: Require no sidecars needing renaming
+      ansible.builtin.assert:
+        that:
+          - sidecars.matched == 0
+        fail_msg: "Sidecars found; inspect them before renaming."
+
+    - name: Check original filenames
+      ansible.builtin.stat:
+        path: "{{ base }}/{{ item.season }}/{{ item.old }}"
+      loop: "{{ fixes }}"
+      register: originals
+
+    - name: Check destination filenames
+      ansible.builtin.stat:
+        path: "{{ base }}/{{ item.season }}/{{ item.new }}"
+      loop: "{{ fixes }}"
+      register: destinations
+
+    - name: Require exactly one valid file per correction
+      ansible.builtin.assert:
+        that:
+          - (item.0.stat.isreg | default(false)) != (item.1.stat.isreg | default(false))
+        fail_msg: "Missing file or filename collision: {{ item.0.item.old }}"
+      loop: "{{ originals.results | zip(destinations.results) | list }}"
+      loop_control:
+        label: "{{ item.0.item.season }} / {{ item.0.item.old }}"
+
+    - name: Display proposed renames
+      ansible.builtin.debug:
+        msg: "{{ item.season }}: {{ item.old }} -> {{ item.new }}"
+      loop: "{{ fixes }}"
+
+    - name: Apply safe episode renumbering
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/mv
+          - --no-clobber
+          - --
+          - "{{ base }}/{{ item.season }}/{{ item.old }}"
+          - "{{ base }}/{{ item.season }}/{{ item.new }}"
+      loop: "{{ fixes }}"
+      loop_control:
+        index_var: idx
+      when:
+        - not ansible_check_mode
+        - originals.results[idx].stat.isreg | default(false)
