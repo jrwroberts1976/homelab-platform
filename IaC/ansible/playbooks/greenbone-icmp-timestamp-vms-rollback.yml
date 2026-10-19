@@ -1,0 +1,66 @@
+---
+# Roll back only the exact-tagged ICMP timestamp INPUT policy on audited VMs.
+# Limit to the affected VM; do not touch other hosts or Docker chains.
+- name: Remove only the persistent VM ICMP timestamp rule
+  hosts: "sensor-01:cloud-01:greenbone-01"
+  serial: 1
+  become: true
+  gather_facts: false
+  vars:
+    vm_icmp_expected_ips:
+      sensor-01: 192.168.2.55
+      cloud-01: 192.168.2.53
+      greenbone-01: 192.168.2.57
+    vm_icmp_probe_from: "{{ 'monitor-01' if inventory_hostname == 'greenbone-01' else 'greenbone-01' }}"
+  tasks:
+    - name: Require audited VM identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in vm_icmp_expected_ips
+          - ansible_host == vm_icmp_expected_ips[inventory_hostname]
+
+    - name: Stop and disable only the timestamp persistence service
+      ansible.builtin.systemd_service:
+        name: homelab-icmp-timestamp-vm.service
+        state: stopped
+        enabled: false
+
+    - name: Verify exact matching host INPUT type-13 drop no longer exists
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-icmp-timestamp-vm, absent]
+      changed_when: false
+
+    - name: Verify SSH service is accessible after rollback
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        timeout: 8
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require ordinary ping after rollback
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "{{ ansible_host }}"]
+      delegate_to: "{{ vm_icmp_probe_from }}"
+      changed_when: false
+
+    - name: Observe timestamp replies from independent scanner after rollback
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "{{ ansible_host }}"
+      delegate_to: "{{ vm_icmp_probe_from }}"
+      register: vm_icmp_rollback_probe
+      changed_when: false
+
+    - name: Record scoped rollback without changing acceptance
+      ansible.builtin.debug:
+        msg:
+          - "VM={{ inventory_hostname }}"
+          - "VM_ICMP_TIMESTAMP_ROLLBACK=APPLIED"
+          - "{{ vm_icmp_rollback_probe.stdout_lines }}"
+          - "Only exact-tagged rule removed; no container/forwarding/cluster changes."
