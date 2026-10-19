@@ -1,0 +1,66 @@
+---
+- name: Assert one of three audited VMs and exact IPv4
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname in ['cloud-01', 'sensor-01', 'greenbone-01']
+      - icmp_timestamp_vm_target_ip is defined
+      - icmp_timestamp_vm_target_ip in ansible_facts.all_ipv4_addresses
+    fail_msg: Unexpected VM host/address; refusing to modify firewall.
+
+- name: Require expected iptables-nft backend
+  ansible.builtin.command:
+    argv: [/usr/sbin/iptables, -V]
+  register: vm_icmp_backend
+  changed_when: false
+  failed_when: vm_icmp_backend.rc != 0 or 'nf_tables' not in vm_icmp_backend.stdout
+
+- name: Read current INPUT and Docker chain state without exposing output
+  ansible.builtin.command:
+    argv: [/usr/sbin/iptables-save, -t, filter]
+  register: vm_icmp_filter
+  changed_when: false
+
+- name: Require unchanged baseline host INPUT owner
+  ansible.builtin.assert:
+    that:
+      - "':INPUT ACCEPT ' in vm_icmp_filter.stdout"
+      - >-
+        (vm_icmp_filter.stdout_lines |
+         select('match', '^-A INPUT ') |
+         reject('search', 'homelab-icmp-vm-' ~ inventory_hostname) | list | length) == 0
+    fail_msg: INPUT chain has new unrecognised rules; refuse modification.
+
+- name: Install narrowly scoped host INPUT rule helper
+  ansible.builtin.template:
+    src: helper.sh.j2
+    dest: /usr/local/sbin/homelab-icmp-timestamp-vm
+    owner: root
+    group: root
+    mode: "0755"
+    validate: "/bin/sh -n %s"
+
+- name: Install independent timestamp persistence unit
+  ansible.builtin.template:
+    src: homelab-icmp-timestamp-vm.service.j2
+    dest: /etc/systemd/system/homelab-icmp-timestamp-vm.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Start only the timestamp-specific rule persistence unit
+  ansible.builtin.systemd_service:
+    name: homelab-icmp-timestamp-vm.service
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Enforce idempotent exact host INPUT rule
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/homelab-icmp-timestamp-vm, apply]
+  register: vm_icmp_apply
+  changed_when: "'RULE_ADDED' in vm_icmp_apply.stdout"
+
+- name: Require exact ICMP type-13 rule present
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/homelab-icmp-timestamp-vm, present]
+  changed_when: false
