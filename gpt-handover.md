@@ -1,10 +1,10 @@
 # GPT Handover — Homelab Platform
 
-**Last updated:** 18 October 2026
+**Last updated:** 19 October 2026
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
-**Current status (19 October 2026):** Greenbone emailed a completed authenticated scan (report `6e75928d-f251-426f-809c-991ffcbf6603`) showing **0 Critical / 0 High / 2 Medium / 0 Low**, 789 informational, 15 accepted. Both Mediums have been traced to their services through live, read-only Ansible. The BirdNET-Go `csrf` cookie `Secure` flag is now verified live on both `/` and `/login` (`docker-01 ok=7 changed=0 failed=0`; **no reload was necessary**). qBittorrent HTTPS is **not yet deployed**: on media-01 Nginx and Certbot are absent, TCP 443 has no listener and the proposed FQDN is now confirmed on both Pi-hole resolvers (each returns 192.168.2.195). The DNS stage has been applied and independently verified on both resolvers; the certificate/Nginx HTTPS stage is still Git-only, with no firewall cutover or qBittorrent restart. Greenbone boot-readiness guard remains Git-only/undeployed. Greenbone email completion does not establish `managed.json` publication. The two-Medium remediation is **not yet closed** until qBittorrent HTTPS cutover and a fresh scan confirm both findings disappear; then review 14 accepted ICMP timestamps and one BirdNET `HttpOnly` cookie.
+**Current status (19 October 2026):** The 19 October authenticated Greenbone scan report email (`6e75928d-f251-426f-809c-991ffcbf6603`) identified 2 actionable Medium findings, 0 Critical/High/Low and 15 accepted risks. BirdNET-Go `csrf; Secure` verified live on both tested HTTPS paths; fresh Greenbone confirmation pending. **qBittorrent trusted HTTPS is now deployed on media-01**, `qbittorrent-https-stage.yml` returned `ok=33 changed=9 failed=0`, Nginx syntax PASS and `QBITTORRENT_HTTPS_STAGE=PASS` (trusted HTTP 200). qBittorrent, Kodi, SMB and NFS were not restarted. Both Pi-hole resolvers resolve `qbittorrent.home.jrwroberts.co.uk` to `192.168.2.195`. **LAN TCP/443 access is not yet allowed by the managed firewall; LAN HTTP/8081 remains open.** A 443+8081 LAN firewall stage is now Git-staged (not tested on admin-01 or deployed) and keeps a separate future 8081 cutover. The Greenbone boot guard is still undeployed; report evidence publication is not independently verified. Both Mediums remain open until HTTP 8081 LAN access is restricted and a completed scan confirms remediation; accepted 14 ICMP timestamps and one BirdNET missing HttpOnly cookie are next.
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
@@ -146,27 +146,25 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
-### Next action — stage trusted qBittorrent HTTPS on media-01 (DNS verified)
+### Next action — validate and deploy LAN-only HTTPS/443 firewall stage
 
-**19 October DNS deployment complete:** User pulled `ed02d6eb`, ran `dns-local-records.yml --limit dns-01,dns-02` and verified the FQDN with a direct `dig @127.0.0.1` on both hosts. Results: `dns-01 ok=4 changed=0 failed=0`; `dns-02 ok=4 changed=0 failed=0`; **both returned `192.168.2.195`** for `qbittorrent.home.jrwroberts.co.uk`. The ad-hoc `ansible.builtin.command` lookup reported `CHANGED` as its default; it was read-only. No media-01 firewall, qBittorrent, Kodi, SMB or NFS change occurred.
+**New live evidence 19 October:** The qBittorrent certificate/Nginx deployment to media-01 passed: Ansible `ok=33 changed=9 failed=0`, `QBITTORRENT_HTTPS_STAGE=PASS`, HTTPS HTTP 200, valid Nginx configuration; no qBittorrent/Kodi/SMB/NFS restart. This proves HTTPS on the host, not WebUI login from the LAN. Port 8081 remains accessible from LAN and local WebUI operation must remain protected.
 
-**Source correction in Git:** The HTTPS Nginx proxy cookie rule is now explicitly `proxy_cookie_flags ~.* secure;` rather than a regex with an empty pattern. The offline validator mirrors that change. It is not deployed. The previously passed offline check should be run again against this revised template before HTTPS provisioning.
+**Git-only (not deployed):** `media_firewall` now has two explicit managed qBittorrent LAN flags, currently **HTTPS/443=true and legacy HTTP/8081=true**. Its nftables template retains LAN SSH, SMB, Kodi SSDP/UPnP, Proxmox NFS and Prometheus rules. Existing firewall role validates the ruleset via `nft -c`, restarts nftables on template changes and verifies active rules/backup peers. New `playbooks/qbittorrent-https-lan-stage.yml` checks active Nginx and qBittorrent, trusted local HTTPS, installs the updated `media_firewall` role only, then checks trusted HTTPS and legacy HTTP from `admin-01`. New `scripts/validate-qbittorrent-lan-firewall.py` offline-renders nftables and asserts preserved critical ports, a default-drop firewall and a possible *future* false flag for 8081 without activating that cutover. **Not yet validated or deployed live.**
 
-**Next scoped stage** (after pulling newest Git): existing `qbittorrent-https-stage.yml` verifies that both Pi-hole resolvers answer correctly, that controller Cloudflare DNS-01 credentials exist, and that the qBittorrent backend works. It then provisions the trusted certificate using `homelab_certificate`, installs Nginx HTTPS on port 443 and checks a trusted TLS response. **Do not modify the default-deny media firewall or close port 8081 yet**; local TLS checks can work via the host loopback route even though LAN 443 remains blocked. Do not treat a successful local TLS check as proof that a browser on the LAN can connect or log in.
+**Next commands, offline checks only:**
 
 ```bash
 cd ~/projects/homelab-platform
 git pull --ff-only || exit 1
-python3 scripts/validate-qbittorrent-https.py || exit 1
+python3 scripts/validate-qbittorrent-lan-firewall.py || exit 1
 python3 scripts/validate-estate.py || exit 1
 cd IaC/ansible
 ansible-playbook -i inventory/hosts.yml \
-  playbooks/qbittorrent-https-stage.yml --syntax-check || exit 1
-ansible-playbook -i inventory/hosts.yml \
-  playbooks/qbittorrent-https-stage.yml --limit media-01
+  playbooks/qbittorrent-https-lan-stage.yml --syntax-check
 ```
 
-Review Ansible output and certificate outcome. If the Cloudflare credentials preflight fails, it should fail closed before provisioning. If the proxy check fails, do not retry blindly or shut off 8081; investigate. After a successful stage, design a separate controlled nftables 443 LAN allowance/8081 restriction with a rollback, and confirm HTTPS browser login, Web API, cookie security and download health. Only after Greenbone rescans clear both Mediums should we review the 14 accepted ICMP timestamp findings and one BirdNET cookie missing HttpOnly. The Greenbone boot guard remains a separate undeployed project.
+Only after these pass, run the scoped LAN firewall stage on `media-01`. Check `QBITTORRENT_LAN_HTTPS=PASS` and `QBITTORRENT_LEGACY_HTTP=AVAILABLE` from the Ansible controller. Then use a real LAN browser to sign in at `https://qbittorrent.home.jrwroberts.co.uk`, check session behavior and downloads. **Do not close HTTP/8081 yet.** After login is verified, stage a separate firewall-only cutover that denies direct LAN 8081 access while keeping local Nginx→qBittorrent loopback, and confirm access + Greenbone scan. Then examine 14 accepted ICMP timestamps and the BirdNET HttpOnly finding. Keep the Greenbone boot-readiness guard separate and still undeployed.
 
 ### Previous plan — trusted qBittorrent HTTPS staging; retain HTTP rollback
 
@@ -232,6 +230,7 @@ Do not regard BirdNET Medium as remediated until Nginx reload/live cookie flag v
 
 | Date | Change / observation | Evidence and validation | Next step |
 | --- | --- | --- |
+| 2026-10-19 | qBittorrent trusted HTTPS confirmed deployed; a LAN-only HTTPS/443 firewall allowance with HTTP/8081 rollback is staged in Git, not deployed. | Ansible media-01: `ok=33 changed=9 failed=0`, HTTPS HTTP 200, Nginx syntax PASS, no Kodi/SMB/NFS/qBittorrent restart. New firewall code and offline validator not yet run on controller. | Pull and run firewall offline validator, estate and playbook syntax; separately deploy 443 alongside 8081 and verify HTTPS login from LAN. |
 | 2026-10-19 | BirdNET Secure cookie verified live; qBittorrent HTTPS prerequisites missing; staged dual-resolver DNS alias, DNS-01 certificate/Nginx HTTPS proxy (Git only). | BirdNET `ok=7 changed=0 failed=0`; cookie Secure PASS on `/` and `/login`, no reload. qBittorrent readiness `ok=3 changed=0 failed=0`, no Nginx/Certbot/443/cert/DNS. New qBittorrent stage and offline validator **not yet run or deployed**. | Run offline/Jinja and Ansible syntax checks; then roll out DNS first, HTTPS second, preserve 8081 until verified cutover. |
 | 2026-10-19 | Two Mediums traced to specific live services; BirdNET Secure cookie config staged, qBittorrent TLS preflight staged. | Read-only Ansible: media-01 8081 qBittorrent, no nginx/cert; docker-01 Nginx 1.26.3 csrf cookie Secure=False/HttpOnly=False; both hosts ok=3 changed=0 failed=0. Staged Git source only. | Syntax-check, deploy narrowly scoped BirdNET Nginx change and verify live flags; run qBittorrent HTTPS prerequisites check before certificate/DNS/IaC cutover. |
 | 2026-10-19 | Identified `media-01:8081` as qBittorrent HTTP Web UI, and `docker-01:443` as BirdNET-Go Nginx; staged scoped read-only host checks. | Repository source: `docs/architecture/MEDIA-01.md`, qBittorrent and birdnet_go roles. New diagnostic playbook committed only; no Ansible live checks or remediation. | Pull/syntax/run `greenbone-two-medium-readonly.yml` on media-01 and docker-01, then plan reversible HTTPS and Secure cookie fixes. |

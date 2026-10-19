@@ -136,13 +136,15 @@ Current explicitly authorised inbound services include:
 |---|---|---|
 | `192.168.2.0/24` | TCP/22 | SSH administration |
 | `192.168.2.0/24` | TCP/445 | SMB |
-| `192.168.2.0/24` | TCP/8081 | qBittorrent Web UI |
+| `192.168.2.0/24` | TCP/8081 | qBittorrent Web UI, HTTP rollback (still open) |
 | `192.168.2.0/24` | UDP/1900 | Kodi SSDP/DLNA discovery |
 | `192.168.2.0/24` | TCP/1255 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
 | `192.168.2.0/24` | TCP/1879 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
 | `192.168.2.70` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.71` | TCP/2049 | Proxmox NFS backup access |
 | `192.168.2.52` | TCP/9100 | Prometheus node_exporter |
+
+**19 October pending (Git-only) firewall stage:** The qBittorrent trusted HTTPS endpoint is working locally, but LAN/443 is not yet exposed. The intended first phase allows LAN/443 **and** retains LAN/8081 for rollback. After successful LAN browser login and session verification, a second, separately validated firewall-only change will disable LAN HTTP/8081. These are planned rules, not evidence of live firewall changes.
 
 The firewall configuration is managed in:
 
@@ -191,6 +193,6 @@ media firewall:       active, default-drop
 DLNA client access:   working after UPnP TCP firewall allowance
 ```
 
-**19 October 2026 pending change (Git only, not deployed):** The latest authenticated Greenbone scan flagged this Web UI's LAN HTTP listener as a Medium cleartext finding. A scoped qBittorrent HTTPS Nginx/Let's Encrypt DNS-01 implementation is staged in Git with internal name `qbittorrent.home.jrwroberts.co.uk`, and a corresponding managed Pi-hole alias is staged for both resolvers. As of the 19 October live check, media-01 had no Nginx/Certbot, trusted cert, or HTTPS listener; the Web UI still runs on `*:8081`. Managed Pi-hole DNS name has been deployed and verified on dns-01 and dns-02 (both return `192.168.2.195`), but no TLS, firewall or service cutover has been executed. Keep the legacy Web UI path available until HTTPS/login and rollback are tested, then change only the Web UI firewall rule.
+**19 October 2026 pending change (Git only, not deployed):** The latest authenticated Greenbone scan flagged this Web UI's LAN HTTP listener as a Medium cleartext finding. A scoped qBittorrent HTTPS Nginx/Let's Encrypt DNS-01 implementation is staged in Git with internal name `qbittorrent.home.jrwroberts.co.uk`, and a corresponding managed Pi-hole alias is staged for both resolvers. As of the 19 October live check, media-01 had no Nginx/Certbot, trusted cert, or HTTPS listener; the Web UI still runs on `*:8081`. Managed Pi-hole DNS name has been deployed and verified on dns-01 and dns-02 (both return `192.168.2.195`), but trusted qBittorrent HTTPS now **has been deployed** and returned HTTP 200 (`media-01 ok=33 changed=9 failed=0`), but no firewall or HTTP cutover has occurred. Keep the legacy Web UI path available until HTTPS/login and rollback are tested, then change only the Web UI firewall rule.
 
 The qBittorrent installation did not disrupt Kodi, SMB or the Kodi audio watchdog. Kodi DLNA connectivity was restored by allowing SSDP discovery and the two observed Kodi UPnP TCP service ports through the managed LAN firewall.
