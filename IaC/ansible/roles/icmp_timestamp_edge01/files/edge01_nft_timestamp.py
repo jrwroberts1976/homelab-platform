@@ -13,7 +13,7 @@ BACKUP = Path("/var/lib/homelab-icmp-edge01/nftables.conf.before")
 BASE_SHA = "60dac93ffe0ea440fc4a8941a080b6fb8d2c8655d47baf856e97182a0d1ca29a"
 TAG = "homelab-icmp-edge01"
 INSERT = "                ip protocol icmp icmp type timestamp-request counter drop comment \"" + TAG + "\"\n"
-ANCHOR = "                type filter hook input priority filter;\n"
+ANCHOR_RE = re.compile(r"(?m)^[ \\t]+type filter hook input priority filter;[ \\t]*$")
 
 
 def run(*args):
@@ -69,7 +69,8 @@ def main(mode):
     validate_identity()
     original = CONF.read_bytes()
     before = original.decode()
-    if before.count(ANCHOR) != 1:
+    anchors = list(ANCHOR_RE.finditer(before))
+    if len(anchors) != 1:
         raise RuntimeError("Expected unique input chain anchor not found")
     expected = before.replace(INSERT, "")
     if hashlib.sha256(expected.encode()).hexdigest() != BASE_SHA:
@@ -101,7 +102,7 @@ def main(mode):
         if BACKUP.read_bytes() != expected.encode():
             raise RuntimeError("Backup mismatch")
         if INSERT not in before:
-            replacement = before.replace(ANCHOR, ANCHOR + INSERT)
+            replacement = before[:anchors[0].end()] + "\n" + INSERT.rstrip("\n") + before[anchors[0].end():]
             if replacement.count(INSERT) != 1:
                 raise RuntimeError("Non-unique insertion")
             # nft syntax-check a temporary candidate before atomically installing.
