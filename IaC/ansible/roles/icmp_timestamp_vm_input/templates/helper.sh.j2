@@ -1,0 +1,26 @@
+#!/bin/sh
+# Managed host INPUT-only ICMPv4 type-13 drop. Do not alter Docker chains.
+set -eu
+IPTABLES=/usr/sbin/iptables
+TARGET={{ icmp_timestamp_vm_target_ip }}/32
+COMMENT=homelab-icmp-vm-{{ inventory_hostname }}
+"$IPTABLES" -V | grep -q '(nf_tables)' || { echo WRONG_BACKEND >&2; exit 2; }
+check() {
+  "$IPTABLES" -w -C INPUT -d "$TARGET" -p icmp --icmp-type 13 -m comment --comment "$COMMENT" -j DROP >/dev/null 2>&1
+}
+case "${1:-}" in
+  apply)
+    if check; then echo RULE_PRESENT
+    else
+      "$IPTABLES" -w -I INPUT 1 -d "$TARGET" -p icmp --icmp-type 13 -m comment --comment "$COMMENT" -j DROP
+      echo RULE_ADDED
+    fi ;;
+  remove)
+    if check; then
+      "$IPTABLES" -w -D INPUT -d "$TARGET" -p icmp --icmp-type 13 -m comment --comment "$COMMENT" -j DROP
+      echo RULE_REMOVED
+    else echo RULE_ABSENT; fi ;;
+  present) check; echo RULE_PRESENT ;;
+  absent) if check; then exit 1; fi; echo RULE_ABSENT ;;
+  *) exit 2 ;;
+esac
