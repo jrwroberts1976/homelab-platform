@@ -139,6 +139,10 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October 2026 ICMP timestamp independently confirmed on media-01:** User ran the scoped read-only external probe from greenbone-01 following successful Python self-test, estate validation and Ansible syntax check. `greenbone-01 ok=5 changed=0 failed=0`, normal ping PASS, three IPv4 timestamp requests sent, **three matching replies received**: `ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`. The accepted disclosure remains live on media-01 and is not a false positive; it is **retained as accepted risk** under the prior user direction not to modify the firewall. No sysctl/firewall/service change and no new full authenticated Greenbone scan were performed. The other 13 reported ICMP timestamp hosts remain unverified by this new probe.
+
+
+
 **19 October read-only ICMP timestamp confirmation (Git-staged, not yet run):** `greenbone-icmp-timestamp-media01-readonly.yml` targets only greenbone-01 as the external probe and media-01 as the target, with three RFC 792 ICMPv4 type-13 timestamp packets and matching type-14 response validation, plus one ordinary ping. The companion offline validator is `scripts/validate-icmp-timestamp-probe.py`. This test does **not** change nftables, sysctl, applications, scan tasks or accepted risks. Its results are not yet available; no-reply is not definitive evidence of remediation. User's no-firewall decision remains in force.
 
 
