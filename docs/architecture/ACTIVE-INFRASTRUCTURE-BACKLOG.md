@@ -104,6 +104,10 @@ The Proxmox Ceph enterprise repository was found enabled even though Ceph is not
 
 ## Vulnerability management — FINAL VALIDATION PENDING
 
+**19 October 2026 update — two actionable Medium findings remain:** A completed authenticated managed Greenbone scan report email arrived at 03:07 UTC (04:07 BST), report `6e75928d-f251-426f-809c-991ffcbf6603`: Critical 0, High 0, Medium 2, Low 0, informational 789, accepted 15. `media-01` (`192.168.2.195:8081`) is flagged for sensitive information transmitted over HTTP (score 4.8; OID `1.3.6.1.4.1.25623.1.0.108440`); `docker-01` (`192.168.2.220:443`) is flagged for missing Secure cookie attribute (score 5.0; OID `1.3.6.1.4.1.25623.1.0.902661`). Neither finding lists a CVE. Investigate service ownership and actual headers/configuration read-only through Ansible, then implement reviewed IaC remediation; do not presume fix or suppress findings. Acceptance count fell from 30 to 15; previous TCP timestamp findings are absent and require evidence-based reconciliation. Also confirm current report `managed.json` publication to `monitor-01` and dashboard freshness. The new emailed scan does not show the systemd boot-readiness guard is fixed; the guard remains staged/undeployed. **Leave final validation OPEN.**
+
+
+
 The 14 October control-validation scan ended at:
 
 ```text
