@@ -1,0 +1,73 @@
+---
+# Explicit rollback only for docker-01 ICMP type-13 host INPUT rule.
+# Does not touch Docker's FORWARD/NAT/DOCKER chains or remove any packages.
+- name: Disable docker-01 dedicated ICMP timestamp filter service
+  hosts: docker-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require exact expected Docker host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "docker-01"
+          - ansible_host == "192.168.2.220"
+
+    - name: Stop and disable only the timestamp persistence unit
+      ansible.builtin.systemd_service:
+        name: homelab-docker01-icmp-timestamp.service
+        state: stopped
+        enabled: false
+
+    - name: Require the dedicated host INPUT rule is absent
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-docker01-icmp-timestamp, absent]
+      changed_when: false
+
+    - name: Require Docker remains running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: docker01_rollback_docker
+      changed_when: false
+      failed_when: docker01_rollback_docker.stdout | trim != "active"
+
+    - name: Require trusted BirdNET HTTPS still responds
+      ansible.builtin.uri:
+        url: https://birdnet.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        use_proxy: false
+        follow_redirects: none
+        return_content: false
+        status_code: [200, 301, 302, 401, 403]
+        timeout: 12
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+- name: Observe Docker-host ICMP timestamp after rollback
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require normal ping after rollback
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.220"]
+      changed_when: false
+
+    - name: Observe restored timestamp response without treating lack of reply as rollback failure
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.220"
+      register: docker01_rollback_timestamp
+      changed_when: false
+
+    - name: Report rollback status and observed response
+      ansible.builtin.debug:
+        msg:
+          - "DOCKER01_ICMP_TIMESTAMP_ROLLBACK=APPLIED"
+          - "{{ docker01_rollback_timestamp.stdout_lines }}"
+          - "Docker remains running; host INPUT timestamp rule is absent."
+          - "Git default playbook can re-enable the unit if applied again."
