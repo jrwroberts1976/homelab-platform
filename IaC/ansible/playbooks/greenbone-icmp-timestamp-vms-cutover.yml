@@ -1,0 +1,209 @@
+---
+# Remediate only audited standard Debian VMs, one by one.
+# With --limit sensor-01, only that VM changes; delegated scanner remains available.
+- name: Drop only ICMPv4 timestamp requests in host INPUT on selected audited VMs
+  hosts: "sensor-01:cloud-01:greenbone-01"
+  become: true
+  serial: 1
+  gather_facts: true
+  vars:
+    vm_icmp_expected_ips:
+      sensor-01: 192.168.2.55
+      cloud-01: 192.168.2.53
+      greenbone-01: 192.168.2.57
+    vm_icmp_probe_from: "{{ 'monitor-01' if inventory_hostname == 'greenbone-01' else 'greenbone-01' }}"
+    vm_icmp_uses_docker: "{{ inventory_hostname in ['cloud-01', 'greenbone-01'] }}"
+  pre_tasks:
+    - name: Confirm audited host address and scanner perspective
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in vm_icmp_expected_ips
+          - ansible_host == vm_icmp_expected_ips[inventory_hostname]
+          - vm_icmp_probe_from != inventory_hostname
+        fail_msg: Unexpected host/probe identity; refuse any firewall change.
+
+    - name: Require normal echo from an independent host
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "{{ ansible_host }}"]
+      delegate_to: "{{ vm_icmp_probe_from }}"
+      changed_when: false
+
+    - name: Require confirmed ICMP timestamp exposure before cutover
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "{{ ansible_host }}"
+      delegate_to: "{{ vm_icmp_probe_from }}"
+      register: vm_icmp_pre_probe
+      changed_when: false
+
+    - name: Stop if the timestamp baseline is no longer reproducible
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in vm_icmp_pre_probe.stdout"
+
+    - name: Require SSH access from the controller before modifying INPUT
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        timeout: 8
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require Docker active when this VM hosts applications as containers
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: vm_icmp_docker_before
+      changed_when: false
+      failed_when: vm_icmp_docker_before.stdout | trim != 'active'
+      when: vm_icmp_uses_docker | bool
+
+    - name: Snapshot running container identities
+      ansible.builtin.command:
+        argv: [docker, ps, -q, --no-trunc]
+      register: vm_icmp_containers_before
+      changed_when: false
+      when: vm_icmp_uses_docker | bool
+
+    - name: Require running application containers
+      ansible.builtin.assert:
+        that:
+          - vm_icmp_containers_before.stdout_lines | length >= 1
+      when: vm_icmp_uses_docker | bool
+
+    - name: Snapshot sensor capture service states
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [suricata.service, homelab-zeek.service]
+      register: vm_icmp_sensor_services_before
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == 'sensor-01'
+
+    - name: Require at least one active sensor capture service
+      ansible.builtin.assert:
+        that:
+          - >-
+            (vm_icmp_sensor_services_before.results |
+             selectattr('stdout', 'defined') |
+             selectattr('stdout', 'equalto', 'active') | list | length) >= 1
+      when: inventory_hostname == 'sensor-01'
+
+    - name: Snapshot complete filter table before host INPUT-only rule
+      ansible.builtin.command:
+        argv: [/usr/sbin/iptables-save, -t, filter]
+      register: vm_icmp_rules_before
+      changed_when: false
+
+  tasks:
+    - name: Install independently persisted exact-tagged host INPUT filter
+      ansible.builtin.include_role:
+        name: icmp_timestamp_vm_input
+      vars:
+        icmp_timestamp_vm_target_ip: "{{ vm_icmp_expected_ips[inventory_hostname] }}"
+
+    - name: Verify SSH still accepts new connections
+      ansible.builtin.wait_for:
+        host: "{{ ansible_host }}"
+        port: 22
+        state: started
+        timeout: 8
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify Docker engine is still active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: vm_icmp_docker_after
+      changed_when: false
+      failed_when: vm_icmp_docker_after.stdout | trim != 'active'
+      when: vm_icmp_uses_docker | bool
+
+    - name: Compare running application containers after rule
+      ansible.builtin.command:
+        argv: [docker, ps, -q, --no-trunc]
+      register: vm_icmp_containers_after
+      changed_when: false
+      when: vm_icmp_uses_docker | bool
+
+    - name: Require unchanged application container identities
+      ansible.builtin.assert:
+        that:
+          - vm_icmp_containers_before.stdout_lines | sort == vm_icmp_containers_after.stdout_lines | sort
+      when: vm_icmp_uses_docker | bool
+
+    - name: Observe sensor capture services after rule
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [suricata.service, homelab-zeek.service]
+      register: vm_icmp_sensor_services_after
+      changed_when: false
+      failed_when: false
+      when: inventory_hostname == 'sensor-01'
+
+    - name: Preserve sensor capture service states
+      ansible.builtin.assert:
+        that:
+          - >-
+            (vm_icmp_sensor_services_before.results | map(attribute='stdout') | list)
+            == (vm_icmp_sensor_services_after.results | map(attribute='stdout') | list)
+      when: inventory_hostname == 'sensor-01'
+
+    - name: Compare filter table after narrow INPUT rule
+      ansible.builtin.command:
+        argv: [/usr/sbin/iptables-save, -t, filter]
+      register: vm_icmp_rules_after
+      changed_when: false
+
+    - name: Require unchanged Docker, FORWARD and INPUT policy definitions
+      ansible.builtin.assert:
+        that:
+          - "':INPUT ACCEPT ' in vm_icmp_rules_after.stdout"
+          - >-
+            (vm_icmp_rules_before.stdout_lines | select('match', '^:') | list)
+            == (vm_icmp_rules_after.stdout_lines | select('match', '^:') | list)
+          - >-
+            (vm_icmp_rules_before.stdout_lines |
+             select('match', '^-A (FORWARD|DOCKER)') | list)
+            == (vm_icmp_rules_after.stdout_lines |
+             select('match', '^-A (FORWARD|DOCKER)') | list)
+
+    - name: Require normal ping after firewall change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "{{ ansible_host }}"]
+      delegate_to: "{{ vm_icmp_probe_from }}"
+      changed_when: false
+
+    - name: Probe timestamp replies after firewall change
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "{{ ansible_host }}"
+      delegate_to: "{{ vm_icmp_probe_from }}"
+      register: vm_icmp_post_probe
+      changed_when: false
+
+    - name: Require no matching timestamp replies on independent scanner
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in vm_icmp_post_probe.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in vm_icmp_post_probe.stdout"
+        fail_msg: Timestamp response persists. Run exact-host rollback if necessary.
+
+    - name: Report confirmed scope of single-VM mitigation
+      ansible.builtin.debug:
+        msg:
+          - "VM={{ inventory_hostname }}"
+          - "VM_ICMP_TIMESTAMP=NO_REPLY_OBSERVED"
+          - "VM_ICMP_ECHO=PASS"
+          - "VM_FIREWALL_SCOPE=HOST_INPUT_ONLY"
+          - "Docker containers / Suricata+Zeek states preserved where applicable."
+          - "No Docker, database, sensor or scanner service restart."
+          - "Rollback: greenbone-icmp-timestamp-vms-rollback.yml --limit {{ inventory_hostname }}"
