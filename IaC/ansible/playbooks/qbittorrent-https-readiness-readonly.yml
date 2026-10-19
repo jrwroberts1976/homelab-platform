@@ -1,0 +1,43 @@
+---
+# Read-only groundwork for trusted HTTPS qBittorrent reverse proxy.
+# Do not change the Web UI, listener, firewall, DNS, or certificates.
+- name: Review qBittorrent HTTPS readiness on media-01
+  hosts: media_hosts
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check port 443, service version and installed TLS packages
+      ansible.builtin.shell: |
+        printf 'TCP_443_LISTENER:\n'
+        ss -H -ltnp | awk '$4 ~ /:443$/ { print }'
+        printf 'QBITTORRENT_PACKAGE='
+        dpkg-query -W -f='${Version}' qbittorrent-nox 2>/dev/null || true
+        printf '\nNGINX_PACKAGE='
+        dpkg-query -W -f='${Version}' nginx 2>/dev/null || true
+        printf '\nCERTBOT_PACKAGE='
+        dpkg-query -W -f='${Version}' certbot 2>/dev/null || true
+        printf '\nCERTIFICATE_PRESENT='
+        test -f /etc/letsencrypt/live/qbittorrent.home.jrwroberts.co.uk/fullchain.pem && echo yes || echo no
+        printf 'QBITTORRENT_SERVICE='
+        systemctl is-active qbittorrent || true
+      args:
+        executable: /bin/bash
+      register: qb_https_readiness
+      changed_when: false
+
+    - name: Query managed local DNS resolvers without changing them
+      ansible.builtin.shell: |
+        for resolver in 192.168.2.50 192.168.2.51; do
+          printf 'DNS_RESOLVER=%s ANSWER=' "$resolver"
+          timeout 5 dig @"$resolver" qbittorrent.home.jrwroberts.co.uk A +short +time=2 +tries=1 | paste -sd, -
+        done
+      args:
+        executable: /bin/bash
+      register: qb_dns_readiness
+      changed_when: false
+
+    - name: Report safe qBittorrent HTTPS prerequisites
+      ansible.builtin.debug:
+        msg:
+          - "{{ qb_https_readiness.stdout_lines }}"
+          - "{{ qb_dns_readiness.stdout_lines }}"

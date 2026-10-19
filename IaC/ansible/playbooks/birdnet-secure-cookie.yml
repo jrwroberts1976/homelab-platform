@@ -1,0 +1,11 @@
+---
+# Security-only deploy: no BirdNET container recreation or unrelated roles.
+- name: Correct BirdNET-Go HTTPS CSRF cookie Secure attribute
+  hosts: birdnet_hosts
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Apply isolated BirdNET-Go secure cookie Nginx configuration
+      ansible.builtin.include_role:
+        name: birdnet_go
+        tasks_from: secure_cookie
