@@ -1,0 +1,32 @@
+---
+- name: Roll back only edge-01 tagged INPUT filter and exact config insertion
+  hosts: edge-01
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Assert rollback scoped to expected host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'edge-01'
+          - ansible_host == '192.168.2.56'
+
+    - name: Remove only tagged rule by handle and restore audited file
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-icmp-edge01, rollback]
+      register: edge_undo
+      changed_when: "'RULE_REMOVED' in edge_undo.stdout or 'CONFIG_RESTORED' in edge_undo.stdout"
+
+    - name: Confirm SSH still available
+      ansible.builtin.wait_for:
+        host: 192.168.2.56
+        port: 22
+        timeout: 8
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Confirm ordinary ping
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", 192.168.2.56]
+      delegate_to: greenbone-01
+      changed_when: false
