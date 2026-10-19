@@ -12,64 +12,100 @@
       - birdnet_secure_site.stat.isreg | default(false)
     fail_msg: "BirdNET HTTPS Nginx site is absent; refusing to create/restart anything."
 
-- name: Install cookie Secure policy in existing BirdNET Nginx site
-  ansible.builtin.template:
-    src: nginx-birdnet.conf.j2
-    dest: "{{ birdnet_go_nginx_site }}"
-    owner: root
-    group: root
-    mode: "0644"
-    backup: true
-  register: birdnet_secure_config
+- name: Deploy and validate BirdNET cookie policy with rollback
+  block:
+    - name: Install cookie Secure policy in existing BirdNET Nginx site
+      ansible.builtin.template:
+        src: nginx-birdnet.conf.j2
+        dest: "{{ birdnet_go_nginx_site }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: birdnet_secure_config
+    
+    - name: Validate Nginx syntax before reload
+      ansible.builtin.command:
+        argv: [nginx, -t]
+      changed_when: false
+    
+    - name: Reload Nginx only when cookie policy changed
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
+      when: birdnet_secure_config.changed
+    
+    - name: Verify csrf Set-Cookie is Secure without logging its value
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        import http.client
+        import ssl
+        context = ssl._create_unverified_context()
+        for path in ("/", "/login"):
+            connection = http.client.HTTPSConnection(
+                "127.0.0.1", 443, context=context, timeout=7
+            )
+            try:
+                connection.request("GET", path, headers={
+                    "Host": "{{ birdnet_go_fqdn }}"
+                })
+                response = connection.getresponse()
+                cookies = response.headers.get_all("Set-Cookie", [])
+                csrf = [
+                    item for item in cookies
+                    if item.split("=", 1)[0].strip().lower() == "csrf"
+                ]
+                if not csrf:
+                    raise RuntimeError("Expected csrf cookie missing on " + path)
+                for cookie in csrf:
+                    attrs = {
+                        part.strip().split("=", 1)[0].lower()
+                        for part in cookie.split(";")[1:]
+                    }
+                    if "secure" not in attrs:
+                        raise RuntimeError("csrf Secure flag missing on " + path)
+                print("SECURE_CSRF_COOKIE=PASS path=" + path)
+            finally:
+                connection.close()
+        PY
+      args:
+        executable: /bin/bash
+      register: birdnet_cookie_verified
+      changed_when: false
+  rescue:
+    - name: Restore previous Nginx site when validation fails
+      ansible.builtin.copy:
+        src: "{{ birdnet_secure_config.backup_file }}"
+        dest: "{{ birdnet_go_nginx_site }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+      when:
+        - birdnet_secure_config is defined
+        - birdnet_secure_config.changed | default(false)
+        - birdnet_secure_config.backup_file is defined
 
-- name: Validate Nginx syntax before reload
-  ansible.builtin.command:
-    argv: [nginx, -t]
-  changed_when: false
+    - name: Validate restored Nginx configuration
+      ansible.builtin.command:
+        argv: [nginx, -t]
+      changed_when: false
 
-- name: Reload Nginx only when cookie policy changed
-  ansible.builtin.systemd_service:
-    name: nginx
-    state: reloaded
-  when: birdnet_secure_config.changed
+    - name: Reload restored Nginx configuration when policy changed
+      ansible.builtin.systemd_service:
+        name: nginx
+        state: reloaded
+      when:
+        - birdnet_secure_config is defined
+        - birdnet_secure_config.changed | default(false)
+        - birdnet_secure_config.backup_file is defined
 
-- name: Verify csrf Set-Cookie is Secure without logging its value
-  ansible.builtin.shell: |
-    python3 - <<'PY'
-    import http.client
-    import ssl
-    context = ssl._create_unverified_context()
-    for path in ("/", "/login"):
-        connection = http.client.HTTPSConnection(
-            "127.0.0.1", 443, context=context, timeout=7
-        )
-        try:
-            connection.request("GET", path, headers={
-                "Host": "{{ birdnet_go_fqdn }}"
-            })
-            response = connection.getresponse()
-            cookies = response.headers.get_all("Set-Cookie", [])
-            csrf = [
-                item for item in cookies
-                if item.split("=", 1)[0].strip().lower() == "csrf"
-            ]
-            if not csrf:
-                raise RuntimeError("Expected csrf cookie missing on " + path)
-            for cookie in csrf:
-                attrs = {
-                    part.strip().split("=", 1)[0].lower()
-                    for part in cookie.split(";")[1:]
-                }
-                if "secure" not in attrs:
-                    raise RuntimeError("csrf Secure flag missing on " + path)
-            print("SECURE_CSRF_COOKIE=PASS path=" + path)
-        finally:
-            connection.close()
-    PY
-  args:
-    executable: /bin/bash
-  register: birdnet_cookie_verified
-  changed_when: false
+    - name: Report unsuccessful cookie remediation
+      ansible.builtin.fail:
+        msg: >-
+          BirdNET Secure-cookie remediation did not validate.
+          Previous Nginx site was restored if an Ansible backup was available;
+          investigate before retrying.
 
 - name: Report secure cookie verification
   ansible.builtin.debug:
