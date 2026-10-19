@@ -50,6 +50,13 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
     mod.BACKUP = base / "state" / "before"
     mod.BASE_SHA = hashlib.sha256(baseline.encode()).hexdigest()
     mod.validate_identity = lambda: None
+    # Redirect helper's /etc syntax-check temporary file into our mock directory.
+    real_mkstemp = tempfile.mkstemp
+    def sandbox_mkstemp(*args, **kwargs):
+        if kwargs.get("dir") == "/etc":
+            kwargs["dir"] = str(base)
+        return real_mkstemp(*args, **kwargs)
+    mod.tempfile = types.SimpleNamespace(mkstemp=sandbox_mkstemp)
     mod.CONF.write_text(baseline)
     state = {"rule": False, "handle": "17", "prefix": ""}
     def fake_run(*argv):
