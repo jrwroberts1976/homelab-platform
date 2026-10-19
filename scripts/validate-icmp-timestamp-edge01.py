@@ -94,6 +94,23 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
         mod.main("rollback")
         assert mod.CONF.read_text() == baseline and not state["rule"]
         mod.main("rollback")
+    # The production edge config uses tabs rather than spaces.
+    tab_baseline = baseline.replace(
+        "                type filter hook input priority filter;",
+        "\\t\\ttype filter hook input priority filter;",
+    )
+    if mod.BACKUP.exists():
+        mod.BACKUP.unlink()
+    mod.CONF.write_text(tab_baseline)
+    mod.BASE_SHA = hashlib.sha256(tab_baseline.encode()).hexdigest()
+    mod.main("apply")
+    assert mod.INSERT in mod.CONF.read_text() and state["rule"]
+    mod.main("rollback")
+    assert mod.CONF.read_text() == tab_baseline and not state["rule"]
+    mod.BASE_SHA = hashlib.sha256(baseline.encode()).hexdigest()
+    mod.CONF.write_text(baseline)
+    if mod.BACKUP.exists():
+        mod.BACKUP.unlink()
     # An unrecognised live INPUT rule must halt before config modification.
     original_run = mod.run
     def unexpected_rule(*argv):
