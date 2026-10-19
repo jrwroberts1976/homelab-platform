@@ -102,6 +102,7 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
     if mod.BACKUP.exists():
         mod.BACKUP.unlink()
     mod.CONF.write_text(tab_baseline)
+    assert mod.ANCHOR_RE.search(tab_baseline), "Tab-indented input hook was not recognised"
     mod.BASE_SHA = hashlib.sha256(tab_baseline.encode()).hexdigest()
     mod.main("apply")
     assert mod.INSERT in mod.CONF.read_text() and state["rule"]
