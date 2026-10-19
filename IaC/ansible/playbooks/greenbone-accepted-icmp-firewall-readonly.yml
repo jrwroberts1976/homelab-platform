@@ -1,0 +1,66 @@
+---
+# Read-only review of the 14 hosts with ICMP timestamp findings in the
+# 19 October 2026 authenticated Greenbone report. No firewall changes.
+- name: Identify firewall ownership for accepted ICMP timestamp findings
+  hosts: "media-01:docker-01:admin-01:dns-01:dns-02:monitor-01:cloud-01:mail-relay-01:sensor-01:edge-01:greenbone-01:komodo-01:zabbix-01:Proxmox-2"
+  gather_facts: false
+  become: true
+
+  tasks:
+    - name: Collect non-secret firewall indicators without changing any host
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        import pathlib
+        import re
+        import shutil
+        import subprocess
+
+        def run(argv):
+            if not shutil.which(argv[0]):
+                return None, ""
+            try:
+                p = subprocess.run(argv, capture_output=True, text=True, timeout=10, check=False)
+                return p.returncode, p.stdout
+            except (OSError, subprocess.TimeoutExpired):
+                return None, ""
+
+        os_release = pathlib.Path("/etc/os-release")
+        os_name = "unknown"
+        if os_release.is_file():
+            for line in os_release.read_text(errors="replace").splitlines():
+                if line.startswith("PRETTY_NAME="):
+                    os_name = line.partition("=")[2].strip().strip('"')
+                    break
+        print("OS=" + os_name)
+        print("SYSTEMD_CONTAINER_MARKER=" +
+              ("present" if pathlib.Path("/run/systemd/container").exists() else "absent"))
+        for unit in ("nftables", "ufw", "firewalld", "pve-firewall", "proxmox-firewall"):
+            rc, _ = run(["systemctl", "is-active", unit])
+            print("SERVICE_" + unit.replace("-", "_").upper() +
+                  "=" + ("active" if rc == 0 else "not-active-or-unknown"))
+
+        rc, rules = run(["nft", "-a", "list", "ruleset"])
+        print("NFT_RULESET=" + ("readable" if rc == 0 else "not-readable"))
+        if rc == 0:
+            print("NFT_INPUT_HOOKS=" + str(len(re.findall(r"hook input", rules))))
+            print("NFT_TIMESTAMP_REQUEST_REFERENCES=" + str(rules.count("timestamp-request")))
+            print("NFT_TIMESTAMP_REPLY_REFERENCES=" + str(rules.count("timestamp-reply")))
+            print("NFT_BROAD_IPV4_ICMP_ACCEPT=" + (
+                "present" if re.search(r"(?:ip protocol icmp|meta l4proto icmp) accept", rules)
+                else "not-observed"))
+
+        rc, rules = run(["iptables-save"])
+        print("IPTABLES_RULESET=" + ("readable" if rc == 0 else "not-readable"))
+        if rc == 0:
+            print("IPTABLES_TIMESTAMP_REQUEST_REFERENCES=" +
+                  str(rules.lower().count("timestamp-request")))
+        print("AUDIT=READ_ONLY")
+        PY
+      args:
+        executable: /bin/bash
+      register: accepted_icmp_firewall
+      changed_when: false
+
+    - name: Print only firewall indicators and ICMP timestamp rule counts
+      ansible.builtin.debug:
+        msg: "{{ accepted_icmp_firewall.stdout_lines }}"
