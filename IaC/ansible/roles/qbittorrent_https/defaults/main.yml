@@ -1,0 +1,11 @@
+---
+# Internal-only qBittorrent HTTPS reverse proxy; direct HTTP stays unchanged
+# until separate, explicitly verified LAN firewall cutover.
+qbittorrent_https_fqdn: qbittorrent.home.jrwroberts.co.uk
+qbittorrent_https_address: "192.168.2.195"
+qbittorrent_https_backend: "127.0.0.1"
+qbittorrent_https_backend_port: 8081
+qbittorrent_https_certificate_fullchain: "/etc/letsencrypt/live/{{ qbittorrent_https_fqdn }}/fullchain.pem"
+qbittorrent_https_certificate_key: "/etc/letsencrypt/live/{{ qbittorrent_https_fqdn }}/privkey.pem"
+qbittorrent_https_nginx_site: /etc/nginx/sites-available/qbittorrent.conf
+qbittorrent_https_nginx_enabled_site: /etc/nginx/sites-enabled/qbittorrent.conf

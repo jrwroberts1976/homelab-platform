@@ -1,0 +1,72 @@
+---
+# Stage HTTPS only: do not change media-01 firewall, qBittorrent service,
+# certificate client secrets, Kodi or backup services outside the certificate role.
+- name: Stage trusted qBittorrent HTTPS without cutting off existing WebUI
+  hosts: media_hosts
+  become: true
+  gather_facts: false
+  vars:
+    qbittorrent_https_fqdn: qbittorrent.home.jrwroberts.co.uk
+    homelab_certificate_fqdn: "{{ qbittorrent_https_fqdn }}"
+    homelab_certificate_cert_name: "{{ qbittorrent_https_fqdn }}"
+    homelab_certificate_domains:
+      - "{{ qbittorrent_https_fqdn }}"
+    homelab_certificate_deploy_hook_name: reload-qbittorrent-nginx
+    homelab_certificate_deploy_hook_content: |
+      #!/bin/sh
+      systemctl reload nginx
+
+  pre_tasks:
+    - name: Confirm protected Cloudflare DNS credentials exist on admin-01
+      ansible.builtin.stat:
+        path: "{{ homelab_certificate_cloudflare_credentials_source }}"
+      delegate_to: localhost
+      become: false
+      register: qbt_https_cloudflare_token
+      no_log: true
+
+    - name: Refuse TLS provisioning without protected certificate credentials
+      ansible.builtin.assert:
+        that:
+          - qbt_https_cloudflare_token.stat.isreg | default(false)
+        fail_msg: "Controller Cloudflare DNS-01 credentials missing. No host changes made."
+
+    - name: Confirm qBittorrent DNS resolves on both Pi-hole resolvers
+      ansible.builtin.command:
+        argv:
+          - dig
+          - "@{{ item }}"
+          - "{{ qbittorrent_https_fqdn }}"
+          - A
+          - +short
+          - +time=2
+          - +tries=1
+      loop: ["192.168.2.50", "192.168.2.51"]
+      register: qbt_https_dns
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Refuse provisioning if either Pi-hole resolver lacks the HTTPS name
+      ansible.builtin.assert:
+        that:
+          - >-
+            qbt_https_dns.results
+            | map(attribute='stdout')
+            | map('trim')
+            | select('equalto', '192.168.2.195')
+            | list
+            | length == 2
+        fail_msg: "qBittorrent local DNS missing on one or both Pi-hole resolvers."
+
+    - name: Require active qBittorrent HTTP backend before touching TLS tools
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8081/
+        return_content: false
+        status_code: [200, 302]
+        timeout: 7
+      changed_when: false
+
+  roles:
+    - role: homelab_certificate
+    - role: qbittorrent_https

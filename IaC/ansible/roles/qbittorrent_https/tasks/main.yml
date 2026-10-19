@@ -1,0 +1,106 @@
+---
+- name: Require existing active qBittorrent before provisioning proxy
+  ansible.builtin.command:
+    argv: [systemctl, is-active, qbittorrent]
+  register: qbt_https_backend_state
+  changed_when: false
+  failed_when: qbt_https_backend_state.stdout | trim != "active"
+
+- name: Require issued qBittorrent TLS certificate files
+  ansible.builtin.stat:
+    path: "{{ item }}"
+  loop:
+    - "{{ qbittorrent_https_certificate_fullchain }}"
+    - "{{ qbittorrent_https_certificate_key }}"
+  register: qbt_https_certs
+
+- name: Fail closed if trusted certificate material is missing
+  ansible.builtin.assert:
+    that:
+      - qbt_https_certs.results | map(attribute='stat.isreg') | map('default', false) | min
+    fail_msg: "No qBittorrent TLS cert/key; refusing HTTPS proxy installation."
+
+- name: Check existing listener on TCP 443
+  ansible.builtin.shell: |
+    ss -H -ltnp | awk '$4 ~ /:443$/ { print }'
+  args:
+    executable: /bin/bash
+  register: qbt_https_port443
+  changed_when: false
+
+- name: Refuse to replace an unrelated HTTPS server
+  ansible.builtin.assert:
+    that:
+      - qbt_https_port443.stdout | trim == "" or "nginx" in qbt_https_port443.stdout
+    fail_msg: "TCP 443 already owned by a non-Nginx service."
+
+- name: Install Nginx
+  ansible.builtin.apt:
+    name: nginx
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install qBittorrent TLS reverse-proxy server block
+  ansible.builtin.template:
+    src: nginx-qbittorrent.conf.j2
+    dest: "{{ qbittorrent_https_nginx_site }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  register: qbt_https_proxy_config
+
+- name: Enable qBittorrent HTTPS site
+  ansible.builtin.file:
+    src: "{{ qbittorrent_https_nginx_site }}"
+    dest: "{{ qbittorrent_https_nginx_enabled_site }}"
+    state: link
+  register: qbt_https_proxy_link
+
+- name: Remove Debian default HTTP site
+  ansible.builtin.file:
+    path: /etc/nginx/sites-enabled/default
+    state: absent
+  register: qbt_https_default
+
+- name: Validate Nginx configuration before activation
+  ansible.builtin.command:
+    argv: [nginx, -t]
+  changed_when: false
+
+- name: Start Nginx HTTPS service without touching qBittorrent
+  ansible.builtin.systemd_service:
+    name: nginx
+    enabled: true
+    state: started
+
+- name: Reload Nginx if HTTPS configuration changed
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+  when: >-
+    qbt_https_proxy_config.changed or
+    qbt_https_proxy_link.changed or
+    qbt_https_default.changed
+
+- name: Check fully validated TLS endpoint and HTTP response status
+  ansible.builtin.uri:
+    url: "https://{{ qbittorrent_https_fqdn }}/"
+    method: GET
+    validate_certs: true
+    follow_redirects: none
+    return_content: false
+    status_code: [200, 302]
+    timeout: 10
+  register: qbt_https_response
+  changed_when: false
+
+- name: Report qBittorrent TLS stage status without exposing credentials
+  ansible.builtin.debug:
+    msg:
+      - "QBITTORRENT_HTTPS_STAGE=PASS"
+      - "FQDN={{ qbittorrent_https_fqdn }}"
+      - "HTTPS_HTTP_STATUS={{ qbt_https_response.status }}"
+      - "Legacy 8081 LAN rule remains enabled until separate cutover."
+      - "qBittorrent, Kodi, SMB and NFS were not restarted."
