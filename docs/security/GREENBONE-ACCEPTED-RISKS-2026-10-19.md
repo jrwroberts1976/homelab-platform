@@ -34,7 +34,11 @@ The accepted-risk **allowlist** also contains 15 older TCP timestamp NVT 1.3.6.1
 
 PROXMOX at 192.168.2.70 is NOT in the last report's 14 ICMP findings. Its older TCP timestamp acceptance is a separate category.
 
-## 19 October scanner-perspective verification staged (not yet executed)
+## Confirmed live evidence — media-01 responds to ICMP timestamps
+
+**19 October 2026:** User ran the scoped read-only Ansible probe from greenbone-01 to media-01 after successful offline probe self-test, estate validation and playbook syntax check. Greenbone probe execution ended `ok=5 changed=0 unreachable=0 failed=0`. Normal IPv4 ping passed. **3 of 3 ICMPv4 timestamp requests received matching ICMPv4 timestamp replies**: `ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`. This independently confirms the ICMP timestamp disclosure remains present on media-01, not that it has been eliminated. No new Greenbone scan was run. Per user's explicit no-firewall direction, **retain this risk acceptance**; neither nftables, sysctl nor risk disposition changed. No equivalent observation has yet been collected for the other 13 hosts.
+
+## Historical staging note — scanner-perspective probe (now executed)
 
 A scoped Ansible diagnostic `IaC/ansible/playbooks/greenbone-icmp-timestamp-media01-readonly.yml` plus Python packet probe `IaC/ansible/playbooks/files/icmp-timestamp-probe.py` has been committed. It uses root raw IPv4 ICMP on **greenbone-01** to transmit **three ICMP timestamp requests (type 13)** to **media-01**; it counts only matching, checksum-valid **timestamp replies (type 14)** and runs an ordinary ping as a reachability baseline. `scripts/validate-icmp-timestamp-probe.py` checks the offline logic. It does not change firewalls, sysctl, Greenbone scans, service state or risk acceptance. The diagnostic is **Git-staged, not yet syntax-checked or executed by the user**. Positive replies confirm exposure; absence of replies does not by itself clear the accepted finding. This approach honours the user's decision against firewall changes.
 
