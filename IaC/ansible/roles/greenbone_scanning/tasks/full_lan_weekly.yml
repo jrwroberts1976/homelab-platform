@@ -1,0 +1,87 @@
+---
+# Separate, opt-in service and timer. Never touch the existing authenticated scan timer.
+- name: Verify existing managed timer and full-LAN runner
+  ansible.builtin.command:
+    argv: [systemctl, is-enabled, homelab-greenbone-managed-scan.timer]
+  register: managed_timer
+  changed_when: false
+  failed_when: managed_timer.stdout | trim != 'enabled'
+
+- name: Check existing automated runner executable
+  ansible.builtin.stat:
+    path: "{{ greenbone_scanning_runner }}"
+  register: runner_stat
+
+- name: Require existing Greenbone runner without replacing it
+  ansible.builtin.assert:
+    that:
+      - runner_stat.stat.isreg | default(false)
+      - runner_stat.stat.executable | default(false)
+
+- name: Inspect current weekly full LAN unit activity
+  ansible.builtin.command:
+    argv: [systemctl, is-active, homelab-greenbone-full-lan-scan.service]
+  register: existing_weekly_service
+  changed_when: false
+  failed_when: false
+
+- name: Never modify unit files while weekly scan is executing
+  ansible.builtin.assert:
+    that:
+      - existing_weekly_service.stdout | trim not in ['active', 'activating']
+
+- name: Validate runner's full LAN GMP task lookup without starting scan
+  ansible.builtin.command:
+    argv:
+      - "{{ greenbone_scanning_runner }}"
+      - full-lan
+      - --check
+  register: full_lan_check
+  changed_when: false
+  when: greenbone_scanning_full_lan_enable | bool
+
+- name: Validate managed runner GMP authentication without starting scan
+  ansible.builtin.command:
+    argv:
+      - "{{ greenbone_scanning_runner }}"
+      - managed
+      - --check
+  register: managed_check
+  changed_when: false
+  when: greenbone_scanning_full_lan_enable | bool
+
+- name: Install weekly full LAN service
+  ansible.builtin.template:
+    src: homelab-greenbone-full-lan-scan.service.j2
+    dest: /etc/systemd/system/homelab-greenbone-full-lan-scan.service
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd for Greenbone scanning
+
+- name: Install weekly full LAN timer
+  ansible.builtin.template:
+    src: homelab-greenbone-full-lan-scan.timer.j2
+    dest: /etc/systemd/system/homelab-greenbone-full-lan-scan.timer
+    owner: root
+    group: root
+    mode: '0644'
+  notify: Reload systemd for Greenbone scanning
+
+- name: Reload systemd definitions only
+  ansible.builtin.meta: flush_handlers
+
+- name: Activate weekly LAN timer only when explicitly approved
+  ansible.builtin.systemd_service:
+    name: homelab-greenbone-full-lan-scan.timer
+    enabled: true
+    state: started
+  when: greenbone_scanning_full_lan_enable | bool
+
+- name: Report weekly full LAN scheduling
+  ansible.builtin.debug:
+    msg:
+      - "Requested full LAN schedule: {{ greenbone_scanning_full_lan_schedule }}"
+      - "Timer activated: {{ greenbone_scanning_full_lan_enable | bool }}"
+      - "Existing authenticated daily timer was not modified."
+      - "No scans were started."
