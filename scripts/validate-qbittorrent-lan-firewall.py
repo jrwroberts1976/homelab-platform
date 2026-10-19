@@ -16,7 +16,10 @@ values = {
     "media_firewall_qbittorrent_https_lan_enabled": True,
     "media_firewall_qbittorrent_http_lan_enabled": True,
 }
-render = Environment(undefined=StrictUndefined).from_string(source)
+# Plain Jinja2 omits Ansible's bool filter, so provide it for typed test flags.
+environment = Environment(undefined=StrictUndefined)
+environment.filters["bool"] = lambda value: value if isinstance(value, bool) else None
+render = environment.from_string(source)
 nft = render.render(**values)
 assert 'tcp dport 443 accept comment "LAN qBittorrent HTTPS"' in nft
 assert 'tcp dport 8081 accept comment "LAN qBittorrent WebUI"' in nft
