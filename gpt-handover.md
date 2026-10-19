@@ -8,6 +8,12 @@
 
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
+## Latest work: docker-01 ICMP timestamp reconnaissance (19 October 2026)
+
+User's read-only docker-01 audit: ok=2 changed=0 failed=0. Debian 13, nftables service inactive, nft rules readable but zero input hooks; iptables-save readable; no existing timestamp-specific rules. Docker host's actual packet filtering owner is **not established**. No host configuration changed.
+
+A further scoped read-only playbook is staged in Git at IaC/ansible/playbooks/greenbone-icmp-timestamp-docker01-readonly.yml; it has **not been run**. It reports iptables backend and filter-chain structure on docker-01 without full rules, and tests normal ping plus three ICMP timestamp requests from greenbone-01. It does not install nftables or change Docker, firewall, kernel, services or scans. Next run its syntax check and limit execution to docker-01:greenbone-01 with forks=1. Do not apply media-01's firewall role on Docker hosts. Existing media-01 mitigation remains verified; all other accepted risks unchanged.
+
 ## Read this first in every new chat
 
 1. Read this file **before** proposing new work.
