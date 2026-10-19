@@ -1,0 +1,78 @@
+---
+- name: Require exact monitor-01 identity and IPv4
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == "monitor-01"
+      - "'192.168.2.52' in ansible_facts.all_ipv4_addresses"
+    fail_msg: Wrong host; refusing ICMP filter changes.
+
+- name: Require Docker is active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service]
+  changed_when: false
+  register: monitor_icmp_docker_status
+  failed_when: monitor_icmp_docker_status.stdout | trim != "active"
+
+- name: Require iptables-nft rather than legacy backend
+  ansible.builtin.command:
+    argv: [/usr/sbin/iptables, -V]
+  register: monitor_icmp_backend
+  changed_when: false
+  failed_when: monitor_icmp_backend.rc != 0 or "nf_tables" not in monitor_icmp_backend.stdout
+
+- name: Inspect current filter chain declarations
+  ansible.builtin.command:
+    argv: [/usr/sbin/iptables-save, -t, filter]
+  register: monitor_icmp_existing_filter
+  changed_when: false
+
+- name: Require existing host INPUT and container forwarding policy
+  ansible.builtin.assert:
+    that:
+      - "':INPUT ACCEPT ' in monitor_icmp_existing_filter.stdout"
+      - "':FORWARD DROP ' in monitor_icmp_existing_filter.stdout"
+      - "'-A FORWARD ' in monitor_icmp_existing_filter.stdout"
+      - "'DOCKER' in monitor_icmp_existing_filter.stdout"
+    fail_msg: Host firewall baseline changed; refusing to install the rule.
+
+- name: Install only the scoped ICMP timestamp rule helper
+  ansible.builtin.copy:
+    src: homelab-monitor01-icmp-timestamp
+    dest: /usr/local/sbin/homelab-monitor01-icmp-timestamp
+    owner: root
+    group: root
+    mode: "0755"
+    validate: "/bin/sh -n %s"
+
+- name: Install persistent ICMP timestamp unit without restarting Docker
+  ansible.builtin.copy:
+    src: homelab-monitor01-icmp-timestamp.service
+    dest: /etc/systemd/system/homelab-monitor01-icmp-timestamp.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Enable and start only the timestamp filter unit
+  ansible.builtin.systemd_service:
+    name: homelab-monitor01-icmp-timestamp.service
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Ensure the managed host INPUT rule remains present
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/homelab-monitor01-icmp-timestamp, apply]
+  register: monitor_icmp_apply
+  changed_when: "'RULE_ADDED' in monitor_icmp_apply.stdout"
+
+- name: Verify managed ICMP timestamp rule matches exactly
+  ansible.builtin.command:
+    argv: [/usr/local/sbin/homelab-monitor01-icmp-timestamp, present]
+  changed_when: false
+
+- name: Verify Docker remains active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service]
+  register: monitor_icmp_docker_post
+  changed_when: false
+  failed_when: monitor_icmp_docker_post.stdout | trim != "active"
