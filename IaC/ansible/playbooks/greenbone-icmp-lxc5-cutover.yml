@@ -1,0 +1,99 @@
+---
+- name: Guarded serial ICMP timestamp cutover for five LXC containers
+  hosts: mail-relay-01,dns-02,dns-01,zabbix-01,komodo-01
+  serial: 1
+  any_errors_fatal: true
+  gather_facts: false
+  become: true
+  vars:
+    expected_ipv4:
+      mail-relay-01: 192.168.2.54
+      dns-02: 192.168.2.50
+      dns-01: 192.168.2.51
+      zabbix-01: 192.168.2.59
+      komodo-01: 192.168.2.58
+    base_sha256: 60dac93ffe0ea440fc4a8941a080b6fb8d2c8655d47baf856e97182a0d1ca29a
+
+  tasks:
+    - name: Assert inventory and target identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in expected_ipv4
+          - ansible_host == expected_ipv4[inventory_hostname]
+
+    - name: Check nftables configuration baseline
+      ansible.builtin.stat:
+        path: /etc/nftables.conf
+        checksum_algorithm: sha256
+      register: nft_config
+
+    - name: Inspect live native INPUT chain
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, -a, list, chain, inet, filter, input]
+      changed_when: false
+      register: nft_input
+
+    - name: Require stock configuration on initial deployment or owned existing mitigation
+      ansible.builtin.assert:
+        that:
+          - nft_config.stat.exists | bool
+          - "nft_config.stat.checksum == base_sha256 or ('homelab-icmp-' ~ inventory_hostname) in nft_input.stdout"
+          - "'hook input priority filter; policy accept' in nft_input.stdout"
+          - "nft_input.stdout.count('comment') <= 1"
+        fail_msg: "Unexpected nftables drift or INPUT chain; refusing to deploy."
+
+    - name: Confirm scanner can ping host before change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "{{ expected_ipv4[inventory_hostname] }}"]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+
+    - name: Install generic nftables mitigation helper
+      ansible.builtin.copy:
+        src: ../roles/icmp_timestamp_lxc_batch/files/icmp_timestamp_lxc.py
+        dest: /usr/local/sbin/homelab-icmp-lxc
+        mode: "0750"
+        owner: root
+        group: root
+
+    - name: Apply one persistent and one live type-13 DROP
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/homelab-icmp-lxc, apply]
+      changed_when: "'CONFIG_ADDED' in batch_apply.stdout or 'RULE_ADDED' in batch_apply.stdout"
+      register: batch_apply
+
+    - name: Verify scanner ping remains available
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "{{ expected_ipv4[inventory_hostname] }}"]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+
+    - name: Probe timestamp from Greenbone after individual host change
+      ansible.builtin.command:
+        argv: [python3, -c, "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}", "{{ expected_ipv4[inventory_hostname] }}"]
+      delegate_to: greenbone-01
+      become: false
+      changed_when: false
+      register: probe_after
+
+    - name: Stop rollout if probe shows replies
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in probe_after.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in probe_after.stdout"
+        fail_msg: "Timestamp response still visible; stop before next host."
+
+    - name: Verify target SSH remains reachable
+      ansible.builtin.wait_for:
+        host: "{{ expected_ipv4[inventory_hostname] }}"
+        port: 22
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Report individual success
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: ICMP timestamp replies suppressed; host-specific rollback is available."
