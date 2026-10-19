@@ -146,6 +146,10 @@ Pending after vulnerability review (unless reprioritised):
 5. Project 6: QEMU restore proof, application-consistent Nextcloud/PostgreSQL recovery, independent backup copy.
 6. Project 8: deliberate legacy cleanup review. Optional password manager/web analytics and deferred Tunnel are not automatic tasks.
 
+### Latest decision — no ICMP firewall changes
+
+19 October 2026: User declined the proposed media-01 ICMP timestamp firewall pilot. No pilot was committed or deployed. Earlier read-only audit succeeded on media-01 (ok=2 changed=0 failed=0): active nftables, broad IPv4 ICMP allow, and no timestamp-specific rules. Previous TCP timestamp sysctl hardening does not cover ICMP timestamps. Linux kernel documentation provides no dedicated sysctl to disable unicast ICMP timestamp replies selectively. Preserve existing risk acceptances and working network configuration. Next review scanner evidence/read-only external ICMP behaviour rather than modifying nftables; do not propose an ICMP firewall change without renewed user approval.
+
 ### Next action — assess 15 accepted Greenbone findings before a new scan
 
 **User reprioritised on 19 October:** The last completed scan's accepted findings were 14 ICMP Timestamp Reply Information Disclosure (NVT 1.3.6.1.4.1.25623.1.0.103190) and one BirdNET-Go non-HttpOnly csrf cookie (NVT 1.3.6.1.4.1.25623.1.0.105925). The larger Git risk allowlist also retains older TCP timestamp items, which are not part of those 15. No acceptances have been removed and no new scan started.
