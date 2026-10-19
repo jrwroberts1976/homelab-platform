@@ -14,6 +14,8 @@
 - Do not invent missing numbered roadmap steps or names.
 - Historical audit/migration documents remain point-in-time evidence and are not rewritten to look current.
 
+**19 October security update:** The media-01 qBittorrent LAN HTTPS-only cutover has passed live Ansible verification (`ok=19 changed=2 failed=0`, HTTPS HTTP 200, LAN 8081 BLOCKED, loopback 8081 AVAILABLE; no qBittorrent/Kodi/SMB/NFS restart). BirdNET's missing Secure cookie attribute was also corrected and verified. The two prior Greenbone actionable Mediums now require one new completed authenticated scan and validated evidence publication before closing; afterwards review the 14 accepted ICMP timestamp disclosures and one BirdNET CSRF `HttpOnly` exception. First check read-only scan state/evidence and GMP readiness; do not duplicate an active scan.
+
 ## Current position — 16 October 2026
 
 The core homelab platform is built and operational. Current work is concentrated in final security validation, recovery proof, container lifecycle hardening and selected technical debt rather than missing foundational infrastructure.

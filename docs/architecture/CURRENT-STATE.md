@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**Latest verified 19 October 2026 — qBittorrent HTTPS-only cutover deployed:** User applied the scoped Git-managed media-01 firewall playbook; `ok=19 changed=2 failed=0`. From admin-01 the trusted HTTPS WebUI returned HTTP 200, direct LAN TCP/8081 was confirmed **BLOCKED**, and the reverse proxy's loopback HTTP/8081 backend remains **AVAILABLE**. The user confirmed working HTTPS login/password. qBittorrent, Kodi, SMB and NFS were not restarted. BirdNET-Go's HTTPS CSRF Secure cookie was separately verified on both tested paths. **Service/network mitigations for the two prior Mediums are complete, but a new authenticated Greenbone scan and published evidence are still needed to close the scan findings.** The 15 accepted findings from the prior report remain pending review after verification; the separately staged Greenbone boot-readiness guard has not been deployed. Next: existing read-only `greenbone-scan-evidence-readonly.yml` plus `greenbone-gmp-preflight.yml`, then consider a single managed scan only if none is active and GMP is ready.
+
+
 **19 October approved qBittorrent HTTP cutover — Git-staged, not deployed:** HTTPS WebUI works and user completed administrator password recovery/login, authorising direct LAN HTTP port 8081 closure. The intended managed media-01 policy now defaults to LAN HTTPS/443 allowed, direct LAN HTTP/8081 disallowed, with loopback Nginx→qBittorrent backend (127.0.0.1:8081), SSH, Kodi/DLNA, SMB, Proxmox NFS and monitoring allowances preserved. A scoped Ansible cutover plus emergency HTTP rollback and offline validators are committed. The **currently deployed** media firewall still permits both 443 and 8081 until the user runs the new playbook; a source commit is not evidence of closure. A new authenticated Greenbone report remains necessary after successful cutover to confirm remediation.
 
 

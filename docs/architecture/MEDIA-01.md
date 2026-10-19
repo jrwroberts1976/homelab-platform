@@ -128,7 +128,10 @@ The initial qBittorrent Web UI administrator password is temporary until a perma
 
 ## Firewall
 
-**19 October approved HTTP/8081 restriction (Git only — not yet deployed):** User confirmed successful trusted HTTPS WebUI and administrator password recovery, and approved closing direct LAN qBittorrent HTTP. Source default now disables LAN TCP/8081, keeps LAN HTTPS/443, preserves loopback Nginx→qBittorrent HTTP backend and all other Kodi/SMB/NFS/SSH/monitoring access. Run scoped `qbittorrent-https-cutover.yml` only after offline/Ansible tests; verify 443 works and new LAN 8081 connections fail. A separate `qbittorrent-https-http-rollback.yml` temporarily restores LAN 8081 if needed. **Table below is current live policy until cutover executes**, not the new committed desired policy.
+**Live change completed 19 October 2026 — HTTPS-only qBittorrent LAN WebUI:** User applied `playbooks/qbittorrent-https-cutover.yml` through admin-01. Ansible completed `media-01 ok=19 changed=2 failed=0`, verifying HTTPS `HTTP_STATUS=200`, direct LAN TCP/8081 **BLOCKED**, and local Nginx→qBittorrent `127.0.0.1:8081` **AVAILABLE**. The validated active managed policy allows LAN TCP/443 and preserves SSH, Kodi UPnP/DLNA, SMB, Proxmox NFS and monitoring access. No qBittorrent, Kodi, SMB or NFS restart occurred. An explicit, **not deployed** emergency HTTP rollback remains at `playbooks/qbittorrent-https-http-rollback.yml`. Prior notes below describe historical rollout; they are superseded by this verified state.
+
+
+**Historical rollout plan, now superseded by the verified 19 October deployment:** User confirmed successful trusted HTTPS WebUI and administrator password recovery, and approved closing direct LAN qBittorrent HTTP. Source default now disables LAN TCP/8081, keeps LAN HTTPS/443, preserves loopback Nginx→qBittorrent HTTP backend and all other Kodi/SMB/NFS/SSH/monitoring access. Run scoped `qbittorrent-https-cutover.yml` only after offline/Ansible tests; verify 443 works and new LAN 8081 connections fail. A separate `qbittorrent-https-http-rollback.yml` temporarily restores LAN 8081 if needed. **Table below is current live policy until cutover executes**, not the new committed desired policy.
 
 
 `media-01` uses the Ansible-managed `media_firewall` role and nftables table `inet media_filter`. The input policy is default-deny.
@@ -139,7 +142,6 @@ Current explicitly authorised inbound services include:
 |---|---|---|
 | `192.168.2.0/24` | TCP/22 | SSH administration |
 | `192.168.2.0/24` | TCP/445 | SMB |
-| `192.168.2.0/24` | TCP/8081 | qBittorrent Web UI, HTTP rollback (still open) |
 | `192.168.2.0/24` | TCP/443 | qBittorrent trusted HTTPS via Nginx (LAN verified) |
 | `192.168.2.0/24` | UDP/1900 | Kodi SSDP/DLNA discovery |
 | `192.168.2.0/24` | TCP/1255 | Kodi UPnP/DLNA service port observed 17 Oct 2026 |
