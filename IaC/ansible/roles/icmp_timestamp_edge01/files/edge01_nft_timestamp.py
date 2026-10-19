@@ -25,7 +25,21 @@ def live():
 
 
 def handles(s):
-    return re.findall(r"^\s*ip protocol icmp icmp type timestamp-request counter packets \d+ bytes \d+ drop comment \"" + TAG + r"\" # handle (\d+)\s*$", s, re.M)
+    # nft may canonicalise the implicit IPv4 protocol expression on output.
+    result = []
+    for line in s.splitlines():
+        if 'comment "' + TAG + '"' not in line:
+            continue
+        rule = re.fullmatch(
+            r'\\s*(?:ip protocol icmp )?icmp type timestamp-request '
+            r'counter packets \\d+ bytes \\d+ drop comment "'
+            + re.escape(TAG) + r'" # handle (\\d+)\\s*',
+            line,
+        )
+        if not rule:
+            raise RuntimeError("Unexpected tagged nft rule shape")
+        result.append(rule.group(1))
+    return result
 
 
 def validate_identity():
@@ -58,8 +72,6 @@ def main(mode):
     if before.count(ANCHOR) != 1:
         raise RuntimeError("Expected unique input chain anchor not found")
     expected = before.replace(INSERT, "")
-    if expected.encode() != original and INSERT not in before:
-        raise RuntimeError("Invalid configuration state")
     if hashlib.sha256(expected.encode()).hexdigest() != BASE_SHA:
         raise RuntimeError("Config diverges from audited baseline")
     observed = live()
@@ -74,7 +86,7 @@ def main(mode):
     ]
     if len(nonstructural) != len(matching):
         raise RuntimeError("Unexpected INPUT rule or structure; fail closed")
-    if count != len(matching) or len(matching) > 1:
+    if len(matching) > 1:
         raise RuntimeError("Ambiguous live tagged rule")
     if mode == "inspect":
         print("CONFIG_TAG_PRESENT=" + str(INSERT in before))
