@@ -18,6 +18,9 @@
 
 ## Working rules
 
+**19 October docker-01 host ICMP filtering staged (not deployed):** Read-only audit verified iptables-nft host INPUT ACCEPT/zero rules, Docker-managed FORWARD DROP/four chains, two running containers and 3/3 matching timestamp replies from scanner. New Git Ansible role adds only a tagged ICMP type-13 DROP on docker-01 host INPUT via iptables-nft, with independent systemd persistence and precise rollback; Docker's forwarding, NAT and published-port rules untouched. Offline validator and scanner pre/post tests staged; do not claim completed until user runs validated scoped playbook and confirms BirdNET/containers. Existing media-01 mitigation remains live and other accepted-risk dispositions remain unchanged.
+
+
 **19 October Docker host verification complete, chain details pending:** Read-only scanner probe reproduced `docker-01`'s accepted ICMP timestamp disclosure (normal ping PASS; 3 requests, 3 matching replies; `docker-01 ok=3 changed=0`, `greenbone-01 ok=5 changed=0`). No network changes. User's excerpt lacks the first-play iptables backend, INPUT policy and Docker chain indicators. Obtain them via `greenbone-icmp-timestamp-docker01-readonly.yml --limit docker-01 --forks 1`, then design a minimal Docker-compatible change and rollback if appropriate. No new Greenbone scan or risk acceptance changes.
 
 
