@@ -9,6 +9,22 @@
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
 ## Latest monitor-01 evidence and next read-only diagnostic — 19 October 2026
+## Latest verified monitor-01 result — ICMP timestamps reproducible (19 October 2026)
+
+**User-provided live output:** Scoped `greenbone-icmp-timestamp-monitor01-readonly.yml --limit 'monitor-01:greenbone-01' --forks 1` completed `monitor-01 ok=3 changed=0 unreachable=0 failed=0` and `greenbone-01 ok=5 changed=0 unreachable=0 failed=0`. From greenbone-01, ordinary ping to `192.168.2.52` passed, and **3 of 3 ICMP type-13 timestamp requests elicited matching type-14 replies** (`ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`, `MONITOR01_TIMESTAMP_INTERPRETATION=REPLY_CONFIRMED`). This reproduces the accepted ICMP timestamp finding; no firewall/sysctl/service configuration or Greenbone scans were changed.
+
+**Missing output:** User pasted the second play and recap only, **not** the first play's `TASK [Report monitoring service and host firewall indicators only]`. Do not assume iptables backend/INPUT policy or why nft was unreadable. To retrieve without resending scanner probes, run only the first play on monitor-01:
+
+```bash
+cd ~/projects/homelab-platform/IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-monitor01-readonly.yml \
+  --limit monitor-01 --forks 1
+```
+
+Review `IPTABLES_VERSION`, `IPTABLES_FILTER_STATUS`, `INPUT_POLICY`, `INPUT_RULE_COUNT`, `NFT_READ_FAILURE_CATEGORY` and service indicators before staging host-specific mitigation. Avoid copying media-01 or docker-01 firewall implementations to monitor-01. **Operational mitigation remains 2 of 14** (media-01 and docker-01); no accepted-risk records altered. Fresh completed authenticated Greenbone scan still pending.
+
+
 
 **User's uploaded terminal log:** After the successful docker-01 ICMP timestamp remediation (already recorded), the user ran `ansible-playbook -i inventory/hosts.yml playbooks/greenbone-accepted-icmp-firewall-readonly.yml --limit monitor-01 --forks 1`. It finished `monitor-01 ok=2 changed=0 unreachable=0 failed=0`. Reported Debian GNU/Linux 13 (Trixie), no detected active nftables/UFW/firewalld/Proxmox firewall systemd services; `NFT_RULESET=not-readable`; `IPTABLES_RULESET=readable`; `IPTABLES_TIMESTAMP_REQUEST_REFERENCES=0`; `AUDIT=READ_ONLY`. This does **not** establish the effective iptables backend/policy or whether monitor-01 responds to timestamp requests. No host change made. User's log also contained benign `-bash: command not found` errors after accidentally pasting previous Ansible report output back into the shell; the actual cutover play had already passed and no SSH failure was evidenced.
 
