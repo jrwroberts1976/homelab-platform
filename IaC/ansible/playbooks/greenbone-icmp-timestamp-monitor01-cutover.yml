@@ -1,0 +1,172 @@
+---
+# 19 October 2026: isolated monitor-01 host INPUT-only ICMPv4 type-13 drop.
+# Three-play sequence deliberately requires both monitor-01 and greenbone-01.
+# No Docker restarts or Greenbone scan / risk acceptance changes.
+- name: Reconfirm monitor-01 ICMP timestamp exposure before modification
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Assert exact scanner and monitor identities
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+          - ansible_host == "192.168.2.57"
+          - hostvars["monitor-01"].ansible_host == "192.168.2.52"
+
+    - name: Require normal echo to monitor-01 before modification
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.52"]
+      changed_when: false
+
+    - name: Reproduce existing monitor-01 timestamp replies from scanner
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.52"
+      register: monitor01_baseline_probe
+      changed_when: false
+
+    - name: Require reproducible replies before host policy modification
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in monitor01_baseline_probe.stdout"
+        fail_msg: "No confirmed timestamp exposure; refusing to modify monitor-01."
+
+- name: Add isolated timestamp-only INPUT rule on monitor-01
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Verify expected monitoring Compose deployment exists
+      ansible.builtin.stat:
+        path: /opt/monitoring/docker-compose.yml
+      register: monitor01_compose_path
+
+    - name: Require established monitoring stack definition
+      ansible.builtin.assert:
+        that:
+          - monitor01_compose_path.stat.isreg | default(false)
+
+    - name: Check trusted Grafana HTTPS from controller before modification
+      ansible.builtin.uri:
+        url: https://grafana.home.jrwroberts.co.uk/
+        validate_certs: true
+        follow_redirects: none
+        status_code: [200, 301, 302, 401, 403]
+        timeout: 12
+        use_proxy: false
+        return_content: false
+      register: monitor01_grafana_before
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Snapshot currently running monitoring container identities
+      ansible.builtin.command:
+        argv: [docker, ps, -q]
+      register: monitor01_containers_before
+      changed_when: false
+
+    - name: Require expected running monitoring stack before rule
+      ansible.builtin.assert:
+        that:
+          - monitor01_containers_before.stdout_lines | length >= 5
+        fail_msg: "Expected at least five running containers; refusing any rule change."
+
+    - name: Snapshot Docker forwarding/filter policies before change
+      ansible.builtin.command:
+        argv: [/usr/sbin/iptables-save, -t, filter]
+      register: monitor01_filter_before
+      changed_when: false
+
+  tasks:
+    - name: Install only the idempotent managed ICMP host INPUT rule
+      ansible.builtin.include_role:
+        name: monitor_icmp_timestamp
+
+    - name: Check trusted Grafana HTTPS again after host rule
+      ansible.builtin.uri:
+        url: https://grafana.home.jrwroberts.co.uk/
+        validate_certs: true
+        follow_redirects: none
+        status_code: [200, 301, 302, 401, 403]
+        timeout: 12
+        use_proxy: false
+        return_content: false
+      register: monitor01_grafana_after
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require unchanged Grafana HTTP status
+      ansible.builtin.assert:
+        that:
+          - monitor01_grafana_after.status == monitor01_grafana_before.status
+
+    - name: Check running monitoring containers after rule installation
+      ansible.builtin.command:
+        argv: [docker, ps, -q]
+      register: monitor01_containers_after
+      changed_when: false
+
+    - name: Require identical running container identities
+      ansible.builtin.assert:
+        that:
+          - monitor01_containers_after.stdout_lines | sort == monitor01_containers_before.stdout_lines | sort
+
+    - name: Read filter policy after host-only change
+      ansible.builtin.command:
+        argv: [/usr/sbin/iptables-save, -t, filter]
+      register: monitor01_filter_after
+      changed_when: false
+
+    - name: Require unchanged Docker chain and forwarding policy
+      ansible.builtin.assert:
+        that:
+          - >-
+            (monitor01_filter_before.stdout_lines | select('match', '^:DOCKER') | list)
+            == (monitor01_filter_after.stdout_lines | select('match', '^:DOCKER') | list)
+          - >-
+            (monitor01_filter_before.stdout_lines | select('match', '^-A (FORWARD|DOCKER) ') | list)
+            == (monitor01_filter_after.stdout_lines | select('match', '^-A (FORWARD|DOCKER) ') | list)
+          - "':FORWARD DROP ' in monitor01_filter_after.stdout"
+
+- name: Prove monitor-01 timestamp suppression while normal ping still works
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require normal ping after monitor-01 change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "192.168.2.52"]
+      changed_when: false
+
+    - name: Probe monitor-01 timestamp response after rule
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.52"
+      register: monitor01_timestamp_after
+      changed_when: false
+
+    - name: Require no matching timestamp replies from monitor-01
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in monitor01_timestamp_after.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in monitor01_timestamp_after.stdout"
+        fail_msg: "Timestamp replies remain; check filtering and use scoped rollback if required."
+
+    - name: Report verified monitor-01 timestamp-only mitigation
+      ansible.builtin.debug:
+        msg:
+          - "MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED"
+          - "MONITOR01_ICMP_ECHO=PASS"
+          - "MONITOR01_FIREWALL_SCOPE=HOST_INPUT_ONLY"
+          - "Grafana HTTPS, running containers, Docker forwarding unchanged."
+          - "No monitoring container, Docker service or Greenbone scan restarted."
+          - "Rollback: greenbone-icmp-timestamp-monitor01-rollback.yml"
