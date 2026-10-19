@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October media-01 ICMP kernel check completed (read-only):** On running Pi kernel 6.18.50+rpt-rpi-2712, `/proc/sys/net/ipv4/icmp_timestamp_ignore_all` is absent (`TIMESTAMP_SYSCTL=NOT_PRESENT`). No supported selective unicast ICMP timestamp sysctl is exposed by this build; the previous positive 3-of-3 timestamp reply test still establishes the accepted finding. The user declined any firewall changes; no kernel package, patch, reboot, sysctl or accepted-risk configuration was modified. Retain acceptance unless a new decision is explicitly approved. The Greenbone rescan for the two previously actionable Mediums is separate.
+
+
 **19 October media-01 kernel review (read-only):** User inspected live Debian 13 Raspberry Pi ARM64 kernel 6.18.50+rpt-rpi-2712 (1:6.18.50-1+rpt1, built 2026-09-11); net.ipv4.icmp_echo_ignore_all=0 and icmp_echo_ignore_broadcasts=1. Broadcast-only ICMP timestamp suppression does not affect the reproducible **unicast** timestamp reply (3/3). A proposed upstream icmp_timestamp_ignore_all sysctl is not documented as a standard supported control; its existence in the downstream RPi build remains to be checked read-only before deciding whether any kernel mitigation is feasible. No kernel changes, no firewall changes, no reboot and no risk allowlist changes.
 
 
