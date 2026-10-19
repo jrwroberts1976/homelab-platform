@@ -1,0 +1,95 @@
+---
+- name: Stage or enable scan-safe Greenbone feed image updates
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  vars:
+    greenbone_feed_enable_timer: false
+    greenbone_feed_calendar: "*-*-* 10:00:00"
+  tasks:
+    - name: Require exact approved Greenbone host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+          - ansible_host == "192.168.2.57"
+
+    - name: Require existing Greenbone scanner runner
+      ansible.builtin.stat:
+        path: /usr/local/sbin/homelab-greenbone-scan
+      register: scan_runner
+
+    - name: Refuse absent original runner
+      ansible.builtin.assert:
+        that:
+          - scan_runner.stat.isreg | default(false)
+          - scan_runner.stat.executable | default(false)
+
+    - name: Install isolated Greenbone feed refresh script
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../scripts/greenbone-feed-refresh.py"
+        dest: /usr/local/sbin/homelab-greenbone-feed-refresh
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Validate updater syntax without running it
+      ansible.builtin.command:
+        argv: [python3, -m, py_compile, /usr/local/sbin/homelab-greenbone-feed-refresh]
+      changed_when: false
+
+    - name: Install Greenbone feed refresh service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-greenbone-feed-refresh.service
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Refresh only Greenbone Community Feed data images safely
+          After=docker.service network-online.target
+          Wants=network-online.target
+          Requires=docker.service
+
+          [Service]
+          Type=oneshot
+          User=root
+          Group=root
+          ExecStart=/usr/local/sbin/homelab-greenbone-feed-refresh --apply
+          TimeoutStartSec=10800
+
+    - name: Install Greenbone feed refresh timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/homelab-greenbone-feed-refresh.timer
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          [Unit]
+          Description=Daily Greenbone Community Feed refresh
+
+          [Timer]
+          OnCalendar={{ greenbone_feed_calendar }}
+          Persistent=true
+          RandomizedDelaySec=0
+          Unit=homelab-greenbone-feed-refresh.service
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Reload systemd units without starting updater
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Enable timer only by explicit opt-in
+      ansible.builtin.systemd_service:
+        name: homelab-greenbone-feed-refresh.timer
+        enabled: true
+        state: started
+      when: greenbone_feed_enable_timer | bool
+
+    - name: Report configured state
+      ansible.builtin.debug:
+        msg:
+          - "Feed timer requested enabled={{ greenbone_feed_enable_timer | bool }}"
+          - "Schedule={{ greenbone_feed_calendar }}"
+          - "Staging does not download images, start updater, or touch scans."
