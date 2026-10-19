@@ -1,0 +1,155 @@
+---
+# Explicitly scoped Docker-host ICMP timestamp mitigation.
+# Host INPUT only; preserves Docker's FORWARD, NAT, published ports and chains.
+# Does not run Greenbone scan or alter accepted-risk records.
+- name: Confirm existing docker-01 timestamp exposure from scanner
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require expected scanner and Docker host addresses
+      ansible.builtin.assert:
+        that:
+          - ansible_host == "192.168.2.57"
+          - hostvars["docker-01"].ansible_host == "192.168.2.220"
+
+    - name: Require normal IPv4 ping before firewall change
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "192.168.2.220"]
+      changed_when: false
+
+    - name: Confirm matching timestamp replies before firewall change
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.220"
+      register: docker01_timestamp_before
+      changed_when: false
+
+    - name: Refuse cutover if no timestamp replies are reproducible
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in docker01_timestamp_before.stdout"
+
+- name: Add only the docker-01 host INPUT type-13 drop
+  hosts: docker-01
+  gather_facts: true
+  become: true
+  pre_tasks:
+    - name: Require trusted BirdNET HTTPS transport before host rule
+      ansible.builtin.uri:
+        url: https://birdnet.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        use_proxy: false
+        follow_redirects: none
+        status_code: [200, 301, 302, 401, 403]
+        timeout: 12
+        return_content: false
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Count running containers before host rule
+      ansible.builtin.command:
+        argv: [docker, ps, -q]
+      register: docker01_containers_before
+      changed_when: false
+
+    - name: Require running Docker containers
+      ansible.builtin.assert:
+        that:
+          - docker01_containers_before.stdout_lines | length >= 2
+        fail_msg: Docker containers missing; do not alter firewall.
+
+    - name: Capture Docker forwarding chains before host rule
+      ansible.builtin.command:
+        argv: [/usr/sbin/iptables-save, -t, filter]
+      register: docker01_filter_before
+      changed_when: false
+
+  tasks:
+    - name: Apply persistent standalone host-only ICMP rule via Ansible role
+      ansible.builtin.include_role:
+        name: docker_icmp_timestamp
+
+    - name: Require trusted BirdNET HTTPS still working
+      ansible.builtin.uri:
+        url: https://birdnet.home.jrwroberts.co.uk/
+        method: GET
+        validate_certs: true
+        use_proxy: false
+        follow_redirects: none
+        status_code: [200, 301, 302, 401, 403]
+        timeout: 12
+        return_content: false
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Verify running container identities are unchanged
+      ansible.builtin.command:
+        argv: [docker, ps, -q]
+      register: docker01_containers_after
+      changed_when: false
+
+    - name: Require Docker containers unchanged
+      ansible.builtin.assert:
+        that:
+          - docker01_containers_after.stdout_lines | sort == docker01_containers_before.stdout_lines | sort
+
+    - name: Capture filter table after addition of host INPUT rule
+      ansible.builtin.command:
+        argv: [/usr/sbin/iptables-save, -t, filter]
+      register: docker01_filter_after
+      changed_when: false
+
+    - name: Require Docker's chain definitions and forwarding policy unchanged
+      ansible.builtin.assert:
+        that:
+          - >-
+            (docker01_filter_before.stdout_lines | select('match', '^:DOCKER') | list)
+            == (docker01_filter_after.stdout_lines | select('match', '^:DOCKER') | list)
+          - >-
+            (docker01_filter_before.stdout_lines | select('match', '^-A (FORWARD|DOCKER) ') | list)
+            == (docker01_filter_after.stdout_lines | select('match', '^-A (FORWARD|DOCKER) ') | list)
+          - "':FORWARD DROP ' in docker01_filter_after.stdout"
+
+- name: Confirm timestamp suppression and normal ping from scanner
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require normal IPv4 ping after rule installation
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "2", -W, "2", "192.168.2.220"]
+      changed_when: false
+
+    - name: Probe timestamp requests after host INPUT rule
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "192.168.2.220"
+      register: docker01_timestamp_after
+      changed_when: false
+
+    - name: Require zero matching timestamp replies
+      ansible.builtin.assert:
+        that:
+          - "'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in docker01_timestamp_after.stdout"
+          - "'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in docker01_timestamp_after.stdout"
+        fail_msg: "Timestamp responses persist. Investigate; use explicit rollback if needed."
+
+    - name: Report Docker-host timestamp-only mitigation
+      ansible.builtin.debug:
+        msg:
+          - "DOCKER01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED"
+          - "DOCKER01_ICMP_ECHO=PASS"
+          - "DOCKER01_FIREWALL_SCOPE=HOST_INPUT_ONLY"
+          - "Docker containers and BirdNET HTTPS checked; no Docker restart."
+          - "No Greenbone scan or accepted-risk changes."
+          - "Rollback: playbooks/greenbone-icmp-timestamp-docker01-rollback.yml"
