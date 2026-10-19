@@ -65,6 +65,15 @@ def main(mode):
     observed = live()
     count = observed.count("comment \"" + TAG + "\"")
     matching = handles(observed)
+    # The audited edge baseline has an empty INPUT chain. Refuse other rules.
+    nonstructural = [
+        line.strip() for line in observed.splitlines()
+        if line.strip() and not line.strip().startswith((
+            "table inet filter", "chain input", "type filter hook input", "}"
+        ))
+    ]
+    if len(nonstructural) != len(matching):
+        raise RuntimeError("Unexpected INPUT rule or structure; fail closed")
     if count != len(matching) or len(matching) > 1:
         raise RuntimeError("Ambiguous live tagged rule")
     if mode == "inspect":
