@@ -25,6 +25,10 @@ New Git-staged, **not run**, `IaC/ansible/playbooks/greenbone-icmp-timestamp-doc
 
 **Git-only, not deployed or independently rechecked yet:** New Ansible role `IaC/ansible/roles/docker_icmp_timestamp` uses a single idempotent `iptables -w -I INPUT 1 -d 192.168.2.220/32 -p icmp --icmp-type 13 -m comment --comment homelab-docker01-icmp-timestamp -j DROP`, guarded by `iptables -C` and backend detection. A dedicated oneshot unit persists the rule over reboot without enabling global nftables or restarting Docker. A scoped manual rollback stops and disables only that service, removing just the exact tagged host INPUT rule; it does not alter DOCKER chains, FORWARD, or NAT. `greenbone-icmp-timestamp-docker01-cutover.yml` includes scanner pre/post tests and Docker/BirdNET invariants. `scripts/validate-docker01-icmp-timestamp-firewall.py` is the offline preflight. No live change, risk reclassification or full Greenbone rescan is claimed yet; source validation, syntax checks and scoped deployment are still required.
 
+## monitor-01 preliminary read-only evidence — 19 October 2026
+
+`monitor-01` (192.168.2.52) read-only audit succeeded (`ok=2 changed=0 failed=0`): Debian 13, nftables/UFW/firewalld/Proxmox services not active/unknown, `NFT_RULESET=not-readable`, `IPTABLES_RULESET=readable`, no existing iptables timestamp references. This does **not** prove what INPUT rules or backend are in effect. Existing monitoring workloads should be preserved. A scoped, Git-only `greenbone-icmp-timestamp-monitor01-readonly.yml` checks iptables policy/backend, constrained monitoring service health indicators and independently probes three ICMP type-13 requests from greenbone-01 with an ordinary ping comparison. It has not run yet. No other host configuration or risk acceptance changes have occurred.
+
 ## Last report's 15 accepted findings
 
 | Finding | NVT OID | Count | Disposition |
