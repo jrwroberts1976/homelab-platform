@@ -1,0 +1,34 @@
+---
+- name: Reconcile full-LAN weekly and existing authenticated Greenbone scan
+  hosts: greenbone-01
+  gather_facts: false
+  become: true
+  vars:
+    greenbone_weekly_apply: false
+  vars_prompt:
+    - name: greenbone_username
+      prompt: Greenbone GMP username
+      private: false
+      default: admin
+    - name: greenbone_password
+      prompt: Greenbone GMP password
+      private: true
+  tasks:
+    - name: Require exact Greenbone server
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'greenbone-01'
+          - ansible_host == '192.168.2.57'
+
+    - name: Run GMP reconciliation in dry-run mode by default
+      ansible.builtin.command:
+        argv: "{{ ['docker', 'exec', '-i', 'greenbone-community-edition-gvmd-1', 'python3', '-c', lookup('ansible.builtin.file', playbook_dir ~ '/../scripts/greenbone-weekly-reconcile.py')] + (['--apply'] if greenbone_weekly_apply | bool else []) }}"
+        stdin: "{{ greenbone_username }}\n{{ greenbone_password }}\n"
+        stdin_add_newline: false
+      register: weekly_scan_result
+      changed_when: greenbone_weekly_apply | bool
+      no_log: true
+
+    - name: Show safe reconciliation summary
+      ansible.builtin.debug:
+        msg: "{{ weekly_scan_result.stdout | from_json }}"
