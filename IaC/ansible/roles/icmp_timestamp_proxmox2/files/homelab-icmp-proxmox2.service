@@ -1,6 +1,7 @@
 [Unit]
 Description=Proxmox-2 dedicated ICMP timestamp request guard
-After=local-fs.target
+After=local-fs.target corosync.service
+Wants=corosync.service
 ConditionPathExists=/usr/local/sbin/homelab-icmp-proxmox2
 
 [Service]
