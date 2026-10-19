@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October approved qBittorrent HTTP cutover — Git-staged, not deployed:** HTTPS WebUI works and user completed administrator password recovery/login, authorising direct LAN HTTP port 8081 closure. The intended managed media-01 policy now defaults to LAN HTTPS/443 allowed, direct LAN HTTP/8081 disallowed, with loopback Nginx→qBittorrent backend (127.0.0.1:8081), SSH, Kodi/DLNA, SMB, Proxmox NFS and monitoring allowances preserved. A scoped Ansible cutover plus emergency HTTP rollback and offline validators are committed. The **currently deployed** media firewall still permits both 443 and 8081 until the user runs the new playbook; a source commit is not evidence of closure. A new authenticated Greenbone report remains necessary after successful cutover to confirm remediation.
+
+
 `greenbone-01` is the active LAN-only Greenbone scanner. The operating model includes managed scans, machine-readable evidence, restricted evidence transfer to `monitor-01`, schema/freshness validation, accepted-risk separation and management-report integration.
 
 The 14 October managed validation had 0 Critical, 0 High, 1 actionable Medium (Zabbix cleartext management HTTP), 0 Low and 30 accepted risks. Trusted Zabbix HTTPS/reverse-proxy remediation was implemented subsequently.

@@ -128,6 +128,9 @@ The initial qBittorrent Web UI administrator password is temporary until a perma
 
 ## Firewall
 
+**19 October approved HTTP/8081 restriction (Git only — not yet deployed):** User confirmed successful trusted HTTPS WebUI and administrator password recovery, and approved closing direct LAN qBittorrent HTTP. Source default now disables LAN TCP/8081, keeps LAN HTTPS/443, preserves loopback Nginx→qBittorrent HTTP backend and all other Kodi/SMB/NFS/SSH/monitoring access. Run scoped `qbittorrent-https-cutover.yml` only after offline/Ansible tests; verify 443 works and new LAN 8081 connections fail. A separate `qbittorrent-https-http-rollback.yml` temporarily restores LAN 8081 if needed. **Table below is current live policy until cutover executes**, not the new committed desired policy.
+
+
 `media-01` uses the Ansible-managed `media_firewall` role and nftables table `inet media_filter`. The input policy is default-deny.
 
 Current explicitly authorised inbound services include:
