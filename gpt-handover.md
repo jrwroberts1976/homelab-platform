@@ -6,6 +6,20 @@
 
 **Current status (19 October 2026):** The last completed authenticated Greenbone report recorded **0 Critical, 0 High, 2 actionable Medium, 15 accepted risks** (14 ICMP timestamp replies and one BirdNET-Go `csrf` cookie missing HttpOnly). Former two actionable Mediums have been mitigated at the live service/network level (trusted qBittorrent HTTPS with direct LAN HTTP/8081 blocked; BirdNET-Go `csrf` Secure cookie verified) and await full scanner confirmation. **Three of the original 14 ICMP timestamp hosts now have independently tested live mitigations:** media-01 (existing Git-managed nftables input type-13 drop), docker-01 (dedicated iptables-nft host INPUT type-13 drop) and **monitor-01** (dedicated iptables-nft host INPUT type-13 drop). Newest user-run `greenbone-icmp-timestamp-monitor01-cutover.yml` completed **monitor-01 `ok=25 changed=3 unreachable=0 failed=0`; greenbone-01 `ok=8 changed=0 unreachable=0 failed=0`**. Scanner-side check reported `MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `MONITOR01_ICMP_ECHO=PASS`, `MONITOR01_FIREWALL_SCOPE=HOST_INPUT_ONLY`. Preflight and post-checks preserved Grafana HTTPS, existing monitoring container identities and Docker forwarding, without restarting containers/Docker/Greenbone scan. Dedicated systemd persistence was staged and applied on monitor-01 but **not reboot-tested**. **11 remaining ICMP host findings and the BirdNET-Go csrf HttpOnly exception** still require review. No accepted-risk allowlist entries have been removed; independently observed no-reply is operational mitigation proof, **not a fresh completed Greenbone report**. Next read-only host review should be scoped by inventory and live firewall owner; before an eventual single authenticated managed scan, check scan activity and GMP readiness.
 
+## Latest live attempt — remaining-11 audit blocked at admin-01 sudo (19 October 2026)
+
+User ran the checked-in `greenbone-icmp-timestamp-remaining11-readonly.yml`, which starts serially with admin-01. Inventory connects to admin-01 as `james`. The identity assertion passed (`admin-01 ok=1`), then the first elevated packet-filter read failed: **`Missing sudo password`** at `Collect non-secret packet filter ownership and permissions`. Recap: `admin-01 ok=1 changed=0 unreachable=0 failed=1`; **no other hosts examined, no scanner-side probes, and no host/network/firewall changes occurred**. This is an authentication issue, not evidence of a firewall problem.
+
+**Immediate retry from `admin-01:~/projects/homelab-platform/IaC/ansible`:**
+
+```bash
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-remaining11-readonly.yml \
+  --forks 1 --ask-become-pass
+```
+
+Supply the interactive `james` sudo password for admin-01 at the `BECOME password:` prompt; **do not place any password in shell arguments, inventory, Git, handover, or chat**. The task remains read-only. Since Ansible prompts once for one shared become password, if subsequent hosts have different sudo credentials, scope them separately rather than weakening sudo or saving secrets. Do not claim that the other 10 have been audited or that any of the 11 findings have been remediated.
+
 ## New user decision — remediate the remaining 11 ICMP timestamp hosts (19 October 2026)
 
 **User authorised continued work on all 11 remaining reported ICMP timestamp findings**, beyond already verified media-01, docker-01 and monitor-01. The 11 are **six LXC guests** (dns-01, dns-02, mail-relay-01, edge-01, komodo-01, zabbix-01), **three VMs** (cloud-01, sensor-01, greenbone-01), **two physical nodes** (admin-01 Pi controller/QNetd, Proxmox-2 cluster hypervisor). The user has not supplied effective firewall ownership/netfilter capability evidence for these 11 and **nothing on these 11 has been modified yet**. It is unsafe to bulk-install the same INPUT rule onto LXCs or a Proxmox node without knowing which firewall owns packets, preserving DNS/SMTP/cluster/guest traffic, or checking CAP_NET_ADMIN.
