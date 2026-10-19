@@ -39,10 +39,42 @@
       register: vm_icmp_pre_probe
       changed_when: false
 
-    - name: Stop if the timestamp baseline is no longer reproducible
+    - name: Check exact tagged INPUT rule before cutover or repeat verification
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/iptables
+          - -w
+          - -C
+          - INPUT
+          - -d
+          - "{{ vm_icmp_expected_ips[inventory_hostname] }}/32"
+          - -p
+          - icmp
+          - --icmp-type
+          - "13"
+          - -m
+          - comment
+          - --comment
+          - "homelab-icmp-vm-{{ inventory_hostname }}"
+          - -j
+          - DROP
+      register: vm_icmp_rule_before
+      changed_when: false
+      failed_when: vm_icmp_rule_before.rc not in [0, 1]
+
+    - name: Require exposure for first deployment or existing exact mitigation for repeat run
       ansible.builtin.assert:
         that:
-          - "'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in vm_icmp_pre_probe.stdout"
+          - >-
+            (vm_icmp_rule_before.rc == 1 and
+             'ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED' in vm_icmp_pre_probe.stdout)
+            or
+            (vm_icmp_rule_before.rc == 0 and
+             'ICMP_TIMESTAMP_REPLIES_MATCHED=0' in vm_icmp_pre_probe.stdout and
+             'ICMP_TIMESTAMP_RESULT=NO_REPLY_OBSERVED' in vm_icmp_pre_probe.stdout)
+        fail_msg: >-
+          Unexpected mismatch between scanner response and exact tagged INPUT rule;
+          refusing any firewall change.
 
     - name: Require SSH access from the controller before modifying INPUT
       ansible.builtin.wait_for:
