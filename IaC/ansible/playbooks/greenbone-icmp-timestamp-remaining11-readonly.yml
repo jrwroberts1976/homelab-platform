@@ -1,0 +1,103 @@
+---
+# 19 Oct 2026: complete remaining 11 ICMP findings safely, read-only first.
+# No firewall, sysctl, kernel, Docker, Proxmox or service state changes.
+- name: Collect firewall ownership for 11 remaining ICMP hosts
+  hosts: "admin-01:dns-02:dns-01:cloud-01:mail-relay-01:sensor-01:edge-01:greenbone-01:komodo-01:zabbix-01:Proxmox-2"
+  serial: 1
+  become: true
+  gather_facts: false
+  vars:
+    expected_ipv4:
+      admin-01: 192.168.2.48
+      dns-02: 192.168.2.50
+      dns-01: 192.168.2.51
+      cloud-01: 192.168.2.53
+      mail-relay-01: 192.168.2.54
+      sensor-01: 192.168.2.55
+      edge-01: 192.168.2.56
+      greenbone-01: 192.168.2.57
+      komodo-01: 192.168.2.58
+      zabbix-01: 192.168.2.59
+      Proxmox-2: 192.168.2.71
+  tasks:
+    - name: Require canonical hostname and IPv4 target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in expected_ipv4
+          - ansible_host == expected_ipv4[inventory_hostname]
+    - name: Collect non-secret packet filter ownership and permissions
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import pathlib, re, shutil, subprocess\ndef probe(argv):\n    if not shutil.which(argv[0]):\n        return \"missing\", \"\", \"\"\n    try:\n        p = subprocess.run(argv, capture_output=True, text=True, timeout=12)\n        return (\"ok\" if p.returncode == 0 else \"error\", p.stdout, p.stderr)\n    except (OSError, subprocess.TimeoutExpired):\n        return \"unavailable\", \"\", \"\"\nfor unit in (\"docker\", \"nftables\", \"ufw\", \"firewalld\", \"pve-firewall\", \"proxmox-firewall\"):\n    s, out, _ = probe([\"systemctl\", \"is-active\", unit])\n    status = \"active\" if s == \"ok\" and out.strip() == \"active\" else \"not-active-or-unknown\"\n    print(\"SERVICE_\" + unit.upper().replace(\"-\", \"_\") + \"=\" + status)\npath = pathlib.Path(\"/run/systemd/container\")\nprint(\"CONTAINER_HINT=\" + (path.read_text(errors=\"replace\").strip()[:30] if path.is_file() else \"not-detected\"))\nstatus = pathlib.Path(\"/proc/self/status\").read_text(errors=\"replace\")\nm = re.search(r\"^CapEff:\\s*([0-9a-fA-F]+)\", status, re.M)\nprint(\"EFFECTIVE_CAP_NET_ADMIN=\" + (\"yes\" if m and (int(m.group(1), 16) & (1 << 12)) else \"no\"))\ns, out, _ = probe([\"iptables\", \"-V\"])\nprint(\"IPTABLES_BACKEND=\" + (out.strip()[:120] if s == \"ok\" else s))\ns, out, err = probe([\"iptables-save\", \"-t\", \"filter\"])\nprint(\"IPTABLES_FILTER_STATUS=\" + s)\nif s == \"ok\":\n    policies = dict(re.findall(r\"^:([^\\s]+) ([A-Z]+) \\[\", out, re.M))\n    for chain in (\"INPUT\", \"FORWARD\", \"OUTPUT\"):\n        print(chain + \"_POLICY=\" + policies.get(chain, \"unknown\"))\n    input_rules = [ln for ln in out.splitlines() if ln.startswith(\"-A INPUT \")]\n    print(\"INPUT_RULE_COUNT=\" + str(len(input_rules)))\n    print(\"INPUT_TIMESTAMP_REFERENCES=\" + str(sum(\"--icmp-type 13\" in ln or \"timestamp-request\" in ln.lower() for ln in input_rules)))\n    print(\"DOCKER_CHAIN_COUNT=\" + str(len(re.findall(r\"^:DOCKER[^\\s]* \", out, re.M))))\nelse:\n    print(\"IPTABLES_FILTER_ERROR=\" + (\"permission\" if \"permission\" in err.lower() else \"other-or-unavailable\"))\ns, out, err = probe([\"nft\", \"list\", \"ruleset\"])\nprint(\"NFT_STATUS=\" + s)\nif s == \"ok\":\n    print(\"NFT_INPUT_HOOKS=\" + str(len(re.findall(r\"\\bhook input\\b\", out))))\n    print(\"NFT_FORWARD_HOOKS=\" + str(len(re.findall(r\"\\bhook forward\\b\", out))))\n    print(\"NFT_TIMESTAMP_REFERENCES=\" + str(out.count(\"timestamp-request\")))\nelse:\n    print(\"NFT_ERROR=\" + (\"permission\" if \"permission\" in err.lower() else \"missing-tool\" if s == \"missing\" else \"other-or-unavailable\"))\nprint(\"PROXMOX_CONFIG_DIR=\" + (\"present\" if pathlib.Path(\"/etc/pve\").is_dir() else \"absent\"))\nprint(\"REMEDIATION_STATE=NOT_CHANGED\")"
+      register: icmp_remaining_owner
+      changed_when: false
+    - name: Report backend and service indicators only
+      ansible.builtin.debug:
+        msg:
+          - "HOST={{ inventory_hostname }}"
+          - "{{ icmp_remaining_owner.stdout_lines }}"
+
+- name: Independently probe remaining ICMP findings across estate
+  hosts: greenbone-01
+  become: true
+  gather_facts: false
+  vars:
+    remaining_hosts:
+      - admin-01
+      - dns-02
+      - dns-01
+      - cloud-01
+      - mail-relay-01
+      - sensor-01
+      - edge-01
+      - greenbone-01
+      - komodo-01
+      - zabbix-01
+      - Proxmox-2
+  tasks:
+    - name: Verify RFC 792 packet self-test first
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - --self-test
+      register: icmp_sweep_selftest
+      changed_when: false
+      failed_when: >-
+        icmp_sweep_selftest.rc != 0 or
+        'ICMP_TIMESTAMP_PROBE_SELF_TEST=PASS' not in icmp_sweep_selftest.stdout
+    - name: Observe ordinary ICMP echo for each host
+      ansible.builtin.command:
+        argv: [ping, -n, -c, "1", -W, "2", "{{ hostvars[item].ansible_host }}"]
+      delegate_to: "{{ 'monitor-01' if item == 'greenbone-01' else 'greenbone-01' }}"
+      register: icmp_remaining_echo
+      failed_when: false
+      changed_when: false
+      loop: "{{ remaining_hosts }}"
+      loop_control:
+        label: "{{ item }}"
+    - name: Send three matching timestamp requests from external vantage
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "{{ lookup('ansible.builtin.file', playbook_dir ~ '/files/icmp-timestamp-probe.py') }}"
+          - "{{ hostvars[item].ansible_host }}"
+      delegate_to: "{{ 'monitor-01' if item == 'greenbone-01' else 'greenbone-01' }}"
+      register: icmp_remaining_timestamp
+      changed_when: false
+      loop: "{{ remaining_hosts }}"
+      loop_control:
+        label: "{{ item }}"
+    - name: Report three-packet evidence by host
+      ansible.builtin.debug:
+        msg:
+          - "HOST={{ item.item }}"
+          - "{{ item.stdout_lines }}"
+          - "No reply alone is not proof of remediation; reconcile with firewall and future Greenbone scan."
+      loop: "{{ icmp_remaining_timestamp.results }}"
+      loop_control:
+        label: "{{ item.item }}"
