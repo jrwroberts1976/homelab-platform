@@ -6,6 +6,29 @@
 
 **Current status (19 October 2026):** The last completed authenticated Greenbone report recorded **0 Critical, 0 High, 2 actionable Medium, 15 accepted risks** (14 ICMP timestamp replies and one BirdNET-Go `csrf` cookie missing HttpOnly). Former two actionable Mediums have been mitigated at the live service/network level (trusted qBittorrent HTTPS with direct LAN HTTP/8081 blocked; BirdNET-Go `csrf` Secure cookie verified) and await full scanner confirmation. **Three of the original 14 ICMP timestamp hosts now have independently tested live mitigations:** media-01 (existing Git-managed nftables input type-13 drop), docker-01 (dedicated iptables-nft host INPUT type-13 drop) and **monitor-01** (dedicated iptables-nft host INPUT type-13 drop). Newest user-run `greenbone-icmp-timestamp-monitor01-cutover.yml` completed **monitor-01 `ok=25 changed=3 unreachable=0 failed=0`; greenbone-01 `ok=8 changed=0 unreachable=0 failed=0`**. Scanner-side check reported `MONITOR01_ICMP_TIMESTAMP=NO_REPLY_OBSERVED`, `MONITOR01_ICMP_ECHO=PASS`, `MONITOR01_FIREWALL_SCOPE=HOST_INPUT_ONLY`. Preflight and post-checks preserved Grafana HTTPS, existing monitoring container identities and Docker forwarding, without restarting containers/Docker/Greenbone scan. Dedicated systemd persistence was staged and applied on monitor-01 but **not reboot-tested**. **11 remaining ICMP host findings and the BirdNET-Go csrf HttpOnly exception** still require review. No accepted-risk allowlist entries have been removed; independently observed no-reply is operational mitigation proof, **not a fresh completed Greenbone report**. Next read-only host review should be scoped by inventory and live firewall owner; before an eventual single authenticated managed scan, check scan activity and GMP readiness.
 
+## New user decision — remediate the remaining 11 ICMP timestamp hosts (19 October 2026)
+
+**User authorised continued work on all 11 remaining reported ICMP timestamp findings**, beyond already verified media-01, docker-01 and monitor-01. The 11 are **six LXC guests** (dns-01, dns-02, mail-relay-01, edge-01, komodo-01, zabbix-01), **three VMs** (cloud-01, sensor-01, greenbone-01), **two physical nodes** (admin-01 Pi controller/QNetd, Proxmox-2 cluster hypervisor). The user has not supplied effective firewall ownership/netfilter capability evidence for these 11 and **nothing on these 11 has been modified yet**. It is unsafe to bulk-install the same INPUT rule onto LXCs or a Proxmox node without knowing which firewall owns packets, preserving DNS/SMTP/cluster/guest traffic, or checking CAP_NET_ADMIN.
+
+**Git-only preparation now committed:** `playbooks/greenbone-icmp-timestamp-remaining11-readonly.yml` interrogates exactly those 11 inventory names/addresses sequentially, reporting only service/iptables/nft/backend/container/CAP_NET_ADMIN/Proxmox indicators (never raw secret-containing rules). The second play runs the existing self-tested 3-request ICMP timestamp probe and ordinary ping from greenbone-01; for **greenbone-01 itself**, probes are delegated to monitor-01 for an independent vantage. `scripts/validate-icmp-timestamp-remaining11-audit.py` statically validates the exact 11 hosts, safety properties and Python source. Detailed staged progression and host table: `docs/security/GREENBONE-ICMP-REMAINING-ROLLOUT-2026-10-19.md`. **No Ansible sweep has run and no new firewall configuration, scan, kernel, reboot, Proxmox policy or accepted-risk change was performed by the Git commit.** Current proof remains 3/14 mitigated, 11 pending. Greenbone's earlier two Mediums and BirdNET csrf HttpOnly remain separate, awaiting fresh completed scan/functional review.
+
+**Next from admin-01, read-only full compatibility survey:**
+
+```bash
+cd ~/projects/homelab-platform &&
+git pull --ff-only &&
+python3 scripts/validate-icmp-timestamp-remaining11-audit.py &&
+python3 scripts/validate-icmp-timestamp-probe.py &&
+python3 scripts/validate-estate.py &&
+cd IaC/ansible &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-remaining11-readonly.yml --syntax-check &&
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/greenbone-icmp-timestamp-remaining11-readonly.yml --forks 1
+```
+
+After reviewing each host's audit and scanner result, design target-specific managed cutover(s) and precise rollback **only for compatible cases**; separate guest/Proxmox host controls and the controller QNetd node, serialise deployment and verify normal ping, essential service paths and absence of timestamp replies before moving on. Do not publish claimed fixes or remove accepted risk records based solely on staged code.
+
 **Owner:** User-led, ChatGPT-assisted infrastructure work
 
 ## Latest monitor-01 evidence and next read-only diagnostic — 19 October 2026
