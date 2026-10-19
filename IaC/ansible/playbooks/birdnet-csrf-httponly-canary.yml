@@ -1,0 +1,24 @@
+---
+- name: Safely canary BirdNET csrf HttpOnly on existing Nginx reverse proxy
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    birdnet_go_csrf_httponly_canary: false
+  tasks:
+    - name: Require exact BirdNET host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+    - name: Apply existing rollback-capable BirdNET cookie role
+      ansible.builtin.include_role:
+        name: birdnet_go
+        tasks_from: secure_cookie
+    - name: Explain browser validation and rollback
+      ansible.builtin.debug:
+        msg:
+          - "HttpOnly opt-in={{ birdnet_go_csrf_httponly_canary | bool }}"
+          - "Nginx response header checked; no Docker/container restart."
+          - "Manually validate login, logout and a settings-save after opting in."
+          - "Rollback: re-run this playbook with -e birdnet_go_csrf_httponly_canary=false."
