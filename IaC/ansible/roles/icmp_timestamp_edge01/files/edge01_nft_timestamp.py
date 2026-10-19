@@ -13,7 +13,7 @@ BACKUP = Path("/var/lib/homelab-icmp-edge01/nftables.conf.before")
 BASE_SHA = "60dac93ffe0ea440fc4a8941a080b6fb8d2c8655d47baf856e97182a0d1ca29a"
 TAG = "homelab-icmp-edge01"
 INSERT = "                ip protocol icmp icmp type timestamp-request counter drop comment \"" + TAG + "\"\n"
-ANCHOR_RE = re.compile(r"(?m)^[ \\t]+type filter hook input priority filter;[ \\t]*$")
+ANCHOR_RE = re.compile(r"(?m)^[ \t]+type filter hook input priority filter;[ \t]*$")
 
 
 def run(*args):
