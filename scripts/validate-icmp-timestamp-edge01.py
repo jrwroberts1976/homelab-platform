@@ -31,18 +31,18 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
     from pathlib import Path
     base = Path(td)
     baseline = (
-        "#!/usr/sbin/nft -f\\n\\nflush ruleset\\n\\n"
-        "table inet filter {\\n"
-        "        chain input {\\n"
-        "                type filter hook input priority filter;\\n"
-        "        }\\n"
-        "        chain forward {\\n"
-        "                type filter hook forward priority filter;\\n"
-        "        }\\n"
-        "        chain output {\\n"
-        "                type filter hook output priority filter;\\n"
-        "        }\\n"
-        "}\\n"
+        "#!/usr/sbin/nft -f\n\nflush ruleset\n\n"
+        "table inet filter {\n"
+        "        chain input {\n"
+        "                type filter hook input priority filter;\n"
+        "        }\n"
+        "        chain forward {\n"
+        "                type filter hook forward priority filter;\n"
+        "        }\n"
+        "        chain output {\n"
+        "                type filter hook output priority filter;\n"
+        "        }\n"
+        "}\n"
     )
     mod = types.ModuleType("edge01_sandbox")
     exec(compile(text, str(helper), "exec"), mod.__dict__)
@@ -56,11 +56,11 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
         if argv[:5] == ("/usr/sbin/nft", "-a", "list", "chain", "inet"):
             body = (f'                {state["prefix"]}icmp type timestamp-request '
                     f'counter packets 0 bytes 0 drop comment "{mod.TAG}" '
-                    f'# handle {state["handle"]}\\n') if state["rule"] else ""
-            return ("table inet filter {\\n"
-                    "        chain input {\\n"
-                    "                type filter hook input priority filter; policy accept;\\n"
-                    + body + "        }\\n}\\n")
+                    f'# handle {state["handle"]}\n') if state["rule"] else ""
+            return ("table inet filter {\n"
+                    "        chain input {\n"
+                    "                type filter hook input priority filter; policy accept;\n"
+                    + body + "        }\n}\n")
         if argv[:3] == ("/usr/sbin/nft", "-c", "-f"):
             assert mod.INSERT in Path(argv[3]).read_text()
             return ""
@@ -92,7 +92,7 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
     def unexpected_rule(*argv):
         out = original_run(*argv)
         if argv[:5] == ("/usr/sbin/nft", "-a", "list", "chain", "inet"):
-            return out.replace("        }", "                tcp dport 22 accept # handle 15\\n        }", 1)
+            return out.replace("        }", "                tcp dport 22 accept # handle 15\n        }", 1)
         return out
     mod.run = unexpected_rule
     try:
