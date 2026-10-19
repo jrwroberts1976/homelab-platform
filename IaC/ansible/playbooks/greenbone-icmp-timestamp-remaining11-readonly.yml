@@ -79,6 +79,14 @@
       loop: "{{ remaining_hosts }}"
       loop_control:
         label: "{{ item }}"
+    - name: Explicitly report ordinary ping results from independent vantage
+      ansible.builtin.debug:
+        msg:
+          - "HOST={{ item.item }}"
+          - "ICMP_ECHO={{ 'PASS' if item.rc == 0 else 'NO_REPLY_OR_ERROR' }}"
+      loop: "{{ icmp_remaining_echo.results }}"
+      loop_control:
+        label: "{{ item.item }}"
     - name: Send three matching timestamp requests from external vantage
       ansible.builtin.command:
         argv:
