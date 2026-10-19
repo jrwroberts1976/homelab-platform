@@ -166,7 +166,9 @@
           - "':INPUT ACCEPT ' in vm_icmp_rules_after.stdout"
           - >-
             (vm_icmp_rules_before.stdout_lines | select('match', '^:') |
-             map('regex_replace', ' \\[\\d+:\\d+\\]
+             map('regex_replace', ' \\[\\d+:\\d+\\]$', '') | list)
+            == (vm_icmp_rules_after.stdout_lines | select('match', '^:') |
+                map('regex_replace', ' \\[\\d+:\\d+\\]$', '') | list)
           - >-
             (vm_icmp_rules_before.stdout_lines |
              select('match', '^-A (FORWARD|DOCKER)') | list)
