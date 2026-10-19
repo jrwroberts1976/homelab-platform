@@ -5,6 +5,11 @@
 **Status:** Live media-01 ICMP timestamp pilot successfully deployed and independently verified on 19 October. The accepted-risk policy is unchanged, and no new Greenbone vulnerability scan has been completed. Other hosts remain under review.
 
 ## docker-01 audit and verification gate — 19 October 2026
+## docker-01 timestamp responses confirmed — 19 October 2026
+
+Read-only Ansible completed on `docker-01` (`ok=3 changed=0 failed=0`) and `greenbone-01` (`ok=5 changed=0 failed=0`). Normal ping to `192.168.2.220` passed; three type-13 requests produced **three matching type-14 replies** (`ICMP_TIMESTAMP_RESULT=REPLY_CONFIRMED`). Thus the accepted ICMP timestamp disclosure remains reproducible on docker-01. No host changes were made. The submitted excerpt does **not contain the `Report non-secret Docker firewall indicators` output** from the first play; so iptables backend, INPUT policy, Docker chain counts and ownership remain unknown. Re-run the existing read-only diagnostic with `--limit docker-01 --forks 1` to collect that specific result before developing any Docker-safe mitigation. Do not install media-01's nftables ruleset on docker-01.
+
+
 
 The user ran the existing one-host read-only firewall audit on docker-01 (Raspberry Pi 4, Debian 13): `ok=2 changed=0 failed=0`. No active nftables, UFW, firewalld or Proxmox firewall service; nftables rules readable, **zero input hooks**, no timestamp-specific rules; iptables-save readable, no timestamp references. These are **not** proof that iptables owns host INPUT filtering or that the old ICMP finding is still reproducible. The existing Docker networking must be preserved.
 
