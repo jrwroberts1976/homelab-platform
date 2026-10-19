@@ -139,6 +139,10 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October ICMP review decision (no remediation approved):** media-01's read-only firewall audit succeeded (`ok=2 changed=0 failed=0`), identifying active nftables, broad IPv4 ICMP acceptance and no type-13-specific rule. The user requested **no firewall change** for these accepted ICMP timestamp findings, so the formerly suggested nftables pilot is not authorised. Existing TCP timestamp sysctl hardening is unrelated, and no supported selective Linux sysctl was identified for unicast ICMP timestamp replies. Retain risk acceptances and confirm actual scanner-perspective behaviour read-only before reconsidering; no live change or new Greenbone scan has been performed.
+
+
+
 **19 October accepted-risk review (planning only):** User chose to evaluate the 15 previously accepted findings before launching another scan. These consist of **14 ICMP Timestamp Reply** disclosures (NVT 1.3.6.1.4.1.25623.1.0.103190) across the 14 named hosts and **one BirdNET-Go csrf cookie missing HttpOnly** (NVT 1.3.6.1.4.1.25623.1.0.105925). The accepted-risk allowlist separately includes 15 historical TCP timestamp entries, not present in the last reported 15. Candidate: selectively drop ICMP IPv4 type 13 requests through each host's existing managed firewall, after verifying firewall ownership and rollback (media-01 as possible pilot). BirdNET upstream deliberately makes its csrf token cookie JavaScript-readable; preserve acceptance until exact deployed version and CSRF functionality are tested before forcing HttpOnly. A read-only Ansible audit of the 14 ICMP hosts and the plan in `docs/security/GREENBONE-ACCEPTED-RISKS-2026-10-19.md` are now Git-staged but **not run or deployed**. No accepted-risk status has changed. Fresh Greenbone scan and evidence checks remain pending.
 
 
