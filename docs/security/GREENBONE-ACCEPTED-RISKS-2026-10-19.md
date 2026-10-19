@@ -44,6 +44,11 @@ A scoped Ansible diagnostic `IaC/ansible/playbooks/greenbone-icmp-timestamp-medi
 
 ## Current user decision: no firewall modification
 ## Follow-up kernel investigation — read-only evidence, 19 October 2026
+## Verified downstream kernel sysctl absence — 19 October 2026
+
+User ran the read-only Ansible check on media-01: `TIMESTAMP_SYSCTL=NOT_PRESENT` for `/proc/sys/net/ipv4/icmp_timestamp_ignore_all`, on active Raspberry Pi kernel `6.18.50+rpt-rpi-2712`. Together with the independent 3/3 positive timestamp-response probe, this confirms the issue remains present and that **this build does not provide the proposed selective unicast ICMP timestamp sysctl**. Current Linux kernel sysctl documentation does not list it; the corresponding 2024 patch proposal encountered upstream review objections. TCP timestamp hardening is unrelated. No firewall/sysctl/package/kernel/service/risk disposition changes were made. The user declined a firewall change. A custom kernel modification would require a separate formal risk/maintenance review and reboot and is not being staged. Keep current low-impact risk acceptance while the user determines priorities.
+
+
 
 The user confirms they have **not changed the kernel**. media-01 is running Raspberry Pi ARM64 Debian 13 kernel 6.18.50+rpt-rpi-2712 (package 1:6.18.50-1+rpt1, built 2026-09-11). The installed rpi-2712 kernel package matches the running version; older 6.18.34 and 6.18.39 packages remain installed. Current settings: net.ipv4.icmp_echo_ignore_all=0, net.ipv4.icmp_echo_ignore_broadcasts=1. The latter suppresses broadcast/multicast timestamp requests but not the unicast timestamp requests that returned 3/3 from greenbone-01. No kernel, sysctl or firewall changes were made. A proposed upstream May 2024 patch added icmp_timestamp_ignore_all, but this does not appear in standard kernel sysctl docs and drew maintainer objections. Next check for its availability in the running Raspberry Pi downstream /proc/sys tree **read-only**, without assuming it exists. Do not disable ping or set an unknown sysctl; do not rebuild kernel without an explicit risk review and approval. Keep the existing low-risk acceptance in force for now.
 
