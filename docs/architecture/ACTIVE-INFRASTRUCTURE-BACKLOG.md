@@ -12,6 +12,9 @@
 
 ## Working rules
 
+**19 October kernel-only mitigation assessed:** media-01's Raspberry Pi Linux 6.18.50 does **not** provide `net.ipv4.icmp_timestamp_ignore_all` (`TIMESTAMP_SYSCTL=NOT_PRESENT`). An upstream proposal is not a supported current kernel setting; a custom kernel patch would be a disproportionate maintenance/reboot burden for this low-impact LAN finding. User declined firewall changes, so keep the confirmed 3/3 ICMP finding accepted; no host changes. Distinguish prior TCP timestamp sysctl hardening. Greenbone scan verification of formerly actionable Medium findings remains pending.
+
+
 **19 October — user-prioritised review of 15 accepted Greenbone risks:** Last report contains 14 ICMP timestamp replies and one BirdNET-Go csrf cookie missing HttpOnly; historical TCP timestamp acceptances are separate and should not be disabled based on these counts. ICMP mitigation is feasible by narrowly filtering IPv4 type-13 timestamp requests, but first audit firewall ownership for 14 hosts (particularly Proxmox-2/LXC/Docker), then test media-01 pilot with rollback. Preserve BirdNET's deliberate JavaScript-readable csrf token until compatibility of HttpOnly is demonstrated. New Git-only read-only playbook `greenbone-accepted-icmp-firewall-readonly.yml` and review `docs/security/GREENBONE-ACCEPTED-RISKS-2026-10-19.md`; no live changes, changed acceptances or new scan yet. Run audit before designing any remediation.
 
 
