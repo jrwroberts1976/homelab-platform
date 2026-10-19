@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October Docker-safe ICMP timestamp filter — Git-staged only:** Latest docker-01 read-only audit shows 2 active containers, `iptables v1.8.11 (nf_tables)`, host INPUT policy ACCEPT with zero rules, FORWARD policy DROP with four Docker chains, no nft INPUT hook and one nft FORWARD hook. Greenbone-side independent test previously received 3 matching timestamp replies from 3 requests. A new Git-managed role `docker_icmp_timestamp` adds only a host IPv4 INPUT destination-specific type-13 DROP through `iptables -w`, with a dedicated systemd oneshot for reboot persistence and explicit deletion on rollback; no Docker FORWARD, DOCKER-*, NAT or nftables-service changes. Staged cutover and rollback playbooks verify Docker containers, trusted BirdNET HTTPS and scanner-side before/after ICMP results. **Not yet deployed or validated on admin-01**; accepted-risk records and all live Docker services remain unchanged. Syntax/offline tests and user-run scoped Ansible required before marking fixed.
+
+
 **19 October docker-01 ICMP finding independently reproduced (read-only):** The `greenbone-icmp-timestamp-docker01-readonly.yml` run succeeded: `docker-01 ok=3 changed=0 failed=0`, `greenbone-01 ok=5 changed=0 failed=0`. Ping passed; 3 of 3 timestamp requests received matching replies from `192.168.2.220`. Its ICMP risk remains present and accepted until properly mitigated and scanner-verified. The shared user output omits the earlier Docker iptables INPUT/chain/backend detail, so firewall ownership is still undetermined. Re-run only `--limit docker-01` read-only to get those indicators before proposing an IaC firewall fix; do not import the media-01 nftables configuration. No Docker or service changes or fresh Greenbone scan occurred.
 
 
