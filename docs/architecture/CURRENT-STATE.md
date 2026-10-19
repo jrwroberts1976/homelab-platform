@@ -139,6 +139,9 @@ The Cloudflare Python 2.20.x compatibility warning observed during Certbot dry-r
 
 ## Vulnerability management
 
+**19 October monitor-01 firewall audit — live read-only:** Scoped `greenbone-accepted-icmp-firewall-readonly.yml --limit monitor-01 --forks 1` passed `ok=2 changed=0 failed=0`. Monitor host runs Debian 13; no nftables/UFW/firewalld/Proxmox service detected active; nft ruleset not readable, iptables-save readable, zero timestamp rule references. iptables backend and effective host INPUT policy are **not established** and a scanner-side type-13 probe has not yet run for this host. Git-staged `greenbone-icmp-timestamp-monitor01-readonly.yml` adds only a bounded firewall-indicator check and three-request scanner-side probe; it has not run or been syntax-validated by the user. No live firewall, monitoring, sysctl, kernel or accepted-risk change. Two of 14 original ICMP hosts (media-01, docker-01) remain operationally mitigated pending Greenbone rescan.
+
+
 **19 October docker-01 ICMP mitigation now deployed and independently checked:** `docker-01 ok=22 changed=3 failed=0`, `greenbone-01 ok=8 changed=0 failed=0` and zero unreachable. Git-managed Docker host iptables-nft INPUT-only type-13 rule active, with no timestamp replies seen by the scanner-side probe while normal ping passed. Docker running container identities and forwarding/DOCKER chains unchanged, BirdNET HTTPS remained reachable, no Docker restart. A dedicated service makes the rule reboot-persistent by configuration (not reboot-tested). **2/14 reported ICMP hosts now operationally mitigated** including media-01; twelve others remain. No new completed Greenbone scan or accepted-risk list change. Historical notes below describing the docker-01 rule as only Git-staged are superseded.
 
 
