@@ -97,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix="edge01-nft-mock-") as td:
     # The production edge config uses tabs rather than spaces.
     tab_baseline = baseline.replace(
         "                type filter hook input priority filter;",
-        "\\t\\ttype filter hook input priority filter;",
+        "\t\ttype filter hook input priority filter;",
     )
     if mod.BACKUP.exists():
         mod.BACKUP.unlink()
