@@ -1,28 +1,32 @@
 #!/usr/bin/env python3
-"""Read newest completed authenticated Greenbone report directly via existing GMP runner."""
-from datetime import datetime
+"""Read latest completed authenticated Greenbone report via task last_report."""
 import runpy
 import sys
 
 TASK_ID = "02b610fc-647a-4fb8-98c3-7763e0425c34"
 client = runpy.run_path("/usr/local/sbin/homelab-greenbone-scan", run_name="greenbone_report_reader")
 gmp = client["gmp"]
-root = gmp('<get_reports details="0" filter="rows=-1"/>', timeout_seconds=120)
+
+# Direct task lookup avoids get_reports pagination and report/task nesting ambiguity.
+root = gmp('<get_tasks task_id="' + TASK_ID + '" details="1"/>', timeout_seconds=120)
+tasks = [t for t in root.findall(".//task") if t.get("id") == TASK_ID]
+if len(tasks) != 1:
+    sys.exit("Expected exactly one authenticated task")
+task = tasks[0]
+print("TASK_STATUS=" + task.findtext("status", "unknown"), flush=True)
 reports = []
-for item in root.findall(".//report"):
-    task = item.find("task")
-    if task is None or task.get("id") != TASK_ID:
-        continue
-    scan_end = (item.findtext("scan_end") or "").strip()
-    if not scan_end:
-        continue
-    reports.append((scan_end, item.get("id", ""), item.findtext("scan_start", "")))
+for node in task.findall(".//report"):
+    rid = node.get("id", "")
+    if rid:
+        reports.append((node.findtext("scan_end", ""), node.findtext("scan_start", ""), rid))
 if not reports:
-    sys.exit("No completed authenticated reports returned by GMP")
-end, report_id, start = max(reports)
-print("LATEST_AUTH_REPORT_ID=" + report_id)
-print("SCAN_START=" + start)
-print("SCAN_END=" + end)
+    # Emit safe metadata to help distinguish task response shape from missing reports.
+    print("TASK_CHILD_ELEMENTS=" + ",".join(c.tag for c in task), flush=True)
+    sys.exit("No report reference returned within authenticated task")
+end, start, report_id = max(reports)
+print("LATEST_AUTH_REPORT_ID=" + report_id, flush=True)
+print("SCAN_START=" + start, flush=True)
+print("SCAN_END=" + end, flush=True)
 report = client["get_report"](report_id)
 findings = client["parse_results"](report)
 nonlog = [x for x in findings if x["severity"] != "Log"]
