@@ -1,0 +1,35 @@
+---
+- name: Roll back admin-01 only dedicated ICMP mitigation
+  hosts: admin-01
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Verify controller identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'admin-01'
+          - ansible_host == '192.168.2.48'
+
+    - name: Stop and disable only dedicated unit
+      ansible.builtin.systemd_service:
+        name: homelab-icmp-admin01.service
+        enabled: false
+        state: stopped
+
+    - name: Verify no owned table remains
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, list, tables]
+      changed_when: false
+      register: remaining
+
+    - name: Assert dedicated table removed
+      ansible.builtin.assert:
+        that:
+          - "'homelab_icmp_timestamp' not in remaining.stdout"
+
+    - name: Confirm QNetd active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, corosync-qnetd]
+      changed_when: false
+      register: qnetd
+      failed_when: qnetd.stdout | trim != 'active'
