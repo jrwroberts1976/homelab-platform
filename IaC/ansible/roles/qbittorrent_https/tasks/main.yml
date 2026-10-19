@@ -9,6 +9,7 @@
 - name: Require issued qBittorrent TLS certificate files
   ansible.builtin.stat:
     path: "{{ item }}"
+    follow: true
   loop:
     - "{{ qbittorrent_https_certificate_fullchain }}"
     - "{{ qbittorrent_https_certificate_key }}"
