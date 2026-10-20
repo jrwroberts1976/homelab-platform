@@ -2,11 +2,21 @@
 # Current-State Architecture
 
 **Status:** CURRENT OPERATIONAL TRUTH  
-**Current-state review:** 16 October 2026  
+**Current-state review:** 20 October 2026 (Trivy addendum; other sections retain their dated evidence)  
 **Identity/address authority:** `IaC/inventory/estate.json`  
 **Configuration authority:** `IaC/`
 
 This document records what is live now. Dated audits, migration notes and commissioning records remain evidence, but they do not override validated live state or the canonical estate inventory.
+
+## 20 October 2026 — Docker image vulnerability monitoring (verified addendum)
+
+**Five-host Trivy rollout: deployed and centrally verified.** Daily systemd timers are enabled on `monitor-01`, `komodo-01`, `cloud-01`, `docker-01` and `greenbone-01`; successful manual full-batch runs and central Prometheus API queries confirmed **30 of 30 running image references valid across 32 containers** (`6/6, 2/2, 4/4, 2/2, 16/16` respectively), with `scan_complete=1` for all five. Reported **191 CRITICAL package-finding occurrences**, not unique CVEs or proven exploits. Container image remediation is **not yet done**. The first unattended daily executions on **21 October 2026** and Grafana panel display remain to be verified; timer enablement alone is not proof of future execution.
+
+- **Rollout status and evidence:** [Container vulnerability status](../security/CONTAINER-VULNERABILITY-STATUS.md).
+- **Operator procedures and safe remediation:** [Container vulnerability remediation runbook](../security/CONTAINER-VULNERABILITY-REMEDIATION-RUNBOOK.md).
+- **Implementation:** `IaC/ansible/roles/container_vulnerability_pilot/` and the `container-vulnerability-*` Ansible playbooks; metrics `homelab_container_estate_*` via Node Exporter → Prometheus → Grafana.
+- **Known limitation:** some Greenbone data images have no Trivy `Results` field; narrowly allowlisted empty results count as process-valid, **not** evidence that security feed contents were audited.
+- **Operational follow-up:** check scan timestamps and image identities, not only the `scan_complete` gauge; verify monitor-01's initial cache/temporary-storage design against disk-backed practice used on other hosts.
 
 ## Authority model
 
