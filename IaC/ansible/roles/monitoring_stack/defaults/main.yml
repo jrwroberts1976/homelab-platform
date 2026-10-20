@@ -6,7 +6,7 @@ monitoring_root: /opt/monitoring
 monitoring_prometheus_image: prom/prometheus:v3.14.0
 monitoring_grafana_image: grafana/grafana:13.2.1
 monitoring_alertmanager_image: prom/alertmanager:v0.34.0
-monitoring_blackbox_image: prom/blackbox-exporter:v0.28.0
+monitoring_blackbox_image: prom/blackbox-exporter:v0.29.0
 monitoring_loki_image: grafana/loki:3.7.7
 
 monitoring_prometheus_retention: 30d
