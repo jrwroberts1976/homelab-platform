@@ -128,7 +128,7 @@ Authoritative inventory identifies 192.168.2.54 as mail-relay-01, CT102 on PROXM
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-20T09:19:16+01:00`
+- Last assessed: `2026-10-20T10:23:04+01:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
