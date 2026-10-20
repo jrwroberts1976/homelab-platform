@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 20 October 2026 (Trivy workstream updated; other historical statuses remain dated)  
+**Last reconciled:** 20 October 2026 (security remediation programme activated; historical statuses remain dated)  
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** 16 October patching/TLS/security reconciliation applied to the canonical current-state and installed-solutions documents.
 
@@ -125,12 +125,14 @@ Practical programme completion remains approximately **70–80%** when optional/
 
 ## Current sequence
 
-1. **Diagnose Greenbone gvmd readiness after Proxmox-2 recovery, then validate a fresh completed scan.** The 18 October run failed while the latest saved evidence was from 16 October. This is the remaining gate on the current patching/vulnerability/TLS workstream.
-2. **Next user-selected investigation: Raspberry Pi overclocking feasibility.** Start read-only: inventory Pi models, cooling, power supplies, current frequencies/thermal throttling and workload headroom before proposing any clock/voltage change.
-3. **Encode the existing Proxmox GDS mitigation in IaC.** Live `gather_data_sampling=force` mitigation is proven but remains a manual GRUB/kernel-parameter configuration.
-4. **Address the Certbot Cloudflare Python dependency warning.** Decide whether to pin the currently working 2.x dependency or deliberately migrate when compatibility with 3.x is established.
-5. Resume **Project 7** estate-wide Docker image lifecycle work unless James reprioritises.
-6. Default resilience priority remains **Project 6 Backup/DR**, followed by **Project 8 legacy cleanup**.
+**20 October user priority: Security Remediation Programme.** [Tracking issue #187](https://github.com/jrwroberts1976/homelab-platform/issues/187) and [programme plan](../security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md) now coordinate Greenbone and Trivy **assessment and controlled fixes**, without creating a new numbered roadmap project.
+
+1. **Verify the evidence before changing anything.** A 20 October authenticated Managed Infrastructure email reports 0 Critical/High/Medium/Low; a separate Full LAN Weekly email reports 7 Medium and 25 Low. Different scopes mean different remediation queues. Validate five Trivy timer runs scheduled on 21 October against fresh image IDs and Prometheus metric age; do not assume a prior completed manual scan proves next-day automation.
+2. **Triage Trivy Critical root causes.** The baseline records 191 Critical package-finding occurrences across 30 host-local running image references; deduplicate, assess reachability/fix availability and identify safe single-image canaries.
+3. **Resolve the seven Full LAN Medium detections.** Identify unknown endpoints, check the managed switch cookie, weak TLS signatures and ASUS/AiMesh TLS renegotiation findings without disrupting core networking.
+4. **Reconcile the 13 ICMP + 12 TCP Low detections** with the earlier managed-host ICMP mitigation programme and recorded accepted-risk decisions; no blanket policy change.
+5. **Continue Project 7 remediation one workload at a time**, with Git-backed IaC, approvals, rollback and fresh scans. Grafana/alerting and credential-safe inspection are supporting tasks. Unrelated optional Pi overclocking, legacy cleanup, Proxmox GDS IaC and Certbot dependency reviews remain separate.
+6. **Project 6 Backup/DR remains deferred by user choice.** Only the rollback/backup safeguards needed for a particular approved security remediation remain in scope.
 
 Projects 5, 9 and 10 remain optional/deferred and are not automatic commitments.
 
@@ -151,7 +153,12 @@ Both PVE nodes remained quorate with QDevice present. Pi-hole, Greenbone, Grafan
 
 The Proxmox Ceph enterprise repository was found enabled even though Ceph is not configured or in use. IaC now explicitly disables that repository so normal package operations do not depend on the enterprise Ceph channel.
 
-## Vulnerability management — FINAL VALIDATION PENDING
+## Vulnerability management — SECURITY REMEDIATION ACTIVE (20 OCTOBER 2026)
+
+The earlier 18 October GMP/boot-readiness failure described in older dated entries is no longer the latest scan evidence. The **20 October** authenticated Managed Infrastructure email (report `680f0ee6-fbd1-421a-ada2-27250d0d2f3a`) records **0 actionable entries**, while the separate **Full LAN Weekly** email (report `ffced3ba-fc6d-4d60-b949-277b8b70de89`) records **7 Medium, 25 Low**. Trivy's completed five-host baseline contains **191 Critical package occurrences** (not unique CVEs). Tracking now lives at [issue #187](https://github.com/jrwroberts1976/homelab-platform/issues/187) and the [programme plan](../security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md). This is new reporting/triage evidence, **not** proof the wider LAN or container estate is clean, and it does not undo previously approved risk acceptances.
+
+### Earlier validation history (retained)
+
 
 **19 October 2026 latest decision — HTTPS-only LAN cutover approved, Git-staged, not deployed:** User confirmed the qBittorrent HTTPS WebUI works and administrator password recovery succeeded, then explicitly requested closure of LAN HTTP/8081. The managed firewall defaults now select HTTPS/443=true, HTTP/8081=false, retaining Nginx→qBittorrent loopback, Kodi, SMB, SSH, NFS and monitoring traffic. A scoped HTTPS-only `qbittorrent-https-cutover.yml`, manual recovery `qbittorrent-https-http-rollback.yml`, and offline validators are staged. No production cutover performed yet. Next run offline/estate/syntax validation, deploy the scoped playbook from admin-01, verify HTTPS and loopback access plus refusal of new LAN 8081 connections, then run a completed authenticated Greenbone scan. Review 14 accepted ICMP timestamps and BirdNET CSRF missing HttpOnly next.
 
