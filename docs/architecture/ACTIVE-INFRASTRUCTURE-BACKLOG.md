@@ -1,6 +1,6 @@
 # Active Infrastructure Backlog
 
-**Last reconciled:** 16 October 2026  
+**Last reconciled:** 20 October 2026 (Trivy workstream updated; other historical statuses remain dated)  
 **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
 **Current documentation work:** 16 October patching/TLS/security reconciliation applied to the canonical current-state and installed-solutions documents.
 
@@ -99,6 +99,14 @@ Expected validation goals:
 
 Practical programme completion remains approximately **70–80%** when optional/deferred projects are excluded. The remaining percentage is dominated by recovery proof, estate-wide container lifecycle work and selected hardening/cleanup.
 
+## 20 October 2026 — Docker image vulnerability workstream (latest verified status)
+
+**Deployment is complete, remediation is open.** Full Trivy image coverage is live across five Docker hosts: **32 containers, 30 unique image references per host, 30/30 valid scan reports, 5/5 complete Prometheus targets**, and five enabled timers. Aggregate **191 CRITICAL package-finding occurrences** are *not* unique CVEs or evidence of exploitability. The first unattended runs on **21 October**, Grafana panel visual verification, and actual CVE remediation remain **OUTSTANDING**. This is a distinct workstream from Greenbone's host/network vulnerability findings.
+
+**Continue from:** [current Trivy rollout status](../security/CONTAINER-VULNERABILITY-STATUS.md) → [remediation and troubleshooting runbook](../security/CONTAINER-VULNERABILITY-REMEDIATION-RUNBOOK.md). Avoid rerunning installation/staging work already verified; do not upgrade every container at once.
+
+**Next actions in order:** (1) Verify next-day unattended Trivy scans on all five hosts using fresh timestamps, service status and complete current inventory; (2) visually check Grafana and consider stale/incomplete monitoring alerts; (3) export/deduplicate critical CVEs by digest/package, identify supported image fixes and prioritise exposure; (4) plan one controlled Git-managed application/image upgrade at a time with service-specific backup, rollback and re-scan; (5) inspect monitor-01 Trivy temporary/cache storage for the RAM-tmpfs risk already corrected elsewhere. **No container vulnerability remediation is claimed complete.**
+
 ## Prioritised projects
 
 | # | Project | Status | Remaining outcome |
@@ -109,7 +117,7 @@ Practical programme completion remains approximately **70–80%** when optional/
 | 4 | Homelab documentation audit | **COMPLETE — 6 Oct 2026** | Current docs continue to be reconciled as architecture changes |
 | 5 | Password manager | **OPTIONAL** | Select product/design only if deliberately prioritised; require HTTPS/MFA, backup, restore proof and emergency access |
 | 6 | Backup and disaster recovery | **OUTSTANDING** | Representative QEMU restore, application-consistent Nextcloud/PostgreSQL recovery, independent second copy and protected recovery identities |
-| 7 | Komodo hardening and Docker image lifecycle | **PARTIAL** | BirdNET canary complete; remaining estate-wide image inventory, release/dependency review, phased updates and rollback validation |
+| 7 | Komodo hardening and Docker image lifecycle | **PARTIAL — TRIVY MONITORING COMPLETE, REMEDIATION PENDING** | 5/5 hosts and 30/30 running image references monitored; verify 21 Oct unattended runs, triage critical findings, plan phased supported image updates and rollback validation |
 | 8 | Legacy infrastructure cleanup | **REVIEW REQUIRED** | Remove only clearly obsolete rollback/superseded state after confidence review |
 | 9 | Web analytics | **OPTIONAL** | Start only if deliberately wanted |
 | 10 | Cloudflare Tunnel | **DEFERRED** | `edge-01` reserved; deploy only for a real approved service requirement |
