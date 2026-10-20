@@ -30,9 +30,18 @@ The targeted profile completed but did not yield a reliable OS fingerprint. Devi
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Zeek flow evidence is not configured for this estate.
+- Evidence source: `sensor-01` Zeek connection telemetry
+- Rolling window: 24 hours
+- Summary generated: `2026-10-20T00:21:45+01:00`
+- MAC identity: `68:ff:7b:1b:1e:ab`
+- Observed IP address(es): `192.168.2.76`
+- Connections: **48**
+- Traffic sent: **14.0 KiB**
+- Traffic received: **13.8 KiB**
+- Top services: `ntp` (45), `dhcp` (1)
+- Top destination ports: `udp/123` (45), `tcp/443` (2), `udp/67` (1)
 
-> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
+> This bounded summary intentionally excludes raw packet data and external destination IP history.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
