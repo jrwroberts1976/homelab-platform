@@ -121,7 +121,7 @@ PROXMOX is a confirmed physical Proxmox VE cluster node and cluster anchor runni
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-20T21:15:05+01:00`
+- Last assessed: `2026-10-20T22:17:23+01:00`
 - Pending updates: **2**
 - Security updates pending: **0**
 - Reboot required: **No**
