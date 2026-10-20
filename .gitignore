@@ -12,3 +12,7 @@
 # Runtime environment secret files
 **/*.env
 !**/*.env.example
+
+# Python-generated cache and bytecode
+__pycache__/
+*.py[cod]
