@@ -137,13 +137,13 @@ dns-01 is the managed CT101 LXC container on Proxmox-2, providing Pi-hole and Un
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T05:14:01+01:00`
-- Pending updates: **2**
-- Security updates pending: **0**
+- Last assessed: `2026-10-21T06:14:32+01:00`
+- Pending updates: **3**
+- Security updates pending: **1**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-16T10:16:22+01:00`
-- Patch state: **Healthy**
+- Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
