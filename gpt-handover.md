@@ -1,6 +1,18 @@
 # GPT Handover — Homelab Platform
 
-**Last updated:** 19 October 2026
+**Last updated:** 20 October 2026
+
+**Session focus:** Security Remediation Programme — new cross-project assessment and tracked fixes
+
+**Current status (20 October 2026):** User authorised a new security workstream addressing both Greenbone Full LAN detections and Trivy image CVEs. GitHub issue [#187](https://github.com/jrwroberts1976/homelab-platform/issues/187) created; review-branch plan `docs/security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md` and active backlog priority staged on branch `docs/security-remediation-programme-2026-10-20`. **This is planning/tracking only:** no Ansible execution, service/image upgrade, firewall, firmware, Greenbone scan or risk-acceptance change. Source/CI validation and merge remain pending review.
+
+**Evidence / scope:** Latest emailed Greenbone *Full LAN Weekly* report `ffced3ba-fc6d-4d60-b949-277b8b70de89` (20 October): **0 Critical, 0 High, 7 Medium, 25 Low, 1,132 Log, 0 Accepted**. Medium investigations: unknown RPC host (1), managed HP switch missing HttpOnly (1), unidentified endpoint weak TLS certificate signatures on two ports (2), ASUS router/AiMesh renegotiation DoS indications (3). Low: 13 ICMP and 12 TCP timestamps on broader LAN. Different-scope *Managed Infrastructure Authenticated Daily* report `680f0ee6-fbd1-421a-ada2-27250d0d2f3a`: **0 Critical/High/Medium/Low; 864 Log; no actionable findings**. Keep older accepted-risk and independently verified managed-host ICMP mitigations; do not equate the newer LAN findings with earlier managed-host scope. The existing Trivy 20 Oct completed-manual-scan baseline is **5/5 hosts, 30/30 host-local running image references, 32 containers, 191 Critical package rows**; root-cause deduplication and remediation not yet performed. First unattended daily Trivy runs on 21 Oct require proof, along with dashboard freshness and current CI documentation guard status.
+
+**Priority and next safe action:** Review #187 work packages S0–S5. Verify 21 Oct Trivy unattended scanner journal/Prometheus recency, deduplicate Critical image CVEs from existing per-host JSON, and identify two unknown LAN Medium endpoints read-only. Draft a per-root-cause supported fix and rollback before user-approved scoped Ansible deployment. **Do not recreate scanning infrastructure or restart active Greenbone workloads.** Backup/DR remains separately deferred.
+
+---
+
+### Earlier handover context — 19 October 2026
 
 **Session focus:** Greenbone vulnerability validation and remediation
 
