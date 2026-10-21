@@ -127,13 +127,13 @@ edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. OpenSSH 10.0p2
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T05:55:21+01:00`
-- Pending updates: **3**
-- Security updates pending: **1**
+- Last assessed: `2026-10-21T06:59:50+01:00`
+- Pending updates: **2**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-16T10:17:32+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-21T06:22:52+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
