@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T14:01:33+01:00`
+- Assessed: `2026-10-22T15:00:05+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `78:8c:b5:38:16:83`
 - Identity confidence: **high**
@@ -60,22 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a TP-Link/Tapo garage-door security camera. Hostname, DHCP identifier, vendor data, and TP-Link cloud/Tapo DNS activity support the identity; the exact firmware OS is not established. TCP port 9999 is open.
+TP-Link smart camera, likely model KC420WS, identified from estate naming, DHCP hostname, vendor data, and TP-Link/Tapo DNS activity. Exact firmware/OS is not supported by the evidence. TCP port 9999 is open; no matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The inventory hostname is garage-door-camera.jameshouse and the telemetry hostname is garage-door-camera.
+- The device is online at 192.168.2.49.
+- The documented inventory hostname is garage-door-camera.jameshouse, with telemetry hostname garage-door-camera.
+- The recorded vendor is TP-Link Limited.
 - The DHCP hostname is KC420WS.
-- The reported vendor is TP-Link Limited.
-- DNS telemetry includes TP-Link/Tapo-related endpoints such as tplinkcloud.com, api.tplinkra.com, and tp-link.com.
-- Nmap reports TCP port 9999 as open, with the service label omitted.
-- No actionable Greenbone findings match the current IP 192.168.2.49.
+- DNS telemetry includes TP-Link cloud, Tapo, and tplinkra.com endpoints.
+- TCP port 9999 is open.
+- Greenbone reported zero matching actionable findings for the current IP.
 
 ### Inferences
 
-- The device is likely a TP-Link/Tapo security camera used for garage-door monitoring.
-- The device likely runs embedded IoT firmware, but the exact operating system and firmware version are unsupported by the evidence.
-- Nmap produced several conflicting Linux, OpenWrt, embedded, and Android candidates; these are insufficient to identify the exact OS.
+- The device is a TP-Link smart security camera associated with a garage-door monitoring role.
+- KC420WS is likely a model-like identifier for the device.
+- The device likely uses embedded IoT firmware, but the exact OS and firmware version cannot be established.
+- Nmap produced Linux/OpenWrt-oriented and other embedded-device candidates, but these are not sufficient to identify the exact OS.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

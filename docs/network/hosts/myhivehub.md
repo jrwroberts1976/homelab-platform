@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T14:01:33+01:00`
+- Assessed: `2026-10-22T15:00:05+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1c:2b:5a:6d:fd`
 - Identity confidence: **high**
@@ -60,22 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-myHivehub is an online AlertMe smart-home hub at 192.168.2.7. The hostname and vendor identify the device, but no operating-system or service evidence is available.
+Online AlertMe device identified as a likely Hive home-automation hub from its documented hostname and vendor metadata. Exact operating system is not available.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.7.
-- The router DHCP hostname is myHivehub.
-- The inventory hostname is myhivehub.jameshouse and the telemetry hostname is myhivehub.
-- The recorded vendor is Alertme.com Limited.
-- Nmap collection is partial and reports no TCP or UDP ports or OS matches.
-- No authoritative operating-system fact is available.
-- No matching actionable Greenbone findings were reported for this IP; this does not establish that the host is vulnerability-free.
+- The documented DHCP and router hostname is myHivehub.
+- Inventory identifies the vendor as Alertme.com Limited.
+- The MAC vendor is Alertme.com Limited.
+- Nmap OS identification is incomplete and reports no OS matches.
+- No actionable Greenbone findings match the current IP in the supplied scan data.
 
 ### Inferences
 
-- The device is likely an AlertMe-branded smart-home hub based on its hostname and recorded vendor.
-- It likely runs embedded IoT firmware, but the specific operating system and version are unsupported by the supplied evidence.
+- The hostname and AlertMe vendor strongly indicate a Hive/AlertMe home-automation hub.
+- The device likely runs embedded IoT firmware, but the exact operating system and version are unsupported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

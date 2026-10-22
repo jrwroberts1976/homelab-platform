@@ -50,33 +50,33 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T14:01:33+01:00`
+- Assessed: `2026-10-22T15:00:05+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `3c:64:cf:87:ae:ea`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo TC40 camera. The hostname, DHCP identifier, TP-Link/Tapo DNS endpoints, camera-oriented Nmap evidence, and open HTTPS/554 ports support the classification; the exact firmware OS is not established.
+Likely a TP-Link Tapo camera, identified by its camera hostname, DHCP name TC40, and TP-Link/Tapo cloud DNS activity. Exact firmware or operating system is not established.
 
 ### Confirmed facts
 
+- The device hostname is garden-gate-camera.jameshouse.
+- The DHCP hostname is TC40.
 - The device is online at 192.168.2.90.
-- Its hostname is garden-gate-camera.jameshouse and its DHCP hostname is TC40.
-- DNS activity included TP-Link Cloud and Tapo endpoints.
-- TCP ports 443 and 554 were open when scanned.
-- The presented TLS certificate used the subject and issuer name TPRI-DEVICE.
-- Nmap reported candidate fingerprints including an AXIS network camera and several Linux or embedded-device fingerprints.
-- Greenbone reported zero matching actionable findings for the current IP; this does not establish that the device is vulnerability-free.
+- TCP port 443 is open.
+- TLS on port 443 presents a certificate with subject and issuer TPRI-DEVICE.
+- DNS observations include TP-Link cloud and Tapo endpoints.
+- No matching actionable Greenbone findings were reported for this IP; this does not prove the host is vulnerability-free.
 
 ### Inferences
 
-- The device is most likely a TP-Link Tapo camera, probably the TC40 model based on the DHCP hostname and Tapo DNS signals.
-- The platform is best classified as embedded IoT firmware rather than a specifically identified Linux version.
-- The Nmap OS fingerprints appear ambiguous and are insufficient to identify the exact firmware OS.
+- The device is likely a TP-Link Tapo camera based on its hostname and TP-Link/Tapo DNS signals.
+- The device likely runs embedded IoT firmware.
+- The Nmap OS results are ambiguous and include generic Linux, router, and camera fingerprints; they do not establish the exact device model or operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

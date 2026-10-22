@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T14:01:33+01:00`
+- Assessed: `2026-10-22T15:00:05+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:82:e1:f2:f9:9f`
 - Identity confidence: **medium**
@@ -60,21 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online Tuya Smart device at 192.168.2.30, likely a patio smart-home device. Exact firmware/OS is unavailable; the DHCP hostname "wlan0" conflicts with the inventory and telemetry hostname, so identity should be reviewed.
+Online Tuya Smart device at 192.168.2.30. Hostname evidence is inconsistent: telemetry/Nmap identify it as patio.jameshouse, while DHCP reports wlan0. No ports or OS matches were obtained, so the exact device type and OS remain unresolved.
 
 ### Confirmed facts
 
 - The device is online at 192.168.2.30.
-- Inventory and Nmap identify the vendor as Tuya Smart.
-- The inventory hostname is patio.jameshouse and the telemetry hostname is patio.
-- The router reports DHCP hostname wlan0.
-- Nmap is partial, with no OS matches and no TCP or UDP ports reported.
-- No actionable Greenbone findings match this IP in the supplied report.
+- The inventory and Nmap vendor field identify the vendor as Tuya Smart.
+- The recorded hostname is patio.jameshouse, with telemetry hostname patio.
+- The DHCP hostname is wlan0.
+- The MAC address is c4:82:e1:f2:f9:9f.
+- Nmap status is partial, with no reported TCP or UDP ports and no OS matches.
+- No matching actionable Greenbone findings were reported for this IP.
 
 ### Inferences
 
-- The device is likely a Tuya-based embedded smart-home device associated with the patio.
-- The platform is best classified broadly as embedded IoT firmware; no exact OS or firmware is supported by the evidence.
+- The device is likely an embedded Tuya-based IoT or smart-home device.
+- The specific product type and operating system cannot be determined from the supplied evidence.
+- The differing hostname signals require review before assigning a definitive device identity.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

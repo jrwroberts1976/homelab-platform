@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T14:01:33+01:00`
+- Assessed: `2026-10-22T15:00:05+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `20:23:51:dc:ef:05`
 - Identity confidence: **high**
@@ -60,24 +60,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-TP-Link Tapo H100 home hub identified from DHCP/inventory hostnames, vendor data, and TP-Link cloud DNS activity. It exposes TCP port 80; Nmap identifies lwIP, which is a network stack rather than a complete operating system.
+Identified as a TP-Link Tapo H100 smart-home hub from the documented hostname, vendor data, DHCP hostname, and TP-Link/Tapo cloud DNS activity. The exact firmware OS is not supported by the evidence; Nmap only provides a tentative lwIP TCP/IP stack fingerprint. TCP port 80 is open. No actionable Greenbone findings matched the current IP.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.29.
 - The inventory hostname is tapo-home-hub-h100.jameshouse and the telemetry hostname is tapo-home-hub-h100.
-- The DHCP hostname and router hostname are H100.
-- The recorded vendor is TP-Link PTE.
+- The router reports DHCP hostname H100 for 192.168.2.29.
+- The inventory vendor is TP-Link PTE.
+- DNS activity includes TP-Link cloud/Tapo endpoints.
 - TCP port 80 is open.
-- Nmap reported lwIP fingerprints, including a highest-ranked lwIP 2.1.0–2.2.0 match.
-- DNS evidence includes TP-Link cloud / Tapo endpoints.
-- No actionable Greenbone findings match the current IP in the supplied scan results.
+- Greenbone reported zero matching actionable findings for the current IP.
 
 ### Inferences
 
-- The device is a TP-Link Tapo H100 smart-home hub.
-- The device likely uses embedded firmware with the lwIP TCP/IP stack.
-- The exact operating system or firmware version cannot be determined from the supplied evidence.
+- The device is most likely a TP-Link Tapo H100 smart-home hub.
+- The platform is likely embedded IoT firmware.
+- The Nmap fingerprint suggests an lwIP-based TCP/IP stack, but lwIP is not treated as the device operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
