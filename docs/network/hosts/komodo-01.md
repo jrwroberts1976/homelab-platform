@@ -109,13 +109,13 @@ komodo-01 is the Proxmox CT104 LXC control-plane host running Debian 13 on x86_6
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-22T18:15:01+01:00`
-- Pending updates: **7**
-- Security updates pending: **0**
+- Last assessed: `2026-10-22T19:18:41+01:00`
+- Pending updates: **11**
+- Security updates pending: **3**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-21T07:16:51+01:00`
-- Patch state: **Healthy**
+- Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
