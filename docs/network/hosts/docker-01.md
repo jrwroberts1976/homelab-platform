@@ -99,7 +99,7 @@ docker-01 is a managed physical Raspberry Pi 4 host running Debian GNU/Linux 13 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-22T04:53:29+01:00`
+- Last assessed: `2026-10-22T05:57:56+01:00`
 - Pending updates: **25**
 - Security updates pending: **2**
 - Reboot required: **No**
