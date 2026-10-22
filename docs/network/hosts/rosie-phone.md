@@ -50,30 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T13:01:53+01:00`
+- Assessed: `2026-10-22T14:00:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `92:ff:53:0a:16:e9`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a POCO C75 smartphone, identified from the DHCP hostname and matching phone-oriented inventory hostname. Exact OS/firmware is not available.
+Likely a POCO C75 mobile device identified from its DHCP hostname. No OS, port, service, or vulnerability evidence was available in the supplied telemetry.
 
 ### Confirmed facts
 
 - The router reports DHCP hostname POCO-C75 for 192.168.2.224.
-- Inventory records hostname rosie-phone.jameshouse and telemetry hostname rosie-phone.
-- The router currently reports the device as online at 192.168.2.224.
-- No authoritative OS fact or Nmap OS match is available.
-- No actionable Greenbone findings match the current IP; this does not establish that the device is vulnerability-free.
+- The device was online at the router's last observation.
+- Inventory associates the IP with hostname rosie-phone.jameshouse and telemetry hostname rosie-phone.
+- Nmap completed only partially and reported no TCP or UDP ports or OS matches.
+- No actionable Greenbone findings matched this IP.
 
 ### Inferences
 
-- The device is likely a POCO C75 smartphone.
-- POCO is a Xiaomi mobile-device brand, and the device likely uses an Android-based mobile platform; this is not directly confirmed by the supplied evidence.
+- The DHCP hostname strongly suggests a POCO C75 smartphone, likely from Xiaomi/Poco.
+- The differing inventory and DHCP hostnames are likely aliases for the same observed device, but the relationship is not independently confirmed.
+- The operating system and firmware cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

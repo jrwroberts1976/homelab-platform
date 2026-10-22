@@ -50,32 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T13:01:53+01:00`
+- Assessed: `2026-10-22T14:00:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `24:b2:b9:30:f8:55`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Online host 192.168.2.183 is identified as James-LT from DHCP and inventory hostnames. The laptop classification is inferred from the hostname; no OS, vendor, port, or service evidence is available.
+James-LT is an online network endpoint at 192.168.2.183. Its hostname suggests a laptop, but no vendor, OS, port, service, or DNS identity evidence is available to confirm the device type or platform.
 
 ### Confirmed facts
 
-- The host is online at 192.168.2.183.
-- The router reports the DHCP hostname James-LT.
-- Inventory records the hostname james-lt.jameshouse and telemetry hostname james-lt.
-- The MAC address is 24:b2:b9:30:f8:55.
-- No authoritative OS fact is available.
-- Nmap did not obtain OS, TCP-port, or UDP-port evidence.
-- No matching actionable Greenbone findings are reported for this IP; this does not establish that the host is vulnerability-free.
+- The router reports DHCP hostname James-LT for 192.168.2.183.
+- The inventory hostname is james-lt.jameshouse, with telemetry hostname james-lt.
+- The device MAC address is 24:b2:b9:30:f8:55.
+- The router currently reports the device as online.
+- Nmap OS and port identification is incomplete because OS evidence is missing.
+- No actionable Greenbone findings match the current IP; this is not proof that the host is vulnerability-free.
+- No patching telemetry is available.
 
 ### Inferences
 
-- The hostname suffix LT suggests this is likely a laptop or other endpoint computer.
-- The operating system and hardware vendor cannot be determined from the supplied evidence.
+- The hostname suffix LT may indicate a laptop, but this is not confirmed.
+- The exact operating system and firmware are unknown.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

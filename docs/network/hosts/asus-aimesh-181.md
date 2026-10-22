@@ -59,7 +59,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T13:01:53+01:00`
+- Assessed: `2026-10-22T14:00:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `04:d4:c4:b8:52:28`
 - Identity confidence: **high**
@@ -69,26 +69,25 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-Identified as the documented ASUS AiMesh wireless mesh node at 192.168.2.181. It exposes Dropbear SSH and HTTPS-alt management services; the available OS fingerprint is inconsistent and does not support a precise OS identification.
+Identified as the ASUS AiMesh wireless mesh node documented as asus-aimesh-181, using the model-like hostname RT-AC86U-5228. It exposes Dropbear SSH and web services; the exact firmware/OS is not established. No actionable Greenbone findings matched the current IP.
 
 ### Confirmed facts
 
-- Canonical estate identity is ASUS AiMesh node.
-- Documented role is Wireless mesh node.
-- Hostname and DHCP hostname are RT-AC86U-5228.
-- Vendor is ASUSTek Computer.
-- IP address is 192.168.2.181 and MAC address is 04:d4:c4:b8:52:28.
+- The canonical estate role is ASUS AiMesh node / Wireless mesh node.
+- The documented hostname is RT-AC86U-5228, with IP address 192.168.2.181.
+- The inventory vendor and Nmap vendor are ASUSTek Computer.
 - TCP ports 22, 80, and 8443 are open.
-- Port 22 is corroborated as Dropbear sshd, protocol 2.0.
-- Port 8443 is corroborated as HTTPS-alt over TLS.
-- The TLS certificate identifies RT-AC86U-5228 and includes ASUS router, repeater, and access-point names.
-- Greenbone reports zero matching actionable findings for the current IP; this is not proof that the host is vulnerability-free.
+- Port 22 provides corroborated Dropbear SSH service, protocol 2.0.
+- A TLS certificate on port 8443 identifies RT-AC86U-5228 and includes ASUS router, repeater, access-point, ZenWiFi, and ExpertWiFi names.
+- DNS observations include routerahs.asus.com and fwupdate.asuswrt-merlin.net.
+- No actionable Greenbone findings matched 192.168.2.181 in the supplied report.
 
 ### Inferences
 
-- The device is consistent with embedded ASUS router or mesh-node firmware.
-- The Nmap fingerprint suggests a Linux-family embedded implementation, but its Android/Linux alternatives are not sufficiently reliable to identify an exact OS.
-- ASUS router-management services and certificate naming are consistent with the documented AiMesh role.
+- The hostname, certificate identity, vendor, and canonical role strongly support an ASUS RT-AC86U-class AiMesh device.
+- The device likely runs embedded ASUS router firmware, potentially in the ASUSWRT family, but the exact firmware and OS are unsupported by the evidence.
+- Nmap Linux/Android matches are fingerprinting alternatives and do not establish Android or a precise Linux version.
+- The open web services are consistent with router administration, but the omitted Nmap label for port 80 is not interpreted.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
