@@ -127,7 +127,7 @@ Managed Proxmox LXC container CT100 providing Pi-hole and Unbound DNS services. 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-22T10:19:00+01:00`
+- Last assessed: `2026-10-22T11:19:52+01:00`
 - Pending updates: **2**
 - Security updates pending: **0**
 - Reboot required: **No**
