@@ -58,7 +58,7 @@ Only bounded application/service evidence is retained here.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T12:02:16+01:00`
+- Assessed: `2026-10-22T13:00:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `94:3a:91:cd:4c:51`
 - Identity confidence: **high**
@@ -68,22 +68,22 @@ Only bounded application/service evidence is retained here.
 
 ### Assessment summary
 
-Likely Amazon Fire TV or Fire TV Stick at 192.168.2.8, supported by Nmap fingerprinting and corroborating Amazon Fire TV/Alexa DNS activity. Exact OS and model are not established.
+Likely Amazon Fire TV or Fire TV Stick at 192.168.2.8, supported by Amazon vendor data, Nmap fingerprinting, and corroborated Amazon Fire TV DNS activity. Exact OS is not established.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.8.
-- Inventory and Nmap identify the vendor as Amazon Technologies.
-- Nmap's highest-confidence match is Amazon Fire TV or Kindle Paperwhite at 99% accuracy, classified as an embedded media device.
-- TCP port 8009 is open.
-- Corroborated DNS signals include Amazon Fire TV, Amazon Video, and Alexa endpoints, along with NordVPN endpoints.
-- No actionable Greenbone findings match the current IP; this is not proof that the host is vulnerability-free.
+- IP address is 192.168.2.8.
+- MAC vendor is Amazon Technologies.
+- Nmap identified an Amazon Fire TV or Kindle Paperwhite fingerprint with 99% accuracy and classified it as an embedded media device.
+- TCP port 8009 is open; the Nmap service label was omitted.
+- DNS telemetry from both configured DNS servers included Amazon Fire TV, Amazon Video, and Alexa endpoint signals.
+- No matching actionable Greenbone findings were reported for the current IP; this does not establish that the device is vulnerability-free.
 
 ### Inferences
 
-- The device is most likely an Amazon Fire TV or Fire TV Stick rather than a Kindle Paperwhite, based on the corroborating Amazon streaming-related DNS signals.
-- The platform is likely embedded device firmware, but the exact OS is unsupported by the available evidence.
-- The DNS evidence indicates NordVPN-related activity or connectivity, but does not establish user intent or device ownership.
+- The device is most likely an Amazon Fire TV or Fire TV Stick.
+- The device likely uses embedded Amazon device firmware, but the exact OS and version are unsupported by the supplied evidence.
+- NordVPN-related DNS activity is associated with the device's observed DNS signals, but its purpose is not established.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T12:02:16+01:00`
+- Assessed: `2026-10-22T13:00:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:65:16:79:58:08`
 - Identity confidence: **high**
@@ -60,22 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Hewlett Packard HP DeskJet 2600 series network printer, identified by DHCP hostname and corroborated HTTP service product data. Exact firmware OS is not established; Nmap suggests VxWorks but this remains tentative.
+HP DeskJet 2600 series network printer identified by corroborated HTTP service fingerprints, HP vendor data, hostname, and printer-specific Nmap matches. Exact firmware/OS is not established.
 
 ### Confirmed facts
 
-- The device hostname is hp-printer.jameshouse and the DHCP hostname is HP795808.
-- The vendor is identified as Hewlett Packard.
-- Services on TCP ports 80, 443, 631, and 8080 are identified as HP DeskJet 2600 series printer HTTP configuration services.
-- The reported serial number is CN95O878PS06PX.
-- TCP port 9100 is open.
-- The device is currently reported offline.
-- No actionable Greenbone findings match the current IP; this does not establish that the device is vulnerability-free.
+- The device hostname is hp-printer.jameshouse, with telemetry hostname hp-printer.
+- The DHCP/router hostname is HP795808.
+- The recorded vendor is Hewlett Packard.
+- Ports 80, 443, 631, 8080, and 9100 are open over TCP.
+- Ports 80, 443, 631, and 8080 expose corroborated HP DeskJet 2600 series printer HTTP configuration services.
+- The reported serial is CN95O878PS06PX.
+- The TLS certificate identifies HP795808 as both subject and issuer common name.
+- Greenbone reported zero actionable findings matching this current IP; this is not proof that the device is vulnerability-free or fully scanned.
 
 ### Inferences
 
-- The device is an HP DeskJet 2600 series network printer.
-- The device likely uses embedded printer firmware; Nmap fingerprints suggest VxWorks, but this is not sufficiently authoritative to set the exact OS.
+- The device is an HP DeskJet 2600 series printer.
+- Nmap fingerprints suggest an embedded printer platform and include VxWorks-based matches, but they do not establish the exact operating system or firmware.
+- The observed HP-related DNS domains are consistent with HP printer connectivity, but are supporting rather than definitive identity evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
