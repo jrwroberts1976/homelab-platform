@@ -126,8 +126,8 @@ Managed Debian 13 VM202 on Proxmox-2 providing Prometheus, Grafana, Alertmanager
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-23T16:22:35+01:00`
-- Pending updates: **2**
+- Last assessed: `2026-10-23T17:23:11+01:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **Yes**
 - unattended-upgrades installed: **Yes**
