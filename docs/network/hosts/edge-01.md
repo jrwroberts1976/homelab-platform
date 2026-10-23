@@ -124,8 +124,8 @@ edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. SSH is exposed
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-23T00:57:20+01:00`
-- Pending updates: **2**
+- Last assessed: `2026-10-23T02:00:20+01:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
