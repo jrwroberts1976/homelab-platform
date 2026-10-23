@@ -126,7 +126,7 @@ dns-01 is CT101, an Ansible-managed LXC container on Proxmox-2 providing the doc
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-23T10:26:32+01:00`
+- Last assessed: `2026-10-23T11:29:41+01:00`
 - Pending updates: **2**
 - Security updates pending: **0**
 - Reboot required: **No**
