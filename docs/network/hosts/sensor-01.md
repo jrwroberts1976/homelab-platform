@@ -128,12 +128,12 @@ sensor-01 is VM201 on PROXMOX, serving as the managed Suricata and Zeek passive 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-24T06:38:40+01:00`
-- Pending updates: **4**
-- Security updates pending: **1**
+- Last assessed: `2026-10-24T07:39:26+01:00`
+- Pending updates: **3**
+- Security updates pending: **0**
 - Reboot required: **Yes**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-22T06:05:37+01:00`
+- Last APT transaction activity: `2026-10-24T06:50:41+01:00`
 - Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
