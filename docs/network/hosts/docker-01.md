@@ -101,7 +101,7 @@ docker-01 is a managed Raspberry Pi 4 running Debian 13 (trixie) on aarch64 and 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-24T22:38:46+01:00`
+- Last assessed: `2026-10-24T23:40:59+01:00`
 - Pending updates: **27**
 - Security updates pending: **0**
 - Reboot required: **No**
