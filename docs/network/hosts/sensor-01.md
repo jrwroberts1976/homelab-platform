@@ -128,9 +128,9 @@ sensor-01 is VM201 on PROXMOX, serving as the managed Suricata and Zeek passive 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-24T04:29:12+01:00`
-- Pending updates: **3**
-- Security updates pending: **0**
+- Last assessed: `2026-10-24T05:33:56+01:00`
+- Pending updates: **4**
+- Security updates pending: **1**
 - Reboot required: **Yes**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-10-22T06:05:37+01:00`
