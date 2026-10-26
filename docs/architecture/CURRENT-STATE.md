@@ -8,6 +8,12 @@
 
 This document records what is live now. Dated audits, migration notes and commissioning records remain evidence, but they do not override validated live state or the canonical estate inventory.
 
+## 26 October 2026 — Five-host Trivy scan verification and severity view refinement
+
+New live read-only Prometheus checks from monitor-01 showed **30/30** running images verified across five hosts (monitor-01 6/6, komodo-01 2/2, cloud-01 4/4, docker-01 2/2, greenbone-01 16/16), with `scan_complete=1` and evidence younger than 30 hours for each target. The `homelab_container_estate_cve_detail_score` series are now ingested centrally from all five hosts: **12,267** image+severity+advisory records, including **94 CRITICAL** and **1,605 HIGH** (not unique estate-wide CVEs or verified exploits). Exporter rollout is LIVE, but the new four-column Grafana JSON and Greenbone *host* CVE exporter have **not yet been confirmed deployed**.
+
+To avoid rendering all 12,267 records by default, a proposed Git-only Grafana severity multi-select defaults to **CRITICAL** (94 observed records) and permits adding HIGH, MEDIUM, LOW, UNKNOWN or All without hiding the existence of lower-severity evidence. The visible Trivy table remains **Target name | Severity | CVE | Details**. All live provisioning still requires the separate guarded `grafana-trivy-dashboard-update.yml` on monitor-01; no production Grafana changes are made by the proposed filter. See `docs/security/GRAFANA-TRIVY-FOUR-COLUMN-CVES-2026-10-26.md` and security issue #187.
+
 ## 26 October 2026, 15:31 GMT — Greenbone Trivy evidence restored; dashboard revision proposed
 
 **Newer live evidence supersedes the 9/16 count below:** On greenbone-01, the operator used scoped Ansible to confirm all four Trivy/Greenbone jobs inactive and start the existing bounded Trivy service manually. It ran **15:29:14–15:31:51 GMT**, systemd `Result=success`, and locally published `homelab_container_estate_running_images 16`, `homelab_container_estate_valid_images 16`, `homelab_container_estate_scan_complete 1`. The running image IDs were rescanned after the 10:00 Greenbone feed update. Central Prometheus re-verification after this specific run is still pending. Greenbone's next regular Trivy scan is now scheduled for 19:00–19:30 UTC on its separately approved evening timer.
