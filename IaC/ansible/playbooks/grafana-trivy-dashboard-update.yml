@@ -1,0 +1,89 @@
+---
+# Targeted, approval-gated Grafana vulnerability dashboard refresh.
+# This playbook deliberately does NOT run monitoring.yml or reconcile Docker.
+# Grafana file provisioning polls every 30 seconds and uses the dashboard UID.
+- name: Refresh the Git-managed Grafana Trivy dashboard only
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+
+  vars:
+    grafana_trivy_dashboard_dest: /opt/monitoring/grafana/provisioning/dashboards/production/homelab-vulnerability-management.json
+    grafana_trivy_dashboard_src: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/production/homelab-vulnerability-management.json"
+
+  pre_tasks:
+    - name: Require explicit operator approval and verify exact monitoring host
+      ansible.builtin.assert:
+        that:
+          - grafana_trivy_dashboard_update_approved | default(false) | bool
+          - inventory_hostname == "monitor-01"
+          - ansible_facts.hostname == "monitor-01"
+          - ansible_facts.distribution == "Debian"
+          - ansible_facts.distribution_major_version == "13"
+          - ansible_facts.default_ipv4.address == "192.168.2.52"
+        fail_msg: >-
+          Refusing Grafana dashboard update without explicit approval and
+          the expected monitor-01 host identity.
+
+    - name: Confirm the production dashboard already exists
+      ansible.builtin.stat:
+        path: "{{ grafana_trivy_dashboard_dest }}"
+      register: grafana_trivy_existing_dashboard
+
+    - name: Refuse to create a dashboard in an unexpected location
+      ansible.builtin.assert:
+        that:
+          - grafana_trivy_existing_dashboard.stat.exists
+          - grafana_trivy_existing_dashboard.stat.isreg
+        fail_msg: "Expected existing provisioned production dashboard is missing."
+
+    - name: Check Grafana health before updating a provisioned JSON file
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+  tasks:
+    - name: Install only the reviewed vulnerability dashboard with rollback backup
+      ansible.builtin.copy:
+        src: "{{ grafana_trivy_dashboard_src }}"
+        dest: "{{ grafana_trivy_dashboard_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+        validate: "python3 -m json.tool %s"
+      register: grafana_trivy_dashboard_copy
+
+    - name: Validate installed dashboard identity and key Trivy queries
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json,sys
+            d=json.load(open(sys.argv[1], encoding="utf-8"))
+            assert d.get("uid") == "homelab-vulnerability-management"
+            assert d.get("refresh") == "30s"
+            p={x["id"]:x for x in d["panels"]}
+            assert {38,39,40,41,42,43} <= p.keys()
+            assert "nextcloud:" in p[40]["targets"][0]["expr"]
+            assert "homelab_container_estate_last_scan_timestamp_seconds" in p[41]["targets"][0]["expr"]
+            assert "homelab_container_estate_scan_complete" in p[42]["targets"][0]["expr"]
+            print("Dashboard UID, refresh interval and Trivy panels verified")
+          - "{{ grafana_trivy_dashboard_dest }}"
+      changed_when: false
+
+    - name: Confirm Grafana remains healthy after dashboard-file update
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+    - name: Report whether the Grafana dashboard file changed
+      ansible.builtin.debug:
+        msg: >-
+          File changed={{ grafana_trivy_dashboard_copy.changed }}.
+          No containers restarted. Grafana production file provisioning
+          checks for updates every 30 seconds. If changed, Ansible's backup
+          is at {{ grafana_trivy_dashboard_copy.backup_file | default('not needed') }}.
