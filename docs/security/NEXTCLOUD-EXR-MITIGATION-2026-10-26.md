@@ -29,6 +29,18 @@ The user explicitly approved the guarded playbook `nextcloud-exr-hardening.yml`;
 - **Do not rerun the old checked-out playbook.** Fetch the latest security branch, run static/estate/syntax checks, inspect changes; then seek explicit approval for live continuation. If the revised write probe fails, inspect the exception and adjust the test; do not bypass the security gate or merge as successful.
 - GitHub PR #192 remains open; live deployment is separate from merging source changes. Rollback is not indicated solely by the original verification error while application health remains good.
 
+## Step 128 evidence — EXR write denial confirmed in the app
+
+The user ran a standalone, read-only `docker exec cloud-01-app-1 php -r` diagnostic at approximately 10:17 on 2026-10-26. The test created an in-memory 1×1 Imagick image and called `writeImage("EXR:/dev/null")`. It returned an `ImagickException` with the exact message:
+
+```text
+attempt to perform an operation not allowed by the security policy `EXR' @ error/constitute.c/IsCoderAuthorized/454
+```
+
+This proves the deployed **app** policy denies EXR writing; the prior `readImage("EXR:/dev/null")` check separately proved EXR reading is denied by the same policy. This confirms the old `getImageBlob()` test was unsuitable as a policy-denial assertion. Neither successful diagnostic changes Nextcloud persistent files.
+
+**Next action remains pending:** synchronize the revised IaC branch, validate the corrected playbook and complete its explicit approval-gated cutover. The app read-only policy mount is already installed, so the revised playbook should skip app recreation; cron still requires recreation with the same mount. Validate PNG/JPEG checks, EXR policy read/write denial, HTTPS, loopback binding and healthy app/cron/db/redis before recording end-to-end mitigation. Do not close either CVE yet.
+
 ## Proposed IaC implementation
 
 - `IaC/ansible/roles/cloud_stack/templates/imagemagick-policy.xml.j2` captures the **exact effective active policy rules** from the observed Nextcloud 35 image and appends `<policy domain="coder" rights="none" pattern="EXR"/>` as the last rule. The original file's long explanatory comments and DTD are not copied; its active restrictions are retained. Review this policy against each future upstream image before upgrading.
