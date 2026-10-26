@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## LATEST — PR #199 merged: four-column Trivy CVE details (26 Oct 2026)
+
+User requested the former cluttered Trivy severity/image raw Prometheus table show **only Target name, Severity, CVE and Details**. Implemented in **merged PR #199**, merge commit `2df2687d791ed97c5d1d4e84bcd0fdbd15e87c2f`, four GitHub CI workflows PASS. Shared Trivy publisher now provides `homelab_container_estate_cve_detail_score` across CRITICAL/HIGH/MEDIUM/LOW/UNKNOWN from validated original reports; gauge value is severity rank (not CVSS). Bounded Details contain running image, packages, fixes and source title; real advisory IDs clickable and deduplicated by image/severity. Strict count/freshness/immutable image checks preserve fail-closed behavior; old metric `homelab_container_estate_critical_cve` remains. Grafana UID `homelab-vulnerability-management` retains Greenbone panels and Trivy stats, replaces Trivy panel 39 with exactly four visible fields, removes duplicate 38 and 41, default host filter All. **NOT DEPLOYED LIVE** by PR merge. On `admin-01` pull current `main`, run `scripts/validate-trivy-cve-dashboard.py`, `scripts/validate-unified-vulnerability-cves.py`, estate check, Ansible syntax; operator must approve/run `playbooks/trivy-critical-cve-exporter.yml` on cloud-01 canary, verify Node Exporter and Prometheus new family, then remaining four hosts. Only after exporter verification, separately deploy Greenbone HOST CVE metrics publisher (if pending) and Grafana JSON from `playbooks/grafana-trivy-dashboard-update.yml`. **Do not say Grafana is fixed until visually inspected.** Existing unknown raw pilot panel may belong to another/live-old dashboard; verify UID instead of deleting. Manual greenbone-01 Trivy 26 Oct 15:29–15:31 GMT Result=success gave local **16/16 valid** and scan_complete=1; post-run central Prometheus not yet verified. Security issue #187 comment 6420873261; new runbook `docs/security/GRAFANA-TRIVY-FOUR-COLUMN-CVES-2026-10-26.md`. Any historic PR-pending or 9/16 statements below are superseded.
+
+---
+
 
 ## READ FIRST — Trivy four-column CVE detail table, 26 October 2026 (newest Git proposal)
 
