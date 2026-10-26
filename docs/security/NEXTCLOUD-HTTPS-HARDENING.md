@@ -141,9 +141,9 @@ The Nginx log identified client `192.168.2.48`, Apache saw Docker bridge peer `1
 
 ## Nextcloud OpenEXR risk mitigation — Git-staged 2026-10-26
 
-**Not yet deployed:** A separate Ansible security branch `security/nextcloud-exr-policy-20261026` stages a read-only ImageMagick policy bind mount for the app and cron containers, denying EXR decoder access while retaining the current resource, URL/HTTP/HTTPS and indirect-read restrictions. The running container still has EXR processing enabled. Evidence confirmed the EXR coder dynamically links OpenEXR libraries and that PHP Imagick advertises EXR.
+**Partially deployed 26 October 2026:** A separate Ansible security branch `security/nextcloud-exr-policy-20261026` stages a read-only ImageMagick policy bind mount for the app and cron containers, denying EXR decoder access while retaining the current resource, URL/HTTP/HTTPS and indirect-read restrictions. The running container still has EXR processing enabled. Evidence confirmed the EXR coder dynamically links OpenEXR libraries and that PHP Imagick advertises EXR.
 
-Deployment and rollback require separately approved playbooks; neither has been executed. The two OpenEXR findings `CVE-2026-42216` and `CVE-2026-42217` remain **open/unmitigated pending enforcement checks**. The Trivy package reports are not expected to disappear merely from policy deployment.
+The deployment playbook was explicitly approved and executed once. It installed the managed policy and recreated `app`, then stopped at the original EXR write verification (an ambiguous `getImageBlob()` exception). Subsequent diagnostic proved **EXR reading in app is denied by ImageMagick security policy**; HTTPS, app health, backend isolation and PostgreSQL/Redis remained healthy. **Cron had not yet been recreated**, and EXR write policy enforcement was not established. PR #192 now contains a resumable cutover and corrected write-path probe, still requiring review and approval. No rollback was performed. The two OpenEXR CVEs remain **open pending full enforcement checks**. The Trivy package reports are not expected to disappear merely from policy deployment.
 
 See [EXR decoder mitigation runbook](NEXTCLOUD-EXR-MITIGATION-2026-10-26.md). The other two critical findings concern libxml2 and linux-libc-dev and are outside the scope of this policy.
 
