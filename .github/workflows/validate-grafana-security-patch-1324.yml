@@ -1,0 +1,33 @@
+name: Validate scoped Grafana 13.2.4 security patch
+
+on:
+  pull_request:
+    paths:
+      - "IaC/ansible/roles/monitoring_stack/defaults/main.yml"
+      - "IaC/komodo/stacks/monitoring/compose.yml"
+      - "IaC/ansible/playbooks/grafana-security-patch-1324.yml"
+      - "scripts/validate-grafana-security-patch-1324.py"
+      - ".github/workflows/validate-grafana-security-patch-1324.yml"
+  push:
+    branches: [main]
+    paths:
+      - "IaC/ansible/roles/monitoring_stack/defaults/main.yml"
+      - "IaC/komodo/stacks/monitoring/compose.yml"
+      - "IaC/ansible/playbooks/grafana-security-patch-1324.yml"
+      - "scripts/validate-grafana-security-patch-1324.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate Grafana patch safety and version pins
+        run: python3 scripts/validate-grafana-security-patch-1324.py
+      - name: Validate Ansible syntax
+        run: |
+          python3 -m pip install "ansible-core>=2.19,<2.20"
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml playbooks/grafana-security-patch-1324.yml --syntax-check
