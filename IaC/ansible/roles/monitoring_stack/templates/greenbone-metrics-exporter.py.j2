@@ -93,13 +93,13 @@ def normalized_finding_cves(finding):
     if isinstance(raw, list):
         candidates = raw
     elif isinstance(raw, str):
-        candidates = re.split(r"[,;\\s]+", raw)
+        candidates = re.split(r"[,;\s]+", raw)
     else:
         candidates = []
     cves = set()
     for candidate in candidates:
         value = str(candidate).strip().upper()
-        if re.fullmatch(r"CVE-\\d{4}-\\d{4,}", value):
+        if re.fullmatch(r"CVE-\d{4}-\d{4,}", value):
             cves.add(value)
     return sorted(cves)
 
