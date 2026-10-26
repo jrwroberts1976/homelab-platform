@@ -111,6 +111,20 @@ and would reopen LAN-facing HTTP port 8080 if restored.
 Restore operations require explicit approval.
 Configuration recovery does not replace application-data backups.
 
+## Certificate renewal verification — 2026-10-26
+
+- Certbot 4.0.0, with Cloudflare DNS validation.
+- Renewal timer enabled and active.
+- Production certificate expires 2027-01-19.
+- `certbot renew --dry-run` completed successfully.
+- Simulated renewal did not replace the production certificate.
+- Deploy hook tested with the expected `RENEWED_LINEAGE`.
+- Nginx reload succeeded at 08:17:32 GMT (exit status 0).
+- Nginx configuration and HTTPS health passed after reload.
+- Real production certificate renewal has not yet been observed.
+- Cloudflare Python library 2.20.x generated a non-blocking
+  deprecation warning; review dependency compatibility through IaC.
+
 ## Outstanding work
 
 - Verify actual Nextcloud proxy-peer IP attribution
