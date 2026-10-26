@@ -139,6 +139,14 @@ The Trivy 35 report contains **4 CRITICAL and 231 HIGH package-finding rows**; h
 
 The Nginx log identified client `192.168.2.48`, Apache saw Docker bridge peer `172.18.0.1`; trusted-proxy configuration and Nextcloud `getRemoteAddress()` source were reviewed. The resolved address **inside a live application request** was not directly observed. Certbot dry-run renewal and an explicitly invoked Nginx reload hook passed on 26 Oct; an actual production renewal has not been observed.
 
+## Nextcloud OpenEXR risk mitigation — Git-staged 2026-10-26
+
+**Not yet deployed:** A separate Ansible security branch `security/nextcloud-exr-policy-20261026` stages a read-only ImageMagick policy bind mount for the app and cron containers, denying EXR decoder access while retaining the current resource, URL/HTTP/HTTPS and indirect-read restrictions. The running container still has EXR processing enabled. Evidence confirmed the EXR coder dynamically links OpenEXR libraries and that PHP Imagick advertises EXR.
+
+Deployment and rollback require separately approved playbooks; neither has been executed. The two OpenEXR findings `CVE-2026-42216` and `CVE-2026-42217` remain **open/unmitigated pending enforcement checks**. The Trivy package reports are not expected to disappear merely from policy deployment.
+
+See [EXR decoder mitigation runbook](NEXTCLOUD-EXR-MITIGATION-2026-10-26.md). The other two critical findings concern libxml2 and linux-libc-dev and are outside the scope of this policy.
+
 ## Outstanding work
 
 - Verify application-level resolved client IP on an authenticated/runtime Nextcloud request; do not assert this is complete based on code inspection alone.
