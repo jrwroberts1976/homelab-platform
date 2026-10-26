@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+## LATEST LIVE EVIDENCE — Greenbone Trivy timer fixed on 26 Oct 2026 14:49 GMT
+
+**Step 153 — verified by user paste:** PR #198 was merged into main (merge commit `8c6f0362dce1db01f5737125dcb95977e9f3ba4a`). On `admin-01`, `git pull --ff-only` succeeded, clean `## main...origin/main`; `scripts/validate-greenbone-trivy-schedule.py` PASS, `scripts/validate-estate.py` PASS (20 active assets), and Ansible syntax check PASS. User ran approval-gated `IaC/ansible/playbooks/trivy-greenbone-after-feed-timer.yml -e greenbone_trivy_timer_change_approved=true` on `greenbone-01`; Ansible **ok=17 changed=2 failed=0** with all host, drift, inactive-scan and active-timer assertions PASS. Targeted changes: copy ONLY `/etc/systemd/system/homelab-trivy-greenbone.timer` with backup, daemon-reload, restart of the **timer unit only**. Verified scanner still inactive; no Trivy scan, Greenbone scan, Docker service/container change or image pull occurred. Backup: `/etc/systemd/system/homelab-trivy-greenbone.timer.1097855.2026-10-26@14:49:45~`. Next scheduled Trivy activation **Monday 26 October 2026 19:05:39 GMT**; future daily timing 19:00–19:30 UTC. **Do not mark 16/16 yet:** latest image-identity check remains 9 valid / 16 running because seven feed/data containers changed immutable IDs after the old 09:29 Trivy scan but before 10:20 feed refresh. Await actual 19:05+ scheduled Trivy run and verify service Result=success, current Docker image/report SHA agreement, 16/16, completeness/freshness and central Prometheus; handle failed scans without claiming zero findings. Security issue #187 has precise completion evidence (comment 6419069643). Greenbone host CVE metrics exporter and Grafana dashboard from merged PR #197 remain **UNDEPLOYED** and require separate approvals; do not infer those changes from the timer correction. Older pending-approval statements below are historical.
+
+---
+
+
 ## READ FIRST — current Trivy/Grafana handover, verified 26 October 2026
 
 **Scope of this current-state note:** operationally supersedes older 26 October paragraphs below that still say PR #195 is unmerged, the cloud-01 CVE exporter canary has not run, or PR #193/#194 are waiting for merge. Keep those older notes as dated history, **not instructions for the next operator**. Canonical estate inventory and architecture documents still take precedence over this handover. Avoid live changes without separate explicit operator approval.
