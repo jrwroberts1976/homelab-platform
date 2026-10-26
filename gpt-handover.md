@@ -1,5 +1,21 @@
 # GPT Handover — Homelab Platform
 
+## Grafana Trivy critical CVE references — improved compact design pending PR review (26 Oct 2026)
+
+**User feedback:** The Grafana `Trivy — findings by image / severity` and `Trivy — scan validity per image` tables were cluttered with raw Prometheus sample metadata and duplicated image rows. User explicitly wants **CVE references** and a simpler dashboard. Previous PR #194 was merged; *no new live deployment is confirmed*, and user pasted the original raw table after that merge. Keep Git merge and deployment as separate states.
+
+**New proposed branch:** `monitoring/trivy-cve-focused-20261026`; not deployed, not merged until approved.
+- Shared Trivy publisher `IaC/ansible/roles/container_vulnerability_pilot/files/publish-estate-metrics.py` updated to **also** publish `homelab_container_estate_critical_cve{image,cve,packages,fixed_versions}=1`, one row per distinct CRITICAL advisory per validated image, deduplicating multi-package repeats. Reads original local Trivy JSON, checks summary freshness, Docker image identity, path and report metadata + count agreement. Failed, absent, stale or mismatched evidence is **not reported as clean**. Existing counts remain untouched where verified.
+- Dashboard `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/production/homelab-vulnerability-management.json` retains original UID, refresh and eight summary stat panels; adds a **Trivy host filter defaulting to cloud-01**, summary of only nonzero-CRITICAL images, compact per-image critical **CVE/advisory ID + packages + fixed version** table with clickable OSV links, plus host scan age. Removes redundant low-value Trivy tables. Readable fields remove `Time`, `__name__`, `instance`, `job`. CRITICAL image rows and CVEs are not confused with counts of package findings or mitigations.
+- Existing targeted approval-gated `playbooks/grafana-trivy-dashboard-update.yml` validator adjusted for new compact table IDs, still copies only one JSON file to monitor-01 with rollback backup and no container restart.
+- New `IaC/ansible/playbooks/trivy-critical-cve-exporter.yml`: explicit separate approval; exact identity checks on five known scanner hosts; `serial: 1`; copy metrics exporter with rollback backup; publish from existing scan JSON (no new Trivy scan), validate textfile and Node Exporter. Canary `--limit cloud-01` first, then remaining four.
+- New offline regression test `scripts/validate-trivy-cve-dashboard.py`, CI workflow `.github/workflows/validate-trivy-cve-dashboard.yml`, runbook `docs/security/GRAFANA-TRIVY-CRITICAL-CVE-2026-10-26.md`. After PR merge, user should run validation, pilot exporter, check Prometheus data and coverage, roll out remaining four, then targeted Grafana playbook; Grafana production provider polls files every 30s. **No live host changes yet; do not state dashboard is fixed until deployed and visually verified.**
+- Confirmed cloud-01 Periphery 2.3.3 old Perl packages unchanged. 13 CRITICAL **package rows** represent 4 distinct CVEs (3 Perl repeated across four packages, one openssh-client). Nextcloud 35 image last Trivy scan 4 CRITICAL/231 HIGH; EXR coder mitigation does not patch libraries. CVE row deduplication changes only presentation, never source vulnerability counts.
+- Continue security issue #187 and eventual separate approved Komodo image upgrade.
+
+---
+
+
 ## Grafana Trivy dashboard readability — proposed IaC change 26 October 2026 (NOT DEPLOYED)
 
 **User report:** At 11:52:46 the Grafana *Trivy — findings by image / severity* panel showed Komodo Periphery 2.3.3 (cloud-01 CRITICAL 13/HIGH 152) plus PostgreSQL and Redis; *Trivy — scan validity per image* showed Nextcloud 35 present and valid. Prometheus table `Time` is scrape/sample time, **not actual Trivy scan completion**. The canonical existing findings query `homelab_container_estate_findings` had no Nextcloud filter; the pasted excerpt may be a partial table, so no exporter bug was established. Independent 26 Oct 08:53 UTC Trivy validated Nextcloud 35 with 4 CRITICAL/231 HIGH package rows; controls don't lower package counts.

@@ -66,10 +66,10 @@
             assert d.get("uid") == "homelab-vulnerability-management"
             assert d.get("refresh") == "30s"
             p={x["id"]:x for x in d["panels"]}
-            assert {38,39,40,41,42,43} <= p.keys()
-            assert "nextcloud:" in p[40]["targets"][0]["expr"]
+            assert {38, 39, 41} <= p.keys()
+            assert "homelab_container_estate_critical_cve" in p[39]["targets"][0]["expr"]
             assert "homelab_container_estate_last_scan_timestamp_seconds" in p[41]["targets"][0]["expr"]
-            assert "homelab_container_estate_scan_complete" in p[42]["targets"][0]["expr"]
+            assert any(v.get("name") == "trivy_host" for v in d.get("templating", {}).get("list", []))
             print("Dashboard UID, refresh interval and Trivy panels verified")
           - "{{ grafana_trivy_dashboard_dest }}"
       changed_when: false
