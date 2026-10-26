@@ -2,9 +2,25 @@
 
 <!-- estate-authority: IaC/inventory/estate.json -->
 
-**Status: PARTIALLY DEPLOYED 2026-10-26 at ~10:17 local — app EXR reading policy DENIAL verified; cron NOT YET RECREATED. Findings remain OPEN until post-deployment verification.**
+**Status: DEPLOYED AND VERIFIED 2026-10-26 — app EXR read/write denial verified; cron mounted the same hardened policy; HTTPS, PNG/JPEG and service health checks passed. The vulnerable OpenEXR library packages remain installed.**
 
 Host: `cloud-01` (192.168.2.53), Nextcloud `35.0.2.2` on `nextcloud:35.0.2-apache`. Managed by Ansible. This is a targeted mitigation of the EXR decoding path and not an upgrade to patched OpenEXR packages.
+
+## Final successful deployment — Step 132, 2026-10-26
+
+After updating local branch `security/nextcloud-exr-policy-20261026` to commit `768963d0`, the operator verified:
+
+- `scripts/validate-nextcloud-exr-policy.py`: PASS; `scripts/validate-estate.py`: PASS; Ansible playbook syntax: PASS.
+- Explicitly approved deployment: `ansible-playbook -i inventory/hosts.yml playbooks/nextcloud-exr-hardening.yml --ask-become-pass -e nextcloud_exr_hardening_approved=true`.
+- **Final recap:** `cloud-01 ok=18 changed=1 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0`.
+- The baseline check accepted the existing hardened policy, and the policy template, Compose render and validation tasks returned `ok` without changes.
+- The app policy mount was detected read-only. **App recreation skipped**; the existing `cloud-01-app-1` continued running.
+- PHP Imagick verification passed: in-memory PNG and JPEG encoding succeeds, while **both EXR read and EXR write operations are rejected specifically by ImageMagick security policy** in `app`.
+- **Cron was recreated exactly once**, with `--no-deps`. Verification confirmed `cloud-01-cron-1` has the identical managed EXR-deny policy. The Ansible task verified the cron policy XML; it did not separately execute EXR decoding/encoding inside cron.
+- After deployment, Nextcloud 35.0.2.2 was healthy, HTTPS status and migration checks passed, backend remained bound only to `127.0.0.1:8080`.
+- PostgreSQL `postgres:18.6-alpine` and Redis `redis:8.2.9-alpine` remained running, healthy and unrecreated; Nginx was not changed by the playbook.
+
+**Disposition:** `CVE-2026-42216` and `CVE-2026-42217` are **mitigated for the ImageMagick EXR coder route**, not *fixed*. The `libopenexr-3-1-30` package is still present and may still be reported as CRITICAL by Trivy. No arbitrary upload-path exploit or library-wide absence of reachable functionality was proven. Retain package advisories until fixed via approved image/update or explicitly risk-accepted after broader review. The other two critical findings (`libxml2`, `linux-libc-dev`) remain outstanding.
 
 ## Evidence collected from the running application
 
@@ -39,7 +55,7 @@ attempt to perform an operation not allowed by the security policy `EXR' @ error
 
 This proves the deployed **app** policy denies EXR writing; the prior `readImage("EXR:/dev/null")` check separately proved EXR reading is denied by the same policy. This confirms the old `getImageBlob()` test was unsuitable as a policy-denial assertion. Neither successful diagnostic changes Nextcloud persistent files.
 
-**Next action remains pending:** synchronize the revised IaC branch, validate the corrected playbook and complete its explicit approval-gated cutover. The app read-only policy mount is already installed, so the revised playbook should skip app recreation; cron still requires recreation with the same mount. Validate PNG/JPEG checks, EXR policy read/write denial, HTTPS, loopback binding and healthy app/cron/db/redis before recording end-to-end mitigation. Do not close either CVE yet.
+**Historical note:** At the time of this diagnostic the cron cutover was still pending. Step 132 subsequently completed the approval-gated deployment, including the cron policy mount and final runtime verification; see the final successful deployment section above.
 
 ## Proposed IaC implementation
 
