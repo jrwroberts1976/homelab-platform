@@ -76,6 +76,9 @@
             assert all(excluded.get(x) for x in ("Time","__name__","instance","job","image","Value"))
             assert "homelab_container_estate_last_scan_timestamp_seconds" in p[37]["targets"][0]["expr"]
             assert any(v.get("name") == "trivy_host" for v in d.get("templating", {}).get("list", []))
+            sev=next(v for v in d["templating"]["list"] if v["name"]=="trivy_severity")
+            assert sev["current"]["value"]=="CRITICAL" and sev["multi"] and sev["includeAll"]
+            assert 'severity=~"${trivy_severity:regex}"' in p[39]["targets"][0]["expr"]
             print("Dashboard UID, Greenbone CVEs and four-column Trivy CVE table verified")
           - "{{ grafana_trivy_dashboard_dest }}"
       changed_when: false
