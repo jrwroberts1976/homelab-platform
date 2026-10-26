@@ -139,13 +139,15 @@ The Trivy 35 report contains **4 CRITICAL and 231 HIGH package-finding rows**; h
 
 The Nginx log identified client `192.168.2.48`, Apache saw Docker bridge peer `172.18.0.1`; trusted-proxy configuration and Nextcloud `getRemoteAddress()` source were reviewed. The resolved address **inside a live application request** was not directly observed. Certbot dry-run renewal and an explicitly invoked Nginx reload hook passed on 26 Oct; an actual production renewal has not been observed.
 
-## Nextcloud OpenEXR risk mitigation — Git-staged 2026-10-26
+## Nextcloud OpenEXR coder mitigation — verified 26 October 2026
 
-**Partially deployed 26 October 2026:** A separate Ansible security branch `security/nextcloud-exr-policy-20261026` stages a read-only ImageMagick policy bind mount for the app and cron containers, denying EXR decoder access while retaining the current resource, URL/HTTP/HTTPS and indirect-read restrictions. The running container still has EXR processing enabled. Evidence confirmed the EXR coder dynamically links OpenEXR libraries and that PHP Imagick advertises EXR.
+**Deployed:** Ansible-managed ImageMagick policy denies EXR decoding and encoding in the Nextcloud application. The policy retains all eleven active upstream baseline restrictions and is mounted read-only into both `cloud-01-app-1` and `cloud-01-cron-1` via Compose.
 
-The deployment playbook was explicitly approved and executed once. It installed the managed policy and recreated `app`, then stopped at the original EXR write verification (an ambiguous `getImageBlob()` exception). Subsequent diagnostic proved **EXR reading in app is denied by ImageMagick security policy**; HTTPS, app health, backend isolation and PostgreSQL/Redis remained healthy. **Cron had not yet been recreated**, and EXR write policy enforcement was not established. PR #192 now contains a resumable cutover and corrected write-path probe, still requiring review and approval. No rollback was performed. The two OpenEXR CVEs remain **open pending full enforcement checks**. The Trivy package reports are not expected to disappear merely from policy deployment.
+The first approved execution installed the policy and recreated app, but its original `getImageBlob()` EXR write test returned an ambiguous exception and halted before cron. Subsequent direct read/write probes confirmed the app returned explicit `security policy 'EXR'` denials. The corrected playbook was committed to PR #192 and validated, then an explicitly approved second cutover completed **successfully** with `ok=18 changed=1 failed=0 skipped=1`. App recreation was skipped because its read-only policy mount was already present; only cron was recreated. PNG and JPEG encoding, EXR read/write denial in app, cron's policy file, HTTPS, Nextcloud 35.0.2 health and loopback binding all passed. PostgreSQL and Redis remained healthy and unchanged.
 
-See [EXR decoder mitigation runbook](NEXTCLOUD-EXR-MITIGATION-2026-10-26.md). The other two critical findings concern libxml2 and linux-libc-dev and are outside the scope of this policy.
+**Security interpretation:** `CVE-2026-42216` and `CVE-2026-42217` are mitigated for the ImageMagick EXR coder path, **not patched**. Their affected Debian OpenEXR library package remains present; Trivy may still flag both. The other findings `CVE-2026-6653` (libxml2) and `CVE-2026-93221` (linux-libc-dev) require separate assessment. PR #192 is the pending repository integration until merged.
+
+See [full EXR decoder remediation, evidence, and rollback runbook](NEXTCLOUD-EXR-MITIGATION-2026-10-26.md).
 
 ## Outstanding work
 
