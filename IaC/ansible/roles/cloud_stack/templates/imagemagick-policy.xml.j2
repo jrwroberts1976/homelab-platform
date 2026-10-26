@@ -1,0 +1,23 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Managed by Ansible: cloud_stack. Effective rules captured from the
+  nextcloud:35.0.2-apache ImageMagick 7 default policy on 2026-10-26.
+  Preserve the upstream active resource and path/coder restrictions below.
+  Re-review the upstream policy when changing the Nextcloud image version.
+  EXR disabled pending review/remediation of CVE-2026-42216 and CVE-2026-42217.
+-->
+<policymap>
+  <policy domain="Undefined" rights="none"/>
+  <policy domain="resource" name="memory" value="1024MiB"/>
+  <policy domain="resource" name="map" value="2048MiB"/>
+  <policy domain="resource" name="area" value="256MP"/>
+  <policy domain="resource" name="disk" value="2GiB"/>
+  <policy domain="resource" name="width" value="32KP"/>
+  <policy domain="resource" name="height" value="32KP"/>
+  <policy domain="path" rights="none" pattern="@*"/>
+  <policy domain="coder" rights="none" pattern="URL"/>
+  <policy domain="coder" rights="none" pattern="HTTPS"/>
+  <policy domain="coder" rights="none" pattern="HTTP"/>
+  <!-- This must remain the last matching EXR coder rule. -->
+  <policy domain="coder" rights="none" pattern="EXR"/>
+</policymap>
