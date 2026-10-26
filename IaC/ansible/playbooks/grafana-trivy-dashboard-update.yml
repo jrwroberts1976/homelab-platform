@@ -79,6 +79,20 @@
             sev=next(v for v in d["templating"]["list"] if v["name"]=="trivy_severity")
             assert sev["current"]["value"]=="CRITICAL" and sev["multi"] and sev["includeAll"]
             assert 'severity=~"${trivy_severity:regex}"' in p[39]["targets"][0]["expr"]
+            assert p[39]["options"].get("enablePagination") is True
+            assert p[39]["options"].get("showColumnFilter") is True
+            detail_override=next(x for x in p[39]["fieldConfig"]["overrides"]
+                                 if x["matcher"].get("options")=="Details")
+            assert not any(v["id"]=="custom.width" for v in detail_override["properties"])
+            assert any(v["id"]=="custom.cellOptions" and v["value"].get("wrapText")
+                       for v in detail_override["properties"])
+            for i in (10, 11, 12):
+                assert p[i]["transformations"][0]["options"]["excludeByName"].get("target_name")
+            for i, family in ((30,"homelab_container_estate_scan_complete"),
+                              (31,"homelab_container_estate_running_images"),
+                              (32,"homelab_container_estate_valid_images")):
+                assert p[i]["targets"][0]["expr"].startswith("sum("+family)
+            assert p[37]["targets"][0]["expr"].startswith("max(")
             print("Dashboard UID, Greenbone CVEs and four-column Trivy CVE table verified")
           - "{{ grafana_trivy_dashboard_dest }}"
       changed_when: false
