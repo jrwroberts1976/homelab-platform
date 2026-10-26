@@ -2,7 +2,7 @@
 
 <!-- estate-authority: IaC/inventory/estate.json -->
 
-**Status: STAGED IN GIT ONLY — NOT DEPLOYED; vulnerabilities NOT CLOSED.**
+**Status: PARTIALLY DEPLOYED 2026-10-26 at ~10:17 local — app EXR reading policy DENIAL verified; cron NOT YET RECREATED. Findings remain OPEN until post-deployment verification.**
 
 Host: `cloud-01` (192.168.2.53), Nextcloud `35.0.2.2` on `nextcloud:35.0.2-apache`. Managed by Ansible. This is a targeted mitigation of the EXR decoding path and not an upgrade to patched OpenEXR packages.
 
@@ -16,13 +16,26 @@ Host: `cloud-01` (192.168.2.53), Nextcloud `35.0.2.2` on `nextcloud:35.0.2-apach
 - Successful Nextcloud `php occ status`: 35.0.2.2, installed true, maintenance false, needsDbUpgrade false.
 - These observations confirm an installed and exposed ImageMagick **coder capability**; exploitation through a specific Nextcloud upload/preview endpoint has **not** been demonstrated.
 
+## Actual partial cutover and diagnostic — 2026-10-26
+
+The user explicitly approved the guarded playbook `nextcloud-exr-hardening.yml`; it stopped at its original Imagick PHP test with `ok=10 changed=4 failed=1`.
+
+- The controller passed identity/version and stock ImageMagick baseline checks, created `/opt/cloud-01/imagemagick/policy.xml`, rendered the Compose mounts and recreated only `cloud-01-app-1`.
+- Existing app had the managed policy `<policy domain="coder" rights="none" pattern="EXR"/>` in `/etc/ImageMagick-7/policy.xml`; **EXR reading** actually failed with `attempt to perform an operation not allowed by the security policy 'EXR' @ ... IsCoderAuthorized`.
+- The original EXR **writing** test used `getImageBlob()` on a newly created image and returned the ambiguous exception `Failed to get the image contents (empty or invalid image?)`. The original playbook rejected this as an unexpected exception (rc 12), before reaching the EXR read test. This is a **verification design fault, not evidence of permitted EXR writes**. EXR writing remains unverified.
+- Subsequent user-run diagnostics confirmed Nextcloud 35.0.2.2: installed true, maintenance false, needsDbUpgrade false. HTTPS status returned the expected healthy JSON and app port stayed `127.0.0.1:8080`; PostgreSQL and Redis healthy with their original containers.
+- `cloud-01-cron-1` was still the earlier instance, so **do not yet describe the whole service as mitigated**.
+- The playbook was revised to accept either the original eleven-rule policy or the approved twelve-rule hardened policy, skip app recreation when its read-only mount already exists, and separately probe EXR read and **EXR write with `writeImage("EXR:/dev/null")`**, requiring a literal ImageMagick security-policy denial. It still fails closed on unexpected failures.
+- **Do not rerun the old checked-out playbook.** Fetch the latest security branch, run static/estate/syntax checks, inspect changes; then seek explicit approval for live continuation. If the revised write probe fails, inspect the exception and adjust the test; do not bypass the security gate or merge as successful.
+- GitHub PR #192 remains open; live deployment is separate from merging source changes. Rollback is not indicated solely by the original verification error while application health remains good.
+
 ## Proposed IaC implementation
 
 - `IaC/ansible/roles/cloud_stack/templates/imagemagick-policy.xml.j2` captures the **exact effective active policy rules** from the observed Nextcloud 35 image and appends `<policy domain="coder" rights="none" pattern="EXR"/>` as the last rule. The original file's long explanatory comments and DTD are not copied; its active restrictions are retained. Review this policy against each future upstream image before upgrading.
 - `IaC/ansible/roles/cloud_stack/defaults/main.yml` specifies `cloud_nextcloud_imagemagick_policy_path` and `cloud_nextcloud_exr_policy_enabled` (true by default).
 - `IaC/ansible/roles/cloud_stack/tasks/main.yml` manages `/opt/cloud-01/imagemagick/policy.xml` **after** the existing deployment approval gate, before Compose.
 - `IaC/ansible/roles/cloud_stack/templates/docker-compose.yml.j2` bind-mounts that host policy **read-only** onto the **app and cron** containers at `/etc/ImageMagick-7/policy.xml`, conditional on `cloud_nextcloud_exr_policy_enabled`.
-- Dedicated `nextcloud-exr-hardening.yml` validates existing live policy rules, approval, host/version, XML, Docker Compose, PNG/JPEG operation, EXR read/write policy denial through PHP Imagick, HTTP loopback isolation and HTTPS. It recreates **only app then cron**, with `--no-deps`.
+- Dedicated `nextcloud-exr-hardening.yml` validates the approved stock **or already-hardened** live policy, approval, host/version, XML, Docker Compose, PNG/JPEG operation, EXR read/write policy denial through PHP Imagick, HTTP loopback isolation and HTTPS. It recreates the app **only if its policy mount is missing**, then cron, with `--no-deps`.
 - Dedicated `nextcloud-exr-rollback.yml` (explicit approval) renders Compose with policy mounts disabled, recreates app/cron only and checks health. The policy file remains on disk; the full cloud-stack role would reenable the mount because its canonical default is true, so do not run it until a failed mitigation has been resolved.
 
 ImageMagick processes policy rules in order, with the **last matching rule winning**. Source: [official ImageMagick security policy documentation](https://imagemagick.org/security-policy/).
@@ -74,6 +87,6 @@ This restores the original image policy by removing the bind mounts. Preserve th
 
 ## Security tracking / closure
 
-Track this work against homelab issue #187. **Do not mark the CVEs fixed or mitigated before a successful runtime enforcement test.** If deployed and enforcement passes, record them as **decoder access mitigated; vulnerable OpenEXR packages still present**. A fresh Trivy scan may continue reporting both CVEs until the packages are fixed, removed or the scanner database is updated.
+Track this work against homelab issue #187. **Do not mark the CVEs fixed or fully mitigated before a successful runtime enforcement test on both app and cron.** If deployed and enforcement passes, record them as **decoder access mitigated; vulnerable OpenEXR packages still present**. A fresh Trivy scan may continue reporting both CVEs until the packages are fixed, removed or the scanner database is updated.
 
 Separate outstanding criticals: `CVE-2026-6653` (libxml2) and `CVE-2026-93221` (linux-libc-dev). Host kernel exposure should be assessed independently of installed container development headers.
