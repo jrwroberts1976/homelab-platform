@@ -87,6 +87,44 @@ def finding_metric_labels(finding_id, finding):
     )
 
 
+def normalized_finding_cves(finding):
+    """Return real CVE identifiers, one per record, without inventing references."""
+    raw = finding.get("cves", [])
+    if isinstance(raw, list):
+        candidates = raw
+    elif isinstance(raw, str):
+        candidates = re.split(r"[,;\\s]+", raw)
+    else:
+        candidates = []
+    cves = set()
+    for candidate in candidates:
+        value = str(candidate).strip().upper()
+        if re.fullmatch(r"CVE-\\d{4}-\\d{4,}", value):
+            cves.add(value)
+    return sorted(cves)
+
+
+def greenbone_cve_metric_labels(finding_id, finding, cve, risk_status):
+    ip = str(finding.get("host") or "")
+    hostname = HOSTNAMES.get(ip, ip)
+    name = str(finding.get("name") or "")
+    severity = str(finding.get("severity") or "")
+    port = str(finding.get("port") or "")
+    fields = {
+        "hostname": hostname,
+        "cve": cve,
+        "severity": severity,
+        "risk_status": risk_status,
+        "finding": name,
+        "port": port,
+        "finding_id": str(finding_id),
+    }
+    return "{" + ",".join(
+        key + '="' + prometheus_label(value) + '"'
+        for key, value in fields.items()
+    ) + "}"
+
+
 payload = json.loads(SOURCE.read_text(encoding="utf-8"))
 
 if payload.get("schema_version") != 1:
@@ -219,6 +257,35 @@ for finding_id, finding in enumerate(accepted_risk_findings, start=1):
         + " "
         + str(score)
     )
+
+lines.extend(
+    [
+        "",
+        "# HELP homelab_greenbone_cve_finding_score Individual CVE reference from a Greenbone host finding; score is the finding CVSS.",
+        "# TYPE homelab_greenbone_cve_finding_score gauge",
+    ]
+)
+
+# This CVE-only family supplements existing all-finding metrics; entries
+# without a CVE remain in actionable/accepted risk tables, not zeroed or lost.
+for risk_status, findings in (
+    ("Actionable", actionable_findings),
+    ("Accepted risk", accepted_risk_findings),
+):
+    for finding_id, finding in enumerate(findings, start=1):
+        if not isinstance(finding, dict):
+            continue
+        score = float(finding.get("score") or 0)
+        for cve in normalized_finding_cves(finding):
+            labels = greenbone_cve_metric_labels(
+                finding_id, finding, cve, risk_status
+            )
+            lines.append(
+                "homelab_greenbone_cve_finding_score"
+                + labels
+                + " "
+                + str(score)
+            )
 
 lines.append("")
 
