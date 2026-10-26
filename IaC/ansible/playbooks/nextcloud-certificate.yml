@@ -1,0 +1,19 @@
+---
+- name: Issue trusted HTTPS certificate for Nextcloud
+  hosts: cloud-01
+  become: true
+  gather_facts: false
+
+  roles:
+    - role: homelab_certificate
+      homelab_certificate_fqdn: "nextcloud.home.jrwroberts.co.uk"
+      homelab_certificate_deploy_hook_name: "35-nextcloud-nginx"
+      homelab_certificate_deploy_hook_content: |
+        #!/bin/sh
+        set -eu
+        EXPECTED="/etc/letsencrypt/live/nextcloud.home.jrwroberts.co.uk"
+        [ "${RENEWED_LINEAGE:-}" = "$EXPECTED" ] || exit 0
+        if [ -x /usr/sbin/nginx ] && systemctl is-active --quiet nginx; then
+          /usr/sbin/nginx -t
+          systemctl reload nginx
+        fi

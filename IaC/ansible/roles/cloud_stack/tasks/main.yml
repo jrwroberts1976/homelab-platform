@@ -112,6 +112,14 @@
       approved dedicated ext4 drive-scsi1 filesystem mounted read-write.
 
 
+- name: Require explicit approval before cloud-01 deployment
+  ansible.builtin.assert:
+    that:
+      - cloud_stack_allow_deploy | bool or ansible_check_mode
+    fail_msg: >-
+      Refusing to pull images or start the cloud-01 application stack.
+      Re-run with -e cloud_stack_allow_deploy=true after validation.
+
 - name: Ensure cloud-01 application directories exist
   ansible.builtin.file:
     path: "{{ item.path }}"
@@ -167,14 +175,6 @@
       - --quiet
   changed_when: false
   no_log: true
-
-- name: Require explicit approval before cloud-01 deployment
-  ansible.builtin.assert:
-    that:
-      - cloud_stack_allow_deploy | bool or ansible_check_mode
-    fail_msg: >-
-      Refusing to pull images or start the cloud-01 application stack.
-      Re-run with -e cloud_stack_allow_deploy=true after validation.
 
 - name: Pull pinned cloud-01 images
   ansible.builtin.command:

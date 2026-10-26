@@ -19,7 +19,8 @@ cloud_redis_image: "redis:8.2.9-alpine"
 cloud_redis_uid: "999"
 cloud_redis_gid: "1000"
 
-cloud_nextcloud_http_bind: "192.168.2.53"
+cloud_nextcloud_http_bind: "127.0.0.1"
+cloud_nextcloud_trusted_proxy: "192.168.2.53 172.18.0.1"
 cloud_nextcloud_http_port: 8080
 
 cloud_nextcloud_admin_user: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_USER') | default('', true) }}"
@@ -33,6 +34,7 @@ cloud_postgres_user: "nextcloud"
 cloud_nextcloud_trusted_domains:
   - "cloud-01"
   - "cloud-01.jameshouse"
+  - "nextcloud.home.jrwroberts.co.uk"
   - "192.168.2.53"
 
 cloud_mail_relay_host: "192.168.2.54"
