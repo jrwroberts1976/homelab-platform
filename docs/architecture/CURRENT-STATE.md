@@ -8,6 +8,12 @@
 
 This document records what is live now. Dated audits, migration notes and commissioning records remain evidence, but they do not override validated live state or the canonical estate inventory.
 
+## 26 October 2026 — Security patch remediation programme staged (NOT live)
+
+The user requested remediation of outstanding vulnerabilities after verified Trivy/Greenbone CVE visibility. Current **live** security evidence before image patching: five Docker hosts, 30/30 running image references validated in central Prometheus, with 12,267 per-image/severity/advisory series (94 Critical and 1,605 High, **not unique CVEs**). The monitoring Grafana container was last observed from IaC and scan evidence at **grafana/grafana:13.2.1**; this live version has **not yet been independently confirmed upgraded**.
+
+**Two changes merged in Git only:** PR #202 pins Grafana **13.2.4** in IaC and provides a tightly bounded, explicit-approval Ansible patch playbook for monitor-01 with SQLite backup, one-service Grafana recreation and unchanged other-service identity checks. **This source pin is desired state, not evidence the running Grafana container was patched.** The playbook intentionally interrupts only Grafana. PR #203 adds a strictly read-only, five-host Ansible Trivy fixability inventory reporting actual per-image Critical/High installed package versions and scanner-listed fixed versions, gated by current immutable-image identity and summary/report count equality. **Neither patch playbook nor read-only inventory has yet been executed live** as of this addendum. See `docs/security/GRAFANA-1324-SECURITY-PATCH-2026-10-26.md`, `docs/security/TRIVY-FIXABILITY-AUDIT-2026-10-26.md` and security issue #187. Update this section only after separately verified user-run live Ansible output.
+
 ## 26 October 2026, 18:16 GMT — Grafana CVE dashboard readability update deployed
 
 **Live operator-run Ansible evidence:** after local Git fast-forward, both offline Trivy/Greenbone regression suites and the targeted dashboard playbook syntax check passed. An explicit approval-gated `grafana-trivy-dashboard-update.yml` on `monitor-01` returned **ok=9 changed=1 failed=0**; dashboard JSON changed, expected UID/Greenbone and Trivy panel validators passed, Grafana health checks passed before and after. The rollback backup is `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-vulnerability-management.json.2178221.2026-10-26@18:16:14~`. No scans or container/service restarts.
