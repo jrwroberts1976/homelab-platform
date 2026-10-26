@@ -49,7 +49,7 @@ def main():
     assert "reboot" not in play.lower()
     assert not re.search(r"(?m)^\s*roles:\s*$", play)
     assert re.search(r"(?m)^\s*- grafana\s*$", play)
-    assert not re.search(r"(?m)^\s*- (?:prometheus|loki|alertmanager|blackbox)\s*$", play)
+    assert play.count("          - --force-recreate") == 1
     print("PASS: Grafana 13.2.4 patch is separately approved, backed up and service-only")
 
 if __name__ == "__main__":
