@@ -1,0 +1,33 @@
+name: Validate Greenbone Trivy post-feed timer
+
+on:
+  pull_request:
+    paths:
+      - "IaC/ansible/roles/container_vulnerability_pilot/files/homelab-trivy-greenbone.timer"
+      - "IaC/ansible/playbooks/trivy-greenbone-after-feed-timer.yml"
+      - "scripts/validate-greenbone-trivy-schedule.py"
+      - ".github/workflows/validate-greenbone-trivy-timer-order.yml"
+  push:
+    branches: [main]
+    paths:
+      - "IaC/ansible/roles/container_vulnerability_pilot/files/homelab-trivy-greenbone.timer"
+      - "IaC/ansible/playbooks/trivy-greenbone-after-feed-timer.yml"
+      - "scripts/validate-greenbone-trivy-schedule.py"
+      - ".github/workflows/validate-greenbone-trivy-timer-order.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  schedule-and-ansible-syntax:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Offline ordering, existing scanner caps and approval-gate checks
+        run: python3 scripts/validate-greenbone-trivy-schedule.py
+      - name: Targeted playbook syntax and calendar expression
+        run: |
+          python3 -m pip install "ansible-core>=2.19,<2.20"
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml playbooks/trivy-greenbone-after-feed-timer.yml --syntax-check
+          systemd-analyze calendar '*-*-* 19:00:00 UTC' --iterations=1

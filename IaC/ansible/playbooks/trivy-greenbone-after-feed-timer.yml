@@ -1,0 +1,140 @@
+---
+# Separate approval gate: reschedule the Greenbone Docker-image Trivy timer ONLY.
+# Does not run a scan, modify a Greenbone feed, touch Compose or restart Docker.
+- name: Move Greenbone Docker image Trivy scan after feed refresh
+  hosts: greenbone-01
+  become: true
+  gather_facts: true
+
+  vars:
+    greenbone_trivy_timer_dest: /etc/systemd/system/homelab-trivy-greenbone.timer
+    greenbone_trivy_timer_src: >-
+      {{ playbook_dir }}/../roles/container_vulnerability_pilot/files/homelab-trivy-greenbone.timer
+
+  pre_tasks:
+    - name: Require separate timer change approval and exact host identity
+      ansible.builtin.assert:
+        that:
+          - greenbone_trivy_timer_change_approved | default(false) | bool
+          - inventory_hostname == 'greenbone-01'
+          - ansible_host == '192.168.2.57'
+          - ansible_facts.hostname == 'greenbone-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.default_ipv4.address == '192.168.2.57'
+        fail_msg: >-
+          A specific greenbone_trivy_timer_change_approved=true approval and
+          the exact expected greenbone-01 identity are mandatory.
+
+    - name: Confirm existing timer and scanner units are present
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ greenbone_trivy_timer_dest }}"
+        - /etc/systemd/system/homelab-trivy-greenbone.service
+      register: greenbone_trivy_timer_existing
+
+    - name: Refuse to bootstrap timer or scanner services
+      ansible.builtin.assert:
+        that:
+          - greenbone_trivy_timer_existing.results[0].stat.isreg | default(false)
+          - greenbone_trivy_timer_existing.results[1].stat.isreg | default(false)
+
+    - name: Read current timer configuration without modifications
+      ansible.builtin.slurp:
+        src: "{{ greenbone_trivy_timer_dest }}"
+      register: greenbone_trivy_timer_before
+
+    - name: Reject unexpected timer ownership or drift
+      ansible.builtin.assert:
+        that:
+          - "'Unit=homelab-trivy-greenbone.service' in (greenbone_trivy_timer_before.content | b64decode)"
+          - "'Persistent=false' in (greenbone_trivy_timer_before.content | b64decode)"
+          - "'RandomizedDelaySec=30m' in (greenbone_trivy_timer_before.content | b64decode)"
+          - >-
+            'OnCalendar=*-*-* 09:00:00 UTC' in (greenbone_trivy_timer_before.content | b64decode)
+            or 'OnCalendar=*-*-* 19:00:00 UTC' in (greenbone_trivy_timer_before.content | b64decode)
+        fail_msg: "Live timer differs from previously reviewed configuration; stop for diagnosis."
+
+    - name: Confirm existing Trivy scanner is not running
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-trivy-greenbone.service, --property=ActiveState, --value]
+      register: greenbone_trivy_scan_before
+      changed_when: false
+      failed_when: greenbone_trivy_scan_before.stdout | trim != 'inactive'
+
+    - name: Confirm Trivy timer is already active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-trivy-greenbone.timer]
+      register: greenbone_trivy_timer_active
+      changed_when: false
+      failed_when: greenbone_trivy_timer_active.stdout | trim != 'active'
+
+  tasks:
+    - name: Copy reviewed timer only with timestamped rollback backup
+      ansible.builtin.copy:
+        src: "{{ greenbone_trivy_timer_src }}"
+        dest: "{{ greenbone_trivy_timer_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: greenbone_trivy_timer_copy
+
+    - name: Reload changed timer definition without restarting any scan
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: greenbone_trivy_timer_copy.changed
+
+    - name: Restart only the existing timer to apply future schedule
+      ansible.builtin.systemd_service:
+        name: homelab-trivy-greenbone.timer
+        state: restarted
+      when: greenbone_trivy_timer_copy.changed
+
+    - name: Verify installed timer schedule and explicit no-catchup policy
+      ansible.builtin.slurp:
+        src: "{{ greenbone_trivy_timer_dest }}"
+      register: greenbone_trivy_timer_after
+
+    - name: Assert expected daily evening timer is present
+      ansible.builtin.assert:
+        that:
+          - "'OnCalendar=*-*-* 19:00:00 UTC' in (greenbone_trivy_timer_after.content | b64decode)"
+          - "'RandomizedDelaySec=30m' in (greenbone_trivy_timer_after.content | b64decode)"
+          - "'Persistent=false' in (greenbone_trivy_timer_after.content | b64decode)"
+          - "'Unit=homelab-trivy-greenbone.service' in (greenbone_trivy_timer_after.content | b64decode)"
+
+    - name: Confirm timer remains active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-trivy-greenbone.timer]
+      register: greenbone_trivy_timer_after_active
+      changed_when: false
+      failed_when: greenbone_trivy_timer_after_active.stdout | trim != 'active'
+
+    - name: Confirm no Trivy scanner was started by rescheduling
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-trivy-greenbone.service, --property=ActiveState, --value]
+      register: greenbone_trivy_scan_after
+      changed_when: false
+      failed_when: greenbone_trivy_scan_after.stdout | trim != 'inactive'
+
+    - name: Display next timer execution without triggering it
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - list-timers
+          - --all
+          - homelab-trivy-greenbone.timer
+          - --no-pager
+      register: greenbone_trivy_schedule
+      changed_when: false
+
+    - name: Report exact scope and rollback evidence
+      ansible.builtin.debug:
+        msg:
+          - "Timer updated={{ greenbone_trivy_timer_copy.changed }}"
+          - "Backup={{ greenbone_trivy_timer_copy.backup_file | default('not needed') }}"
+          - "Only the Trivy scheduling timer was restarted if changed."
+          - "No Trivy scan, Greenbone scan, Docker change or image pull was initiated."
+          - "{{ greenbone_trivy_schedule.stdout_lines }}"
