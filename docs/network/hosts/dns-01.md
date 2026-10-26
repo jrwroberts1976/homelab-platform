@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T16:04:13+01:00`
+- Assessed: `2026-10-22T17:02:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:c3:75:ba`
 - Identity confidence: **high**
@@ -97,26 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-dns-01 is the managed CT101 LXC container on Proxmox-2, providing Pi-hole and Unbound on Debian GNU/Linux 13. SSH and DNS services are confirmed; one Greenbone kernel-mitigation finding warrants review.
+dns-01 is CT101, an Ansible-managed LXC container on Proxmox-2 providing the documented Pi-hole and Unbound role. It runs authoritative Debian GNU/Linux 13 (trixie) on x86_64, with corroborated OpenSSH and dnsmasq/Pi-hole services. No actionable Greenbone findings match the current IP.
 
 ### Confirmed facts
 
-- Canonical estate identity is dns-01, an LXC container managed by Ansible.
-- The container is CT101 on Proxmox-2 and has the role Pi-hole and Unbound.
+- The canonical estate name is dns-01.
+- The device is an LXC guest, CT101, managed on Proxmox-2.
+- The documented role is Pi-hole and Unbound.
 - Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
-- TCP ports 22, 53, 80, 443, and 9100 are open.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is confirmed on TCP port 22.
-- dnsmasq 2.93 with Pi-hole extra information is confirmed on TCP port 53.
-- A corroborated TLS service identified as webdav is reported on TCP port 443.
-- The TLS certificate on port 443 has subject and issuer common name pi.hole.
-- Greenbone reports one matching actionable finding: CVE-2022-40982, concerning missing Linux kernel mitigations for GDS/Downfall.
-- Patch telemetry reports zero available security updates, zero total updates, and no reboot required.
+- TCP port 22 is open and runs OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 53 is open and runs dnsmasq 2.93 with Pi-hole evidence.
+- TCP ports 80, 443, and 9100 are open; the evidence does not provide service labels for ports 80 or 9100.
+- TCP port 443 has a corroborated TLS service identified as WebDAV, with a certificate for pi.hole.
+- Greenbone reports zero actionable findings matching 192.168.2.51.
 
 ### Inferences
 
-- The device is a virtualized Linux service container rather than a physical network appliance.
-- Its primary network function is DNS filtering and recursive resolution through Pi-hole and Unbound.
-- The Proxmox vendor attribution identifies the virtualization platform context rather than necessarily the software vendor of the guest services.
+- The device is a Debian-based service container hosted by Proxmox.
+- The hostname and exposed DNS/Pi-hole service are consistent with the documented DNS infrastructure role.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -128,12 +126,12 @@ dns-01 is the managed CT101 LXC container on Proxmox-2, providing Pi-hole and Un
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T10:23:41+01:00`
-- Pending updates: **2**
+- Last assessed: `2026-10-26T06:53:02+00:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-21T07:54:36+01:00`
+- Last APT transaction activity: `2026-10-24T07:12:46+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.

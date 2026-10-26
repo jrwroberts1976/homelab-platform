@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T15:01:28+01:00`
+- Assessed: `2026-10-22T16:05:03+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:05`
 - Identity confidence: **high**
@@ -82,25 +82,24 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-Managed Proxmox LXC container CT105 running the Zabbix monitoring platform. Authoritative inventory identifies Debian 13 on x86_64. SSH and Nginx HTTP/HTTPS services are active; four security updates are pending and Greenbone reports a medium-severity cleartext HTTP finding on port 8080.
+zabbix-01 is the documented CT105 LXC container on PROXMOX, hosting the Zabbix monitoring platform. Authoritative Zabbix Agent 2 data identifies Debian GNU/Linux 13 (trixie). SSH and Nginx HTTP/HTTPS services are exposed; port 9100 is open without a reported service label. One medium Greenbone Debian advisory is present for review.
 
 ### Confirmed facts
 
-- The canonical estate identity is zabbix-01, an LXC container managed by Ansible.
-- The container is Zabbix monitoring platform CT105 on PROXMOX.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-23-pve.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is exposed on TCP port 22.
-- Nginx HTTP service is exposed on TCP ports 80 and 8080.
-- Nginx HTTPS service is exposed on TCP port 443.
-- The TLS certificate for port 443 names zabbix.home.jrwroberts.co.uk.
+- The canonical estate identity is zabbix-01, CT105, managed as an LXC container on PROXMOX.
+- The documented role is Zabbix monitoring platform with PostgreSQL, TimescaleDB, Zabbix Server, Agent 2, and Nginx active.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie) on x86_64.
+- The reported kernel is 7.0.14-23-pve.
+- TCP port 22 is open with corroborated OpenSSH 10.0p2 Debian 7+deb13u4 evidence.
+- TCP ports 80 and 443 are open with corroborated Nginx HTTP/HTTPS evidence.
 - TCP port 9100 is open; its Nmap service label was omitted.
-- Greenbone reports one matching medium-severity finding: Cleartext Transmission of Sensitive Information via HTTP on TCP port 8080.
-- Four security updates are available, unattended upgrades are enabled, and no reboot is required.
+- The host has one matching Greenbone actionable finding: Debian Security Advisory DSA-6572-1, severity Medium, score 5.0.
+- Patch telemetry reports six updates available and zero security updates available; unattended upgrades are enabled.
 
 ### Inferences
 
-- The host identity is well established as the Zabbix monitoring container because the canonical estate record, Proxmox inventory, hostname, authoritative agent inventory, and exposed services agree.
-- The service set is consistent with a web-based Zabbix monitoring deployment, but port 9100's function is not inferred because its Nmap label was omitted.
+- The device is a Linux-based managed infrastructure server running inside an LXC container.
+- The HTTPS service is associated with zabbix.home.jrwroberts.co.uk based on the presented TLS certificate.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -112,13 +111,13 @@ Managed Proxmox LXC container CT105 running the Zabbix monitoring platform. Auth
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T09:54:54+01:00`
+- Last assessed: `2026-10-26T06:52:14+00:00`
 - Pending updates: **7**
-- Security updates pending: **1**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-16T10:17:48+01:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-10-24T07:51:04+01:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->

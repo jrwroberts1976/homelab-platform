@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T15:01:28+01:00`
+- Assessed: `2026-10-22T16:05:03+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `60:83:e7:f3:c1:92`
 - Identity confidence: **high**
@@ -60,22 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a TP-Link Tapo P110-class smart plug. The device uses the DHCP hostname P110, resolves TP-Link/Tapo cloud endpoints, and has an embedded lwIP fingerprint with TCP port 80 open. Exact firmware or OS is not established.
+Likely a TP-Link Tapo P110 smart plug. Identity is supported by the DHCP hostname, TP-Link vendor data, Tapo cloud DNS activity, and the device MAC vendor. Exact firmware/OS is not established; Nmap reported a lwIP stack fingerprint and TCP port 80 open.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.95.
-- The documented hostname is acer-lights.jameshouse and the DHCP hostname is P110.
-- The recorded vendor is TP-Link PTE.
-- DNS activity includes TP-Link cloud/Tapo endpoint signals.
-- Nmap reports a lwIP fingerprint in the 1.4.1–2.0.3 range.
+- DHCP hostname is P110.
+- Inventory and Nmap identify the vendor as TP-Link PTE.
+- DNS activity included TP-Link/Tapo cloud endpoints.
+- Nmap reported a lwIP 1.4.1–2.0.3 fingerprint; lwIP is a TCP/IP stack rather than a complete OS identification.
 - TCP port 80 is open.
-- No actionable Greenbone findings currently match this IP.
+- No actionable Greenbone findings matched the current IP; this does not establish that the device is vulnerability-free.
 
 ### Inferences
 
-- The P110 DHCP hostname and TP-Link/Tapo DNS signals strongly indicate a TP-Link Tapo P110-class smart plug.
-- The device likely runs embedded IoT firmware using lwIP as its TCP/IP stack.
+- The device is likely a TP-Link Tapo P110 smart plug, based primarily on the model-like DHCP hostname and Tapo cloud DNS signals.
+- The device likely runs embedded IoT firmware, but the exact firmware or operating system is unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

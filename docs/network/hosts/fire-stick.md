@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T12:02:16+01:00`
+- Assessed: `2026-10-22T13:00:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `ac:17:02:07:0d:5d`
 - Identity confidence: **high**
@@ -60,25 +60,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely an Amazon Fire TV device at 192.168.2.149. Hostname, Nmap fingerprint, and DNS activity support the identification, but the inventory/MAC vendor is recorded as Fibar Group and the exact OS is unavailable.
+Host is strongly identified as an Amazon Fire TV–like streaming device from its hostname, Amazon endpoint activity, and Nmap fingerprint. Exact firmware/OS is unsupported; the inventory MAC vendor conflicts with the Amazon identification and warrants review.
 
 ### Confirmed facts
 
-- The device hostname is fire-stick.jameshouse and its telemetry hostname is fire-stick.
-- The device IP is 192.168.2.149 and MAC address is ac:17:02:07:0d:5d.
-- Nmap identified an Amazon Fire TV or Kindle Paperwhite fingerprint with 99% accuracy and classified it as an embedded media device.
-- TCP port 8009 is open.
-- DNS signals include Amazon Fire TV, Amazon Video, and Alexa endpoints, as well as NordVPN endpoints.
-- The inventory vendor is recorded as Fibar Group sp. z o.o.
-- No authoritative OS information is available.
-- No actionable Greenbone findings match the current IP.
-- Patch telemetry is unavailable.
+- The documented hostname is fire-stick.jameshouse.
+- The inventory vendor is Fibar Group sp. z o.o.
+- Nmap reports an open TCP port 8009.
+- Nmap's highest-ranked match is Amazon Fire TV or Kindle Paperwhite at 99% accuracy.
+- DNS evidence includes Amazon Fire TV, Amazon Video, and Alexa endpoint signals.
+- No actionable Greenbone findings matched the current IP in the supplied scan results.
 
 ### Inferences
 
-- The device is most likely an Amazon Fire TV or closely related Amazon media device; the hostname and DNS signals favor Fire TV over Kindle Paperwhite.
-- The platform is best described conservatively as embedded media-device firmware; no exact OS or version is supported.
-- The conflicting Fibar Group vendor attribution warrants manual review.
+- The device is most likely an Amazon Fire TV–class streaming device.
+- The platform is likely embedded media-device firmware, but the exact OS and firmware are not established.
+- The Fibar Group MAC-vendor result may reflect the network interface or an identity mismatch; it does not resolve the device identity.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

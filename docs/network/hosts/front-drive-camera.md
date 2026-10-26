@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T12:02:16+01:00`
+- Assessed: `2026-10-22T13:00:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `5c:e9:31:18:c1:4a`
 - Identity confidence: **high**
@@ -60,24 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-TP-Link Tapo/TC40 network camera identified from hostname, DHCP model-like name, vendor, and TP-Link cloud DNS activity. HTTPS is exposed on ports 443 and 8443; port 554 is open. Exact OS or firmware is not established.
+Likely a TP-Link Tapo camera, identified by its hostname, DHCP name TC40, vendor data, and TP-Link cloud/Tapo DNS activity. Exact firmware/OS is not established. HTTPS is available on ports 443 and 8443; port 554 is open. No actionable Greenbone findings matched this IP, which does not prove the host is vulnerability-free.
 
 ### Confirmed facts
 
-- The device hostname is front-drive-camera.jameshouse.
-- The DHCP hostname is TC40.
-- The inventory vendor and Nmap vendor are TP-Link Limited.
-- DNS activity matched TP-Link cloud and Tapo endpoints.
-- TCP ports 443 and 8443 provide corroborated HTTPS services.
-- TCP port 554 is open; no service label is available for this port.
-- No authoritative OS information is available.
-- Greenbone reported zero matching actionable findings for this IP; this does not prove the host is vulnerability-free.
+- Inventory hostname is front-drive-camera.jameshouse and telemetry hostname is front-drive-camera.
+- The DHCP hostname and router hostname are TC40.
+- Inventory and Nmap vendor data identify TP-Link Limited.
+- DNS evidence includes TP-Link cloud and Tapo endpoints.
+- Corroborated HTTPS services are exposed on TCP ports 443 and 8443.
+- TCP port 554 is open; its Nmap service label was omitted.
+- The TLS certificate identifies the device as TPRI-DEVICE.
+- No actionable Greenbone findings matched 192.168.2.128.
 
 ### Inferences
 
-- The device is most likely a TP-Link Tapo TC40 network camera used as the front-drive camera.
-- The platform is likely embedded IoT firmware.
-- Nmap's Linux and network-camera matches are tentative and do not establish an exact OS or firmware version.
+- The naming, TC40 identifier, TP-Link vendor, and Tapo cloud endpoints strongly indicate a TP-Link Tapo camera.
+- The device likely uses embedded IoT firmware, but the exact operating system and firmware version are unknown.
+- Generic Nmap matches for Linux, routers, and an AXIS camera are inconsistent and do not establish the device OS or model.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

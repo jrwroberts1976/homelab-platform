@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T16:04:13+01:00`
+- Assessed: `2026-10-22T17:02:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Identity confidence: **high**
@@ -97,25 +97,22 @@ complete household browsing history.
 
 ### Assessment summary
 
-edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. OpenSSH 10.0p2 is exposed on TCP/22 and TCP/9100 is open with no service identification supplied. Greenbone reports one matching medium-severity kernel mitigation finding; patch telemetry currently reports no pending updates.
+edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. SSH is exposed on TCP/22; TCP/9100 is also open. No matching actionable Greenbone findings were reported, while two non-security updates are available.
 
 ### Confirmed facts
 
-- The canonical estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
-- The container is managed by Ansible.
-- Authoritative Zabbix Agent 2 inventory identifies the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
-- The Proxmox cluster API identifies the guest type as LXC, name edge-01, on Proxmox-2, with VMID 103.
-- The device vendor is Proxmox Server Solutions GmbH.
+- The documented estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
+- Proxmox inventory identifies the guest type as LXC and the vendor as Proxmox Server Solutions GmbH.
+- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
 - TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP/9100 is open; no service identification was supplied.
-- Greenbone reports one matching actionable finding: CVE-2022-40982, rated Medium, concerning missing Linux kernel mitigations for GDS/Downfall.
-- Patch telemetry is fresh and reports zero available security updates, zero total updates, and no reboot required.
+- TCP/9100 is open; its Nmap service label was omitted.
+- Greenbone reports zero matching actionable findings for the current host IP.
+- Patching reports two updates available, zero security updates available, and no reboot required.
 
 ### Inferences
 
-- The host is a Linux-based managed infrastructure container running under Proxmox.
-- The authoritative OS inventory is stronger than the Nmap and DNS evidence for operating-system identification.
-- The Greenbone finding and the absence of pending updates are both conditions that merit review; the supplied evidence does not establish that any available package fixes the cited CVE.
+- This is a managed infrastructure/container host rather than a standalone home IoT device, based on the canonical estate record and Proxmox LXC inventory.
+- The authoritative OS facts supersede Nmap OS identification, which was intentionally skipped.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -127,12 +124,12 @@ edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. OpenSSH 10.0p2
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T10:10:43+01:00`
-- Pending updates: **2**
+- Last assessed: `2026-10-26T07:22:20+00:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-21T06:22:52+01:00`
+- Last APT transaction activity: `2026-10-24T06:07:50+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.

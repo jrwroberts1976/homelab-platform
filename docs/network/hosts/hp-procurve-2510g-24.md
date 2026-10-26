@@ -55,7 +55,7 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T12:02:16+01:00`
+- Assessed: `2026-10-22T13:00:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:9c:02:45:39:00`
 - Identity confidence: **high**
@@ -65,23 +65,22 @@ A switch should normally have little or no direct Internet/DNS activity. Record 
 
 ### Assessment summary
 
-HP ProCurve 2510G-24 core managed switch and SPAN source at 192.168.2.16. HTTP configuration service is confirmed; TCP/23 is open. No actionable Greenbone findings matched this IP. Exact operating system is not established.
+HP ProCurve 2510G-24 managed switch and SPAN source at 192.168.2.16. HTTP configuration service is exposed on TCP/80; TCP/23 is open. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
 - The canonical estate identity is HP ProCurve 2510G-24.
-- The device is classified as a network device with the role Core managed switch and SPAN source.
-- The vendor is Hewlett Packard.
-- The device is online at 192.168.2.16.
-- TCP port 80 is open and identified as HTTP with corroborated HP ProCurve Switch 2510G-24 configuration evidence.
-- TCP port 23 is open.
-- Greenbone reported zero matching actionable findings for the current IP.
+- The documented estate role is core managed switch and SPAN source.
+- The device vendor is Hewlett Packard.
+- The device is online at 192.168.2.16 with hostname hp-switch.jameshouse.
+- TCP/23 and TCP/80 are open.
+- TCP/80 provides a corroborated eHTTP 2.0 service identified as HP ProCurve Switch 2510G-24 HTTP configuration.
+- Greenbone reported zero matching actionable findings for the current host IP.
 
 ### Inferences
 
-- The device uses embedded network-switch firmware.
-- Nmap results are consistent with an embedded switch, but do not establish the exact operating system.
-- The Nmap VxWorks match is tentative and is not sufficient to populate exact_os.
+- The device uses embedded network-switch firmware rather than a general-purpose host operating system.
+- Nmap produced a 100% VxWorks fingerprint match, but this is not sufficient to establish the exact operating system or firmware.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

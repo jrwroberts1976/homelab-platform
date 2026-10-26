@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T16:04:13+01:00`
+- Assessed: `2026-10-22T17:02:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:e9:49:60`
 - Identity confidence: **high**
@@ -97,24 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-cloud-01 is the managed QEMU VM cloud-01 on Proxmox VM200, running Debian GNU/Linux 13 (trixie). It provides corroborated OpenSSH 10.0p2 and Apache httpd 2.4.68 services, with TCP ports 22, 8080, and 9100 open. Greenbone reports two medium-severity kernel-mitigation findings; patch telemetry currently shows no pending updates or reboot requirement.
+cloud-01 is the managed QEMU VM cloud-01 on PROXMOX, running authoritative Debian GNU/Linux 13. It hosts documented production Nextcloud, PostgreSQL and Redis workloads; SSH and Apache HTTP services are exposed, with port 9100 also open. Greenbone reports two actionable medium-severity findings, while patch telemetry shows two updates available and a reboot required; both conditions merit review.
 
 ### Confirmed facts
 
-- The canonical estate identity is cloud-01, documented as a VM managed by Ansible.
-- The VM is QEMU guest cloud-01, VMID 200, hosted on PROXMOX.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.111+deb13-cloud-amd64.
-- The documented estate role is Production Nextcloud, PostgreSQL and Redis, VM200 on PROXMOX.
-- TCP port 22 is open and serves corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 8080 is open and serves corroborated Apache httpd 2.4.68 (Debian).
-- TCP port 9100 is open; its Nmap service label was omitted.
-- Greenbone reports two matching medium-severity kernel-mitigation findings involving MDS and SSB speculative-execution vulnerabilities.
-- Patch telemetry is fresh, reports zero available security updates and zero total updates, and indicates no reboot is required.
+- The canonical device name is cloud-01.
+- The device is a VM with QEMU guest type and VMID 200 on PROXMOX.
+- The documented estate role is Production Nextcloud, PostgreSQL and Redis.
+- The authoritative OS is Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 6.12.111+deb13-cloud-amd64.
+- Port 22/tcp is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- Port 8080/tcp is open and provides corroborated Apache httpd 2.4.68 (Debian).
+- Port 9100/tcp is open; its service label is omitted.
+- Greenbone reports two matching actionable medium-severity findings, including DSA-6572-1 and missing Linux kernel mitigations for Processor MMIO Stale Data vulnerabilities.
+- Patch telemetry reports two updates available, zero security updates available, and a reboot required.
 
 ### Inferences
 
-- The host is a production Linux application/server VM based on its documented estate role and exposed services.
-- The authoritative OS facts supersede Nmap OS or DNS inference.
+- The device is a managed Debian Linux server VM rather than a physical network appliance.
+- The Proxmox vendor attribution identifies the virtualization platform or estate provider, not necessarily the guest OS vendor.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -126,12 +126,12 @@ cloud-01 is the managed QEMU VM cloud-01 on Proxmox VM200, running Debian GNU/Li
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T09:52:52+01:00`
-- Pending updates: **1**
+- Last assessed: `2026-10-26T07:02:22+00:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **Yes**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-18T06:19:31+01:00`
+- Last APT transaction activity: `2026-10-25T06:18:42+00:00`
 - Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.

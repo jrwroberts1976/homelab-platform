@@ -59,7 +59,7 @@ Use bounded domain/service summaries only.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T15:01:28+01:00`
+- Assessed: `2026-10-22T16:05:03+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1a:9f:0c:30:3b`
 - Identity confidence: **high**
@@ -69,23 +69,22 @@ Use bounded domain/service summaries only.
 
 ### Assessment summary
 
-Proxmox-2 is a managed physical Proxmox VE cluster node running authoritative Debian GNU/Linux 13 (trixie) host OS facts. Open services include corroborated OpenSSH 10.0p2 and the Proxmox Virtual Environment REST API; ports 111 and 9100 are also open. No matching actionable Greenbone findings were reported, while patch telemetry is unavailable.
+Proxmox-2 is a managed physical Proxmox VE cluster node running authoritative Debian GNU/Linux 13 (trixie) OS facts. SSH and the Proxmox Virtual Environment REST API are confirmed open; ports 111 and 9100 are also open. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
 - The canonical estate identifies this device as Proxmox-2, a physical Proxmox VE cluster node 2.
-- The hostname is proxmox-2.jameshouse and the IP address is 192.168.2.71.
-- Authoritative Zabbix Agent 2 inventory reports Proxmox VE / Debian GNU/Linux 13 (trixie), kernel 7.0.14-20-pve, architecture x86_64.
-- TCP port 22 is open and is identified as OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 3128 is open and is identified as the Proxmox Virtual Environment REST API version 3.0.
+- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie) on x86_64 with kernel 7.0.14-20-pve.
+- The device hostname is proxmox-2.jameshouse and its IP address is 192.168.2.71.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is confirmed on TCP port 22.
+- Proxmox Virtual Environment REST API version 3.0 is identified on TCP port 3128.
 - TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
-- The current Greenbone data contains zero matching actionable findings.
-- Patch telemetry is unavailable.
+- Greenbone reported zero matching actionable findings for the current host IP.
 
 ### Inferences
 
-- This is a managed Proxmox virtualization host rather than a general-purpose endpoint.
-- The A-Link vendor value is inventory metadata and does not identify the Proxmox software vendor.
+- The host functions as a physical virtualization and cluster-management node based on its canonical estate role and confirmed Proxmox service.
+- A-Link is the vendor reported by inventory and Nmap evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -97,12 +96,12 @@ Proxmox-2 is a managed physical Proxmox VE cluster node running authoritative De
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T10:19:35+01:00`
-- Pending updates: **3**
+- Last assessed: `2026-10-26T07:30:25+00:00`
+- Pending updates: **4**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-21T06:35:59+01:00`
+- Last APT transaction activity: `2026-10-24T06:54:28+01:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.

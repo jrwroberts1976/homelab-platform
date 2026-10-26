@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T13:01:53+01:00`
+- Assessed: `2026-10-22T14:00:35+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `5c:34:00:50:df:b3`
 - Identity confidence: **high**
@@ -60,20 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a Hisense VIDAA smart TV. Identity is well supported by the hostname, vendor attribution, and VIDAA-related DNS activity; no exact OS or firmware is established.
+Identified as a Hisense smart TV, likely using VIDAA services. Exact operating system or firmware is unavailable; no open ports or Nmap OS matches were observed. No actionable Greenbone findings matched the current IP.
 
 ### Confirmed facts
 
-- The device hostname is main-tv.jameshouse.
-- The inventory and Nmap records identify the vendor as Hisense Electric.
-- Observed DNS domains include multiple vidaahub.com endpoints.
-- Nmap OS identification is incomplete, with no OS matches or port evidence.
-- No actionable Greenbone findings matched the current IP at scan time.
+- The device hostname is main-tv.jameshouse and telemetry hostname is main-tv.
+- The recorded vendor is Hisense Electric.
+- The device IP is 192.168.2.234 and MAC address is 5c:34:00:50:df:b3.
+- DNS samples include multiple vidaahub.com domains and Netflix service domains, along with www.youtube.com.
+- Nmap collection was partial with no TCP or UDP ports and no OS matches.
+- No actionable Greenbone findings matched this current IP.
+- Authoritative OS information is unavailable.
 
 ### Inferences
 
-- The device is likely a Hisense smart television using the VIDAA platform.
-- The platform is best classified as embedded IoT firmware; the exact OS and firmware version are unknown.
+- The device identity is consistent with a Hisense smart TV.
+- The vidaahub.com DNS activity is consistent with VIDAA platform services.
+- The exact operating system and firmware version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

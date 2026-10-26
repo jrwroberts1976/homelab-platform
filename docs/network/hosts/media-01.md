@@ -59,7 +59,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T15:01:28+01:00`
+- Assessed: `2026-10-22T16:05:03+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `2c:cf:67:30:be:1f`
 - Identity confidence: **high**
@@ -69,27 +69,27 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-media-01 is a managed physical Raspberry Pi 5 running authoritative Debian 13 (trixie) on aarch64. It serves SSH and Samba and is documented as a Kodi endpoint and primary Proxmox NFS backup target. Nine updates are available, with no pending security updates or reboot requirement.
+media-01 is a managed Raspberry Pi 5 running authoritative Debian GNU/Linux 13 (trixie) on aarch64. It serves as a Kodi endpoint and primary Proxmox NFS backup target, with SSH, HTTPS/nginx, Samba, and an additional open TCP port 9100. No actionable Greenbone findings matched the current IP; sampled logs contain media-device, audio, and authentication errors.
 
 ### Confirmed facts
 
-- The canonical device name is media-01.
-- The device is a physical host managed by Ansible.
-- The canonical role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
+- The canonical device name is media-01 and it is a physical host.
+- The documented role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
 - The vendor is Raspberry Pi (Trading).
-- The host is online at 192.168.2.195 and uses the hostname media-01.jameshouse.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture aarch64, with kernel 6.18.50+rpt-rpi-2712.
-- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 445 is open and provides corroborated Samba smbd version 4.
-- TCP port 9100 is open; no service label is supplied for this port.
-- No actionable Greenbone findings match the current host IP.
-- Nine total updates are available, including zero security updates; unattended upgrades are enabled and no reboot is required.
-- The bounded 24-hour Loki sample contains authentication and media-device permission error messages.
+- The authoritative OS is Debian GNU/Linux 13 (trixie), with aarch64 architecture and kernel 6.18.50+rpt-rpi-2712.
+- The host is managed by Ansible.
+- TCP ports 22, 443, 445, and 9100 are open.
+- TCP 22 provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP 443 provides corroborated nginx over TLS.
+- TCP 445 provides corroborated Samba smbd version 4.
+- No actionable Greenbone findings matched 192.168.2.195 in the supplied report.
+- The bounded 24-hour Loki sample contains media-device, audio, HTTP parsing, and authentication-related warning or error samples.
 
 ### Inferences
 
-- The host is serving both remote administration through SSH and file sharing through Samba.
-- Its documented Kodi role is consistent with the sampled media-device log errors, although those errors indicate permission failures rather than a confirmed device malfunction.
+- The host is suitable for the documented media-playback and backup roles based on its canonical estate record and observed services.
+- The host was recently reachable through DHCP/router telemetry, although inventory telemetry reports it as offline.
+- The sampled log messages merit operational review, but the bounded sample does not establish an incident or overall host health.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -101,7 +101,7 @@ media-01 is a managed physical Raspberry Pi 5 running authoritative Debian 13 (t
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T09:50:22+01:00`
+- Last assessed: `2026-10-22T05:35:26+01:00`
 - Pending updates: **22**
 - Security updates pending: **0**
 - Reboot required: **No**

@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T15:01:28+01:00`
+- Assessed: `2026-10-22T16:05:03+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:35:3b:11`
 - Identity confidence: **high**
@@ -97,25 +97,25 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Proxmox LXC container CT100 providing Pi-hole and Unbound DNS services. Authoritative inventory identifies Debian GNU/Linux 13 (trixie); SSH and DNS services are confirmed.
+dns-02 is CT100, an Ansible-managed Proxmox LXC running Debian 13. It provides Pi-hole/dnsmasq DNS service and Unbound according to the canonical estate record; SSH and HTTPS/WebDAV are also exposed.
 
 ### Confirmed facts
 
-- Canonical estate name is dns-02.
-- The device is an LXC guest named dns-02 on PROXMOX with VMID 100.
-- The documented role is Pi-hole and Unbound.
+- Canonical estate identity is dns-02, CT100 on PROXMOX, with role Pi-hole and Unbound.
+- The Proxmox cluster API identifies the guest as an LXC named dns-02 on node PROXMOX with VMID 100.
 - Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie) on x86_64.
-- TCP port 22 is open and runs OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 53 is open and runs dnsmasq 2.93 with Pi-hole evidence.
-- TCP ports 80 and 9100 are open.
-- TCP port 443 is open and has a TLS certificate for pi.hole issued to pi.hole.
-- No matching actionable Greenbone findings were reported for 192.168.2.50.
-- No pending security updates or reboot requirement are reported.
+- The inventory vendor is Proxmox Server Solutions GmbH.
+- TCP ports 22, 53, 80, 443, and 9100 are open.
+- TCP 22 provides OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP 53 provides dnsmasq 2.93 with Pi-hole enrichment.
+- TCP 443 is identified as WebDAV over TLS by the service enrichment.
+- Greenbone reports zero matching actionable findings for the current host IP.
+- No security updates are currently available; two non-security updates are available and no reboot is required.
 
 ### Inferences
 
-- The device identity is consistent with a Debian-based DNS infrastructure container managed through Proxmox.
-- The Pi-hole role is corroborated by the DNS service metadata and pi.hole certificate.
+- The host is a containerized DNS infrastructure service rather than a standalone physical device.
+- The Debian OS facts apply to the LXC guest and are authoritative for this classification.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
@@ -127,12 +127,12 @@ Managed Proxmox LXC container CT100 providing Pi-hole and Unbound DNS services. 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-21T09:59:18+01:00`
-- Pending updates: **2**
+- Last assessed: `2026-10-26T07:11:22+00:00`
+- Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-21T07:06:59+01:00`
+- Last APT transaction activity: `2026-10-25T06:23:32+00:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.

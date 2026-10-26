@@ -40,7 +40,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-15T12:02:16+01:00`
+- Assessed: `2026-10-22T13:00:41+01:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `14:7f:67:6d:e5:98`
 - Identity confidence: **high**
@@ -50,21 +50,20 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 ### Assessment summary
 
-Likely an LG webOS smart TV at 192.168.2.130. Exact OS/firmware is not established; no TCP/UDP ports were reported by the partial Nmap scan. No matching actionable Greenbone findings were reported, which is not proof of full security coverage.
+Likely an LG webOS smart TV at 192.168.2.130. The hostname and LG Innotek vendor identify the device, but no exact OS or service evidence is available.
 
 ### Confirmed facts
 
-- The DHCP and inventory hostname is LGwebOSTV.
-- The recorded vendor is LG Innotek.
+- The device hostname is LGwebOSTV.
+- The device vendor is identified as LG Innotek.
 - The device is online at 192.168.2.130.
-- The partial Nmap result reported no TCP or UDP ports and no OS matches.
-- Greenbone reported zero matching actionable findings for this current IP.
+- Nmap collection is partial and reports missing OS evidence; no TCP or UDP ports were reported.
+- No matching actionable Greenbone findings were reported for this IP.
 
 ### Inferences
 
-- The hostname strongly indicates an LG webOS television or related LG smart-TV device.
-- The device is best classified as embedded IoT firmware rather than a general-purpose computer.
-- The exact webOS version and underlying operating system are unsupported by the supplied evidence.
+- The device is likely an LG smart TV using webOS based on its hostname.
+- The device likely uses embedded IoT-style firmware; the exact webOS version is unknown.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
