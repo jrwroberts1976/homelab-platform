@@ -152,7 +152,8 @@ cloud-01 is the managed QEMU VM cloud-01 on PROXMOX, running authoritative Debia
 - Trusted proxies: `192.168.2.53` and `172.18.0.1`; actual proxy-peer attribution requires final verification.
 - Certbot timer enabled and active; `35-nextcloud-nginx` deploy hook installed.
 - Certificate renewal operation has not been end-to-end tested.
-- Rollback configuration checkpoint: `/root/nextcloud-http-isolation-20261021/`.
+- Preferred hardened configuration checkpoint: `/root/nextcloud-hardened-baseline-20261026/`.
+- Historical 2026-10-21 rollback checkpoint must not be restored routinely because it reopens LAN HTTP.
 - Nextcloud container-image vulnerability remediation remains outstanding.
 - Deployment configuration is maintained in `homelab-platform` on the `security/nextcloud-https` branch.
 
