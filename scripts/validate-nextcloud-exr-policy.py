@@ -64,5 +64,9 @@ for text in (stage, rollback):
 assert "nextcloud_exr_hardening_approved: false" in stage
 assert "nextcloud_exr_rollback_approved: false" in rollback
 assert "EXR read/write denied by policy" in stage
+assert 'writeImage("EXR:/dev/null")' in stage, "Write-path test must use writeImage"
+assert 'readImage("EXR:/dev/null")' in stage, "Read-path test must probe coder"
+assert "nextcloud_exr_app_mount_present" in stage, "Restart must be avoidable on resume"
+assert "already-hardened baseline" in stage, "Resume must accept approved policy"
 
 print("PASS: EXR policy, restrictions, compose mounts, approval and rollback checks")
