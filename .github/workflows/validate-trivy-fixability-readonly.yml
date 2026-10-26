@@ -1,0 +1,31 @@
+name: Validate read-only Trivy fixability evidence
+
+on:
+  pull_request:
+    paths:
+      - "IaC/ansible/playbooks/trivy-fixability-readonly.yml"
+      - "IaC/ansible/playbooks/files/trivy-fixability-readonly.py"
+      - "scripts/validate-trivy-fixability-readonly.py"
+      - ".github/workflows/validate-trivy-fixability-readonly.yml"
+  push:
+    branches: [main]
+    paths:
+      - "IaC/ansible/playbooks/trivy-fixability-readonly.yml"
+      - "IaC/ansible/playbooks/files/trivy-fixability-readonly.py"
+      - "scripts/validate-trivy-fixability-readonly.py"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Reject stale or incorrect vulnerability reports
+        run: python3 scripts/validate-trivy-fixability-readonly.py
+      - name: Verify Ansible syntax for serial read-only evidence collector
+        run: |
+          python3 -m pip install "ansible-core>=2.19,<2.20"
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml playbooks/trivy-fixability-readonly.yml --syntax-check
