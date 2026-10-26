@@ -2,7 +2,7 @@
 
 <!-- estate-authority: IaC/inventory/estate.json -->
 
-**Status:** Git-only proposal on branch monitoring/trivy-four-column-cves-20261026. Not merged or deployed until independently verified and approved. This does **not** repair or reclassify a vulnerability.
+**Status:** PR #199 merged into GitHub main on 26 October 2026, merge commit `2df2687d791ed97c5d1d4e84bcd0fdbd15e87c2f`, with all four CI checks passing. **Not deployed** to any live Trivy publisher or Grafana service by the merge; operator-run, separately approval-gated Ansible stages below remain pending. This does **not** repair or reclassify a vulnerability.
 
 ## User requirement
 
@@ -24,7 +24,7 @@ For each image, the publisher verifies the existing **summary completed/fresh**,
 
 ## Rollout and explicit gates
 
-1. Review PR and all CI checks; merge only after operator approval. On admin-01, pull main and run:
+1. PR #199 merged after all four CI checks passed. On admin-01, pull main and run:
    - python3 scripts/validate-trivy-cve-dashboard.py
    - python3 scripts/validate-unified-vulnerability-cves.py
    - python3 scripts/validate-estate.py
