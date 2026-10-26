@@ -31,13 +31,9 @@ The targeted profile provides strong embedded-platform evidence. The lwIP finger
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-26T00:22:36+00:00`
-- MAC identity: `60:83:e7:f4:0b:2e`
-- MAC-attributable originated connections: **none observed in this window**
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
