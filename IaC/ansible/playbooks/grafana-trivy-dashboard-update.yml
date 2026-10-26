@@ -2,7 +2,7 @@
 # Targeted, approval-gated Grafana vulnerability dashboard refresh.
 # This playbook deliberately does NOT run monitoring.yml or reconcile Docker.
 # Grafana file provisioning polls every 30 seconds and uses the dashboard UID.
-- name: Refresh the Git-managed Grafana Trivy dashboard only
+- name: Refresh the Git-managed four-column Trivy CVE dashboard only
   hosts: monitor-01
   become: true
   gather_facts: true
@@ -55,7 +55,7 @@
         validate: "python3 -m json.tool %s"
       register: grafana_trivy_dashboard_copy
 
-    - name: Validate installed dashboard identity and key Trivy queries
+    - name: Validate four-column CVE table and preservation of Greenbone panels
       ansible.builtin.command:
         argv:
           - python3
@@ -66,12 +66,17 @@
             assert d.get("uid") == "homelab-vulnerability-management"
             assert d.get("refresh") == "30s"
             p={x["id"]:x for x in d["panels"]}
-            assert {10, 11, 12, 38, 39, 41} <= p.keys()
+            assert {10, 11, 12, 39} <= p.keys()
+            assert not {38, 41} & p.keys()
             assert "homelab_greenbone_cve_finding_score" in p[12]["targets"][0]["expr"]
-            assert "homelab_container_estate_critical_cve" in p[39]["targets"][0]["expr"]
-            assert "homelab_container_estate_last_scan_timestamp_seconds" in p[41]["targets"][0]["expr"]
+            assert "homelab_container_estate_cve_detail_score" in p[39]["targets"][0]["expr"]
+            cols=p[39]["transformations"][0]["options"]["renameByName"]
+            assert cols == {"target_name":"Target name","severity":"Severity","cve":"CVE","details":"Details"}
+            excluded=p[39]["transformations"][0]["options"]["excludeByName"]
+            assert all(excluded.get(x) for x in ("Time","__name__","instance","job","image","Value"))
+            assert "homelab_container_estate_last_scan_timestamp_seconds" in p[37]["targets"][0]["expr"]
             assert any(v.get("name") == "trivy_host" for v in d.get("templating", {}).get("list", []))
-            print("Dashboard UID, refresh interval and Trivy panels verified")
+            print("Dashboard UID, Greenbone CVEs and four-column Trivy CVE table verified")
           - "{{ grafana_trivy_dashboard_dest }}"
       changed_when: false
 
