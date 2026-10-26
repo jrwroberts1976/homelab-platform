@@ -1,5 +1,7 @@
 # Nextcloud HTTPS hardening
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 Status: Deployed and independently verified
 Verified: 2026-10-26
 Host: cloud-01
