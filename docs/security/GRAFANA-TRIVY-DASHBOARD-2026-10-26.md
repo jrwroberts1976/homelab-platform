@@ -1,5 +1,7 @@
 # Grafana Trivy dashboard — findings and scan freshness clarification (26 October 2026)
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 **Status:** Proposed IaC dashboard change. Not yet deployed to monitor-01; approval-gated update only. Review PR and merge before production execution.
 
 **Canonical dashboard:** `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/production/homelab-vulnerability-management.json` (UID `homelab-vulnerability-management`, title *Homelab — Vulnerability Management*).
