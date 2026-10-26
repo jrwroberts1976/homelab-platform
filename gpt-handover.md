@@ -1,5 +1,21 @@
 # GPT Handover — Homelab Platform
 
+## Grafana Trivy dashboard readability — proposed IaC change 26 October 2026 (NOT DEPLOYED)
+
+**User report:** At 11:52:46 the Grafana *Trivy — findings by image / severity* panel showed Komodo Periphery 2.3.3 (cloud-01 CRITICAL 13/HIGH 152) plus PostgreSQL and Redis; *Trivy — scan validity per image* showed Nextcloud 35 present and valid. Prometheus table `Time` is scrape/sample time, **not actual Trivy scan completion**. The canonical existing findings query `homelab_container_estate_findings` had no Nextcloud filter; the pasted excerpt may be a partial table, so no exporter bug was established. Independent 26 Oct 08:53 UTC Trivy validated Nextcloud 35 with 4 CRITICAL/231 HIGH package rows; controls don't lower package counts.
+
+**Komodo read-only verification:** On cloud-01 running `ghcr.io/moghtech/komodo-periphery:2.3.3`; Perl `libperl5.40`, `perl`, `perl-base`, `perl-modules-5.40` all `5.40.1-6`; `openssh-client 1:10.0p1-7+deb13u4`; `ssh` and `perl` binaries present. Image still has 13 CRITICAL package rows (12 Perl rows across 3 CVEs with Trixie fix `5.40.1-6+deb13u1`, 1 OpenSSH client CVE without fixed version listed). `apt-cache policy` in running image only knew old installed version—do NOT treat that as evidence no upstream fix exists. **No package or container change.**
+
+**Proposed branch** `monitoring/trivy-dashboard-clarity-20261026`:
+- Updates `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/production/homelab-vulnerability-management.json`: keeps dashboard UID, 30s refresh and all original panels, makes general findings table readable by host/image/severity, adds dedicated Nextcloud severity table, actual last completed scan age (hours) by host, scan-complete status by host, critical findings by host; explains freshness and missing-data semantics. Does **not change Prometheus metric values**.
+- Adds `IaC/ansible/playbooks/grafana-trivy-dashboard-update.yml`, an **explicit approval-gated, monitor-01-only** dashboard-file copy with JSON validation and backup, before/after Grafana health verification; avoids `monitoring.yml`, container reconciliation or Grafana restarts. Grafana provisioning file polling configured at 30s.
+- Adds `docs/security/GRAFANA-TRIVY-DASHBOARD-2026-10-26.md` with PromQL diagnostics, runbook, verification and rollback.
+- **Do not claim dashboard live until PR merged and the user executes approved Ansible playbook on admin-01, then verifies Grafana.** No live Grafana or Prometheus changes made in this conversation.
+- Still need eventual controlled Komodo Periphery image upgrade and Trivy rescan through IaC, separate from dashboard work.
+
+---
+
+
 ## Nextcloud remaining CRITICAL CVEs — read-only exposure triage completed 26 October 2026
 
 **Current documented status:** No live host/container modifications during this triage. On `cloud-01`, Nextcloud `35.0.2.2` remained installed/healthy with maintenance false and needsDbUpgrade false. Earlier EXR IaC mitigation is live and merged; `CVE-2026-42216` and `CVE-2026-42217` are **mitigated for the ImageMagick EXR coder path only** (OpenEXR Debian libraries remain unpatched).
