@@ -1,5 +1,7 @@
 # Nextcloud 35 ImageMagick EXR decoder mitigation — 2026-10-26
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 **Status: STAGED IN GIT ONLY — NOT DEPLOYED; vulnerabilities NOT CLOSED.**
 
 Host: `cloud-01` (192.168.2.53), Nextcloud `35.0.2.2` on `nextcloud:35.0.2-apache`. Managed by Ansible. This is a targeted mitigation of the EXR decoding path and not an upgrade to patched OpenEXR packages.
