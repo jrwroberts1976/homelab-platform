@@ -65,6 +65,7 @@ services:
     volumes:
       - {{ cloud_stack_state_root }}/nextcloud-html:/var/www/html
       - {{ cloud_nextcloud_data_dir }}:/var/www/html/data
+      - {{ cloud_nextcloud_imagemagick_policy_path }}:/etc/ImageMagick-7/policy.xml:ro
     networks:
       - cloud_backend
 
@@ -80,6 +81,7 @@ services:
     volumes:
       - {{ cloud_stack_state_root }}/nextcloud-html:/var/www/html
       - {{ cloud_nextcloud_data_dir }}:/var/www/html/data
+      - {{ cloud_nextcloud_imagemagick_policy_path }}:/etc/ImageMagick-7/policy.xml:ro
     networks:
       - cloud_backend
 
