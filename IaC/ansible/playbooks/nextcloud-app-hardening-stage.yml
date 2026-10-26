@@ -1,0 +1,38 @@
+---
+- name: Stage Nextcloud application hardening
+  hosts: cloud-01
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../roles/cloud_stack/defaults/main.yml
+
+  vars:
+    nextcloud_app_hardening_allow_write: false
+
+  tasks:
+    - name: Enforce host and approval gates
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "cloud-01"
+          - ansible_host == "192.168.2.53"
+          - ansible_check_mode or nextcloud_app_hardening_allow_write | bool
+
+    - name: Check rollback Compose exists
+      ansible.builtin.stat:
+        path: /root/nextcloud-https-rollback-20261021/docker-compose.yml
+      register: rollback_compose
+
+    - name: Require rollback file
+      ansible.builtin.assert:
+        that:
+          - rollback_compose.stat.isreg | default(false)
+
+    - name: Stage managed Compose definition
+      ansible.builtin.template:
+        src: ../roles/cloud_stack/templates/docker-compose.yml.j2
+        dest: /opt/cloud-01/docker-compose.yml
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true

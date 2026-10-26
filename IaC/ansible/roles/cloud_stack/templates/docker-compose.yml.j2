@@ -54,6 +54,8 @@ services:
       NEXTCLOUD_DATA_DIR: /var/www/html/data
       NEXTCLOUD_TRUSTED_DOMAINS: "{{ cloud_nextcloud_trusted_domains | join(' ') }}"
       NEXTCLOUD_INIT_HTACCESS: "true"
+      APACHE_DISABLE_REWRITE_IP: "1"
+      TRUSTED_PROXIES: "{{ cloud_nextcloud_trusted_proxy }}"
       SMTP_HOST: "{{ cloud_mail_relay_host }}"
       SMTP_PORT: "{{ cloud_mail_relay_port }}"
       MAIL_FROM_ADDRESS: "nextcloud"

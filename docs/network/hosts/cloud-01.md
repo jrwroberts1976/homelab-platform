@@ -137,6 +137,28 @@ cloud-01 is the managed QEMU VM cloud-01 on PROXMOX, running authoritative Debia
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
 
+## Reviewed Nextcloud HTTPS configuration
+
+**Verified: 2026-10-26.** Manual operational evidence; this section does not replace automated assessments.
+
+- HTTPS hostname: `nextcloud.home.jrwroberts.co.uk`.
+- Nginx listens on `192.168.2.53:443` with a trusted certificate.
+- Docker publishes Nextcloud HTTP only on `127.0.0.1:8080`.
+- Independent testing from `admin-01` confirmed that `192.168.2.53:8080` refuses connections.
+- HTTPS `/status.php` and `/login` returned HTTP 200 after cutover.
+- Nextcloud version: `34.0.3.2`; maintenance mode disabled.
+- `APACHE_DISABLE_REWRITE_IP=1`.
+- Nginx replaces incoming `X-Forwarded-For` and `X-Real-IP` with `$remote_addr`.
+- Trusted proxies: `192.168.2.53` and `172.18.0.1`; actual proxy-peer attribution requires final verification.
+- Certbot timer enabled and active; `35-nextcloud-nginx` deploy hook installed.
+- Certificate renewal operation has not been end-to-end tested.
+- Preferred hardened configuration checkpoint: `/root/nextcloud-hardened-baseline-20261026/`.
+- Historical 2026-10-21 rollback checkpoint must not be restored routinely because it reopens LAN HTTP.
+- Nextcloud container-image vulnerability remediation remains outstanding.
+- Deployment configuration is maintained in `homelab-platform` on the `security/nextcloud-https` branch.
+
+The 2026-10-15 automated assessment predates HTTP isolation and may report the former LAN-facing port 8080.
+
 ## Monitoring and security
 
 - Grafana host dashboard:

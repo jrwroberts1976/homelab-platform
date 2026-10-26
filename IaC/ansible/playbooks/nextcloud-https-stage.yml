@@ -1,0 +1,131 @@
+---
+- name: Stage Nextcloud HTTPS reverse proxy
+  hosts: cloud-01
+  become: true
+  gather_facts: false
+
+  vars:
+    nextcloud_https_fqdn: "nextcloud.home.jrwroberts.co.uk"
+    nextcloud_https_allow_deploy: false
+
+  tasks:
+    - name: Require explicit HTTPS deployment approval
+      ansible.builtin.assert:
+        that:
+          - nextcloud_https_allow_deploy | bool
+        fail_msg: "Deployment not authorised. No changes made."
+
+    - name: Verify certificate files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "/etc/letsencrypt/live/{{ nextcloud_https_fqdn }}/fullchain.pem"
+        - "/etc/letsencrypt/live/{{ nextcloud_https_fqdn }}/privkey.pem"
+      register: nextcloud_certificates
+
+    - name: Require valid certificate file paths
+      ansible.builtin.assert:
+        that:
+          - nextcloud_certificates.results | map(attribute='stat.exists') | min
+        fail_msg: "Nextcloud certificate files are missing."
+
+    - name: Verify existing Nextcloud backend
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:8080/status.php"
+        status_code: 200
+        return_content: true
+      register: nextcloud_backend
+
+    - name: Require healthy Nextcloud application
+      ansible.builtin.assert:
+        that:
+          - nextcloud_backend.json.installed | default(false) | bool
+          - not (nextcloud_backend.json.maintenance | default(true) | bool)
+
+    - name: Read trusted domains
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - -u
+          - www-data
+          - cloud-01-app-1
+          - php
+          - occ
+          - config:system:get
+          - trusted_domains
+      register: current_domains
+      changed_when: false
+
+    - name: Add HTTPS trusted domain if missing
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - -u
+          - www-data
+          - cloud-01-app-1
+          - php
+          - occ
+          - config:system:set
+          - trusted_domains
+          - "--type=json"
+          - "--value={{ (current_domains.stdout_lines + [nextcloud_https_fqdn]) | unique | list | to_json }}"
+      when: nextcloud_https_fqdn not in current_domains.stdout_lines
+
+    - name: Install Nginx without starting its default site
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        policy_rc_d: 101
+
+    - name: Disable default Nginx site
+      ansible.builtin.file:
+        path: /etc/nginx/sites-enabled/default
+        state: absent
+      register: nextcloud_default_site
+
+    - name: Install Nextcloud HTTPS configuration
+      ansible.builtin.template:
+        src: "../roles/cloud_stack/templates/nextcloud-nginx.conf.j2"
+        dest: /etc/nginx/conf.d/nextcloud-https.conf
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: nextcloud_nginx_config
+
+    - name: Validate Nginx configuration
+      ansible.builtin.command:
+        cmd: nginx -t
+      changed_when: false
+
+    - name: Start and enable Nginx
+      ansible.builtin.systemd:
+        name: nginx
+        state: started
+        enabled: true
+
+    - name: Reload Nginx if configuration changed
+      ansible.builtin.systemd:
+        name: nginx
+        state: reloaded
+      when: >
+        nextcloud_nginx_config.changed or
+        nextcloud_default_site.changed
+
+    - name: Verify trusted HTTPS status endpoint
+      ansible.builtin.command:
+        argv:
+          - curl
+          - --fail
+          - --silent
+          - --show-error
+          - --max-time
+          - "15"
+          - --resolve
+          - "{{ nextcloud_https_fqdn }}:443:192.168.2.53"
+          - "https://{{ nextcloud_https_fqdn }}/status.php"
+      changed_when: false
