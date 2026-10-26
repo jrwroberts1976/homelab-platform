@@ -61,9 +61,10 @@
                 ("coder", "none", None, "HTTPS", None),
                 ("coder", "none", None, "HTTP", None),
             ]
-            if observed != expected:
-                raise SystemExit("ImageMagick baseline changed; review before deployment")
-            print("PASS: Original policy matches Git-managed baseline")
+            hardened = expected + [("coder", "none", None, "EXR", None)]
+            if observed not in (expected, hardened):
+                raise SystemExit("Unexpected ImageMagick rules; review before deployment")
+            print("PASS: Live policy is approved stock or already-hardened baseline")
       changed_when: false
 
     - name: Create managed ImageMagick policy directory
@@ -112,9 +113,29 @@
       changed_when: false
       no_log: true
 
-    - name: Recreate only the Nextcloud app to mount policy
+    - name: Inspect whether app already has the desired read-only policy mount
+      ansible.builtin.command:
+        argv: [docker, inspect, cloud-01-app-1]
+      register: nextcloud_app_inspect
+      changed_when: false
+
+    - name: Determine whether app recreation is required
+      ansible.builtin.set_fact:
+        nextcloud_exr_app_mount_present: >-
+          {{
+            (
+              (nextcloud_app_inspect.stdout | from_json | first).Mounts
+              | selectattr('Destination', 'equalto', '/etc/ImageMagick-7/policy.xml')
+              | selectattr('Source', 'equalto', cloud_nextcloud_imagemagick_policy_path)
+              | selectattr('RW', 'equalto', false)
+              | list | length
+            ) == 1
+          }}
+
+    - name: Recreate only Nextcloud app if policy mount is absent
       ansible.builtin.command:
         cmd: docker compose --project-directory /opt/cloud-01 up -d --no-deps --force-recreate app
+      when: not (nextcloud_exr_app_mount_present | bool)
 
     - name: Require healthy Nextcloud 35 following app recreation
       ansible.builtin.command:
@@ -129,7 +150,7 @@
       retries: 24
       delay: 5
 
-    - name: Prove PNG and JPEG remain usable and EXR is blocked in app
+    - name: Verify PNG/JPEG encoding and EXR read/write policy enforcement in app
       ansible.builtin.command:
         argv:
           - docker
@@ -138,40 +159,41 @@
           - php
           - -r
           - |
-            $im = new Imagick();
-            $im->newImage(1, 1, new ImagickPixel("red"));
+            function requirePolicyDeny(callable $operation, string $label): void {
+                try {
+                    $operation();
+                    fwrite(STDERR, "FAIL: $label was permitted\\n");
+                    exit(13);
+                } catch (ImagickException $e) {
+                    $message = $e->getMessage();
+                    if (stripos($message, "security policy") === false &&
+                        stripos($message, "not authorized") === false) {
+                        fwrite(STDERR, "FAIL: $label unexpected exception: $message\\n");
+                        exit(14);
+                    }
+                    echo "PASS: $label denied by ImageMagick security policy\\n";
+                }
+            }
             foreach (["PNG", "JPEG"] as $format) {
+                $im = new Imagick();
+                $im->newImage(1, 1, new ImagickPixel("red"));
                 $im->setImageFormat($format);
                 if (strlen($im->getImageBlob()) < 10) {
-                    fwrite(STDERR, "$format output unavailable\n");
+                    fwrite(STDERR, "FAIL: $format output unavailable\\n");
                     exit(10);
                 }
+                echo "PASS: $format encoding\\n";
             }
-            try {
+            requirePolicyDeny(function() {
+                (new Imagick())->readImage("EXR:/dev/null");
+            }, "EXR reading");
+            requirePolicyDeny(function() {
+                $im = new Imagick();
+                $im->newImage(1, 1, new ImagickPixel("red"));
                 $im->setImageFormat("EXR");
-                $im->getImageBlob();
-                fwrite(STDERR, "FAIL: EXR writing permitted\n");
-                exit(11);
-            } catch (ImagickException $e) {
-                if (stripos($e->getMessage(), "security policy") === false &&
-                    stripos($e->getMessage(), "not authorized") === false) {
-                    fwrite(STDERR, "FAIL: EXR failed for another reason\n");
-                    exit(12);
-                }
-            }
-            try {
-                $test = new Imagick();
-                $test->readImage("EXR:/dev/null");
-                fwrite(STDERR, "FAIL: EXR reading permitted\n");
-                exit(13);
-            } catch (ImagickException $e) {
-                if (stripos($e->getMessage(), "security policy") === false &&
-                    stripos($e->getMessage(), "not authorized") === false) {
-                    fwrite(STDERR, "FAIL: EXR read failed for another reason\n");
-                    exit(14);
-                }
-            }
-            echo "PASS: PNG/JPEG usable; EXR read/write denied by policy\n";
+                $im->writeImage("EXR:/dev/null");
+            }, "EXR writing");
+            echo "PASS: PNG/JPEG usable; EXR read/write denied by policy\\n";
       changed_when: false
 
     - name: Recreate only Nextcloud cron with policy mount
