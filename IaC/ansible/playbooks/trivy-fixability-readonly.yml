@@ -1,0 +1,53 @@
+---
+# Entirely read-only host inspection through canonical Ansible inventory.
+# Does not run Trivy, query internet, pull images, modify packages, or restart services.
+- name: Inspect existing validated Trivy reports for fix-version evidence only
+  hosts: "monitor-01:komodo-01:cloud-01:docker-01:greenbone-01"
+  serial: 1
+  become: true
+  gather_facts: true
+
+  vars:
+    trivy_fixability_expected_ipv4:
+      monitor-01: 192.168.2.52
+      komodo-01: 192.168.2.58
+      cloud-01: 192.168.2.53
+      docker-01: 192.168.2.220
+      greenbone-01: 192.168.2.57
+
+  pre_tasks:
+    - name: Require exact active scanner host, Debian 13 and non-stale identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in trivy_fixability_expected_ipv4
+          - ansible_host == trivy_fixability_expected_ipv4[inventory_hostname]
+          - ansible_facts.hostname == inventory_hostname
+          - ansible_facts.default_ipv4.address == trivy_fixability_expected_ipv4[inventory_hostname]
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+        fail_msg: "Refusing to read Trivy reports on unapproved or unexpected host."
+
+    - name: Require protected Trivy summary and evidence directory
+      ansible.builtin.stat:
+        path: /var/lib/homelab-container-security/pilot-inventory-summary.json
+      register: trivy_fixability_summary
+
+    - name: Refuse absent/empty scan summary
+      ansible.builtin.assert:
+        that:
+          - trivy_fixability_summary.stat.isreg | default(false)
+          - trivy_fixability_summary.stat.size | default(0) | int > 0
+
+  tasks:
+    - name: Summarise fixable Critical and High evidence without modifying scanner reports
+      ansible.builtin.script:
+        cmd: files/trivy-fixability-readonly.py
+      register: trivy_fixability_result
+      changed_when: false
+      failed_when: >-
+        trivy_fixability_result.rc != 0
+        or 'TRIVY_FIXABILITY_READONLY=PASS' not in trivy_fixability_result.stdout
+
+    - name: Show bounded non-secret fixability counts and actual Trivy fix hints
+      ansible.builtin.debug:
+        var: trivy_fixability_result.stdout_lines
