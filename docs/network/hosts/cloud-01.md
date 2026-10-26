@@ -146,18 +146,28 @@ cloud-01 is the managed QEMU VM cloud-01 on PROXMOX, running authoritative Debia
 - Docker publishes Nextcloud HTTP only on `127.0.0.1:8080`.
 - Independent testing from `admin-01` confirmed that `192.168.2.53:8080` refuses connections.
 - HTTPS `/status.php` and `/login` returned HTTP 200 after cutover.
-- Nextcloud version: `34.0.3.2`; maintenance mode disabled.
+- Nextcloud version: **`35.0.2.2`** (26 October 2026 upgrade from `34.0.3.2`); maintenance mode disabled; no pending DB upgrade.
 - `APACHE_DISABLE_REWRITE_IP=1`.
 - Nginx replaces incoming `X-Forwarded-For` and `X-Real-IP` with `$remote_addr`.
-- Trusted proxies: `192.168.2.53` and `172.18.0.1`; actual proxy-peer attribution requires final verification.
+- Trusted proxies: `192.168.2.53` and `172.18.0.1`. The Nginx access log observed client `192.168.2.48` while Apache observed Docker peer `172.18.0.1`; the installed Nextcloud forwarded-header code was reviewed, but runtime-resolved application IP was not independently observed.
 - Certbot timer enabled and active; `35-nextcloud-nginx` deploy hook installed.
-- Certificate renewal operation has not been end-to-end tested.
+- Certbot dry-run renewal via Cloudflare DNS-01 succeeded; a directly triggered deploy-hook Nginx reload also succeeded on 2026-10-26. Real production renewal not yet observed.
 - Preferred hardened configuration checkpoint: `/root/nextcloud-hardened-baseline-20261026/`.
 - Historical 2026-10-21 rollback checkpoint must not be restored routinely because it reopens LAN HTTP.
-- Nextcloud container-image vulnerability remediation remains outstanding.
-- Deployment configuration is maintained in `homelab-platform` on the `security/nextcloud-https` branch.
+- Nextcloud 35 image upgraded and scanned on 2026-10-26: CRITICAL 4 (was 33), HIGH 231 (was 502); report-level triage of remaining CVEs is outstanding.
+- Hardened HTTPS configuration is already managed through `homelab-platform`; the Nextcloud 35 upgrade is on branch `security/nextcloud-34-to-35`, commit `519cbc31`, pending review/merge.
 
 The 2026-10-15 automated assessment predates HTTP isolation and may report the former LAN-facing port 8080.
+
+## Nextcloud release and deployment change history
+
+| Date (UTC) | Change and evidence | Git / release references |
+| --- | --- | --- |
+| 2026-10-26 | Upgraded server 34.0.3.2 to **35.0.2.2**, using `nextcloud:35.0.2-apache` in both `app` and `cron`; PostgreSQL 18.6 and Redis 8.2.9 not recreated. Approval-gated Ansible run: `ok=12 changed=5 failed=0`. HTTPS status verified, HTTP bound only to `127.0.0.1:8080`, maintenance off and no DB upgrade pending. | Branch `security/nextcloud-34-to-35`, commit `519cbc31`; `IaC/ansible/playbooks/nextcloud-upgrade-35.yml` |
+| 2026-10-26 08:53 | Fresh `homelab-trivy-cloud.service` scan succeeded; complete 4/4 image coverage. Nextcloud CRITICAL rows **33 to 4**, HIGH **502 to 231** compared with historical image 34 report. Remaining CVEs not yet individually triaged. | [Security evidence](../../security/CONTAINER-VULNERABILITY-STATUS.md) |
+| 2026-10-26 | Upstream Nextcloud **35.0.2** maintenance release (published 15 Oct) includes sharing-permission, session-cookie, encryption-metadata, filename-handling and performance fixes. These are upstream release notes, not independent functional/security test results for this host. | [Full official 35.0.2 release notes](https://github.com/nextcloud-releases/server/releases/tag/v35.0.2) |
+
+Operator confirmed there was no production user data requiring preservation and selected direct 34.0.3 to 35.0.2 migration. This does not make a database downgrade automatically safe; application rollback after schema migration requires an appropriate state restore. See [Nextcloud HTTPS and upgrade change list](../../security/NEXTCLOUD-HTTPS-HARDENING.md).
 
 ## Monitoring and security
 
@@ -181,7 +191,7 @@ The 2026-10-15 automated assessment predates HTTP isolation and may report the f
 
 | Date | Evidence / change | Source | Reviewed by |
 |---|---|---|---|
-| | | | |
+| 2026-10-26 | Nextcloud 35.0.2.2 application upgrade, full Trivy rescan, hardened HTTPS retained | Ansible playbook, Docker inspection, scanner journal | User-provided live command output |
 
 ## Notes
 
