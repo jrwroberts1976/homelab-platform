@@ -139,6 +139,16 @@ The Trivy 35 report contains **4 CRITICAL and 231 HIGH package-finding rows**; h
 
 The Nginx log identified client `192.168.2.48`, Apache saw Docker bridge peer `172.18.0.1`; trusted-proxy configuration and Nextcloud `getRemoteAddress()` source were reviewed. The resolved address **inside a live application request** was not directly observed. Certbot dry-run renewal and an explicitly invoked Nginx reload hook passed on 26 Oct; an actual production renewal has not been observed.
 
+## Nextcloud OpenEXR coder mitigation — verified 26 October 2026
+
+**Deployed:** Ansible-managed ImageMagick policy denies EXR decoding and encoding in the Nextcloud application. The policy retains all eleven active upstream baseline restrictions and is mounted read-only into both `cloud-01-app-1` and `cloud-01-cron-1` via Compose.
+
+The first approved execution installed the policy and recreated app, but its original `getImageBlob()` EXR write test returned an ambiguous exception and halted before cron. Subsequent direct read/write probes confirmed the app returned explicit `security policy 'EXR'` denials. The corrected playbook was committed to PR #192 and validated, then an explicitly approved second cutover completed **successfully** with `ok=18 changed=1 failed=0 skipped=1`. App recreation was skipped because its read-only policy mount was already present; only cron was recreated. PNG and JPEG encoding, EXR read/write denial in app, cron's policy file, HTTPS, Nextcloud 35.0.2 health and loopback binding all passed. PostgreSQL and Redis remained healthy and unchanged.
+
+**Security interpretation:** `CVE-2026-42216` and `CVE-2026-42217` are mitigated for the ImageMagick EXR coder path, **not patched**. Their affected Debian OpenEXR library package remains present; Trivy may still flag both. The other findings `CVE-2026-6653` (libxml2) and `CVE-2026-93221` (linux-libc-dev) require separate assessment. PR #192 is the pending repository integration until merged.
+
+See [full EXR decoder remediation, evidence, and rollback runbook](NEXTCLOUD-EXR-MITIGATION-2026-10-26.md).
+
 ## Outstanding work
 
 - Verify application-level resolved client IP on an authenticated/runtime Nextcloud request; do not assert this is complete based on code inspection alone.

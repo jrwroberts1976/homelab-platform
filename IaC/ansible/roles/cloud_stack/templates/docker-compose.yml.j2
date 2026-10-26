@@ -65,6 +65,9 @@ services:
     volumes:
       - {{ cloud_stack_state_root }}/nextcloud-html:/var/www/html
       - {{ cloud_nextcloud_data_dir }}:/var/www/html/data
+{% if cloud_nextcloud_exr_policy_enabled | bool %}
+      - {{ cloud_nextcloud_imagemagick_policy_path }}:/etc/ImageMagick-7/policy.xml:ro
+{% endif %}
     networks:
       - cloud_backend
 
@@ -80,6 +83,9 @@ services:
     volumes:
       - {{ cloud_stack_state_root }}/nextcloud-html:/var/www/html
       - {{ cloud_nextcloud_data_dir }}:/var/www/html/data
+{% if cloud_nextcloud_exr_policy_enabled | bool %}
+      - {{ cloud_nextcloud_imagemagick_policy_path }}:/etc/ImageMagick-7/policy.xml:ro
+{% endif %}
     networks:
       - cloud_backend
 

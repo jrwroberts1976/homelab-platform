@@ -1,0 +1,249 @@
+---
+# One-time, approval-gated policy cutover. Does not pull images, restart the
+# database or Redis, or modify Nginx. Review changes before any live execution.
+- name: Enforce EXR-deny ImageMagick policy on Nextcloud 35
+  hosts: cloud-01
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../roles/cloud_stack/defaults/main.yml
+
+  vars:
+    nextcloud_exr_hardening_approved: false
+
+  tasks:
+    - name: Require correct host and explicit approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "cloud-01"
+          - ansible_host == "192.168.2.53"
+          - nextcloud_exr_hardening_approved | bool
+          - cloud_nextcloud_image == "nextcloud:35.0.2-apache"
+          - cloud_nextcloud_http_bind == "127.0.0.1"
+          - cloud_nextcloud_imagemagick_policy_path == "/opt/cloud-01/imagemagick/policy.xml"
+        fail_msg: "Wrong target, image or missing EXR-policy approval; refusing deployment."
+
+    - name: Require current healthy Nextcloud 35
+      ansible.builtin.command:
+        argv: [docker, exec, --user, www-data, cloud-01-app-1, php, occ, status]
+      register: before_status
+      changed_when: false
+      failed_when: >-
+        before_status.rc != 0 or
+        'versionstring: 35.0.2' not in before_status.stdout or
+        'maintenance: false' not in before_status.stdout or
+        'needsDbUpgrade: false' not in before_status.stdout
+
+    - name: Require upstream baseline ImageMagick active rules
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - cloud-01-app-1
+          - python3
+          - -c
+          - |
+            import xml.etree.ElementTree as ET
+            root = ET.parse("/etc/ImageMagick-7/policy.xml").getroot()
+            keys = ("domain", "rights", "name", "pattern", "value")
+            observed = [tuple(e.get(k) for k in keys) for e in root.findall("policy")]
+            expected = [
+                ("Undefined", "none", None, None, None),
+                ("resource", None, "memory", None, "1024MiB"),
+                ("resource", None, "map", None, "2048MiB"),
+                ("resource", None, "area", None, "256MP"),
+                ("resource", None, "disk", None, "2GiB"),
+                ("resource", None, "width", None, "32KP"),
+                ("resource", None, "height", None, "32KP"),
+                ("path", "none", None, "@*", None),
+                ("coder", "none", None, "URL", None),
+                ("coder", "none", None, "HTTPS", None),
+                ("coder", "none", None, "HTTP", None),
+            ]
+            hardened = expected + [("coder", "none", None, "EXR", None)]
+            if observed not in (expected, hardened):
+                raise SystemExit("Unexpected ImageMagick rules; review before deployment")
+            print("PASS: Live policy is approved stock or already-hardened baseline")
+      changed_when: false
+
+    - name: Create managed ImageMagick policy directory
+      ansible.builtin.file:
+        path: /opt/cloud-01/imagemagick
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Deploy EXR-deny policy preserving existing active rules
+      ansible.builtin.template:
+        src: ../roles/cloud_stack/templates/imagemagick-policy.xml.j2
+        dest: "{{ cloud_nextcloud_imagemagick_policy_path }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+
+    - name: Verify managed policy is well-formed XML with final EXR deny
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import xml.etree.ElementTree as ET
+            p = ET.parse("/opt/cloud-01/imagemagick/policy.xml").getroot()
+            rules = [e.attrib for e in p.findall("policy")]
+            assert rules[-1] == {"domain": "coder", "rights": "none", "pattern": "EXR"}
+            assert len(rules) == 12
+            print("PASS: All eleven original rules retained; EXR denied last")
+      changed_when: false
+
+    - name: Install updated Compose with read-only mounts
+      ansible.builtin.template:
+        src: ../roles/cloud_stack/templates/docker-compose.yml.j2
+        dest: /opt/cloud-01/docker-compose.yml
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+
+    - name: Validate Docker Compose before recreation
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 config --quiet
+      changed_when: false
+      no_log: true
+
+    - name: Inspect whether app already has the desired read-only policy mount
+      ansible.builtin.command:
+        argv: [docker, inspect, cloud-01-app-1]
+      register: nextcloud_app_inspect
+      changed_when: false
+
+    - name: Determine whether app recreation is required
+      ansible.builtin.set_fact:
+        nextcloud_exr_app_mount_present: >-
+          {{
+            (
+              (nextcloud_app_inspect.stdout | from_json | first).Mounts
+              | selectattr('Destination', 'equalto', '/etc/ImageMagick-7/policy.xml')
+              | selectattr('Source', 'equalto', cloud_nextcloud_imagemagick_policy_path)
+              | selectattr('RW', 'equalto', false)
+              | list | length
+            ) == 1
+          }}
+
+    - name: Recreate only Nextcloud app if policy mount is absent
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 up -d --no-deps --force-recreate app
+      when: not (nextcloud_exr_app_mount_present | bool)
+
+    - name: Require healthy Nextcloud 35 following app recreation
+      ansible.builtin.command:
+        argv: [docker, exec, --user, www-data, cloud-01-app-1, php, occ, status]
+      register: after_status
+      changed_when: false
+      until:
+        - after_status.rc == 0
+        - "'versionstring: 35.0.2' in after_status.stdout"
+        - "'maintenance: false' in after_status.stdout"
+        - "'needsDbUpgrade: false' in after_status.stdout"
+      retries: 24
+      delay: 5
+
+    - name: Verify PNG/JPEG encoding and EXR read/write policy enforcement in app
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - cloud-01-app-1
+          - php
+          - -r
+          - |
+            function requirePolicyDeny(callable $operation, string $label): void {
+                try {
+                    $operation();
+                    fwrite(STDERR, "FAIL: $label was permitted\\n");
+                    exit(13);
+                } catch (ImagickException $e) {
+                    $message = $e->getMessage();
+                    if (stripos($message, "security policy") === false &&
+                        stripos($message, "not authorized") === false) {
+                        fwrite(STDERR, "FAIL: $label unexpected exception: $message\\n");
+                        exit(14);
+                    }
+                    echo "PASS: $label denied by ImageMagick security policy\\n";
+                }
+            }
+            foreach (["PNG", "JPEG"] as $format) {
+                $im = new Imagick();
+                $im->newImage(1, 1, new ImagickPixel("red"));
+                $im->setImageFormat($format);
+                if (strlen($im->getImageBlob()) < 10) {
+                    fwrite(STDERR, "FAIL: $format output unavailable\\n");
+                    exit(10);
+                }
+                echo "PASS: $format encoding\\n";
+            }
+            requirePolicyDeny(function() {
+                (new Imagick())->readImage("EXR:/dev/null");
+            }, "EXR reading");
+            requirePolicyDeny(function() {
+                $im = new Imagick();
+                $im->newImage(1, 1, new ImagickPixel("red"));
+                $im->setImageFormat("EXR");
+                $im->writeImage("EXR:/dev/null");
+            }, "EXR writing");
+            echo "PASS: PNG/JPEG usable; EXR read/write denied by policy\\n";
+      changed_when: false
+
+    - name: Recreate only Nextcloud cron with policy mount
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 up -d --no-deps --force-recreate cron
+
+    - name: Verify cron has identical managed EXR deny policy
+      ansible.builtin.command:
+        argv:
+          - docker
+          - exec
+          - cloud-01-cron-1
+          - python3
+          - -c
+          - |
+            import xml.etree.ElementTree as ET
+            p = ET.parse("/etc/ImageMagick-7/policy.xml").getroot()
+            assert p.findall("policy")[-1].attrib == {
+                "domain": "coder", "rights": "none", "pattern": "EXR"
+            }
+            print("PASS: cron has EXR-deny policy")
+      changed_when: false
+
+    - name: Verify app HTTP remains loopback-only
+      ansible.builtin.command:
+        argv: [docker, port, cloud-01-app-1, "80/tcp"]
+      register: bind_port
+      changed_when: false
+      failed_when: bind_port.stdout | trim != "127.0.0.1:8080"
+
+    - name: Verify HTTPS application and migration status
+      ansible.builtin.uri:
+        url: https://nextcloud.home.jrwroberts.co.uk/status.php
+        status_code: 200
+        return_content: true
+      register: https_status
+      until:
+        - https_status.status | default(0) == 200
+        - https_status.json.versionstring | default('') == "35.0.2"
+        - https_status.json.maintenance | default(true) == false
+        - https_status.json.needsDbUpgrade | default(true) == false
+      retries: 12
+      delay: 5
+
+    - name: Show resulting app and cron container states
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 ps app cron db redis
+      register: containers
+      changed_when: false
+
+    - name: Report container status
+      ansible.builtin.debug:
+        var: containers.stdout_lines

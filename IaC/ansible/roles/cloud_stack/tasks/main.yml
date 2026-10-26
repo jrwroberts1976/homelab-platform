@@ -147,6 +147,22 @@
     - "{{ cloud_stack_state_root }}/nextcloud-html"
     - "{{ cloud_nextcloud_data_dir }}"
 
+- name: Ensure managed ImageMagick policy directory exists
+  ansible.builtin.file:
+    path: "{{ cloud_stack_root }}/imagemagick"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install hardened ImageMagick policy for Nextcloud
+  ansible.builtin.template:
+    src: imagemagick-policy.xml.j2
+    dest: "{{ cloud_nextcloud_imagemagick_policy_path }}"
+    owner: root
+    group: root
+    mode: "0644"
+
 - name: Install protected cloud-01 environment
   ansible.builtin.template:
     src: cloud.env.j2

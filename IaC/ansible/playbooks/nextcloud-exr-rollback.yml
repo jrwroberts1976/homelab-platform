@@ -1,0 +1,89 @@
+---
+# Explicit rollback for the EXR policy bind mount only. Preserves HTTPS,
+# loopback-only HTTP, Nextcloud image version and db/redis containers.
+- name: Roll back only Nextcloud EXR policy mounts
+  hosts: cloud-01
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../roles/cloud_stack/defaults/main.yml
+
+  vars:
+    nextcloud_exr_rollback_approved: false
+    cloud_nextcloud_exr_policy_enabled: false
+
+  tasks:
+    - name: Require correct target and explicit rollback approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "cloud-01"
+          - ansible_host == "192.168.2.53"
+          - nextcloud_exr_rollback_approved | bool
+          - cloud_nextcloud_image == "nextcloud:35.0.2-apache"
+          - cloud_nextcloud_http_bind == "127.0.0.1"
+          - not cloud_nextcloud_exr_policy_enabled | bool
+
+    - name: Restore Compose without the EXR policy bind mounts
+      ansible.builtin.template:
+        src: ../roles/cloud_stack/templates/docker-compose.yml.j2
+        dest: /opt/cloud-01/docker-compose.yml
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+
+    - name: Verify Compose without exposing secrets
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 config --quiet
+      changed_when: false
+      no_log: true
+
+    - name: Recreate only Nextcloud app without managed policy mount
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 up -d --no-deps --force-recreate app
+
+    - name: Verify Nextcloud app healthy after rollback
+      ansible.builtin.command:
+        argv: [docker, exec, --user, www-data, cloud-01-app-1, php, occ, status]
+      register: status
+      changed_when: false
+      until:
+        - status.rc == 0
+        - "'versionstring: 35.0.2' in status.stdout"
+        - "'maintenance: false' in status.stdout"
+        - "'needsDbUpgrade: false' in status.stdout"
+      retries: 24
+      delay: 5
+
+    - name: Recreate only Nextcloud cron without managed policy mount
+      ansible.builtin.command:
+        cmd: docker compose --project-directory /opt/cloud-01 up -d --no-deps --force-recreate cron
+
+    - name: Verify loopback-only HTTP
+      ansible.builtin.command:
+        argv: [docker, port, cloud-01-app-1, "80/tcp"]
+      register: port
+      changed_when: false
+      failed_when: port.stdout | trim != "127.0.0.1:8080"
+
+    - name: Verify Nextcloud HTTPS and version
+      ansible.builtin.uri:
+        url: https://nextcloud.home.jrwroberts.co.uk/status.php
+        status_code: 200
+        return_content: true
+      register: https_status
+      until:
+        - https_status.status | default(0) == 200
+        - https_status.json.versionstring | default('') == "35.0.2"
+        - https_status.json.maintenance | default(true) == false
+        - https_status.json.needsDbUpgrade | default(true) == false
+      retries: 12
+      delay: 5
+
+    - name: Explain rollback state
+      ansible.builtin.debug:
+        msg: >-
+          EXR policy mount removed from app and cron; managed policy file remains
+          on disk. Do not run full cloud-stack deployment before deciding
+          whether to re-enable cloud_nextcloud_exr_policy_enabled.

@@ -22,6 +22,8 @@ cloud_redis_gid: "1000"
 cloud_nextcloud_http_bind: "127.0.0.1"
 cloud_nextcloud_trusted_proxy: "192.168.2.53 172.18.0.1"
 cloud_nextcloud_http_port: 8080
+cloud_nextcloud_imagemagick_policy_path: "{{ cloud_stack_root }}/imagemagick/policy.xml"
+cloud_nextcloud_exr_policy_enabled: true
 
 cloud_nextcloud_admin_user: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_USER') | default('', true) }}"
 cloud_nextcloud_admin_password: "{{ lookup('ansible.builtin.env', 'NEXTCLOUD_ADMIN_PASSWORD') | default('', true) }}"
