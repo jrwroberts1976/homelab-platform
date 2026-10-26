@@ -80,7 +80,7 @@ def summarise_image(image, image_id, entry, now, root=ROOT):
     ):
         raise ValueError("Invalid or missing summary severity counts")
     path = Path(entry.get("report") or "")
-    if (path.parent.resolve() != root.resolve() or
+    if (path.resolve().parent != root.resolve() or
         not path.name.startswith("image-") or path.suffix != ".json"):
         raise ValueError("Trivy report outside approved evidence directory")
     report = json.loads(path.read_text())
