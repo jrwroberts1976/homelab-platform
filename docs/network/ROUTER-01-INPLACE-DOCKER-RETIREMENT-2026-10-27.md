@@ -79,6 +79,31 @@ ansible-playbook -i inventory/hosts.yml \
 
 **No actual Docker removal commands are approved in this document.**
 
+## Approved service outage and final read-only configuration check
+
+**User approved taking BOTH BirdNET-Go and Komodo Periphery offline** when Docker retirement is performed; their historical BirdNET data need not be migrated. **This is not authorisation to begin an uncontrolled or incomplete decommission.** All production services remain running until verified Komodo deregistration, metrics/alerts retirement, backup/console proof and a controlled execution window. The Docker-retirement Ansible playbook's five preflight gates remain default false.
+
+We identified that `container-vulnerability-docker-enable.yml` will currently enable the daily Trivy timer; `publish-estate-metrics.py` writes `/var/lib/prometheus/node-exporter/homelab_container_estate.prom`. A stopped scan timer alone will leave stale last-success metrics, so the retirement must also remove/retire the **Docker-specific textfile**, update central scan target dashboards/alerts and ensure playbook invocations cannot reinstall or re-enable the retired Docker workloads. Preserve other host node-exporter, Alloy, Zabbix and external container-scanning coverage. No fabricated "zero critical" scores.
+
+Komodo Periphery is provisioned by `roles/komodo_periphery` and `IaC/komodo/resources/docker-01.toml`; verify `docker-01` is deregistered or explicitly disabled in running Komodo Core, and any auto-reconcile/stack deployment is disabled **before** Docker stops. Preserve the `komodo-periphery_komodo_periphery_keys` named volume; it contains authentication material.
+
+**New safe preflight:** `IaC/ansible/playbooks/router-01-retirement-config-readonly.yml` inspects only non-secret Netplan `eth0` metadata, enabled Nginx config basenames with *boolean* BirdNET/backend markers, presence (not contents) of the old Trivy Prometheus textfile, and Komodo key volume existence. It does not show raw Netplan/Nginx config or credentials and makes no changes.
+
+After checking that the new playbook passed CI, run from `admin-01` on the draft branch:
+
+```bash
+cd ~/projects/homelab-platform
+git fetch origin
+git switch feature/pi-router-iac-birdnet-poc-migration-20261027
+git pull --ff-only origin feature/pi-router-iac-birdnet-poc-migration-20261027
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-retirement-config-readonly.yml \
+  --limit docker-01 --ask-become-pass
+```
+
+**Read-only only**; do not run the disruptive `router-01-docker-retirement-approved.yml` yet. Keep SSH at `192.168.2.220` and ASUS gateway unchanged.
+
 ## Controlled Docker-retirement Ansible authored — DEFAULT DENY (not executed)
 
 New source-only playbook: `IaC/ansible/playbooks/router-01-docker-retirement-approved.yml`. **This has NOT been run on `docker-01`** and WILL stop two production Docker workloads if activated. It is not safe simply because its syntax passes CI. No approval flags are set by default.
