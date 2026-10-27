@@ -120,6 +120,28 @@ ansible-playbook -i inventory/hosts.yml \
 
 **Read-only only**; do not run the disruptive `router-01-docker-retirement-approved.yml` yet. Keep SSH at `192.168.2.220` and ASUS gateway unchanged.
 
+## Komodo Core reconciliation — required before Docker shutdown
+
+The deployed **Komodo Core is on `komodo-01`**, whereas **Periphery is running inside Docker on `docker-01`**. The source-controlled resource `IaC/komodo/resources/docker-01.toml` still describes a BirdNET deployment named `birdnet-go` with server `docker-01`, and source roles/plays can recreate Periphery or the BirdNET project if an old operation is run. A `deploy = false` declaration does not prove any existing runtime object has been deleted.
+
+**Operator review in Komodo Core** (do not assume source files reflect runtime DB):
+- Locate managed Server `docker-01`, inspect linked **Deployments, Stacks, Repos, Procedures, Actions and ResourceSyncs**. The `birdnet-go` Deployment may be registered even if its TOML `deploy = false`; other resources may exist.
+- Disable schedules/webhooks/auto-reconcile/auto-update and any deployment that could restart BirdNET or recreate Periphery; record only resource identifiers/names (no token/key output).
+- After confirming no other infrastructure relies on this managed Server and user-approved downtime, **remove or retire the Komodo Core resource and its dependent `docker-01` deployment definitions**, retaining all Periphery keys locally until backups are checked. Reconfirm Core shows no live active `docker-01` registration before setting `router_komodo_deregistration_verified=true`.
+- Source-control cleanup of `IaC/komodo/resources/docker-01.toml`, `komodo_periphery_hosts` inventory, BirdNET/Komodo roles and replay automation is a separately reviewed change coordinated with the actual runtime deletion. **Do not prematurely change canonical live inventory while the Pi is still named docker-01.**
+
+Komodo documents that Servers are resources attached to Deployments, Stacks, Repos and Builders, and Core manages resources through the UI/API: https://komo.do/docs/resources and https://komo.do/docs/setup/connect-servers .
+
+## Central vulnerability monitoring — required before Docker shutdown
+
+- Daily scan on the old host: `homelab-trivy-docker.timer` (and possible in-flight `homelab-trivy-docker.service`); the Python exporter writes `/var/lib/prometheus/node-exporter/homelab_container_estate.prom`. The locked Docker removal playbook stops both and removes only that textfile.
+- The existing Prometheus node exporter target `192.168.2.220:9100` must **remain enabled** while it is still a monitored Linux host: `IaC/komodo/stacks/monitoring/prometheus/prometheus.yml`. Its `target_name: docker-01` label remains true until verified host rename.
+- `IaC/komodo/stacks/monitoring/prometheus/alerts.yml` includes normal connectivity and Alloy monitoring of `docker-01`. Do not disable general host monitoring just because Docker is retiring.
+- Dashboards may retain **historical** Trivy image/CVE series after the textfile is removed. They must not show a freshly successful Docker scan or artificially zero vulnerabilities. Verify the specific Docker-only series age/removal/absence after shutdown, while the other four scan targets continue independently. Do not delete unrelated image-scanner exporters, raw evidence or other hosts' scan data.
+- This transition is NOT verified merely by seeing the textfile present or the old timer active. `router_trivy_monitoring_reconciled=true` requires approved alerts/reporting behaviour and a planned verification of Docker-only series after retirement.
+
+**The signed-off service downtime is specifically BirdNET-Go and Komodo Periphery; all other approval gates stay blocked until their own evidence is complete.**
+
 ## Controlled Docker-retirement Ansible authored — DEFAULT DENY (not executed)
 
 New source-only playbook: `IaC/ansible/playbooks/router-01-docker-retirement-approved.yml`. **This has NOT been run on `docker-01`** and WILL stop two production Docker workloads if activated. It is not safe simply because its syntax passes CI. No approval flags are set by default.
