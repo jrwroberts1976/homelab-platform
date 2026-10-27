@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — Final read-only retirement preflight and Trivy cleanup CI PASS
+
+GitHub Actions **Validate router-01 offline IaC run 40490719490 SUCCESS**, **Estate and documentation guard run 40490719483 SUCCESS**, after adding safe Netplan/Nginx/Trivy/Komodo metadata-only preflight `playbooks/router-01-retirement-config-readonly.yml` and guarded removal of stale Docker-only Prometheus textfile on FUTURE approved service retirement. CI proves Ansible syntax / static controls, **not** actual production behaviour. User explicitly accepts BirdNET-Go and Komodo downtime; all other retirement gates and exact Komodo deregistration/central monitoring changes pending. Live `docker-01`, SSH, Netplan, Docker services and ASUS remain unchanged. No Docker teardown run.
+
+---
+
 ## 27 October 2026 — final read-only retirement preflight + Docker Trivy safe retirement staged (not deployed)
 
 Following user's explicit acceptance that BirdNET-Go and Komodo Periphery will go offline at controlled Docker retirement, added `IaC/ansible/playbooks/router-01-retirement-config-readonly.yml` to query ONLY safe, non-secret eth0 Netplan persistence metadata, Nginx site filenames and whether configured for BirdNET/localhost:8080, Docker-specific Trivy textfile presence, and Komodo keys volume existence. **User has not yet run this read-only preflight.** Runbook `docs/network/ROUTER-01-INPLACE-DOCKER-RETIREMENT-2026-10-27.md` carries controller command.
