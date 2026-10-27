@@ -18,6 +18,17 @@
       delegate_to: localhost
       become: false
 
+    - name: HARD STOP — legacy networkd rollback incompatible with discovered NetworkManager
+      ansible.builtin.fail:
+        msg: >-
+          REFUSED: 27-Oct docker-01 audit found NetworkManager ACTIVE and
+          systemd-networkd INACTIVE. This old networkd rollback helper
+          is superseded. Obtain the active eth0 NetworkManager profile,
+          develop and TEST an NM-native fallback with local console before
+          enabling any router LAN IP cutover.
+      delegate_to: localhost
+      become: false
+
     - name: Collect converted host facts only after local approval
       ansible.builtin.setup:
 
