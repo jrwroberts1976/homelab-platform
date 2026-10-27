@@ -38,6 +38,7 @@ jobs:
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-install-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-connect-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-stop-inplace.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-health-readonly.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-dhcp-install-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-wan-guard-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-firewall-stage-inplace.yml --syntax-check
