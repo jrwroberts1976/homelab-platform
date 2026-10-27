@@ -1,0 +1,102 @@
+---
+# Read-only source/destination discovery for router/BirdNET migration.
+# Does not install software, move audio devices, change DNS/firewall or restart services.
+- name: Audit BirdNET source and Pi 5 destination before migration
+  hosts: birdnet_hosts:media_hosts
+  become: true
+  gather_facts: true
+  serial: 1
+
+  pre_tasks:
+    - name: Assert documented source/destination identity
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.hostname in ['docker-01', 'media-01']
+          - >-
+            (ansible_facts.hostname == 'docker-01'
+             and '192.168.2.220' in ansible_facts.all_ipv4_addresses)
+            or
+            (ansible_facts.hostname == 'media-01'
+             and '192.168.2.195' in ansible_facts.all_ipv4_addresses)
+        fail_msg: Refusing read-only inspection on an unexpected host or address.
+
+  tasks:
+    - name: Read Pi hardware model
+      ansible.builtin.slurp:
+        src: /proc/device-tree/model
+      register: router_migration_pi_model
+
+    - name: Read USB inventory
+      ansible.builtin.command:
+        argv: [lsusb]
+      register: router_migration_usb
+      changed_when: false
+      failed_when: false
+
+    - name: Read ALSA capture devices
+      ansible.builtin.command:
+        argv: [arecord, -l]
+      register: router_migration_alsa
+      changed_when: false
+      failed_when: false
+
+    - name: Read free memory
+      ansible.builtin.command:
+        argv: [free, -m]
+      register: router_migration_free
+      changed_when: false
+
+    - name: Read root filesystem capacity
+      ansible.builtin.command:
+        argv: [df, -h, /]
+      register: router_migration_disk
+      changed_when: false
+
+    - name: Read disk mounts
+      ansible.builtin.command:
+        argv: [findmnt, -r, -o, TARGET,SOURCE,FSTYPE]
+      register: router_migration_mounts
+      changed_when: false
+
+    - name: Read currently listening TCP ports
+      ansible.builtin.command:
+        argv: [ss, -lnt]
+      register: router_migration_listeners
+      changed_when: false
+
+    - name: Read service health indicators
+      ansible.builtin.command:
+        argv: [systemctl, is-active, kodi.service, nfs-server.service, nginx.service, docker.service]
+      register: router_migration_service_health
+      changed_when: false
+      failed_when: false
+
+    - name: Check BirdNET application root
+      ansible.builtin.stat:
+        path: /opt/birdnet-go
+      register: router_migration_birdnet_root
+
+    - name: Check Docker command availability
+      ansible.builtin.command:
+        argv: [docker, version, --format, '{{ "{{.Server.Version}}" }}']
+      register: router_migration_docker
+      changed_when: false
+      failed_when: false
+
+    - name: Report bounded read-only migration readiness data
+      ansible.builtin.debug:
+        msg:
+          - "host={{ ansible_facts.hostname }}"
+          - "ipv4={{ ansible_facts.all_ipv4_addresses }}"
+          - "pi_model={{ router_migration_pi_model.content | b64decode | replace('\\u0000', '') }}"
+          - "usb={{ router_migration_usb.stdout_lines }}"
+          - "alsa={{ router_migration_alsa.stdout_lines }}"
+          - "memory={{ router_migration_free.stdout_lines }}"
+          - "root_disk={{ router_migration_disk.stdout_lines }}"
+          - "mounts={{ router_migration_mounts.stdout_lines }}"
+          - "tcp_listeners={{ router_migration_listeners.stdout_lines }}"
+          - "services={{ router_migration_service_health.stdout_lines }}"
+          - "birdnet_root_present={{ router_migration_birdnet_root.stat.exists | bool }}"
+          - "docker_server_version={{ router_migration_docker.stdout | default('not installed') }}"
