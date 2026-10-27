@@ -1,0 +1,11 @@
+[Unit]
+Description=Fail-safe rollback of unconfirmed router-01 LAN change
+
+[Timer]
+# Relative to timer activation, including after a reboot if it was enabled.
+OnActiveSec=300s
+Unit=router-01-lan-rollback.service
+AccuracySec=1s
+
+[Install]
+WantedBy=timers.target
