@@ -21,6 +21,19 @@ The previously proposed **"move BirdNET to Pi 5, verify microphone and then free
 - DNS: `dns-01` `192.168.2.51`, `dns-02` `192.168.2.50`; core switch HP ProCurve 2510G-24. SPAN source ports 1–23 and destination 24 serve passive `sensor-01`.
 - BirdNET-Go POC **recordings, audio clips, historical detections and database do NOT need copying or retention**. Existing audio hardware location is a post-project question.
 
+## Confirmed broadband WAN: PPPoE (27 October 2026)
+
+The user confirmed that the existing ISP modem/ONT connects to the ASUS over Ethernet and **the new router must authenticate using PPPoE**. This is a hard implementation requirement, not a discovery hypothesis. Do not change the live ASUS WAN or PPPoE session before handover.
+
+- Proposed physically isolated Pi router network: **USB 3.0 Ethernet = PPPoE WAN**, built-in `eth0` = LAN. Identify interfaces by permanent hardware/MAC facts; do **not** assume an `enx...` name without read-only hardware inventory. Do not connect USB Ethernet to the live ONT now.
+- Debian 13: pin `ppp` and use `pppd` with its documented `pppoe.so` plugin and managed peer profile, plus network bring-up/systemd supervision. No interactive `pppoeconf` wizard in normal IaC reconciliation. PPPoE interface `ppp0` is the logical WAN after successful authentication. Avoid a competing IP/DHCP client on the raw WAN Ethernet link.
+- PPPoE user/password must be entered through protected secret handling (Ansible Vault or equivalent), deployed as root-readable-only PAP/CHAP secret material, redacted from logs with `no_log`. Never commit credentials, reveal them in PR output or send screenshots showing the password.
+- ISP-specific settings to **discover read-only on the existing ASUS**: username (redacted if sharing), authentication type, WAN interface VLAN ID/priority or no tag, PPPoE service/access concentrator name if needed, MTU, public IPv4/CGNAT, IPv6 support and login retry/reconnection behaviour. Do not assume ISP VLAN ID merely from UK broadband technology.
+- **Initial MTU/MRU 1492** for normal 1500-byte Ethernet PPPoE (RFC 2516); implement path-MTU discovery/MSS management and test relevant websites and VPN. PPP MTU 1500 is optional *only if* the end-to-end transport supports RFC 4638 and is independently verified.
+- Bring up default route **only** over authenticated PPPoE after cutover; nftables WAN/NAT and Suricata forwarding rules bind to the logical PPP interface, including reconnections and interface lifecycle. Ensure no leak/bypass over the bare USB WAN Ethernet, and prohibit router DNS/client routing changes on the existing Pi 4 while BirdNET remains live.
+- Fail-open Suricata does not apply to the PPPoE link: if authentication, modem, USB NIC, or router itself fails, internet connectivity is unavailable. Health check and reconnect, alert on PPP down/auth failure (without credentials), and keep a proven **ASUS restore/cutback** path.
+- Test with an **isolated PPPoE access concentrator or separate permitted test link**; no dual production PPPoE sessions or live modem/ONT connection during pre-handover development. Acceptance gate at handover: PADI/PADO, authentication, `ppp0` IP, default route, NAT, IPv4 MTU, IPv6 as supported, DNS/Pi-hole, WireGuard, Suricata and dashboard/alerts, then controlled rollback.
+
 ## Build architecture
 
 - Debian 13 ARM64 dedicated router, `nftables` NAT/firewall, interface identities and board parameters in inventory-host variables; hardware-neutral Ansible roles.
@@ -34,7 +47,7 @@ The previously proposed **"move BirdNET to Pi 5, verify microphone and then free
 
 ## Phase 1 — PRE-HANDOVER: Git-only and off-network preparation
 
-**Permitted without changing production:** GitHub source review, repository/IaC authoring, unit tests, Ansible syntax/static checks, offline image preparation on spare boot media, plan/rollback rehearsal on paper. Collect WAN type (DHCP/PPPoE/possible VLAN tags), DHCP reservations, WAN access keys and ASUS export through read-only admin interaction **only if separately authorised and non-disruptive**.
+**Permitted without changing production:** GitHub source review, repository/IaC authoring, unit tests, Ansible syntax/static checks, offline image preparation on spare boot media, plan/rollback rehearsal on paper. Collect PPPoE-specific WAN settings (credentials stored securely, possible VLAN tags), DHCP reservations, WAN access keys and ASUS export through read-only admin interaction **only if separately authorised and non-disruptive**.
 
 **Not permitted:** touching network cabling/switch mirrors, applying any playbook that changes live hosts, running a second DHCP server/gateway on production Ethernet, reimaging `docker-01`, moving or testing its microphone, redeploying `media-01`, installing Docker on Pi 5, any changes to current ASUS routing/AiMesh.
 
@@ -48,7 +61,7 @@ The draft playbook `IaC/ansible/playbooks/pi-router-birdnet-readonly.yml` is a *
 
 Require an explicit approved date/window and rollback authority before **any production switch**:
 - Tested ASUS configuration backup and instructions to restore its routing/DHCP/OpenVPN modes.
-- Physical diagram identifying exact ONT Ethernet, Pi 4 WAN NIC, Pi 4 LAN NIC and core switch connection. WAN connection type/credentials captured securely.
+- Physical diagram identifying exact ONT Ethernet, Pi 4 WAN NIC, Pi 4 LAN NIC and core switch connection. PPPoE credentials and tagging settings captured securely.
 - DHCP lease/reservation/DNS/default-gateway details verified; no double default gateway `.1`.
 - Secure offline copy of WireGuard keys, TLS or interception CA (if explicitly used), configuration backups, Ansible Vault keys, runtime secrets; no secrets committed.
 - Approved risk note: BirdNET POC may be **unavailable temporarily** after source Pi 4 retirement and until Pi 5 audio can be tested **AFTER completion**. A fresh app without microphone tests cannot be signed off as functional bird detection. POC shutdown requires separate express approval.
