@@ -1,3 +1,16 @@
+## 27 Oct builder fix — 6 GiB root and safe failure status
+
+The ARM64 builder now requires `growpart` (Debian package `cloud-guest-utils`) and `resize2fs/e2fsck` (`e2fsprogs`). It decompresses the verified base to the *new* output, expands the last partition with growpart, checks/resizes ext4 before mounting it and before apt installs. It records only a stage name and exit code in `OUTPUT.img.build-status` (0600); no ISP credentials or verbose command lines are written there. Script prints stage errors, but the enclosing Ansible task retains `no_log: true`.
+
+On admin-01, install dependencies:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y cloud-guest-utils e2fsprogs
+```
+
+Before retry verify no old build mounts. **Preserve previous `router-01.img`; choose `router-01-v2.img`** as `router_image_output`. On failure, read `sudo cat /home/james/router-images/router-01-v2.img.build-status` and do not share credentials or disk image. Even a SUCCESS state is not boot proof; preserve original Pi SD and test offline.
+
 # Clean Debian 13 router SD image build (27 Oct 2026)
 
 Status: IaC **implemented in GitHub, NOT RUN OR BOOT TESTED**. Builds offline *target*, but the builder needs internet to install Debian packages.
