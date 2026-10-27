@@ -41,6 +41,9 @@ jobs:
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-dhcp-install-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-wan-guard-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-firewall-stage-inplace.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-lan-stage-inplace.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-lan-arm-inplace.yml --syntax-check
+          ansible-playbook -i inventory/router-01-cutover-new.yml playbooks/router-01-lan-confirm-inplace.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-pppoe-prestage.yml --syntax-check
           ansible-playbook -i localhost, -c local playbooks/router-01-pppoe-local-validate.yml --syntax-check
@@ -57,4 +60,7 @@ jobs:
         run: |
           bash -n IaC/ansible/router-01/files/router-01-lan-cutover.sh
           shellcheck IaC/ansible/router-01/files/router-01-lan-cutover.sh
+          bash -n IaC/ansible/router-01/files/router-01-nm-cutover.sh
+          shellcheck IaC/ansible/router-01/files/router-01-nm-cutover.sh
+          sudo nft -c -f IaC/ansible/router-01/templates/nftables-pppoe-inplace.conf.j2
           sudo nft -c -f IaC/ansible/router-01/files/router-wan-guard.nft
