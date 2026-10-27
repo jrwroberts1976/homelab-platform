@@ -277,6 +277,8 @@ def main() -> None:
         check("plugin pppoe.so" in peer.read_text(), "Wrong PPPoE plugin")
         check("nic-eth1" in peer.read_text(), "Wrong PPPoE NIC")
         check("mtu 1492" in peer.read_text(), "PPPoE MTU mismatch")
+        check("lcp-echo-interval 6" in peer.read_text(), "ASUS echo interval mismatch")
+        check("lcp-echo-failure 10" in peer.read_text(), "ASUS echo failure threshold mismatch")
         creds = render("ppp-secrets.j2", "ppp-secrets")
         check("not-a-secret-fixture" in creds.read_text(), "Vault templating broken")
 
