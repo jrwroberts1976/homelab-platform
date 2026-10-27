@@ -93,7 +93,7 @@
     owner: root
     group: root
     mode: "0644"
-    validate: "/usr/sbin/kea-dhcp4 -t -c %s"
+    validate: "/usr/sbin/kea-dhcp4 -t %s"
 
 - name: Install Unbound recursive DNS LAN policy
   ansible.builtin.template:
