@@ -94,6 +94,31 @@ ansible-playbook -i inventory/router-01-prestage.yml \
 
 This only validates syntax on the controller; no SSH or PPPoE connection is attempted.
 
+## Latest completed local secret check — 27 October 2026
+
+The user ran `ansible-vault view` on `admin-01`, piping decrypted YAML into a validator which **only printed** `PASS: PPPoE credentials present`. The required keys are populated; file mode is `0600` and the Vault header is `$ANSIBLE_VAULT;1.1;AES256`. Neither actual ISP credential nor the Vault password was shared or recorded.
+
+### Next: controller-only PPPoE rendering with the REAL Vault, no SSH
+
+The new playbook `playbooks/router-01-pppoe-local-validate.yml` runs on **localhost only**, loads defaults, decrypts the off-repository Vault passed with `-e @`, renders PPPoE peer and authentication templates **in memory**, and reports a generic PASS without revealing credentials. It does **not** connect to `192.168.2.220`, `router-01`, the ASUS router or ISP. No PPPoE session, file installation or network changes.
+
+On `admin-01`, after pulling the approved draft branch:
+
+```bash
+cd ~/projects/homelab-platform
+git fetch origin
+git switch feature/pi-router-iac-birdnet-poc-migration-20261027
+git pull --ff-only origin feature/pi-router-iac-birdnet-poc-migration-20261027
+
+cd IaC/ansible
+ansible-playbook -i localhost, -c local \
+  playbooks/router-01-pppoe-local-validate.yml \
+  --ask-vault-pass \
+  -e @"$HOME/.config/router-01/pppoe-vault.yml"
+```
+
+**Important:** Never use `-v/-vvv` troubleshooting with real credentials unless confirmed that outputs are redacted. No `ansible-vault view` without piping to a private validator and never paste decrypted content in chat. The playbook is intentionally marked `no_log: true` for sensitive tasks.
+
 ## Later: approved reimaged router-01 only
 
 Only after an explicitly approved handover, physical console arrangement and successful reimage of `docker-01` to **`router-01`**, the guarded `router-01-pppoe-prestage.yml` may be invoked with an off-Git Vault and `router_pppoe_prestage_approved=true`. It requires Debian 13, exact `eth0` and `eth1` MACs, reimage marker and preserved `192.168.2.220` SSH address.
