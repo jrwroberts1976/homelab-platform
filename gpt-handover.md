@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 Oct 2026 — router-01 offline CI PASS (initial PPPoE/Kea/Unbound/nftables IaC)
+
+**Verified on GitHub Actions for head commit `da390ca1f7030adccaddeed1fd014c45a48d53f2`:** `Validate router-01 offline IaC` run 40475700235 **SUCCESS** and `Estate and documentation guard` run 40475700329 **SUCCESS**. Native config validation was done with Ubuntu 24.04 Kea 2.4, Unbound and nftables plus Ansible `--syntax-check` with staged `router-01` inventory; no hosts contacted. Earlier errors were caught and fixed: correct Kea CLI `-t file`, restricted CI temp config accessibility (AppArmor path), Kea 2.4 `output_options` compatibility, nftables LAN DHCP discover from `0.0.0.0`, and required estate-doc authority header. Runbook and `IaC/ansible/router-01/README.md` updated.
+
+This does **not** validate Debian 13 on actual Pi ARM64, PPPoE ISP credentials/VLAN, internet, DHCP lease renewal, DNSSEC live resolution, physical modem/WAN link, recovery or default Linux network-manager coordination. Bare-metal automated bootstrap is an outstanding gap. A full deployment still requires explicit approved handover, retirement/reimage of old `docker-01` to future `router-01`, isolated checks and rollback. ASUS retains PPPoE/DHCP/AiMesh `.2.x` unchanged. BirdNET fresh Pi 5 install later.
+
+---
+
 ## LATEST — 27 Oct 2026: actual router-01 basic IaC staged, no deployment
 
 **User set future hostname `router-01`** for the Pi 4 after approved handover/reimage; the existing active `docker-01` remains unchanged until then. Draft PR #207 now includes NEW `IaC/ansible/inventory/router-01-staging.yml` (separate from live inventory), `playbooks/router-01-basics.yml`, `playbooks/router-01-readonly.yml`, `roles/router_basics/` templates and guarded tasks (Debian13/hostname/.3.1/MAC checks, PPPoE with Vault credentials, systemd-networkd, Kea `.3.100-.199`, Unbound `.3.1`, nftables LAN→ppp0 NAT), `IaC/ansible/router-01/README.md`, offline `scripts/validate-router-01-basics.py` and CI `.github/workflows/validate-router-01-basics.yml`. Source USB WAN `eth1` AX88179 MAC `00:24:9b:63:b3:8a`; onboard LAN `eth0` MAC `d8:3a:dd:5a:51:44`.
