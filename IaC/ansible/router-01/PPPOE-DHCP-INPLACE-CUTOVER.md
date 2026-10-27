@@ -45,6 +45,22 @@ ansible-playbook -i inventory/hosts.yml \
 
 This installs and syntax-checks the `192.168.3.0/24` Kea scope and future `.3.1` Unbound resolver. It explicitly **MASKS and DISABLES both services**. Never unmask/start Kea while `eth0` is attached to the old ASUS LAN: DHCP broadcasts could otherwise get competing replies. Docker is not removed here.
 
+## Live DNSSEC trust-anchor issue and Git-only repair (27 Oct 2026, 11:26 GMT)
+
+User ran `router-01-dhcp-install-inplace.yml` on actual `docker-01`:
+
+- **Recap: 12 OK, 4 changed, 1 failed** (and no unreachable hosts).
+- Kea and Unbound packages installed; both service units STOPPED/DISABLED/MASKED.
+- Future Kea scope `192.168.3.0/24` staged; `kea-dhcp4 -t` **PASS**.
+- Future Unbound config staged, but `unbound-checkconf` **FAILED** because Debian's packaged `auto-trust-anchor-file` points to a missing `/var/lib/unbound/root.key`.
+- Remaining final old LAN IP verification/report tasks did not execute due to the Unbound validation failure. There is **no evidence of PPPoE authentication, DNS/DHCP activation or LAN readdressing**.
+
+**Remediation committed**: the playbook now explicitly installs Debian `dns-root-data`, requires non-empty `/usr/share/dns/root.key`, creates writable `/var/lib/unbound` for the `unbound` service user, initialises **only a missing** `/var/lib/unbound/root.key` from the Debian-maintained data, checks its size, then runs `unbound-checkconf`. A present runtime DNSSEC trust anchor is not overwritten, preserving RFC5011 trust-anchor tracking. Kea and Unbound remain masked throughout. Do NOT disable DNSSEC, hand-write root keys, unmask DNS/DHCP or move WAN cables to work around the failure.
+
+**Rerun section 2 after pulling updated feature branch**. It is intended to be idempotent and should finish with the old LAN unchanged. If it fails again, inspect the *new* exact error before further change.
+
+Debian packaged root data: https://packages.debian.org/trixie/all/dns-root-data/filelist and official Unbound trust-anchor setup: https://unbound.docs.nlnetlabs.nl/en/latest/getting-started/configuration.html .
+
 ## 3. Physical PPPoE authentication test — broadband interruption accepted
 
 **Expect existing internet access through ASUS to go offline during this test.** Keep **Pi eth0 plugged into old HP switch** and SSH `192.168.2.220` reachable through the current LAN. ASUS LAN/DHCP continues to hand out `192.168.2.x` locally, even when its WAN disconnected.
