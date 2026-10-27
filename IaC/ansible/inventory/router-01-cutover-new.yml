@@ -1,0 +1,12 @@
+---
+# New IP for AFTER the physically isolated Pi eth0 -> ASUS WAN handover.
+# Cannot be reached until real LAN cutover. NOT production inventory truth yet.
+all:
+  children:
+    router_cutover_new:
+      hosts:
+        router-01:
+          ansible_host: 192.168.3.1
+          ansible_user: james
+          ansible_ssh_private_key_file: ~/.ssh/proxmox-automation
+          ansible_become: true
