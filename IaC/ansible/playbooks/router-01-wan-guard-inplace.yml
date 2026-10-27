@@ -32,12 +32,16 @@
           - (ansible_facts.get('eth0', {}).get('macaddress', '') | lower) == 'd8:3a:dd:5a:51:44'
           - (ansible_facts.get('eth1', {}).get('macaddress', '') | lower) == '00:24:9b:63:b3:8a'
 
-    - name: Require authenticated IPv4 PPPoE WAN before firewall guard
-      ansible.builtin.command:
-        argv: [ip, -4, -o, addr, show, dev, ppp0]
-      register: router_guard_ppp0_address
-      changed_when: false
-      failed_when: "'inet ' not in router_guard_ppp0_address.stdout"
+    - name: Verify PPPoE peer is installed (ppp0 may be disconnected)
+      ansible.builtin.stat:
+        path: /etc/ppp/peers/homelab-wan
+      register: router_guard_pppoe_peer
+
+    - name: Refuse WAN protection stage if PPPoE has never been prepared
+      ansible.builtin.assert:
+        that:
+          - router_guard_pppoe_peer.stat.isreg | default(false)
+        fail_msg: "Install root-protected PPPoE peer first; no active ppp0 required."
 
     - name: Check guard table current presence without modifying firewall
       ansible.builtin.command:
