@@ -95,6 +95,38 @@ ansible-playbook -i inventory/hosts.yml \
 
 Then **physically reconnect ONT → ASUS WAN**; give ASUS time to re-establish PPPoE. The Pi keeps SSH `.2.220` and both Kea/Unbound stay disabled.
 
+## LIVE PPPoE PASS and immediate WAN-input protection stage
+
+On 27 October 2026 user physically connected ONT to the Pi4 USB ASIX `eth1` and ran `router-01-pppoe-connect-inplace.yml` on actual `docker-01`: **14 OK, 3 changed, zero failures**. Link carrier passed; `router-pppoe.service` started and enabled; `ppp0` negotiated actual ISP IPv4 and installed default route; `eth0` kept old `192.168.2.220/24` SSH. Kea and Unbound remain STOPPED/MASKED, no NAT yet. ASUS WAN disconnected from ONT, so old ASUS LAN is local-only. The repeated `ifconfig` was run on `admin-01` (`192.168.2.48`), **not** the Pi; do not mistake admin-01's eth0 for the ISP WAN.
+
+**WAN firewall concern:** earlier read-only Pi evidence showed host iptables `INPUT ACCEPT` and listening Nginx/SSH/metrics; the new ppp0 may expose them to ISP inbound traffic if assigned a routable address and no separate rule blocks them. Stage 0 for the remaining cutover is therefore a small, dedicated **PPP-only incoming firewall** managed by `router-01-wan-guard-inplace.yml`; it adds an independent nftables `inet router_wan_guard` INPUT base chain accepting established/related traffic and dropping unsolicited packets **arriving via ppp0 only**. Does **not** flush/rewrite Docker's filter/forward/NAT rules or the existing SSH LAN. The guard's separate `router-wan-guard.service` is enabled to start before PPPoE after reboot. Run on `admin-01`:
+
+```bash
+cd ~/projects/homelab-platform
+git fetch origin
+git switch feature/pi-router-iac-birdnet-poc-migration-20261027
+git pull --ff-only origin feature/pi-router-iac-birdnet-poc-migration-20261027
+cd IaC/ansible
+
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-wan-guard-inplace.yml \
+  --limit docker-01 --ask-become-pass \
+  -e router_wan_guard_approved=true
+```
+
+After guard PASS, stage future ppp0 NAT and IPv4 forwarding files (syntax validated but **NOT ACTIVE**) on same existing host:
+
+```bash
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-firewall-stage-inplace.yml \
+  --limit docker-01 --ask-become-pass \
+  -e router_firewall_stage_approved=true
+```
+
+Files remain inside private `/var/lib/router-01-stage/forwarding/`; they are NOT loaded and forwarding is NOT enabled. On *later* isolated .3.1 LAN activation, after Docker is stopped/retired and its iptables FORWARD DROP is reconciled, the staged complete router firewall becomes owner (it uses `flush ruleset`, intentionally NOT permitted while Docker running). It then replaces the standalone ppp0 guard with complete default-deny WAN input, enables IPv4 forwarding and NAT. **Do NOT activate this merely after both stage playbooks pass; a physical eth0 separation and Netplan/NetworkManager cutover are still needed.**
+
+Why Docker reconciliation matters: Docker's historical iptables `FORWARD DROP` can drop packets despite an `accept` in a different nftables forward chain. See Docker's firewall docs: https://docs.docker.com/engine/network/firewall-nftables/ .
+
 ## 4. NEXT — connect DHCP and routing AFTER PPPoE PASS
 
 The final **LAN and client forwarding** step is separate, because the existing old `.2.x` LAN must NOT share a broadcast segment with the new Kea DHCP server. Changing `eth0` while logged in to `.2.220` can break the SSH session.
