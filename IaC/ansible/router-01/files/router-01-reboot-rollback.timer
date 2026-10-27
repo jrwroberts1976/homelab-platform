@@ -1,0 +1,9 @@
+[Unit]
+Description=Revert unconfirmed Pi router cutover 15 minutes after activation
+
+[Timer]
+OnActiveSec=15min
+Unit=router-01-reboot-rollback.service
+
+[Install]
+WantedBy=timers.target
