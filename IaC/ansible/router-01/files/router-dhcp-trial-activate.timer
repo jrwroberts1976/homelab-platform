@@ -1,0 +1,6 @@
+[Unit]
+Description=Allow time to move Pi eth0 off switch and into ASUS WAN
+
+[Timer]
+OnActiveSec=90s
+Unit=router-dhcp-trial-activate.service
