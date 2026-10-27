@@ -1,0 +1,89 @@
+---
+# Read-only readiness gate for the proposed reboot-based router migration.
+# No network, service, timer, Docker, firewall or boot-state mutations.
+- name: Verify Pi4 baseline before designing reboot cutover
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Require designated migration host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+    - name: Check host identity
+      ansible.builtin.command: hostname -s
+      register: router_hostname
+      changed_when: false
+      failed_when: router_hostname.stdout | trim != 'docker-01'
+    - name: Check current LAN address
+      ansible.builtin.command: ip -4 -o addr show dev eth0
+      register: router_eth0
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_eth0.stdout"
+    - name: Verify exact physical Ethernet identities
+      ansible.builtin.command: "cat /sys/class/net/{{ item.name }}/address"
+      loop:
+        - {name: eth0, mac: 'd8:3a:dd:5a:51:44'}
+        - {name: eth1, mac: '00:24:9b:63:b3:8a'}
+      register: router_mac
+      changed_when: false
+      failed_when: router_mac.stdout | trim != item.mac
+    - name: Confirm old scheduled cutover and rollback are inactive
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      loop:
+        - router-lan-switch.timer
+        - router-lan-rollback.timer
+      register: router_timers
+      changed_when: false
+      failed_when: router_timers.stdout | trim == 'active'
+    - name: Confirm DHCP and DNS cannot serve the old LAN
+      ansible.builtin.command: "systemctl is-enabled {{ item }}"
+      loop:
+        - kea-dhcp4-server.service
+        - unbound.service
+      register: router_masked
+      changed_when: false
+      failed_when: router_masked.stdout | trim != 'masked'
+    - name: Confirm Docker runtime is stopped
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      loop:
+        - docker.service
+        - docker.socket
+        - containerd.service
+      register: router_docker
+      changed_when: false
+      failed_when: router_docker.stdout | trim == 'active'
+    - name: Confirm router cutover is not already applied
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-01-cutover/applied
+        - /var/lib/router-01-cutover/confirmed
+        - /etc/netplan/99-router-01-lan.yaml
+      register: router_markers
+      failed_when: router_markers.stat.exists | default(false)
+    - name: Check staged router config files are present
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-01-stage/lan/99-router-01-lan.yaml
+        - /var/lib/router-01-stage/lan/90-router-01-wan-unmanaged.conf
+        - /var/lib/router-01-stage/forwarding/nftables.conf
+        - /etc/kea/kea-dhcp4.conf
+        - /etc/unbound/unbound.conf.d/router-01.conf
+        - /etc/ppp/peers/homelab-wan
+      register: router_staged
+      failed_when: not (router_staged.stat.exists | default(false))
+    - name: Validate staged DHCP syntax
+      ansible.builtin.command: kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+      changed_when: false
+    - name: Validate Unbound syntax
+      ansible.builtin.command: unbound-checkconf
+      changed_when: false
+    - name: Validate staged nftables syntax only
+      ansible.builtin.command: nft -c -f /var/lib/router-01-stage/forwarding/nftables.conf
+      changed_when: false
+    - name: Read-only gate result
+      ansible.builtin.debug:
+        msg: "PASS: baseline only; reboot migration is NOT installed or armed. Do not reboot or move cables."
