@@ -34,8 +34,8 @@ jobs:
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package-stage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml --syntax-check
+          ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-basics.yml --syntax-check
       - name: Shell static and syntax verification (NO hardware)
         run: |
           bash -n IaC/ansible/router-01/files/router-01-lan-cutover.sh
           shellcheck IaC/ansible/router-01/files/router-01-lan-cutover.sh
-          ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-basics.yml --syntax-check
