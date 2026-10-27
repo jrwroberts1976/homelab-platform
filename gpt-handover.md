@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — router-01 package and LAN rollback static CI PASSED
+
+Latest verified checks after last code revisions: GitHub Actions `Validate router-01 offline IaC` run **40478862743 = SUCCESS** and `Estate and documentation guard` run **40478862554 = SUCCESS**, on commit `fad4deb3a0d827122f658db9ed6c87bfcb2ca632`. Offline validations covered rendered Kea/Unbound/nftables, Ansible syntax for new package-stage/rollback-prep plus existing plays, Bash syntax and ShellCheck for LAN rollback. **These are static/off-host checks, not an on-device rollback rehearsal.** Hardware testing and boot recovery remain blocked until approved isolated test.
+
+No changes to live `docker-01`, 192.168.2.220, ASUS PPPoE/DHCP/AiMesh, DNS or Proxmox. Only future-only IaC and documentation are on draft PR #207 and tracked by issue #206.
+
+---
+
 ## 27 Oct 2026 — router-01 guarded software staging and timed LAN rollback added (Git only)
 
 To respect the user's requirement of keeping original 192.168.2.220 SSH connectivity until the LAST cutover step, draft PR #207 now has a separate `router-01-package-stage.yml`. It installs PPPoE/Kea/Unbound/nftables on an APPROVED, reimaged future `router-01` using `apt.policy_rc_d=101` to avoid service auto-start; immediately stops/disables/masks the daemons; has explicit local permission and remote hostname/reimage/old IP/MAC gating. `router-01-rollback-prepare.yml` installs only a disabled systemd rollback timer and a script at `/usr/local/sbin/router-01-lan-cutover`. At a FUTURE approved, console-supervised cutover the script can back up the old networkd LAN config, arm a five-minute systemd timer, switch `eth0` to `192.168.3.1`, and require confirmation or automatically restore the old LAN config. Final router_basics playbook now suppresses apt service autostarts and unmasks units only at explicit activation. Offline validator and CI updated; tests **do not prove the timer or rollback works on Pi**.
