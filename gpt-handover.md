@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 Oct 2026 — no-reimage router in-place plan Git/CI SUCCESS
+
+User specifically opted NOT to reimage Pi4. Draft PR #207 now keeps existing Debian13 `docker-01` OS, SSH `192.168.2.220`; Docker retirement must be preceded by dependency audit and separately approved Ansible cleanup (BirdNET POC plus Komodo Periphery/container-Trivy/Alloy integrations). A new read-only `IaC/ansible/playbooks/router-01-docker-retirement-readonly.yml` safely audits container/project/volume/bridge/package/service/timer/interface/network-manager state with **no writes**, using live production inventory and `--limit docker-01`. After audit and reviewed cleanup, new `router-01` identity with `/etc/router-01-conversion-approved` marker and Docker inactive (all other hardware/IP guards stay). Existing LAN `.2.220` retained until LAST approved handover IP change to `.3.1`. Timed rollback assumes systemd-networkd; must adapt to currently active eth0 manager after audit and test with console. `CURRENT-STATE.md`/live inventory still docker-01, no changes.
+
+GitHub Actions **SUCCESS**: `Validate router-01 offline IaC` run **40485660334** and `Estate and documentation guard` run **40485660362** on implemented code; no actual device or Docker changes. Next step: user runs safe read-only audit playbook, shares metadata output; then plan exact Docker/Komodo/Trivy retirement. No blind `apt purge` or deletion of `/var/lib/docker`.
+
+---
+
 ## LATEST — 27 October 2026: user rejects reimage; convert docker-01 to router-01 IN PLACE
 
 **User explicitly requires keeping the existing Pi 4 Debian OS, not reimaging**. Plan revised in issue #206 and draft PR #207. Current deployed Pi remains `docker-01` at `192.168.2.220`, operating BirdNET-Go POC, Docker and Komodo Periphery; also Trivy image scan / timers and Docker-specific monitoring/iptables may rely on that host. BirdNET history/recordings are not required (clean install on Pi5 later). Existing ASUS still handles PPPoE/DHCP/AiMesh and must not be disrupted before approved handover.
