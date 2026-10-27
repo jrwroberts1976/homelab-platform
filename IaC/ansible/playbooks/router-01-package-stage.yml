@@ -1,5 +1,5 @@
 ---
-# Only for explicitly approved, freshly reimaged router-01 using old SSH IP.
+# Only for explicitly approved, freshly in-place conversiond router-01 using old SSH IP.
 # Installs software without activating services or touching eth0 configuration.
 - name: Install router packages safely while retaining old management address
   hosts: router_prestage
@@ -21,15 +21,15 @@
     - name: Collect facts only following explicit local approval
       ansible.builtin.setup:
 
-    - name: Read reimage attestation
+    - name: Read in-place conversion attestation
       ansible.builtin.stat:
-        path: /etc/router-01-reimage-complete
-      register: router_reimage_attestation
+        path: /etc/router-01-conversion-approved
+      register: router_conversion_attestation
 
     - name: Verify future host and keep old LAN management address
       ansible.builtin.assert:
         that:
-          - router_reimage_attestation.stat.isreg | default(false)
+          - router_conversion_attestation.stat.isreg | default(false)
           - ansible_facts.hostname == router_hostname_expected
           - ansible_facts.distribution == 'Debian'
           - ansible_facts.distribution_major_version == '13'
@@ -38,6 +38,20 @@
           - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
           - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
         fail_msg: "Wrong machine, image, interfaces or stage; abort."
+
+    - name: Ensure Docker service is no longer active on approved converted host
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: router_docker_daemon_status
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse router preparation while Docker is still active
+      ansible.builtin.assert:
+        that:
+          - router_docker_daemon_status.stdout | trim != 'active'
+        fail_msg: "Docker still active. Complete the reviewed service retirement first."
+
   tasks:
     - name: Install packages with maintainer-script service starts refused
       ansible.builtin.apt:
