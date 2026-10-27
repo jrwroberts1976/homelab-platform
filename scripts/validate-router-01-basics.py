@@ -78,7 +78,7 @@ def main() -> None:
           pre_tasks[0]["ansible.builtin.assert"]["that"],
           "Pre-stage local approval guard missing")
     prestage_src = (ANSIBLE / "playbooks" / "router-01-prestage.yml").read_text()
-    check("router_reimage_marker.stat.isreg" in prestage_src,
+    check("router_conversion_marker.stat.isreg" in prestage_src,
           "Must require new-image attestation file")
     check("router_current_management_ip in ansible_facts.all_ipv4_addresses"
           in prestage_src, "Must guard old management address")
@@ -97,7 +97,7 @@ def main() -> None:
     check(pppoe_play["pre_tasks"][0].get("delegate_to") == "localhost",
           "PPPoE stage must refuse from controller before contacting host")
     pppoe_src = (ANSIBLE / "playbooks" / "router-01-pppoe-prestage.yml").read_text()
-    for required in ("router_pppoe_reimage_marker.stat.isreg",
+    for required in ("router_pppoe_conversion_marker.stat.isreg",
                      "router_current_management_ip in ansible_facts.all_ipv4_addresses",
                      "router_expected_wan_mac",
                      "router_expected_lan_mac",
@@ -113,7 +113,18 @@ def main() -> None:
         check(forbidden not in pppoe_src,
               "PPPoE prestage must not touch active paths: " + forbidden)
 
-    # Package installation may occur only after the reimage and while
+    audit = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-docker-retirement-readonly.yml").read_text()
+    )[0]
+    check(audit["hosts"] == "docker-01", "Read-only audit must target active docker-01")
+    for task in audit["tasks"]:
+        modules = [key for key in task if key.startswith("ansible.builtin.")]
+        check(all(key in {"ansible.builtin.assert", "ansible.builtin.command",
+                          "ansible.builtin.shell", "ansible.builtin.debug"}
+                  for key in modules),
+              "Docker retirement audit has a mutating Ansible module")
+
+    # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
         (ANSIBLE / "playbooks" / "router-01-package-stage.yml").read_text()
@@ -127,7 +138,7 @@ def main() -> None:
     package_src = (ANSIBLE / "playbooks" / "router-01-package-stage.yml").read_text()
     check("policy_rc_d: 101" in package_src, "Missing maintainer start suppression")
     check("masked: true" in package_src, "Unstarted services must be masked")
-    check("router_reimage_attestation.stat.isreg" in package_src,
+    check("router_conversion_attestation.stat.isreg" in package_src,
           "Package stage must check image marker")
     check("router_current_management_ip in ansible_facts.all_ipv4_addresses"
           in package_src, "Package stage must retain old IP")
@@ -160,7 +171,9 @@ def main() -> None:
     check(script_text.find('systemctl enable --now "$TIMER"') <
           script_text.find('install -m 0644 "$NEW" "$CURRENT"'),
           "LAN switched before timer armed")
-    check('router-01-reimage-complete' in script_text and
+    check('systemctl -q is-active docker.service' in script_text,
+          "LAN cutover must refuse Docker still running")
+    check('router-01-conversion-approved' in script_text and
           'switch|confirm|rollback|status' in script_text,
           "Rollback host/command safety guard missing")
     check('networkctl reload' in script_text and
@@ -181,6 +194,10 @@ def main() -> None:
     check(play[0]["vars"]["router_activate_services"] is False, "Play services must default off")
     task_text = (ANSIBLE / "roles" / "router_basics" / "tasks" / "main.yml").read_text()
     yaml.safe_load(task_text)
+    check("router_conversion_approval.stat.isreg" in task_text,
+          "Final router role must require approved in-place conversion")
+    check("router_docker_status.stdout | trim != 'active'" in task_text,
+          "Final role must refuse a running Docker daemon")
     check("policy_rc_d: 101" in task_text,
           "Final role must suppress any apt package service autostarts")
     check("masked: false" in task_text,
