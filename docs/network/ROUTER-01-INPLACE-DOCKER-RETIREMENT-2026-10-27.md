@@ -25,6 +25,22 @@ User ran `router-01-inplace-dependencies-readonly.yml` on active `docker-01` usi
 
 **Current status: evidence complete for phase-two audit; still NO LIVE CHANGE AUTHORIZED.**
 
+## THIRD production read-only audit COMPLETE — Netplan, Nginx, Trivy, Komodo volume
+
+User ran `router-01-retirement-config-readonly.yml --limit docker-01 --ask-become-pass` on **27 October 2026**, reporting **7 OK, 0 changed, 0 failed**. This was an observation only; no Docker or OS changes.
+
+| Verified object | Observation | Next safe action |
+|---|---|---|
+| Persistent eth0 configuration | `/etc/netplan/90-NM-75a1216a-9d1a-30cd-8aca-ace5526ec021.yaml` declares `eth0`, `renderer: NetworkManager`, `dhcp4: true`, zero static addresses and routes | **Preserve file and NetworkManager** while `192.168.2.220` remains the SSH address; never install networkd config for eth0 |
+| Other Netplan file | `90-NM-9ce9ccfd-823b-3512-8ce3-e18405b63bbf.yaml` exists but no eth0 stanza was reported | **Leave untouched**; ownership/purpose not determined |
+| Nginx site | Exactly one reported enabled symlink: `/etc/nginx/sites-enabled/birdnet-go.conf`, marked BirdNET and upstream `127.0.0.1:8080` | After BirdNET retirement, safely disable **only** this symlink and validate/reload Nginx; preserve TLS cert/key and all other Nginx data |
+| Docker Trivy textfile | `/var/lib/prometheus/node-exporter/homelab_container_estate.prom` **present** | At retirement, stop timer and any active scan, remove only this now-inapplicable textfile, preserve other node-exporter metrics |
+| Komodo authentication volume | `komodo-periphery_komodo_periphery_keys` **present** | Preserve keys/volume; separately deregister/disable this server in Komodo Core before stopping Periphery |
+
+The user has explicitly **approved BirdNET-Go and Komodo Periphery downtime**. That establishes service-outage intent only, not the other four prerequisites. Existing default-deny Ansible removal play is **NOT approved for execution yet**; Komodo Core resource/deployment link audit, metrics/dashboard lifecycle and backups/console validation remain unverified.
+
+**Do not confuse service retirement with IP cutover.** The Pi must keep its existing Netplan-managed `eth0` connection and `192.168.2.220` SSH. Actual WAN handover and `192.168.3.1` are later operations. The legacy systemd-networkd rollback remains hard-disabled.
+
 ## Latest binding decisions
 
 - **Keep existing Debian 13 OS and SSH**, no reimage. Preserve Pi4 `eth0 = 192.168.2.220/24` and ASUS `192.168.2.1` gateway until last approved network cutover. Pi4 USB `eth1` is future raw untagged PPPoE WAN.
