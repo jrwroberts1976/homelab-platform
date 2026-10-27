@@ -4,7 +4,17 @@ Tracked in [issue #206](https://github.com/jrwroberts1976/homelab-platform/issue
 
 **Do NOT run any router role on the existing production `docker-01`.** It currently provides BirdNET POC on `192.168.2.220`. The ASUS router currently owns PPPoE/DHCP for the complete home network.
 
-The build now has **two separate inventories**, neither of which changes canonical live `inventory/hosts.yml`. Only after an *approved handover* and retirement/reimage of the Pi 4 as Debian 13 **router-01**, keep onboard `eth0` on the old SSH management address **`192.168.2.220`** while preparing configuration. This preserves your connection during configuration. Keep USB WAN `eth1` disconnected from the live ONT; do not enable a new DHCP server on the production LAN. Verify the Pi MAC addresses, new hostname, host-key fingerprint and full console/rollback access first. **Change `eth0` to `192.168.3.1/24` LAST**, inside the approved router handover when the ASUS is ready to take DHCP on its WAN.
+The build now has **two separate inventories**, neither of which changes canonical live `inventory/hosts.yml`. Only after an *approved handover* and retirement/in-place conversion of the Pi 4 as Debian 13 **router-01**, keep onboard `eth0` on the old SSH management address **`192.168.2.220`** while preparing configuration. This preserves your connection during configuration. Keep USB WAN `eth1` disconnected from the live ONT; do not enable a new DHCP server on the production LAN. Verify the Pi MAC addresses, new hostname, host-key fingerprint and full console/rollback access first. **Change `eth0` to `192.168.3.1/24` LAST**, inside the approved router handover when the ASUS is ready to take DHCP on its WAN.
+
+## Latest build method — IN-PLACE CONVERSION, no reimage
+
+**User decision (27 October 2026): Keep the installed Debian 13 OS on the existing Pi 4.** Do not reimage, repartition or discard the OS. Docker containers and the Docker stack will be retired by a **separately approved, Ansible-managed change**, once a read-only inventory shows all dependencies. This includes BirdNET-Go POC, Komodo Periphery, Trivy/monitoring timers, and any other previously unknown containers or services. User does not require BirdNET recordings/history to be preserved; fresh BirdNET-Go on Pi 5 comes later.
+
+**FIRST: read-only production audit** with `playbooks/router-01-docker-retirement-readonly.yml` using the production inventory (`docker-01` at `192.168.2.220`). The audit collects container names/images/ports, volume/network names, installed package identities, relevant systemd services, timers and the actual network manager. It does not stop Docker, remove files, change the hostname or IP. **Do not `docker system prune --volumes`, `rm -rf /var/lib/docker`, or blindly `apt purge` on an unknown estate.**
+
+**Then**, after confirming dependent services have been deliberately retired and approved: stop the relevant services, disable Komodo Periphery/scan timer dependencies, remove only identified Docker packages, verify Docker bridges/iptables/nftables ownership safely, switch the hostname from `docker-01` to `router-01` with unchanged `192.168.2.220` SSH management, and create a root-owned `/etc/router-01-conversion-approved` marker as the final attestation of that reviewed conversion. The marker is **not** a shortcut to skipping evidence, and should not be created until the prerequisites have passed. Only then can the existing PPPoE/router staging playbooks proceed.
+
+**LAN IP `192.168.3.1` remains the last step** of a separately tested and approved cutover. No changes to existing production DHCP/ASUS broadband until then. Keep canonical live inventory and `CURRENT-STATE.md` at `docker-01` until verified conversion, then record actual changes.
 
 ## First-phase topology
 
@@ -23,24 +33,24 @@ ASUS remains a router through the first broadband cutover and validation. Conver
 
 ## Crucial sequencing: keep the SSH address until the very end
 
-**Do not readdress the Pi as the first provisioning step.** Once the existing POC has been explicitly approved for retirement and the Pi reimaged, choose the old management address `192.168.2.220` on the new `router-01` image until the router configuration is ready. The currently active `docker-01` must not be touched before approved handover.
+**Do not readdress the Pi as the first provisioning step.** Once the existing POC has been explicitly approved for retirement and the Pi converted, choose the old management address `192.168.2.220` on the new `router-01` image until the router configuration is ready. The currently active `docker-01` must not be touched before approved handover.
 
-1. **Pre-stage over SSH at `192.168.2.220`, after reimage:** use `inventory/router-01-prestage.yml` and `playbooks/router-01-prestage.yml` (not `router-01-basics.yml`). This refuses ANY host contact before a local opt-in flag; on target it checks Debian13, `router-01` hostname, expected MACs, old management IP and a `/etc/router-01-reimage-complete` image-provenance marker.
-2. That pre-stage playbook **only renders private, prospective config files under `/var/lib/router-01-stage/`**. It does **not** install packages, touch `/etc/systemd/network`, start PPPoE, enable DHCP/DNS/firewall, reconfigure interfaces or change the live IP. PPPoE secrets stay root-only and off Git. Reimage marker creation and an off-Git Vault path remain bootstrap prerequisites.
-3. **Package staging is now authored:** `playbooks/router-01-package-stage.yml` installs PPPoE/Kea/Unbound/nftables on the approved, reimaged host **while retaining `.2.220`**; Ansible `apt` uses `policy_rc_d: 101` to suppress package post-install service starts and the playbook stops, disables and masks the new daemons. This is separately opt-in and must be verified on Debian 13 hardware before use. It does not install active `.3.1` networking or start DHCP. The original `router-01-basics.yml` role remains a post-readdress final-config and activation tool only.
+1. **Pre-stage over SSH at `192.168.2.220`, after in-place conversion:** use `inventory/router-01-prestage.yml` and `playbooks/router-01-prestage.yml` (not `router-01-basics.yml`). This refuses ANY host contact before a local opt-in flag; on target it checks Debian13, `router-01` hostname, expected MACs, old management IP and a `/etc/router-01-conversion-approved` conversion approval marker.
+2. That pre-stage playbook **only renders private, prospective config files under `/var/lib/router-01-stage/`**. It does **not** install packages, touch `/etc/systemd/network`, start PPPoE, enable DHCP/DNS/firewall, reconfigure interfaces or change the live IP. PPPoE secrets stay root-only and off Git. Reconversion marker creation and an off-Git Vault path remain bootstrap prerequisites.
+3. **Package staging is now authored:** `playbooks/router-01-package-stage.yml` installs PPPoE/Kea/Unbound/nftables on the approved, converted host **while retaining `.2.220`**; Ansible `apt` uses `policy_rc_d: 101` to suppress package post-install service starts and the playbook stops, disables and masks the new daemons. This is separately opt-in and must be verified on Debian 13 hardware before use. It does not install active `.3.1` networking or start DHCP. The original `router-01-basics.yml` role remains a post-readdress final-config and activation tool only.
 4. **Recovery helper staged in Git:** `playbooks/router-01-rollback-prepare.yml` installs `/usr/local/sbin/router-01-lan-cutover` and a *disabled* systemd timer; this makes **no LAN change**. During the final approved handover, the operator must have a local console/direct laptop on `.3.x`, a known current networkd file `/etc/systemd/network/10-router-lan.network` managing the old `.2.220`, and a staged `.3.1` replacement. The local `switch --approved-handover` command first backs up the old file and arms the five-minute persistent-at-boot timer, then reloads and reconfigures `eth0`. SSH to `.2.220` drops. To keep the change, run `confirm` locally or from the new `.3.x` connection **before the deadline**. Without confirmation, the timer invokes `rollback` and restores the original networkd file. **The helper has only passed static/CI checks and has NOT been exercised on the actual Pi or across a reboot. Do not execute this cutover until an isolated rehearsal proves restore works.**
 5. After the new LAN IP is independently reachable, use the separately approved final `.3.1` Ansible playbook to install active service configurations and **unmask/start** PPPoE, nftables NAT, Unbound and Kea. Verify configuration before acknowledging the entire broadband handover. **IP rollback confirmation is distinct from broadband-service acceptance**: the timer restores the old management configuration only; it does not automatically restore ASUS cabling/PPPoE or undo all daemon changes. Keep physical ASUS rollback available.
 
 **Do not run a remote command to readdress `eth0` without first implementing and testing the recovery mechanism.** This plan changes the sequencing, not production.
 
-### Stage-only example (never run before approval and actual reimage)
+### Stage-only example (never run before approval and actual in-place conversion)
 
 ```bash
 cd ~/projects/homelab-platform/IaC/ansible
 # Syntax check only, no host connection:
 ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
 
-# LATER, only after approved reimage of docker-01 to router-01 and image marker:
+# LATER, only after approved in-place conversion of docker-01 to router-01 and conversion marker:
 # ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml \
 #   --ask-vault-pass -e @/secure/off-repo/router-01-vault.yml \
 #   -e router_prestage_approved=true
@@ -55,7 +65,7 @@ ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package
 ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml --syntax-check
 bash -n router-01/files/router-01-lan-cutover.sh
 
-# These next stages must NOT run without approved reimage/handover and console:
+# These next stages must NOT run without approved in-place conversion/handover and console:
 # ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package-stage.yml -e router_package_stage_approved=true
 # ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml -e router_rollback_prepare_approved=true
 
@@ -70,16 +80,16 @@ bash -n router-01/files/router-01-lan-cutover.sh
 
 ## Security and bootstrap safeguards
 
-- `inventory/router-01-prestage.yml` resolves ONLY future `router-01` at the original SSH management IP `192.168.2.220`, **after an approved reimage**. `inventory/router-01-staging.yml` names the final `router-01` at `192.168.3.1`. Neither is canonical production inventory.
+- `inventory/router-01-prestage.yml` resolves ONLY future `router-01` at the original SSH management IP `192.168.2.220`, **after an approved in-place conversion**. `inventory/router-01-staging.yml` names the final `router-01` at `192.168.3.1`. Neither is canonical production inventory.
 - Ansible roles assert hostname, Debian 13, current router IP, **both Ethernet MACs** and lack of legacy `.2.220`/ASUS default route.
 - No router service starts without explicit `router_activate_services=true`; no role runs without `router_deploy_approved=true`.
 - Password is passed only via **encrypted external Ansible Vault file** (`router_pppoe_username`, `router_pppoe_password`). No credentials in repository, command-line extra-vars, terminal output or screenshots. File ownership/mode 0600.
 - PPPoE login and VLAN tagging details still require read-only confirmation from ASUS; this role does not configure VLAN tagging. IPv6 is deferred.
-- **Important:** the first bootstrap is not yet fully automated: install Debian image, initialize SSH/keys and isolated `eth0` networkd interface with offline media/console. `router_basics` only writes the lasting networkd definitions; it does NOT restart networkd or change live interfaces. Capture this dependency before claiming fully automated disaster recovery.
-- Running `apt` may start package services briefly; that is why the role is allowed **only on physically isolated reimaged hardware**, never on the live Pi or production LAN.
-- Some installer images use NetworkManager/ifupdown rather than networkd. Establish `systemd-networkd` ownership in the isolated image/console before role runs, with no competing Ethernet manager; the role aborts if networkd inactive.
+- **Important:** no Debian reinstall is planned. Audit the **existing** DHCP client, networking manager, SSH access, storage and firewall ownership before replacing Docker. Changing the active network manager to systemd-networkd, if required, is an independently reviewed cutover risk. The `router_basics` role writes the eventual networkd definitions but must NOT run while Docker or the existing DHCP-managed LAN is active.
+- Use the separate guarded `router-01-package-stage.yml` with `policy_rc_d: 101` on the **approved converted host** to install packages without starting Kea/Unbound/nftables. Run only after Docker service retirement is verified.
+- The **existing Debian host** may use NetworkManager, dhcpcd, ifupdown or systemd-networkd. Read-only inventory must identify the actual manager; do not assume networkd already owns `eth0`. The final cutover script requires networkd ownership and a known old-IP network file, so conversion/testing of the manager is a separate gated task.
 - `router_activate_services=true` is intended only after full boot/network/firewall readiness. It enables nftables, Unbound, Kea and PPPoE; always keep console access and a proven ASUS rollback. On initial isolated tests with no ISP ONT, PPPoE service may retry; this is expected.
-- `/etc/nftables.conf` is fully managed and includes `flush ruleset`: **never** apply to a shared Docker/Kodi/Proxmox host. Target MUST be fresh dedicated router-01.
+- `/etc/nftables.conf` is fully managed and includes `flush ruleset`: **never** apply to a shared Docker/Kodi/Proxmox host. Target MUST be Docker-free dedicated router-01.
 - **Automated offline validation PASS (27 October 2026):** GitHub Actions `Validate router-01 offline IaC` rendered and syntax-tested Kea, Unbound and nftables on an isolated Ubuntu 24.04 CI runner, and ran Ansible `--syntax-check` on both router playbooks. The separate estate/documentation guard also PASS. **Debian 13 ARM64 on-hardware validation, PPPoE ISP session, DHCP broadcast/renewal and full recovery test are still outstanding.** Do not treat an Ubuntu CI pass as a production acceptance.
 
 ## Controller-only syntax checks (NO HOST CONTACT)
@@ -95,7 +105,7 @@ ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-readonly
 
 ## Future isolated execution only AFTER handover permission
 
-Obtain approved change and prepare a preconfigured reimaged `router-01` on isolated Ethernet with rescue console. Populate a secure vaulted file **outside Git** containing `router_pppoe_username` and `router_pppoe_password`. Do not execute any command below before this stage.
+Obtain approved change and prepare a preconfigured converted `router-01` on isolated Ethernet with rescue console. Populate a secure vaulted file **outside Git** containing `router_pppoe_username` and `router_pppoe_password`. Do not execute any command below before this stage.
 
 ```bash
 # Readonly target identity check FIRST, after rebuild:
