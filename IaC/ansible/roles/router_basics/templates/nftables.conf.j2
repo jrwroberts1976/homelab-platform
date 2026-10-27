@@ -10,7 +10,9 @@ table inet router_filter {
         ct state invalid drop
         iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} ip protocol icmp accept
         iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} tcp dport { 22, 53 } accept
-        iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} udp dport { 53, 67 } accept
+        iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} udp dport 53 accept
+        # DHCPDISCOVER starts from 0.0.0.0; permit only LAN client 68 -> server 67.
+        iifname "{{ router_lan_interface }}" udp sport 68 udp dport 67 accept
     }
     chain forward {
         type filter hook forward priority filter; policy drop;
