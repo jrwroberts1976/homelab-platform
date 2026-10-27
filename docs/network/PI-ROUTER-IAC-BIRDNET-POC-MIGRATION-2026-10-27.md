@@ -1,63 +1,92 @@
-# Raspberry Pi router — IaC and BirdNET-Go POC migration plan (27 October 2026)
+# Raspberry Pi router — IaC build, controlled handover and BirdNET-Go POC relocation
 
-**Status:** DESIGN / GIT-ONLY. **No live deployment approved or performed.** Tracking: [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
+**Updated 27 October 2026. Status: DESIGN / GIT ONLY.**
+Tracking: [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206), [draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207).
 
-## Source of truth and migration goal
-- Canonical *deployed* inventory: `docs/architecture/CURRENT-STATE.md`, `IaC/ansible/inventory/hosts.yml` and `IaC/inventory/estate.json`. Do **not** present this plan as live state.
-- `docker-01` (`192.168.2.220`, secondary Wi-Fi `.221`) is the active Pi 4 BirdNET-Go Docker/Komodo Periphery host; its USB microphone is currently in the Garden Room.
-- `media-01` (`192.168.2.195`) is the active Pi 5 Kodi/qBittorrent, SMB and **primary Proxmox NFS backup** host. Avoid forced reboot, broad package dist-upgrade, destructive storage changes and resetting nftables.
-- **BirdNET-Go is a proof of concept:** the user explicitly does **not** require its recordings, clip files, detection history or database. **Use a fresh BirdNET application state** on the destination. Preserve old host until new POC works; data backup is *not* a gate to this particular move.
-- Once BirdNET is healthy on the Pi 5 and old dependencies are removed, rebuild the liberated Pi 4 as a **dedicated Debian router**. The router IaC must support rebuilding on equivalent Pi 5 hardware later.
+## Non-negotiable user requirements
 
-## Critical migration gates
-1. **Audio placement:** current role `birdnet_baseline` requires a **local USB sound device** `0c76:161e` and current `birdnet_go` requires stable ID `usb-id:0c76:161e:`, with `/dev/snd` mounted into the container. To free Pi 4, physically move microphone to Pi 5 (and verify sound from intended observation location), or separately design/test a persistent network-audio capture path. If the Garden Room audio must stay physically there, do not claim direct migration works merely by moving Compose files.
-2. **Existing service safety:** Pi 5 already serves Nginx HTTPS on 443 for qBittorrent, Kodi and production NFS. BirdNET site must use separate SNI `birdnet.home.jrwroberts.co.uk` and coexist with existing Nginx vhosts; never delete default/other sites, overwrite /etc/nftables.conf or restart Nginx indiscriminately. Test Nginx config and perform guarded reload only.
-3. **Docker and nftables interactions:** check current Pi 5 Docker/iptables/nftables state before installation. Docker changes firewall chains; prove LAN TLS, Proxmox NFS 2049, SMB 445, SSH, Kodi/DLNA, and exporter still work, with rollback and maintenance window.
-4. **Persisted configuration ownership:** `birdnet_go` and `birdnet_baseline` presently assert `docker-01`/`.220`/Pi 4. Refactor to target-specific variables and skip Pi-4-only baseline on the Pi 5. Keep old source role uninfluenced during preflight.
-5. **Version drift:** Ansible default image `ghcr.io/tphakala/birdnet-go:20260823` vs Komodo resource `20261010`. These are *source declarations*, not verified running image. Read current container image digest/version before picking an immutable destination image. One owner for container rollout/upgrade, no concurrent Komodo/Ansible drift.
-6. **DNS and TLS:** retain existing BirdNET service hostname, but use staged host-local HTTPS tests and only repoint Pi-hole DNS after the target works; avoid hostname dual-active ambiguity. Preserve existing qBittorrent certificate/vhost. Verify authenticated app operations and live audio after DNS cutover.
-7. **Network role boundary:** no new VLANs or router changes during the BirdNET migration. Pi 4 has a secondary Wi-Fi IP `.221` which must be handled before router image/cutover.
+1. **No interruption whatsoever to the current production network before the expressly agreed handover.** The ASUS RT-AC86U remains default gateway `192.168.2.1`, DHCP provider, AiMesh controller and OpenVPN endpoint until then. Do not introduce duplicate DHCP or duplicate gateway IP, change switch ports, remove SPAN, change DNS, reimage an in-service Pi, disable BirdNET, alter VLANs, or make live network-policy changes before handover.
+2. **BirdNET microphone testing happens only AFTER the router project has been completed.** Do not run microphone audio capture, USB audio enumeration, `arecord` tests or BirdNET detection/recording acceptance before that milestone. It is not a router-handover dependency.
+3. **Entire router build is reproducible from Git/Ansible**, including recovery onto replacement Pi 5 hardware with secure backups of non-Git secrets and device-specific configuration.
+4. No VLANs, existing flat `192.168.2.0/24`; preserve existing Pi-hole+Unbound, ASUS AiMesh Wi-Fi, monitoring and Proxmox availability.
 
-## Execution phases / rollback
+The previously proposed **"move BirdNET to Pi 5, verify microphone and then free Pi 4" sequence is superseded** by this instruction. The physical Pi 4 is still needed for its present BirdNET POC and **cannot serve as a pre-handover test router**.
 
-### A — Read-only audit (safe to run after local syntax check)
-```bash
-cd ~/projects/homelab-platform/IaC/ansible
-ansible-playbook -i inventory/hosts.yml playbooks/pi-router-birdnet-readonly.yml --syntax-check
-ansible-playbook -i inventory/hosts.yml playbooks/pi-router-birdnet-readonly.yml --ask-become-pass
-```
-Read service/port use, disk/RAM, USB/ALSA, current paths, Docker availability, and model identity. No installs or edits. Confirm the actual physical USB microphone strategy. The playbook is **not** a production migration.
+## Current source of truth (do not modify until actual cutovers)
 
-### B — Stage fresh BirdNET on Pi 5
-Write a **separate, target-guarded** Ansible playbook; avoid running the existing `birdnet-01.yml` against `media-01`. Keep Docker volume paths away from NFS backup namespaces. Configure a media-01 BirdNET virtual host without disturbing qBittorrent. Add Pi-5-specific audio preflight and deterministic image pin. Add scoped firewall rule for trusted LAN HTTPS if needed (443 already serves qBittorrent). Do not modify the original Pi 4.
+- `docs/architecture/CURRENT-STATE.md`; `IaC/inventory/estate.json`; `IaC/ansible/inventory/hosts.yml` are **deployed-state authority**.
+- `docker-01` (`192.168.2.220` Ethernet, `.221` secondary Wi-Fi): active Pi 4, BirdNET-Go Docker, Komodo Periphery and Garden Room USB microphone.
+- `media-01` (`192.168.2.195`): active Pi 5, Kodi, qBittorrent HTTPS/Nginx, SMB, and **production Proxmox NFS backup exports**. Do not reimage, broadly upgrade, reset nftables, overwrite Nginx virtual hosts or reboot casually.
+- `admin-01` Pi 3: Ansible controller and Proxmox QNetd; leave unchanged.
+- DNS: `dns-01` `192.168.2.51`, `dns-02` `192.168.2.50`; core switch HP ProCurve 2510G-24. SPAN source ports 1–23 and destination 24 serve passive `sensor-01`.
+- BirdNET-Go POC **recordings, audio clips, historical detections and database do NOT need copying or retention**. Existing audio hardware location is a post-project question.
 
-### C — Validate and cut over BirdNET
-Require successful live audio and recent bird classification, functioning HTTPS/app sessions, resource/temperature headroom, NFS backups, Kodi and existing qBittorrent HTTPS, both monitoring stacks, zero newly failed systemd units, and a second Ansible reconciliation with no unintended drift. Only then stage and approve DNS transition. If problems arise, revert BirdNET DNS to `.220` and shut down *only* the new BirdNET container/site, not media services. Historic recordings intentionally stay behind and may later be discarded after approval.
+## Build architecture
 
-### D — Free the Pi 4
-Verify no application, external audio, DNS, Komodo, exporter, backup or recovery workload relies on the old BirdNET host. Retire BirdNET/Komodo Periphery with a dedicated guarded playbook **after separate approval**, update canonical inventory, and provision a new router hostname/role. Do not reimage `docker-01` while it still carries the canonical active workload.
+- Debian 13 ARM64 dedicated router, `nftables` NAT/firewall, interface identities and board parameters in inventory-host variables; hardware-neutral Ansible roles.
+- Suricata on NFQUEUE, nft `queue bypass` and application `nfq.fail-open`, watchdog, failure and packet-drop telemetry. **Fail-open means IPS service failure does not block forwarded traffic; it does NOT mean router hardware failure is non-disruptive.**
+- E2Guardian + Squid web filtering, branded HTTP block page. Managed HTTPS proxy/certificate pilot needed for reliable branded HTTPS block pages; no unconditional interception of all device traffic.
+- WireGuard VPN split-tunnel/full-tunnel options; private keys and CA materials protected off plaintext Git.
+- Kea DHCP and Stork where supported; preserve existing ASUS reservations/dynamic range exactly after a real read-only export. At no point allow simultaneous uncontrolled ASUS and Pi DHCP responders on production LAN.
+- Pi-hole DNS remains authoritative for client DHCP options. Grafana/Loki/Prometheus/Alertmanager/Zabbix receive security and availability alerts.
+- Cockpit and/or approved IaC-backed router admin controls, management reachable only on trusted LAN/VPN.
+- ASUS AiMesh retained for Wi-Fi and converted to supported AP mesh topology at handover; unsupported ASUS firmware remains a separately tracked residual wireless risk.
 
-### E — Fully reproducible router build
-Use dedicated Ansible roles split by function; no magic one-off SSH edits:
-- `router_bootstrap`: Debian 13 image/SSH baseline, network interface detection, rescue console and idempotent host configuration.
-- `router_network`: physically isolated WAN/LAN, NAT, `192.168.2.1/24` at cutover, safe remote-apply with timed rollback.
-- `router_firewall`: nftables with guarded validation, correct established/related handling, minimal external exposure and explicit rescue/rollback.
-- `router_ips`: Suricata NFQUEUE, nft queue `bypass` and Suricata `nfq.fail-open`, watchdog and overloaded/hung-worker tests; IPS bypass must **not** disable the firewall.
-- `router_web_filter`: E2Guardian/Squid + branded block page, explicit proxy pilot and managed browser trust if TLS inspection is ever approved. Plain HTTPS cannot reliably display a custom block page without client cooperation/TLS interception. Proxy outage policy is distinct from IPS fail-open.
-- `router_vpn`: WireGuard with split/full tunnel options, persistent keys stored securely off plain Git, peer revocation, external mobile-data tests.
-- `router_dhcp`: Kea, Stork observability as feasible; import actual existing ASUS leases/reservations. **Never** run two uncontrolled DHCP servers on the live LAN.
-- `router_observability`: exporter, Alloy/Loki, Grafana/Alertmanager/Zabbix security alerts; alert on Suricata bypass/failure, VPN/DHCP outages, risky rule changes and web-filter problems.
-- `router_management`: LAN/VPN-only authenticated Cockpit and approved IaC-backed controls; no dashboard-side unmanaged rules.
+## Phase 1 — PRE-HANDOVER: Git-only and off-network preparation
 
-Keep board-agnostic roles and explicit host variables for Pi 4 vs Pi 5 (interface names, USB Ethernet chipset, mount/boot layout, NIC MAC and interface identity, CPU/memory budgets). Validate measured throughput under real rules, DNS, VPN and proxy load before router cutover.
+**Permitted without changing production:** GitHub source review, repository/IaC authoring, unit tests, Ansible syntax/static checks, offline image preparation on spare boot media, plan/rollback rehearsal on paper. Collect WAN type (DHCP/PPPoE/possible VLAN tags), DHCP reservations, WAN access keys and ASUS export through read-only admin interaction **only if separately authorised and non-disruptive**.
 
-### F — Recovery and replacement acceptance
-Rebuild from a clean, pinned Debian image plus a Git checkout, encrypted secret restore, bootstrap SSH, Ansible, and verified service data. Make the restore possible **without DHCP/DNS/network services from the failed router** (local keyboard/console or preconfigured emergency address and offline packages). Preserve externally backed-up WireGuard private keys, TLS/CA keys, DHCP reservation configuration, WAN connection details and limited state required for continuity. Test (1) clean same-model restore and (2) Pi 4 -> Pi 5 host-variable substitution in a test network. Use a written gateway rollback and keep ASUS routing recoverable during pilot.
+**Not permitted:** touching network cabling/switch mirrors, applying any playbook that changes live hosts, running a second DHCP server/gateway on production Ethernet, reimaging `docker-01`, moving or testing its microphone, redeploying `media-01`, installing Docker on Pi 5, any changes to current ASUS routing/AiMesh.
 
-## Decisions and known caveats
-- ISP uses a separate modem/ONT with Ethernet WAN. Actual DHCP/PPPoE/VLAN tag, public-IP/CGNAT situation, and credentials **not yet audited**.
-- Keep ASUS AiMesh as Wi-Fi access points while acknowledging unsupported firmware remains a risk. No VLAN scope.
-- Intended switch SPAN retirement must be **separate approval** after accepting loss of same-subnet visibility from passive `sensor-01`.
-- Production/current-state docs and IP identity should only be updated after verified cutovers.
-- Treat Komodo deployment declaration and certificate provisioning as explicit migration dependencies; do not assume Docker on media-01 is already installed.
-- BirdNET recording/history/database preservation is deliberately **out of scope** for this POC.
+The draft playbook `IaC/ansible/playbooks/pi-router-birdnet-readonly.yml` is a **read-only non-audio readiness tool**, but **DO NOT execute against production until separately approved**. The code must contain **no ALSA / microphone checks**, even if read-only. Syntax checks are permitted.
+
+**Isolated pilot when spare hardware is available:** physically isolated Pi (not the in-production Pi 4), isolated switch/laptop or direct cable, simulated WAN connection and distinct test addressing. Validate image bootstrap, Ansible idempotence, nftables, Suricata fail-open, Kea, DNS, WireGuard, E2Guardian/Squid block page, alert pipelines and Pi 5 substitution against a clean environment. Never connect test DHCP/WAN/LAN interfaces to live production switch.
+
+**If no spare test Pi exists:** write/CI-test IaC and pre-stage supported storage/image; document that full performance/hardware tests must happen during the handover maintenance window, before router becomes production gateway. No claims of zero-downtime Pi 4 hardware testing.
+
+## Phase 2 — HANDOVER PREREQUISITES AND GO/NO-GO
+
+Require an explicit approved date/window and rollback authority before **any production switch**:
+- Tested ASUS configuration backup and instructions to restore its routing/DHCP/OpenVPN modes.
+- Physical diagram identifying exact ONT Ethernet, Pi 4 WAN NIC, Pi 4 LAN NIC and core switch connection. WAN connection type/credentials captured securely.
+- DHCP lease/reservation/DNS/default-gateway details verified; no double default gateway `.1`.
+- Secure offline copy of WireGuard keys, TLS or interception CA (if explicitly used), configuration backups, Ansible Vault keys, runtime secrets; no secrets committed.
+- Approved risk note: BirdNET POC may be **unavailable temporarily** after source Pi 4 retirement and until Pi 5 audio can be tested **AFTER completion**. A fresh app without microphone tests cannot be signed off as functional bird detection. POC shutdown requires separate express approval.
+- No change to current NFS backup schedules, Kodi/qBittorrent HTTPS or the switch SPAN unless a separate scoped action is approved.
+
+## Phase 3 — APPROVED HANDOVER WINDOW ONLY
+
+1. Ensure fallback ASUS still routes live traffic while remaining tasks happen on **isolated** hardware. User specifically forbids *pre*-handover network interruption.
+2. With approval, stop BirdNET POC on `docker-01` at the planned window and reimage Pi 4 to dedicated router; preserve source-system recovery option as feasible. Do not claim continued BirdNET detection on Pi 5 while microphone testing is deferred.
+3. Optionally stage a clean BirdNET container on `media-01` **at/after handover** with independent safety checks for Docker/nftables, existing qBittorrent Nginx/443, NFS exports and Kodi; **do not run microphone tests**. BirdNET history/recordings intentionally omitted. No target live-recognition acceptance yet.
+4. Apply router Ansible bootstrap and functional checks **on an isolated test link**; verify two NICs, routing, DHCP, port filtering, Suricata failure mode, VPN, web proxy health, DNS, and monitoring before any live switch. Abort to ASUS if incomplete.
+5. At approved moment, swap ONT/WAN and LAN to Pi router, disable ASUS DHCP/NAT, change AiMesh primary to AP mode only after safe gateway takeover plan. Preserve single gateway, `192.168.2.1`, and restore ASUS immediately if tests fail. Actual transition may have bounded downtime **inside handover**, never before.
+6. Test wired/wireless clients, DNS resolvers, internet, client renewal, roaming, firewall/IPS fail-open, proxy page as supported, WireGuard from external mobile data, Grafana/alerts, and remote access to Proxmox. Keep ASUS restore plan ready until accepted.
+
+**Hardware feasibility constraint:** A Pi 4 carrying BirdNET cannot simultaneously be rebuilt for routing without POC interruption. If zero **handover-window** downtime and uninterrupted BirdNET both become requirements, additional separate hardware is mandatory. A Pi 5 upgrade similarly requires hardware-specific NIC and recovery validation.
+
+## Phase 4 — AFTER ROUTER PROJECT COMPLETE: BirdNET audio
+
+Only now arrange physical transfer of the Garden Room USB microphone to Pi 5 or implement an independently proven network stream. Verify USB/ALSA or streaming input, permissions, audio capture, recent classifications and actual intended listening location. Tune location/config as necessary. If audio cannot be made available, document BirdNET as **deferred/POC inactive**, not as migrated and functioning. Maintain NFS and Kodi service safety.
+
+## Required Ansible/IaC modules and recovery acceptance
+
+| Role | Scope |
+|---|---|
+| `router_bootstrap` | Debian image, user/SSH bootstrap, trust paths, NIC discovery, rescue access |
+| `router_network` | WAN and LAN with explicit gates, optional PPPoE, static rescue address, IPv4 forwarding |
+| `router_firewall` | nftables validation and reversible WAN/LAN NAT; explicit WireGuard exposure |
+| `router_ips` | Suricata NFQUEUE fail-open and health watchdog; preserve firewall when IPS bypassed |
+| `router_web_filter` | E2Guardian/Squid filtering and opt-in managed proxy/HTTPS policy; graceful failure |
+| `router_vpn` | WireGuard peer config, split/full routing, secure key restore/revoke |
+| `router_dhcp` | Kea DHCP, Stork visibility, reservations, lease integrity and rogue DHCP detection |
+| `router_observability` | Prometheus, Alloy/Loki, Zabbix, alert routes and dashboards |
+| `router_management` | LAN/VPN-only web management; Git is configuration authority |
+
+Recovery target: flash Pi 4 or Pi 5 supported Debian image; use rescue network not dependent on failed gateway; restore versioned encrypted inputs (WireGuard, WAN secrets, DHCP reservations, certificates and role vars); execute Ansible; validate network routing/firewall/DNS/DHCP/VPN/IPS/filtering; ensure second idempotent reconciliation has no unintended drift; rollback controlled cutover if possible. Document minimum external peripherals (USB/PCIe NIC and storage) and change-safe interfaces for Pi 5.
+
+## Documentation discipline
+
+`CURRENT-STATE.md` and canonical inventory must report **verified live state only**, not plans. Update `gpt-handover.md` after Git changes and again after each live approved cutover. Retired identities remain history-only. SPAN mirror removal requires separately approved scope because same-subnet east–west visibility would be lost.
+
+**No pre-handover production changes, no microphone testing before router-project completion.**
