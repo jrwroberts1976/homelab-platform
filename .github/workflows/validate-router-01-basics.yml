@@ -1,0 +1,32 @@
+name: Validate router-01 offline IaC
+
+on:
+  pull_request:
+    paths:
+      - 'IaC/ansible/roles/router_basics/**'
+      - 'IaC/ansible/playbooks/router-01-*.yml'
+      - 'IaC/ansible/inventory/router-01-staging.yml'
+      - 'scripts/validate-router-01-basics.py'
+      - '.github/workflows/validate-router-01-basics.yml'
+  workflow_dispatch:
+
+jobs:
+  syntax-and-render:
+    runs-on: ubuntu-24.04
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install CLI syntax validators
+        run: |
+          sudo apt-get update -qq
+          sudo DEBIAN_FRONTEND=noninteractive apt-get install -y -qq nftables unbound kea-dhcp4-server
+          python3 -m pip install --user --break-system-packages 'ansible-core>=2.19,<2.21'
+          echo "$HOME/.local/bin" >> "$GITHUB_PATH"
+      - name: Offline router contract checks (no SSH, no production)
+        run: python3 scripts/validate-router-01-basics.py
+      - name: Ansible syntax checks (no host contact)
+        working-directory: IaC/ansible
+        run: |
+          ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-readonly.yml --syntax-check
+          ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-basics.yml --syntax-check
