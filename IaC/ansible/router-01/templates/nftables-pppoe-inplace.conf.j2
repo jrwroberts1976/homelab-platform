@@ -1,0 +1,38 @@
+#!/usr/sbin/nft -f
+# STAGED ONLY. Load after Docker retirement, NOT while Docker owns iptables.
+# Full router nftables owner for Pi4 -> ppp0 WAN, .3.1/24 downstream eth0.
+# These rules intentionally DROP unsolicited PPP WAN traffic.
+flush ruleset
+
+table inet router_filter {
+  chain input {
+    type filter hook input priority filter; policy drop;
+    iifname "lo" accept
+    ct state established,related accept
+    ct state invalid drop
+
+    # Downstream .3.0/24 hosts and new ASUS WAN may manage only the router.
+    iifname "eth0" ip saddr 192.168.3.0/24 ip protocol icmp accept
+    iifname "eth0" ip saddr 192.168.3.0/24 tcp dport { 22, 53, 9100, 10050 } accept
+    iifname "eth0" ip saddr 192.168.3.0/24 udp dport 53 accept
+
+    # DHCP discover: initial source 0.0.0.0, destination broadcast.
+    iifname "eth0" udp sport 68 udp dport 67 accept
+  }
+  chain forward {
+    type filter hook forward priority filter; policy drop;
+    ct state established,related accept
+    ct state invalid drop
+    iifname "eth0" oifname "ppp0" ip saddr 192.168.3.0/24 accept
+  }
+  chain output {
+    type filter hook output priority filter; policy accept;
+  }
+}
+
+table ip router_nat {
+  chain postrouting {
+    type nat hook postrouting priority srcnat; policy accept;
+    oifname "ppp0" ip saddr 192.168.3.0/24 masquerade
+  }
+}
