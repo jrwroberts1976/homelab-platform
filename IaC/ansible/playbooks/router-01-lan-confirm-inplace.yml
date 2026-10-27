@@ -1,0 +1,47 @@
+---
+# Run from admin-01 via NEW ASUS LAN -> ASUS WAN -> Pi .3.1 route,
+# ONLY after Kea has leased .3.x to ASUS WAN and ISP browsing is verified.
+# This disables the automatic ten-minute rollback timer.
+- name: Confirm successful PPP WAN and Kea LAN after Pi4 cutover
+  hosts: router_cutover_new
+  gather_facts: false
+  become: true
+  vars:
+    router_lan_confirm_approved: false
+    router_asus_wan_dhcp_lease_verified: false
+    router_client_internet_verified: false
+  pre_tasks:
+    - name: Require explicit real-service verification on controller
+      ansible.builtin.assert:
+        that:
+          - router_lan_confirm_approved | bool
+          - router_asus_wan_dhcp_lease_verified | bool
+          - router_client_internet_verified | bool
+          - ansible_host == '192.168.3.1'
+        fail_msg: >-
+          Do not disarm rollback until ASUS WAN has .3.x DHCP lease
+          and a client on ASUS LAN actually browses through Pi PPPoE.
+      delegate_to: localhost
+      become: false
+
+  tasks:
+    - name: Confirm physical new Pi downstream LAN IP
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_cutover_new_lan
+      changed_when: false
+      failed_when: "'192.168.3.1/24' not in router_cutover_new_lan.stdout"
+
+    - name: Confirm services, ISP default and nft NAT; stop rollback
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-01-nm-cutover, confirm]
+      register: router_cutover_confirmation
+      changed_when: true
+
+    - name: Report complete router verification
+      ansible.builtin.debug:
+        msg:
+          - "PASS: ASUS WAN DHCP .3.x and ASUS client browsing verified by operator."
+          - "Pi eth0=192.168.3.1, Kea and Unbound active, ppp0 ISP route and NAT confirmed."
+          - "Automatic rollback timer stopped and disabled."
+          - "Host still named docker-01 until separately updated in inventory and docs."
