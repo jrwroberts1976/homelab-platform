@@ -1,0 +1,15 @@
+[Unit]
+Description=Protect Pi4 PPPoE WAN (ppp0) from unsolicited inbound IP traffic
+Documentation=https://github.com/jrwroberts1976/homelab-platform
+After=network-pre.target
+Before=router-pppoe.service
+ConditionPathExists=/etc/nftables.d/router-wan-guard.nft
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/nftables.d/router-wan-guard.nft
+ExecStop=/usr/sbin/nft delete table inet router_wan_guard
+
+[Install]
+WantedBy=multi-user.target
