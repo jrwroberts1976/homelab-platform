@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## LATEST — 27 Oct 2026: reinstated temporary 192.168.3.x transit for two-stage router migration
+
+**Explicit addressing choice for the current router plan:** user reversed the short-lived single-subnet handover preference and wants **temporary 192.168.3.0/24 restored**. First approved cutover: Pi 4 PPPoE WAN on USB NIC, Pi LAN 192.168.3.1/24 -> ASUS WAN 192.168.3.2/24, ASUS stays in router mode, with unchanged LAN gateway/DHCP 192.168.2.1, AiMesh and **whole HP switch and homelab behind ASUS LAN**. Temporary double NAT intentional; validate inbound VPN/port forwards, reduced client visibility and rollback. Second separately approved change: make Pi 192.168.2.1 LAN and Kea DHCP, ASUS AiMesh AP with unique 192.168.2.x management IP, switch on Pi LAN, retire temporary .3.x link. Never put router-mode ASUS WAN and LAN on the same .2 subnet; never operate duplicate .2.1 gateways or competing DHCP. No VLANs and no permanent renumbering.
+
+**Zero production network interruption before expressly approved handover remains mandatory**; Git-only/offline or physically isolated preparation. Existing Pi 4 BirdNET remains until approved retirement at handover. **All microphone/audio tests are deferred until after the router project is complete.** Runbook and issue #206 corrected on draft PR #207; no production changes.
+
+---
+
 ## 27 Oct 2026 — PPPoE WAN confirmed for new Pi router
 
 User confirmed current ISP Ethernet modem/ONT uses **PPPoE** and new Pi 4 router must terminate that connection on USB Ethernet WAN, while onboard Ethernet remains LAN. Git-only draft PR #207 runbook updated: Debian 13 `pppd`/`pppoe.so`, PPP interface-bound nftables/NAT/IPS, Ansible-Vault-like off-Git secrets/PAP/CHAP, reconnect monitoring, standard 1492 initial PPPoE MTU with MSS/PMTU validation, ISP VLAN/tag/IPv6 credential read-only discovery, isolated test/explicit cutover. Confirmed **no changes to existing ASUS PPPoE session, network, cables, DHCP, Pi 4 BirdNET or Pi 5** until approved handover; BirdNET microphone tests remain **post router project**. No live preflight or connection attempted.
