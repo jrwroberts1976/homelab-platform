@@ -19,3 +19,5 @@ router_dhcp_valid_lifetime: 3600
 router_pppoe_username: ""
 router_pppoe_password: ""
 router_pppoe_mtu: 1492
+router_pppoe_lcp_echo_interval: 6
+router_pppoe_lcp_echo_failure: 10
