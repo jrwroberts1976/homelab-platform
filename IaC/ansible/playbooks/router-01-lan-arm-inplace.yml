@@ -1,0 +1,72 @@
+---
+# TRIGGERS A REAL LOCAL CUTOVER IN 120 SECONDS. SSH WILL DROP.
+# Only execute after ASUS WAN set to AUTOMATIC IP and user is ready to
+# move Pi eth0 off HP switch and into ASUS WAN immediately after this returns.
+- name: Arm timed Pi4 to ASUS WAN router LAN cutover
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_lan_cutover_approved: false
+    router_asus_wan_automatic_ip_confirmed: false
+    router_operator_ready_to_rewire: false
+  pre_tasks:
+    - name: Local controller gate for real ISP/LAN disruption
+      ansible.builtin.assert:
+        that:
+          - router_lan_cutover_approved | bool
+          - router_asus_wan_automatic_ip_confirmed | bool
+          - router_operator_ready_to_rewire | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: >-
+          REFUSED: requires user-approved physical cutover,
+          ASUS WAN set to Automatic IP and readiness to rewire Pi eth0
+          to ASUS WAN during the 120-second grace period.
+      delegate_to: localhost
+      become: false
+
+  tasks:
+    - name: Require original management IPv4 immediately before arming
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_cutover_old_ip
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_cutover_old_ip.stdout"
+
+    - name: Require staged Netplan override, nft NAT, and local script
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-01-stage/lan/99-router-01-lan.yaml
+        - /var/lib/router-01-stage/forwarding/nftables.conf
+        - /usr/local/sbin/router-01-nm-cutover
+      register: router_cutover_resources
+
+    - name: Refuse if anything was not staged
+      ansible.builtin.assert:
+        that:
+          - router_cutover_resources.results | map(attribute='stat.isreg') | list == [true, true, true]
+
+    - name: Ensure the two DNS/DHCP services are still masked
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ item }}"]
+      loop: [kea-dhcp4-server.service, unbound.service]
+      register: router_cutover_masked
+      changed_when: false
+      failed_when: router_cutover_masked.stdout | trim != 'masked'
+
+    - name: Schedule LOCAL router cutover in 120 seconds without dropping SSH now
+      ansible.builtin.systemd_service:
+        name: router-lan-switch.timer
+        state: started
+      # Timer calls local service, not SSH, after the operator rewires.
+
+    - name: Report physical cable action and rollback timer window
+      ansible.builtin.debug:
+        msg:
+          - "ARMED: 120 seconds until local Pi eth0 switch to 192.168.3.1."
+          - "NOW unplug Pi eth0 from HP switch and connect it to ASUS WAN."
+          - "Keep ONT connected to Pi USB eth1; ASUS LAN stays on HP switch."
+          - "After switch, admin-01 can try SSH 192.168.3.1 via ASUS LAN."
+          - "Automatic rollback occurs 10 minutes after apply if not confirmed."
