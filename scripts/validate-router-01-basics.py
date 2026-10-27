@@ -213,6 +213,58 @@ def main() -> None:
     check("DOCKER_TRIVY_TEXTFILE_PRESENT=" in last_src,
           "Docker metrics retirement requires textfile presence evidence")
 
+    # The live Pi4 now uses NetworkManager. The PPPoE and Kea install phases
+    # must work on existing docker-01 without touching its old eth0 LAN.
+    for filename, gate in (
+        ("router-01-pppoe-install-inplace.yml", "router_pppoe_install_approved"),
+        ("router-01-pppoe-connect-inplace.yml", "router_pppoe_connect_approved"),
+        ("router-01-pppoe-stop-inplace.yml", "router_pppoe_stop_approved"),
+        ("router-01-dhcp-install-inplace.yml", "router_dhcp_install_approved"),
+    ):
+        staged = yaml.safe_load((ANSIBLE / "playbooks" / filename).read_text())[0]
+        check(staged["hosts"] == "docker-01",
+              f"{filename} must target existing Pi, not imaginary host")
+        check(staged["gather_facts"] is False,
+              f"{filename} needs local gate before SSH")
+        check(staged["vars"][gate] is False,
+              f"{filename} must default approval OFF")
+        check(staged["pre_tasks"][0].get("delegate_to") == "localhost",
+              f"{filename} must refuse before any host contact")
+        check(f"{gate} | bool" in
+              staged["pre_tasks"][0]["ansible.builtin.assert"]["that"],
+              f"{filename} missing controller approval")
+        src = (ANSIBLE / "playbooks" / filename).read_text()
+        check("'192.168.2.220' in ansible_facts.all_ipv4_addresses" in src
+              or "'192.168.2.220/24' not in" in src,
+              f"{filename} must retain old LAN SSH")
+        check("netplan apply" not in src and "networkctl reconfigure" not in src,
+              f"{filename} must not switch LAN")
+    ppp_install_src = (
+        ANSIBLE / "playbooks" / "router-01-pppoe-install-inplace.yml"
+    ).read_text()
+    check("policy_rc_d: 101" in ppp_install_src and "enabled: false" in ppp_install_src,
+          "PPPoE install must not auto-activate WAN")
+    check("no_log: true" in ppp_install_src,
+          "Real PPPoE credentials must not appear in Ansible output")
+    ppp_connect_src = (
+        ANSIBLE / "playbooks" / "router-01-pppoe-connect-inplace.yml"
+    ).read_text()
+    check("eth1" in ppp_connect_src and "router_eth1_carrier" in ppp_connect_src,
+          "PPPoE activation must require physically connected USB WAN")
+    check("router_pppoe_default_route" in ppp_connect_src,
+          "PPPoE activation must validate new default route")
+    kea_stage = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-dhcp-install-inplace.yml").read_text()
+    )[0]
+    check("policy_rc_d: 101" in str(kea_stage["tasks"]),
+          "Kea install must suppress service auto-start")
+    check(any(task.get("ansible.builtin.systemd_service", {}).get("masked")
+              is True for task in kea_stage["tasks"]),
+          "Kea must remain MASKED until LAN isolated")
+    check("192.168.3.1" in
+          (ANSIBLE / "roles" / "router_basics" / "defaults" / "main.yml").read_text(),
+          "Future Kea gateway must remain .3.1")
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
