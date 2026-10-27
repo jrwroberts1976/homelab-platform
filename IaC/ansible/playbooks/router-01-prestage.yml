@@ -1,6 +1,6 @@
 ---
 # User requirement: Keep old management IP reachable. New eth0 IP is the LAST step.
-# Approved, reimaged router-01 only. Does NOT install packages, modify system config,
+# Approved, in-place conversiond router-01 only. Does NOT install packages, modify system config,
 # reload network interfaces, reboot, start DNS/DHCP, or create a PPPoE connection.
 - name: Prestage router-01 templates before any LAN address cutover
   hosts: router_prestage
@@ -18,22 +18,22 @@
           - ansible_host == '192.168.2.220'
         fail_msg: >-
           REFUSED: staging must only run during approved router handover,
-          after docker-01 is retired and reimaged as router-01.
+          after docker-01 is retired and in-place conversiond as router-01.
       delegate_to: localhost
       become: false
 
     - name: Gather actual router-01 facts only after local approval
       ansible.builtin.setup:
 
-    - name: Look for reimage completion marker
+    - name: Look for in-place conversion completion marker
       ansible.builtin.stat:
-        path: /etc/router-01-reimage-complete
-      register: router_reimage_marker
+        path: /etc/router-01-conversion-approved
+      register: router_conversion_marker
 
     - name: Require new hostname, image marker, old LAN IP and correct NICs
       ansible.builtin.assert:
         that:
-          - router_reimage_marker.stat.isreg | default(false)
+          - router_conversion_marker.stat.isreg | default(false)
           - ansible_facts.hostname == 'router-01'
           - ansible_facts.distribution == 'Debian'
           - ansible_facts.distribution_major_version == '13'
@@ -42,8 +42,22 @@
           - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
           - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
         fail_msg: >-
-          REFUSED: current device is not the separately approved, reimaged
+          REFUSED: current device is not the separately approved, in-place conversiond
           router-01 on its OLD SSH management IP. Never prestage on docker-01.
+
+
+    - name: Ensure Docker service is no longer active on approved converted host
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: router_docker_daemon_status
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse router preparation while Docker is still active
+      ansible.builtin.assert:
+        that:
+          - router_docker_daemon_status.stdout | trim != 'active'
+        fail_msg: "Docker still active. Complete the reviewed service retirement first."
 
     - name: Require off-Git vaulted PPPoE credentials without revealing them
       ansible.builtin.assert:
