@@ -49,14 +49,14 @@ The user supplied ASUS RT-AC86U WAN configuration screenshots. **No WAN or ISP s
 
 **PPPoE credentials are sensitive:** a previously shared screenshot displayed the current login and password. **Do not commit, quote, send again, or paste these values into any issue/PR or terminal transcript.** Treat the exposed password as needing rotation via the ISP at a planned non-disruptive point; rotate stored Vault values then. The PPPoE username should also remain outside public Git. Do not attempt an uncoordinated password rotation while ASUS is connected.
 
-**Still unknown:** VLAN tag / priority or lack of tagging on the ONT uplink, usually configured separately under ASUS LAN > IPTV (ISP profile) rather than this WAN page. Verify read-only; never assume no tag from a blank PPPoE service name. Verify IPv6 separately. These are hard PPPoE handover prerequisites.
+**Latest user confirmation:** the ASUS has **no WAN VLAN configured and no IPTV settings/menu**. For the initial `router-01` build, use **untagged PPPoE directly on physical USB `eth1`**, with no `8021q` VLAN subinterface and no invented VLAN ID. This reflects the observed ASUS setup; a missing ASUS IPTV menu alone is not definitive ISP documentation. At the approved handover, if PPPoE discovery does not complete, verify actual ISP/ONT requirements before considering a tagged WAN. IPv6 support remains a separate open item.
 
 ## ISP settings to capture read-only
 
 From current ASUS WAN > Internet Connection and the ISP agreement:
 - Connection protocol: **PPPoE** (already confirmed)
 - PPPoE login **username and password**; enter these only into *your own encrypted Ansible Vault*, do **not** paste the password in Git/PR/chat or console logs
-- Any VLAN tag/priority needed on WAN (or **no tag**); unknown until checked. Do not guess an ISP VLAN ID.
+- **No VLAN setting is present on current ASUS (user-confirmed)**. Deploy untagged physical `eth1` for initial PPPoE; only revisit VLAN tagging if supported ISP/ONT evidence or connection testing requires it.
 - Special ISP access concentrator/PPPoE service name if configured (default: none)
 - MTU and any IPv6 requirements. Initial expected PPPoE MTU is **1492** on standard Ethernet, to be tested at cutover.
 - ISP modem/ONT remains connected to ASUS throughout preparation; no second PPPoE session now.
@@ -100,7 +100,7 @@ Only after an explicitly approved handover, physical console arrangement and suc
 
 It **only renders prospective PPPoE files** under `/var/lib/router-01-stage/pppoe`. It does not install packages, overwrite active `/etc/ppp` files, start `pppd`, connect the ONT, change LAN IP, change DNS, change DHCP, or disconnect SSH.
 
-**Actual PPPoE login tests, external IP, reconnection and performance tests must wait for the separately approved ISP handover.** Confirm whether a WAN VLAN is needed before attempting that connection. Successful authentication and default route do not automatically prove DHCP/DNS/firewall forwarding works.
+**Actual PPPoE login tests, external IP, reconnection and performance tests must wait for the separately approved ISP handover.** Start untagged as per the existing ASUS settings, without adding any VLAN device. Successful authentication and default route do not automatically prove DHCP/DNS/firewall forwarding works.
 
 ## Sources
 
