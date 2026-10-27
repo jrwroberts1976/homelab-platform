@@ -192,6 +192,23 @@ def main() -> None:
         check(not any(forbidden in cmd for cmd in commands),
               f"Unsafe command in Docker retirement: {forbidden}")
 
+    last_audit = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-retirement-config-readonly.yml").read_text()
+    )[0]
+    check(last_audit["hosts"] == "docker-01",
+          "Last pre-retirement audit must only target current docker-01")
+    for task in last_audit["tasks"]:
+        modules = [key for key in task if key.startswith("ansible.builtin.")]
+        check(all(key in {"ansible.builtin.assert", "ansible.builtin.command",
+                          "ansible.builtin.shell", "ansible.builtin.stat",
+                          "ansible.builtin.debug"} for key in modules),
+              "Last pre-retirement audit contains mutating Ansible modules")
+    last_src = (ANSIBLE / "playbooks" / "router-01-retirement-config-readonly.yml").read_text()
+    check("NETPLAN=" in last_src and "NGINX_SITES=" in last_src,
+          "Last audit must report safe Netplan/Nginx evidence")
+    check("DOCKER_TRIVY_TEXTFILE_PRESENT=" in last_src,
+          "Docker metrics retirement requires textfile presence evidence")
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
