@@ -1,4 +1,18 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — REAL encrypted PPPoE inputs successfully rendered on admin-01 (LOCAL ONLY)
+
+User ran from `~/projects/homelab-platform/IaC/ansible` on `admin-01`, on branch `feature/pi-router-iac-birdnet-poc-migration-20261027`:
+
+```text
+ansible-playbook -i localhost, -c local playbooks/router-01-pppoe-local-validate.yml --ask-vault-pass -e @<off-Git encrypted Vault>
+localhost: ok=3 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+PASS: PPPoE Vault variables and rendered configuration validated entirely on the controller
+```
+
+The encrypted `~/.config/router-01/pppoe-vault.yml` contains both populated PPPoE inputs and the actual PPPoE peer/secret templates rendered in memory. Password, username and Vault password were NOT disclosed. This did not contact Pi, ISP/ONT or ASUS; no PPPoE session or LAN IP change. **Confirmed: offline config ready; live authentication and network function not yet tested.** Further work requires preserving the current `docker-01` BirdNET and ASUS network until the approved handover. Initial setup uses untagged `eth1` PPPoE, planned new LAN `192.168.3.1` with final readdressing LAST. Recommended: verify secure recovery copy of encrypted Vault and password stored separately; any credential rotation to be coordinated with ISP and live ASUS.
+
+---
+
 ## 27 October 2026 — PPPoE localhost-only encrypted-Vault template validator CI PASSED
 
 GitHub Actions `Validate router-01 offline IaC` run **40483382741 SUCCESS** on draft PR #207. This includes a controller-only Ansible PPPoE playbook syntax check and execution with **dummy CI credentials**, and the existing router configuration/nft/Kea/Unbound checks. Estate and documentation guard run **40483382712 SUCCESS**. New runbook `IaC/ansible/router-01/PPPOE-FIRST.md` documents the safe `admin-01` run with the user's existing off-Git encrypted Vault, and explains no production host contact. **Next user action:** run that localhost-only command and report PASS/FAIL; do not print credentials. Still no live ISP session/reimage/network changes.
