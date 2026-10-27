@@ -127,6 +127,26 @@ Files remain inside private `/var/lib/router-01-stage/forwarding/`; they are NOT
 
 Why Docker reconciliation matters: Docker's historical iptables `FORWARD DROP` can drop packets despite an `accept` in a different nftables forward chain. See Docker's firewall docs: https://docs.docker.com/engine/network/firewall-nftables/ .
 
+## LAST USER DECISION: confirm PPPoE FIRST, then do a TEMPORARY Kea DHCP trial (headless)
+
+User lacks a screen for Pi4 and will lose chat/internet while changing the single ONT connection. They suggested: start Kea without enabling autostart, rewire, and reboot the Pi if it fails. **Do not accept reboot as reliable rollback from the previous cutover:** `router-01-nm-cutover` writes **persistent** `/etc/netplan/99-router-01-lan.yaml`, full `/etc/nftables.conf`, enables nftables/PPPoE and writes persistent forwarding sysctl. Rebooting may preserve those even if Kea was not enabled and may make client internet fail. First inspect whether the prior 120-second cutover ran or rolled back. Running unmasked Kea on eth0 while it shares the ASUS LAN .2 switch also risks competing DHCP, so it must be isolated.
+
+**New first operator step while the Pi still answers old `192.168.2.220` SSH:** pull feature branch and run only read-only PPPoE health:
+
+```bash
+cd ~/projects/homelab-platform
+git switch feature/pi-router-iac-birdnet-poc-migration-20261027
+git pull --ff-only origin feature/pi-router-iac-birdnet-poc-migration-20261027
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-pppoe-health-readonly.yml \
+  --limit docker-01 --ask-become-pass
+```
+
+It reports USB `eth1` carrier, PPPoE systemd active state, `ppp0` address presence, default routes, direct ping to 1.1.1.1 over PPP0 when up, Kea state, prior switch+rollback timers, marker files, and whether the persistent new LAN Netplan file exists. **No secrets, changes, WAN reconnect or DHCP start.** The check can only reach the Pi if its management address `.2.220` is reachable. If SSH reports UNREACHABLE, this does NOT mean PPPoE authentication failed; the previous Pi cable move/IP cutover may have disconnected management. No Ansible command sent to `admin-01` can then change Pi's isolated network. Recovery without monitor requires direct management over a laptop/ethernet adapter on isolated Pi eth0 (after establishing which LAN IPv4 is active) or restore cables only after Kea confirmed stopped, or another already-established management path. Never assert success based on earlier PPP0 test now that later ppp0 disappeared. ONT is a single uplink: for an actual retest, it must be physically connected to Pi USB eth1, not ASUS.
+
+After PPP0 stability and correct current Netplan confirmed, design a true *temporary, nonautostart* Kea test for physically isolated `.3` segment with a **local timed restoration of service AND old Netplan/firewall**. Reboot is not the rollback because of persistent cutover config.
+
 ## OFFLINE RECOVERY / DHCP-FIRST DIAGNOSTIC WHEN CHAT OR SSH IS UNAVAILABLE (27 Oct 2026)
 
 **User report:** after the delayed physical cutover was ARMED (7 OK/1 changed), confirming Pi `192.168.3.1` from admin-01 failed with `Network is unreachable`; admin-01 remained `192.168.2.48/24`, ASUS LAN `192.168.2.1` responded, and old Pi `192.168.2.220` did not respond. The ASUS reportedly **did not receive a WAN DHCP lease**. The user will not be able to use this chat once they unplug cables, so instructions must work WITHOUT internet, GitHub or assistant connectivity. **No validated proof yet of actual local switch success or rollback.**
