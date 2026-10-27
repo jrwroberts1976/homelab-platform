@@ -12,5 +12,5 @@ maxfail 0
 holdoff 10
 mtu {{ router_pppoe_mtu }}
 mru {{ router_pppoe_mtu }}
-lcp-echo-interval 20
-lcp-echo-failure 3
+lcp-echo-interval {{ router_pppoe_lcp_echo_interval }}
+lcp-echo-failure {{ router_pppoe_lcp_echo_failure }}
