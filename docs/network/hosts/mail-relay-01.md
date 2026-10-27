@@ -126,7 +126,7 @@ mail-relay-01 is CT102, an Ansible-managed Proxmox LXC running Debian GNU/Linux 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-27T04:16:59+00:00`
+- Last assessed: `2026-10-27T05:21:00+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
