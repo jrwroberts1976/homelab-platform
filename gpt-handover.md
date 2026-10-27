@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — final read-only retirement preflight + Docker Trivy safe retirement staged (not deployed)
+
+Following user's explicit acceptance that BirdNET-Go and Komodo Periphery will go offline at controlled Docker retirement, added `IaC/ansible/playbooks/router-01-retirement-config-readonly.yml` to query ONLY safe, non-secret eth0 Netplan persistence metadata, Nginx site filenames and whether configured for BirdNET/localhost:8080, Docker-specific Trivy textfile presence, and Komodo keys volume existence. **User has not yet run this read-only preflight.** Runbook `docs/network/ROUTER-01-INPLACE-DOCKER-RETIREMENT-2026-10-27.md` carries controller command.
+
+In default-deny `router-01-docker-retirement-approved.yml` (still NOT run and pending ALL five independent prerequisites), added logic to stop any active `homelab-trivy-docker.service` after disabling timer and remove **only** stale `/var/lib/prometheus/node-exporter/homelab_container_estate.prom` AFTER Docker retirement. Must coordinate/promote accurate **retired** metrics state in monitoring; keep other node-exporter/Alloy/Zabbix metrics and security scans for unrelated hosts. Never remove Komodo keys volume; don't reimage Debian or touch live `eth0 192.168.2.220`, ASUS PPPoE/DHCP. Repo still draft PR #207, issue #206.
+
+---
+
 ## 27 October 2026 — User approved BirdNET+Komodo downtime; Docker still running
 
 User explicitly answered **YES** to taking both existing Docker workloads offline **during the controlled Docker retirement**. This settles service-outage acceptability and does not need repeating. It does NOT verify separate prerequisites: Komodo Core managed-server deregistration / redeployment disabled, Trivy/Grafana/Prometheus container-metric retirement, backup and direct console proof, or approved runtime cutover. The dangerous Ansible `router-01-docker-retirement-approved.yml` remains DEFAULT DENY; **do not pass false gates to force it**. The live `docker-01` / `192.168.2.220`, ASUS PPPoE/DHCP, SSH, BirdNET and Komodo are still unchanged.
