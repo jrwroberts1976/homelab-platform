@@ -1,0 +1,169 @@
+---
+# Pre-install all future config and recovery files over OLD SSH 192.168.2.220.
+# Does NOT readdress, unmask/start Kea, enable forwarding, stop Docker, or
+# load/flush nftables. Safe to run with or WITHOUT an active ppp0.
+- name: Stage offline cutover and automatic rollback on existing Debian Pi4
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_lan_stage_approved: false
+    router_stage_root: /var/lib/router-01-stage
+  pre_tasks:
+    - name: Default-deny controller stage gate
+      ansible.builtin.assert:
+        that:
+          - router_lan_stage_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Router cutover stage is not approved or target is wrong."
+      delegate_to: localhost
+      become: false
+
+    - name: Collect existing host facts without changing network
+      ansible.builtin.setup:
+
+    - name: Require original Pi identity, LAN and exact interfaces
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'docker-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+          - (ansible_facts.get('eth0', {}).get('macaddress', '') | lower) == 'd8:3a:dd:5a:51:44'
+          - (ansible_facts.get('eth1', {}).get('macaddress', '') | lower) == '00:24:9b:63:b3:8a'
+
+    - name: Confirm current eth0 is Netplan plus NetworkManager
+      ansible.builtin.command:
+        argv: [nmcli, -g, GENERAL.CONNECTION, device, show, eth0]
+      register: router_stage_eth0_profile
+      changed_when: false
+      failed_when: router_stage_eth0_profile.stdout | trim != 'netplan-eth0'
+
+    - name: Validate existing Netplan eth0 source exists unchanged
+      ansible.builtin.stat:
+        path: /etc/netplan/90-NM-75a1216a-9d1a-30cd-8aca-ace5526ec021.yaml
+      register: router_stage_netplan
+    - name: Require existing eth0 Netplan file
+      ansible.builtin.assert:
+        that:
+          - router_stage_netplan.stat.isreg | default(false)
+
+    - name: Check Kea, Unbound are still disabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ item }}"]
+      loop: [kea-dhcp4-server.service, unbound.service]
+      register: router_stage_masked
+      changed_when: false
+      failed_when: router_stage_masked.stdout | trim != 'masked'
+
+    - name: Require PPPoE service is already installed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/router-pppoe.service
+      register: router_stage_pppoe_unit
+
+    - name: Refuse if PPPoE installation is missing
+      ansible.builtin.assert:
+        that:
+          - router_stage_pppoe_unit.stat.isreg | default(false)
+
+  tasks:
+    - name: Install nftables and tools for offline validation only
+      ansible.builtin.apt:
+        name: [nftables, iputils-ping]
+        state: present
+        policy_rc_d: 101
+
+    - name: Create private staging locations
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - "{{ router_stage_root }}"
+        - "{{ router_stage_root }}/lan"
+        - "{{ router_stage_root }}/forwarding"
+
+    - name: Stage NetworkManager Netplan override for post-cable move ONLY
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/router-lan-netplan-override.yaml"
+        dest: "{{ router_stage_root }}/lan/99-router-01-lan.yaml"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Stage complete future router firewall OFFLINE only
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/templates/nftables-pppoe-inplace.conf.j2"
+        dest: "{{ router_stage_root }}/forwarding/nftables.conf"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Validate future nft rules without replacing existing Docker chains
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, -c, -f, "{{ router_stage_root }}/forwarding/nftables.conf"]
+      changed_when: false
+
+    - name: Stage future forwarding sysctl without enabling it
+      ansible.builtin.copy:
+        content: "net.ipv4.ip_forward=1\n"
+        dest: "{{ router_stage_root }}/forwarding/90-router-01-forwarding.conf"
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Install isolated scheduled cutover program, no execution
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/router-01-nm-cutover.sh"
+        dest: /usr/local/sbin/router-01-nm-cutover
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Validate shell syntax before scheduled switch
+      ansible.builtin.command:
+        argv: [bash, -n, /usr/local/sbin/router-01-nm-cutover]
+      changed_when: false
+
+    - name: Install deferred switch and independent rollback systemd units
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - router-lan-switch.service
+        - router-lan-switch.timer
+        - router-lan-rollback.service
+        - router-lan-rollback.timer
+
+    - name: Reload systemd after installing unit files
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Assert no switch or rollback timer is prematurely running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [router-lan-switch.timer, router-lan-rollback.timer]
+      register: router_stage_timers
+      changed_when: false
+      failed_when: router_stage_timers.stdout | trim == 'active'
+
+    - name: Verify original SSH LAN remained unchanged by staging
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_lan_staged_ip
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_lan_staged_ip.stdout"
+
+    - name: Print preparation only - NO physical action yet
+      ansible.builtin.debug:
+        msg:
+          - "PASS: Future router .3.1 LAN, nft PPP NAT, Kea and rollback staged only."
+          - "Nothing started: Kea/Unbound masked, Docker untouched, PPP status unchanged."
+          - "Next: ASUS WAN Automatic IP; ARM play, then move Pi eth0 to ASUS WAN within 120s."
+          - "Automatic rollback 10 min after local switch unless confirmed from 192.168.3.1."
