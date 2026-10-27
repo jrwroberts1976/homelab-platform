@@ -1,6 +1,6 @@
 ---
 # Install an INERT rollback helper. It neither arms the timer nor changes network.
-# Future approved in-place conversiond router-01 ONLY, while old SSH IP is intact.
+# Future approved converted router-01 ONLY, while old SSH IP is intact.
 - name: Prepare router-01 offline LAN recovery before IP change
   hosts: router_prestage
   become: true
@@ -14,11 +14,11 @@
           - router_rollback_prepare_approved | bool
           - inventory_hostname == 'router-01'
           - ansible_host == '192.168.2.220'
-        fail_msg: "Recovery helper may only be prepared on approved in-place conversiond router-01."
+        fail_msg: "Recovery helper may only be prepared on approved converted router-01."
       delegate_to: localhost
       become: false
 
-    - name: Collect in-place conversiond host facts only after local approval
+    - name: Collect converted host facts only after local approval
       ansible.builtin.setup:
 
     - name: Check in-place conversion attestation
