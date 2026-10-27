@@ -1,0 +1,54 @@
+---
+# OFFLINE/CONTROLLER-ONLY. No SSH, package install, service activation or network change.
+# Invoke with --ask-vault-pass -e @/path/outside/repo/pppoe-vault.yml
+# Never print the plaintext credentials or rendered PPPoE files.
+- name: Validate private router-01 PPPoE inputs entirely on the Ansible controller
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars_files:
+    - ../roles/router_basics/defaults/main.yml
+
+  tasks:
+    - name: Require real, single-line PPPoE credentials from encrypted external Vault
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_username is string
+          - router_pppoe_password is string
+          - router_pppoe_username | trim | length > 0
+          - router_pppoe_password | trim | length > 0
+          - router_pppoe_username != 'YOUR_ISP_LOGIN'
+          - router_pppoe_password != 'YOUR_ISP_PASSWORD'
+          - router_pppoe_username.splitlines() | length == 1
+          - router_pppoe_password.splitlines() | length == 1
+        fail_msg: PPPoE Vault must contain nonempty real credentials; no values will be shown.
+      no_log: true
+
+    - name: Validate PPPoE peer and secret templates render using encrypted credentials
+      ansible.builtin.assert:
+        that:
+          - "'plugin pppoe.so' in router_pppoe_peer_candidate"
+          - "'nic-eth1' in router_pppoe_peer_candidate"
+          - "'mtu 1492' in router_pppoe_peer_candidate"
+          - "'mru 1492' in router_pppoe_peer_candidate"
+          - "'lcp-echo-interval 6' in router_pppoe_peer_candidate"
+          - "'lcp-echo-failure 10' in router_pppoe_peer_candidate"
+          - "('user ' ~ '"' ~ router_pppoe_username ~ '"') in router_pppoe_peer_candidate"
+          - router_pppoe_secrets_candidate | length > 0
+        fail_msg: PPPoE peer/secret template render validation failed; secrets will not be printed.
+      vars:
+        router_pppoe_peer_candidate: >-
+          {{ lookup('ansible.builtin.template',
+                    playbook_dir ~ '/../roles/router_basics/templates/ppp-homelab-wan.j2') }}
+        router_pppoe_secrets_candidate: >-
+          {{ lookup('ansible.builtin.template',
+                    playbook_dir ~ '/../roles/router_basics/templates/ppp-secrets.j2') }}
+      no_log: true
+
+    - name: Report local-only PPPoE verification
+      ansible.builtin.debug:
+        msg: >-
+          PASS: PPPoE Vault variables and rendered configuration validated entirely
+          on the controller; no values displayed, files installed, devices
+          contacted, WAN session started or LAN addresses changed.
