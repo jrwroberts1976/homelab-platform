@@ -6,6 +6,12 @@ Tracked in [issue #206](https://github.com/jrwroberts1976/homelab-platform/issue
 
 The build now has **two separate inventories**, neither of which changes canonical live `inventory/hosts.yml`. Only after an *approved handover* and retirement/in-place conversion of the Pi 4 as Debian 13 **router-01**, keep onboard `eth0` on the old SSH management address **`192.168.2.220`** while preparing configuration. This preserves your connection during configuration. Keep USB WAN `eth1` disconnected from the live ONT; do not enable a new DHCP server on the production LAN. Verify the Pi MAC addresses, new hostname, host-key fingerprint and full console/rollback access first. **Change `eth0` to `192.168.3.1/24` LAST**, inside the approved router handover when the ASUS is ready to take DHCP on its WAN.
 
+## IMPORTANT 27-Oct live audit update: NetworkManager, NOT networkd
+
+The production read-only audit returned **docker-01 12 OK / 0 changed**, showing **NetworkManager.service ACTIVE**, **systemd-networkd INACTIVE**; eth0 is still DHCP at `192.168.2.220`. **Do not run the legacy `router-01-lan-cutover` networkd script or `router-01-rollback-prepare.yml`.** The rollback playbook is now intentionally hard-disabled on the Ansible controller until an NM-native design is validated. The previous rollback scripts/templates are historical staged prototypes, **not tested or usable on this Pi**.
+
+See `docs/network/ROUTER-01-INPLACE-DOCKER-RETIREMENT-2026-10-27.md`. The next (read-only) action is `playbooks/router-01-inplace-dependencies-readonly.yml` on current `docker-01` to determine which NetworkManager profile truly owns eth0 and simulate package removal; **no purge, restart or network changes**. NetworkManager's built-in `nmcli device checkpoint --timeout` capability may provide a safer last-step rollback (official reference: https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html); design/test this with direct console after the audit.
+
 ## Latest build method — IN-PLACE CONVERSION, no reimage
 
 **User decision (27 October 2026): Keep the installed Debian 13 OS on the existing Pi 4.** Do not reimage, repartition or discard the OS. Docker containers and the Docker stack will be retired by a **separately approved, Ansible-managed change**, once a read-only inventory shows all dependencies. This includes BirdNET-Go POC, Komodo Periphery, Trivy/monitoring timers, and any other previously unknown containers or services. User does not require BirdNET recordings/history to be preserved; fresh BirdNET-Go on Pi 5 comes later.
