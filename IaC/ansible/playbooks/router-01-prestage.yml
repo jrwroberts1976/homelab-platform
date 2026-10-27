@@ -1,0 +1,95 @@
+---
+# User requirement: Keep old management IP reachable. New eth0 IP is the LAST step.
+# Approved, reimaged router-01 only. Does NOT install packages, modify system config,
+# reload network interfaces, reboot, start DNS/DHCP, or create a PPPoE connection.
+- name: Prestage router-01 templates before any LAN address cutover
+  hosts: router_prestage
+  gather_facts: false
+  become: true
+  vars:
+    router_prestage_approved: false
+    router_stage_directory: /var/lib/router-01-stage
+  pre_tasks:
+    - name: Refuse touching ANY host unless stage is explicitly approved
+      ansible.builtin.assert:
+        that:
+          - router_prestage_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: >-
+          REFUSED: staging must only run during approved router handover,
+          after docker-01 is retired and reimaged as router-01.
+      delegate_to: localhost
+      become: false
+
+    - name: Gather actual router-01 facts only after local approval
+      ansible.builtin.setup:
+
+    - name: Look for reimage completion marker
+      ansible.builtin.stat:
+        path: /etc/router-01-reimage-complete
+      register: router_reimage_marker
+
+    - name: Require new hostname, image marker, old LAN IP and correct NICs
+      ansible.builtin.assert:
+        that:
+          - router_reimage_marker.stat.isreg | default(false)
+          - ansible_facts.hostname == 'router-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - router_current_management_ip in ansible_facts.all_ipv4_addresses
+          - router_lan_address not in ansible_facts.all_ipv4_addresses
+          - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+          - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
+        fail_msg: >-
+          REFUSED: current device is not the separately approved, reimaged
+          router-01 on its OLD SSH management IP. Never prestage on docker-01.
+
+    - name: Require off-Git vaulted PPPoE credentials without revealing them
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_username | default('') | length > 0
+          - router_pppoe_password | default('') | length > 0
+        fail_msg: "Provide encrypted off-Git PPPoE credentials for the staged config."
+      no_log: true
+
+  tasks:
+    - name: Create root-private staging directory (does not affect active config)
+      ansible.builtin.file:
+        path: "{{ router_stage_directory }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Render inert prospective router configuration files
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/{{ item.src }}"
+        dest: "{{ router_stage_directory }}/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - { src: "10-router-lan.network.j2", dest: "10-router-lan.network" }
+        - { src: "20-router-wan.network.j2", dest: "20-router-wan.network" }
+        - { src: "ppp-homelab-wan.j2", dest: "ppp-homelab-wan" }
+        - { src: "ppp-secrets.j2", dest: "ppp-secrets" }
+        - { src: "router-pppoe.service.j2", dest: "router-pppoe.service" }
+        - { src: "kea-dhcp4.conf.j2", dest: "kea-dhcp4.conf" }
+        - { src: "unbound-router.conf.j2", dest: "unbound-router.conf" }
+        - { src: "nftables.conf.j2", dest: "nftables.conf" }
+      no_log: true
+
+    - name: Confirm old management address is still present after staging
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr, show, dev, "{{ router_lan_interface }}"]
+      register: router_staged_lan_check
+      changed_when: false
+      failed_when: router_current_management_ip not in router_staged_lan_check.stdout
+
+    - name: Confirm no LAN change or network service activation was attempted
+      ansible.builtin.debug:
+        msg:
+          - "router-01 prospective configs staged only in root-private directory"
+          - "Active LAN remains {{ router_current_management_ip }}"
+          - "DO NOT switch LAN IP until console/out-of-band access and timed rollback are tested"
