@@ -94,6 +94,15 @@
         group: root
         mode: '0600'
 
+    - name: Stage future persistent USB WAN unmanaged NetworkManager policy
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/90-router-01-wan-unmanaged.conf"
+        dest: "{{ router_stage_root }}/lan/90-router-01-wan-unmanaged.conf"
+        owner: root
+        group: root
+        mode: '0600'
+      # The policy is NOT installed into active NetworkManager until cutover.
+
     - name: Prepare isolated Netplan test root (no active interfaces modified)
       ansible.builtin.file:
         path: "{{ router_stage_root }}/netplan-validation/etc/netplan"
