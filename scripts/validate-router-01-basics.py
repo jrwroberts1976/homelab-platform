@@ -87,6 +87,32 @@ def main() -> None:
         check(forbidden not in prestage_src,
               f"Pre-stage must not activate/modify live networking: {forbidden}")
 
+    pppoe_play = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-pppoe-prestage.yml").read_text()
+    )[0]
+    check(pppoe_play["hosts"] == "router_prestage", "PPPoE stage wrong inventory")
+    check(pppoe_play["gather_facts"] is False, "PPPoE stage must guard before SSH")
+    check(pppoe_play["vars"]["router_pppoe_prestage_approved"] is False,
+          "PPPoE stage must default to refused")
+    check(pppoe_play["pre_tasks"][0].get("delegate_to") == "localhost",
+          "PPPoE stage must refuse from controller before contacting host")
+    pppoe_src = (ANSIBLE / "playbooks" / "router-01-pppoe-prestage.yml").read_text()
+    for required in ("router_pppoe_reimage_marker.stat.isreg",
+                     "router_current_management_ip in ansible_facts.all_ipv4_addresses",
+                     "router_expected_wan_mac",
+                     "router_expected_lan_mac",
+                     "no_log: true",
+                     "router_stage_directory }}/pppoe",
+                     "router_pppoe_service_status.stdout | trim != 'active'"):
+        check(required in pppoe_src, "PPPoE prestage guard missing: " + required)
+    for forbidden in ("ansible.builtin.apt:",
+                      "ansible.builtin.systemd_service:",
+                      "/etc/ppp/peers/homelab-wan",
+                      "/etc/systemd/network/20-router-wan.network",
+                      "networkctl reconfigure"):
+        check(forbidden not in pppoe_src,
+              "PPPoE prestage must not touch active paths: " + forbidden)
+
     # Package installation may occur only after the reimage and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
