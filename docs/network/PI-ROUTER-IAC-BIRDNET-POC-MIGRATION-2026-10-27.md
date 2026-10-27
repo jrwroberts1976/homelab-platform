@@ -14,6 +14,19 @@
 7. BirdNET-Go on Pi 4 `docker-01` is currently POC and is NOT to be migrated during this router project. Its retirement/reimage at approved handover requires explicit authority; historical recording/database preservation not needed. A fully fresh BirdNET-Go deployment on Pi 5 `media-01`, including microphone tests, is **separate and after router project completion**.
 8. Git/Ansible IaC owns builds, static network config, secrets deployment and rollback. Clean OS image, board-specific NIC facts, encrypted off-Git PPPoE and future VPN credentials, restore-to-Pi-5 procedure and offline rescue access are mandatory.
 
+## IMPLEMENTATION STAGED IN DRAFT PR #207 — future hostname `router-01`
+
+**New hostname choice:** at the *approved router reimage/handover*, retire the Pi 4 production identity `docker-01` and build a **new host named `router-01`**. Do not rename the currently running BirdNET host or change `IaC/inventory/estate.json`, canonical Ansible `inventory/hosts.yml`, DNS or `CURRENT-STATE.md` until live cutover confirms the new identity. There must be no simultaneous production `docker-01` and `router-01` entries referring to the same active machine.
+
+**Actual IaC now in the draft branch (files added; no deployment):**
+- `IaC/ansible/inventory/router-01-staging.yml` — separate, future-only staging inventory, `192.168.3.1`.
+- `IaC/ansible/playbooks/router-01-readonly.yml` — future reimaged host identity read-only inspection; **do not execute against the existing Pi 4**.
+- `IaC/ansible/playbooks/router-01-basics.yml` and `roles/router_basics/` — guarded host/MAC/OS validation, systemd-networkd LAN/PPPoE physical NIC definitions, `pppd` with vaulted PAP/CHAP secrets, Kea DHCP, Unbound DNS and nftables NAT/firewall, optional explicit separate activation.
+- `IaC/ansible/router-01/README.md` — bootstrap prerequisites, safe command sequence and explicit remaining validation/rollback tasks.
+- `scripts/validate-router-01-basics.py` and `.github/workflows/validate-router-01-basics.yml` — offline render/contract/native syntax checks and Ansible syntax, with **no SSH to a host**.
+
+**Safety/quality status:** Code is proposed implementation, **NOT yet validated on real Debian 13 Pi hardware**. A fresh Debian networkd/bootstrap image and isolated LAN with SSH console access are prerequisites; role refuses to run unless `router_deploy_approved=true`, hostname `router-01`, Debian 13, expected `eth0`/`eth1` MACs, and `.3.1` on LAN. Service activation separately requires `router_activate_services=true`. No claim of complete automated bare-metal provisioning yet; improve bootstrap after syntax and test feedback. Do not run code on the existing `docker-01`.
+
 ## Current documented production inventory (unchanged)
 
 Live-state truth is `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and `IaC/ansible/inventory/hosts.yml`.
