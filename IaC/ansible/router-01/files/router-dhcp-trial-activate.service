@@ -1,0 +1,8 @@
+[Unit]
+Description=Start headless isolated Pi4 DHCP trial after cable move
+After=NetworkManager.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-01-dhcp-trial start
+TimeoutStartSec=120
