@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Raspberry Pi 4 router — PPPoE, DHCP, Unbound DNS first (IaC)
 
 **Design state: 27 October 2026. No production changes approved, installed or performed.**
