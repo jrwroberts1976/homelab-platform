@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — PPPoE Vault credentials validated on admin-01
+
+User confirmed local Vault path `~/.config/router-01/pppoe-vault.yml`, `chmod 600`, header `$ANSIBLE_VAULT;1.1;AES256`, then ran a *redacted* parser which printed **PASS: PPPoE credentials present**; required PPPoE username/password are populated. No plaintext secrets were sent to ChatGPT or GitHub. Added future-only `IaC/ansible/playbooks/router-01-pppoe-local-validate.yml` which uses `hosts: localhost`, `connection: local`, no facts, no privilege escalation, external encrypted Vault via `--ask-vault-pass -e @/home/james/.config/router-01/pppoe-vault.yml`, sensitive tasks `no_log: true`, in-memory template evaluation. It only prints a generic PASS, never writes decrypted output or contacts `docker-01`. GitHub workflow now runs local template test with dummy CI-only credentials. See `IaC/ansible/router-01/PPPOE-FIRST.md`. Live ASUS/router, DHCP, Pi 4 BirdNET and WAN remain untouched. Await user to run controller-only test. No real ISP PPPoE session yet.
+
+---
+
 ## 27 October 2026 — encrypted PPPoE Vault file created locally on admin-01
 
 User ran `ansible-vault create ~/.config/router-01/pppoe-vault.yml` on `admin-01`, followed by `chmod 600`. The first line was verified to be `$ANSIBLE_VAULT;1.1;AES256`, so the file is encrypted; **the encrypted contents / required variable names and values are not yet independently verified**. Vault file lives in the user's home config directory, outside Git; neither PPPoE username/password nor Vault password was committed or repeated. Next safe step: check that keys `router_pppoe_username` and `router_pppoe_password` are populated by parsing decrypted YAML **locally without printing any values**. Need ISP credential rotation in planned non-disruptive maintenance because earlier screenshot exposed the PPPoE password. WAN network, ASUS and active `docker-01` still unchanged.
