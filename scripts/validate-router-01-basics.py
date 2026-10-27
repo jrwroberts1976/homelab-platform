@@ -146,6 +146,52 @@ def main() -> None:
                   for line in dependency_src.splitlines()),
           "Do not expose NetworkManager profile secrets")
 
+    retired = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-docker-retirement-approved.yml").read_text()
+    )[0]
+    check(retired["hosts"] == "docker-01",
+          "Docker retirement must target current managed docker-01")
+    check(retired["gather_facts"] is False,
+          "Docker retirement must check approvals before SSH")
+    approvals = [
+        "router_docker_retirement_approved",
+        "router_komodo_deregistration_verified",
+        "router_trivy_monitoring_reconciled",
+        "router_retirement_backup_verified",
+        "router_retirement_console_ready",
+    ]
+    for key in approvals:
+        check(retired["vars"][key] is False,
+              f"Docker retirement approval {key} must default false")
+        check(f"{key} | bool" in
+              retired["pre_tasks"][0]["ansible.builtin.assert"]["that"],
+              f"Controller must verify {key}")
+    check(retired["pre_tasks"][0]["delegate_to"] == "localhost",
+          "Docker retirement must refuse locally before SSH")
+    retired_source = (
+        ANSIBLE / "playbooks" / "router-01-docker-retirement-approved.yml"
+    ).read_text()
+    check("apt-get, -s, remove" in retired_source,
+          "Docker retirement requires apt simulation before uninstall")
+    check("autoremove: false" in retired_source
+          and "purge: false" in retired_source,
+          "Docker retirement may not purge or autoremove")
+    check("docker, compose, -f" in retired_source
+          and " down]" in retired_source,
+          "Docker retirement must stop ONLY exact Compose projects")
+    for forbidden in (
+        "docker system prune", "--volumes", "rm -rf /var/lib/docker",
+        "netplan apply", "nmcli connection modify", "hostnamectl set-hostname",
+    ):
+        # The playbook comments may mention avoided behaviours;
+        # disallow only the actual commands/modules at runtime.
+        commands = [
+            str(task.get("ansible.builtin.command", ""))
+            for task in retired.get("tasks", [])
+        ]
+        check(not any(forbidden in cmd for cmd in commands),
+              f"Unsafe command in Docker retirement: {forbidden}")
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
