@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — encrypted PPPoE Vault file created locally on admin-01
+
+User ran `ansible-vault create ~/.config/router-01/pppoe-vault.yml` on `admin-01`, followed by `chmod 600`. The first line was verified to be `$ANSIBLE_VAULT;1.1;AES256`, so the file is encrypted; **the encrypted contents / required variable names and values are not yet independently verified**. Vault file lives in the user's home config directory, outside Git; neither PPPoE username/password nor Vault password was committed or repeated. Next safe step: check that keys `router_pppoe_username` and `router_pppoe_password` are populated by parsing decrypted YAML **locally without printing any values**. Need ISP credential rotation in planned non-disruptive maintenance because earlier screenshot exposed the PPPoE password. WAN network, ASUS and active `docker-01` still unchanged.
+
+---
+
 ## Latest — 27 Oct 2026: ISP PPPoE expected untagged, no ASUS IPTV menu
 
 User clarified ASUS has **no VLAN configured and no IPTV page/option**. Updated issue #206 and `IaC/ansible/router-01/PPPOE-FIRST.md`: initial future `router-01` PPPoE will use **untagged `eth1` USB Ethernet** with `pppd` `pppoe.so`, no invented VLAN, no `8021q` subinterface. If PPPoE discovery fails during approved cutover, revisit actual ONT/ISP tagging evidence then; missing menu is not definitive ISP-side proof. No active network/device/ASUS/BirdNET change, no second PPPoE session. PPPoE credentials must remain outside Git in encrypted Vault and not appear in logs/chat.
