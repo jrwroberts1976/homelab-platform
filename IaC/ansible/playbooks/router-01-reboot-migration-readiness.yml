@@ -1,0 +1,82 @@
+---
+# Read-only, no boot arming or reboot. Check installed source and boot prerequisites.
+- name: Check router reboot recovery readiness without changing runtime
+  hosts: docker-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Check old LAN is still on eth0
+      ansible.builtin.command: ip -4 -o addr show dev eth0
+      register: old_lan
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in old_lan.stdout"
+
+    - name: Check installed script syntax
+      ansible.builtin.command: bash -n /usr/local/sbin/router-01-reboot-migration
+      changed_when: false
+
+    - name: Verify installed systemd units
+      ansible.builtin.command:
+        argv:
+          - systemd-analyze
+          - verify
+          - /etc/systemd/system/router-01-reboot-activate.service
+          - /etc/systemd/system/router-01-reboot-rollback.service
+          - /etc/systemd/system/router-01-reboot-rollback.timer
+      changed_when: false
+
+    - name: Require recovery is tied to actual boot instead of service activation
+      ansible.builtin.command:
+        argv: [systemctl, show, router-01-reboot-rollback.timer, -p, TimersMonotonic]
+      register: timer_schedule
+      changed_when: false
+      failed_when: "'OnBootSec' not in timer_schedule.stdout and 'OnBoot' not in timer_schedule.stdout"
+
+    - name: Require arm not enabled before explicit approval
+      ansible.builtin.command: "systemctl is-enabled {{ item }}"
+      register: armed
+      changed_when: false
+      failed_when: armed.stdout | trim != 'disabled'
+      loop:
+        - router-01-reboot-activate.service
+        - router-01-reboot-rollback.timer
+
+    - name: Ensure old migration timers remain inactive
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      register: old_timer
+      changed_when: false
+      failed_when: old_timer.stdout | trim == 'active'
+      loop:
+        - router-lan-switch.timer
+        - router-lan-rollback.timer
+
+    - name: Require DHCP services masked before physical isolation
+      ansible.builtin.command: "systemctl is-enabled {{ item }}"
+      register: old_dhcp
+      changed_when: false
+      failed_when: old_dhcp.stdout | trim != 'masked'
+      loop:
+        - kea-dhcp4-server.service
+        - unbound.service
+
+    - name: Check staged firewall and DHCP syntax
+      ansible.builtin.command:
+        argv: [nft, -c, -f, /var/lib/router-01-reboot-migration/boot/nftables.conf]
+      changed_when: false
+
+    - name: Confirm staged Kea syntax
+      ansible.builtin.command:
+        argv: [kea-dhcp4, -t, /etc/kea/kea-dhcp4.conf]
+      changed_when: false
+
+    - name: Confirm staged DNS syntax
+      ansible.builtin.command:
+        argv: [unbound-checkconf]
+      changed_when: false
+
+    - name: Report readiness scope
+      ansible.builtin.debug:
+        msg:
+          - "STATIC READINESS CHECK PASSED (not an end-to-end boot/rollback test)."
+          - "Both migration units disabled; no network changed."
+          - "No cutover until physical rollback plan and ASUS management route understood."
