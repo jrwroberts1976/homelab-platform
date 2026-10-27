@@ -340,6 +340,77 @@ def main() -> None:
                               str(ANSIBLE / "router-01" / "templates" /
                                   "nftables-pppoe-inplace.conf.j2")])
 
+    cutover = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-lan-stage-inplace.yml").read_text()
+    )[0]
+    check(cutover["hosts"] == "docker-01" and
+          cutover["gather_facts"] is False and
+          cutover["vars"]["router_lan_stage_approved"] is False and
+          cutover["pre_tasks"][0]["delegate_to"] == "localhost",
+          "LAN stage must default-deny on the old docker-01 before any SSH")
+    cutover_source = (
+        ANSIBLE / "playbooks" / "router-01-lan-stage-inplace.yml"
+    ).read_text()
+    check("netplan, generate, --root-dir" in cutover_source,
+          "Validate merged Netplan on isolated root before changing live eth0")
+    check("router-lan-rollback.timer" in cutover_source and
+          "router-lan-switch.timer" in cutover_source,
+          "Both local switch and rollback units must be staged")
+    check("systemctl unmask" not in cutover_source and
+          "netplan apply" not in cutover_source,
+          "Staging must never start DHCP or readdress current eth0")
+    arm = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-lan-arm-inplace.yml").read_text()
+    )[0]
+    check(arm["hosts"] == "docker-01" and arm["gather_facts"] is False,
+          "LAN arm must address current old Pi and gate before SSH")
+    for key in ("router_lan_cutover_approved",
+                "router_asus_wan_automatic_ip_confirmed",
+                "router_operator_ready_to_rewire"):
+        check(arm["vars"][key] is False and
+              f"{key} | bool" in arm["pre_tasks"][0]["ansible.builtin.assert"]["that"],
+              f"Physical LAN arm missing default-deny flag: {key}")
+    check(arm["pre_tasks"][0]["delegate_to"] == "localhost",
+          "Arming physical cutover must have controller gate")
+    confirm = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-lan-confirm-inplace.yml").read_text()
+    )[0]
+    check(confirm["hosts"] == "router_cutover_new"
+          and confirm["vars"]["router_lan_confirm_approved"] is False
+          and confirm["vars"]["router_client_internet_verified"] is False,
+          "Cutover confirmation must require verified client internet")
+    switch_text = (
+        ANSIBLE / "router-01" / "files" / "router-01-nm-cutover.sh"
+    ).read_text()
+    for needed in (
+        'systemctl enable --now "$ROLLBACK_TIMER"',
+        'netplan apply',
+        'systemctl unmask kea-dhcp4-server.service unbound.service',
+        'nft -f "$LIVE_NFT"',
+        '192.168.3.1/24',
+        'ping -n -I eth0',
+        'systemctl disable --now "$ROLLBACK_TIMER"',
+        "rollback()",
+    ):
+        check(needed in switch_text,
+              f"Timed LAN cutover required guard missing: {needed}")
+    check(switch_text.index('systemctl enable --now "$ROLLBACK_TIMER"')
+          < switch_text.index('netplan apply'),
+          "Rollback timer MUST arm before first LAN readdress")
+    check(switch_text.index('stop_docker') < switch_text.index('nft -f "$LIVE_NFT"'),
+          "Do not flush active Docker firewall while Docker is still running")
+    check("OnActiveSec=10min" in
+          (ANSIBLE / "router-01" / "files" / "router-lan-rollback.timer").read_text(),
+          "Ten-minute automatic rollback required")
+    check("OnActiveSec=120s" in
+          (ANSIBLE / "router-01" / "files" / "router-lan-switch.timer").read_text(),
+          "Deferred physical rewiring needs 120 seconds")
+    cutover_inventory = yaml.safe_load(
+        (ANSIBLE / "inventory" / "router-01-cutover-new.yml").read_text()
+    )
+    check(cutover_inventory["all"]["children"]["router_cutover_new"]["hosts"]["router-01"]["ansible_host"] ==
+          "192.168.3.1", "Confirm host must be new isolated Pi LAN .3.1")
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
