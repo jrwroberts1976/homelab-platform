@@ -152,19 +152,25 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
-mark "provision SSH and verify services"
+mark "create SSH user"
 chroot "$ROOT" useradd -m -s /bin/bash james 2>/dev/null || true
+mark "install SSH authorized key"
 install -d -m 0700 "$ROOT/home/james/.ssh"
 install -m 0600 "$PUBKEY" "$ROOT/home/james/.ssh/authorized_keys"
 chroot "$ROOT" chown -R james:james /home/james/.ssh
 install -d -m 0750 "$ROOT/etc/sudoers.d"
 echo "james ALL=(ALL:ALL) NOPASSWD:ALL" > "$ROOT/etc/sudoers.d/90-james-router"
 chmod 0440 "$ROOT/etc/sudoers.d/90-james-router"
+mark "enable boot services"
 chroot "$ROOT" systemctl disable kea-dhcp4-server.service 2>/dev/null || true
 chroot "$ROOT" systemctl enable systemd-networkd.service dnsmasq.service unbound.service nftables.service router-pppoe.service ssh.service
+mark "validate dnsmasq"
 chroot "$ROOT" dnsmasq --test
+mark "validate unbound"
 chroot "$ROOT" unbound-checkconf
-chroot "$ROOT" nft -c -f /etc/nftables.conf
+mark "validate nftables"
+# nft check works in the host mount namespace, with path to image.
+nft -c -f "$ROOT/etc/nftables.conf"
 echo "nameserver 127.0.0.1" > "$ROOT/etc/resolv.conf"
 sync
 printf "SUCCESS: image assembled, boot not tested\n" > "$STATUS"
