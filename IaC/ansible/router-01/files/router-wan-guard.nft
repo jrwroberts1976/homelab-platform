@@ -1,0 +1,11 @@
+#!/usr/sbin/nft -f
+# Standalone guard for an already-authenticated Pi4 ppp0 before LAN cutover.
+# Do NOT flush the running Docker/iptables/nftables ruleset.
+# Block only NEW unsolicited traffic arriving from the ISP PPP link.
+table inet router_wan_guard {
+  chain wan_input {
+    type filter hook input priority -10; policy accept;
+    iifname "ppp0" ct state established,related accept
+    iifname "ppp0" counter drop
+  }
+}
