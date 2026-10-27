@@ -94,6 +94,29 @@
         group: root
         mode: '0600'
 
+    - name: Prepare isolated Netplan test root (no active interfaces modified)
+      ansible.builtin.file:
+        path: "{{ router_stage_root }}/netplan-validation/etc/netplan"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Copy current real Netplan definitions into isolated validation root
+      ansible.builtin.shell: |
+        cp -a /etc/netplan/*.yaml "{{ router_stage_root }}/netplan-validation/etc/netplan/"
+        cp "{{ router_stage_root }}/lan/99-router-01-lan.yaml" \
+          "{{ router_stage_root }}/netplan-validation/etc/netplan/99-router-01-lan.yaml"
+      args:
+        executable: /bin/bash
+      changed_when: true
+      no_log: true
+
+    - name: Generate future NetworkManager profile OFFLINE to validate YAML merge
+      ansible.builtin.command:
+        argv: [netplan, generate, --root-dir, "{{ router_stage_root }}/netplan-validation"]
+      changed_when: false
+
     - name: Stage complete future router firewall OFFLINE only
       ansible.builtin.copy:
         src: "{{ playbook_dir }}/../router-01/templates/nftables-pppoe-inplace.conf.j2"
