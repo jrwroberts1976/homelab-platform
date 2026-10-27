@@ -127,6 +127,65 @@ Files remain inside private `/var/lib/router-01-stage/forwarding/`; they are NOT
 
 Why Docker reconciliation matters: Docker's historical iptables `FORWARD DROP` can drop packets despite an `accept` in a different nftables forward chain. See Docker's firewall docs: https://docs.docker.com/engine/network/firewall-nftables/ .
 
+## CURRENT NEXT STEP — SINGLE-ONT PI ROUTER + ASUS WAN DHCP (27 Oct 2026)
+
+**Physical network desired by user**: only Pi USB `eth1` connects to the Vodafone ONT; the Pi onboard `eth0` connects DIRECTLY to the **ASUS WAN**; ASUS **LAN** still connects to the HP switch and continues DHCP `192.168.2.1/24` to current clients. The ASUS **WAN must be configured to Automatic IP/DHCP** (it will receive a lease in `192.168.3.100–199` from Pi Kea). Temporary double NAT is intentional; ASUS AP mode is a separate future change.
+
+**Live last-known**: user successfully authenticated PPPoE, then `router-01-wan-guard-inplace.yml` failed on **missing `ppp0`**, 3 OK/0 changed/1 failed at 11:56, proving no WAN guard actually installed. ISP ONT may have been moved back to ASUS; PPP can be disconnected without invalidating the pre-stage. `router-01-wan-guard-inplace.yml` has since been corrected to install a protective nft INPUT rule for `ppp0` even when the interface is temporarily absent. Existing Kea/Unbound are MASKED. **Do not rerun the old `router-01-firewall-stage-inplace.yml` requiring PPP up**; the NEW full cutover stage below replaces it.
+
+### Stage router with old SSH available, no network change
+
+**Do this while `admin-01` still has internet and can pull GitHub**, before changing ASUS WAN mode or unplugging the working ONT connection. Run:
+
+```bash
+cd ~/projects/homelab-platform
+git switch feature/pi-router-iac-birdnet-poc-migration-20261027
+git pull --ff-only origin feature/pi-router-iac-birdnet-poc-migration-20261027
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-lan-stage-inplace.yml \
+  --limit docker-01 --ask-become-pass \
+  -e router_lan_stage_approved=true
+```
+
+This stages `99-router-01-lan.yaml` for Netplan+NetworkManager, persistent unmanaged USB eth1 (PPPoE), `192.168.3.1/24`, full nftables PPP NAT/firewall, forwarding sysctl and **local 120-second deferred cutover + 10-minute automatic rollback**. It specifically runs `netplan generate --root-dir` with a temporary copy of the Pi's actual Netplan YAML: **validates the merge without changing active networking**. Confirms Kea/Unbound remain masked; Docker still untouched. PPPoE **does not need to be active** for staging. **STOP if staging fails; do not physically cut over.**
+
+### Physical activation: one WAN, ASUS downstream
+
+1. In ASUS web interface `192.168.2.1`, set Internet/WAN type **Automatic IP** (not PPPoE); leave ASUS operating mode **Wireless Router**, LAN `192.168.2.1/24` and DHCP/AiMesh unchanged. Its internet will stop until the Pi takes over.
+2. Ensure the new stage Ansible above reported PASS. Keep Pi `eth0` on HP switch for the next ARM command (SSH is `192.168.2.220`). `admin-01` stays ASUS LAN `192.168.2.48`.
+3. **ARM a detached local switch**, which starts **120 seconds AFTER** the command returns. This is the last Ansible call to the old IP:
+   ```bash
+   ansible-playbook -i inventory/hosts.yml \
+     playbooks/router-01-lan-arm-inplace.yml \
+     --limit docker-01 --ask-become-pass \
+     -e router_lan_cutover_approved=true \
+     -e router_asus_wan_automatic_ip_confirmed=true \
+     -e router_operator_ready_to_rewire=true
+   ```
+4. **IMMEDIATELY AFTER ARM returns**, within the 120-second grace period: connect **ONT → Pi USB eth1**, unplug **Pi eth0 from HP switch** and connect **Pi eth0 → ASUS WAN**. Keep **ASUS LAN → HP switch**, other devices unchanged. There is now no electrical connection between the new Pi `192.168.3.0/24` segment and the old ASUS `192.168.2.0/24` switch segment except through ASUS routing.
+5. The Pi's scheduled local program refuses to act if old ASUS `192.168.2.1` is still responding on `eth0`, or if the cable carrier is absent; it arms the **10-min rollback timer before readdressing**. It stops Docker's two approved workloads, disables Docker/socket/runtime (without package purge or volume/key deletion), installs the validated Netplan `.3.1` override, loads complete nft PPP WAN/NAT rules, enables IPv4 forwarding, starts Unbound/Kea on `.3`, and restarts/reenables PPPoE to reconnect to ONT. SSH `.2.220` intentionally ceases; Pi is reachable at `192.168.3.1` **through the ASUS WAN when its DHCP lease succeeds**.
+6. In ASUS WAN status, verify it receives `192.168.3.100–199` with gateway/DNS `192.168.3.1`. Test internet on a device connected to ASUS LAN.
+7. **ONLY IF** an ASUS LAN device browses successfully and the ASUS WAN lease is valid, DISARM rollback from `admin-01` using the new inventory and existing Ansible credentials:
+   ```bash
+   ansible-playbook -i inventory/router-01-cutover-new.yml \
+     playbooks/router-01-lan-confirm-inplace.yml \
+     --limit router-01 --ask-become-pass \
+     -e router_lan_confirm_approved=true \
+     -e router_asus_wan_dhcp_lease_verified=true \
+     -e router_client_internet_verified=true
+   ```
+   The confirmation play requires real `ppp0` IPv4+default, active Kea/Unbound and nft NAT, then stops the rollback timer. Do NOT falsely attest success.
+
+### If new network does not come up
+
+- Do not turn on Kea manually on the old HP switch. If unconfirmed, local `router-lan-rollback.timer` restores previous Netplan DHCP and stops Kea/Unbound/PPPoE after ten minutes from activation. If the switch preflight aborts before changing networks, the rollback should not be needed.
+- **Physically reconnect Pi eth0 to HP switch** and **ONT to ASUS WAN**. Restore ASUS WAN PPPoE settings (it was changed to Automatic IP during cutover) to return old internet. The old Pi `192.168.2.220` management DHCP becomes available again when cables are back.
+- The legacy systemd-networkd rollback helpers are **not compatible** and remain disabled. Do NOT run them.
+- Check Pi locally using monitor/keyboard or via reachable IP: `sudo /usr/local/sbin/router-01-nm-cutover status`, and journal `sudo journalctl -u router-lan-switch.service -u router-lan-rollback.service -n 100 --no-pager` (no PPP passwords). When the Pi is online at new `.3.1`, SSH may be reached from ASUS LAN `.2.x` via its WAN routing.
+
+**KNOWN LIMITATIONS:** Stage/play syntax and Netplan offline generation cannot prove the ASUS WAN config or physical cabling; actual operation needs physical change. The hostname remains `docker-01` until separate IaC inventory/doc migration, and Komodo/BirdNET run their last cycles until cutover stops Docker. The previous observed `ppp0` dropout could indicate ONT moved back or a separate PPP stability issue; the cutover program retries PPP, but connection success still requires the actual ONT carrier and ISP session. If this fails it will not pretend success.
+
 ## 4. NEXT — connect DHCP and routing AFTER PPPoE PASS
 
 The final **LAN and client forwarding** step is separate, because the existing old `.2.x` LAN must NOT share a broadcast segment with the new Kea DHCP server. Changing `eth0` while logged in to `.2.220` can break the SSH session.
