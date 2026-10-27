@@ -1,0 +1,16 @@
+# PPPoE client for router-01. ISP user secret in protected chap/pap files.
+plugin pppoe.so
+nic-{{ router_wan_interface }}
+user "{{ router_pppoe_username }}"
+noipdefault
+noauth
+defaultroute
+replacedefaultroute
+hide-password
+persist
+maxfail 0
+holdoff 10
+mtu {{ router_pppoe_mtu }}
+mru {{ router_pppoe_mtu }}
+lcp-echo-interval 20
+lcp-echo-failure 3

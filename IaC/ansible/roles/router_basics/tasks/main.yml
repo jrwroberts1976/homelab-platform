@@ -1,0 +1,168 @@
+---
+# A safe guard is deliberately repeated within the role, not just in the play.
+- name: Refuse unapproved or incorrectly named target
+  ansible.builtin.assert:
+    that:
+      - router_deploy_approved | bool
+      - inventory_hostname == 'router-01'
+      - ansible_facts.hostname == router_hostname_expected
+      - ansible_facts.distribution == 'Debian'
+      - ansible_facts.distribution_major_version == '13'
+      - router_lan_address in ansible_facts.all_ipv4_addresses
+      - "'192.168.2.220' not in ansible_facts.all_ipv4_addresses"
+      - (ansible_facts.default_ipv4.gateway | default('')) != '192.168.2.1'
+      - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+      - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
+    fail_msg: >-
+      REFUSED: requires a freshly reimaged Debian 13 router-01 with
+      192.168.3.1 on the expected LAN and verified eth0/USB NIC identities.
+      DO NOT run against docker-01 before approved handover.
+
+- name: Check vault-backed ISP credentials without showing values
+  ansible.builtin.assert:
+    that:
+      - router_pppoe_username | length > 0
+      - router_pppoe_password | length > 0
+      - "'\n' not in router_pppoe_username"
+      - "'\n' not in router_pppoe_password"
+    fail_msg: "PPPoE username/password must come from a secure external Ansible Vault."
+  no_log: true
+
+- name: Confirm systemd-networkd owns network on reimaged system
+  ansible.builtin.command:
+    argv: [systemctl, is-active, systemd-networkd.service]
+  register: router_networkd
+  changed_when: false
+  failed_when: router_networkd.stdout | trim != 'active'
+
+- name: Install baseline packages ONLY on reimaged/guarded router
+  ansible.builtin.apt:
+    name:
+      - ppp
+      - kea-dhcp4-server
+      - unbound
+      - nftables
+    state: present
+    update_cache: true
+    cache_valid_time: 3600
+
+- name: Install LAN and raw WAN systemd-networkd definitions (do not reload network)
+  ansible.builtin.template:
+    src: "{{ item.src }}"
+    dest: "{{ item.dest }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - { src: "10-router-lan.network.j2", dest: "/etc/systemd/network/10-router-lan.network" }
+    - { src: "20-router-wan.network.j2", dest: "/etc/systemd/network/20-router-wan.network" }
+
+- name: Install PPPoE peer profile
+  ansible.builtin.template:
+    src: ppp-homelab-wan.j2
+    dest: /etc/ppp/peers/homelab-wan
+    owner: root
+    group: root
+    mode: "0600"
+  no_log: true
+
+- name: Install dedicated PPPoE CHAP and PAP secret files on fresh image
+  ansible.builtin.template:
+    src: ppp-secrets.j2
+    dest: "{{ item }}"
+    owner: root
+    group: root
+    mode: "0600"
+  loop:
+    - /etc/ppp/chap-secrets
+    - /etc/ppp/pap-secrets
+  no_log: true
+
+- name: Install guarded PPPoE service unit
+  ansible.builtin.template:
+    src: router-pppoe.service.j2
+    dest: /etc/systemd/system/router-pppoe.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install Kea DHCP configuration and validate syntax
+  ansible.builtin.template:
+    src: kea-dhcp4.conf.j2
+    dest: /etc/kea/kea-dhcp4.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/kea-dhcp4 -t -c %s"
+
+- name: Install Unbound recursive DNS LAN policy
+  ansible.builtin.template:
+    src: unbound-router.conf.j2
+    dest: /etc/unbound/unbound.conf.d/router-01.conf
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Check Unbound configuration syntax
+  ansible.builtin.command:
+    argv: [/usr/sbin/unbound-checkconf]
+  changed_when: false
+
+- name: Install and syntax-validate complete router nftables ruleset
+  ansible.builtin.template:
+    src: nftables.conf.j2
+    dest: /etc/nftables.conf
+    owner: root
+    group: root
+    mode: "0644"
+    validate: "/usr/sbin/nft -c -f %s"
+
+- name: Configure IPv4 forwarding for isolated router
+  ansible.builtin.copy:
+    dest: /etc/sysctl.d/90-router-01-forwarding.conf
+    content: "net.ipv4.ip_forward=1\n"
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd unit metadata
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+
+- name: Do not activate unfinished router services by default
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: false
+    state: stopped
+  loop:
+    - router-pppoe.service
+    - kea-dhcp4-server.service
+    - unbound.service
+    - nftables.service
+  when: not (router_activate_services | bool)
+
+- name: Explicit activation gate - must be separately authorised
+  ansible.builtin.assert:
+    that:
+      - router_deploy_approved | bool
+      - router_activate_services | bool
+    fail_msg: "Cannot start router services without both explicit flags."
+  when: router_activate_services | bool
+
+- name: Apply forwarding sysctl (only during approved activation)
+  ansible.builtin.command:
+    argv: [sysctl, -p, /etc/sysctl.d/90-router-01-forwarding.conf]
+  changed_when: true
+  when: router_activate_services | bool
+
+- name: Start firewall, recursive DNS, DHCP and PPPoE only on approved activation
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    enabled: true
+    state: started
+  loop:
+    - nftables.service
+    - unbound.service
+    - kea-dhcp4-server.service
+    - router-pppoe.service
+  when: router_activate_services | bool

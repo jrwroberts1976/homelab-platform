@@ -1,0 +1,23 @@
+---
+- name: Router-01 safe preflight on isolated rebuilt host
+  hosts: router_staging
+  gather_facts: true
+  become: false
+  tasks:
+    - name: Check identity and no legacy docker-01 IP
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'router-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - "'192.168.2.220' not in ansible_facts.all_ipv4_addresses"
+          - "'192.168.3.1' in ansible_facts.all_ipv4_addresses"
+        fail_msg: "Not the isolated router-01 staging target; abort."
+    - name: Report NIC identities and default route
+      ansible.builtin.debug:
+        msg:
+          - "hostname={{ ansible_facts.hostname }}"
+          - "lan_mac={{ ansible_facts.get('eth0', {}).get('macaddress', 'not-found') }}"
+          - "wan_mac={{ ansible_facts.get('eth1', {}).get('macaddress', 'not-found') }}"
+          - "current_gateway={{ ansible_facts.default_ipv4.gateway | default('none') }}"
+          - "ipv4={{ ansible_facts.all_ipv4_addresses }}"

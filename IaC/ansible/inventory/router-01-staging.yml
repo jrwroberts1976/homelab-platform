@@ -1,0 +1,22 @@
+---
+# Intentionally separate from inventory/hosts.yml (production truth).
+# This target does not exist until docker-01 is explicitly retired and reimaged.
+all:
+  children:
+    router_staging:
+      hosts:
+        router-01:
+          ansible_host: 192.168.3.1
+          ansible_user: james
+          ansible_become: true
+          router_lan_interface: eth0
+          router_wan_interface: eth1
+          router_lan_address: "192.168.3.1"
+          router_lan_prefix: 24
+          router_lan_cidr: "192.168.3.0/24"
+          router_expected_lan_mac: "d8:3a:dd:5a:51:44"
+          router_expected_wan_mac: "00:24:9b:63:b3:8a"
+          router_dhcp_start: "192.168.3.100"
+          router_dhcp_end: "192.168.3.199"
+          router_hostname_expected: "router-01"
+          router_pppoe_mtu: 1492

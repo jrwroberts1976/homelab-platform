@@ -1,0 +1,19 @@
+# Router-specific addon. Debian's packaged DNSSEC trust-anchor config remains in force.
+server:
+    interface: 127.0.0.1
+    interface: {{ router_lan_address }}
+    port: 53
+    do-ip4: yes
+    do-ip6: no
+    do-udp: yes
+    do-tcp: yes
+    access-control: 0.0.0.0/0 refuse
+    access-control: 127.0.0.0/8 allow
+    access-control: {{ router_lan_cidr }} allow
+    access-control: ::0/0 refuse
+    qname-minimisation: yes
+    hide-identity: yes
+    hide-version: yes
+    harden-glue: yes
+    harden-dnssec-stripped: yes
+    prefetch: yes

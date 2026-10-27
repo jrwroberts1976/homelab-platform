@@ -1,0 +1,30 @@
+#!/usr/sbin/nft -f
+# ONLY for isolated reimaged router-01: complete owner of nftables configuration.
+flush ruleset
+
+table inet router_filter {
+    chain input {
+        type filter hook input priority filter; policy drop;
+        iifname "lo" accept
+        ct state established,related accept
+        ct state invalid drop
+        iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} ip protocol icmp accept
+        iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} tcp dport { 22, 53 } accept
+        iifname "{{ router_lan_interface }}" ip saddr {{ router_lan_cidr }} udp dport { 53, 67 } accept
+    }
+    chain forward {
+        type filter hook forward priority filter; policy drop;
+        ct state established,related accept
+        ct state invalid drop
+        iifname "{{ router_lan_interface }}" oifname "ppp0" ip saddr {{ router_lan_cidr }} accept
+    }
+    chain output {
+        type filter hook output priority filter; policy accept;
+    }
+}
+table ip router_nat {
+    chain postrouting {
+        type nat hook postrouting priority srcnat; policy accept;
+        oifname "ppp0" ip saddr {{ router_lan_cidr }} masquerade
+    }
+}

@@ -1,0 +1,11 @@
+# Physical USB Ethernet carries PPPoE frames only; ppp0 owns WAN layer 3.
+[Match]
+MACAddress={{ router_expected_wan_mac }}
+
+[Network]
+DHCP=no
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+
+[Link]
+RequiredForOnline=no

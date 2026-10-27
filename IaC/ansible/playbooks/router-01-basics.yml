@@ -1,0 +1,22 @@
+---
+# PRODUCTION SAFETY GATE: never run against docker-01 or inventory/hosts.yml.
+# Usage only after separately approved router reimage on physically isolated LAN.
+- name: Stage baseline PPPoE DHCP Unbound and nftables on new router-01
+  hosts: router_staging
+  gather_facts: true
+  become: true
+  vars:
+    router_deploy_approved: false
+    router_activate_services: false
+  pre_tasks:
+    - name: Require explicit permission before any changes
+      ansible.builtin.assert:
+        that:
+          - router_deploy_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == router_hostname_expected
+        fail_msg: >-
+          REFUSED: this playbook is ONLY for the reimaged router-01
+          on an isolated test network, after an explicit approved cutover.
+  roles:
+    - router_basics

@@ -1,0 +1,33 @@
+{
+  "Dhcp4": {
+    "interfaces-config": {
+      "interfaces": ["{{ router_lan_interface }}"]
+    },
+    "lease-database": {
+      "type": "memfile",
+      "persist": true,
+      "name": "/var/lib/kea/kea-leases4.csv"
+    },
+    "valid-lifetime": {{ router_dhcp_valid_lifetime }},
+    "subnet4": [
+      {
+        "id": 1,
+        "subnet": "{{ router_lan_cidr }}",
+        "pools": [
+          { "pool": "{{ router_dhcp_start }} - {{ router_dhcp_end }}" }
+        ],
+        "option-data": [
+          { "name": "routers", "data": "{{ router_lan_address }}" },
+          { "name": "domain-name-servers", "data": "{{ router_lan_address }}" }
+        ]
+      }
+    ],
+    "loggers": [
+      {
+        "name": "kea-dhcp4",
+        "output-options": [{"output": "stdout"}],
+        "severity": "INFO"
+      }
+    ]
+  }
+}

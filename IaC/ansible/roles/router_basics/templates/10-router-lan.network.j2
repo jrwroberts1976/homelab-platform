@@ -1,0 +1,12 @@
+# IaC managed. Apply only to a clean router-01 image on isolated networking.
+[Match]
+MACAddress={{ router_expected_lan_mac }}
+
+[Network]
+Address={{ router_lan_address }}/{{ router_lan_prefix }}
+DHCP=no
+IPv6AcceptRA=no
+LinkLocalAddressing=no
+
+[Link]
+RequiredForOnline=no
