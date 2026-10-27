@@ -69,6 +69,16 @@ Pi 4 onboard eth0 --> 192.168.3.1/24 (LAN)
 
 This creates intentional **double NAT**. Existing devices do not need to change addresses for stage one. Some externally initiated VPN/port-forwards or source attribution may be disrupted by double NAT; identify essential inbound services, test them, and keep a cutback to ASUS PPPoE.
 
+## Migration safety correction — change LAN IP LAST
+
+**Most recent user instruction:** Keep SSH management available on `192.168.2.220` through the approved router preparation; only change the physical Pi's LAN address to `192.168.3.1` as the **last network change**. The old address belongs to the currently live `docker-01` BirdNET host; use it on the *newly reimaged* future `router-01` only **after an explicitly approved handover and retirement of the POC**. Do not rename/reimage/readdress `docker-01` ahead of approval.
+
+**IaC now distinguishes two management stages:**
+- **Pre-switch:** `IaC/ansible/inventory/router-01-prestage.yml` points at `router-01` using `192.168.2.220`; `playbooks/router-01-prestage.yml` is doubly gated and rejects the old `docker-01` identity. It requires a post-reimage `/etc/router-01-reimage-complete` marker and only writes non-running, private candidate configurations under `/var/lib/router-01-stage/`. It does not install/start packages, touch active network files or change the IP. Do not execute it yet.
+- **Post-switch:** `inventory/router-01-staging.yml` points at `192.168.3.1`; the `router-01-basics.yml` playbook presently requires the new IP and is **not** the preparation tool.
+
+**Outstanding before safe handover:** create/test a mechanism to install packages and load ready configs *without* package post-install auto-starting DHCP/Unbound on the currently connected production LAN; separate and safely control service activation. The final change to `eth0` must be made through an explicit timed-fallback transaction, with local console/directly attached `.3.x` laptop and verified external ASUS PPPoE rollback. SSH to `192.168.2.220` will drop; `admin-01` on the downstream `.2.x` side cannot be assumed to reach `.3.1` through ASUS WAN. **Do not change `eth0` remotely without tested recovery.**
+
 ## First IaC scope and acceptance tests
 
 ### PPPoE
