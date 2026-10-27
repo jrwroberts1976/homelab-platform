@@ -1,0 +1,95 @@
+---
+# Headless read-only PPPoE and cutover status. NO network/service changes.
+# Use old inventory only if current Pi still answers SSH at 192.168.2.220.
+- name: Check PPPoE link and prior cutover without modifying the Pi
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Record Pi eth0, eth1 and ppp0 current IPv4 addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -brief, address]
+      register: router_health_addresses
+      changed_when: false
+
+    - name: Read WAN eth1 physical carrier status
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth1/carrier]
+      register: router_health_carrier
+      changed_when: false
+      failed_when: false
+
+    - name: Read PPPoE service state, no journals or secrets
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-pppoe.service]
+      register: router_health_pppoe_service
+      changed_when: false
+      failed_when: false
+
+    - name: Read WAN IPv4 without failing if PPP session is down
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, ppp0]
+      register: router_health_ppp_ip
+      changed_when: false
+      failed_when: false
+
+    - name: Read default routes (may include old ASUS and/or ppp0)
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_health_route
+      changed_when: false
+
+    - name: Probe public IPv4 from PPP interface only when it exists
+      ansible.builtin.command:
+        argv: [ping, -n, -I, ppp0, -c, '2', -W, '2', 1.1.1.1]
+      register: router_health_ping
+      changed_when: false
+      failed_when: false
+      when: router_health_ppp_ip.rc == 0 and 'inet ' in router_health_ppp_ip.stdout
+
+    - name: Check whether the old cutover timer is still armed
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-lan-switch.timer]
+      register: router_health_arm_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Check whether rollback timer is armed
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-lan-rollback.timer]
+      register: router_health_rollback_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Read staged router cutover markers without modifying them
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-01-cutover/applied
+        - /var/lib/router-01-cutover/confirmed
+        - /etc/netplan/99-router-01-lan.yaml
+      register: router_health_markers
+
+    - name: Read Kea activation status to detect possible DHCP collision
+      ansible.builtin.command:
+        argv: [systemctl, is-active, kea-dhcp4-server.service]
+      register: router_health_kea_service
+      changed_when: false
+      failed_when: false
+
+    - name: Show concise PPPoE and network evidence
+      ansible.builtin.debug:
+        msg:
+          - "PI_IPV4={{ router_health_addresses.stdout_lines }}"
+          - "USB_ETH1_CARRIER={{ router_health_carrier.stdout | trim if router_health_carrier.rc == 0 else 'not-present-or-down' }}"
+          - "PPPOE_SERVICE={{ router_health_pppoe_service.stdout | trim }}"
+          - "PPPOE_IPV4_PRESENT={{ router_health_ppp_ip.rc == 0 and 'inet ' in router_health_ppp_ip.stdout }}"
+          - "DEFAULT_ROUTES={{ router_health_route.stdout_lines }}"
+          - "PPP_EXPLICIT_PING_SUCCESS={{ (router_health_ping.rc | default(-1)) == 0 }}"
+          - "KEA_SERVICE={{ router_health_kea_service.stdout | trim }}"
+          - "CUTOVER_SWITCH_TIMER={{ router_health_arm_timer.stdout | trim }}"
+          - "CUTOVER_ROLLBACK_TIMER={{ router_health_rollback_timer.stdout | trim }}"
+          - "CUTOVER_MARKER={{ router_health_markers.results[0].stat.exists | default(false) }}"
+          - "CONFIRMED_MARKER={{ router_health_markers.results[1].stat.exists | default(false) }}"
+          - "PERSISTENT_NEW_LAN_NETPLAN={{ router_health_markers.results[2].stat.exists | default(false) }}"
+          - "READ ONLY: Nothing restarted, unmasked, enabled, readdressed or rewired."
