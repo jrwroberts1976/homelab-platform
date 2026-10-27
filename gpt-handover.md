@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — PPPoE localhost-only encrypted-Vault template validator CI PASSED
+
+GitHub Actions `Validate router-01 offline IaC` run **40483382741 SUCCESS** on draft PR #207. This includes a controller-only Ansible PPPoE playbook syntax check and execution with **dummy CI credentials**, and the existing router configuration/nft/Kea/Unbound checks. Estate and documentation guard run **40483382712 SUCCESS**. New runbook `IaC/ansible/router-01/PPPOE-FIRST.md` documents the safe `admin-01` run with the user's existing off-Git encrypted Vault, and explains no production host contact. **Next user action:** run that localhost-only command and report PASS/FAIL; do not print credentials. Still no live ISP session/reimage/network changes.
+
+---
+
 ## 27 October 2026 — PPPoE Vault credentials validated on admin-01
 
 User confirmed local Vault path `~/.config/router-01/pppoe-vault.yml`, `chmod 600`, header `$ANSIBLE_VAULT;1.1;AES256`, then ran a *redacted* parser which printed **PASS: PPPoE credentials present**; required PPPoE username/password are populated. No plaintext secrets were sent to ChatGPT or GitHub. Added future-only `IaC/ansible/playbooks/router-01-pppoe-local-validate.yml` which uses `hosts: localhost`, `connection: local`, no facts, no privilege escalation, external encrypted Vault via `--ask-vault-pass -e @/home/james/.config/router-01/pppoe-vault.yml`, sensitive tasks `no_log: true`, in-memory template evaluation. It only prints a generic PASS, never writes decrypted output or contacts `docker-01`. GitHub workflow now runs local template test with dummy CI-only credentials. See `IaC/ansible/router-01/PPPOE-FIRST.md`. Live ASUS/router, DHCP, Pi 4 BirdNET and WAN remain untouched. Await user to run controller-only test. No real ISP PPPoE session yet.
