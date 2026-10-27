@@ -1,0 +1,89 @@
+---
+# Only for explicitly approved, freshly reimaged router-01 using old SSH IP.
+# Installs software without activating services or touching eth0 configuration.
+- name: Install router packages safely while retaining old management address
+  hosts: router_prestage
+  become: true
+  gather_facts: false
+  vars:
+    router_package_stage_approved: false
+  pre_tasks:
+    - name: Refuse any network contact before local change approval
+      ansible.builtin.assert:
+        that:
+          - router_package_stage_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Not approved; no SSH to production docker-01."
+      delegate_to: localhost
+      become: false
+
+    - name: Collect facts only following explicit local approval
+      ansible.builtin.setup:
+
+    - name: Read reimage attestation
+      ansible.builtin.stat:
+        path: /etc/router-01-reimage-complete
+      register: router_reimage_attestation
+
+    - name: Verify future host and keep old LAN management address
+      ansible.builtin.assert:
+        that:
+          - router_reimage_attestation.stat.isreg | default(false)
+          - ansible_facts.hostname == router_hostname_expected
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - router_current_management_ip in ansible_facts.all_ipv4_addresses
+          - router_lan_address not in ansible_facts.all_ipv4_addresses
+          - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+          - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
+        fail_msg: "Wrong machine, image, interfaces or stage; abort."
+  tasks:
+    - name: Install packages with maintainer-script service starts refused
+      ansible.builtin.apt:
+        name:
+          - ppp
+          - kea-dhcp4-server
+          - unbound
+          - nftables
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        policy_rc_d: 101
+
+    - name: Stop, disable and mask services until approved IP cutover
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        state: stopped
+        enabled: false
+        masked: true
+      loop:
+        - kea-dhcp4-server.service
+        - unbound.service
+        - nftables.service
+
+    - name: Verify core router daemons are not running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      changed_when: false
+      failed_when: router_pkg_status.stdout | trim == 'active'
+      register: router_pkg_status
+      loop:
+        - kea-dhcp4-server.service
+        - unbound.service
+        - nftables.service
+
+    - name: Confirm original SSH management IP still present
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, "{{ router_lan_interface }}"]
+      register: router_pkg_ip
+      changed_when: false
+      failed_when: router_current_management_ip not in router_pkg_ip.stdout
+
+    - name: Report stage result without touching network services
+      ansible.builtin.debug:
+        msg: >-
+          Packages are installed; DHCP, DNS and firewall services remain
+          stopped, disabled and masked. The management IP is still
+          {{ router_current_management_ip }}. LAN readdressing remains
+          separately gated and is the LAST handover step.
