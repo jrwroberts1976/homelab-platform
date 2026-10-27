@@ -1,5 +1,5 @@
 ---
-# Only for explicitly approved, freshly in-place conversiond router-01 using old SSH IP.
+# Only for explicitly approved, converted router-01 using old SSH IP.
 # Installs software without activating services or touching eth0 configuration.
 - name: Install router packages safely while retaining old management address
   hosts: router_prestage
