@@ -31,6 +31,7 @@ jobs:
         working-directory: IaC/ansible
         run: |
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-readonly.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-docker-retirement-readonly.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-pppoe-prestage.yml --syntax-check
           ansible-playbook -i localhost, -c local playbooks/router-01-pppoe-local-validate.yml --syntax-check
