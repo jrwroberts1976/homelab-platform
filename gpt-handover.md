@@ -1,3 +1,7 @@
+## 27 October 2026 — Router reboot migration stage-only playbook added (NOT DEPLOYED)
+
+Git feature branch contains `IaC/ansible/playbooks/router-01-reboot-migration-stage.yml` (commit `49aa2d3b`). It stages offline Netplan, WAN unmanaged, firewall, forwarding and root-private recovery snapshots after exact identity checks, and validates Kea/Unbound/nftables/Netplan. It does not readdress interfaces, activate DHCP, install boot service, arm rollback or reboot. Existing read-only preflight on `docker-01` passed 13 OK, 0 changed, 0 failed. User must pull branch, syntax-check and execute stage with `-e router_reboot_stage_approved=true` from `admin-01`. **Do not reboot or move cables**: activation and proven reboot-safe recovery are not implemented. Docker disabled, residual Docker firewall rules still loaded; PPPoE eth1 cable absent.
+
 # GPT Handover — Homelab Platform
 ## 27 Oct 2026 — PPPoE confirmed, old cutover timer DISABLED; headless ephemeral Kea DHCP trial IaC ready CI PASS
 
