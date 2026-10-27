@@ -127,6 +127,38 @@ Files remain inside private `/var/lib/router-01-stage/forwarding/`; they are NOT
 
 Why Docker reconciliation matters: Docker's historical iptables `FORWARD DROP` can drop packets despite an `accept` in a different nftables forward chain. See Docker's firewall docs: https://docs.docker.com/engine/network/firewall-nftables/ .
 
+## OFFLINE RECOVERY / DHCP-FIRST DIAGNOSTIC WHEN CHAT OR SSH IS UNAVAILABLE (27 Oct 2026)
+
+**User report:** after the delayed physical cutover was ARMED (7 OK/1 changed), confirming Pi `192.168.3.1` from admin-01 failed with `Network is unreachable`; admin-01 remained `192.168.2.48/24`, ASUS LAN `192.168.2.1` responded, and old Pi `192.168.2.220` did not respond. The ASUS reportedly **did not receive a WAN DHCP lease**. The user will not be able to use this chat once they unplug cables, so instructions must work WITHOUT internet, GitHub or assistant connectivity. **No validated proof yet of actual local switch success or rollback.**
+
+**Before another attempt, save these instructions locally** (printed or terminal). Do not re-arm a timer while the old one may still be pending. Keep the Pi eth0 and ASUS WAN as a *direct, isolated link*, never Pi eth0 connected to the HP switch if Kea may be running. The ASUS LAN remains on the HP switch.
+
+At the **Pi's direct local console (keyboard/screen)** after ONT→USB eth1 and Pi eth0→ASUS WAN are physically plugged:
+
+```bash
+sudo /usr/local/sbin/router-01-nm-cutover status
+ip -4 -br addr show eth0
+sudo systemctl is-active kea-dhcp4-server.service
+sudo systemctl is-enabled kea-dhcp4-server.service
+sudo systemctl status router-lan-switch.service router-lan-rollback.timer --no-pager
+sudo journalctl -u router-lan-switch.service -u router-lan-rollback.service -u kea-dhcp4-server.service -n 80 --no-pager
+```
+
+**Only if Pi eth0 actually shows `192.168.3.1/24` AND is physically isolated directly on ASUS WAN** (NOT HP switch), then turn on Kea for a DHCP-only diagnostic without changing Pi LAN addressing or resetting PPPoE:
+
+```bash
+sudo /usr/sbin/kea-dhcp4 -t /etc/kea/kea-dhcp4.conf
+sudo systemctl unmask kea-dhcp4-server.service
+sudo systemctl enable --now kea-dhcp4-server.service
+sudo systemctl status kea-dhcp4-server.service --no-pager
+sudo journalctl -u kea-dhcp4-server.service -n 60 --no-pager
+sudo cat /var/lib/kea/kea-leases4.csv | tail -n 8
+```
+
+At the ASUS UI (still local on `192.168.2.1`, internet not required), WAN must be **Automatic IP**. Click WAN DHCP renewal/reconnect. Expect a **`192.168.3.100–199` lease with gateway `192.168.3.1`**. A Kea DHCP lease proves Pi→ASUS WAN Layer2+DHCP only; PPPoE/NAT and client internet are separate. If `192.168.3.1` is missing on Pi eth0, merely unmasking Kea is not a valid test: the previous Netplan cutover didn't finish (or timed rollback reverted it). **Do not enable Kea in that state**. Inspect the last `router-lan-switch.service` and `router-lan-rollback.service` logs. Only when the Pi's `eth0` is isolated can the local existing staged cutover be retried, and only after ensuring old timers inactive and script baseline checks pass. The script is at `/usr/local/sbin/router-01-nm-cutover`.
+
+**Do NOT run `confirm` just because ASUS has a lease.** Verify PPP0 IPv4, NAT table, Unbound and actual client browsing before disabling the local rollback timer. Conversely the rollback timer may revert an unconfirmed but otherwise working DHCP trial after ten minutes. If console is unavailable, return to a known old management state (Pi eth0 on HP switch ONLY after confirming Kea is stopped/masked) before using Ansible over `192.168.2.220`; running arbitrary local commands from `admin-01` DOES NOT configure the Pi.
+
 ## CURRENT NEXT STEP — SINGLE-ONT PI ROUTER + ASUS WAN DHCP (27 Oct 2026)
 
 **Physical network desired by user**: only Pi USB `eth1` connects to the Vodafone ONT; the Pi onboard `eth0` connects DIRECTLY to the **ASUS WAN**; ASUS **LAN** still connects to the HP switch and continues DHCP `192.168.2.1/24` to current clients. The ASUS **WAN must be configured to Automatic IP/DHCP** (it will receive a lease in `192.168.3.100–199` from Pi Kea). Temporary double NAT is intentional; ASUS AP mode is a separate future change.
