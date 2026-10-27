@@ -33,9 +33,16 @@ jobs:
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-readonly.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-pppoe-prestage.yml --syntax-check
+          ansible-playbook -i localhost, -c local playbooks/router-01-pppoe-local-validate.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package-stage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml --syntax-check
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-basics.yml --syntax-check
+      - name: Exercise local-only PPPoE rendering with fake credentials (NO devices)
+        working-directory: IaC/ansible
+        run: |
+          ansible-playbook -i localhost, -c local playbooks/router-01-pppoe-local-validate.yml \
+            -e router_pppoe_username=ci-fixture@example.invalid \
+            -e router_pppoe_password=ci-not-a-real-secret
       - name: Shell static and syntax verification (NO hardware)
         run: |
           bash -n IaC/ansible/router-01/files/router-01-lan-cutover.sh
