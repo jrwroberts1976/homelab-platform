@@ -1,4 +1,11 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — router-01: LAN address changes last
+
+User requires old SSH management address 192.168.2.220 to remain in place while preparing a reimaged router-01. The live docker-01 must not be touched before an explicitly approved handover.
+
+New Git-only pre-stage inventory and playbook render candidate configs in /var/lib/router-01-stage. This does not activate DNS, DHCP, PPPoE, or change any IP. The existing final-stage role requires 192.168.3.1 and is not suitable for early configuration. Before LAN cutover, implement safe package installation with suppressed autostart, a timed rollback and an independent console or directly attached client able to reach 192.168.3.1. The old SSH session will end during the final IP switch. See draft PR #207 and issue #206.
+
+---
 ## 27 Oct 2026 — router-01 offline CI PASS (initial PPPoE/Kea/Unbound/nftables IaC)
 
 **Verified on GitHub Actions for head commit `da390ca1f7030adccaddeed1fd014c45a48d53f2`:** `Validate router-01 offline IaC` run 40475700235 **SUCCESS** and `Estate and documentation guard` run 40475700329 **SUCCESS**. Native config validation was done with Ubuntu 24.04 Kea 2.4, Unbound and nftables plus Ansible `--syntax-check` with staged `router-01` inventory; no hosts contacted. Earlier errors were caught and fixed: correct Kea CLI `-t file`, restricted CI temp config accessibility (AppArmor path), Kea 2.4 `output_options` compatibility, nftables LAN DHCP discover from `0.0.0.0`, and required estate-doc authority header. Runbook and `IaC/ansible/router-01/README.md` updated.
