@@ -26,6 +26,31 @@ User-supplied speed-test screenshot received 27 October 2026, while current ASUS
 
 This is a **single speed test**, not a guaranteed ISP line rate or proof of new Pi performance. At the approved cutover, take comparable repeated tests on the same client / server, with and without any subsequent IPS/proxy features, and record observed PPPoE reconnect time, stability, WAN errors and CPU load. Basic PPPoE+NAT should comfortably fit within Pi 4 hardware at this measured throughput, subject to actual testing. This screenshot does **not** show PPPoE credentials or VLAN tagging.
 
+## ASUS WAN settings — read-only screenshots received 27 October 2026
+
+The user supplied ASUS RT-AC86U WAN configuration screenshots. **No WAN or ISP settings were modified.**
+
+| ASUS item | Verified value | Router-01 handling |
+|---|---|---|
+| WAN connection type | **PPPoE** | `pppd` with `pppoe.so` on USB `eth1` |
+| Enable WAN | Yes | PPPoE systemd service enabled only at approved handover |
+| Get WAN IP automatically | Yes | WAN IPv4 obtained through PPP negotiation on `ppp0`, **not DHCP on raw `eth1`** |
+| PPP authentication | Auto | Leave PPPoE authentication method negotiable, protected PAP/CHAP secrets |
+| Disconnect after inactivity | 0 | No idle disconnect, persistent session |
+| MTU / MRU | 1492 / 1492 | `pppd` profile 1492 |
+| Service Name | Blank | Do not specify one |
+| Access Concentrator Name | Blank | Do not specify one |
+| Host-Uniq / additional pppd options | Blank | No overrides requested |
+| Internet detection | PPP Echo | LCP echo monitoring on Pi |
+| PPP Echo Interval | **6 seconds** | `router_pppoe_lcp_echo_interval: 6` |
+| PPP Echo Max Failures | **10** | `router_pppoe_lcp_echo_failure: 10` |
+| ASUS NAT | Enabled, **Symmetric** | Basic Pi nftables masquerade planned; not claimed identical to ASUS symmetric NAT |
+| UPnP | Enabled (secure mode enabled) | **Not automatically enabled** on Pi; assess inbound use/port forwards separately |
+
+**PPPoE credentials are sensitive:** a previously shared screenshot displayed the current login and password. **Do not commit, quote, send again, or paste these values into any issue/PR or terminal transcript.** Treat the exposed password as needing rotation via the ISP at a planned non-disruptive point; rotate stored Vault values then. The PPPoE username should also remain outside public Git. Do not attempt an uncoordinated password rotation while ASUS is connected.
+
+**Still unknown:** VLAN tag / priority or lack of tagging on the ONT uplink, usually configured separately under ASUS LAN > IPTV (ISP profile) rather than this WAN page. Verify read-only; never assume no tag from a blank PPPoE service name. Verify IPv6 separately. These are hard PPPoE handover prerequisites.
+
 ## ISP settings to capture read-only
 
 From current ASUS WAN > Internet Connection and the ISP agreement:
