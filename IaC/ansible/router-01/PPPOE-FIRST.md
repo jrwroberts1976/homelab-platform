@@ -2,6 +2,12 @@
 
 **Git-only as of 27 October 2026.** Tracks issue #206 / draft PR #207.
 
+## Important update — keep installed Debian OS, retire Docker later
+
+The Pi 4 will **not be reimaged**. The user wants to keep the existing Debian 13 installation and remove Docker after checking what relies on it. The current production host stays `docker-01` at `192.168.2.220` until explicitly approved. The PPPoE Vault/profile already validated on `admin-01` needs no live Pi changes today.
+
+Use `playbooks/router-01-docker-retirement-readonly.yml` to audit services and network ownership **before** any Docker removal. After controlled Docker/Komodo/BirdNET retirement, eventual host rename to `router-01` and explicit `/etc/router-01-conversion-approved` marker, the gated PPPoE staging playbook can run over the **unchanged old management IP**. The actual PPPoE session and LAN change still wait for the separately approved handover.
+
 ## What is configured
 
 Debian 13 `pppd` loads the PPPoE plugin `pppoe.so` on the **ASIX AX88179 USB Ethernet** adapter `eth1` (MAC `00:24:9b:63:b3:8a`). The broadband connection appears as logical `ppp0` **only after a successful authenticated ISP session**. Current `docker-01` `eth0` at `192.168.2.220` remains untouched.
@@ -119,9 +125,9 @@ ansible-playbook -i localhost, -c local \
 
 **Important:** Never use `-v/-vvv` troubleshooting with real credentials unless confirmed that outputs are redacted. No `ansible-vault view` without piping to a private validator and never paste decrypted content in chat. The playbook is intentionally marked `no_log: true` for sensitive tasks.
 
-## Later: approved reimaged router-01 only
+## Later: approved converted router-01 only
 
-Only after an explicitly approved handover, physical console arrangement and successful reimage of `docker-01` to **`router-01`**, the guarded `router-01-pppoe-prestage.yml` may be invoked with an off-Git Vault and `router_pppoe_prestage_approved=true`. It requires Debian 13, exact `eth0` and `eth1` MACs, reimage marker and preserved `192.168.2.220` SSH address.
+Only after an explicitly approved handover, physical console arrangement and approved in-place conversion of `docker-01` to **`router-01`**, the guarded `router-01-pppoe-prestage.yml` may be invoked with an off-Git Vault and `router_pppoe_prestage_approved=true`. It requires Debian 13, exact `eth0` and `eth1` MACs, conversion approval marker and preserved `192.168.2.220` SSH address.
 
 It **only renders prospective PPPoE files** under `/var/lib/router-01-stage/pppoe`. It does not install packages, overwrite active `/etc/ppp` files, start `pppd`, connect the ONT, change LAN IP, change DNS, change DHCP, or disconnect SSH.
 
