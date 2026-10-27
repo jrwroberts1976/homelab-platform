@@ -87,6 +87,60 @@ def main() -> None:
         check(forbidden not in prestage_src,
               f"Pre-stage must not activate/modify live networking: {forbidden}")
 
+    # Package installation may occur only after the reimage and while
+    # the old SSH IP is still present. dpkg start attempts must be suppressed.
+    package_play = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-package-stage.yml").read_text()
+    )[0]
+    check(package_play["hosts"] == "router_prestage", "Package stage wrong hosts")
+    check(package_play["gather_facts"] is False, "Package guard must precede SSH")
+    check(package_play["vars"]["router_package_stage_approved"] is False,
+          "Package stage must default OFF")
+    check(package_play["pre_tasks"][0].get("delegate_to") == "localhost",
+          "Package first guard must run locally")
+    package_src = (ANSIBLE / "playbooks" / "router-01-package-stage.yml").read_text()
+    check("policy_rc_d: 101" in package_src, "Missing maintainer start suppression")
+    check("masked: true" in package_src, "Unstarted services must be masked")
+    check("router_reimage_attestation.stat.isreg" in package_src,
+          "Package stage must check image marker")
+    check("router_current_management_ip in ansible_facts.all_ipv4_addresses"
+          in package_src, "Package stage must retain old IP")
+    check("/etc/systemd/network/" not in package_src,
+          "Package stage must not write live networkd configuration")
+
+    recovery_play = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-rollback-prepare.yml").read_text()
+    )[0]
+    check(recovery_play["hosts"] == "router_prestage",
+          "Recovery helper wrong hosts")
+    check(recovery_play["gather_facts"] is False,
+          "Recovery helper must gate before SSH")
+    check(recovery_play["vars"]["router_rollback_prepare_approved"] is False,
+          "Recovery helper must default OFF")
+    check(recovery_play["pre_tasks"][0].get("delegate_to") == "localhost",
+          "Recovery helper approval must be local")
+
+    rollback_base = ANSIBLE / "router-01" / "files"
+    timer_text = (rollback_base / "router-01-lan-rollback.timer").read_text()
+    service_text = (rollback_base / "router-01-lan-rollback.service").read_text()
+    script_text = (rollback_base / "router-01-lan-cutover.sh").read_text()
+    check("OnActiveSec=300s" in timer_text, "Five-minute rollback not set")
+    check("WantedBy=timers.target" in timer_text,
+          "Rollback must also survive an unconfirmed reboot")
+    check("ExecStart=/usr/local/sbin/router-01-lan-cutover rollback"
+          in service_text, "Rollback service must call script")
+    check('systemctl enable --now "$TIMER"' in script_text,
+          "Rollback timer must arm BEFORE LAN switch")
+    check(script_text.find('systemctl enable --now "$TIMER"') <
+          script_text.find('install -m 0644 "$NEW" "$CURRENT"'),
+          "LAN switched before timer armed")
+    check('router-01-reimage-complete' in script_text and
+          'switch|confirm|rollback|status' in script_text,
+          "Rollback host/command safety guard missing")
+    check('networkctl reload' in script_text and
+          'networkctl reconfigure "$LAN"' in script_text,
+          "networkd reload + reconfigure required")
+
     defaults = yaml.safe_load(
         (ANSIBLE / "roles" / "router_basics" / "defaults" / "main.yml").read_text()
     )
