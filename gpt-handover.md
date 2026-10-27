@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — Confirmed ASUS PPPoE WAN settings, no credentials in Git
+
+User supplied screenshots of WAN > Internet Connection and PPPoE account settings. **Confirmed:** PPPoE, WAN enabled, automatically assigned WAN IP through PPP (not raw Ethernet DHCP), ASUS NAT on (symmetric), ASUS UPnP on with secure mode, authentication Auto, idle disconnect 0, MTU/MRU 1492, service name and access concentrator blank, PPP Echo mode interval 6 / max failures 10. Updated `IaC/ansible/router-01/PPPOE-FIRST.md` with read-only evidence and no username/password. Updated Ansible `pppd` template/defaults to set echo interval 6/failures 10 and added offline validation. Pi future `eth1` must have no Ethernet DHCP; `ppp0` obtains provider-assigned IPv4.
+
+**Earlier ASUS screenshot displayed PPPoE login/password**, so never quote or commit those values, recommend coordinated rotation when possible, and save eventual credentials securely in off-Git encrypted Ansible Vault. ISP VLAN tagging (check ASUS LAN > IPTV), IPv6 and real PPPoE authentication still UNVERIFIED. No live Pi/ASUS/cable/network change; draft PR #207. ASUS remains gateway and `docker-01` remains BirdNET POC until approved handover.
+
+---
+
 ## 27 October 2026 — ISP speed baseline recorded, PPPoE setup first
 
 User supplied screenshot of current ASUS internet speed test: **36.43 Mbps download, 12.05 Mbps upload, 10 ms ping**. Logged in `IaC/ansible/router-01/PPPOE-FIRST.md` as single pre-cutover measurement; not guaranteed line rate. New Pi 4 ASIX WAN interface remains disconnected. `router-01-pppoe-prestage.yml` is Git-only; requires post-reimage `router-01` and encrypted, off-Git PPPoE credentials. Need read-only ASUS WAN settings (username/private secret, potential VLAN ID and other options), then controlled handover; no live PPPoE or LAN network changes. DHCP/DNS and LAN-IP change remain later stages.
