@@ -5,17 +5,39 @@ umask 077
 [[ $# -eq 4 ]] || { echo "usage: sudo $0 base.img.xz output.img secrets.txt ssh-public-key-file" >&2; exit 2; }
 [[ $(id -u) -eq 0 && $(uname -m) = aarch64 ]] || { echo "Requires root on ARM64 Linux" >&2; exit 2; }
 BASE=$(realpath "$1"); OUT=$(realpath -m "$2"); CREDS=$(realpath "$3"); PUBKEY=$(realpath "$4")
-[[ -f "$BASE" && -f "$CREDS" && -f "$PUBKEY" && ! -e "$OUT" ]] || exit 2
+[[ -f "$BASE" && -f "$CREDS" && -f "$PUBKEY" && ! -e "$OUT" ]] || { echo "Missing input or output already exists" >&2; exit 2; }
+for binary in growpart resize2fs e2fsck losetup xz mount chroot; do command -v "$binary" >/dev/null || { echo "Missing host dependency: $binary (install cloud-guest-utils/e2fsprogs)" >&2; exit 2; }; done
+STEP="initialisation"
+STATUS="${OUT}.build-status"
+printf "STARTED: %s\n" "$STEP" > "$STATUS"
+chmod 0600 "$STATUS"
+mark() { STEP="$1"; printf "IN_PROGRESS: %s\n" "$STEP" > "$STATUS"; }
+failed() { local rc=$?; printf "FAILED: %s (exit %s)\n" "$STEP" "$rc" > "$STATUS"; echo "Image build failed in stage: $STEP (exit $rc). See $STATUS" >&2; exit "$rc"; }
+trap failed ERR
 WORK=$(mktemp -d /tmp/pi-router-build.XXXXXXXX)
 LOOP=""
 cleanup() { set +e; for p in dev/pts run sys proc dev boot/firmware; do if mountpoint -q "$WORK/root/$p"; then umount "$WORK/root/$p"; fi; done; if mountpoint -q "$WORK/root"; then umount "$WORK/root"; fi; if [[ -n "$LOOP" ]]; then losetup -d "$LOOP"; fi; rmdir "$WORK/root" "$WORK" 2>/dev/null || true; }
 trap cleanup EXIT
+mark "decompress"
 echo "Decompressing official Raspberry Pi OS Lite ARM64 image..."
 xz -dc "$BASE" > "$OUT"
+mark "expand image root partition"
+# Expand the *file* and partition table BEFORE attaching loop devices.
+truncate -s 6G "$OUT"
+growpart "$OUT" 2
 LOOP=$(losetup --find --show --partscan "$OUT")
 for n in $(seq 1 15); do [[ -b "$LOOP"p2 ]] && break; sleep 1; done
-[[ -b "$LOOP"p1 && -b "$LOOP"p2 ]] || exit 1
+[[ -b "$LOOP"p1 && -b "$LOOP"p2 ]] || { echo "Expected Pi boot/root partitions missing" >&2; exit 1; }
+mark "resize ext4 root filesystem"
+# e2fsck -p exit 0 or 1 means filesystem is clean or corrections were made.
+set +e
+e2fsck -pf "${LOOP}p2"
+FSCK_RC=$?
+set -e
+if ((FSCK_RC > 1)); then echo "ext4 pre-resize check failed: $FSCK_RC" >&2; exit "$FSCK_RC"; fi
+resize2fs "${LOOP}p2"
 mkdir -p "$WORK/root"
+mark "mount and validate Debian root"
 mount "$LOOP"p2 "$WORK/root"
 ROOT="$WORK/root"
 # Fail closed if the selected root partition is empty, corrupt, or not a Debian OS.
@@ -29,9 +51,11 @@ mount "$LOOP"p1 "$ROOT/boot/firmware"
 for p in dev proc sys run; do mount --bind "/$p" "$ROOT/$p"; done
 mkdir -p "$ROOT/dev/pts"; mount --bind /dev/pts "$ROOT/dev/pts"
 cp -L /etc/resolv.conf "$ROOT/etc/resolv.conf"
+mark "apt update/install"
 echo "Installing networking packages inside target filesystem..."
 chroot "$ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get update
 chroot "$ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dnsmasq unbound nftables ppp openssh-server sudo ca-certificates
+mark "configure network and services"
 for svc in NetworkManager.service dhcpcd.service networking.service; do chroot "$ROOT" systemctl disable "$svc" 2>/dev/null || true; done
 mkdir -p "$ROOT/etc/systemd/network" "$ROOT/etc/dnsmasq.d" "$ROOT/etc/unbound/unbound.conf.d" "$ROOT/etc/ppp/peers" "$ROOT/etc/systemd/system" "$ROOT/etc/sysctl.d"
 cat > "$ROOT/etc/systemd/network/10-router-lan.network" <<EOF
@@ -128,6 +152,7 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
+mark "provision SSH and verify services"
 chroot "$ROOT" useradd -m -s /bin/bash james 2>/dev/null || true
 install -d -m 0700 "$ROOT/home/james/.ssh"
 install -m 0600 "$PUBKEY" "$ROOT/home/james/.ssh/authorized_keys"
@@ -142,4 +167,5 @@ chroot "$ROOT" unbound-checkconf
 chroot "$ROOT" nft -c -f /etc/nftables.conf
 echo "nameserver 127.0.0.1" > "$ROOT/etc/resolv.conf"
 sync
+printf "SUCCESS: image assembled, boot not tested\n" > "$STATUS"
 echo "Built $OUT (contains PPPoE credentials; keep file private)"
