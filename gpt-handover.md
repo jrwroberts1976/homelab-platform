@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## 27 Oct 2026 — PPPoE WAN confirmed for new Pi router
+
+User confirmed current ISP Ethernet modem/ONT uses **PPPoE** and new Pi 4 router must terminate that connection on USB Ethernet WAN, while onboard Ethernet remains LAN. Git-only draft PR #207 runbook updated: Debian 13 `pppd`/`pppoe.so`, PPP interface-bound nftables/NAT/IPS, Ansible-Vault-like off-Git secrets/PAP/CHAP, reconnect monitoring, standard 1492 initial PPPoE MTU with MSS/PMTU validation, ISP VLAN/tag/IPv6 credential read-only discovery, isolated test/explicit cutover. Confirmed **no changes to existing ASUS PPPoE session, network, cables, DHCP, Pi 4 BirdNET or Pi 5** until approved handover; BirdNET microphone tests remain **post router project**. No live preflight or connection attempted.
+
+---
+
 ## LATEST clarification — 27 Oct 2026: zero pre-handover network disruption; BirdNET mic tests POST project
 
 **User explicitly requires the current production network to remain completely uninterrupted until the formal router handover.** Existing ASUS remains sole gateway/DHCP/AiMesh routing owner; no Pi 4 reimage, competing DHCP/IP `192.168.2.1`, switch recabling, BirdNET shutdown, production Ansible change or Pi 5 deployment pre-handover. Pre-handover work is only Git/IaC/static checks and optional dedicated spare Pi on **physically isolated** links. The Pi 4 `docker-01` is still running BirdNET and cannot be the isolated pilot before it is formally released at handover. With no spare, real hardware validation is deferred to an approved maintenance window while ASUS continues to route until final cutover. A brief outage at handover may be needed; do not promise zero downtime at cutover.
