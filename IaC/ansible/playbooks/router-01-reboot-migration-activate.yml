@@ -1,0 +1,112 @@
+---
+# Install reboot-activation/recovery units without starting or enabling any of them.
+# Separate, explicitly approved arming step is still required before physical rewiring.
+- name: Install guarded reboot router migration units without activating them
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_reboot_install_approved: false
+    router_stage_dir: /var/lib/router-01-reboot-migration
+  pre_tasks:
+    - name: Require explicit approval and exact inventory target
+      ansible.builtin.assert:
+        that:
+          - router_reboot_install_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+      delegate_to: localhost
+      become: false
+
+    - name: Confirm old management address remains active
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_eth0
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_eth0.stdout"
+
+    - name: Require old timers inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [router-lan-switch.timer, router-lan-rollback.timer]
+      register: old_timers
+      changed_when: false
+      failed_when: old_timers.stdout | trim == 'active'
+
+    - name: Require Kea and Unbound masked
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ item }}"]
+      loop: [kea-dhcp4-server.service, unbound.service]
+      register: masked
+      changed_when: false
+      failed_when: masked.stdout | trim != 'masked'
+
+    - name: Require staged inputs and recovery backups
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ router_stage_dir }}/backup/old-eth0.yaml"
+        - "{{ router_stage_dir }}/backup/old-nftables.conf"
+        - "{{ router_stage_dir }}/boot/99-router-01-lan.yaml"
+        - "{{ router_stage_dir }}/boot/90-router-01-wan-unmanaged.conf"
+        - "{{ router_stage_dir }}/boot/nftables.conf"
+        - "{{ router_stage_dir }}/boot/90-router-01-forwarding.conf"
+      register: staged
+      failed_when: not (staged.stat.isreg | default(false))
+  tasks:
+    - name: Install router reboot migration executable (not run)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/router-01-reboot-migration.sh"
+        dest: /usr/local/sbin/router-01-reboot-migration
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Check migration shell syntax
+      ansible.builtin.command:
+        argv: [bash, -n, /usr/local/sbin/router-01-reboot-migration]
+      changed_when: false
+
+    - name: Install boot activation and rollback units (not started)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - router-01-reboot-activate.service
+        - router-01-reboot-rollback.service
+        - router-01-reboot-rollback.timer
+
+    - name: Reload systemd definitions
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Require activation service not enabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-01-reboot-activate.service]
+      register: activation_enabled
+      changed_when: false
+      failed_when: activation_enabled.stdout | trim == 'enabled'
+
+    - name: Require rollback timer inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-01-reboot-rollback.timer]
+      register: rollback_active
+      changed_when: false
+      failed_when: rollback_active.stdout | trim == 'active'
+
+    - name: Confirm old management network still present
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: still_old_ip
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in still_old_ip.stdout"
+
+    - name: Summarise installation-only result
+      ansible.builtin.debug:
+        msg:
+          - "Installed executable and service units only; NOT enabled, started or armed."
+          - "No Netplan, Kea, Unbound, firewall or PPPoE runtime changes."
+          - "Requires further reviewed arming playbook before physical cutover and reboot."
