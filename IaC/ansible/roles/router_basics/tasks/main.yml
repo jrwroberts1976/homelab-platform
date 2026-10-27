@@ -93,7 +93,12 @@
     owner: root
     group: root
     mode: "0644"
-    validate: "/usr/sbin/kea-dhcp4 -t %s"
+
+
+- name: Validate installed Kea configuration before any activation
+  ansible.builtin.command:
+    argv: [/usr/sbin/kea-dhcp4, -t, /etc/kea/kea-dhcp4.conf]
+  changed_when: false
 
 - name: Install Unbound recursive DNS LAN policy
   ansible.builtin.template:
