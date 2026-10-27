@@ -2,10 +2,10 @@
 # Execute on ARM64 Linux admin-01. Do not run on the target Pi.
 set -Eeuo pipefail
 umask 077
-[[ $# -eq 3 ]] || { echo "usage: sudo $0 base.img.xz output.img secrets.txt" >&2; exit 2; }
+[[ $# -eq 4 ]] || { echo "usage: sudo $0 base.img.xz output.img secrets.txt ssh-public-key-file" >&2; exit 2; }
 [[ $(id -u) -eq 0 && $(uname -m) = aarch64 ]] || { echo "Requires root on ARM64 Linux" >&2; exit 2; }
-BASE=$(realpath "$1"); OUT=$(realpath -m "$2"); CREDS=$(realpath "$3")
-[[ -f "$BASE" && -f "$CREDS" && ! -e "$OUT" ]] || exit 2
+BASE=$(realpath "$1"); OUT=$(realpath -m "$2"); CREDS=$(realpath "$3"); PUBKEY=$(realpath "$4")
+[[ -f "$BASE" && -f "$CREDS" && -f "$PUBKEY" && ! -e "$OUT" ]] || exit 2
 WORK=$(mktemp -d /tmp/pi-router-build.XXXXXXXX)
 LOOP=""
 cleanup() { set +e; for p in dev/pts run sys proc dev boot/firmware; do mountpoint -q "$WORK/root/$p" && umount "$WORK/root/$p"; done; [[ -z "$LOOP" ]] || losetup -d "$LOOP"; rm -rf "$WORK"; }
@@ -25,7 +25,7 @@ mkdir -p "$ROOT/dev/pts"; mount --bind /dev/pts "$ROOT/dev/pts"
 cp -L /etc/resolv.conf "$ROOT/etc/resolv.conf"
 echo "Installing networking packages inside target filesystem..."
 chroot "$ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get update
-chroot "$ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dnsmasq unbound nftables ppp openssh-server ca-certificates
+chroot "$ROOT" /usr/bin/env DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends dnsmasq unbound nftables ppp openssh-server sudo ca-certificates
 for svc in NetworkManager.service dhcpcd.service networking.service; do chroot "$ROOT" systemctl disable "$svc" 2>/dev/null || true; done
 mkdir -p "$ROOT/etc/systemd/network" "$ROOT/etc/dnsmasq.d" "$ROOT/etc/unbound/unbound.conf.d" "$ROOT/etc/ppp/peers" "$ROOT/etc/systemd/system" "$ROOT/etc/sysctl.d"
 cat > "$ROOT/etc/systemd/network/10-router-lan.network" <<EOF
@@ -122,6 +122,13 @@ RestartSec=10
 [Install]
 WantedBy=multi-user.target
 EOF
+chroot "$ROOT" useradd -m -s /bin/bash james 2>/dev/null || true
+install -d -m 0700 "$ROOT/home/james/.ssh"
+install -m 0600 "$PUBKEY" "$ROOT/home/james/.ssh/authorized_keys"
+chroot "$ROOT" chown -R james:james /home/james/.ssh
+install -d -m 0750 "$ROOT/etc/sudoers.d"
+echo "james ALL=(ALL:ALL) NOPASSWD:ALL" > "$ROOT/etc/sudoers.d/90-james-router"
+chmod 0440 "$ROOT/etc/sudoers.d/90-james-router"
 chroot "$ROOT" systemctl disable kea-dhcp4-server.service 2>/dev/null || true
 chroot "$ROOT" systemctl enable systemd-networkd.service dnsmasq.service unbound.service nftables.service router-pppoe.service ssh.service
 chroot "$ROOT" dnsmasq --test
