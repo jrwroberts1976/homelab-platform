@@ -1,0 +1,9 @@
+[Unit]
+Description=Automatic router-01 LAN management IP rollback if not confirmed
+After=systemd-networkd.service
+Wants=systemd-networkd.service
+ConditionPathExists=/var/lib/router-01-stage/lan-rollback/status
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-01-lan-cutover rollback
