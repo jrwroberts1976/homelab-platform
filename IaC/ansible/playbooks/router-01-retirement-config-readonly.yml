@@ -1,0 +1,106 @@
+---
+# FINAL READ-ONLY CONFIG PRECHECK before separately approved Docker retirement.
+# Never print YAML files or Nginx configurations: they may hold secrets.
+# Never touch the physical interface, containers, certificates, or service state.
+- name: Inspect Netplan persistence and BirdNET Nginx/Trivy inventory safely
+  hosts: docker-01
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Confirm current production identity and SSH management IP
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'docker-01'
+          - ansible_facts.hostname == 'docker-01'
+          - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+
+    - name: Report only safe Netplan eth0 metadata (never dump Netplan YAML)
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        from pathlib import Path
+        try:
+            import yaml
+        except ImportError:
+            print("UNAVAILABLE: python3-yaml required; no config changes made")
+            raise SystemExit(0)
+        directory = Path('/etc/netplan')
+        for path in sorted(directory.glob('*.yaml')):
+            if path.is_symlink():
+                print(f"SKIP-SYMLINK {path.name}")
+                continue
+            try:
+                data = yaml.safe_load(path.read_text()) or {}
+                network = data.get('network') or {}
+                ethernets = network.get('ethernets') or {}
+                print(f"file={path.name} renderer={network.get('renderer', 'unset')}")
+                for name, spec in ethernets.items():
+                    if not isinstance(spec, dict):
+                        continue
+                    matched = name == 'eth0' or (spec.get('match') or {}).get('name') == 'eth0'
+                    if matched:
+                        print(
+                          f"eth0-entry={name} renderer={spec.get('renderer', 'inherited')} "
+                          f"dhcp4={spec.get('dhcp4', 'unset')} "
+                          f"addresses_count={len(spec.get('addresses') or [])} "
+                          f"routes_count={len(spec.get('routes') or [])}"
+                        )
+            except Exception as exc:
+                print(f"file={path.name} parse-error={type(exc).__name__}")
+        PY
+      args:
+        executable: /bin/bash
+      register: router_netplan_safe_inventory
+      changed_when: false
+
+    - name: Report Nginx site names and BirdNET proxy markers without file contents
+      ansible.builtin.shell: |
+        python3 - <<'PY'
+        from pathlib import Path
+        paths = [Path('/etc/nginx/sites-enabled'), Path('/etc/nginx/conf.d')]
+        for root in paths:
+            if not root.is_dir():
+                continue
+            for path in sorted(root.iterdir()):
+                if path.is_dir() or path.suffix in ('.key', '.pem', '.crt'):
+                    continue
+                try:
+                    resolved = path.resolve(strict=True)
+                    # Never resolve arbitrary symlinks outside standard nginx config.
+                    if not str(resolved).startswith('/etc/nginx/'):
+                        print(f"{root.name}/{path.name}: skip-external-target")
+                        continue
+                    text = resolved.read_text(errors='replace')
+                    print(
+                        f"{root.name}/{path.name}: "
+                        f"birdnet_marker={'birdnet' in text.lower()} "
+                        f"backend_8080={'127.0.0.1:8080' in text} "
+                        f"enabled_symlink={path.is_symlink()}"
+                    )
+                except Exception as exc:
+                    print(f"{root.name}/{path.name}: read-error={type(exc).__name__}")
+        PY
+      args:
+        executable: /bin/bash
+      register: router_nginx_safe_inventory
+      changed_when: false
+
+    - name: Check Docker Trivy Prometheus textfile path without reading metrics
+      ansible.builtin.stat:
+        path: /var/lib/prometheus/node-exporter/homelab_container_estate.prom
+      register: router_docker_metric_file
+
+    - name: Check expected Komodo key volume existence without reading key content
+      ansible.builtin.stat:
+        path: /var/lib/docker/volumes/komodo-periphery_komodo_periphery_keys
+      register: router_komodo_key_volume
+
+    - name: Report safe non-secret pre-retirement metadata only
+      ansible.builtin.debug:
+        msg:
+          - "NETPLAN={{ router_netplan_safe_inventory.stdout_lines }}"
+          - "NGINX_SITES={{ router_nginx_safe_inventory.stdout_lines }}"
+          - "DOCKER_TRIVY_TEXTFILE_PRESENT={{ router_docker_metric_file.stat.exists | default(false) }}"
+          - "KOMODO_KEY_VOLUME_PRESENT={{ router_komodo_key_volume.stat.exists | default(false) }}"
+          - "READ ONLY: no service stop, package removal, IP/host change or credential disclosure."
