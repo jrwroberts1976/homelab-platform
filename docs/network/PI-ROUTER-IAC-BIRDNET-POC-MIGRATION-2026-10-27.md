@@ -4,6 +4,12 @@
 **Design state: 27 October 2026. No production changes approved, installed or performed.**
 [Tracking issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206) · [draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207).
 
+## Verified 27-Oct live audit: Docker impact and active NetworkManager
+
+The user ran the scoped read-only Docker audit on `docker-01`: **12 OK, 0 changed, 0 failed**. Actual running containers are BirdNET-Go and Komodo Periphery; one Komodo keys volume. `docker.io`, `docker-compose`, `containerd`, `runc`, `iptables` and `nftables` are installed. `homelab-trivy-docker.timer` remains scheduled; do not leave stale vulnerability scan/export metrics and alerts after planned Docker retirement. `NetworkManager` is active, `systemd-networkd` inactive. This is NOT yet proof of eth0's exact NetworkManager profile; gather profile/UUID/IPv4 method and simulate apt removal with the second read-only `router-01-inplace-dependencies-readonly.yml`.
+
+**BLOCKER:** legacy networkd-only LAN rollback script is not valid for current observed host. Its installer `router-01-rollback-prepare.yml` has been hard-disabled to fail locally before any host connection. Design an NM-native checkpoint/rollback with tested direct console and preserve old SSH IP until final approved cutover. See `ROUTER-01-INPLACE-DOCKER-RETIREMENT-2026-10-27.md` for details.
+
 ## LATEST DECISION — convert existing docker-01 IN PLACE (no OS reinstallation)
 
 **User explicitly does NOT want a reimage.** Keep the existing Debian 13 system, OS image, SSH keys and management address `192.168.2.220` throughout preparation. Remove Docker *after* a review of its workloads, including BirdNET-Go POC, Komodo Periphery, container/Trivy monitoring, persistent containers and any other dependencies. BirdNET history is disposable by user decision. Do **not** immediately purge Docker or delete `/var/lib/docker` without inventory, impact review and a separately approved change.
