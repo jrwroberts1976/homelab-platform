@@ -293,6 +293,53 @@ def main() -> None:
           "Initialise DNSSEC anchor BEFORE unbound-checkconf")
 
 
+    wan_guard = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-wan-guard-inplace.yml").read_text()
+    )[0]
+    check(wan_guard["hosts"] == "docker-01" and
+          wan_guard["gather_facts"] is False and
+          wan_guard["vars"]["router_wan_guard_approved"] is False and
+          wan_guard["pre_tasks"][0]["delegate_to"] == "localhost",
+          "Standalone WAN guard must gate before contacting the real Pi")
+    guard = (ANSIBLE / "router-01" / "files" / "router-wan-guard.nft").read_text()
+    check("flush ruleset" not in guard
+          and "iifname \"ppp0\" ct state established,related accept" in guard
+          and "iifname \"ppp0\" counter drop" in guard
+          and "hook input" in guard,
+          "PPPoE guard must drop unsolicited WAN input without flushing Docker")
+    guard_service = (
+        ANSIBLE / "router-01" / "files" / "router-wan-guard.service"
+    ).read_text()
+    check("Before=router-pppoe.service" in guard_service and
+          "WantedBy=multi-user.target" in guard_service,
+          "WAN firewall must install persistently before PPP service at boot")
+    stage = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-firewall-stage-inplace.yml").read_text()
+    )[0]
+    check(stage["hosts"] == "docker-01"
+          and stage["vars"]["router_firewall_stage_approved"] is False
+          and stage["pre_tasks"][0]["delegate_to"] == "localhost",
+          "NAT staging must be default-deny before host contact")
+    stage_src = (
+        ANSIBLE / "playbooks" / "router-01-firewall-stage-inplace.yml"
+    ).read_text()
+    check("nft, -c, -f" in stage_src
+          and "router-01-stage/forwarding" in stage_src,
+          "NAT stage must only syntax-check private prospective rules")
+    prospective = (
+        ANSIBLE / "router-01" / "templates" / "nftables-pppoe-inplace.conf.j2"
+    ).read_text()
+    check('oifname "ppp0" ip saddr 192.168.3.0/24 masquerade' in prospective
+          and "ct state established,related accept" in prospective
+          and 'iifname "eth0" udp sport 68 udp dport 67 accept' in prospective,
+          "Prospective full router NAT/DHCP firewall rules missing")
+    maybe_check_syntax("nft", ["-c", "-f",
+                              str(ANSIBLE / "router-01" / "files" /
+                                  "router-wan-guard.nft")])
+    maybe_check_syntax("nft", ["-c", "-f",
+                              str(ANSIBLE / "router-01" / "templates" /
+                                  "nftables-pppoe-inplace.conf.j2")])
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
