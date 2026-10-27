@@ -34,7 +34,7 @@
           - "'mru 1492' in router_pppoe_peer_candidate"
           - "'lcp-echo-interval 6' in router_pppoe_peer_candidate"
           - "'lcp-echo-failure 10' in router_pppoe_peer_candidate"
-          - "('user ' ~ '"' ~ router_pppoe_username ~ '"') in router_pppoe_peer_candidate"
+          - router_pppoe_username in router_pppoe_peer_candidate
           - router_pppoe_secrets_candidate | length > 0
         fail_msg: PPPoE peer/secret template render validation failed; secrets will not be printed.
       vars:
