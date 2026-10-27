@@ -1,6 +1,6 @@
 ---
 # User requirement: Keep old management IP reachable. New eth0 IP is the LAST step.
-# Approved, in-place conversiond router-01 only. Does NOT install packages, modify system config,
+# Approved, converted router-01 only. Does NOT install packages, modify system config,
 # reload network interfaces, reboot, start DNS/DHCP, or create a PPPoE connection.
 - name: Prestage router-01 templates before any LAN address cutover
   hosts: router_prestage
@@ -18,7 +18,7 @@
           - ansible_host == '192.168.2.220'
         fail_msg: >-
           REFUSED: staging must only run during approved router handover,
-          after docker-01 is retired and in-place conversiond as router-01.
+          after docker-01 is retired and converted as router-01.
       delegate_to: localhost
       become: false
 
@@ -30,7 +30,7 @@
         path: /etc/router-01-conversion-approved
       register: router_conversion_marker
 
-    - name: Require new hostname, image marker, old LAN IP and correct NICs
+    - name: Require new hostname, conversion marker, old LAN IP and correct NICs
       ansible.builtin.assert:
         that:
           - router_conversion_marker.stat.isreg | default(false)
@@ -42,7 +42,7 @@
           - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
           - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
         fail_msg: >-
-          REFUSED: current device is not the separately approved, in-place conversiond
+          REFUSED: current device is not the separately approved, converted
           router-01 on its OLD SSH management IP. Never prestage on docker-01.
 
 
