@@ -9,7 +9,7 @@ Tracking: [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues
 2. **BirdNET microphone testing happens only AFTER the router project has been completed.** Do not run microphone audio capture, USB audio enumeration, `arecord` tests or BirdNET detection/recording acceptance before that milestone. It is not a router-handover dependency.
 3. **Entire router build is reproducible from Git/Ansible**, including recovery onto replacement Pi 5 hardware with secure backups of non-Git secrets and device-specific configuration.
 4. No VLANs, existing flat `192.168.2.0/24`; preserve existing Pi-hole+Unbound, ASUS AiMesh Wi-Fi, monitoring and Proxmox availability.
-5. **Do not introduce `192.168.3.0/24` or a second ASUS routed subnet, including as a migration stage.** Final and transitional network addressing remains `192.168.2.0/24`; Pi becomes sole gateway/DHCP at approved handover, with ASUS converted to AiMesh AP mode.
+5. **Use `192.168.3.0/24` solely for the temporary Pi-router-to-ASUS-WAN transit LAN during the approved handover.** Keep the ASUS LAN, AiMesh clients, homelab hosts and DHCP in `192.168.2.0/24` until a separately approved conversion of ASUS to AP mode. Do not permanently renumber the homelab.
 
 The previously proposed **"move BirdNET to Pi 5, verify microphone and then free Pi 4" sequence is superseded** by this instruction. The physical Pi 4 is still needed for its present BirdNET POC and **cannot serve as a pre-handover test router**.
 
@@ -44,7 +44,54 @@ The user confirmed that the existing ISP modem/ONT connects to the ASUS over Eth
 - Kea DHCP and Stork where supported; preserve existing ASUS reservations/dynamic range exactly after a real read-only export. At no point allow simultaneous uncontrolled ASUS and Pi DHCP responders on production LAN.
 - Pi-hole DNS remains authoritative for client DHCP options. Grafana/Loki/Prometheus/Alertmanager/Zabbix receive security and availability alerts.
 - Cockpit and/or approved IaC-backed router admin controls, management reachable only on trusted LAN/VPN.
-- ASUS AiMesh retained for Wi-Fi and converted to supported AP mesh topology at handover; unsupported ASUS firmware remains a separately tracked residual wireless risk. ASUS documentation permits its **WAN or LAN port as upstream uplink in AP mode** (https://www.asus.com/uk/support/faq/1015009/). Connecting Pi LAN/core-switch LAN to ASUS WAN is supported **after AP-mode conversion**, but not as a router-mode WAN and LAN both on `192.168.2.0/24`: that overlaps the routed subnets. Give ASUS an unused unique `192.168.2.x` management IP via verified DHCP lease/reservation or approved static config; it must not retain gateway `192.168.2.1`.
+- ASUS AiMesh retained for Wi-Fi. **During the first approved handover stage, ASUS stays in router/AiMesh-controller mode** with `192.168.3.2/24` (proposed) on its WAN, upstream Pi LAN `192.168.3.1/24`, ASUS LAN `192.168.2.1/24` and existing `192.168.2.x` DHCP. This is *temporary double NAT*. Only later, on a separately approved second cutover, place ASUS in AP mode (WAN port as upstream uplink supported by ASUS: https://www.asus.com/uk/support/faq/1015009/), give it a unique `.2.x` management IP, transfer `.2.1` and DHCP to Pi, and reconnect the switch to Pi LAN. **Never** have ASUS router-mode WAN and LAN both on `192.168.2.0/24`.
+
+## Two-stage IP transition — APPROVED AS A DESIGN, NOT A LIVE CHANGE
+
+**Reinstated at user request (27 October 2026).** A temporary `192.168.3.0/24` link is the chosen migration approach. It is **not** a new permanent network or a VLAN.
+
+**Existing production before handover (unchanged):**
+```text
+ONT -- PPPoE -- ASUS RT-AC86U (LAN 192.168.2.1, DHCP, AiMesh)
+                       |
+                  HP ProCurve + entire 192.168.2.0/24 estate
+```
+
+**First approved handover / temporary state:**
+```text
+ONT -- PPPoE -- Pi 4 router
+                 USB-WAN: physical PPPoE NIC, logical ppp0
+                 LAN: 192.168.3.1/24 (temporary)
+                       |
+                 ASUS WAN: 192.168.3.2/24 (static or reserved)
+                 ASUS LAN: 192.168.2.1/24
+                 ASUS DHCP and AiMesh remain active, ASUS router/NAT mode
+                       |
+                  HP ProCurve + existing 192.168.2.0/24 LAN and Wi-Fi
+```
+- Pi is the PPPoE terminator, default gateway for transit link, upstream NAT/firewall; ASUS NATs `.2.x` clients toward its `.3.2` WAN. **Temporary double NAT is intentional**.
+- The Pi's DHCP scope on this transit link is unnecessary if ASUS WAN uses static `.3.2`. Never enable Pi DHCP on `.2.x` during stage one. ASUS alone continues serving `.2.x` clients.
+- Assign the Pi LAN `.3.1`, ASUS WAN `.3.2`; check these addresses do not conflict before handover. ASUS must still have WAN and LAN on **different** subnets in router mode.
+- Keep the **entire existing switch and static `.2.x` server estate behind ASUS LAN**, not directly on the Pi `.3.x` LAN. The network remains in place without renumbering.
+- Double NAT can affect existing ASUS OpenVPN port forwards, inbound hosting, UPnP, game connectivity, IP attribution and WireGuard. Test explicit temporary inbound port forwarding and return paths before accepting remote access. On Pi the source from LAN appears primarily as ASUS WAN `.3.2`; per-device attribution is reduced; retain SPAN while needed.
+- For split VPN access into downstream `.2.x`, plan route `192.168.2.0/24 via 192.168.3.2` on Pi **and allow relevant incoming forwarded connections through ASUS security rules** (or validate policy-directed port forwards). Routing alone does not remove ASUS WAN firewall restrictions. Do not assume it works.
+- Before stage one starts, record ASUS PPPoE settings, backup the configuration, physically label ONT-to-Pi and Pi-to-ASUS connections, prove revert-to-ASUS PPPoE, and secure maintenance approval. Expect a brief controlled internet interruption **at** handover.
+
+**Second, separately approved cutover / permanent state:**
+```text
+ONT -- PPPoE -- Pi 4 router
+                 LAN: 192.168.2.1/24
+                       |
+                  HP ProCurve + 192.168.2.0/24 estate
+                       |
+                  ASUS AiMesh in AP mode, unique management IP on .2.x
+```
+- Export and reconcile ASUS DHCP reservations, lease pool and DNS. Prepare Pi Kea for `.2.x` but do not enable it until ASUS DHCP is disabled.
+- Convert ASUS controller/nodes to AP-mode-supported AiMesh topology and attach its WAN uplink (if supported in AP mode) to the Pi/core switch; preserve SSIDs and verify client association and roaming.
+- Switch Pi LAN and Kea to `.2.1` **in coordinated sequence with** removal of ASUS gateway/DHCP ownership to prevent collisions.
+- Confirm no permanent `.3.x` dependence before retiring the temporary subnet; preserve rollback plans for both phases.
+
+All preparations remain **Git-only/offline** until the user approves a handover window. No staged address is to be added to a production NIC during design.
 
 ## Phase 1 — PRE-HANDOVER: Git-only and off-network preparation
 
@@ -74,7 +121,8 @@ Require an explicit approved date/window and rollback authority before **any pro
 2. With approval, stop BirdNET POC on `docker-01` at the planned window and reimage Pi 4 to dedicated router; preserve source-system recovery option as feasible. Do not claim continued BirdNET detection on Pi 5 while microphone testing is deferred.
 3. Optionally stage a clean BirdNET container on `media-01` **at/after handover** with independent safety checks for Docker/nftables, existing qBittorrent Nginx/443, NFS exports and Kodi; **do not run microphone tests**. BirdNET history/recordings intentionally omitted. No target live-recognition acceptance yet.
 4. Apply router Ansible bootstrap and functional checks **on an isolated test link**; verify two NICs, routing, DHCP, port filtering, Suricata failure mode, VPN, web proxy health, DNS, and monitoring before any live switch. Abort to ASUS if incomplete.
-5. At the approved moment, coordinate WAN and LAN gateway ownership so the Pi alone owns `192.168.2.1` and Kea is the **only** DHCP responder. Save existing ASUS configuration; switch ASUS AiMesh controller to **AP mode** (not a second router), disable its old NAT/DHCP through that mode, reconnect Pi LAN/core switch to the ASUS WAN uplink supported in AP mode, and locate the ASUS new unique `192.168.2.x` management IP. Validate AiMesh nodes, wired switch devices, DHCP and internet. Avoid both ASUS and Pi simultaneously owning `.1`. Restore ASUS router/PPPoE/DHCP roles and original cabling immediately if the controlled handover fails. Temporary outage is possible **inside approved handover only**, never before.
+5. **First approved handover:** keep the HP switch and all existing `192.168.2.x` wired/wireless devices behind the ASUS **LAN**. Stop ASUS PPPoE and connect its **WAN** to the Pi LAN (`192.168.3.2` to Pi `192.168.3.1`), while Pi USB WAN authenticates PPPoE to ONT. Preserve ASUS LAN `.2.1`, DHCP, AiMesh and NAT. Validate internet, DNS, switch, Wi-Fi and monitored infrastructure, acknowledging double NAT and possible VPN/port-forward side effects. Roll back to direct ONT→ASUS PPPoE if any critical check fails.
+6. **Separate final AP conversion:** only after first-stage stability and explicit approval, migrate Pi LAN from `.3.1` to `192.168.2.1` and enable Kea with original DHCP reservations, convert ASUS to AP-mode and new unique `.2.x` management IP, and connect Pi LAN/core switch and ASUS AP uplink. Ensure no duplicate `.2.1` gateway or competing DHCP service. Validate internal services and Wi-Fi roaming; retain a documented ASUS restore path. Any temporary outage is confined to approved cutover windows.
 6. Test wired/wireless clients, DNS resolvers, internet, client renewal, roaming, firewall/IPS fail-open, proxy page as supported, WireGuard from external mobile data, Grafana/alerts, and remote access to Proxmox. Keep ASUS restore plan ready until accepted.
 
 **Hardware feasibility constraint:** A Pi 4 carrying BirdNET cannot simultaneously be rebuilt for routing without POC interruption. If zero **handover-window** downtime and uninterrupted BirdNET both become requirements, additional separate hardware is mandatory. A Pi 5 upgrade similarly requires hardware-specific NIC and recovery validation.
