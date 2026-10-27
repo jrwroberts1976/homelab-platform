@@ -1,0 +1,129 @@
+---
+# Stage a 90s-delayed, ephemeral Kea test with 15-minute automatic undo.
+# No live LAN/PPPoE/NAT/Docker/DHCP changes.
+- name: Stage headless, no-reboot, DHCP-only trial on existing Pi4
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_dhcp_trial_stage_approved: false
+  pre_tasks:
+    - name: Default-deny controller-side stage approval
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_trial_stage_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "DHCP trial stage requires explicit approval on old managed Pi."
+      delegate_to: localhost
+      become: false
+
+    - name: Gather live host details before staging
+      ansible.builtin.setup:
+
+    - name: Check identity and original managed SSH
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'docker-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+          - (ansible_facts.get('eth0', {}).get('macaddress', '') | lower) == 'd8:3a:dd:5a:51:44'
+          - (ansible_facts.get('eth1', {}).get('macaddress', '') | lower) == '00:24:9b:63:b3:8a'
+
+    - name: Require the old 120-second cutover timer has been stopped
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-lan-switch.timer]
+      register: router_old_switch_timer
+      changed_when: false
+      failed_when: router_old_switch_timer.stdout | trim == 'active'
+
+    - name: Require Kea inactive and MASKED before offline trial
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, kea-dhcp4-server.service]
+      register: router_trial_kea_mask
+      changed_when: false
+      failed_when: router_trial_kea_mask.stdout | trim != 'masked'
+
+    - name: Require Kea inactive before staging
+      ansible.builtin.command:
+        argv: [systemctl, is-active, kea-dhcp4-server.service]
+      register: router_trial_kea_state
+      changed_when: false
+      failed_when: router_trial_kea_state.stdout | trim == 'active'
+
+    - name: Require no persistent .3.1 cutover Netplan override
+      ansible.builtin.stat:
+        path: /etc/netplan/99-router-01-lan.yaml
+      register: router_trial_netplan
+
+    - name: Refuse staging over a persistent already applied router LAN
+      ansible.builtin.assert:
+        that:
+          - not (router_trial_netplan.stat.exists | default(false))
+
+    - name: Verify PPPoE service is installed
+      ansible.builtin.stat:
+        path: /etc/systemd/system/router-pppoe.service
+      register: router_trial_ppp_installed
+
+    - name: Require PPPoE setup before DHCP trial
+      ansible.builtin.assert:
+        that:
+          - router_trial_ppp_installed.stat.isreg | default(false)
+
+  tasks:
+    - name: Stage temporary DHCP trial program (not run)
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/router-01-dhcp-trial.sh"
+        dest: /usr/local/sbin/router-01-dhcp-trial
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Validate DHCP trial shell syntax only
+      ansible.builtin.command:
+        argv: [bash, -n, /usr/local/sbin/router-01-dhcp-trial]
+      changed_when: false
+
+    - name: Install four dedicated temporary trial systemd unit files
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../router-01/files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - router-dhcp-trial-activate.service
+        - router-dhcp-trial-activate.timer
+        - router-dhcp-trial-rollback.service
+        - router-dhcp-trial-rollback.timer
+
+    - name: Reload systemd unit definitions without starting DHCP trial
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Require both trial timers are NOT active after stage
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - router-dhcp-trial-activate.timer
+        - router-dhcp-trial-rollback.timer
+      register: router_trial_timers_staged
+      changed_when: false
+      failed_when: router_trial_timers_staged.stdout | trim == 'active'
+
+    - name: Verify original Pi eth0 address unchanged
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_trial_preserved_lan
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_trial_preserved_lan.stdout"
+
+    - name: Report stage only
+      ansible.builtin.debug:
+        msg:
+          - "STAGED ONLY: No DHCP, Netplan, PPP, NAT or Docker runtime changes."
+          - "Trial uses temporary, not-saved NetworkManager .3.1 profile."
+          - "Kea starts disabled-at-boot and only on isolated ASUS WAN."
+          - "Trial auto-rollback 15 minutes after activation; no reboot required."
