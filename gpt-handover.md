@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 Oct 2026 — router-01 guarded software staging and timed LAN rollback added (Git only)
+
+To respect the user's requirement of keeping original 192.168.2.220 SSH connectivity until the LAST cutover step, draft PR #207 now has a separate `router-01-package-stage.yml`. It installs PPPoE/Kea/Unbound/nftables on an APPROVED, reimaged future `router-01` using `apt.policy_rc_d=101` to avoid service auto-start; immediately stops/disables/masks the daemons; has explicit local permission and remote hostname/reimage/old IP/MAC gating. `router-01-rollback-prepare.yml` installs only a disabled systemd rollback timer and a script at `/usr/local/sbin/router-01-lan-cutover`. At a FUTURE approved, console-supervised cutover the script can back up the old networkd LAN config, arm a five-minute systemd timer, switch `eth0` to `192.168.3.1`, and require confirmation or automatically restore the old LAN config. Final router_basics playbook now suppresses apt service autostarts and unmasks units only at explicit activation. Offline validator and CI updated; tests **do not prove the timer or rollback works on Pi**.
+
+**No production network change, no remote stage, no reimage, no BirdNET stop, no ASUS PPPoE/DHCP change.** Physical isolated rehearsal with Debian13 ARM64, console/management laptop, cold reboot, PPPoE and DHCP still BLOCKING prior to a live handover. Future new hostname `router-01` is stage-only: current `docker-01` remains canonical deployed host. See issue #206 and draft PR #207.
+
+---
+
 ## 27 October 2026 — router-01: LAN address changes last
 
 User requires old SSH management address 192.168.2.220 to remain in place while preparing a reimaged router-01. The live docker-01 must not be touched before an explicitly approved handover.
