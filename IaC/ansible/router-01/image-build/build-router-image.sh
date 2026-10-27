@@ -8,7 +8,7 @@ BASE=$(realpath "$1"); OUT=$(realpath -m "$2"); CREDS=$(realpath "$3"); PUBKEY=$
 [[ -f "$BASE" && -f "$CREDS" && -f "$PUBKEY" && ! -e "$OUT" ]] || exit 2
 WORK=$(mktemp -d /tmp/pi-router-build.XXXXXXXX)
 LOOP=""
-cleanup() { set +e; for p in dev/pts run sys proc dev boot/firmware; do mountpoint -q "$WORK/root/$p" && umount "$WORK/root/$p"; done; [[ -z "$LOOP" ]] || losetup -d "$LOOP"; rm -rf "$WORK"; }
+cleanup() { set +e; for p in dev/pts run sys proc dev boot/firmware; do if mountpoint -q "$WORK/root/$p"; then umount "$WORK/root/$p"; fi; done; if mountpoint -q "$WORK/root"; then umount "$WORK/root"; fi; if [[ -n "$LOOP" ]]; then losetup -d "$LOOP"; fi; rmdir "$WORK/root" "$WORK" 2>/dev/null || true; }
 trap cleanup EXIT
 echo "Decompressing official Raspberry Pi OS Lite ARM64 image..."
 xz -dc "$BASE" > "$OUT"
