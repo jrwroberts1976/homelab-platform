@@ -32,6 +32,7 @@ jobs:
         run: |
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-readonly.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
+          ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-pppoe-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package-stage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml --syntax-check
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-basics.yml --syntax-check
