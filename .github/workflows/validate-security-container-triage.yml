@@ -1,0 +1,30 @@
+name: Validate read-only Trivy security triage
+
+on:
+  pull_request:
+    paths:
+      - "IaC/ansible/playbooks/security-container-triage-readonly.yml"
+      - "scripts/validate-security-container-triage-readonly.py"
+      - ".github/workflows/validate-security-container-triage.yml"
+  push:
+    branches: [main]
+    paths:
+      - "IaC/ansible/playbooks/security-container-triage-readonly.yml"
+      - "scripts/validate-security-container-triage-readonly.py"
+      - ".github/workflows/validate-security-container-triage.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify read-only scanner evidence constraints
+        run: python3 scripts/validate-security-container-triage-readonly.py
+      - name: Verify Ansible syntax
+        run: |
+          python3 -m pip install "ansible-core>=2.19,<2.20"
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml playbooks/security-container-triage-readonly.yml --syntax-check
