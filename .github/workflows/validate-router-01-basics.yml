@@ -39,6 +39,8 @@ jobs:
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-connect-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-stop-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-health-readonly.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-dhcp-trial-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-dhcp-trial-arm.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-dhcp-install-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-wan-guard-inplace.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-firewall-stage-inplace.yml --syntax-check
@@ -63,5 +65,7 @@ jobs:
           shellcheck IaC/ansible/router-01/files/router-01-lan-cutover.sh
           bash -n IaC/ansible/router-01/files/router-01-nm-cutover.sh
           shellcheck IaC/ansible/router-01/files/router-01-nm-cutover.sh
+          bash -n IaC/ansible/router-01/files/router-01-dhcp-trial.sh
+          shellcheck IaC/ansible/router-01/files/router-01-dhcp-trial.sh
           sudo nft -c -f IaC/ansible/router-01/templates/nftables-pppoe-inplace.conf.j2
           sudo nft -c -f IaC/ansible/router-01/files/router-wan-guard.nft
