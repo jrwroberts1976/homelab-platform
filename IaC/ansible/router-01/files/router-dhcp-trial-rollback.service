@@ -1,0 +1,7 @@
+[Unit]
+Description=Stop Kea and restore original Pi4 DHCP profile after trial
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-01-dhcp-trial rollback
+TimeoutStartSec=120
