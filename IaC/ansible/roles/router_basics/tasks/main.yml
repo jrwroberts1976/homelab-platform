@@ -45,6 +45,7 @@
     state: present
     update_cache: true
     cache_valid_time: 3600
+    policy_rc_d: 101
 
 - name: Install LAN and raw WAN systemd-networkd definitions (do not reload network)
   ansible.builtin.template:
@@ -139,6 +140,7 @@
     name: "{{ item }}"
     enabled: false
     state: stopped
+    masked: true
   loop:
     - router-pppoe.service
     - kea-dhcp4-server.service
@@ -158,6 +160,17 @@
   ansible.builtin.command:
     argv: [sysctl, -p, /etc/sysctl.d/90-router-01-forwarding.conf]
   changed_when: true
+  when: router_activate_services | bool
+
+- name: Unmask router services only after explicit activation approval
+  ansible.builtin.systemd_service:
+    name: "{{ item }}"
+    masked: false
+  loop:
+    - nftables.service
+    - unbound.service
+    - kea-dhcp4-server.service
+    - router-pppoe.service
   when: router_activate_services | bool
 
 - name: Start firewall, recursive DNS, DHCP and PPPoE only on approved activation
