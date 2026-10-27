@@ -1,0 +1,101 @@
+---
+# Causes a REAL temporary DHCP activation 90 seconds after arming.
+# Operator must physically isolate Pi eth0 on ASUS WAN during countdown.
+# Reboot is not relied upon for recovery; auto-rollback 15 min from start.
+- name: Arm isolated Pi4 DHCP-only headless WAN-lease test
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_dhcp_trial_arm_approved: false
+    router_asus_wan_auto_ip_confirmed: false
+    router_operator_ready_to_move_cable: false
+  pre_tasks:
+    - name: Default-deny physical cable-switch confirmation locally
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_trial_arm_approved | bool
+          - router_asus_wan_auto_ip_confirmed | bool
+          - router_operator_ready_to_move_cable | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Must stage first, set ASUS WAN to Automatic IP and prepare to move cable."
+      delegate_to: localhost
+      become: false
+
+    - name: Verify old managed address exists
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_trial_arm_old_ip
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_trial_arm_old_ip.stdout"
+
+    - name: Verify physical USB ONT carrier present
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth1/carrier]
+      register: router_trial_arm_carrier
+      changed_when: false
+      failed_when: router_trial_arm_carrier.stdout | trim != '1'
+
+    - name: Require live PPPoE IPv4 exists
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, ppp0]
+      register: router_trial_arm_ppp
+      changed_when: false
+      failed_when: router_trial_arm_ppp.rc != 0 or 'inet ' not in router_trial_arm_ppp.stdout
+
+    - name: Prove live internet explicitly through PPPoE
+      ansible.builtin.command:
+        argv: [ping, -n, -I, ppp0, -c, '2', -W, '2', 1.1.1.1]
+      register: router_trial_arm_ping
+      changed_when: false
+
+    - name: Require old physical cutover timer still stopped
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-lan-switch.timer]
+      register: router_trial_arm_old_timer
+      changed_when: false
+      failed_when: router_trial_arm_old_timer.stdout | trim == 'active'
+
+    - name: Require existing Kea is disabled and MASKED
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, kea-dhcp4-server.service]
+      register: router_trial_arm_kea
+      changed_when: false
+      failed_when: router_trial_arm_kea.stdout | trim != 'masked'
+
+    - name: Check trial executable staged and shell-readable
+      ansible.builtin.stat:
+        path: /usr/local/sbin/router-01-dhcp-trial
+      register: router_trial_arm_script
+
+    - name: Refuse if DHCP trial staging was not completed
+      ansible.builtin.assert:
+        that:
+          - router_trial_arm_script.stat.isreg | default(false)
+          - router_trial_arm_script.stat.executable | default(false)
+
+    - name: Require no existing DHCP trial timer is pending
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [router-dhcp-trial-activate.timer, router-dhcp-trial-rollback.timer]
+      register: router_trial_arm_timers
+      changed_when: false
+      failed_when: router_trial_arm_timers.stdout | trim == 'active'
+
+  tasks:
+    - name: Arm ONE-SHOT local DHCP trial 90 seconds after return
+      ansible.builtin.systemd_service:
+        name: router-dhcp-trial-activate.timer
+        state: started
+
+    - name: Print physical move instructions before disconnecting SSH
+      ansible.builtin.debug:
+        msg:
+          - "ARMED: 90 seconds to isolate Pi eth0 on ASUS WAN."
+          - "Leave ONT connected to Pi USB eth1. Leave ASUS LAN on HP switch."
+          - "MOVE Pi eth0 OUT of HP switch and INTO ASUS WAN NOW."
+          - "After countdown, Kea will run temporarily and NEVER be enabled at boot."
+          - "Check ASUS WAN for 192.168.3.100-199 lease. No client internet is expected (NAT not enabled)."
+          - "Automatic DHCP stop/revert runs 15 min after trial activation."
+          - "If it fails, restore original Pi eth0 -> switch and ONT -> ASUS WAN after timer."
