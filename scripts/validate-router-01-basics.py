@@ -265,6 +265,33 @@ def main() -> None:
     check("192.168.3.1" in
           (ANSIBLE / "roles" / "router_basics" / "defaults" / "main.yml").read_text(),
           "Future Kea gateway must remain .3.1")
+    dns_tasks = kea_stage["tasks"]
+    check(any("dns-root-data" in task.get("ansible.builtin.apt", {}).get("name", [])
+              for task in dns_tasks),
+          "Install Debian DNSSEC root trust anchor package with Unbound")
+    check(any(task.get("ansible.builtin.copy", {}).get("src") == "/usr/share/dns/root.key"
+              and task["ansible.builtin.copy"].get("dest") == "/var/lib/unbound/root.key"
+              and task["ansible.builtin.copy"].get("remote_src") is True
+              and task["ansible.builtin.copy"].get("force") is False
+              for task in dns_tasks),
+          "Root anchor must be copied on target ONLY if missing; preserve RFC5011 updates")
+    check(any(task.get("ansible.builtin.stat", {}).get("path") ==
+              "/var/lib/unbound/root.key" for task in dns_tasks),
+          "Verify the DNSSEC anchor on the real target")
+    check(any("router_dnssec_ready_anchor.stat.size" in
+              str(task.get("ansible.builtin.assert", {}))
+              for task in dns_tasks),
+          "Do not pass DNSSEC syntax validation with an empty root key")
+    syntax_indexes = [i for i, task in enumerate(dns_tasks)
+                      if task.get("ansible.builtin.command", {}).get("argv") ==
+                      ["/usr/sbin/unbound-checkconf"]]
+    copy_indexes = [i for i, task in enumerate(dns_tasks)
+                    if task.get("ansible.builtin.copy", {}).get("dest") ==
+                    "/var/lib/unbound/root.key"]
+    check(bool(syntax_indexes and copy_indexes) and
+          copy_indexes[0] < syntax_indexes[0],
+          "Initialise DNSSEC anchor BEFORE unbound-checkconf")
+
 
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
