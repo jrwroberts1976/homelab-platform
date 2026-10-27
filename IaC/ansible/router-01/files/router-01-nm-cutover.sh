@@ -111,7 +111,11 @@ rollback() {
   if test -f "$STATE/old-netplan-eth0.yaml"; then
     cp -a "$STATE/old-netplan-eth0.yaml" /etc/netplan/90-NM-75a1216a-9d1a-30cd-8aca-ace5526ec021.yaml
   fi
-  netplan generate && netplan apply || log 'Netplan rollback failed: use local console'
+  if netplan generate; then
+    if ! netplan apply; then log 'Netplan rollback apply failed: use local console'; fi
+  else
+    log 'Netplan rollback generate failed: use local console'
+  fi
   if test -f "$STATE/old-ip-forward"; then
     sysctl -w "net.ipv4.ip_forward=$(cat "$STATE/old-ip-forward")" >/dev/null || true
   fi
