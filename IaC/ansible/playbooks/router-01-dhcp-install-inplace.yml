@@ -64,7 +64,7 @@
   tasks:
     - name: Install Kea and Unbound without allowing package post-install starts
       ansible.builtin.apt:
-        name: [kea-dhcp4-server, unbound]
+        name: [kea-dhcp4-server, unbound, dns-root-data]
         state: present
         update_cache: true
         cache_valid_time: 3600
@@ -98,6 +98,54 @@
         owner: root
         group: root
         mode: '0644'
+
+    - name: Require the Debian-maintained DNSSEC root trust anchor source
+      ansible.builtin.stat:
+        path: /usr/share/dns/root.key
+      register: router_dnssec_package_anchor
+
+    - name: Refuse to fabricate or disable DNSSEC if packaged anchor is missing
+      ansible.builtin.assert:
+        that:
+          - router_dnssec_package_anchor.stat.isreg | default(false)
+          - router_dnssec_package_anchor.stat.size | default(0) | int > 0
+        fail_msg: "dns-root-data did not supply /usr/share/dns/root.key; stop before DNS activation."
+
+    - name: Ensure writable DNSSEC trust-anchor directory exists for Unbound
+      ansible.builtin.file:
+        path: /var/lib/unbound
+        state: directory
+        owner: unbound
+        group: unbound
+        mode: '0750'
+
+    - name: Inspect existing RFC5011 DNSSEC anchor to avoid replacing updates
+      ansible.builtin.stat:
+        path: /var/lib/unbound/root.key
+      register: router_dnssec_existing_anchor
+
+    - name: Initialise missing DNSSEC trust anchor from Debian dns-root-data
+      ansible.builtin.copy:
+        src: /usr/share/dns/root.key
+        dest: /var/lib/unbound/root.key
+        remote_src: true
+        owner: unbound
+        group: unbound
+        mode: '0644'
+        force: false
+      when: not (router_dnssec_existing_anchor.stat.exists | default(false))
+
+    - name: Verify Unbound DNSSEC trust anchor exists and is nonempty
+      ansible.builtin.stat:
+        path: /var/lib/unbound/root.key
+      register: router_dnssec_ready_anchor
+
+    - name: Refuse DNSSEC validation if root trust anchor could not be prepared
+      ansible.builtin.assert:
+        that:
+          - router_dnssec_ready_anchor.stat.isreg | default(false)
+          - router_dnssec_ready_anchor.stat.size | default(0) | int > 0
+        fail_msg: "Missing or empty DNSSEC root anchor; Unbound will remain masked."
 
     - name: Syntax-check staged Unbound without starting a resolver
       ansible.builtin.command:
