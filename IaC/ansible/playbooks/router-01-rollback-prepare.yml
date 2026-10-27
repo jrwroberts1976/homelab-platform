@@ -1,0 +1,81 @@
+---
+# Install an INERT rollback helper. It neither arms the timer nor changes network.
+# Future approved reimaged router-01 ONLY, while old SSH IP is intact.
+- name: Prepare router-01 offline LAN recovery before IP change
+  hosts: router_prestage
+  become: true
+  gather_facts: false
+  vars:
+    router_rollback_prepare_approved: false
+  pre_tasks:
+    - name: Refuse host contact without explicit local approval
+      ansible.builtin.assert:
+        that:
+          - router_rollback_prepare_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Recovery helper may only be prepared on approved reimaged router-01."
+      delegate_to: localhost
+      become: false
+
+    - name: Collect reimaged host facts only after local approval
+      ansible.builtin.setup:
+
+    - name: Check reimage attestation
+      ansible.builtin.stat:
+        path: /etc/router-01-reimage-complete
+      register: router_reimage_attestation
+
+    - name: Assert hardware and old management address unchanged
+      ansible.builtin.assert:
+        that:
+          - router_reimage_attestation.stat.isreg | default(false)
+          - ansible_facts.hostname == 'router-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - router_current_management_ip in ansible_facts.all_ipv4_addresses
+          - router_lan_address not in ansible_facts.all_ipv4_addresses
+          - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+          - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
+        fail_msg: "Wrong device or address. Aborting without changes."
+
+  tasks:
+    - name: Deploy reviewed rollback executable
+      ansible.builtin.copy:
+        src: ../router-01/files/router-01-lan-cutover.sh
+        dest: /usr/local/sbin/router-01-lan-cutover
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Deploy rollback systemd units in disabled state
+      ansible.builtin.copy:
+        src: "../router-01/files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: "0644"
+      loop:
+        - router-01-lan-rollback.service
+        - router-01-lan-rollback.timer
+
+    - name: Reload unit definitions, but DO NOT arm the timer
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Ensure timer remains stopped and disabled before cutover
+      ansible.builtin.systemd_service:
+        name: router-01-lan-rollback.timer
+        enabled: false
+        state: stopped
+
+    - name: Confirm old LAN management still present
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr, show, dev, "{{ router_lan_interface }}"]
+      register: router_recovery_ip
+      changed_when: false
+      failed_when: router_current_management_ip not in router_recovery_ip.stdout
+
+    - name: Recovery helper installed with no IP changes
+      ansible.builtin.debug:
+        msg: "Rollback helper installed but NOT armed. LAN remains at {{ router_current_management_ip }}."
