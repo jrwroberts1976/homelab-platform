@@ -23,7 +23,7 @@ case "$ACTION" in switch|confirm|rollback|status) ;; *) die "usage: $0 switch|co
 
 # Never touch legacy docker-01 or any unsupported machine.
 [ "$(hostname -s)" = "router-01" ] || die "hostname is not router-01"
-[ -f /etc/router-01-reimage-complete ] || die "post-reimage marker absent"
+[ -f /etc/router-01-conversion-approved ] || die "approved in-place conversion marker absent"
 [ -d "$STAGE" ] || die "missing root-private stage"
 [ ! -L "$CURRENT" ] || die "active network configuration is symlinked"
 [ -f "$CURRENT" ] || die "expected networkd bootstrap config absent"
@@ -44,6 +44,9 @@ case "$ACTION" in
     ;;
   switch)
     [ "${2:-}" = "--approved-handover" ] || die "explicit --approved-handover required"
+    if systemctl -q is-active docker.service || systemctl -q is-active docker.socket; then
+      die "Docker still active: abort LAN cutover until explicit Docker retirement"
+    fi
     ip_has "$OLD" || die "original management address not present"
     [ ! -f "$STATE" ] || die "cutover already attempted; inspect recovery state first"
     if [ ! -f "$NEW" ] || [ -L "$NEW" ]; then die "new LAN candidate missing"; fi
