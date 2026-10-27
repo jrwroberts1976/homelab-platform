@@ -173,6 +173,10 @@ def main() -> None:
     ).read_text()
     check("apt-get, -s, remove" in retired_source,
           "Docker retirement requires apt simulation before uninstall")
+    check("/var/lib/prometheus/node-exporter/homelab_container_estate.prom" in retired_source,
+          "Retire Docker-only scan metric to avoid stale successful scans")
+    check("homelab-trivy-docker.service" in retired_source,
+          "Stop in-flight Docker-specific scan before runtime removal")
     check("autoremove: false" in retired_source
           and "purge: false" in retired_source,
           "Docker retirement may not purge or autoremove")
