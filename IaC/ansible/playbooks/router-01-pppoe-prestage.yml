@@ -1,0 +1,106 @@
+---
+# PPPoE configuration first: root-private templates ONLY, no package installs.
+# MUST NOT be run on live docker-01 / existing 192.168.2.220 host.
+# Use only after explicit retirement/reimage to router-01 during approved handover.
+- name: Prestage PPPoE-only configuration without changing broadband or LAN
+  hosts: router_prestage
+  gather_facts: false
+  become: true
+  vars:
+    router_pppoe_prestage_approved: false
+    router_stage_directory: /var/lib/router-01-stage
+  pre_tasks:
+    - name: Refuse any remote connection before local approval
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_prestage_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: >-
+          PPPoE prestaging is permitted ONLY after an approved reimage as
+          router-01. The current BirdNET docker-01 must remain untouched.
+      delegate_to: localhost
+      become: false
+
+    - name: Collect facts on approved replacement only
+      ansible.builtin.setup:
+
+    - name: Read required post-reimage attestation marker
+      ansible.builtin.stat:
+        path: /etc/router-01-reimage-complete
+      register: router_pppoe_reimage_marker
+
+    - name: Assert replacement identity, both NICs and original management IP
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_reimage_marker.stat.isreg | default(false)
+          - ansible_facts.hostname == 'router-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - router_current_management_ip in ansible_facts.all_ipv4_addresses
+          - router_lan_address not in ansible_facts.all_ipv4_addresses
+          - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+          - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
+          - (ansible_facts.get(router_wan_interface, {}).get('ipv4', {}).get('address', '') | length) == 0
+        fail_msg: "Incorrect machine/image/NIC or active WAN address; no changes allowed."
+
+    - name: Require private vaulted PPPoE credentials
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_username | default('') | length > 0
+          - router_pppoe_password | default('') | length > 0
+          - router_pppoe_username.splitlines() | length == 1
+          - router_pppoe_password.splitlines() | length == 1
+        fail_msg: "Encrypted off-repo Vault must provide PPPoE credentials."
+      no_log: true
+
+  tasks:
+    - name: Create private, inert PPPoE staging directory
+      ansible.builtin.file:
+        path: "{{ router_stage_directory }}/pppoe"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Render PPPoE profile, root-only secret and service (NOT to active paths)
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/{{ item.src }}"
+        dest: "{{ router_stage_directory }}/pppoe/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0600'
+      loop:
+        - { src: ppp-homelab-wan.j2, dest: homelab-wan.peer }
+        - { src: ppp-secrets.j2, dest: authentication.secrets }
+        - { src: router-pppoe.service.j2, dest: router-pppoe.service }
+        - { src: 20-router-wan.network.j2, dest: physical-wan.network }
+      no_log: true
+
+    - name: Read PPPoE service status without starting it
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-pppoe.service]
+      register: router_pppoe_service_status
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse to report success if a PPPoE service was already active
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_service_status.stdout | trim != 'active'
+        fail_msg: "Unexpected active PPPoE service; investigation needed."
+
+    - name: Verify SSH management LAN is still on its original IP
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, "{{ router_lan_interface }}"]
+      register: router_pppoe_lan_check
+      changed_when: false
+      failed_when: router_current_management_ip not in router_pppoe_lan_check.stdout
+
+    - name: Describe stage-only result
+      ansible.builtin.debug:
+        msg:
+          - "PPPoE files staged on router-01 under root-private /var/lib/router-01-stage/pppoe"
+          - "PPPoE has NOT been started; ISP modem and ASUS are unchanged"
+          - "Management LAN remains {{ router_current_management_ip }}"
+          - "Credentials are not printed or committed to Git"
