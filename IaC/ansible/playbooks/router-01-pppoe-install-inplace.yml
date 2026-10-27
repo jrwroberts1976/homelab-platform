@@ -1,0 +1,131 @@
+---
+# Stage PPPoE on the EXISTING Debian13 Pi4 (currently docker-01).
+# No reimage/hostname change. NO PPPoE session, LAN IP or Docker change.
+- name: Install PPPoE configuration in-place without initiating a connection
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_pppoe_install_approved: false
+    router_pppoe_username: ""
+    router_pppoe_password: ""
+    router_wan_interface: eth1
+    router_expected_wan_mac: "00:24:9b:63:b3:8a"
+    router_expected_lan_mac: "d8:3a:dd:5a:51:44"
+    router_pppoe_mtu: 1492
+    router_pppoe_lcp_echo_interval: 6
+    router_pppoe_lcp_echo_failure: 10
+  pre_tasks:
+    - name: Approval gate on controller before contacting the Pi
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_install_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Run only with explicit router_pppoe_install_approved=true for active Pi4."
+      delegate_to: localhost
+      become: false
+
+    - name: Collect live facts only after approval
+      ansible.builtin.setup:
+
+    - name: Verify OS, current LAN and both known NIC MACs
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'docker-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+          - (ansible_facts.get('eth0', {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+          - (ansible_facts.get('eth1', {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
+        fail_msg: "Unexpected host/IP/NIC; refusing PPPoE installation."
+
+    - name: Verify existing LAN still uses NetworkManager netplan-eth0
+      ansible.builtin.command:
+        argv: [nmcli, -g, GENERAL.CONNECTION, device, show, eth0]
+      register: router_nm_lan
+      changed_when: false
+      failed_when: router_nm_lan.stdout | trim != 'netplan-eth0'
+
+    - name: Require valid private ISP credentials from external Ansible Vault
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_username | default('') | trim | length > 0
+          - router_pppoe_password | default('') | trim | length > 0
+          - router_pppoe_username.splitlines() | length == 1
+          - router_pppoe_password.splitlines() | length == 1
+          - router_pppoe_username != 'YOUR_ISP_LOGIN'
+          - router_pppoe_password != 'YOUR_ISP_PASSWORD'
+        fail_msg: "Supply real ISP credentials only using the off-Git encrypted Vault."
+      no_log: true
+
+  tasks:
+    - name: Install pppd/PPPoE package without starting a network service
+      ansible.builtin.apt:
+        name: ppp
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        policy_rc_d: 101
+
+    - name: Ensure private pppd peer directory exists
+      ansible.builtin.file:
+        path: /etc/ppp/peers
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install root-only PPPoE peer profile from Ansible template
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/ppp-homelab-wan.j2"
+        dest: /etc/ppp/peers/homelab-wan
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+    - name: Install PPPoE secret in both PPP authentication files
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/ppp-secrets.j2"
+        dest: "{{ item }}"
+        owner: root
+        group: root
+        mode: '0600'
+        backup: true
+      loop: [/etc/ppp/chap-secrets, /etc/ppp/pap-secrets]
+      no_log: true
+
+    - name: Install systemd PPPoE unit, but do NOT start
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/router-pppoe.service.j2"
+        dest: /etc/systemd/system/router-pppoe.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload only systemd unit definitions
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Ensure PPPoE service is stopped and disabled until ONT cable move
+      ansible.builtin.systemd_service:
+        name: router-pppoe.service
+        enabled: false
+        state: stopped
+        masked: false
+
+    - name: Verify original SSH LAN address remains and was not changed
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_post_install_lan
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_post_install_lan.stdout"
+
+    - name: Report standby PPPoE installation without exposing credentials
+      ansible.builtin.debug:
+        msg:
+          - "PASS: pppd and protected PPPoE configuration installed on existing docker-01."
+          - "PPPoE is STOPPED and DISABLED; ONT remains on ASUS."
+          - "eth0 management remains at 192.168.2.220, NetworkManager unchanged."
+          - "No Docker, Kea DHCP, NAT/firewall or production DNS changes."
