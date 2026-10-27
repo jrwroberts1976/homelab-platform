@@ -1,5 +1,7 @@
 # router-01 — initial PPPoE/DHCP/Unbound IaC (NOT DEPLOYED)
 
+**LATEST BUILD PRIORITY — 27 October 2026:** user wants working **PPPoE FIRST, then DHCP**, keeping the installed Debian 13, not waiting for a fresh OS. The working Ansible path for the current Pi4 (`docker-01`, SSH `192.168.2.220`) is documented in [PPPOE-DHCP-INPLACE-CUTOVER.md](PPPOE-DHCP-INPLACE-CUTOVER.md). It provides controller-gated `router-01-pppoe-install-inplace.yml` and `router-01-dhcp-install-inplace.yml` (packages + configs; PPPoE stopped, DHCP/Unbound MASKED), followed by a physical ONT-to-USB-WAN PPPoE test using `router-01-pppoe-connect-inplace.yml`, with `router-01-pppoe-stop-inplace.yml` as a restore path. All four target the **actual docker-01 production inventory**, preserve eth0 SSH and avoid any reimage. ISP creds remain ONLY in the off-Git encrypted Vault. The earlier systemd-networkd-only `router-01-basics.yml` remains incompatible with the observed NetworkManager host and must not be run. Full LAN .3.1 + DHCP activation still requires isolated cable topology and working NAT/Netplan rollback.
+
 Tracked in [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206) and draft PR #207.
 
 **Do NOT run any router role on the existing production `docker-01`.** It currently provides BirdNET POC on `192.168.2.220`. The ASUS router currently owns PPPoE/DHCP for the complete home network.
