@@ -124,6 +124,27 @@ def main() -> None:
                   for key in modules),
               "Docker retirement audit has a mutating Ansible module")
 
+    dependency_audit = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-inplace-dependencies-readonly.yml").read_text()
+    )[0]
+    check(dependency_audit["hosts"] == "docker-01",
+          "In-place dependency audit must target only docker-01")
+    dependency_src = (
+        ANSIBLE / "playbooks" / "router-01-inplace-dependencies-readonly.yml"
+    ).read_text()
+    check("apt-get" in dependency_src and "- -s" in dependency_src,
+          "Docker package removal impact must be simulation-only")
+    check("nmcli -g" in dependency_src,
+          "Need non-secret NetworkManager profile inventory")
+    for task in dependency_audit["tasks"]:
+        modules = [key for key in task if key.startswith("ansible.builtin.")]
+        check(all(key in {"ansible.builtin.assert", "ansible.builtin.command",
+                          "ansible.builtin.shell", "ansible.builtin.debug"}
+                  for key in modules),
+              "In-place dependency audit contains mutating Ansible modules")
+    check("--show-secrets" not in dependency_src,
+          "Do not expose NetworkManager profile secrets")
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
