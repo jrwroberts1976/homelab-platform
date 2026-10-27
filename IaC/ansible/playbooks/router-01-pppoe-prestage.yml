@@ -1,7 +1,7 @@
 ---
 # PPPoE configuration first: root-private templates ONLY, no package installs.
 # MUST NOT be run on live docker-01 / existing 192.168.2.220 host.
-# Use only after explicit retirement/reimage to router-01 during approved handover.
+# Use only after explicit retirement/in-place conversion to router-01 during approved handover.
 - name: Prestage PPPoE-only configuration without changing broadband or LAN
   hosts: router_prestage
   gather_facts: false
@@ -17,7 +17,7 @@
           - inventory_hostname == 'router-01'
           - ansible_host == '192.168.2.220'
         fail_msg: >-
-          PPPoE prestaging is permitted ONLY after an approved reimage as
+          PPPoE prestaging is permitted ONLY after an approved in-place conversion as
           router-01. The current BirdNET docker-01 must remain untouched.
       delegate_to: localhost
       become: false
@@ -25,15 +25,15 @@
     - name: Collect facts on approved replacement only
       ansible.builtin.setup:
 
-    - name: Read required post-reimage attestation marker
+    - name: Read required post-in-place conversion attestation marker
       ansible.builtin.stat:
-        path: /etc/router-01-reimage-complete
-      register: router_pppoe_reimage_marker
+        path: /etc/router-01-conversion-approved
+      register: router_pppoe_conversion_marker
 
     - name: Assert replacement identity, both NICs and original management IP
       ansible.builtin.assert:
         that:
-          - router_pppoe_reimage_marker.stat.isreg | default(false)
+          - router_pppoe_conversion_marker.stat.isreg | default(false)
           - ansible_facts.hostname == 'router-01'
           - ansible_facts.distribution == 'Debian'
           - ansible_facts.distribution_major_version == '13'
@@ -43,6 +43,20 @@
           - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
           - (ansible_facts.get(router_wan_interface, {}).get('ipv4', {}).get('address', '') | length) == 0
         fail_msg: "Incorrect machine/image/NIC or active WAN address; no changes allowed."
+
+
+    - name: Ensure Docker service is no longer active on approved converted host
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker.service]
+      register: router_docker_daemon_status
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse router preparation while Docker is still active
+      ansible.builtin.assert:
+        that:
+          - router_docker_daemon_status.stdout | trim != 'active'
+        fail_msg: "Docker still active. Complete the reviewed service retirement first."
 
     - name: Require private vaulted PPPoE credentials
       ansible.builtin.assert:
