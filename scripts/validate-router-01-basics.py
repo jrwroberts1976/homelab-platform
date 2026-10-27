@@ -142,7 +142,8 @@ def main() -> None:
                           "ansible.builtin.shell", "ansible.builtin.debug"}
                   for key in modules),
               "In-place dependency audit contains mutating Ansible modules")
-    check("--show-secrets" not in dependency_src,
+    check(not any("--show-secrets" in line and not line.lstrip().startswith("#")
+                  for line in dependency_src.splitlines()),
           "Do not expose NetworkManager profile secrets")
 
     # Package installation may occur only after approved conversion and while
