@@ -37,8 +37,9 @@ activate() {
   need unbound-checkconf
   need nft -c -f "$BOOT/nftables.conf"
   # Recovery timer is armed before any live configuration is changed.
-  need systemctl start "$ROLLBACK"
-  log 'Rollback timer armed before LAN activation'
+  need systemctl is-enabled --quiet "$ROLLBACK"
+  need systemctl is-active --quiet "$ROLLBACK"
+  log 'Independent rollback timer confirmed active before LAN activation'
   touch "$STATE/attempted"
   # Replace the original eth0 DHCP file, rather than overlaying another eth0 definition.
   install -m 0600 "$BOOT/99-router-01-lan.yaml" "$OLD"
@@ -93,7 +94,10 @@ rollback() {
   nft add table ip router_recovery || true
   nft 'add chain ip router_recovery input { type filter hook input priority filter; policy accept; }' || true
   nft add rule ip router_recovery input ip protocol icmp icmp type timestamp-request drop || true
-  netplan generate && netplan apply || log 'ERROR Netplan apply failed; physical recovery required'
+  if ! netplan generate || ! netplan apply; then
+    log 'ERROR rollback Netplan apply failed; keeping migration markers for diagnosis'
+    exit 1
+  fi
   rm -f "$STATE/activated" "$STATE/attempted"
   systemctl disable --now router-01-reboot-activate.service 2>/dev/null || true
   systemctl disable --now router-01-reboot-rollback.timer 2>/dev/null || true
@@ -109,7 +113,7 @@ confirm() {
   nft list table ip router_nat >/dev/null
   test -s /var/lib/kea/kea-leases4.csv
   touch "$STATE/confirmed"
-  systemctl stop "$ROLLBACK"
+  systemctl disable --now "$ROLLBACK"
   systemctl disable router-01-reboot-activate.service 2>/dev/null || true
   log 'Confirmed and rollback timer stopped'
 }
