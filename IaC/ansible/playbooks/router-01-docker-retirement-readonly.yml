@@ -1,0 +1,123 @@
+---
+# Evidence-gathering ONLY for CURRENT docker-01. No stops, purges, restarts,
+# network modification, hostname changes or file writes.
+# Run while production BirdNET POC and ASUS are still unchanged.
+- name: Read-only Docker retirement and in-place router conversion audit
+  hosts: docker-01
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Verify live identity and management connection before audit
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'docker-01'
+          - ansible_facts.hostname == 'docker-01'
+          - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+        fail_msg: "Unexpected production identity; stop before collecting evidence."
+
+    - name: Inspect live Docker containers safely (names, images, states, ports only)
+      ansible.builtin.command:
+        argv:
+          - docker
+          - container
+          - ls
+          - --all
+          - --format
+          - "{{ '{{.Names}} | {{.Image}} | {{.Status}} | {{.Ports}}' }}"
+      register: router_current_containers
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect running Docker projects without environment/secrets
+      ansible.builtin.command:
+        argv: [docker, compose, ls, --all, --format, json]
+      register: router_current_compose
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect Docker data volumes by NAME only
+      ansible.builtin.command:
+        argv: [docker, volume, ls, --format, "{{ '{{.Name}}' }}"]
+      register: router_current_volumes
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect Docker bridge networks by name and driver only
+      ansible.builtin.command:
+        argv: [docker, network, ls, --format, "{{ '{{.Name}} | {{.Driver}}' }}"]
+      register: router_current_bridges
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect Debian package ownership of container software
+      ansible.builtin.shell: |
+        dpkg-query -W -f='${binary:Package} ${Status} ${Version}\n' \
+          docker-ce docker-ce-cli docker.io docker-compose-plugin docker-compose \
+          docker-buildx-plugin containerd containerd.io runc podman podman-docker \
+          iptables nftables systemd-networkd 2>/dev/null || true
+      args:
+        executable: /bin/bash
+      register: router_container_packages
+      changed_when: false
+
+    - name: Inspect relevant systemd services and enabled timers
+      ansible.builtin.shell: |
+        for service in docker.service docker.socket containerd.service \
+          komodo-periphery.service birdnet-go.service \
+          systemd-networkd.service NetworkManager.service networking.service \
+          dhcpcd.service ssh.service; do
+          printf '%s: ' "$service"
+          systemctl is-active "$service" 2>/dev/null || true
+        done
+        echo '--- Potential Docker / BirdNET / Komodo / Trivy timers ---'
+        systemctl list-timers --all --no-legend --no-pager |
+          grep -Ei 'docker|birdnet|komodo|trivy|container|image' || true
+      args:
+        executable: /bin/bash
+      register: router_current_units
+      changed_when: false
+
+    - name: Inspect interface addresses without applying changes
+      ansible.builtin.command:
+        argv: [ip, -br, addr]
+      register: router_current_addresses
+      changed_when: false
+
+    - name: Inspect default route and related interfaces
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_current_route
+      changed_when: false
+
+    - name: Identify network configuration manager and unit ownership
+      ansible.builtin.shell: |
+        echo '--- networkctl eth0 (summary) ---'
+        networkctl status eth0 --no-pager 2>/dev/null |
+          grep -Ei 'State:|Network File:|Link File:|Address:|Gateway:' || true
+        echo '--- active link configuration files (file NAMES only) ---'
+        for d in /etc/systemd/network /etc/network/interfaces.d \
+          /etc/NetworkManager/system-connections; do
+          if [ -d "$d" ]; then find "$d" -maxdepth 1 -type f -printf '%f\n'; fi
+        done
+      args:
+        executable: /bin/bash
+      register: router_current_network_owner
+      changed_when: false
+
+    - name: Report read-only retirement evidence without Docker envs or passwords
+      ansible.builtin.debug:
+        msg:
+          - "DOCKER_CONTAINERS={{ router_current_containers.stdout_lines }}"
+          - "DOCKER_COMPOSE_PROJECTS={{ router_current_compose.stdout_lines }}"
+          - "DOCKER_VOLUMES={{ router_current_volumes.stdout_lines }}"
+          - "DOCKER_NETWORKS={{ router_current_bridges.stdout_lines }}"
+          - "CONTAINER_PACKAGES={{ router_container_packages.stdout_lines }}"
+          - "SYSTEMD_AND_TIMERS={{ router_current_units.stdout_lines }}"
+          - "IP_ADDRESSES={{ router_current_addresses.stdout_lines }}"
+          - "DEFAULT_ROUTE={{ router_current_route.stdout_lines }}"
+          - "NETWORK_MANAGER={{ router_current_network_owner.stdout_lines }}"
+          - "No services stopped, packages purged, files changed or IPs switched."
+
+# Never use this as a Docker removal playbook. Inventory and manual approval first.
