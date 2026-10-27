@@ -46,7 +46,7 @@ case "$ACTION" in
     [ "${2:-}" = "--approved-handover" ] || die "explicit --approved-handover required"
     ip_has "$OLD" || die "original management address not present"
     [ ! -f "$STATE" ] || die "cutover already attempted; inspect recovery state first"
-    [ -f "$NEW" ] && [ ! -L "$NEW" ] || die "new LAN candidate missing"
+    if [ ! -f "$NEW" ] || [ -L "$NEW" ]; then die "new LAN candidate missing"; fi
     grep -qF "Address=${TARGET}/24" "$NEW" || die "staged LAN config does not set target address"
     grep -qF "MACAddress=${EXPECTED_MAC}" "$NEW" || die "staged config targets unexpected hardware"
     grep -qF "$OLD" "$CURRENT" || die "active bootstrap config not using old address"
@@ -74,7 +74,7 @@ case "$ACTION" in
     echo "LAN switch requested. SSH will move to ${TARGET}; confirm before timer expires."
     ;;
   confirm)
-    [ -f "$STATE" ] && [ "$(cat "$STATE")" = pending ] || die "no pending cutover"
+    if [ ! -f "$STATE" ] || [ "$(cat "$STATE")" != pending ]; then die "no pending cutover"; fi
     ip_has "$TARGET" || die "target LAN address not active; cannot confirm"
     # Mark confirmation first, so an in-flight timer cannot undo a verified change.
     printf 'confirmed\n' > "$STATE"
