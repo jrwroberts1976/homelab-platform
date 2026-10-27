@@ -10,6 +10,10 @@
 - Confirmed PPPoE: untagged, 1492 MTU/MRU, 6-second LCP echo and 10 failures, auto authentication. Actual credentials **already confirmed encrypted** in off-Git local `$HOME/.config/router-01/pppoe-vault.yml` on `admin-01`, and a local real-Vault rendering test passed. No secrets in repository.
 - Future Pi LAN `192.168.3.1/24`, Kea pool `192.168.3.100`–`192.168.3.199`, Unbound recursive DNS at `.3.1`. ASUS future **WAN DHCP client** (not a fixed .3.2 address), ASUS remains router-mode/DHCP/AiMesh initially; temporary double NAT acceptable.
 
+## LIVE progress — 27 October 2026, 11:22 GMT
+
+**PPPoE installation on the actual existing Pi4 SUCCEEDED**: `docker-01 ok=14 changed=4 unreachable=0 failed=0`. The user's encrypted Ansible Vault provided both actual credentials, the PPP peer/PAP/CHAP secret files and dedicated service unit were installed, and PPPoE remains **STOPPED/DISABLED**. Original SSH 192.168.2.220/24 remains accessible via NetworkManager netplan-eth0; no ISP WAN connection attempted or ONT cabling modified. Follow section 2 next (Kea/Unbound installation MASKED), then section 3 (physical ONT/PPPoE auth test). Do not repeat section 1 unless intentionally repairing config.
+
 ## 1. NOW, while ASUS broadband is still working: install PPPoE but DO NOT connect
 
 From `admin-01`:
