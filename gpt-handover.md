@@ -1,4 +1,9 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — ISP speed baseline recorded, PPPoE setup first
+
+User supplied screenshot of current ASUS internet speed test: **36.43 Mbps download, 12.05 Mbps upload, 10 ms ping**. Logged in `IaC/ansible/router-01/PPPOE-FIRST.md` as single pre-cutover measurement; not guaranteed line rate. New Pi 4 ASIX WAN interface remains disconnected. `router-01-pppoe-prestage.yml` is Git-only; requires post-reimage `router-01` and encrypted, off-Git PPPoE credentials. Need read-only ASUS WAN settings (username/private secret, potential VLAN ID and other options), then controlled handover; no live PPPoE or LAN network changes. DHCP/DNS and LAN-IP change remain later stages.
+
+---
 ## 27 October 2026 — router-01 package and LAN rollback static CI PASSED
 
 Latest verified checks after last code revisions: GitHub Actions `Validate router-01 offline IaC` run **40478862743 = SUCCESS** and `Estate and documentation guard` run **40478862554 = SUCCESS**, on commit `fad4deb3a0d827122f658db9ed6c87bfcb2ca632`. Offline validations covered rendered Kea/Unbound/nftables, Ansible syntax for new package-stage/rollback-prep plus existing plays, Bash syntax and ShellCheck for LAN rollback. **These are static/off-host checks, not an on-device rollback rehearsal.** Hardware testing and boot recovery remain blocked until approved isolated test.
