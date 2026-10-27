@@ -102,7 +102,7 @@ def main() -> None:
         check(opts == {"routers": "192.168.3.1", "domain-name-servers": "192.168.3.1"},
               "Kea must advertise router-01 as DNS and gateway")
         check("reservations" not in subnet, "Do not invent ASUS MAC/address reservations")
-        maybe_check_syntax("kea-dhcp4", ["-t", "-c", str(kea_path)])
+        maybe_check_syntax("kea-dhcp4", ["-t", str(kea_path)])
 
         dns_path = render("unbound-router.conf.j2", "unbound.conf")
         dns = dns_path.read_text()
