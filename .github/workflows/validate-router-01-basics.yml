@@ -35,6 +35,10 @@ jobs:
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-inplace-dependencies-readonly.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-docker-retirement-approved.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml playbooks/router-01-retirement-config-readonly.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-install-inplace.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-connect-inplace.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-pppoe-stop-inplace.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml playbooks/router-01-dhcp-install-inplace.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-pppoe-prestage.yml --syntax-check
           ansible-playbook -i localhost, -c local playbooks/router-01-pppoe-local-validate.yml --syntax-check
