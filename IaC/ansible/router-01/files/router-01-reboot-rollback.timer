@@ -1,8 +1,10 @@
 [Unit]
-Description=Revert unconfirmed Pi router cutover 15 minutes after activation
+Description=Revert unconfirmed Pi router cutover 15 minutes after boot
 
 [Timer]
-OnActiveSec=15min
+# Enabled by arming playbook, starts on boot independently of activation service.
+# This also protects failures before the activation script can arm a timer.
+OnBootSec=15min
 Unit=router-01-reboot-rollback.service
 
 [Install]
