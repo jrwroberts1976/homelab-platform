@@ -178,6 +178,11 @@ def main() -> None:
           "Recovery helper must default OFF")
     check(recovery_play["pre_tasks"][0].get("delegate_to") == "localhost",
           "Recovery helper approval must be local")
+    check(recovery_play["pre_tasks"][1].get("ansible.builtin.fail") is not None,
+          "Old networkd rollback must remain disabled on NM-managed Pi")
+    check(recovery_play["pre_tasks"][1].get("delegate_to") == "localhost",
+          "Old rollback must fail on controller before SSH")
+
 
     rollback_base = ANSIBLE / "router-01" / "files"
     timer_text = (rollback_base / "router-01-lan-rollback.timer").read_text()
