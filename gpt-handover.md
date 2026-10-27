@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 11:22 GMT — PPPoE in-place package/credentials INSTALLED, PASS on live docker-01
+
+User executed `playbooks/router-01-pppoe-install-inplace.yml --limit docker-01 --ask-become-pass --ask-vault-pass -e @~/.config/router-01/pppoe-vault.yml -e router_pppoe_install_approved=true` from `admin-01` on feature/pi-router-iac-birdnet-poc-migration-20261027. **RESULT PASS: docker-01 ok=14 changed=4 failed=0 unreachable=0**. Guards confirmed Debian13, hostname docker-01, exact onboard eth0 / ASIX USB eth1 MACs, active NetworkManager netplan-eth0, SSH 192.168.2.220; encrypted ISP credentials accepted without printing values. ppp package already present (APT OK/unchanged); the peer directory, root-protected /etc/ppp/peers/homelab-wan, PAP/CHAP secrets mode 0600 and /etc/systemd/system/router-pppoe.service were installed/updated and systemd metadata reloaded. **PPPoE service confirmed STOPPED and DISABLED, no actual ISP handshake yet**. Original eth0 DHCP/SSH 192.168.2.220 and ASUS PPPoE broadband unchanged. Host OS NOT reimaged, Docker NOT removed, no Kea/DNS/firewall/router NAT change.
+
+**IMMEDIATE NEXT STEP:** install/stage Kea + Unbound on this Pi with `router-01-dhcp-install-inplace.yml --limit docker-01 --ask-become-pass -e router_dhcp_install_approved=true`. This must MASK and STOP BOTH DHCP/DNS daemons and syntax-check future .3.1 LAN, never advertise DHCP on current .2.x LAN. After PASS of that stage, manually move ONT from ASUS WAN to Pi ASIX eth1 (planned ASUS internet outage, keep Pi eth0 connected to HP switch), then run `router-01-pppoe-connect-inplace.yml --limit docker-01 --ask-become-pass -e router_pppoe_connect_approved=true`, prove ppp0 route. Existing `router-01-pppoe-stop-inplace.yml` + physically return ONT→ASUS WAN is rollback. **LAN eth0 IP change last, after new NAT+Netplan+isolated DHCP activation IaC verified.**
+
+---
+
 ## 27 October 2026 — NEW USER PRIORITY: ACTIVATE PPPoE FIRST then Kea DHCP; no OS reimage
 
 Latest instructions from user: **"we are rebuilding the network i dont really care about being carefull"**, then **"lets get the PPoE sorted and then get DHCP plugged into the router"**. Earlier user accepted BirdNET-Go and Komodo Periphery downtime and said something was shut down, but we **have NOT VERIFIED** exactly what runtime was stopped; do not assume Docker, the Pi or Komodo Core is deregistered. User now prioritises function over earlier extensive retirement audit, yet still wants IaC/Ansible for everything and LAN IP change LAST to retain SSH.
