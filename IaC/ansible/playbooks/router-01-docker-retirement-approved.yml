@@ -102,6 +102,11 @@
         enabled: false
         state: stopped
 
+    - name: Stop any in-flight Docker-specific Trivy scan unit
+      ansible.builtin.systemd_service:
+        name: homelab-trivy-docker.service
+        state: stopped
+
     - name: Stop each Compose project WITHOUT deleting volumes or bind mounts
       ansible.builtin.command:
         argv: [docker, compose, -f, "{{ item }}", down]
@@ -132,6 +137,13 @@
         state: absent
         purge: false
         autoremove: false
+
+    - name: Retire only the obsolete Docker-specific Trivy textfile metric
+      ansible.builtin.file:
+        path: /var/lib/prometheus/node-exporter/homelab_container_estate.prom
+        state: absent
+      # The central monitoring reconciliation gate must already be verified.
+      # Leave other node exporter metrics and the exporter service untouched.
 
     - name: Verify eth0 still uses the original NetworkManager profile
       ansible.builtin.command:
