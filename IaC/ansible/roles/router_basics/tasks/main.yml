@@ -23,8 +23,8 @@
     that:
       - router_pppoe_username | length > 0
       - router_pppoe_password | length > 0
-      - "'\n' not in router_pppoe_username"
-      - "'\n' not in router_pppoe_password"
+      - router_pppoe_username.splitlines() | length == 1
+      - router_pppoe_password.splitlines() | length == 1
     fail_msg: "PPPoE username/password must come from a secure external Ansible Vault."
   no_log: true
 
