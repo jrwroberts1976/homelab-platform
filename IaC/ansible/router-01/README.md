@@ -27,9 +27,9 @@ ASUS remains a router through the first broadband cutover and validation. Conver
 
 1. **Pre-stage over SSH at `192.168.2.220`, after reimage:** use `inventory/router-01-prestage.yml` and `playbooks/router-01-prestage.yml` (not `router-01-basics.yml`). This refuses ANY host contact before a local opt-in flag; on target it checks Debian13, `router-01` hostname, expected MACs, old management IP and a `/etc/router-01-reimage-complete` image-provenance marker.
 2. That pre-stage playbook **only renders private, prospective config files under `/var/lib/router-01-stage/`**. It does **not** install packages, touch `/etc/systemd/network`, start PPPoE, enable DHCP/DNS/firewall, reconfigure interfaces or change the live IP. PPPoE secrets stay root-only and off Git. Reimage marker creation and an off-Git Vault path remain bootstrap prerequisites.
-3. **Remaining engineering gate:** add an explicitly separate, verified phase to install packages and copy staged configs into final managed paths **while keeping the old address**, with package post-install autostarts suppressed and no network reload/reboot. The initial `router-01-basics.yml` playbook currently targets the `.3.1` final identity and must **not** be used as the pre-stage deployment tool. Do not claim all software is installed or ready after a mere pre-stage render.
-4. **LAST: switch LAN IP** to `192.168.3.1/24`, with a local-console or direct-attached management laptop preconfigured on `192.168.3.x`, automated timed rollback if not acknowledged, and physically approved ASUS WAN DHCP connection. The SSH connection on `.2.220` is expected to drop. Ansible from `admin-01` may not be able to reach the upstream `.3.x` subnet through the ASUS WAN firewall afterward: validate a separate re-entry/console method in advance.
-5. After the new address is proven reachable, activate the PPPoE, nftables NAT, Unbound and Kea services through a reviewed guarded cutover mechanism. Confirm DHCP lease, DNS, PPPoE, routes and broadband, then explicitly acknowledge success to cancel the automatic rollback. Restore the original ASUS WAN PPPoE cabling/session if cutover fails.
+3. **Package staging is now authored:** `playbooks/router-01-package-stage.yml` installs PPPoE/Kea/Unbound/nftables on the approved, reimaged host **while retaining `.2.220`**; Ansible `apt` uses `policy_rc_d: 101` to suppress package post-install service starts and the playbook stops, disables and masks the new daemons. This is separately opt-in and must be verified on Debian 13 hardware before use. It does not install active `.3.1` networking or start DHCP. The original `router-01-basics.yml` role remains a post-readdress final-config and activation tool only.
+4. **Recovery helper staged in Git:** `playbooks/router-01-rollback-prepare.yml` installs `/usr/local/sbin/router-01-lan-cutover` and a *disabled* systemd timer; this makes **no LAN change**. During the final approved handover, the operator must have a local console/direct laptop on `.3.x`, a known current networkd file `/etc/systemd/network/10-router-lan.network` managing the old `.2.220`, and a staged `.3.1` replacement. The local `switch --approved-handover` command first backs up the old file and arms the five-minute persistent-at-boot timer, then reloads and reconfigures `eth0`. SSH to `.2.220` drops. To keep the change, run `confirm` locally or from the new `.3.x` connection **before the deadline**. Without confirmation, the timer invokes `rollback` and restores the original networkd file. **The helper has only passed static/CI checks and has NOT been exercised on the actual Pi or across a reboot. Do not execute this cutover until an isolated rehearsal proves restore works.**
+5. After the new LAN IP is independently reachable, use the separately approved final `.3.1` Ansible playbook to install active service configurations and **unmask/start** PPPoE, nftables NAT, Unbound and Kea. Verify configuration before acknowledging the entire broadband handover. **IP rollback confirmation is distinct from broadband-service acceptance**: the timer restores the old management configuration only; it does not automatically restore ASUS cabling/PPPoE or undo all daemon changes. Keep physical ASUS rollback available.
 
 **Do not run a remote command to readdress `eth0` without first implementing and testing the recovery mechanism.** This plan changes the sequencing, not production.
 
@@ -45,6 +45,28 @@ ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestag
 #   --ask-vault-pass -e @/secure/off-repo/router-01-vault.yml \
 #   -e router_prestage_approved=true
 ```
+
+
+### New Git-only stage commands (not for live docker-01)
+
+```bash
+# OFFLINE syntax only on admin-01, no remote execution:
+ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package-stage.yml --syntax-check
+ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml --syntax-check
+bash -n router-01/files/router-01-lan-cutover.sh
+
+# These next stages must NOT run without approved reimage/handover and console:
+# ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-package-stage.yml -e router_package_stage_approved=true
+# ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-rollback-prepare.yml -e router_rollback_prepare_approved=true
+
+# Actual eventual cutover, strictly from local console with backup and signed-off change:
+# sudo /usr/local/sbin/router-01-lan-cutover switch --approved-handover
+# sudo /usr/local/sbin/router-01-lan-cutover status
+# sudo /usr/local/sbin/router-01-lan-cutover confirm
+# sudo /usr/local/sbin/router-01-lan-cutover rollback
+```
+
+**Do not treat the above commented handover commands as an instruction to run them today.** They are unproven on-hardware and are shown to document controls and reviews.
 
 ## Security and bootstrap safeguards
 
