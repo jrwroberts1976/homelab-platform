@@ -1,0 +1,88 @@
+---
+# Runs on admin-01 itself. Does not touch the running Raspberry Pi.
+# Pass the encrypted vault as -e @/home/james/.config/router-01/pppoe-vault.yml
+# and --ask-vault-pass; specify its variable names via two *_key extra vars.
+- name: Build self-contained Pi4 Debian router disk image using local Ansible Vault
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: true
+  vars:
+    router_image_base: ""
+    router_image_output: ""
+    router_ssh_public_key: "/home/james/.ssh/id_ed25519.pub"
+    router_pppoe_username_key: "pppoe_username"
+    router_pppoe_password_key: "pppoe_password"
+  pre_tasks:
+    - name: Require aarch64 builder, explicitly chosen source and output paths
+      ansible.builtin.assert:
+        that:
+          - ansible_architecture == "aarch64"
+          - router_image_base | length > 0
+          - router_image_output | length > 0
+          - router_image_base != router_image_output
+        fail_msg: "Run on ARM64 admin-01 with -e router_image_base=... -e router_image_output=..."
+    - name: Require downloaded base and SSH public key
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ router_image_base }}"
+        - "{{ router_ssh_public_key }}"
+      register: sources
+    - name: Abort if any local image source is missing
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+      loop: "{{ sources.results }}"
+    - name: Require vault variables to be loaded (values are never logged)
+      ansible.builtin.assert:
+        that:
+          - lookup('vars', router_pppoe_username_key, default='') | length > 0
+          - lookup('vars', router_pppoe_password_key, default='') | length > 0
+        fail_msg: "PPPoE keys not found in loaded vault. Specify router_pppoe_username_key and router_pppoe_password_key."
+      no_log: true
+  tasks:
+    - name: Build image from a root-only temporary PPPoE credentials file
+      block:
+        - name: Allocate private temporary directory
+          ansible.builtin.tempfile:
+            state: directory
+            prefix: router-01-credentials-
+          register: temporary_credentials
+          no_log: true
+        - name: Write secrets locally without logging contents
+          ansible.builtin.copy:
+            content: "{{ lookup('vars', router_pppoe_username_key) }}\n{{ lookup('vars', router_pppoe_password_key) }}\n"
+            dest: "{{ temporary_credentials.path }}/pppoe"
+            owner: root
+            group: root
+            mode: '0600'
+          no_log: true
+        - name: Assemble final bootable image (writes credentials into the image)
+          ansible.builtin.command:
+            argv:
+              - /bin/bash
+              - "{{ playbook_dir }}/../router-01/image-build/build-router-image.sh"
+              - "{{ router_image_base }}"
+              - "{{ router_image_output }}"
+              - "{{ temporary_credentials.path }}/pppoe"
+              - "{{ router_ssh_public_key }}"
+          register: build_result
+          no_log: true
+      always:
+        - name: Remove temporary decrypted credentials
+          ansible.builtin.file:
+            path: "{{ temporary_credentials.path }}"
+            state: absent
+          when: temporary_credentials.path is defined
+          no_log: true
+    - name: Verify image exists (do not expose ISP credentials)
+      ansible.builtin.stat:
+        path: "{{ router_image_output }}"
+      register: image_result
+    - name: Report build state
+      ansible.builtin.assert:
+        that:
+          - image_result.stat.isreg | default(false)
+          - image_result.stat.size | int > 100000000
+        success_msg: "Image created at {{ router_image_output }}; contains PPPoE secrets, protect image and flash only after offline validation."
