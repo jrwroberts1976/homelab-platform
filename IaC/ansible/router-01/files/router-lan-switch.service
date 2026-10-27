@@ -1,0 +1,8 @@
+[Unit]
+Description=Perform isolated Pi4 LAN DHCP/NAT router switch
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-01-nm-cutover apply
+TimeoutStartSec=180
