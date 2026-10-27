@@ -68,6 +68,12 @@ ConfigureWithoutCarrier=yes
 LinkLocalAddressing=no
 IPv6AcceptRA=no
 EOF
+cat > "$ROOT/etc/systemd/network/10-router-wan.link" <<EOF
+[Match]
+MACAddress=00:24:9b:63:b3:8a
+[Link]
+Name=eth1
+EOF
 cat > "$ROOT/etc/systemd/network/20-router-wan.network" <<EOF
 [Match]
 MACAddress=00:24:9b:63:b3:8a
