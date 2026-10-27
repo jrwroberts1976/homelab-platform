@@ -1,4 +1,14 @@
 # GPT Handover — Homelab Platform
+## LATEST clarification — 27 Oct 2026: zero pre-handover network disruption; BirdNET mic tests POST project
+
+**User explicitly requires the current production network to remain completely uninterrupted until the formal router handover.** Existing ASUS remains sole gateway/DHCP/AiMesh routing owner; no Pi 4 reimage, competing DHCP/IP `192.168.2.1`, switch recabling, BirdNET shutdown, production Ansible change or Pi 5 deployment pre-handover. Pre-handover work is only Git/IaC/static checks and optional dedicated spare Pi on **physically isolated** links. The Pi 4 `docker-01` is still running BirdNET and cannot be the isolated pilot before it is formally released at handover. With no spare, real hardware validation is deferred to an approved maintenance window while ASUS continues to route until final cutover. A brief outage at handover may be needed; do not promise zero downtime at cutover.
+
+**User explicitly defers all microphone testing until AFTER router project completion.** Removed `lsusb`/`arecord` checks from the unexecuted `pi-router-birdnet-readonly.yml` on draft PR #207; it now performs only non-audio host readiness. Do not run this playbook against live hosts without approval. BirdNET-Go is a POC, history/recordings/database not required; moving the Pi 4 to routing at handover may mean POC temporarily unavailable until later microphone/audio tests on media-01. This POC interruption requires separate explicit approval; no fabricated claim that BirdNET detection on Pi 5 works without audio. Preserve media-01 production Kodi, NFS, qBittorrent and nftables.
+
+Updated plan `docs/network/PI-ROUTER-IAC-BIRDNET-POC-MIGRATION-2026-10-27.md` and issue #206. **No live network, services, USB audio or hosts changed.** Draft PR #207 only.
+
+---
+
 ## 27 Oct 2026 — Pi router and BirdNET POC move: design-only Git branch; no live changes
 
 User chose an IaC-only router build with testable disaster recovery and Pi 4→Pi 5 hardware portability. To free Pi 4 `docker-01`, BirdNET-Go proof-of-concept should be clean-installed on Pi 5 `media-01`; **recordings, database and history do not need migration**. Current physical USB microphone `0c76:161e` is in the Garden Room; moving the container is insufficient unless the Pi 5 gets local audio or verified network audio. Pi 5 currently supports production Kodi, qBittorrent HTTPS, SMB and dual-node Proxmox NFS backups, and must not be reimaged or disrupted. BirdNET Ansible role currently asserts docker-01/.220 and image pin disagrees with Komodo resource; inspect first. Full rollback and confirmation before retiring old Docker host.
