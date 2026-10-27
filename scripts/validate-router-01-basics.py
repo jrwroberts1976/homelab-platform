@@ -256,7 +256,8 @@ def main() -> None:
     kea_stage = yaml.safe_load(
         (ANSIBLE / "playbooks" / "router-01-dhcp-install-inplace.yml").read_text()
     )[0]
-    check("policy_rc_d: 101" in str(kea_stage["tasks"]),
+    check(any(task.get("ansible.builtin.apt", {}).get("policy_rc_d") == 101
+              for task in kea_stage["tasks"]),
           "Kea install must suppress service auto-start")
     check(any(task.get("ansible.builtin.systemd_service", {}).get("masked")
               is True for task in kea_stage["tasks"]),
