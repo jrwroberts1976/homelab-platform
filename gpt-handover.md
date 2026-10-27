@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## Latest — 27 Oct 2026: ISP PPPoE expected untagged, no ASUS IPTV menu
+
+User clarified ASUS has **no VLAN configured and no IPTV page/option**. Updated issue #206 and `IaC/ansible/router-01/PPPOE-FIRST.md`: initial future `router-01` PPPoE will use **untagged `eth1` USB Ethernet** with `pppd` `pppoe.so`, no invented VLAN, no `8021q` subinterface. If PPPoE discovery fails during approved cutover, revisit actual ONT/ISP tagging evidence then; missing menu is not definitive ISP-side proof. No active network/device/ASUS/BirdNET change, no second PPPoE session. PPPoE credentials must remain outside Git in encrypted Vault and not appear in logs/chat.
+
+---
+
 ## 27 October 2026 — Confirmed ASUS PPPoE WAN settings, no credentials in Git
 
 User supplied screenshots of WAN > Internet Connection and PPPoE account settings. **Confirmed:** PPPoE, WAN enabled, automatically assigned WAN IP through PPP (not raw Ethernet DHCP), ASUS NAT on (symmetric), ASUS UPnP on with secure mode, authentication Auto, idle disconnect 0, MTU/MRU 1492, service name and access concentrator blank, PPP Echo mode interval 6 / max failures 10. Updated `IaC/ansible/router-01/PPPOE-FIRST.md` with read-only evidence and no username/password. Updated Ansible `pppd` template/defaults to set echo interval 6/failures 10 and added offline validation. Pi future `eth1` must have no Ethernet DHCP; `ppp0` obtains provider-assigned IPv4.
