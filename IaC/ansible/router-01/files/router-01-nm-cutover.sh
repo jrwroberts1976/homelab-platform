@@ -75,6 +75,13 @@ apply() {
   stop_docker
   systemctl disable --now router-wan-guard.service 2>/dev/null || true
 
+  # Keep USB eth1 as a raw PPPoE interface even after a reboot.
+  install -d -m 0755 /etc/NetworkManager/conf.d
+  install -m 0644 /var/lib/router-01-stage/lan/90-router-01-wan-unmanaged.conf \
+    /etc/NetworkManager/conf.d/90-router-01-wan-unmanaged.conf
+  nmcli device set eth1 managed no
+  ip link set dev eth1 up
+
   # These files were syntax-validated separately before physical move.
   install -m 0644 /var/lib/router-01-stage/lan/99-router-01-lan.yaml "$OVERRIDE"
   netplan generate
@@ -108,6 +115,7 @@ rollback() {
   systemctl mask kea-dhcp4-server.service unbound.service 2>/dev/null || true
   systemctl disable --now router-pppoe.service 2>/dev/null || true
   rm -f "$OVERRIDE"
+  rm -f /etc/NetworkManager/conf.d/90-router-01-wan-unmanaged.conf
   if test -f "$STATE/old-netplan-eth0.yaml"; then
     cp -a "$STATE/old-netplan-eth0.yaml" /etc/netplan/90-NM-75a1216a-9d1a-30cd-8aca-ace5526ec021.yaml
   fi
@@ -123,6 +131,8 @@ rollback() {
   systemctl disable --now nftables.service 2>/dev/null || true
   if test -f "$STATE/old-nftables.conf"; then
     cp -a "$STATE/old-nftables.conf" "$LIVE_NFT"
+  else
+    rm -f "$LIVE_NFT"
   fi
   if test -f "$STATE/old-running-rules.nft"; then
     nft -f "$STATE/old-running-rules.nft" || log 'Original nft rules not fully restorable; review locally'
