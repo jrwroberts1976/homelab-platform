@@ -1,4 +1,14 @@
 # GPT Handover — Homelab Platform
+## LATEST — 27 Oct 2026: actual router-01 basic IaC staged, no deployment
+
+**User set future hostname `router-01`** for the Pi 4 after approved handover/reimage; the existing active `docker-01` remains unchanged until then. Draft PR #207 now includes NEW `IaC/ansible/inventory/router-01-staging.yml` (separate from live inventory), `playbooks/router-01-basics.yml`, `playbooks/router-01-readonly.yml`, `roles/router_basics/` templates and guarded tasks (Debian13/hostname/.3.1/MAC checks, PPPoE with Vault credentials, systemd-networkd, Kea `.3.100-.199`, Unbound `.3.1`, nftables LAN→ppp0 NAT), `IaC/ansible/router-01/README.md`, offline `scripts/validate-router-01-basics.py` and CI `.github/workflows/validate-router-01-basics.yml`. Source USB WAN `eth1` AX88179 MAC `00:24:9b:63:b3:8a`; onboard LAN `eth0` MAC `d8:3a:dd:5a:51:44`.
+
+Deployment playbook requires `router_deploy_approved=true`, future hostname `router-01`, correct NICs and rebuilt isolated `.3.1` host; `router_activate_services=true` separately required to start services. Existing `docker-01` MUST NOT be targeted. First implementation is baseline only; additional full bare-metal bootstrap scripting/isolated Pi test is outstanding. ASUS WAN **DHCP**, unchanged ASUS router-mode `.2.x` and double NAT at first handover. ASUS AiMesh AP conversion only after successful first cutover. DNS locally via temporary Unbound because DNS-01/02 are currently behind ASUS. Fresh BirdNET-Go on Pi5 **later**, not migrated.
+
+**CI initial failure investigation:** new offline workflow detected incorrect Kea `-t -c` CLI (must be `-t file`), and estate guard required `<!-- estate-authority: IaC/inventory/estate.json -->` within first 40 runbook lines. BOTH source issues corrected in draft branch. Follow-up CI status must be rechecked; **do not claim validation passed yet**. No host, router, ISP connection, DHCP, firewall or microphone changed.
+
+---
+
 ## LATEST — 27 Oct 2026: ASUS AP conversion AFTER verified Pi router cutover; DNS and WAN DHCP confirmed
 
 **Latest decisive user direction:** initial router work is PPPoE, Kea DHCP, **temporary Unbound DNS** and minimum nftables/NAT. Pi LAN `192.168.3.1/24`, USB `eth1` AX88179 WAN (MAC `00:24:9b:63:b3:8a`) and onboard `eth0` LAN (MAC `d8:3a:dd:5a:51:44`). ASUS WAN is **Automatic IP (DHCP)** and receives .3.x address, gateway/DNS .3.1 from Kea (suggested dynamic pool .3.100-.199). **No static .3.2 requirement or invented ASUS WAN MAC**; optional reservation only after actual MAC discovery.
