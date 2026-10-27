@@ -1,0 +1,9 @@
+[Unit]
+Description=Automatically revert unconfirmed Pi4 LAN router cutover
+
+[Timer]
+OnActiveSec=10min
+Unit=router-lan-rollback.service
+
+[Install]
+WantedBy=timers.target
