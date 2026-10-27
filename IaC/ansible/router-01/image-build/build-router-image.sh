@@ -18,6 +18,12 @@ for n in $(seq 1 15); do [[ -b "$LOOP"p2 ]] && break; sleep 1; done
 mkdir -p "$WORK/root"
 mount "$LOOP"p2 "$WORK/root"
 ROOT="$WORK/root"
+# Fail closed if the selected root partition is empty, corrupt, or not a Debian OS.
+if [[ ! -r "$ROOT/etc/os-release" || ! -x "$ROOT/usr/bin/apt-get" || ! -x "$ROOT/usr/bin/dpkg" ]]; then
+  echo "ERROR: Mounted partition 2 is not a usable Debian root filesystem." >&2
+  echo "Inspect the untouched base image before retrying. No credentials were injected." >&2
+  exit 1
+fi
 mkdir -p "$ROOT/boot/firmware"
 mount "$LOOP"p1 "$ROOT/boot/firmware"
 for p in dev proc sys run; do mount --bind "/$p" "$ROOT/$p"; done
