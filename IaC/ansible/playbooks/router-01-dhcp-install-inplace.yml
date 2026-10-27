@@ -1,0 +1,120 @@
+---
+# Stage Kea DHCP4 and Unbound on EXISTING docker-01; services masked until
+# eth0 is physically on the new downstream LAN and has 192.168.3.1/24.
+# NEVER start Kea while eth0 shares the old ASUS 192.168.2.x broadcast LAN.
+- name: Stage LAN DHCP and DNS files without serving the existing LAN
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars_files:
+    - ../roles/router_basics/defaults/main.yml
+  vars:
+    router_dhcp_install_approved: false
+  pre_tasks:
+    - name: Require local approval before contacting docker-01
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_install_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Kea/Unbound install is default denied, even though services will be masked."
+      delegate_to: localhost
+      become: false
+
+    - name: Collect facts after controller approval
+      ansible.builtin.setup:
+
+    - name: Require Debian 13 on original DHCP-managed SSH address
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'docker-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - "'192.168.2.220' in ansible_facts.all_ipv4_addresses"
+          - router_lan_address not in ansible_facts.all_ipv4_addresses
+          - (ansible_facts.get('eth0', {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
+        fail_msg: "Do not install DHCP on an unexpected live interface/IP."
+
+    - name: Confirm DHCP server is not already active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, kea-dhcp4-server.service]
+      register: router_existing_kea
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse if an existing Kea server is running
+      ansible.builtin.assert:
+        that:
+          - router_existing_kea.stdout | trim != 'active'
+        fail_msg: "An existing DHCP server is active; stop and inspect before modifying."
+
+    - name: Check that local Unbound server is not active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, unbound.service]
+      register: router_existing_unbound
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse replacing an active local DNS configuration
+      ansible.builtin.assert:
+        that:
+          - router_existing_unbound.stdout | trim != 'active'
+        fail_msg: "Unbound already active; inspect before modifying."
+
+  tasks:
+    - name: Install Kea and Unbound without allowing package post-install starts
+      ansible.builtin.apt:
+        name: [kea-dhcp4-server, unbound]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        policy_rc_d: 101
+
+    - name: Immediately mask and disable both DHCP and DNS services
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: false
+        state: stopped
+        masked: true
+      loop: [kea-dhcp4-server.service, unbound.service]
+
+    - name: Stage future 192.168.3.0/24 Kea DHCP scope
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/kea-dhcp4.conf.j2"
+        dest: /etc/kea/kea-dhcp4.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate Kea configuration on current host without starting DHCP
+      ansible.builtin.command:
+        argv: [/usr/sbin/kea-dhcp4, -t, /etc/kea/kea-dhcp4.conf]
+      changed_when: false
+
+    - name: Stage future Unbound DNS policy for 192.168.3.1 only
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_basics/templates/unbound-router.conf.j2"
+        dest: /etc/unbound/unbound.conf.d/router-01.conf
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Syntax-check staged Unbound without starting a resolver
+      ansible.builtin.command:
+        argv: [/usr/sbin/unbound-checkconf]
+      changed_when: false
+
+    - name: Verify original LAN management address still exists
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_dhcp_stage_lan
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_dhcp_stage_lan.stdout"
+
+    - name: Report future DHCP scope only (not active)
+      ansible.builtin.debug:
+        msg:
+          - "PASS: Kea DHCP and Unbound DNS installed/configured but MASKED and STOPPED."
+          - "Future LAN: 192.168.3.1/24; lease pool 192.168.3.100 - 192.168.3.199."
+          - "ASUS DHCP on old 192.168.2.x physical LAN remains uncontested."
+          - "DO NOT UNMASK/START until eth0 is disconnected from old LAN and moved to ASUS WAN downstream side."
