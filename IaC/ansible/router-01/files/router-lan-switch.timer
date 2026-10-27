@@ -1,0 +1,6 @@
+[Unit]
+Description=Delay LAN IP switch while operator moves Pi eth0 to ASUS WAN
+
+[Timer]
+OnActiveSec=120s
+Unit=router-lan-switch.service
