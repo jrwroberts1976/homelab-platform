@@ -1,0 +1,29 @@
+---
+- name: Apply MAC-pinned WAN naming to an existing offline Pi router image
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: true
+  vars:
+    router_image_output: /home/james/router-images/router-01-v2.img
+  tasks:
+    - name: Verify target image exists
+      ansible.builtin.stat:
+        path: "{{ router_image_output }}"
+      register: offline_image
+    - name: Refuse absent or invalid image path
+      ansible.builtin.assert:
+        that:
+          - offline_image.stat.isreg | default(false)
+          - router_image_output is match('^/[^\n]+\\.img$')
+    - name: Install WAN naming rule in existing image
+      ansible.builtin.command:
+        argv:
+          - /bin/bash
+          - "{{ playbook_dir }}/../router-01/image-build/patch-existing-image-wan-link.sh"
+          - "{{ router_image_output }}"
+      register: patch_result
+      changed_when: patch_result.rc == 0
+    - name: Report offline patch result
+      ansible.builtin.debug:
+        msg: "{{ patch_result.stdout }}"
