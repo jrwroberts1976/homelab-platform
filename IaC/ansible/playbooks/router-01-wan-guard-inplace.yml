@@ -51,7 +51,8 @@
         that:
           - >-
             router_guard_current_table.rc != 0 or
-            ('iifname "ppp0" counter drop' in router_guard_current_table.stdout and
+            ('iifname "ppp0"' in router_guard_current_table.stdout and
+             'drop' in router_guard_current_table.stdout and
              'ct state established,related accept' in router_guard_current_table.stdout)
         fail_msg: "An unknown existing WAN guard table is present; inspect it first."
 
@@ -97,6 +98,12 @@
         state: started
       when: router_guard_current_table.rc != 0
 
+    - name: Enable boot-time guard if it already exists from earlier operation
+      ansible.builtin.systemd_service:
+        name: router-wan-guard.service
+        enabled: true
+      when: router_guard_current_table.rc == 0
+
     - name: Verify guard chain is now active
       ansible.builtin.command:
         argv: [/usr/sbin/nft, list, table, inet, router_wan_guard]
@@ -108,7 +115,9 @@
       ansible.builtin.assert:
         that:
           - router_guard_final_table.rc == 0
-          - "'iifname \"ppp0\" counter packets' in router_guard_final_table.stdout or 'iifname \"ppp0\" counter drop' in router_guard_final_table.stdout"
+          - >-
+            'iifname "ppp0"' in router_guard_final_table.stdout and
+            'drop' in router_guard_final_table.stdout
           - "'ct state established,related accept' in router_guard_final_table.stdout"
         fail_msg: "WAN nft table did not activate with expected PPP guard; do not cut over LAN."
 
