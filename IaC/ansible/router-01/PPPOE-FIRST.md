@@ -14,6 +14,18 @@ Ansible templates:
 
 **Only PPPoE preparation is in scope here.** DHCP, temporary DNS, nftables and LAN address switch are separately staged and must not be activated yet.
 
+## Measured pre-cutover broadband baseline
+
+User-supplied speed-test screenshot received 27 October 2026, while current ASUS remains the broadband router:
+
+| Metric | Baseline |
+|---|---:|
+| Download | **36.43 Mbps** |
+| Upload | **12.05 Mbps** |
+| Ping / latency | **10 ms** |
+
+This is a **single speed test**, not a guaranteed ISP line rate or proof of new Pi performance. At the approved cutover, take comparable repeated tests on the same client / server, with and without any subsequent IPS/proxy features, and record observed PPPoE reconnect time, stability, WAN errors and CPU load. Basic PPPoE+NAT should comfortably fit within Pi 4 hardware at this measured throughput, subject to actual testing. This screenshot does **not** show PPPoE credentials or VLAN tagging.
+
 ## ISP settings to capture read-only
 
 From current ASUS WAN > Internet Connection and the ISP agreement:
