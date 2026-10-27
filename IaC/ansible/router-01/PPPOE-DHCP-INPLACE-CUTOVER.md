@@ -61,6 +61,12 @@ User ran `router-01-dhcp-install-inplace.yml` on actual `docker-01`:
 
 Debian packaged root data: https://packages.debian.org/trixie/all/dns-root-data/filelist and official Unbound trust-anchor setup: https://unbound.docs.nlnetlabs.nl/en/latest/getting-started/configuration.html .
 
+## Live update — Kea and Unbound stage PASSED after DNSSEC repair
+
+On 27 October 2026, user reran `router-01-dhcp-install-inplace.yml` on `docker-01`: **ok=22 changed=2 failed=0 unreachable=0**. Debian DNSSEC root data verified, missing `/var/lib/unbound/root.key` initialised, `unbound-checkconf` passed; Kea syntax passed. Both Kea and Unbound remain **stopped and masked**, protecting the existing ASUS DHCP network; original `eth0 192.168.2.220/24` and SSH validated unchanged. `ppp`, peer/authentication files and PPPoE systemd unit were already installed earlier and remain **stopped and disabled**.
+
+**Stage 2 COMPLETE; proceed with Stage 3 ONT cable move and real ISP authentication test.** Keep Pi onboard `eth0` on the old HP switch for `admin-01` SSH. Do not move eth0, change IP, start DHCP/DNS or start router nftables yet. ONT to USB `eth1` takes ASUS internet offline temporarily; old ASUS LAN DHCP can still operate. The test can establish only WAN PPPoE, not working client traffic. If it fails, run PPPoE stop play and restore ONT to ASUS WAN.
+
 ## 3. Physical PPPoE authentication test — broadband interruption accepted
 
 **Expect existing internet access through ASUS to go offline during this test.** Keep **Pi eth0 plugged into old HP switch** and SSH `192.168.2.220` reachable through the current LAN. ASUS LAN/DHCP continues to hand out `192.168.2.x` locally, even when its WAN disconnected.
