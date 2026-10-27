@@ -1,0 +1,41 @@
+---
+# Abort the trial PPPoE WAN session on the current Pi4. After stopping this,
+# physically reconnect the ONT cable to ASUS WAN to restore its ISP session.
+# Keeps existing eth0 management IP untouched.
+- name: Stop Pi4 PPPoE WAN without modifying the original LAN
+  hosts: docker-01
+  gather_facts: false
+  become: true
+  vars:
+    router_pppoe_stop_approved: false
+  pre_tasks:
+    - name: Require explicit controller-side PPPoE stop approval
+      ansible.builtin.assert:
+        that:
+          - router_pppoe_stop_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: "Stop not approved, or inventory does not target old Pi SSH."
+      delegate_to: localhost
+      become: false
+
+  tasks:
+    - name: Stop and disable only the dedicated PPPoE service
+      ansible.builtin.systemd_service:
+        name: router-pppoe.service
+        enabled: false
+        state: stopped
+
+    - name: Verify old SSH address is still present
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_stop_lan
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in router_stop_lan.stdout"
+
+    - name: Report recovery step
+      ansible.builtin.debug:
+        msg:
+          - "PPPoE session stopped; old LAN SSH at 192.168.2.220 unchanged."
+          - "To restore external internet, physically reconnect ONT to ASUS WAN."
+          - "No Kea/Unbound/firewall/Docker changes were made by this playbook."
