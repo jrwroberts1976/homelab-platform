@@ -85,11 +85,14 @@ def main() -> None:
 
     with tempfile.TemporaryDirectory(prefix="router01-config-test-") as temp:
         path = pathlib.Path(temp)
+        # Kea can read its config as a restricted service user in test mode.
+        path.chmod(0o755)
 
         def render(source: str, output: str) -> pathlib.Path:
             rendered = env.get_template(source).render(**fixture)
             dest = path / output
             dest.write_text(rendered)
+            dest.chmod(0o644)  # Fixtures contain no real credentials.
             return dest
 
         kea_path = render("kea-dhcp4.conf.j2", "kea.json")
