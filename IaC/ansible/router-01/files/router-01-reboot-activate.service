@@ -1,0 +1,13 @@
+[Unit]
+Description=One-shot Pi4 reboot router migration (guarded physical cutover)
+After=NetworkManager.service
+Wants=NetworkManager.service
+ConditionPathExists=/var/lib/router-01-reboot-migration/boot/99-router-01-lan.yaml
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-01-reboot-migration activate
+TimeoutStartSec=180
+
+[Install]
+WantedBy=multi-user.target
