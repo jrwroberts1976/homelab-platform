@@ -1,95 +1,94 @@
-# Raspberry Pi 4 router — PPPoE and DHCP first, full IaC and controlled handover
+# Raspberry Pi 4 router — PPPoE, DHCP, Unbound DNS first (IaC)
 
-**27 October 2026 — GIT-ONLY DESIGN, NOTHING DEPLOYED.**
-Tracks [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206) and [draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207).
+**Design state: 27 October 2026. No production changes approved, installed or performed.**
+[Tracking issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206) · [draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207).
 
-## Latest decisions (override earlier discussions)
+## Latest decisions — authoritative for this project
 
-1. **Do not interrupt the current production network before explicit approved handover.** ASUS RT-AC86U remains PPPoE gateway, `192.168.2.1` DHCP server and AiMesh controller until then; all active Pi, Proxmox, DNS and switch services remain unchanged.
-2. **Start with the basics: PPPoE + an independent DHCP scope + minimal firewall/NAT on the Pi router.** No Suricata, web proxy, WireGuard, management dashboard, or Wi-Fi cutover in the first functional gate. Later phases retain these desired features.
-3. **Use `192.168.3.0/24` for the new Pi LAN**, initially to ASUS WAN; it may remain the eventual primary LAN. The user is happy to choose **new static IP addresses** and update host/inventory documentation as devices move; do **not** commit to restoring `192.168.2.x` permanently.
-4. **Accept double NAT** during the first stage: ASUS WAN `192.168.3.2`, ASUS LAN still `192.168.2.1`; keep the existing HP switch, AiMesh and `192.168.2.x` homelab behind ASUS during first handover. Don't require AP mode in first gate.
-5. **BirdNET-Go is OUT OF SCOPE for this router build.** Pi 4 `docker-01` currently hosts BirdNET POC; at a separately approved router handover it will cease when Pi 4 is repurposed. User does not want recordings/history/database preserved. **At a later date after the router project**, do a completely fresh BirdNET-Go installation on the existing Pi 5 `media-01` with microphone testing then, not now. Do not stage, copy, migrate or test BirdNET on media-01 as part of this router project.
-6. **Ansible/Git is the authority for all builds**, with off-Git encrypted secrets, clean Debian-image recovery on Pi 4 or Pi 5, validation, documentation and rollback.
-7. The formerly discussed removal of switch SPAN mirroring and conversion of ASUS to AiMesh AP mode require **separate future decisions**. No VLAN requirement.
+1. **ZERO network interruption before expressly approved first router handover.** ASUS remains live PPPoE gateway, DHCP server and AiMesh controller for `192.168.2.0/24`; do not alter existing switch/SPAN, Pi 4 interfaces/routing, existing Pi-hole servers, Pi 5 or other production services. No second live PPPoE connection or DHCP server on production Ethernet during preparation.
+2. **Implement only the basics first:** PPPoE WAN, Kea DHCP, temporary **Unbound recursive DNS** on Pi, minimal safe nftables firewall/NAT and IPv4 forwarding. WireGuard, Suricata fail-open IPS, E2Guardian/Squid blocked-page web filtering, Cockpit/Stork, Grafana security dashboard are follow-on stages, not first PPPoE/DHCP cutover blockers.
+3. New Pi LAN `192.168.3.1/24` using onboard `eth0`; USB Ethernet `eth1` is PPPoE WAN. `192.168.3.0/24` may remain the permanent primary LAN. The user accepts later host-by-host new static addresses; update canonical docs after proven live changes, not from this plan.
+4. **ASUS WAN uses Automatic IP (DHCP), NOT static.** Kea allocates its `192.168.3.x` WAN address and hands out gateway/DNS `192.168.3.1`. A future reserved WAN address (e.g. `192.168.3.2`) is OPTIONAL only when the real ASUS WAN MAC is verified; no reservation/static ASUS WAN requirement at first handover.
+5. **ASUS remains in ROUTER MODE throughout the first cutover and its acceptance testing.** Its LAN remains `192.168.2.1/24` with existing ASUS DHCP/AiMesh; HP switch, Proxmox, Pi-hole and Wi-Fi clients remain on the existing `.2.x` side. **Double NAT is accepted.**
+6. **Only AFTER successful/verified Pi router cutover** and in a separate approved later change, migrate static IPs and dependencies and convert ASUS/AiMesh to Access Point mode. The AP conversion is NEVER a step of initial router handover. During conversion coordinate DHCP, DNS, core switch/uplink, clients and management IPs to avoid conflicts/outage. No VLAN project.
+7. BirdNET-Go on Pi 4 `docker-01` is currently POC and is NOT to be migrated during this router project. Its retirement/reimage at approved handover requires explicit authority; historical recording/database preservation not needed. A fully fresh BirdNET-Go deployment on Pi 5 `media-01`, including microphone tests, is **separate and after router project completion**.
+8. Git/Ansible IaC owns builds, static network config, secrets deployment and rollback. Clean OS image, board-specific NIC facts, encrypted off-Git PPPoE and future VPN credentials, restore-to-Pi-5 procedure and offline rescue access are mandatory.
 
-## Currently deployed estate (reference only)
+## Current documented production inventory (unchanged)
 
-See `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json`, `IaC/ansible/inventory/hosts.yml`.
+Live-state truth is `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and `IaC/ansible/inventory/hosts.yml`.
 
-| Component | Verified/documented current state | Planned change |
-|---|---|---|
-| ASUS RT-AC86U | PPPoE, `192.168.2.1`, DHCP, AiMesh | Router behind Pi after FIRST handover; AP later if chosen |
-| `docker-01` Pi 4 | Debian 13 BirdNET POC and Komodo Periphery at `192.168.2.220`; Wi-Fi previously `.221` | Reimage/rebuild into router **ONLY** at approved handover |
-| Pi 4 `eth0` | MAC `d8:3a:dd:5a:51:44`, `192.168.2.220` | Pi LAN `192.168.3.1/24` **after** rebuild |
-| Pi 4 `eth1` | ASIX AX88179 USB 3.0 GbE, USB VID:PID `0b95:1790`, MAC `00:24:9b:63:b3:8a`, NO-CARRIER | Physical PPPoE WAN once cabled to ONT **at handover** |
-| `media-01` Pi 5 | Kodi, qBittorrent, SMB, NFS backups | **No change** during router project; optional fresh BirdNET later |
-| `admin-01` Pi 3 | Ansible controller / Proxmox QNetd | Remains unchanged |
-| `dns-01`, `dns-02` | Pi-hole/Unbound `192.168.2.51` and `.50` | Remain unchanged in first stage |
-| HP ProCurve 2510G-24 | Existing core switch and SPAN capture to `sensor-01` | Keep behind ASUS LAN in first stage |
+| Device | Existing state / verified evidence | Proposed first handover |
+| --- | --- | --- |
+| ASUS RT-AC86U | PPPoE; LAN `192.168.2.1`; DHCP; AiMesh | WAN **DHCP client** of Pi; router/DHCP/AiMesh on `.2.x` preserved |
+| Pi 4 `docker-01` | `192.168.2.220`, Debian 13, BirdNET POC/Komodo | Reimage and repurpose **only during approved handover** |
+| Pi 4 `eth0` | onboard MAC `d8:3a:dd:5a:51:44`; current IP `192.168.2.220` | LAN `192.168.3.1/24` after rebuild |
+| Pi 4 `eth1` | ASIX AX88179 USB GbE, `0b95:1790`, MAC `00:24:9b:63:b3:8a`, DOWN/NO-CARRIER | Untouched before handover; PPPoE WAN once connected to ONT |
+| Pi 5 `media-01` | `192.168.2.195`, Kodi, qBittorrent HTTPS, SMB, production Proxmox NFS backup | No changes in router project |
+| Pi-hole hosts | `dns-01 192.168.2.51`; `dns-02 192.168.2.50` | Keep serving ASUS `.2.x` clients; no changes initially |
+| HP ProCurve | Core switch; SPAN to `sensor-01` | Remains downstream of ASUS LAN initially |
 
-**Observed Pi 4 status from user-provided command output:** existing default route via ASUS `192.168.2.1` on `eth0`. USB `eth1` has no link and no IP; do not plug its cable into ONT during the preparation stage.
+User's latest interface evidence: Pi `eth0` default route via ASUS `192.168.2.1`, `eth1` present with **no cable, no IP**. A detected NIC does not establish ISP link readiness.
 
-## First target topology / approved handover stage
+## First target topology (ONLY during approved handover)
 
 ```text
 ISP modem / ONT
-     |
-     | Ethernet carrying PPPoE
-     v
-Pi 4  eth1 (ASIX USB, PPPoE physical WAN)
-     ppp0 (logical PPPoE WAN, dynamic ISP address)
-     nftables: LAN -> ppp0 forwarding/NAT, WAN input default-deny
-     eth0  192.168.3.1/24 (LAN)
-     |      |  \-- OPTIONAL isolated/client .3.x DHCP lease testing
-     |
-     +---> ASUS WAN 192.168.3.2/24; default gateway 192.168.3.1
-                |
-                | ASUS router NAT + DHCP + AiMesh remains active
-                v
-           ASUS LAN 192.168.2.1/24
-                |
-                +-- HP ProCurve + existing wired and Wi-Fi .2.x clients
+      |
+      | Ethernet PPPoE
+      v
+Pi 4 USB eth1 ------> PPPoE logical ppp0, dynamic ISP address
+Pi 4 onboard eth0 --> 192.168.3.1/24 (LAN)
+      |                     |
+      |              Kea DHCP on eth0 ONLY
+      |              Unbound UDP/TCP 53 on 192.168.3.1
+      |              nftables: LAN->ppp0 routing/NAT
+      |
+      +---> ASUS WAN: Automatic IP (DHCP from Pi on .3.x)
+                  ASUS router mode/NAT stays enabled
+                  ASUS LAN: 192.168.2.1/24
+                  ASUS DHCP + AiMesh remain in service
+                         |
+                   HP core switch, Pi-hole, Proxmox,
+                   wireless and other current .2.x hosts
 ```
 
-- ASUS maintains its `.2.x` DHCP scope and router-mode WAN firewall; new Kea DHCP listens **only on the Pi `.3.x` LAN** for any clients there. On the `.3.x` transit, ASUS WAN may be statically configured `.3.2` outside the dynamic pool.
-- Proposed Kea initial DHCP pool **`192.168.3.100-192.168.3.199`**, router `.3.1`, `.3.2` reserved for ASUS WAN. Confirm exact scope before approving deployment. No overlapping second Kea scope on `.2.x`.
-- **DNS caveat:** existing Pi-hole servers stay *behind ASUS* on `.2.50/.51`, and Pi-side `.3.x` clients are upstream of ASUS NAT. The Pi cannot simply advertise these resolvers to `.3.x` clients without explicitly tested downstream reachability/firewall/routing. For initial isolated `.3.x` testing, use a documented temporary DNS resolver policy (or deliberately provision a Pi-side forwarder); decide and validate before client acceptance. ASUS `.2.x` clients keep existing Pi-hole DNS.
-- **Double NAT is explicitly acceptable.** Remote OpenVPN/WireGuard/port-forward ingress and source attribution could differ; evaluate when those services are migrated, but do not block the basic outbound-connectivity gate unless existing essential services depend on inbound connectivity.
-- With new static addresses allowed, stage a **per-host IP/DNS/NFS/firewall/monitoring migration register**, not bulk rewriting every live `.2.x` host. Each later change updates inventory/estate/docs only after live verification. Readdressing infrastructure (Proxmox, Pi-hole, NFS, Kubernetes or monitored applications) requires explicit dependency checks and rollback.
+This creates intentional **double NAT**. Existing devices do not need to change addresses for stage one. Some externally initiated VPN/port-forwards or source attribution may be disrupted by double NAT; identify essential inbound services, test them, and keep a cutback to ASUS PPPoE.
 
-## First IaC delivery gate — PPPoE, DHCP and base NAT/firewall
+## First IaC scope and acceptance tests
 
-**PPPoE requirements**
-- Debian 13 ARM64, `ppp`/`pppd` + PPPoE plugin `pppoe.so`, service lifecycle, automatic reconnect and monitoring of `ppp0`.
-- Guard for `eth1` hardware MAC `00:24:9b:63:b3:8a` or configurable NIC hardware identity; `eth0` LAN. Keep Pi 4 vs Pi 5 board settings separable. Verify NO-CARRIER on USB NIC now is normal and does not represent internet readiness.
-- Ansible Vault (or equivalent) for PPP credentials; `no_log`, root-only file permissions. ISP VLAN tag, username/auth method, MTU/MRU, IPv6 capabilities and ISP-specific options need read-only discovery from ASUS before connecting Pi to live ONT.
-- Initial PPP MTU/MRU 1492; default route and firewall bind to `ppp0`; validate DNS/MTU/TCP PMTU/MSS/renewal and session reconnection at isolated bench or approved cutover.
+### PPPoE
+- Debian 13, `ppp`/`pppd` with `pppoe.so`, automatic reconnect, systemd/health diagnostics. Interface identity bound to known USB NIC (host vars support future Pi 5).
+- ISP username/authentication, secret password, optional VLAN tag and IPv6 need **read-only discovery** from existing ASUS configuration. Use Ansible Vault or equivalent secret path, no plaintext passwords in Git or diagnostics, root-only PAP/CHAP file. Never assume ISP VLAN tagging.
+- Standard initial PPP MTU/MRU 1492, path MTU/MSS tests; external `ppp0` default route established only when ISP authentication succeeds.
 
-**Kea DHCP requirements**
-- A configuration file/templates and **separate `.3.x` scope** enabled only when isolated/handed over, never active on current `docker-01` network.
-- Proposed default gateway `192.168.3.1`, dynamic pool `.100-.199`, ASUS WAN fixed at `.3.2`; scope-specific DNS validated as above. No initial automatic permanent reservation import or renumbering of active `.2.x` estate.
-- Offer logs, pool utilisation/lease health and monitoring after basic client connectivity is confirmed.
+### Kea DHCP
+- Bind DHCP exclusively to onboard `eth0`, Pi `192.168.3.1/24`.
+- **Proposed dynamic pool** `192.168.3.100 - 192.168.3.199` (subject to final preflight). Router option `192.168.3.1`, DNS option `192.168.3.1`.
+- ASUS WAN **Automatic IP** from this pool. **Do not preconfigure static ASUS WAN `.3.2`.** Optional later reserved `.3.2` requires actual ASUS WAN MAC and a Git-managed Kea reservation.
+- ASUS continues offering DHCP on its physically distinct `.2.x` LAN. Pi Kea must not listen/serve this downstream network.
 
-**Base connectivity required even though focus is PPPoE and DHCP**
-- `nftables` input default-deny on WAN, established/related, selected LAN admin access, safe stateful forwarding and masquerade from `192.168.3.0/24` to `ppp0`.
-- Debian IPv4 forwarding, no unexpected Docker forwarding/iptables leftovers after reimage, SSH/console rescue, tested rollback to ASUS PPPoE.
-- Prove WAN session, public route, NAT, LAN client DNS and DHCP, ASUS WAN DHCP/static configuration as approved, and network access for existing `.2.x` clients.
+### Temporary Unbound DNS
+- Install **Unbound as recursive validating DNS on Pi**, listening on localhost and `192.168.3.1` on UDP/TCP 53 only; clients on Pi `.3.x` obtain it via Kea.
+- Restrict recursion access to loopback and `192.168.3.0/24`, firewall-block WAN port 53, validate DNSSEC recursion, upstream reachability and DNS failure reporting. No internet-accessible open resolver.
+- Existing `dns-01`/`dns-02` Pi-hole+Unbound remain on `.2.50/.51` behind ASUS WAN firewall; do not assume Pi-side `.3.x` clients can reach them, and do not change their settings during first handover.
+- For the downstream ASUS `.2.x` LAN, preserve currently effective Pi-hole DNS; its WAN may use Pi Unbound only for router-originated fallback resolution. Document and later explicitly choose whether to retain or retire temporary Unbound once DNS hosts migrate.
 
-## Operational gates
+### Minimal firewall/NAT
+- `nftables` WAN input default-deny, safe established/related handling, SSH/rescue restrictions on LAN, LAN-to-`ppp0` stateful forwarding, masquerading and IPv4 forwarding.
+- Bind rules to logical PPP interface, not raw USB NIC, and prove no unintended direct ingress/bypass. Firewall rollback not coupled to Suricata fail-open (later stage).
+- Test PPP session, default route, MTU, IPv4 external access, DHCP lease/gateway/DNS option, Unbound query/TCP+UDP+DNSSEC, double-NAT outbound access for an ASUS client and existing Pi-hole resolution for downstream `.2.x` clients.
 
-**Before handover:** only read-only source review and Git/IaC/static CI, encrypted-secret preparation and *physically isolated* test with separate hardware if available. No changes to ASUS PPPoE, production DHCP, Pi 4 `eth0`, Pi 5, SPAN, BirdNET microphone, switch or other production services. The existing Pi 4 cannot simultaneously be reimaged/tested as production router while running BirdNET POC.
+## Two distinct handovers
 
-**Approved handover:** confirm ASUS backup, ISP WAN settings, physical cabling, rollback, alerting and maintenance approval. Separately approve retiring Pi 4 BirdNET POC, then reimage Pi 4 in isolation; validate PPPoE/DHCP/config and connect to the ONT/ASUS WAN as a planned cutover. ASUS should remain capable of being reconnected to ONT and resuming PPPoE if validation fails. Existing `.2.x` switch estate stays behind ASUS during stage one.
+**Handover 1 — PPPoE + DHCP + Unbound + NAT:** only after readiness review and approval; stop and retire Pi 4 BirdNET POC with separate authorisation, reimage Pi 4 off-network, verify hardware and base services in isolation, move ONT Ethernet from ASUS PPPoE to Pi USB WAN, Pi LAN to ASUS WAN, set ASUS WAN to *Automatic IP*. Keep ASUS as router/DHCP/AiMesh and HP switch downstream. Test all essentials and revert ONT→ASUS PPPoE if blocked. Any necessary outage only inside agreed handover window.
 
-**After basic network stability:** follow-on work includes WireGuard VPN, inline Suricata fail-open, E2Guardian/Squid filtering with HTTPS block-page limitations, Grafana/Loki/Alertmanager/Cockpit, Kea/Stork DHCP management, and (only if later approved) ASUS AiMesh AP conversion and migrations of static hosts to `.3.x`. Do not claim these features are installed during basic router acceptance.
+**Handover 2 — ASUS access point, only AFTER Handover 1 has been accepted:** enumerate .2.x static dependencies and prepare new .3.x addresses, DNS/DHCP changes, HP switch path, Wi-Fi management address and client roaming. Ensure Kea pool/reservations do not overlap and there is no double active gateway. When separately authorised, convert ASUS to AP-mode AiMesh and preserve SSID coverage, then verify. Update live authoritative estate only for completed readdressed devices. Do not promise zero cutover downtime.
 
-**At a later date outside this router project:** clean BirdNET-Go installation on `media-01` with a new microphone/audio setup and separate safe plan. No recording/history/database migration is required. No audio tests before the router project completes.
+## Other planned services and work explicitly deferred
+Suricata NFQUEUE IPS with fail-open semantics; E2Guardian+Squid web filtering and branded blocked pages (HTTPS client trust/limitations); WireGuard VPN server; Kea/Stork and Cockpit UI; integrated Grafana/Loki/Alertmanager/Zabbix security alerts; optional future SPAN removal with accepted same-subnet visibility loss. All built through IaC as subsequent scoped changes. Pi 5 BirdNET-Go is a **separate future clean install**, no microphone testing now.
 
-## Hardware portability / backup
+## Disaster recovery and docs
+Rebuild Pi 4 or replacement Pi 5 from a pinned clean Debian 13 image and Git Ansible roles with segregated NIC host vars. Restore protected WAN/PPPoE/CA/VPN keys (if present), Kea reservations and network config from external storage, with console/temporary rescue addressing not dependent on the broken router. Run second Ansible reconciliation and require no unintended drift. Keep production `CURRENT-STATE.md`, `estate.json`, `hosts.yml`, DNS, host security exceptions, NFS, monitoring and `gpt-handover.md` aligned **only with verified live changes**, not proposed moves.
 
-Board-neutral roles with replaceable WAN NIC hardware ID, LAN NIC identity, OS image, Wi-Fi policy and persistent encrypted secrets. Router rebuild must be possible on Pi 5 from clean Debian image, Git/Ansible and independently backed-up PPPoE credentials, DHCP configuration/reservations and future VPN/TLS keys; restore network rescue access without assuming functioning router DNS/DHCP.
-
-## Documentation policy
-
-Keep `CURRENT-STATE.md` and canonical inventory as **verified live state** until successful cutovers. Track future `.3.x` static host assignments in an IP migration ledger and update relevant service templates/Ansible vars and `gpt-handover.md` after each verified move. Do not use historical retired device identities for new active roles. Project status remains **planning only**.
+**No production changes made by this plan.**
