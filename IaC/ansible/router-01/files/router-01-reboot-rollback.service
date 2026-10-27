@@ -1,0 +1,8 @@
+[Unit]
+Description=Undo unconfirmed reboot router migration
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-01-reboot-migration rollback
+TimeoutStartSec=180
