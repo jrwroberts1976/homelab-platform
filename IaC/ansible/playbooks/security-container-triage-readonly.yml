@@ -1,0 +1,138 @@
+---
+# Safe read-only CVE root-cause inventory from EXISTING validated Trivy JSON.
+# No new scans, pulls, service operations, security acceptance or local writes.
+- name: Summarise actual Critical and High Trivy root causes without changing estate
+  hosts: "monitor-01:komodo-01:cloud-01:docker-01:greenbone-01"
+  become: true
+  gather_facts: true
+  serial: 1
+
+  vars:
+    triage_expected_addresses:
+      monitor-01: 192.168.2.52
+      komodo-01: 192.168.2.58
+      cloud-01: 192.168.2.53
+      docker-01: 192.168.2.220
+      greenbone-01: 192.168.2.57
+
+  pre_tasks:
+    - name: Assert exact authorized scanner inventory identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in triage_expected_addresses
+          - ansible_host == triage_expected_addresses[inventory_hostname]
+          - ansible_facts.hostname == inventory_hostname
+          - ansible_facts.distribution == "Debian"
+          - ansible_facts.distribution_major_version == "13"
+          - ansible_facts.default_ipv4.address == triage_expected_addresses[inventory_hostname]
+        fail_msg: "Unexpected scanner host: read-only investigation stopped."
+
+    - name: Confirm already-collected scanner summary exists
+      ansible.builtin.stat:
+        path: /var/lib/homelab-container-security/pilot-inventory-summary.json
+      register: triage_summary
+
+    - name: Refuse missing scanner evidence
+      ansible.builtin.assert:
+        that:
+          - triage_summary.stat.isreg | default(false)
+        fail_msg: "No existing Trivy summary; do not infer that vulnerabilities are absent."
+
+  tasks:
+    - name: Verify immutable running IDs and print bounded Critical/High remediation groups
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import collections
+            import json
+            from pathlib import Path
+            import subprocess
+            import time
+
+            root=Path("/var/lib/homelab-container-security").resolve()
+            summary=json.loads((root/"pilot-inventory-summary.json").read_text())
+            now=int(time.time())
+            completed=int(summary.get("scan_completed",0))
+            assert summary.get("complete") is True, "Trivy scan summary incomplete"
+            assert 0 <= now-completed <= 30*3600, "Trivy scan stale or future-dated"
+
+            def clean(value,maximum=95):
+                return " ".join(str(value or "").split())[:maximum]
+
+            ps=subprocess.check_output(
+                ["docker","ps","--format","json"],text=True,timeout=30
+            )
+            running=set()
+            for line in ps.splitlines():
+                if line.strip():
+                    running.add(json.loads(line)["Image"])
+            assert running, "Docker running inventory empty"
+            entries={
+                e["image"]:e for e in summary.get("images",[])
+                if isinstance(e,dict) and e.get("image")
+            }
+            assert running == set(entries), "Running image inventory differs from saved scan"
+
+            all_items=collections.Counter()
+            fixable=collections.Counter()
+            no_fix=collections.Counter()
+            image_stats=[]
+            for tag in sorted(running):
+                entry=entries[tag]
+                inspect=json.loads(subprocess.check_output(
+                    ["docker","image","inspect",tag],text=True,timeout=30
+                ))[0]
+                image_id=inspect["Id"]
+                assert entry.get("image_id")==image_id, "Image ID drift for "+tag
+                assert entry.get("status")=="SUCCESS", "Scan not successful: "+tag
+                report_path=Path(entry.get("report",""))
+                assert report_path.parent.resolve()==root
+                assert report_path.name.startswith("image-") and report_path.suffix==".json"
+                report=json.loads(report_path.read_text())
+                assert report.get("Metadata",{}).get("ImageID")==image_id
+                counts=entry.get("counts")
+                assert isinstance(counts,dict)
+                observed=collections.Counter()
+                groups={}
+                for result in report.get("Results") or []:
+                    for v in result.get("Vulnerabilities") or []:
+                        sev=str(v.get("Severity") or "UNKNOWN").upper()
+                        observed[sev]+=1
+                        if sev not in ("CRITICAL","HIGH"):
+                            continue
+                        cve=clean(v.get("VulnerabilityID") or "UNSPECIFIED",85)
+                        pkg=clean(v.get("PkgName") or "UNSPECIFIED",75)
+                        installed=clean(v.get("InstalledVersion") or "?",70)
+                        fixed=clean(v.get("FixedVersion") or "",70)
+                        key=(sev,cve,pkg,installed,fixed)
+                        groups[key]=groups.get(key,0)+1
+                for sev in ("CRITICAL","HIGH","MEDIUM","LOW","UNKNOWN"):
+                    assert observed[sev]==counts[sev], "Count mismatch for "+tag+" "+sev
+                rows=sum(groups.values())
+                fixed_rows=sum(n for (sev,cve,pkg,installed,fixed),n in groups.items() if fixed)
+                all_items.update({(tag,)+k:v for k,v in groups.items()})
+                fixable[tag]=fixed_rows
+                no_fix[tag]=rows-fixed_rows
+                image_stats.append((tag,counts["CRITICAL"],counts["HIGH"],rows,fixed_rows))
+            print("SCAN_COVERAGE=PASS","IMAGE_REFS=",len(running),"SCAN_AGE_HOURS=",round((now-completed)/3600,2))
+            print("==== IMAGE | CRITICAL ROWS | HIGH ROWS | FIX-LISTED C/H ROWS ====")
+            for tag,critical,high,rows,fixrows in sorted(image_stats,key=lambda x:(-x[1],-x[2],x[0])):
+                print(clean(tag,110),critical,high,fixrows,"of",rows)
+            print("==== TOP DISTINCT CRITICAL/HIGH PACKAGE+ADVISORY ROOT CAUSES (max 25) ====")
+            for row,count in sorted(all_items.items(),key=lambda kv:(
+                0 if kv[0][1]=="CRITICAL" else 1,
+                0 if kv[0][5] else 1,-kv[1],kv[0]
+            ))[:25]:
+                image,sev,cve,pkg,installed,fixed=row
+                print(sev,"IMAGE=",clean(image,95),"ID=",cve,
+                      "PKG=",pkg,"INSTALLED=",installed,"FIX=",fixed or "NOT_LISTED",
+                      "PACKAGE_ROWS=",count)
+            print("TRIVY_TRIAGE_READONLY=PASS")
+      register: triage_output
+      changed_when: false
+
+    - name: Show bounded remediation summary only
+      ansible.builtin.debug:
+        var: triage_output.stdout_lines
