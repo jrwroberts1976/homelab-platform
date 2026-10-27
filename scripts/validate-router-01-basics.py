@@ -411,6 +411,50 @@ def main() -> None:
     check(cutover_inventory["all"]["children"]["router_cutover_new"]["hosts"]["router-01"]["ansible_host"] ==
           "192.168.3.1", "Confirm host must be new isolated Pi LAN .3.1")
 
+    # The user has no Pi console. A short DHCP-only test must neither make
+    # LAN config persistent nor start Kea while Pi eth0 is on the old switch.
+    for name, approval in (
+        ("router-01-dhcp-trial-stage.yml", "router_dhcp_trial_stage_approved"),
+        ("router-01-dhcp-trial-arm.yml", "router_dhcp_trial_arm_approved"),
+    ):
+        trial = yaml.safe_load((ANSIBLE / "playbooks" / name).read_text())[0]
+        check(trial["hosts"] == "docker-01" and trial["gather_facts"] is False,
+              f"{name} must target old managed SSH only")
+        check(trial["vars"][approval] is False,
+              f"{name} must default to NOT approved")
+        check(trial["pre_tasks"][0]["delegate_to"] == "localhost" and
+              f"{approval} | bool" in
+              trial["pre_tasks"][0]["ansible.builtin.assert"]["that"],
+              f"{name} must locally check approval before SSH")
+    trial_script = (
+        ANSIBLE / "router-01" / "files" / "router-01-dhcp-trial.sh"
+    ).read_text()
+    for req in (
+        "connection add save no",
+        "ipv4.addresses 192.168.3.1/24",
+        "ping -n -I eth0",
+        "ping -n -I ppp0",
+        'systemctl start "$UNDO_TIMER"',
+        "systemctl disable kea-dhcp4-server.service",
+        "systemctl mask kea-dhcp4-server.service",
+        "connection delete id",
+        "kea-dhcp4 -t",
+    ):
+        check(req in trial_script,
+              f"Ephemeral Kea trial missing prerequisite/rollback: {req}")
+    check('systemctl enable kea-dhcp4-server' not in trial_script and
+          'netplan apply' not in trial_script and
+          '/etc/sysctl.d/' not in trial_script and
+          'flush ruleset' not in trial_script,
+          "DHCP-only trial may not persist networking, activate NAT or enable Kea")
+    for name, interval in (
+        ("router-dhcp-trial-activate.timer", "OnActiveSec=90s"),
+        ("router-dhcp-trial-rollback.timer", "OnActiveSec=15min"),
+    ):
+        check(interval in (
+            ANSIBLE / "router-01" / "files" / name
+        ).read_text(), f"DHCP trial timer mismatch: {name}")
+
     # Package installation may occur only after approved conversion and while
     # the old SSH IP is still present. dpkg start attempts must be suppressed.
     package_play = yaml.safe_load(
