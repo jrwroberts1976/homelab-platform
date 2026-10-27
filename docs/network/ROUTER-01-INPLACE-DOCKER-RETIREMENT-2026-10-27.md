@@ -79,6 +79,25 @@ ansible-playbook -i inventory/hosts.yml \
 
 **No actual Docker removal commands are approved in this document.**
 
+## Controlled Docker-retirement Ansible authored — DEFAULT DENY (not executed)
+
+New source-only playbook: `IaC/ansible/playbooks/router-01-docker-retirement-approved.yml`. **This has NOT been run on `docker-01`** and WILL stop two production Docker workloads if activated. It is not safe simply because its syntax passes CI. No approval flags are set by default.
+
+**Five approvals required on the Ansible controller before ANY SSH:**
+1. `router_docker_retirement_approved=true`: the service interruption to BirdNET and Komodo is authorised.
+2. `router_komodo_deregistration_verified=true`: the Komodo managed-host registration and automations/redeployment dependencies were deliberately retired or updated.
+3. `router_trivy_monitoring_reconciled=true`: Trivy Docker scheduled scan, stale container metrics and central exporter/Grafana/Zabbix alerts have an approved, documented retired-state transition (never fabricate clean scan data).
+4. `router_retirement_backup_verified=true`: host network config, Komodo onboarding key, needed Docker settings and off-Pi rescue/recovery are preserved as appropriate; BirdNET POC history is intentionally waived.
+5. `router_retirement_console_ready=true`: an operator can restore the Pi through direct console if an unexpected outage occurs.
+
+**On-host preflight before any service is stopped:** the active host is still Debian 13 `docker-01` at `192.168.2.220`, ASUS default route `.2.1`, active NetworkManager profile `netplan-eth0`; exactly two running containers named `birdnet-go` and `komodo-periphery-periphery-1`; the two expected Compose files exist; and a **fresh** apt simulation removes *exactly* four runtime packages.
+
+**If fully approved at a later maintenance window**, the playbook would disable the Docker-specific Trivy timer, use Compose `down` on the exact BirdNET and Komodo YAML files without `--volumes`, stop/disable docker.socket/docker.service/containerd, and remove only `docker.io docker-compose containerd runc` with `purge: false`, `autoremove: false`. It then checks that `192.168.2.220`, the `netplan-eth0` profile, ASUS default route and core NetworkManager/SSH/Alloy/Zabbix/Nginx units remain active. No Docker data directories, named volumes or Komodo keys are deleted; no router software starts; no interface/IP, hostname, PPPoE, nftables, Nginx config or live inventory changes. BirdNET HTTPS would be unavailable after container shutdown until its old Nginx site is independently retired.
+
+**Known follow-ups even after execution:** remove/replace the BirdNET-only Nginx site after verifying what serves 80/443, reconcile the old `homelab-docker01-icmp-timestamp` mitigation with new router firewall owner, update central monitoring/Komodo and canonical inventory ONLY after actual live verification, and separately approve `router-01` hostname change. The final LAN .3.1 cutover remains last and requires a tested NM-native rollback.
+
+**WARNING:** Do NOT pass the five approval flags based solely on having read this plan. They are declarations that the prerequisite actions are already VERIFIED, not a way to skip work. No execution command is furnished until those prerequisites are complete.
+
 ## Future approved Docker retirement (NOT YET RUN)
 
 - Reconcile Komodo agent registration/host dependencies; preserve or explicitly retire security scanning and monitoring with updated metrics inventory/alerts and verified no unexpected consumers.
