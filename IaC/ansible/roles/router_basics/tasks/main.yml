@@ -1,5 +1,29 @@
 ---
 # A safe guard is deliberately repeated within the role, not just in the play.
+- name: Verify conversion approval attestation is present
+  ansible.builtin.stat:
+    path: /etc/router-01-conversion-approved
+  register: router_conversion_approval
+
+- name: Refuse any router activation before Docker retirement approval
+  ansible.builtin.assert:
+    that:
+      - router_conversion_approval.stat.isreg | default(false)
+    fail_msg: "Router-01 conversion has not been approved and recorded."
+
+- name: Confirm Docker daemon is inactive before router networking is managed
+  ansible.builtin.command:
+    argv: [systemctl, is-active, docker.service]
+  register: router_docker_status
+  changed_when: false
+  failed_when: false
+
+- name: Refuse nftables management while Docker is running
+  ansible.builtin.assert:
+    that:
+      - router_docker_status.stdout | trim != 'active'
+    fail_msg: "Docker remains active; removing its firewall chains now is unsafe."
+
 - name: Refuse unapproved or incorrectly named target
   ansible.builtin.assert:
     that:
@@ -14,7 +38,7 @@
       - (ansible_facts.get(router_lan_interface, {}).get('macaddress', '') | lower) == (router_expected_lan_mac | lower)
       - (ansible_facts.get(router_wan_interface, {}).get('macaddress', '') | lower) == (router_expected_wan_mac | lower)
     fail_msg: >-
-      REFUSED: requires a freshly reimaged Debian 13 router-01 with
+      REFUSED: requires a approved converted Debian 13 router-01 with
       192.168.3.1 on the expected LAN and verified eth0/USB NIC identities.
       DO NOT run against docker-01 before approved handover.
 
@@ -28,14 +52,14 @@
     fail_msg: "PPPoE username/password must come from a secure external Ansible Vault."
   no_log: true
 
-- name: Confirm systemd-networkd owns network on reimaged system
+- name: Confirm systemd-networkd owns network on converted system
   ansible.builtin.command:
     argv: [systemctl, is-active, systemd-networkd.service]
   register: router_networkd
   changed_when: false
   failed_when: router_networkd.stdout | trim != 'active'
 
-- name: Install baseline packages ONLY on reimaged/guarded router
+- name: Install baseline packages ONLY on approved converted/guarded router
   ansible.builtin.apt:
     name:
       - ppp
@@ -67,7 +91,7 @@
     mode: "0600"
   no_log: true
 
-- name: Install dedicated PPPoE CHAP and PAP secret files on fresh image
+- name: Install dedicated PPPoE CHAP and PAP secret files on approved converted host
   ansible.builtin.template:
     src: ppp-secrets.j2
     dest: "{{ item }}"
