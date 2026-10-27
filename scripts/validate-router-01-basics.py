@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import os
 import pathlib
 import re
 import subprocess
@@ -105,7 +106,28 @@ def main() -> None:
         check(opts == {"routers": "192.168.3.1", "domain-name-servers": "192.168.3.1"},
               "Kea must advertise router-01 as DNS and gateway")
         check("reservations" not in subnet, "Do not invent ASUS MAC/address reservations")
-        maybe_check_syntax("kea-dhcp4", ["-t", str(kea_path)])
+        # On Ubuntu CI, AppArmor can deny Kea opening a config under /tmp
+        # regardless of Unix modes. Stage a non-secret fixture in /etc/kea
+        # only on the disposable GitHub runner, then always remove it.
+        if os.environ.get("GITHUB_ACTIONS") == "true":
+            fixture_path = "/etc/kea/router-01-ci-configuration.conf"
+            try:
+                subprocess.run(
+                    ["sudo", "-n", "install", "-m", "0644",
+                     str(kea_path), fixture_path], check=True, timeout=20
+                )
+                subprocess.run(
+                    ["sudo", "-n", "kea-dhcp4", "-t", fixture_path],
+                    check=True, timeout=20
+                )
+                print("PASS: Kea native config validation in isolated CI")
+            finally:
+                subprocess.run(
+                    ["sudo", "-n", "rm", "-f", fixture_path],
+                    check=True, timeout=20
+                )
+        else:
+            print("SKIP: Kea native validation outside ephemeral CI; JSON parsed")
 
         dns_path = render("unbound-router.conf.j2", "unbound.conf")
         dns = dns_path.read_text()
