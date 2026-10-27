@@ -127,6 +127,56 @@ Files remain inside private `/var/lib/router-01-stage/forwarding/`; they are NOT
 
 Why Docker reconciliation matters: Docker's historical iptables `FORWARD DROP` can drop packets despite an `accept` in a different nftables forward chain. See Docker's firewall docs: https://docs.docker.com/engine/network/firewall-nftables/ .
 
+## LATEST USER-APPROVED HEADLESS PATH — PPPoE PASSED, OLD TIMER NOW DISABLED; temporary DHCP-only trial
+
+**Live evidence:** new read-only PPPoE health check on actual `docker-01` showed USB eth1 carrier `1`; `router-pppoe.service active`, real ISP IPv4 on `ppp0`, forced `ping -I ppp0 1.1.1.1` PASS and default via ppp0. Old Pi onboard `eth0=192.168.2.220/24`. Kea was `inactive`; previous `router-lan-switch.timer` showed `active` but `CUTOVER_MARKER=False`, `PERSISTENT_NEW_LAN_NETPLAN=False`, `CUTOVER_ROLLBACK_TIMER=inactive`. User then successfully stopped+disabled old `router-lan-switch.timer` TWICE; final systemd status `ActiveState=inactive`, `SubState=dead`, `NextElapseUSecMonotonic=infinity`. Old switch no longer pending. PPPoE works; focus on getting an isolated ASUS WAN lease.
+
+**Headless DHCP-only trial introduced**: `router-01-dhcp-trial-stage.yml` and `router-01-dhcp-trial-arm.yml`; local executable `/usr/local/sbin/router-01-dhcp-trial` and transient systemd one-shot timers. Unlike previous full router cutover, this trial does **NOT edit /etc/netplan, nftables, sysctls, Docker, PPPoE, Unbound**, nor enable Kea at reboot. An isolated NetworkManager profile `router-01-dhcp-trial` is created with **`nmcli connection add save no`**, sets only Pi eth0 `192.168.3.1/24`, starts Kea without enabling its boot unit, and leaves Unbound MASKED. It refuses activation unless Pi eth0 has physical carrier, ASUS old `192.168.2.1` is NOT reachable on eth0, old 120s switch timer is inactive, and real PPP0 IPv4 plus forced outbound ping both PASS. A separate **15-minute local rollback timer arms BEFORE modifying the network** and then stops/masks Kea, deletes the ephemeral profile and removes .3.1. A reboot similarly removes the temporary NM profile and does not autostart Kea, but still requires physical cable restoration to regain old .2.220 management. This trial can prove **DHCP LEASE ONLY**; with NAT and Unbound NOT enabled, browsing is NOT expected even if ASUS gets a .3 IP.
+
+### 1. While old SSH and internet are working: stage only
+
+```bash
+cd ~/projects/homelab-platform
+git switch feature/pi-router-iac-birdnet-poc-migration-20261027
+git pull --ff-only origin feature/pi-router-iac-birdnet-poc-migration-20261027
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-dhcp-trial-stage.yml --limit docker-01 \
+  --ask-become-pass -e router_dhcp_trial_stage_approved=true
+```
+
+The output must PASS. Original management IP and Kea masked must remain; SSH does not drop. **Do NOT run previous `router-01-lan-arm-inplace.yml` again.**
+
+### 2. Set ASUS WAN to Automatic IP and prepare ONE physical move
+
+ONT stays on **Pi USB eth1**. ASUS LAN remains on HP switch/old home network. Pi eth0 stays on HP switch UNTIL arm succeeds. No separate ONT into ASUS. ASUS WAN is set **Automatic IP** (rather than PPPoE). On admin-01:
+
+```bash
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/router-01-dhcp-trial-arm.yml --limit docker-01 \
+  --ask-become-pass \
+  -e router_dhcp_trial_arm_approved=true \
+  -e router_asus_wan_auto_ip_confirmed=true \
+  -e router_operator_ready_to_move_cable=true
+```
+
+The arm play RECHECKS PPP0 link/IP/forced internet ping, that Kea still MASKED and old 120s timer stopped. It then schedules a **90-second delayed** local test. **As soon as ARM reports success**, move **Pi onboard eth0 OUT of the HP switch and INTO the ASUS WAN port**, leaving ASUS LAN on switch and ONT on Pi eth1. After 90s Pi's local script adds nonpersistent `192.168.3.1` and starts Kea; no chat connection needed.
+
+### 3. Check ASUS WAN status (local UI works without ISP browsing)
+
+From old ASUS LAN, visit `http://192.168.2.1` and select WAN/Internet status, trigger DHCP renew. **PASS** is actual ASUS WAN IPv4 `192.168.3.100–199` with gateway `192.168.3.1`. It confirms Kea and the isolated Pi↔ASUS WAN cable work. Browsing is *NOT* expected: DHCP-only test does not enable NAT/forwarding/DNS. The Pi local script logs `router-dhcp-trial` to journald and Kea records leases under `/var/lib/kea/kea-leases4.csv`.
+
+### 4. Automatic stop and restoration
+
+The local **15-minute rollback** stops/masks Kea, deletes temporary NM profile, and allows old persistent Netplan DHCP to resume when Pi eth0 physically rejoins old HP switch. **After trial window** return Pi eth0 to HP switch (never while Kea trial active), and return ONT to ASUS WAN + set ASUS WAN PPPoE ONLY if recovering original internet topology. If this is a successful lease trial, preserve the result and then plan a separate real NAT/Unbound/full-router cutover; this trial is intentionally non-permanent. If trial aborts because cable isolation/PPP missing, no DHCP is activated; local logs can be retrieved after restoring old link:
+```bash
+ansible -i inventory/hosts.yml docker-01 -b --ask-become-pass \
+  -m ansible.builtin.shell -a \
+  'journalctl -t router-dhcp-trial -u router-dhcp-trial-activate.service -u router-dhcp-trial-rollback.service -u kea-dhcp4-server.service -n 100 --no-pager; tail -n 8 /var/lib/kea/kea-leases4.csv 2>/dev/null || true'
+```
+
+**Do NOT rely on `router-01-nm-cutover` previous full router rollback for this DHCP-only test**, and do not run the old full arm while temporary test is pending. Saved scripts and commands allow running without ChatGPT, no Pi screen required.
+
 ## LAST USER DECISION: confirm PPPoE FIRST, then do a TEMPORARY Kea DHCP trial (headless)
 
 User lacks a screen for Pi4 and will lose chat/internet while changing the single ONT connection. They suggested: start Kea without enabling autostart, rewire, and reboot the Pi if it fails. **Do not accept reboot as reliable rollback from the previous cutover:** `router-01-nm-cutover` writes **persistent** `/etc/netplan/99-router-01-lan.yaml`, full `/etc/nftables.conf`, enables nftables/PPPoE and writes persistent forwarding sysctl. Rebooting may preserve those even if Kea was not enabled and may make client internet fail. First inspect whether the prior 120-second cutover ran or rolled back. Running unmasked Kea on eth0 while it shares the ASUS LAN .2 switch also risks competing DHCP, so it must be isolated.
