@@ -1,4 +1,14 @@
 # GPT Handover — Homelab Platform
+## LATEST — 27 Oct 2026: ASUS AP conversion AFTER verified Pi router cutover; DNS and WAN DHCP confirmed
+
+**Latest decisive user direction:** initial router work is PPPoE, Kea DHCP, **temporary Unbound DNS** and minimum nftables/NAT. Pi LAN `192.168.3.1/24`, USB `eth1` AX88179 WAN (MAC `00:24:9b:63:b3:8a`) and onboard `eth0` LAN (MAC `d8:3a:dd:5a:51:44`). ASUS WAN is **Automatic IP (DHCP)** and receives .3.x address, gateway/DNS .3.1 from Kea (suggested dynamic pool .3.100-.199). **No static .3.2 requirement or invented ASUS WAN MAC**; optional reservation only after actual MAC discovery.
+
+Unbound listens on Pi .3.1 TCP/UDP 53 with restricted .3.x/loopback recursion; no open WAN DNS. Existing .2.50/.51 Pi-hole remains untouched behind ASUS for .2.x devices. **ASUS remains full router/NAT/DHCP/AiMesh for 192.168.2.0/24 during first Pi PPPoE cutover and its validation** (double NAT accepted). Only **after that cutover is complete, stable and accepted**, separately approve future static-host renumbering to .3.x and conversion of ASUS/AiMesh to access point; do not combine AP conversion with first WAN cutover. User accepts new static IPs and updating documentation after live verification, not before. No VLANs.
+
+**BirdNET-Go is now expressly OUT of this router project**; clean fresh installation on Pi 5 later, no recording/history/database restore or mic testing now. Existing Pi 4 POC stays live until approved router handover/reimage; no interruption before approved cutover. Follow-on WireGuard, Suricata fail-open, E2Guardian, security dashboard etc postponed until basics work. Updated issue #206 and draft PR #207 runbook; no production changes.
+
+---
+
 ## LATEST — 27 Oct 2026: reinstated temporary 192.168.3.x transit for two-stage router migration
 
 **Explicit addressing choice for the current router plan:** user reversed the short-lived single-subnet handover preference and wants **temporary 192.168.3.0/24 restored**. First approved cutover: Pi 4 PPPoE WAN on USB NIC, Pi LAN 192.168.3.1/24 -> ASUS WAN 192.168.3.2/24, ASUS stays in router mode, with unchanged LAN gateway/DHCP 192.168.2.1, AiMesh and **whole HP switch and homelab behind ASUS LAN**. Temporary double NAT intentional; validate inbound VPN/port forwards, reduced client visibility and rollback. Second separately approved change: make Pi 192.168.2.1 LAN and Kea DHCP, ASUS AiMesh AP with unique 192.168.2.x management IP, switch on Pi LAN, retire temporary .3.x link. Never put router-mode ASUS WAN and LAN on the same .2 subnet; never operate duplicate .2.1 gateways or competing DHCP. No VLANs and no permanent renumbering.
