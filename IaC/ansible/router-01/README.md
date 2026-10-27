@@ -33,7 +33,7 @@ ASUS remains a router through the first broadband cutover and validation. Conver
 - Some installer images use NetworkManager/ifupdown rather than networkd. Establish `systemd-networkd` ownership in the isolated image/console before role runs, with no competing Ethernet manager; the role aborts if networkd inactive.
 - `router_activate_services=true` is intended only after full boot/network/firewall readiness. It enables nftables, Unbound, Kea and PPPoE; always keep console access and a proven ASUS rollback. On initial isolated tests with no ISP ONT, PPPoE service may retry; this is expected.
 - `/etc/nftables.conf` is fully managed and includes `flush ruleset`: **never** apply to a shared Docker/Kodi/Proxmox host. Target MUST be fresh dedicated router-01.
-- Templates are not yet verified with `nft -c`, `kea-dhcp4 -t` and `unbound-checkconf` on Debian. Run those validations and the Ansible syntax checks before deployment. No claim of tested production readiness.
+- **Automated offline validation PASS (27 October 2026):** GitHub Actions `Validate router-01 offline IaC` rendered and syntax-tested Kea, Unbound and nftables on an isolated Ubuntu 24.04 CI runner, and ran Ansible `--syntax-check` on both router playbooks. The separate estate/documentation guard also PASS. **Debian 13 ARM64 on-hardware validation, PPPoE ISP session, DHCP broadcast/renewal and full recovery test are still outstanding.** Do not treat an Ubuntu CI pass as a production acceptance.
 
 ## Controller-only syntax checks (NO HOST CONTACT)
 
