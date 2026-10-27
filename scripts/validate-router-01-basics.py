@@ -155,6 +155,13 @@ def main() -> None:
     check(play[0]["vars"]["router_activate_services"] is False, "Play services must default off")
     task_text = (ANSIBLE / "roles" / "router_basics" / "tasks" / "main.yml").read_text()
     yaml.safe_load(task_text)
+    check("policy_rc_d: 101" in task_text,
+          "Final role must suppress any apt package service autostarts")
+    check("masked: false" in task_text,
+          "Final role must explicitly unmask services after approval")
+    check("router_activate_services | bool" in task_text,
+          "Final unmask must require activation approval")
+
     for required in (
         "ansible_facts.hostname == router_hostname_expected",
         "router_deploy_approved | bool",
