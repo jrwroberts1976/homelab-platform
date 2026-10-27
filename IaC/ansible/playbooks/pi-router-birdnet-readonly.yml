@@ -1,6 +1,8 @@
 ---
 # Read-only source/destination discovery for router/BirdNET migration.
 # Does not install software, move audio devices, change DNS/firewall or restart services.
+# USER GATE: NO production hosts are to be contacted before explicit approval.
+# Microphone discovery, capture and audio verification are DEFERRED until AFTER router project handover.
 - name: Audit BirdNET source and Pi 5 destination before migration
   hosts: birdnet_hosts:media_hosts
   become: true
@@ -27,20 +29,6 @@
       ansible.builtin.slurp:
         src: /proc/device-tree/model
       register: router_migration_pi_model
-
-    - name: Read USB inventory
-      ansible.builtin.command:
-        argv: [lsusb]
-      register: router_migration_usb
-      changed_when: false
-      failed_when: false
-
-    - name: Read ALSA capture devices
-      ansible.builtin.command:
-        argv: [arecord, -l]
-      register: router_migration_alsa
-      changed_when: false
-      failed_when: false
 
     - name: Read free memory
       ansible.builtin.command:
@@ -91,8 +79,6 @@
           - "host={{ ansible_facts.hostname }}"
           - "ipv4={{ ansible_facts.all_ipv4_addresses }}"
           - "pi_model={{ router_migration_pi_model.content | b64decode | replace('\\u0000', '') }}"
-          - "usb={{ router_migration_usb.stdout_lines }}"
-          - "alsa={{ router_migration_alsa.stdout_lines }}"
           - "memory={{ router_migration_free.stdout_lines }}"
           - "root_disk={{ router_migration_disk.stdout_lines }}"
           - "mounts={{ router_migration_mounts.stdout_lines }}"
