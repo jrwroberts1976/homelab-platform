@@ -51,6 +51,42 @@ def main() -> None:
     check(conf["router_wan_interface"] == "eth1", "WAN must be eth1")
     check(conf["router_dhcp_start"] == "192.168.3.100", "Unexpected DHCP start")
     check(conf["router_dhcp_end"] == "192.168.3.199", "Unexpected DHCP end")
+    # The old SSH management address remains in the future-only pre-stage
+    # inventory until every prospective config is safely rendered.
+    prestage_inv = yaml.safe_load(
+        (ANSIBLE / "inventory" / "router-01-prestage.yml").read_text()
+    )
+    prestage_hosts = prestage_inv["all"]["children"]["router_prestage"]["hosts"]
+    check(list(prestage_hosts) == ["router-01"], "Pre-stage may only target router-01")
+    check(prestage_hosts["router-01"]["ansible_host"] == "192.168.2.220",
+          "Pre-stage must keep original SSH address")
+    check(prestage_hosts["router-01"]["router_lan_address"] == "192.168.3.1",
+          "Final LAN target changed unexpectedly")
+
+    prestage_play = yaml.safe_load(
+        (ANSIBLE / "playbooks" / "router-01-prestage.yml").read_text()
+    )[0]
+    check(prestage_play["hosts"] == "router_prestage", "Wrong pre-stage play target")
+    check(prestage_play["gather_facts"] is False,
+          "Must refuse locally before any SSH contact")
+    check(prestage_play["vars"]["router_prestage_approved"] is False,
+          "Pre-stage approval must default OFF")
+    pre_tasks = prestage_play["pre_tasks"]
+    check(pre_tasks[0].get("delegate_to") == "localhost",
+          "First pre-stage guard must run locally")
+    check("router_prestage_approved | bool" in
+          pre_tasks[0]["ansible.builtin.assert"]["that"],
+          "Pre-stage local approval guard missing")
+    prestage_src = (ANSIBLE / "playbooks" / "router-01-prestage.yml").read_text()
+    check("router_reimage_marker.stat.isreg" in prestage_src,
+          "Must require new-image attestation file")
+    check("router_current_management_ip in ansible_facts.all_ipv4_addresses"
+          in prestage_src, "Must guard old management address")
+    for forbidden in ("ansible.builtin.apt:", "ansible.builtin.systemd_service:",
+                      "networkctl reconfigure", "/etc/systemd/network/10-router-lan.network"):
+        check(forbidden not in prestage_src,
+              f"Pre-stage must not activate/modify live networking: {forbidden}")
+
     defaults = yaml.safe_load(
         (ANSIBLE / "roles" / "router_basics" / "defaults" / "main.yml").read_text()
     )
