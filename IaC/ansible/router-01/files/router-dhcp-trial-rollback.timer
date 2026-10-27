@@ -1,0 +1,6 @@
+[Unit]
+Description=Automatically stop headless DHCP test after fifteen minutes
+
+[Timer]
+OnActiveSec=15min
+Unit=router-dhcp-trial-rollback.service
