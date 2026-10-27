@@ -6,6 +6,7 @@ on:
       - 'IaC/ansible/roles/router_basics/**'
       - 'IaC/ansible/playbooks/router-01-*.yml'
       - 'IaC/ansible/inventory/router-01-staging.yml'
+      - 'IaC/ansible/inventory/router-01-prestage.yml'
       - 'scripts/validate-router-01-basics.py'
       - '.github/workflows/validate-router-01-basics.yml'
   workflow_dispatch:
@@ -29,4 +30,5 @@ jobs:
         working-directory: IaC/ansible
         run: |
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-readonly.yml --syntax-check
+          ansible-playbook -i inventory/router-01-prestage.yml playbooks/router-01-prestage.yml --syntax-check
           ansible-playbook -i inventory/router-01-staging.yml playbooks/router-01-basics.yml --syntax-check
