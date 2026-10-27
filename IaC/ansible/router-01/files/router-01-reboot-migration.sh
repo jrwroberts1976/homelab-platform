@@ -65,6 +65,13 @@ activate() {
 }
 rollback() {
   test ! -e "$STATE/confirmed" || { log 'Confirmed; no rollback'; exit 0; }
+  # If activation never touched the network, preserve the original LAN intact.
+  if test ! -e "$STATE/attempted"; then
+    log 'No activation attempt; original LAN remains intact'
+    systemctl disable --now router-01-reboot-activate.service 2>/dev/null || true
+    systemctl disable --now router-01-reboot-rollback.timer 2>/dev/null || true
+    exit 0
+  fi
   log 'Restoring original LAN after unconfirmed reboot migration'
   systemctl disable --now kea-dhcp4-server.service unbound.service 2>/dev/null || true
   systemctl mask kea-dhcp4-server.service unbound.service 2>/dev/null || true
@@ -89,6 +96,7 @@ rollback() {
   netplan generate && netplan apply || log 'ERROR Netplan apply failed; physical recovery required'
   rm -f "$STATE/activated" "$STATE/attempted"
   systemctl disable --now router-01-reboot-activate.service 2>/dev/null || true
+  systemctl disable --now router-01-reboot-rollback.timer 2>/dev/null || true
   log 'Old DHCP config restored. Reconnect Pi eth0 to HP switch and ONT to ASUS WAN.'
 }
 confirm() {
