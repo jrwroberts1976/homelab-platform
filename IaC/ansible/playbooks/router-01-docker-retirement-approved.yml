@@ -1,0 +1,172 @@
+---
+# DISRUPTIVE DRAFT: DO NOT RUN before explicit approved maintenance.
+# Stops BirdNET and Komodo; disables Docker-specific Trivy; uninstalls four packages.
+# Never changes eth0 IP, NetworkManager, SSH, firewall tables, hostname, Nginx,
+# Alloy/Zabbix, or removes Docker named volumes / user data.
+- name: Controlled Docker retirement on Debian Pi4 with SSH retained
+  hosts: docker-01
+  become: true
+  gather_facts: false
+  serial: 1
+  vars:
+    router_docker_retirement_approved: false
+    router_komodo_deregistration_verified: false
+    router_trivy_monitoring_reconciled: false
+    router_retirement_backup_verified: false
+    router_retirement_console_ready: false
+    router_retirement_expected_network_profile: netplan-eth0
+    router_retirement_expected_management_ip: 192.168.2.220
+    router_retirement_expected_gateway: 192.168.2.1
+  pre_tasks:
+    - name: Refuse any SSH before five independent approvals
+      ansible.builtin.assert:
+        that:
+          - router_docker_retirement_approved | bool
+          - router_komodo_deregistration_verified | bool
+          - router_trivy_monitoring_reconciled | bool
+          - router_retirement_backup_verified | bool
+          - router_retirement_console_ready | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+        fail_msg: >-
+          No host contacted. Approval, Komodo deregistration, reconciled
+          Trivy metrics, backup and direct rescue access are required.
+      delegate_to: localhost
+      become: false
+
+    - name: Collect host facts after permission gate only
+      ansible.builtin.setup:
+
+    - name: Assert current hostname, Debian, SSH IPv4 and ASUS route
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.hostname == 'docker-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - router_retirement_expected_management_ip in ansible_facts.all_ipv4_addresses
+          - (ansible_facts.default_ipv4.gateway | default('')) == router_retirement_expected_gateway
+
+    - name: Verify the exact live NetworkManager connection
+      ansible.builtin.command:
+        argv: [nmcli, -g, GENERAL.CONNECTION, device, show, eth0]
+      register: router_nm_pre
+      changed_when: false
+      failed_when: router_nm_pre.stdout | trim != router_retirement_expected_network_profile
+
+    - name: Require exactly the two expected running containers
+      ansible.builtin.command:
+        argv: [docker, container, ls, --format, "{{ '{{.Names}}' }}"]
+      register: router_current_containers
+      changed_when: false
+
+    - name: Refuse if running container inventory drifted
+      ansible.builtin.assert:
+        that:
+          - >-
+            (router_current_containers.stdout_lines | sort)
+            == (['birdnet-go','komodo-periphery-periphery-1'] | sort)
+        fail_msg: "Unexpected running containers; do not retire Docker."
+
+    - name: Simulate the exact apt removal transaction again
+      ansible.builtin.command:
+        argv: [apt-get, -s, remove, docker.io, docker-compose, containerd, runc]
+      register: router_apt_dryrun
+      changed_when: false
+
+    - name: Refuse any APT removal drift
+      ansible.builtin.assert:
+        that:
+          - >-
+            (router_apt_dryrun.stdout_lines
+            | select('match', '^Remv ')
+            | map('regex_replace', '^Remv ([^ ]+).*', '\\1')
+            | list | sort)
+            == (['docker.io','docker-compose','containerd','runc'] | sort)
+        fail_msg: "Additional removals detected in apt simulation. Abort."
+
+    - name: Verify exact BirdNET and Komodo Compose files still exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop: [/opt/birdnet-go/compose.yml, /etc/komodo/compose.yml]
+      register: router_expected_compose
+
+    - name: Refuse missing Compose files
+      ansible.builtin.assert:
+        that:
+          - router_expected_compose.results | map(attribute='stat.isreg') | list == [true, true]
+
+  tasks:
+    - name: Disable Docker-specific Trivy timer only after operator approval
+      ansible.builtin.systemd_service:
+        name: homelab-trivy-docker.timer
+        enabled: false
+        state: stopped
+
+    - name: Stop each Compose project WITHOUT deleting volumes or bind mounts
+      ansible.builtin.command:
+        argv: [docker, compose, -f, "{{ item }}", down]
+      loop: [/opt/birdnet-go/compose.yml, /etc/komodo/compose.yml]
+      changed_when: true
+
+    - name: Disable and stop Docker socket before daemon
+      ansible.builtin.systemd_service:
+        name: docker.socket
+        enabled: false
+        state: stopped
+
+    - name: Disable and stop Docker daemon
+      ansible.builtin.systemd_service:
+        name: docker.service
+        enabled: false
+        state: stopped
+
+    - name: Disable and stop containerd
+      ansible.builtin.systemd_service:
+        name: containerd.service
+        enabled: false
+        state: stopped
+
+    - name: Remove only the four approved runtime packages, no purge or autoremove
+      ansible.builtin.apt:
+        name: [docker.io, docker-compose, containerd, runc]
+        state: absent
+        purge: false
+        autoremove: false
+
+    - name: Verify eth0 still uses the original NetworkManager profile
+      ansible.builtin.command:
+        argv: [nmcli, -g, GENERAL.CONNECTION, device, show, eth0]
+      register: router_nm_post
+      changed_when: false
+      failed_when: router_nm_post.stdout | trim != router_retirement_expected_network_profile
+
+    - name: Verify 192.168.2.220 remains on eth0
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_ip_post
+      changed_when: false
+      failed_when: router_retirement_expected_management_ip not in router_ip_post.stdout
+
+    - name: Verify ASUS default route remains unchanged
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_route_post
+      changed_when: false
+      failed_when: router_retirement_expected_gateway not in router_route_post.stdout
+
+    - name: Confirm core non-Docker services are alive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [NetworkManager.service, ssh.service, alloy.service, zabbix-agent2.service, nginx.service]
+      register: router_service_post
+      changed_when: false
+      failed_when: router_service_post.stdout | trim != 'active'
+
+    - name: State actual scope; do not mark router ready
+      ansible.builtin.debug:
+        msg:
+          - "Docker and two Compose workloads retired; their data and keys preserved."
+          - "LAN stays 192.168.2.220, ASUS stays the router."
+          - "No PPPoE/DHCP/DNS/firewall/hostname changes."
+          - "Nginx BirdNET site and ICMP/monitoring dependencies still need reconciliation."
+          - "Conversion attestation marker is NOT created by this playbook."
