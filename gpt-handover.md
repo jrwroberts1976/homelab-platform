@@ -1,4 +1,16 @@
 # GPT Handover — Homelab Platform
+## LATEST — 27 October 2026: user rejects reimage; convert docker-01 to router-01 IN PLACE
+
+**User explicitly requires keeping the existing Pi 4 Debian OS, not reimaging**. Plan revised in issue #206 and draft PR #207. Current deployed Pi remains `docker-01` at `192.168.2.220`, operating BirdNET-Go POC, Docker and Komodo Periphery; also Trivy image scan / timers and Docker-specific monitoring/iptables may rely on that host. BirdNET history/recordings are not required (clean install on Pi5 later). Existing ASUS still handles PPPoE/DHCP/AiMesh and must not be disrupted before approved handover.
+
+**NEXT ACTION: read-only audit** using newly added `IaC/ansible/playbooks/router-01-docker-retirement-readonly.yml` with production inventory and `--limit docker-01`. Collects names of Docker containers/images/volumes/networks, installed packages, systemd services/timers, interface addresses/default route and existing eth0 network manager, without changing anything. This MUST precede any Docker purge, container termination, network-manager replacement, host rename or firewall flush. Need review dependencies including Komodo Periphery, Trivy exporters, BirdNET Nginx TLS, monitoring, Docker bridge/NAT/iptables and DNS before an Ansible cleanup plan.
+
+**Router staging safety updated:** future-only `router-01` prestage/package/rollback/PPPoE plays now require a root-only `/etc/router-01-conversion-approved` marker (created only after reviewed service retirement), new hostname `router-01`, Debian13, expected eth0/eth1 MACs, unchanged old `.2.220` SSH IP and Docker daemon inactive. Final router role and timed LAN-IP helper also require reviewed conversion and no active Docker. Earlier '/etc/router-01-reimage-complete' marker is obsolete. **Existing eth0 network manager/ownership is unknown:** timed rollback assumes systemd-networkd managing a specific config and must NOT be exercised until adapted and tested. Change eth0 IP to `192.168.3.1` LAST at separate approved handover. CURRENT-STATE.md and canonical inventory remain deployed docker-01 truth until live verification; do not prematurely rename.
+
+**No live host/network change or Docker removal performed in ChatGPT.** No new PPPoE connection. Previously user's real vaulted PPPoE config test PASS remains valid; off-Git encrypted credentials unchanged.
+
+---
+
 ## 27 October 2026 — REAL encrypted PPPoE inputs successfully rendered on admin-01 (LOCAL ONLY)
 
 User ran from `~/projects/homelab-platform/IaC/ansible` on `admin-01`, on branch `feature/pi-router-iac-birdnet-poc-migration-20261027`:
