@@ -1,4 +1,14 @@
 # GPT Handover — Homelab Platform
+## 27 October 2026 — User approved BirdNET+Komodo downtime; Docker still running
+
+User explicitly answered **YES** to taking both existing Docker workloads offline **during the controlled Docker retirement**. This settles service-outage acceptability and does not need repeating. It does NOT verify separate prerequisites: Komodo Core managed-server deregistration / redeployment disabled, Trivy/Grafana/Prometheus container-metric retirement, backup and direct console proof, or approved runtime cutover. The dangerous Ansible `router-01-docker-retirement-approved.yml` remains DEFAULT DENY; **do not pass false gates to force it**. The live `docker-01` / `192.168.2.220`, ASUS PPPoE/DHCP, SSH, BirdNET and Komodo are still unchanged.
+
+Source details: Komodo registration/runtime role `IaC/ansible/roles/komodo_periphery`, declarative resource `IaC/komodo/resources/docker-01.toml`. `container-vulnerability-docker-enable.yml` would re-enable the daily `homelab-trivy-docker.timer`; `publish-estate-metrics.py` produces node exporter textfile `/var/lib/prometheus/node-exporter/homelab_container_estate.prom`. A disabled scan alone leaves false/stale readings; must retire the specific textfile and reconcile central metric panels/alerts, not fabricate zero issues. Normal host Alloy, node exporter, Zabbix and unrelated container-scanning stay.
+
+Added new **read-only** `IaC/ansible/playbooks/router-01-retirement-config-readonly.yml` for current `docker-01` to inspect safe, non-secret persistent Netplan `eth0` metadata, Nginx site paths/boolean BirdNET backend ownership, presence (no content) of Docker Trivy textfile and Komodo keys volume. Uses production Ansible inventory, no mutations, no raw config/secrets printed. Command documented in `docs/network/ROUTER-01-INPLACE-DOCKER-RETIREMENT-2026-10-27.md`. Need user-run evidence and Komodo core control-plane reconciliation before removal. **Keep the old LAN IP until final PPPoE handover and adapt rollback for NetworkManager.** Draft PR #207 and issue #206 updated.
+
+---
+
 ## 27 October 2026 — in-place Docker retirement PLAYBOOK STAGED in Git, not executed
 
 From user second live read-only audit: NetworkManager 1.52.1 current Ethernet `netplan-eth0` (`ipv4.method auto`, autoconnect yes); `apt-get -s remove docker.io docker-compose containerd runc` would remove exactly those four (RC 0). Existing live `docker-01` at `192.168.2.220` with ASUS gateway `.2.1`, two Compose containers BirdNET-Go and Komodo Periphery, host Nginx, Alloy/Zabbix/SSH/node exporter, Trivy scan timer, legacy ICMP timestamp INPUT mitigation and Docker-managed FORWARD/NAT chains. DO NOT autoremove, flush firewall or overwrite the active Netplan/NM LAN.
