@@ -3,6 +3,28 @@
 
 **27 October 2026. Evidence only / no changes deployed.** Tracks [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206) and [draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207).
 
+## SECOND live read-only audit — COMPLETE (27 October 2026)
+
+User ran `router-01-inplace-dependencies-readonly.yml` on active `docker-01` using production inventory: **8 OK, 0 changed, 0 failed, 0 unreachable**. No packages removed; `apt-get` was simulated.
+
+| Evidence | Verified result | Consequence |
+|---|---|---|
+| NetworkManager | `nmcli 1.52.1`; **eth0 connected** via `netplan-eth0`, UUID `75a1216a-9d1a-30cd-8aca-ace5526ec021` | Retain NetworkManager. No systemd-networkd migration |
+| Active profile | autoconnect `yes`, `ipv4.method auto`, no static address/gateway in profile, `ipv4.never-default no` | Preserve DHCP/ASUS gateway at `192.168.2.220` until last-stage change |
+| Docker apt simulation | `apt-get -s remove docker.io docker-compose containerd runc` returned **RC 0** and exactly 4 removals | In-place Debian OS package removal is feasible; **simulation is not real uninstall/rollback evidence** |
+| Autoremove suggestions | `criu docker-buildx docker-cli libcompel1 libnet1 libprotobuf-c1 python3-protobuf python3-pycriu tini` | **DO NOT RUN APT AUTOREMOVE** as part of first retirement. Evaluate separately |
+| Container monitoring | `homelab-trivy-docker.timer` enabled and scheduled; `alloy`, Alloy heartbeat/health timers, `zabbix-agent2` enabled | Retire Docker-specific scan and exporter safely; preserve Alloy/Zabbix and avoid false-green metrics |
+| Legacy timestamp mitigation | `homelab-docker01-icmp-timestamp.service` enabled | Rework/rename firewall mitigation at a separate reviewed stage, do not blindly flush rules |
+| Nginx | `nginx.service` active; TCP 80/443 listening; BirdNET proxy backend `127.0.0.1:8080` also listening | Audit Nginx site configuration before removing BirdNET; do not remove whole Nginx without checking other dependencies |
+| Other services | `ssh.service`, local `127.0.0.1:12345`, TCP 10050, 9100, RPC 111, 5353 and other sockets | SSH and monitoring must remain reachable; identify unrecognised listeners before teardown |
+| Live firewall | `iptables` filter **INPUT ACCEPT**, **FORWARD DROP**; Docker/DOCKER-USER/ISOLATION chains; nat DOCKER; `nft` tables `ip filter` and `ip nat` | Docker owns current bridge NAT/forwarding chains; **never flush whole nftables/iptables ruleset while containers remain** |
+
+**Network management implications:** `netplan-eth0` strongly indicates Netplan generates/owns the persistent NetworkManager profile; confirm the actual `/etc/netplan/*.yaml` files and renderer using a **read-only, non-secret** inspection before authoring a new `eth0` configuration. Netplan settings are intended to persist and can regenerate NetworkManager profiles; changes to a generated profile may not survive reboot as expected. Refer to the [Debian Netplan documentation](https://wiki.debian.org/Netplan) and [NetworkManager checkpoint manual](https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html). A checkpoint with a timeout is a useful *candidate* for an approved, console-supervised network change but **has not been tested here**. Keep the original `192.168.2.220` and ASUS route unchanged.
+
+**Docker removal dependencies now confirmed:** BirdNET Compose at `/opt/birdnet-go/compose.yml`, Komodo Periphery Compose at `/etc/komodo/compose.yml`, Komodo volume containing agent keys, Trivy scheduled container scan, Alloy/Prometheus exporters, Zabbix, Nginx reverse proxy and the host ICMP timestamp mitigation. We need a source-controlled retirement plan for each before a single service is stopped. Docker `containerd` and `runc` are removable based on the simulated apt transaction, but keep `iptables` and `nftables` for router functions.
+
+**Current status: evidence complete for phase-two audit; still NO LIVE CHANGE AUTHORIZED.**
+
 ## Latest binding decisions
 
 - **Keep existing Debian 13 OS and SSH**, no reimage. Preserve Pi4 `eth0 = 192.168.2.220/24` and ASUS `192.168.2.1` gateway until last approved network cutover. Pi4 USB `eth1` is future raw untagged PPPoE WAN.
@@ -33,11 +55,11 @@ Command: `router-01-docker-retirement-readonly.yml --limit docker-01 --ask-becom
 1. **Docker removal takes down two actual services**, not just BirdNET. Plan Komodo host deregistration / control-plane inventory adjustment and ensure old jobs do not re-create Periphery.
 2. **Container security monitoring becomes invalid if left enabled.** Stop/disable old `homelab-trivy-docker.timer` and dependent exporter/scrape entries under IaC during approved retirement. Alert thresholds and dashboards should show deliberately retired/not-applicable, never a fabricated zero findings or silent `scan_complete=1`.
 3. Review BirdNET HTTPS reverse-proxy dependencies, host Alloy/Zabbix/Trivy service setup and the existing Docker-01 ICMP timestamp mitigation. Retain SSH and required firewall rules; do not blindly flush iptables/nftables.
-4. **NetworkManager is active but current eth0 connection ownership/profile is not yet proven** by this audit; `networkctl` returned no active networkd information. Obtain the active NM profile and harmless IP properties before authoring live cutover automation.
+4. **The second audit confirmed eth0 is attached to NetworkManager's `netplan-eth0` DHCP profile**, but the persistence source under `/etc/netplan` still needs a read-only inspection. Do not treat the live NM profile as a replacement for Netplan's persistent configuration.
 5. **Existing rollback script MUST NOT run on this host.** It expects `systemd-networkd` and `/etc/systemd/network/10-router-lan.network`, neither established. Redesign final `eth0` cutover around the observed NetworkManager profile, with a local rescue console. Upstream NetworkManager supports a `nmcli device checkpoint --timeout ...` transaction that can automatically restore a device if unconfirmed (reference: https://networkmanager.pages.freedesktop.org/NetworkManager/NetworkManager/nmcli.html). Test behaviour in isolation and on the installed version before trusting it.
 6. **Avoid altering `eth0` while setting up the router**. Stage PPPoE profiles and disabled Kea/Unbound/firewall via IaC while old SSH remains available; final `.3.1` IP switch requires separate explicit handover.
 
-## NEXT safe evidence collection
+## Previously completed second evidence collection
 
 Use `IaC/ansible/playbooks/router-01-inplace-dependencies-readonly.yml` via the PRODUCTION inventory on current `docker-01`. It collects:
 - `NetworkManager` version and **only** eth0 active profile ID, UUID and safe IPv4 properties (never `--show-secrets`);
