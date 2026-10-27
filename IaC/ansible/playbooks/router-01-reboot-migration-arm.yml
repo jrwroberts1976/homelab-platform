@@ -1,0 +1,118 @@
+---
+# DANGEROUS: Only run immediately before the approved physical cable swap.
+# Arms BOTH boot activation and independent boot rollback; does NOT reboot.
+- name: Arm headless Pi router first-boot cutover with independent rollback
+  hosts: docker-01
+  become: true
+  gather_facts: false
+  vars:
+    router_reboot_arm_approved: false
+  pre_tasks:
+    - name: Require explicit arming approval and correct inventory
+      ansible.builtin.assert:
+        that:
+          - router_reboot_arm_approved | bool
+          - inventory_hostname == 'docker-01'
+          - ansible_host == '192.168.2.220'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify current old management address
+      ansible.builtin.command: ip -4 -o addr show dev eth0
+      changed_when: false
+      register: current_address
+      failed_when: "'192.168.2.220/24' not in current_address.stdout"
+
+    - name: Verify interface identity
+      ansible.builtin.command: "cat /sys/class/net/{{ item.name }}/address"
+      register: interface_mac
+      changed_when: false
+      failed_when: interface_mac.stdout | trim != item.mac
+      loop:
+        - { name: eth0, mac: 'd8:3a:dd:5a:51:44' }
+        - { name: eth1, mac: '00:24:9b:63:b3:8a' }
+
+    - name: Require original backups and staged router files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: file_state
+      failed_when: not (file_state.stat.isreg | default(false))
+      loop:
+        - /var/lib/router-01-reboot-migration/backup/old-eth0.yaml
+        - /var/lib/router-01-reboot-migration/backup/old-nftables.conf
+        - /var/lib/router-01-reboot-migration/boot/99-router-01-lan.yaml
+        - /var/lib/router-01-reboot-migration/boot/nftables.conf
+        - /usr/local/sbin/router-01-reboot-migration
+
+    - name: Verify no earlier cutover state marker exists
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      register: prior_state
+      loop:
+        - /var/lib/router-01-reboot-migration/state/attempted
+        - /var/lib/router-01-reboot-migration/state/activated
+        - /var/lib/router-01-reboot-migration/state/confirmed
+
+    - name: Refuse previous or partial activation
+      ansible.builtin.assert:
+        that:
+          - not (item.stat.exists | default(false))
+      loop: "{{ prior_state.results }}"
+
+    - name: Require inactive legacy timers
+      ansible.builtin.command: "systemctl is-active {{ item }}"
+      register: legacy_timer
+      changed_when: false
+      failed_when: legacy_timer.stdout | trim == 'active'
+      loop:
+        - router-lan-switch.timer
+        - router-lan-rollback.timer
+
+    - name: Require DHCP and DNS still masked
+      ansible.builtin.command: "systemctl is-enabled {{ item }}"
+      register: masked_service
+      changed_when: false
+      failed_when: masked_service.stdout | trim != 'masked'
+      loop:
+        - kea-dhcp4-server.service
+        - unbound.service
+  tasks:
+    - name: Verify installed recovery shell syntax
+      ansible.builtin.command: bash -n /usr/local/sbin/router-01-reboot-migration
+      changed_when: false
+
+    - name: Verify installed systemd unit syntax
+      ansible.builtin.command:
+        argv:
+          - systemd-analyze
+          - verify
+          - /etc/systemd/system/router-01-reboot-activate.service
+          - /etc/systemd/system/router-01-reboot-rollback.service
+          - /etc/systemd/system/router-01-reboot-rollback.timer
+      changed_when: false
+
+    - name: Enable independent rollback timer for NEXT boot (do not start)
+      ansible.builtin.systemd_service:
+        name: router-01-reboot-rollback.timer
+        enabled: true
+        state: stopped
+
+    - name: Enable guarded activation on NEXT boot (do not start)
+      ansible.builtin.systemd_service:
+        name: router-01-reboot-activate.service
+        enabled: true
+        state: stopped
+
+    - name: Confirm old management network remains untouched
+      ansible.builtin.command: ip -4 -o addr show dev eth0
+      register: final_address
+      changed_when: false
+      failed_when: "'192.168.2.220/24' not in final_address.stdout"
+
+    - name: Report armed state and manual hold point
+      ansible.builtin.debug:
+        msg:
+          - "ARMED for next boot only; old management IP is still active."
+          - "Rollback independently due 15 minutes after first boot."
+          - "Do NOT reboot until physical cable plan and return route are approved."
+          - "ON FAILURE restore ONT->ASUS WAN and Pi eth0->HP switch."
