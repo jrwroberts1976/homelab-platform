@@ -1,0 +1,11 @@
+# Applied ONLY by the detached router cutover script after eth0 is isolated.
+# Original 90-NM-*.yaml DHCP profile is left intact for rollback.
+network:
+  version: 2
+  ethernets:
+    eth0:
+      renderer: NetworkManager
+      dhcp4: false
+      dhcp6: false
+      addresses:
+        - 192.168.3.1/24
