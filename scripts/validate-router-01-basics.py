@@ -28,6 +28,9 @@ def maybe_check_syntax(executable: str, arguments: list[str]) -> None:
 
     if shutil.which(executable):
         command = [executable, *arguments]
+        # nft -c may still require CAP_NET_ADMIN to query rule metadata.
+        if executable == "nft" and os.environ.get("GITHUB_ACTIONS") == "true":
+            command = ["sudo", "-n", *command]
         subprocess.run(command, check=True, timeout=20)
         print("PASS: " + " ".join(command))
     else:
