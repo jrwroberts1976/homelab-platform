@@ -1,0 +1,141 @@
+---
+# Stage C2b1 diagnostic. Absolutely no filesystem, account, key or SSH changes.
+# Isolate WHY runuser/ssh-keygen -y failed. Never output either key's contents.
+- name: Diagnose the restricted SSH identity key access without modifications
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+  vars:
+    router_c2_key_access_audit_approved: false
+    router_c2_tunnel_user: router-metrics-tunnel
+    router_c2_private_key: /etc/homelab/router-metrics-ssh/id_ed25519
+    router_c2_public_key: /etc/homelab/router-metrics-ssh/id_ed25519.pub
+
+  pre_tasks:
+    - name: Check controller identity
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: router_c2_key_access_controller
+
+    - name: Require deliberate audit opt-in and exact monitoring host
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_access_audit_approved | bool
+          - router_c2_key_access_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Check actual monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      check_mode: false
+      register: router_c2_key_access_hostname
+
+    - name: Check actual monitoring IPv4 addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      changed_when: false
+      check_mode: false
+      register: router_c2_key_access_addresses
+
+    - name: Refuse unintended monitoring host
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_access_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_key_access_addresses.stdout"
+
+  tasks:
+    - name: Inspect each SSH key path component without reading private key
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /etc
+        - /etc/homelab
+        - /etc/homelab/router-metrics-ssh
+        - "{{ router_c2_private_key }}"
+        - "{{ router_c2_public_key }}"
+      register: router_c2_key_access_path_stats
+
+    - name: Require key files exist and are not symlinks
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_access_path_stats.results[3].stat.isreg | default(false)
+          - router_c2_key_access_path_stats.results[4].stat.isreg | default(false)
+          - not router_c2_key_access_path_stats.results[3].stat.islnk | default(false)
+          - not router_c2_key_access_path_stats.results[4].stat.islnk | default(false)
+          - router_c2_key_access_path_stats.results[3].stat.mode == '0600'
+
+    - name: Confirm service identity can execute under runuser (no shell)
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_tunnel_user }}", --, id, -un]
+      register: router_c2_runuser_identity
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Probe private-key read access as service identity (no content output)
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_tunnel_user }}", --, test, -r, "{{ router_c2_private_key }}"]
+      register: router_c2_key_readable_by_user
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Probe private-key file lookup as service identity (no content output)
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_tunnel_user }}", --, test, -f, "{{ router_c2_private_key }}"]
+      register: router_c2_key_visible_to_user
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Derive public key as root without printing the result
+      ansible.builtin.command:
+        argv: [ssh-keygen, -y, -P, "", -f, "{{ router_c2_private_key }}"]
+      register: router_c2_root_derivation
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Derive public key as dedicated identity without printing the result
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_tunnel_user }}", --, ssh-keygen, -y, -P, "", -f, "{{ router_c2_private_key }}"]
+      register: router_c2_user_derivation
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Read stored PUBLIC key within Ansible only
+      ansible.builtin.slurp:
+        src: "{{ router_c2_public_key }}"
+      register: router_c2_key_access_public
+      no_log: true
+
+    - name: Classify key access failure without exposing private or derived public key bytes
+      ansible.builtin.debug:
+        msg:
+          key_directory_metadata: "{{ router_c2_key_access_path_stats.results[:3] | map(attribute='item') | list }}"
+          path_mode_and_owner:
+            /etc: "{{ router_c2_key_access_path_stats.results[0].stat.mode ~ ' ' ~ router_c2_key_access_path_stats.results[0].stat.pw_name }}"
+            /etc/homelab: "{{ router_c2_key_access_path_stats.results[1].stat.mode ~ ' ' ~ router_c2_key_access_path_stats.results[1].stat.pw_name }}"
+            /etc/homelab/router-metrics-ssh: "{{ router_c2_key_access_path_stats.results[2].stat.mode ~ ' ' ~ router_c2_key_access_path_stats.results[2].stat.pw_name }}"
+            private_key: "{{ router_c2_key_access_path_stats.results[3].stat.mode ~ ' ' ~ router_c2_key_access_path_stats.results[3].stat.pw_name }}"
+          runuser_identity_worked: "{{ router_c2_runuser_identity.rc == 0 and router_c2_runuser_identity.stdout | trim == router_c2_tunnel_user }}"
+          service_user_can_see_private_key_path: "{{ router_c2_key_visible_to_user.rc == 0 }}"
+          service_user_can_read_private_key: "{{ router_c2_key_readable_by_user.rc == 0 }}"
+          root_can_parse_private_key: "{{ router_c2_root_derivation.rc == 0 }}"
+          service_user_can_parse_private_key: "{{ router_c2_user_derivation.rc == 0 }}"
+          root_derived_public_matches_stored: "{{ (router_c2_root_derivation.stdout.split()[:2] == (router_c2_key_access_public.content | b64decode).split()[:2]) if router_c2_root_derivation.rc == 0 else false }}"
+          user_derived_public_matches_stored: "{{ (router_c2_user_derivation.stdout.split()[:2] == (router_c2_key_access_public.content | b64decode).split()[:2]) if router_c2_user_derivation.rc == 0 else false }}"
+          root_failure_category: "{{ 'none' if router_c2_root_derivation.rc == 0 else ('permission-denied' if 'permission denied' in (router_c2_root_derivation.stderr | lower) else ('invalid-format-or-crypto' if 'invalid format' in (router_c2_root_derivation.stderr | lower) or 'libcrypto' in (router_c2_root_derivation.stderr | lower) else ('passphrase' if 'passphrase' in (router_c2_root_derivation.stderr | lower) else 'other'))) }}"
+          service_failure_category: "{{ 'none' if router_c2_user_derivation.rc == 0 else ('permission-denied' if 'permission denied' in (router_c2_user_derivation.stderr | lower) else ('invalid-format-or-crypto' if 'invalid format' in (router_c2_user_derivation.stderr | lower) or 'libcrypto' in (router_c2_user_derivation.stderr | lower) else ('passphrase' if 'passphrase' in (router_c2_user_derivation.stderr | lower) else 'other'))) }}"
+          changes: "READ-ONLY: no accounts, keys, trust, SSH tunnel, services, router, Docker or Prometheus changed"
