@@ -403,3 +403,32 @@ Preferred design for review, **not approved/deployed**:
 6. Verify no TCP9100 on Pi LAN/ppp0 before and after, internet browsing behind ASUS, static monitoring host identity, router services/PPPoE/NAT/MSS intact, and SSH tunnel reconnection and system startup behavior. C2 remains **NOT INSTALLED** until separate branch-reviewed implementation and normal deployment approval.
 
 Do not expose the Pi host's live SSH public-key contents or any generated private key in user-facing notes or repository commits. The SHA256 public fingerprint alone is suitable as a documented security pin.
+
+### C2a implementation candidate: independently pinned host trust ONLY (NOT RUN)
+
+Staged source-only `IaC/ansible/playbooks/router-01-ssh-host-pin.yml` on draft PR #210. Before any trust write, the playbook:
+- Requires explicit `router_c2_host_pin_approved=true`, `admin-01` controller, exact Pi `192.168.3.1` + hardware MAC and monitor `192.168.2.52` + hostname guards.
+- Reads the **physical Pi's own** `/etc/ssh/ssh_host_ed25519_key.pub` using the existing authenticated Ansible link; validates exact `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` fingerprint against independently observed evidence, refusing mismatch.
+- Refuses to overwrite any existing differing dedicated pin. Planned target **on monitor only**: `/etc/homelab/router-metrics-ssh/known_hosts`, line `192.168.3.1 ssh-ed25519 <actual Pi public key>`. Root-owned directory `0755` and root-owned pin file `0644` allow future unprivileged SSH client to read the **public** key but not edit it. Does **not** modify `/home/james/.ssh/known_hosts`.
+- In check mode predicts creation of the directory but does not try to copy into a nonexistent directory; the actual host-key verification is gated to normal mode. This means check mode **does not claim** to have established trust. On real execution `ssh-keygen -lf <dedicated known_hosts>` must exactly match the pinned SHA256.
+- Does not generate any monitoring **private** key, create Pi user/authorized_keys, touch Pi sshd settings, launch SSH, open firewall ports, or change Prometheus/Docker. Stage C2a alone will **not** make remote login or metrics scraping work.
+
+**No live or check-mode execution yet. First run only this source check and preview:**
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-host-pin.yml \
+  --limit router-01,monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-host-pin.yml \
+  --limit router-01,monitor-01 --ask-become-pass --check --diff \
+  -e router_c2_host_pin_approved=true
+```
+
+If the preview passes without discrepancy, approve a **separate normal-mode** invocation to write *only the dedicated monitor host public-key pin*. Provisioning a dedicated limited-privilege SSH key pair and Pi account is **another distinct review/deploy gate**. No broad SSH daemon configuration change, no changes to existing `james` credentials and no ISP port exposure should occur.
