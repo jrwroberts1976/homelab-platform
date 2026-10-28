@@ -1,5 +1,14 @@
 # GPT Handover — Homelab Platform
 
+## LATEST — 28 October 2026: live Pi 192.168.2.1 MSS audit PASS after PR #212 merge
+
+Operator on `admin-01` confirmed fast-forward of `main` to `6c573fee`, Ansible syntax PASS, then ran `router-01-mss-postcutover-readonly.yml` with isolated new Pi inventory, `--check`, become password and `-e router_mss_postcutover_audit_approved=true`. **PLAY RECAP router-01 ok=16 changed=0 unreachable=0 failed=0 skipped=0**. All exact controller/MAC/eth0 `192.168.2.1/24`/PPPoE default-route and MTU 1492/IPv4 forwarding checks passed. `nftables`, `router-pppoe`, `dnsmasq`, `unbound` active before and after. Live default-drop filter and NAT masquerade check PASS; **two bidirectional TCP MSS set 1452** rules in `table ip router_pppoe_mss` present. Persistent `/etc/nftables.conf` had one managed MSS block and syntax `nft -c -f` **PASS**; obsolete `pppoe_mss_test` table **absent**. Both `live_nat_mentions_new_lan_subnet` and `disk_nat_mentions_new_lan_subnet` **true** for `192.168.2.0/24`. This proves subnet text presence, not complete NAT predicate equivalence or traffic/capacity tests. **No live router modifications** by audit.
+
+**Git integration decision:** Preserve verified results in a small documentation-only branch and merge after estate/docs CI. Existing PR #208 writer/inventory is **still pinned to historical .3.1/.3.0/24**, so avoid merging or rerunning it on current gateway; the persistent fix is already active and needs no blind restage. PR #207 contains historical Kea/firewall migration and remains held; PR #210 SSH activation remains held. DHCP .100–.199/static .195 collision possibility, estate.json drift, and ASUS management address still outstanding.
+
+**Local worktree note:** user showed untracked `IaC/ansible/FETCH_HEAD`, `IaC/ansible/localhost]`, and `IaC/ansible/{` before switching feature branch to `main`. These are not evidence of network change. Do not auto-delete or `git clean -fd` them; inspect safely before cleanup.
+
+
 ## 28 October 2026 — MSS PR #208 split: safe post-cutover verification staged
 
 The operator approved continuing GitHub merges after safe read-only baseline PR #211 was squash-merged (main `851a915f94f57e325faec7cc18b52cea3d7d5af8`). Audit of historical draft PR #208 confirms the original 28 Oct live reboot **did** load `table ip router_pppoe_mss` with bidirectional 1452-byte SYN clamp and matched packets; the *writer* playbook and isolated inventory still assert `eth0 192.168.3.1/24`, `192.168.3.0/24` NAT. Later verified DHCP/primary LAN cutover moved Pi to `192.168.2.1/24`; no postcutover live nftables NAT-file comparison was supplied. Do **not** merge PR #208 or blindly replace the firewall from draft #207.
