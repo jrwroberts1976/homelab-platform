@@ -536,3 +536,27 @@ ansible-playbook \
 ```
 
 **Do not claim C2b1 installed until normal-mode recap shows success and generated ED25519 public fingerprint passes.** If live mode fails after creating an account/group or key, pause to inspect the partial state rather than blindly rerunning with credentials changed. Then separately scope C2b2 Pi-side restricted authorized-key account, SSH host trust use, source restrictions and a Docker-aware tunnel.
+
+### 28 October ~17:10 — C2b1 normal-mode Ansible returns OK with ZERO changes; reconcile existing identity
+
+User executed the previously approved `monitor-01-router-metrics-key-provision.yml` **WITHOUT** `--check` on live `monitor-01` with explicit `router_c2_key_provision_approved=true`. Actual recap **`monitor-01 ok=31 changed=0 unreachable=0 failed=0 skipped=0`**. All group, account, ED25519 key generation, key mode/ownership, key public-key fingerprint, Pi pinned host-key trust, Prometheus HTTP200 and no TCP19100 listener tasks returned **OK**, none reported CHANGED. Debug claimed `LIVE: isolated local SSH client identity and key provisioned`, but critically **zero CHANGED means this particular invocation did not actually create or modify the group/user/key files**. The earlier dry-run `--check --diff` predicted a missing group and skipped all account and key creation. Therefore the identity/key state must have appeared between executions, or changed in a separate unreported invocation. Do **not** infer who/what created the credentials, or assume that the private/public files pair and account locking have been independently verified merely from their existence and the key-type fingerprint check. Do not alter Pi SSH trust or authorised keys until reconciling this state.
+
+**C2b1 runtime state is present and original playbook completed successfully; credential *provenance is unknown***. Subsequent source-only `IaC/ansible/playbooks/monitor-01-router-metrics-key-postflight-readonly.yml` now staged on draft PR #210. It **does not mutate any host**. It guards exact controller and monitoring identity, verifies dedicated system user/group, locked password, nologin shell, user home, root-owned trust directory and pinned Pi ED25519 fingerprint, private mode `0600` owned by service identity, public mode `0644`, validates the *actual private key is readable by the service identity* using `runuser -u router-metrics-tunnel -- ssh-keygen -y -f ...`, compares its derived public key against the stored `.pub` without printing key material, and reads file modification timestamps to help determine when those key files appeared. It also rechecks Prometheus readiness and no TCP19100 listener. Only the public-key SHA256 fingerprint and redacted status are emitted; no private-key material goes into GitHub, Ansible output or the controller.
+
+**Next command, read-only syntax and --check ONLY:**
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-postflight-readonly.yml \
+  --limit monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-postflight-readonly.yml \
+  --limit monitor-01 --ask-become-pass --check \
+  -e router_c2_key_postflight_approved=true
+```
+
+This **only audits monitor-01**, not Pi; no trust, key, account or tunnel changes. If passes, treat account/key as existing and secure and proceed to **separately reviewed C2b2 Pi service account and restricted key authorisation**. No remote metrics scrape has yet been configured; Pi exporter still localhost-only. Do not print the actual private SSH key.
