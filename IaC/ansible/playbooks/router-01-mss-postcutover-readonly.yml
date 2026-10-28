@@ -1,0 +1,154 @@
+---
+# Read-only verification of the ALREADY DEPLOYED PPPoE MSS clamp after the
+# primary Pi LAN switched from 192.168.3.1 to 192.168.2.1 on 28 Oct 2026.
+# No blockinfile, nft reload, restart, chmod, networking, DNS or DHCP edits.
+# Must NOT use the pre-cutover 192.168.3.1 MSS persistence inventory.
+- name: Verify post-cutover PPPoE MSS and firewall persistence without edits
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_mss_postcutover_audit_approved: false
+
+  pre_tasks:
+    - name: Read exact management-controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_mss_audit_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse other controller, inventory, address or normal execution
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+          - router_mss_postcutover_audit_approved | bool
+          - router_mss_audit_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Read-only MSS audit requires admin-01, exact Pi .2.1, --check and explicit approval."
+      delegate_to: localhost
+      become: false
+
+    - name: Read physical Pi onboard MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_mss_audit_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Read current Pi LAN address and PPPoE MTU
+      ansible.builtin.command:
+        argv: "{{ item }}"
+      loop:
+        - [ip, -4, -o, addr, show, dev, eth0]
+        - [cat, /sys/class/net/ppp0/mtu]
+        - [ip, -4, route, show, default]
+        - [sysctl, -n, net.ipv4.ip_forward]
+      register: router_mss_audit_link
+      check_mode: false
+      changed_when: false
+
+    - name: Require exact Pi hardware, active new LAN, PPPoE and forwarding
+      ansible.builtin.assert:
+        that:
+          - router_mss_audit_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in router_mss_audit_link.results[0].stdout"
+          - router_mss_audit_link.results[1].stdout | trim == '1492'
+          - "'ppp0' in router_mss_audit_link.results[2].stdout"
+          - router_mss_audit_link.results[3].stdout | trim == '1'
+        fail_msg: "The Pi identity, primary LAN or PPPoE forwarding differs; do not claim MSS verification."
+
+  tasks:
+    - name: Read four essential router systemd service states
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: router_mss_audit_services
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Require gateway services still active
+      ansible.builtin.assert:
+        that:
+          - (router_mss_audit_services.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Read live kernel's existing filter, NAT and persistent MSS tables
+      ansible.builtin.command:
+        argv: [nft, -a, list, table, "{{ item.family }}", "{{ item.table }}"]
+      loop:
+        - {family: inet, table: filter_router}
+        - {family: ip, table: nat_router}
+        - {family: ip, table: router_pppoe_mss}
+      register: router_mss_audit_tables
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm default-drop filter, active masquerade and both 1452 MSS rules
+      ansible.builtin.assert:
+        that:
+          - "'policy drop' in router_mss_audit_tables.results[0].stdout"
+          - "'masquerade' in router_mss_audit_tables.results[1].stdout"
+          - "(router_mss_audit_tables.results[2].stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2"
+          - "'iifname \"eth0\" oifname \"ppp0\"' in router_mss_audit_tables.results[2].stdout"
+          - "'iifname \"ppp0\" oifname \"eth0\"' in router_mss_audit_tables.results[2].stdout"
+        fail_msg: "Current live firewall/MSS differs from documented post-reboot state."
+
+    - name: Check presence of obsolete temporary MSS table without failing if absent
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, pppoe_mss_test]
+      register: router_mss_audit_temporary
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Validate existing nftables startup file without loading it
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, -c, -f, /etc/nftables.conf]
+      check_mode: false
+      changed_when: false
+
+    - name: Read the existing on-disk startup file
+      ansible.builtin.slurp:
+        src: /etc/nftables.conf
+      register: router_mss_audit_file
+
+    - name: Confirm persistent on-disk MSS table exists exactly once
+      ansible.builtin.assert:
+        that:
+          - "(router_mss_audit_file.content | b64decode).count('table ip router_pppoe_mss') == 1"
+          - "(router_mss_audit_file.content | b64decode).count('# BEGIN ANSIBLE MANAGED: Router-01 PPPoE MSS') == 1"
+          - "(router_mss_audit_file.content | b64decode).count('# END ANSIBLE MANAGED: Router-01 PPPoE MSS') == 1"
+          - "((router_mss_audit_file.content | b64decode) | regex_findall('tcp option maxseg size set 1452') | length) == 2"
+          - "'flush ruleset' in (router_mss_audit_file.content | b64decode)"
+        fail_msg: "Startup file does not match verified 1452-byte persistent MSS block."
+
+    - name: Report state and explicitly flag incomplete new-LAN NAT reconciliation
+      ansible.builtin.debug:
+        msg:
+          safety: "READ-ONLY --check; zero intended configuration changes"
+          lan: "eth0 192.168.2.1/24, physical Pi verified"
+          ppp0_mtu: 1492
+          nftables_file_syntax: "PASS"
+          live_persistent_mss: "Two 1452-byte IPv4 SYN clamp rules verified"
+          temporary_pppoe_mss_test_present: "{{ router_mss_audit_temporary.rc == 0 }}"
+          live_nat_mentions_new_lan_subnet: "{{ '192.168.2.0/24' in router_mss_audit_tables.results[1].stdout }}"
+          disk_nat_mentions_new_lan_subnet: "{{ '192.168.2.0/24' in (router_mss_audit_file.content | b64decode) }}"
+          next_step: "If either LAN NAT subnet check is false, inspect and reconcile separately; DO NOT reload nftables."
+
+  post_tasks:
+    - name: Recheck critical router services remained active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: router_mss_audit_services_after
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm gateway unaffected by observation
+      ansible.builtin.assert:
+        that:
+          - (router_mss_audit_services_after.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
