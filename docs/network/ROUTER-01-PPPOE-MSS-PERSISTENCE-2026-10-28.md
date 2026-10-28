@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 PPPoE TCP MSS persistence — 28 October 2026
 
-**Status:** persistent MSS rules **confirmed present on Pi disk with valid nftables syntax**; temporary live workaround active. No reboot/reload has occurred in supplied evidence, so post-reboot persistence remains **unverified**. Original backup filename now verified; Ansible deployment recap not yet supplied. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
+**Status (28 October, after reboot):** persistent MSS rules **verified loaded automatically and actively matching packets after reboot**. PPPoE, nftables, dnsmasq and Unbound are active; IPv4 forwarding, default route and original filter/NAT rules confirmed. Client-side browser validation and original Ansible deployment recap remain unreported. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
 
 ## Observed problem and evidence
 
@@ -89,4 +89,25 @@ User ran `sudo diff -u '/etc/nftables.conf.2112.2026-10-28@13:09:59~' /etc/nftab
 - Current file: `/etc/nftables.conf`, 1305 bytes; timestamp 28 October 2026 13:09.
 - Original automatic Ansible backup: `/etc/nftables.conf.2112.2026-10-28@13:09:59~`, 765 bytes, original timestamp 27 October 2026 18:22.
 - Disk `nft -c -f` validation already passed and temporary live MSS table remains active. The original deployment `PLAY RECAP` has not been provided.
-- The disk configuration is **ready for controlled boot validation**, but no reboot is authorised or reported. Before planning the reboot, read-only check `is-enabled` and `is-active` for `nftables`, `router-pppoe`, `kea-dhcp4-server` and `unbound`, IPv4 forwarding and any outstanding router rollback timer. Have physical recovery available. Do not reload/restart nftables as a test.
+- The disk configuration is **ready for controlled boot validation**, but no reboot is authorised or reported. Prior to the completed reboot, read-only checks covered `nftables`, `router-pppoe`, `dnsmasq` and `unbound`, IPv4 forwarding and router rollback timers. Have physical recovery available. Do not reload/restart nftables as a test.
+
+## 28 October — Successful reboot and persistent MSS runtime verification
+
+The operator rebooted the live Raspberry Pi; subsequent `uptime` showed a fresh boot and SSH reconnected. Direct read-only checks **after reboot** confirmed:
+
+| Test | Result |
+| --- | --- |
+| `nft -a list table ip router_pppoe_mss` | Table auto-loaded, mangle forward chain, both 1452-byte SYN MSS rules |
+| MSS LAN→WAN | 288 matched packets / 15,950 bytes |
+| MSS WAN→LAN | 22 matched packets / 1,108 bytes |
+| `systemctl is-active nftables router-pppoe dnsmasq unbound` | All four **active** |
+| `ip -4 route show default` | `default dev ppp0 scope link` |
+| `sysctl net.ipv4.ip_forward` | `net.ipv4.ip_forward = 1` |
+| `nft list table inet filter_router` | Input and forward DROP policies intact; expected LAN, established traffic rules present |
+| `nft list table ip nat_router` | Masquerade on `ppp0` for `192.168.3.0/24` intact |
+
+**DHCP clarification:** The user explicitly confirmed that **dnsmasq, not Kea**, provides Pi DHCP. Before reboot, `systemctl list-unit-files` showed `dnsmasq.service enabled` and `ss -lunp` showed `dnsmasq` listening on UDP/67. `net.ipv4.ip_forward=1` is persisted via `/etc/sysctl.d/90-router-forward.conf`. After reboot, dnsmasq is confirmed active; no evidence supports a Kea dependency. The Pi LAN `192.168.3.1/24` and ASUS downstream LAN `192.168.1.0/24` are separate networks following the ASUS reset.
+
+**Outcome:** The previously temporary MSS workaround **is now proven persistent and active after reboot**. The pre-reboot original backup remains at `/etc/nftables.conf.2112.2026-10-28@13:09:59~`. The absence of `pppoe_mss_test` was not separately tested; do not claim it from this excerpt. Actual client web browsing after reboot (particularly BBC) has been requested but has not been reported, so **end-to-end client validation remains open**.
+
+**IaC follow-up:** The original staging playbook required `pppoe_mss_test` to exist, which would fail idempotent reruns after reboot. Draft PR #208 now accepts either the verified temporary pre-reboot table or the persistent post-reboot table. This is **source-only remediation** until Ansible syntax/check is rerun against the updated commit; it performs no live nftables changes.
