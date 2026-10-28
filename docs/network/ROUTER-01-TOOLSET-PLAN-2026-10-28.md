@@ -140,3 +140,23 @@ In the real run, all five concrete package verification items individually repor
 ### Next stage — monitoring connectivity design, READ-ONLY
 
 `router-01` (`192.168.3.1/24`) could not reach Loki HTTP `192.168.2.52:3100` nor Zabbix TCP `192.168.2.59:10051` in corrected prior audit. Both central services live in ASUS downstream `192.168.2.0/24` (router-mode + NAT), so an upstream Pi is not necessarily able to initiate traffic into that LAN. **Do not infer backend outage without testing from inside the ASUS LAN.** From `admin-01` on `192.168.2.0/24` test reachability to Loki and Zabbix and inspect local route; from Pi read route to downstream addresses without changing it. Choose push vs pull with least privilege: Prometheus and passive Zabbix may be accessed *from* downstream monitoring server *to* Pi `192.168.3.1` if Pi's input firewall and ASUS NAT permit, whereas Alloy pushing logs and active Zabbix to downstream services will need a separate, explicitly approved connectivity solution. **No port-forward/firewall changes or AP-mode cutover as part of this test.** Verify IP/host resolution and service state before agent install. Track in issue #209.
+
+### Read-only two-vantage monitoring path probe (staged, NOT YET RUN)
+
+New source-only `IaC/ansible/playbooks/router-01-monitoring-path-readonly.yml` compares `admin-01` (inside ASUS downstream `.2.x`) and router Pi (upstream `.3.1`), from the same Ansible invocation. It reads each origin's route to Loki/Zabbix, tests HTTP 200 for `192.168.2.52:3100/ready` and TCP connect to `192.168.2.59:10051`. Uses `check_mode:false` on read-only network requests to ensure these run in `--check`. Guards operator opt-in, controller hostname `admin-01`, router target `192.168.3.1` and actual Pi onboard MAC `d8:3a:dd:5a:51:44`. No host configuration, APT, service, firewall or routing changes.
+
+Run from `admin-01` existing detached worktree (after safe `fetch` and fast-forward):
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-monitoring-path-readonly.yml --syntax-check
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-monitoring-path-readonly.yml --check \
+  -e router_monitoring_path_audit_approved=true
+```
+
+**No monitoring agent packages have yet been installed; this playbook has not been executed on the controller and syntax is not yet tested there.** Interpret results: if admin-01 reaches the services but the router cannot, focus on directionality/routing through the ASUS (NAT) rather than asserting monitoring outage; if both fail, check the server/endpoint state from inside the ASUS LAN before any router-side changes. Any later changes to export traffic or access controls require separate reviewed IaC and narrow allowances; never WAN-expose Zabbix/Prometheus/Alloy.
