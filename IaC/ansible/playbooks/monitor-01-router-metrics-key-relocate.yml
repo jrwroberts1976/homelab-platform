@@ -169,16 +169,19 @@
         - "{{ router_c2_new_host_pin }}"
       register: router_c2_move_dest
 
-    - name: Refuse existing nonregular, linked or wrong-owner destinations
+    - name: Refuse unexpected existing destination files without assuming absent stat fields
       ansible.builtin.assert:
         that:
-          - (router_c2_move_dest.results | selectattr('stat.islnk', 'equalto', true) | list | length) == 0
-          - (router_c2_move_dest.results | selectattr('stat.exists', 'equalto', true) | rejectattr('stat.isreg', 'equalto', true) | list | length) == 0
-          - (router_c2_move_dest.results | selectattr('stat.exists', 'equalto', true) | rejectattr('stat.pw_name', 'equalto', router_c2_user) | list | length) == 0
-          - (not router_c2_move_dest.results[0].stat.exists) or router_c2_move_dest.results[0].stat.mode == '0600'
-          - (not router_c2_move_dest.results[1].stat.exists) or router_c2_move_dest.results[1].stat.mode == '0644'
-          - (not router_c2_move_dest.results[2].stat.exists) or router_c2_move_dest.results[2].stat.mode == '0644'
-        fail_msg: "Destination credentials already exist with unexpected type or ownership; do not overwrite."
+          # stat.islnk/isreg/pw_name/mode are not necessarily returned for absent paths.
+          # Always handle an absent file explicitly, then enforce full checks if present.
+          - not (item.stat.islnk | default(false))
+          - (not (item.stat.exists | default(false))) or (item.stat.isreg | default(false))
+          - (not (item.stat.exists | default(false))) or (item.stat.pw_name | default('')) == router_c2_user
+          - (not (item.stat.exists | default(false))) or (item.stat.mode | default('')) == ('0600' if item.item == router_c2_new_private else '0644')
+        fail_msg: "Destination credentials exist in an unexpected state; no overwrite permitted."
+      loop: "{{ router_c2_move_dest.results }}"
+      loop_control:
+        label: "{{ item.item }}"
 
     - name: Check existing destination private key equivalence, when present
       ansible.builtin.command:
