@@ -515,3 +515,24 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 No live normal-mode action until reviewing syntax and proposed changes; no Pi account, tunnel or Prometheus scrape will be configured by this pilot.
+
+### 28 October ~17:07 — C2b1 dedicated monitor-01 SSH identity preview PASS, live still pending
+
+User on `admin-01` fast-forwarded isolated worktree to branch `60759298`, then ran `monitor-01-router-metrics-key-provision.yml --syntax-check` **PASS** followed by `--check --diff -e router_c2_key_provision_approved=true` **PASS** with `--limit monitor-01`: **`monitor-01 ok=24 changed=1 (predicted) unreachable=0 failed=0 skipped=7 rescued=0 ignored=0`**.
+
+All controller/monitor identity, SSH host-key pin and safe parent directory checks passed; no pre-existing `router-metrics-tunnel` account/group or colliding private/public key was encountered, Prometheus remains HTTP 200 ready, filesystem space is sufficient, port 19100 unoccupied both before and after, and no router access/change occurred. The **only check-mode difference** was predicted creation of `router-metrics-tunnel` **system group**. Dependent user creation and `ssh-keygen`/key ownership/fingerprint checks skipped in check mode since the group is not actually present. **NO SSH user or key created in this preview.**
+
+**C2b1 may advance to bounded operator-approved live execution, without `--check`, using the existing vetted `monitor-01`-only Ansible playbook**. This creates a locked-password unprivileged system user `router-metrics-tunnel` with `/usr/sbin/nologin`, and generates locally on monitor-01 only a new ED25519 keypair `/etc/homelab/router-metrics-ssh/id_ed25519[.pub]`; private file `0600` owned by that account and public file root-owned `0644`. Normal-mode postflight verifies generated public key ED25519, Prometheus ready 200, and still no TCP19100 forwarder. No Pi account/authorized_keys yet, no SSH connection/tunnel, no firewall, no Docker or Prometheus modifications. **Do not display/commit the private key.** The key is unencrypted to enable unattended future forwarding and must remain restricted to the local monitoring account.
+
+Exact next invocation from existing `~/projects/homelab-router-toolset-audit/IaC/ansible`:
+
+```bash
+ansible-playbook \
+  -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-provision.yml \
+  --limit monitor-01 \
+  --ask-become-pass \
+  -e router_c2_key_provision_approved=true
+```
+
+**Do not claim C2b1 installed until normal-mode recap shows success and generated ED25519 public fingerprint passes.** If live mode fails after creating an account/group or key, pause to inspect the partial state rather than blindly rerunning with credentials changed. Then separately scope C2b2 Pi-side restricted authorized-key account, SSH host trust use, source restrictions and a Docker-aware tunnel.
