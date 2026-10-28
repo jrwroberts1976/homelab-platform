@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 PPPoE TCP MSS persistence — 28 October 2026
 
-**Status:** live temporary workaround verified; persistence IaC proposed in draft PR, **not deployed**. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
+**Status:** persistent MSS rules **confirmed present on Pi disk with valid nftables syntax**; temporary live workaround active. No reboot/reload has occurred in supplied evidence, so post-reboot persistence remains **unverified**. Ansible deployment recap/backup filename not yet supplied. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
 
 ## Observed problem and evidence
 
@@ -62,3 +62,22 @@ The persistent `router_pppoe_mss` table is **not expected in the live kernel** y
 - Future router firewall IaC must incorporate this persistent MSS rule when consolidating/renaming the real live tables, or a later full ruleset replacement could erase it.
 
 See router migration [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206) and unmerged [draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207).
+
+## 28 Oct — On-disk verification after Ansible stage
+
+User verified on Raspberry Pi:
+
+```text
+sudo nft -c -f /etc/nftables.conf    # exit 0, no output
+27:# BEGIN ANSIBLE MANAGED: Router-01 PPPoE MSS
+30:table ip router_pppoe_mss {
+33: ... eth0 -> ppp0 ... set 1452
+34: ... ppp0 -> eth0 ... set 1452
+37:# END ANSIBLE MANAGED: Router-01 PPPoE MSS
+sudo nft -a list table ip pppoe_mss_test  # present: counters 1581/306
+sudo systemctl is-active nftables          # active
+```
+
+Therefore the **startup file now contains and validates** the persistent clamp, but no reload or reboot was carried out and the running kernel still uses `pppoe_mss_test`. No post-boot persistence claim is justified yet. The live Ansible deployment recap and backup filename have not been supplied; retrieve both before a separately approved, recoverable reboot.
+
+At the next reboot, the startup file's `flush ruleset` will remove the temporary table and load `router_pppoe_mss`; verify exact tables and operational traffic as specified above. Do not restart or reload nftables as a substitute for controlled boot verification, and do not conflate host DHCP renumbering after the ASUS reset with the Pi's verified `192.168.3.1`.
