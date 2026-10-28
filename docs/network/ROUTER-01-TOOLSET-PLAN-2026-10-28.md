@@ -210,3 +210,31 @@ Verified from the local `monitor-01` itself: `docker.service active`, `monitorin
 Recent Loki logs show successful HTTP 200 queries and TSDB indexing, plus `deletion is not available for this tenant` warnings/errors in the compactor cache-generation path; these messages **do not establish a current unready service**, but may warrant a separate low-risk configuration review if recurrent. Local HTTP 200 does **not prove** the earlier `admin-01 -> 192.168.2.52:3100/ready` HTTP 503 is resolved from a second vantage or identify its historical cause. Do not claim the 503 root cause fixed, and do not restart or redeploy Loki.
 
 **Next safe monitoring path checks, no package/firewall/service changes**: from `admin-01` verify `http://192.168.2.52:3100/ready` is now HTTP 200; from `monitor-01` verify `ip route get 192.168.3.1` and TCP connectivity to `192.168.3.1:22`. These establish an inside-LAN-to-upstream-router path suitable for designing a *restricted pull* Node Exporter scrape. They do **not** grant or test port 9100; exporter is not yet installed and the Pi INPUT firewall currently has no monitored-exporter exception. Any later Node Exporter/agent installation or Pi nftables allowlist must be separately safety-gated, with proven ASUS WAN IP/source, localhost and from-monitor scrape evidence, and no ISP WAN exposure. Active Zabbix or outbound Alloy from Pi to `.2.x` remain blocked by the distinct Pi `ppp0` routing/ASUS NAT boundary.
+
+## 28 October ~15:57 BST/GMT — monitor-01 outbound path to router verified
+
+Operator on `admin-01` ran the last three **read-only** checks from the live monitoring estate:
+
+- `curl http://192.168.2.52:3100/ready` returned **HTTP 200** from `admin-01`. Prior HTTP 503 is no longer reproduced either locally on `monitor-01` or from `admin-01`; **cause remains unknown**, so no service restart or deployment warranted.
+- From `monitor-01`, `ip -4 route get 192.168.3.1` showed **`192.168.3.1 via 192.168.2.1 dev eth0 src 192.168.2.52`**, i.e. across ASUS to upstream Pi.
+- From `monitor-01`, `ansible.builtin.wait_for host=192.168.3.1 port=22` **SUCCESS** `state=started`, `changed=false`, confirming TCP connectivity in the **downstream-to-upstream** direction (only port 22 demonstrated). Ad hoc `ansible.builtin.command` route read was labelled CHANGED by Ansible's default even though `ip route get` does not change the routing table; no actual router/network modification occurred.
+
+This supports designing a **pull-based Node Exporter** for `monitor-01` to scrape Pi `192.168.3.1:9100` via ASUS, rather than forcing Pi-originating traffic into private downstream `.2.x`. It does **not** prove 9100 is allowed/open, because exporter is not installed and Pi's input policy is default-deny. Explicit minimal ingress allowance, source NAT awareness, bind address and boot recovery need review first. Forwarding on `ppp0` must NEVER expose metrics to the ISP.
+
+### Stage C preflight prepared — source-only, no agent deployment
+
+Added `IaC/ansible/playbooks/router-01-exporter-ingress-readonly.yml` to the isolated audit branch, requiring controller `admin-01`, exact router IP `192.168.3.1`, physical `eth0` MAC and opt-in `router_exporter_ingress_audit_approved=true`. Reads **live `nft -a list table inet filter_router`**, current main routes, LAN IPv4 neighbors, Pi's dnsmasq leases (if readable), currently bound TCP sockets, Node Exporter package status, and confirms all four critical services active. Logs changes as READ ONLY; no network or package mutation. This playbook has **not been syntax-checked or run on admin-01 yet**.
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-exporter-ingress-readonly.yml --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-exporter-ingress-readonly.yml --check --ask-become-pass \
+  -e router_exporter_ingress_audit_approved=true
+```
+
+**Design gate:** Identify real ASUS WAN IP on Pi `.3.x`, any stable DHCP reservation, trusted source semantics after ASUS NAT, current nft input-chain order and default-deny, and whether `9100` is already used. If source is SNATed to ASUS WAN IP, a Pi firewall rule restricted to ASUS WAN IP permits *downstream LAN hosts behind ASUS*, not just `monitor-01` specifically; avoid falsely representing it as host-specific protection. Do not apply a firewall rule, modify ASUS mode, restart router services or install/export Node Exporter until that evidence is reviewed. After a safely authorized exporter rollout, add exact scrape target in Prometheus via separate reviewed IaC; do not redeploy entire monitoring stack blindly. Zabbix/Alloy outbound paths remain unresolved.
