@@ -916,3 +916,32 @@ ansible-playbook \
 ```
 
 **Do not authorize any public key or reload SSH in this step.** Verify the live recap and the effective admin/monitor policy assertion tasks, then plan a separate activation/reload gate with fallback and admin SSH connectivity check. Do not touch the live PPPoE gateway network.
+
+### 28 October ~18:50 — C2b2-c restricted Pi sshd Match ON DISK LIVE PASS; active SSH reload NOT done
+
+Operator ran `router-01-metrics-sshd-install.yml` **NORMAL MODE** on physical `router-01` via admin-01, with exact opt-in and limit. Actual recap **`router-01 ok=30 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`**. All controller/Pi MAC/locked nologin service user/absent authorized_keys/expected main sshd include/no fragments, syntax and loopback exporter/gateway checks passed.
+
+**ONLY LIVE CHANGE:** appended reviewed EOF `Match User router-metrics` block to `/etc/ssh/sshd_config`, using Ansible `blockinfile backup:true` with `validate: /usr/sbin/sshd -t -f %s`. The play successfully revalidated real `sshd -t`, compared **complete** existing `james` admin SSH effective policy against its pre-change policy in both direct and ASUS source contexts, and asserted the monitoring user's local-only forward policy for both contexts. The observed monitoring policy has `authenticationmethods publickey`, `passwordauthentication no`, `allowtcpforwarding local`, `permitopen 127.0.0.1:9100`, `permitlisten none`, `maxsessions 0`, `permittty no`, `x11forwarding no`, `allowagentforwarding no`, `allowstreamlocalforwarding no`, `forcecommand none` and all intended restrictions. **NO sshd reload/restart**, no monitoring public key authorized yet, no SSH forward, no network/nftables/PPPoE/Node Exporter/monitoring deployment. Four gateway units still active.
+
+**Risk boundary:** Pi's installed `sshd_config` is now restricted on disk but running SSH listener was deliberately NOT reloaded. On a future unplanned sshd restart/reboot the new on-disk settings may be read. Existing administrator policy equivalence was verified using real OpenSSH on physical Pi, but live post-reload connectivity needs a separate approval and fail-safe. Do not assume a dry-run or syntax validation establishes remote login continuity.
+
+**Next source-only check-mode activation/rollback preflight**, now staged as `IaC/ansible/playbooks/router-01-metrics-sshd-activation-preflight.yml` in draft PR #210. It requires `--check` and exact `admin-01` controller, physical Pi IP/MAC, and `-e router_c2_ssh_activation_preflight_approved=true`. Inspects installed EOF Match and early Include and no fragments, validates current sshd syntax, finds most recent **root-owned Ansible pre-change `sshd_config.*~` backup**, syntax-checks backup and confirms it contains no monitoring Match, checks original and new effective `james` policies byte-identical via `sshd -T -f backup -C` and installed `sshd -T -C` from two source contexts, checks every required monitoring restriction, identifies actual `ssh.service` ActiveState and CanReload, validates absent authorized_keys, core gateway service health, SSH port22 listener and Node Exporter loopback. **NO file mutations, service reload, restart, SSH key authorization, network or monitoring changes.** It has NOT been syntax-checked or executed by operator. If backup naming or `ssh.service` detection differs, it is designed to FAIL CLOSED; reconcile with evidence rather than bypassing guards.
+
+Next operator command from `admin-01` isolated feature worktree:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_c2_ssh_activation_preflight_approved=true
+```
+
+**Do not reload sshd, modify authorized_keys, enable a tunnel or change the exporter listener yet.** If preflight passes, separately design limited `systemctl reload ssh` gate with verified rollback to exact Ansible pre-change config, existing admin SSH reconnection test, and protection against interrupted network. Next steps require independent review/approval.
