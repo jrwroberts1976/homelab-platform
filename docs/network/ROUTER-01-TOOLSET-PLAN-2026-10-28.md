@@ -1,6 +1,19 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 toolset baseline — 28 October 2026
 
+## VERIFIED — 28 October 2026 22:09 UTC: post-cutover router baseline PASS (read-only)
+
+**Actual admin-01 operator evidence** (not predicted CI): isolated worktree detached HEAD at `3e15857d`, Git fetch/fast-forward already up to date; collector Python AST PASS; custom Ansible assert-condition validator PASS; Ansible syntax check PASS. Operator ran `router-01-postcutover-baseline-readonly.yml` with isolated `inventory/router-01-postcutover-baseline.yml`, `--limit router-01 --ask-become-pass --check -e router_postcutover_baseline_approved=true`. **PLAY RECAP: router-01 ok=15 changed=0 unreachable=0 failed=0 skipped=0**. Identity safeguards passed: actual onboard eth0 MAC `d8:3a:dd:5a:51:44`, Pi primary LAN `192.168.2.1/24`, default route `ppp0`, and nftables/router-pppoe/dnsmasq/unbound remained active before and after. No intended configuration writes, restarts or reloads.
+
+**Snapshot timestamp: 2026-10-28T22:09:06+00:00**; system hostname still `raspberrypi`, kernel `6.18.50+rpt-rpi-v8`, uptime 8.84 hours. 4 cores, 3-second CPU busy **0.1%**; load **0.09 / 0.04 / 0.01** (1/5/15 minutes); frequency **1800 MHz** governor `ondemand`; temperature **45.3 °C**, Pi throttling **`throttled=0x0`**. Memory total **3795.7 MiB**, available **3538.2 MiB** (**6.8% estimated used**), swap used **0 MiB**. Root filesystem size **938.2 GiB**, available **896.1 GiB** (**4.5% used**).
+
+**Interfaces:** `eth0` LAN and USB `eth1` WAN both carrier up at 1000 Mb/s; `ppp0` has IPv4 and default route, PPP operational state `unknown` is expected for a point-to-point interface and not a confirmed fault. Three-second sampled bit rates (RX/TX): eth0 **127.4 / 124.3 kbps**, eth1 **123.0 / 126.9 kbps**, ppp0 **121.2 / 120.8 kbps**. No RX/TX errors on any interface. Cumulative drops: eth0 **RX 150 / TX 23**; eth1 **0/0**, ppp0 **0/0**. The **earlier operator snapshot at 22:06:52 UTC** showed the same eth0 drop counters (150/23), so no growth between these two snapshots; this is not a load-test guarantee.
+
+**WAN probe:** `ping -I ppp0` to `1.1.1.1`, 5 low-rate requests, **0% loss**, RTT **10.339/10.502/10.826 ms** (min/mean/max), exit 0. Earlier 22:06:52 UTC snapshot also had 0% loss and 10.283 ms mean. DNS/DHCP/PPPoE/firewall/SSH/Node Exporter services all active. dnsmasq lease file exists with **18 rows** (count only, not reservation or uniqueness validation). Listening: DNS `192.168.2.1:53` and loopback 53, DHCP UDP `0.0.0.0:67`, SSH TCP `0.0.0.0:22` and `[::]:22`, Node Exporter **`127.0.0.1:9100` only**. Listening on all addresses does not prove firewall exposure; validate actual nft ingress separately.
+
+**Assessment:** strong *idle* reference baseline; no measured CPU, RAM, disk, PPP, packet-loss or temperature issue in this short check. 3-second bit rates are NOT maximum ISP speed and do not establish routing performance under load. Keep firewall, SSH activation, DHCP exclusions/static overlap (especially `media-01` at `.195` inside `.100-.199`), ASUS management, and IaC desired-state reconciliation as **separate pending tasks**. Do **not** reuse the obsolete `.3.1` toolset/SSH inventory, restart nftables, reload SSH, grant keys, or enable a tunnel as part of recording this baseline. No source code, router configuration, or topology changed in this documentation-only checkpoint.
+
+
 ## NEW — 28 October ~22:00: post-cutover Pi router performance baseline, SOURCE ONLY (no measurements yet)
 
 User asked to establish baseline router readings after making Pi the `192.168.2.1` gateway and DHCP/DNS server. **Staged source-only in draft PR #210**:
