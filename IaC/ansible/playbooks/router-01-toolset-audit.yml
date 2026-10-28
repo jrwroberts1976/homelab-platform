@@ -150,6 +150,8 @@
         return_content: true
         status_code: [200]
       register: router_toolset_loki
+      # URI is read-only; run it even in Ansible --check mode.
+      check_mode: false
       failed_when: false
       changed_when: false
 
@@ -160,6 +162,8 @@
         connect_timeout: 2
         timeout: 4
       register: router_toolset_zabbix
+      # TCP connect is read-only; check mode otherwise skips wait_for.
+      check_mode: false
       failed_when: false
       changed_when: false
 
@@ -171,6 +175,6 @@
           - "Node exporter/Alloy/Zabbix and other service states: {{ router_toolset_optional_status.results | map(attribute='item') | zip(router_toolset_optional_status.results | map(attribute='stdout')) | list }}"
           - "Installed package audit: {{ router_toolset_package_status.results | map(attribute='item') | zip(router_toolset_package_status.results | map(attribute='stdout')) | list }}"
           - "Listening sockets: {{ router_toolset_listeners.stdout_lines }}"
-          - "Loki readiness (200 = ready): {{ router_toolset_loki.status | default('not reachable') }}"
-          - "Zabbix TCP/10051 reachability: {{ 'connected' if router_toolset_zabbix.state | default('') == 'started' else 'not verified/reachable' }}"
+          - "Loki readiness (HTTP 200 = ready): {{ router_toolset_loki.status | default('probe failed') }}"
+          - "Zabbix TCP/10051 reachability: {{ 'connected' if router_toolset_zabbix.state | default('') == 'started' else 'failed to connect' }}"
           - "No packages installed; no files, services, interfaces, firewall or routes modified."
