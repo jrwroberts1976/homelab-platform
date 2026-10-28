@@ -1,6 +1,14 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 28 October 2026 evening — NEWER LIVE DHCP/GATEWAY CUTOVER EVIDENCE (RECONCILIATION REQUIRED)
+
+**Newer operator evidence supersedes the older ASUS-as-router row elsewhere in this historical document.** The Raspberry Pi 4 `router-01` now runs the active household IPv4 gateway and `dnsmasq` DHCP on `192.168.2.1/24`; `unbound` DNS, `nftables` and `router-pppoe`/PPPoE through `ppp0` are active. The configured DHCP scope is **`192.168.2.100–199`**, and the advertised router/DNS address is **`192.168.2.1`**. The observed client lease addresses `.125`, `.171` and `.186` fall within that pool; they are **not** its bounds. Laptop `.186` reported DHCP/gateway/DNS `192.168.2.1`, internet connectivity passed, traceroute first hop Pi `.2.1` then ISP `212.158.250.40`, removing ASUS from the observed NAT/gateway path. Cutover rollback timer was no longer listed. User reported wired AiMesh traffic functioning; individual Ethernet-backhaul node status not independently audited.
+
+**ASUS changed to AP/AiMesh role**, with management last positively checked on the OLD `192.168.3.142` address through a temporary Pi secondary `192.168.3.1`, including local SSH port-forward access from Windows. `192.168.2.2` was proposed for new ASUS management but **not confirmed assigned**. The Pi's **primary** LAN is now `192.168.2.1`, not the older `192.168.3.1` address from pre-cutover notes. This architecture file's older active-estate table, `IaC/inventory/estate.json`, Pi Ansible audit inventory `router-01=192.168.3.1` and C2 router SSH guard assertions require coordinated reconciliation before more router changes. **HOLD further SSH reload/key grants/tunnel work** until fresh IP/MAC/route/SSH path checks and guarded Ansible inventory updates. Verify DHCP exclusions/static reservations, especially where the broad `.100–.199` pool overlaps established fixed addresses (e.g. `media-01 .195`); do not assume DHCP conflict protections already configured.
+
+These are **operator-reported live findings from the later 28 October conversation**, not independently re-run by this documentation update. The new DHCP/ASUS cutover has **not yet been shown committed to Ansible/IaC nor validated against the entire canonical estate inventory**, so current live state outranks older architectural assumptions until the documented desired state catches up. See `docs/network/ROUTER-01-TOOLSET-PLAN-2026-10-28.md` (urgent cutover reconciliation section). No host changes were executed to produce this addendum.
+
 **Status:** CURRENT OPERATIONAL TRUTH  
 **Current-state review:** 20 October 2026 (Trivy addendum; other sections retain their dated evidence)  
 **Identity/address authority:** `IaC/inventory/estate.json`  
