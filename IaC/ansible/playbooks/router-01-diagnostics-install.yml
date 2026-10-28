@@ -13,7 +13,7 @@
     router_diagnostics_packages:
       - mtr-tiny
       - traceroute
-      - dnsutils
+      - bind9-dnsutils
       - conntrack
       - jq
     router_diagnostics_core_services:
@@ -149,7 +149,7 @@
           - install
           - mtr-tiny
           - traceroute
-          - dnsutils
+          - bind9-dnsutils
           - conntrack
           - jq
       register: router_diagnostics_apt_simulate
@@ -183,10 +183,18 @@
       check_mode: false
       when: not ansible_check_mode
 
-    - name: Require all five utilities installed
+    - name: Require each real diagnostic package to be installed
       ansible.builtin.assert:
         that:
-          - (router_diagnostics_installed.results | selectattr('stdout', 'equalto', 'install ok installed') | list | length) == (router_diagnostics_packages | length)
+          - item.rc == 0
+          - item.stdout | trim == 'install ok installed'
+        fail_msg: >-
+          Package {{ item.item }} did not report an installed dpkg status:
+          rc={{ item.rc }}, stdout={{ item.stdout | default('') | trim }}.
+        success_msg: "Installed: {{ item.item }}"
+      loop: "{{ router_diagnostics_installed.results }}"
+      loop_control:
+        label: "{{ item.item }}"
       when: not ansible_check_mode
 
   post_tasks:
