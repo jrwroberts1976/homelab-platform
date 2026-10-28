@@ -1,0 +1,244 @@
+---
+# Stage C2b1: create a local unprivileged monitoring identity and SSH key
+# ON MONITOR-01 ONLY. Pi authorized_keys and sshd remain untouched.
+# A distinct C2b2 change will review the public key's router-side limits.
+- name: Stage a dedicated local SSH identity for router metrics without starting a tunnel
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_key_provision_approved: false
+    router_c2_tunnel_user: router-metrics-tunnel
+    router_c2_tunnel_home: /var/lib/router-metrics-tunnel
+    router_c2_key_dir: /etc/homelab/router-metrics-ssh
+    router_c2_private_key: /etc/homelab/router-metrics-ssh/id_ed25519
+    router_c2_public_key: /etc/homelab/router-metrics-ssh/id_ed25519.pub
+    router_c2_trust_file: /etc/homelab/router-metrics-ssh/known_hosts
+    router_c2_verified_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+
+  pre_tasks:
+    - name: Check controller identity before connecting to monitor
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: router_c2_key_controller
+
+    - name: Require exact controller and approved monitoring target
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_provision_approved | bool
+          - router_c2_key_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Read actual monitor hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      check_mode: false
+      register: router_c2_key_hostname
+
+    - name: Read actual monitor IPv4 addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      changed_when: false
+      check_mode: false
+      register: router_c2_key_ipv4
+
+    - name: Require monitor-01 host identity
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_key_ipv4.stdout"
+
+    - name: Check dedicated pinned host trust file
+      ansible.builtin.stat:
+        path: "{{ router_c2_trust_file }}"
+      register: router_c2_key_trust_stat
+
+    - name: Refuse absent, linked or non-root-owned trust file
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_trust_stat.stat.isreg | default(false)
+          - not router_c2_key_trust_stat.stat.islnk | default(false)
+          - router_c2_key_trust_stat.stat.pw_name == 'root'
+
+    - name: Reverify the independently pinned Pi SSH fingerprint
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_trust_file }}", -E, sha256]
+      register: router_c2_key_trust_fingerprint
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse key generation if SSH host trust is not verified
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_trust_fingerprint.stdout.split()[1] == router_c2_verified_fingerprint
+          - "'(ED25519)' in router_c2_key_trust_fingerprint.stdout"
+
+    - name: Check planned account name is unclaimed or has expected attributes
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_tunnel_user }}"]
+      register: router_c2_key_existing_user
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Refuse an unrelated pre-existing user account
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_existing_user.stdout.split(':')[5] == router_c2_tunnel_home
+          - router_c2_key_existing_user.stdout.split(':')[6] == '/usr/sbin/nologin'
+        fail_msg: "Existing tunnel identity has unexpected home/shell; do not modify."
+      when: router_c2_key_existing_user.rc == 0
+
+    - name: Check private key file status without reading secret bytes
+      ansible.builtin.stat:
+        path: "{{ router_c2_private_key }}"
+      register: router_c2_key_private_before
+
+    - name: Check public key file status
+      ansible.builtin.stat:
+        path: "{{ router_c2_public_key }}"
+      register: router_c2_key_public_before
+
+    - name: Refuse partial, linked or irregular existing SSH key material
+      ansible.builtin.assert:
+        that:
+          - (router_c2_key_private_before.stat.exists | bool) == (router_c2_key_public_before.stat.exists | bool)
+          - not router_c2_key_private_before.stat.islnk | default(false)
+          - not router_c2_key_public_before.stat.islnk | default(false)
+          - (not router_c2_key_private_before.stat.exists) or (router_c2_key_private_before.stat.isreg | default(false))
+          - (not router_c2_key_public_before.stat.exists) or (router_c2_key_public_before.stat.isreg | default(false))
+          - (not router_c2_key_private_before.stat.exists) or (router_c2_key_private_before.stat.pw_name == router_c2_tunnel_user)
+          - (not router_c2_key_private_before.stat.exists) or (router_c2_key_private_before.stat.mode == '0600')
+        fail_msg: "SSH key material already exists in an unexpected state; stop."
+
+    - name: Verify Prometheus remains healthy before local account creation
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: router_c2_key_prom_before
+      changed_when: false
+      check_mode: false
+
+    - name: Check available filesystem capacity for local identity
+      ansible.builtin.command:
+        argv: [df, -Pk, /etc]
+      register: router_c2_key_disk
+      changed_when: false
+      check_mode: false
+
+    - name: Require adequate free filesystem capacity
+      ansible.builtin.assert:
+        that:
+          - (router_c2_key_disk.stdout_lines[1].split()[3] | int) > 204800
+
+  tasks:
+    - name: Create distinct system group for SSH forwarding identity
+      ansible.builtin.group:
+        name: "{{ router_c2_tunnel_user }}"
+        system: true
+        state: present
+
+    - name: Create unprivileged service identity without an interactive shell
+      ansible.builtin.user:
+        name: "{{ router_c2_tunnel_user }}"
+        group: "{{ router_c2_tunnel_user }}"
+        system: true
+        state: present
+        create_home: true
+        home: "{{ router_c2_tunnel_home }}"
+        shell: /usr/sbin/nologin
+        password_lock: true
+
+    - name: Generate dedicated ED25519 SSH client key locally on monitor only
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -q
+          - -t
+          - ed25519
+          - -N
+          - ""
+          - -C
+          - router-metrics-tunnel@monitor-01
+          - -f
+          - "{{ router_c2_private_key }}"
+        creates: "{{ router_c2_private_key }}"
+      register: router_c2_key_generated
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: Restrict private key to dedicated unprivileged identity
+      ansible.builtin.file:
+        path: "{{ router_c2_private_key }}"
+        owner: "{{ router_c2_tunnel_user }}"
+        group: "{{ router_c2_tunnel_user }}"
+        mode: "0600"
+        state: file
+      when: not ansible_check_mode
+
+    - name: Set public key ownership without exposing key contents
+      ansible.builtin.file:
+        path: "{{ router_c2_public_key }}"
+        owner: root
+        group: root
+        mode: "0644"
+        state: file
+      when: not ansible_check_mode
+
+    - name: Validate local public key fingerprint without printing key bytes
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_public_key }}", -E, sha256]
+      register: router_c2_key_public_fingerprint
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode
+
+    - name: Assert actual generated key is ED25519
+      ansible.builtin.assert:
+        that:
+          - "'(ED25519)' in router_c2_key_public_fingerprint.stdout"
+      when: not ansible_check_mode
+
+  post_tasks:
+    - name: Verify Prometheus still ready without restarting anything
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        method: GET
+        status_code: 200
+        timeout: 5
+      changed_when: false
+      check_mode: false
+
+    - name: Verify no SSH port-forwarding listener was started
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_c2_key_after_listeners
+      changed_when: false
+      check_mode: false
+
+    - name: Require port 19100 is still unused
+      ansible.builtin.assert:
+        that:
+          - "':19100' not in router_c2_key_after_listeners.stdout"
+
+    - name: Report bounded identity provisioning state
+      ansible.builtin.debug:
+        msg:
+          status: "{{ 'CHECK MODE: account/group preview only; no SSH keys generated' if ansible_check_mode else 'LIVE: isolated local SSH client identity and key provisioned' }}"
+          monitor_identity: "{{ router_c2_tunnel_user }}"
+          private_key_location: "{{ router_c2_private_key }}"
+          private_key_contents: "NEVER PRINTED OR COMMITTED"
+          pi_router_changes: "NONE"
+          ssh_tunnel: "NONE"
+          docker_and_prometheus_changes: "NONE"
