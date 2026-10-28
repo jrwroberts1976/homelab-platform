@@ -96,7 +96,7 @@
     - name: Refuse incomplete EOF monitoring block
       ansible.builtin.assert:
         that:
-          - c2b2_activation_final_line.stdout | trim == '# END ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)'
+          - "c2b2_activation_final_line.stdout | trim == '# END ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)'"
 
     - name: Ensure no extra SSH daemon drop-ins
       ansible.builtin.find:
