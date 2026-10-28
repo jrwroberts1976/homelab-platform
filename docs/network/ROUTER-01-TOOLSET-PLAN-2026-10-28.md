@@ -586,3 +586,34 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 Inspect output flags and path metadata. If service-user read fails but root parse succeeds, next reviewed IaC fix should arrange a safe private-key path that the service can traverse, without altering shared parent directory permissions. If root parse also fails, inspect format/passphrase without copying secret into console. No change/deploy authorised in this diagnostic stage.
+
+### 28 October ~17:20 — root cause identified for C2b1 service-key failure; safe remediation staged SOURCE ONLY
+
+Operator ran `monitor-01-router-metrics-key-access-readonly.yml` from `admin-01`, syntax-check **PASS**, `--check` **`monitor-01 ok=14 changed=0 failed=0 skipped=0`**. It isolated an **access-control, not a key-corruption, problem**:
+
+- `/etc`: **`0755 root`**; `/etc/homelab`: **`0750 root`**; `/etc/homelab/router-metrics-ssh`: **`0755 root`**; `id_ed25519` **`0600 router-metrics-tunnel`**.
+- `runuser` for `router-metrics-tunnel` **works**, but the service user **cannot see or read the private-key pathname** and the SSH key derivation failed with **permission-denied**.
+- Root **can parse the private ED25519 key**, and root's derived public key **MATCHES** the stored `id_ed25519.pub`. Thus the original keypair is valid, and filesystem traversal through the shared `/etc/homelab` directory is blocked as designed.
+- **No files, users, SSH services, Pi router, monitoring services or network were changed by this diagnostic.**
+
+**Security decision:** Do **NOT** `chmod 755 /etc/homelab` or weaken the shared root-only configuration directory; do not grant blanket directory access. Avoid storing private client SSH credentials beneath this protected shared parent for an unprivileged tunnel process.
+
+Staged IaC candidate **`IaC/ansible/playbooks/monitor-01-router-metrics-key-relocate.yml`** in draft PR #210, **not syntax-checked or executed on admin-01**. Design: exact `admin-01`->`monitor-01` and opt-in `router_c2_key_relocate_approved=true`; require existing locked/nonlogin `router-metrics-tunnel` account and verified source keypair + independently pinned Pi ED25519 host SHA256; refuse existing conflicting target files and symlinks. In real mode only, create **`/var/lib/router-metrics-tunnel/.ssh` owned by that user, mode `0700`**, then securely copy the *existing validated private key* to `/var/lib/router-metrics-tunnel/.ssh/id_ed25519` as service-user `0600`, copy matching public key and pinned `known_hosts` into that private directory; copies are **remote-to-remote on monitor-01**, with private-key task `no_log: true` and no secret to admin-01 or GitHub. Check actual usability with `runuser -u router-metrics-tunnel -- ssh-keygen -y -P '' -f /var/lib/router-metrics-tunnel/.ssh/id_ed25519` (no_log, match against source public), verify copied host trust SHA256 as the service user, then Prometheus HTTP200 and TCP19100 still unused. The original valid keypair and original root-owned host pin at `/etc/homelab/router-metrics-ssh` are **retained** pending a distinct, approved cleanup after a secure tunnel is working. Shared `/etc/homelab` mode0750 is untouched; no key is regenerated, no Pi modifications, no SSH tunnel, no Docker/Prometheus changes. Future tunnel SSH client must use **new canonical key and known_hosts paths** in `/var/lib/router-metrics-tunnel/.ssh` rather than old inaccessible paths.
+
+**Next gate: syntax check and dry run ONLY** (the preview predicts just creation of the private `.ssh` directory, dependent credential copies/postflight intentionally skipped):
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-relocate.yml \
+  --limit monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-relocate.yml \
+  --limit monitor-01 --ask-become-pass --check --diff \
+  -e router_c2_key_relocate_approved=true
+```
+
+**Do not run without `--check` until the full preview has been reviewed.** No further Pi-side `router-metrics` account or `authorized_keys` installation is authorised until the service can actually derive its own public key from its own safe private-key path. This fix is more secure than modifying the shared config directory and keeps the original key available for rollback.
