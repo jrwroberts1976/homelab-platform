@@ -982,3 +982,33 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Do **not** use `ALLOW_BROKEN_CONDITIONALS`; the IaC fix avoids weakening validation. Do NOT run normal mode; this check-only playbook refuses it. If backup discovery/reload checks fail later, investigate from actual output; no permission loosening, blind service restart, monitoring key grant or tunnel activation. Stage C2b2-c on-disk Match installation was earlier LIVE PASS, router-01 ok=30 changed=1 failed=0, with actual daemon reload still pending approval.
+
+### 28 October ~19:00 — New local static checker false positives for valid Ansible booleans; fixed and regression tests staged
+
+Operator on `admin-01` fetched feature branch through `28c99172` and ran the new controller-local `scripts/validate-ansible-assert-conditions.py` on `router-01-metrics-sshd-activation-preflight.yml`. The checker **FAILED** reporting 14 legitimate `changed_when: false` and `failed_when: false` instances as `expected condition string, got bool`. Because commands were joined with `&&`, the Ansible `--syntax-check` and Pi `--check` **DID NOT RUN** in this attempt. **This is a bug in our newly written checker, NOT an SSH configuration error or router change.** The previous Ansible EOF assertion fix remains in GitHub, but hasn't been re-executed against the Pi. No Pi file, sshd reload, authorized key, tunnel, network or monitoring changes.
+
+**Cause and source fix**: Native YAML booleans `true`/`false` are valid for Ansible `when`, `failed_when`, `changed_when`, and `until`. The controller-local Python static checker erroneously accepted only `str`. Updated `IaC/ansible/scripts/validate-ansible-assert-conditions.py` to accept `(str, bool)` in those conditional fields, including lists, while still requiring **`ansible.builtin.assert.that` items to be strings** and rejecting mistakenly YAML-parsed mapping conditions. Nothing was weakened on the Pi and no `ALLOW_BROKEN_CONDITIONALS` workaround is necessary.
+
+Added controller-only regression script `IaC/ansible/scripts/test-validate-ansible-assert-conditions.py` with positive cases containing native `changed_when: false`, `failed_when: false`, `when: true`, `until: true` and expression lists; and negative cases where an unquoted colon creates YAML dicts in `assert.that` and `when`. These are **source-only regression tests; operator has not run them yet**.
+
+Next safe operator commands, from isolated worktree on `admin-01`; **only static tests, syntax-check and READ-ONLY --check**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+python3 scripts/test-validate-ansible-assert-conditions.py &&
+python3 scripts/validate-ansible-assert-conditions.py \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml &&
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml \
+  --limit router-01 --syntax-check &&
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_c2_ssh_activation_preflight_approved=true
+```
+
+Wait for final Pi preflight recap and rollback backup verification. If any guard fails, stop and diagnose; **DO NOT reload SSH, activate service or authorize monitoring key**. GitHub source/CI cannot substitute for the operator's actual Ansible run.
