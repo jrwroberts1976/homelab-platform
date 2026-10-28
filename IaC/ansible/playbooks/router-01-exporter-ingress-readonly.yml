@@ -1,0 +1,128 @@
+---
+# Discovery only: source NAT, DHCP leases, live firewall and unused metrics port.
+# Running this playbook must not enable any inbound exporter socket or change
+# the live PPPoE router, ASUS, monitoring server or DNS/DHCP.
+- name: Inspect router-01 ingress before choosing Prometheus exporter security
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_exporter_ingress_audit_approved: false
+    router_exporter_ingress_expected_mac: d8:3a:dd:5a:51:44
+    router_exporter_ingress_expected_lan: 192.168.3.1/24
+    router_exporter_ingress_services:
+      - nftables
+      - router-pppoe
+      - dnsmasq
+      - unbound
+  pre_tasks:
+    - name: Read controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_ingress_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require explicit approval, known controller and exact router target
+      ansible.builtin.assert:
+        that:
+          - router_exporter_ingress_audit_approved | bool
+          - router_ingress_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Only the verified Pi may be inspected, from admin-01."
+      delegate_to: localhost
+      become: false
+
+    - name: Read onboard Pi Ethernet MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_ingress_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Read router LAN address
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_ingress_lan
+      check_mode: false
+      changed_when: false
+
+    - name: Verify hardware and address before reading router rules
+      ansible.builtin.assert:
+        that:
+          - router_ingress_mac.stdout | lower | trim == router_exporter_ingress_expected_mac
+          - router_exporter_ingress_expected_lan in router_ingress_lan.stdout
+
+  tasks:
+    - name: Read live router INPUT firewall table, with rule handles
+      ansible.builtin.command:
+        argv: [nft, -a, list, table, inet, filter_router]
+      register: router_ingress_firewall
+      changed_when: false
+      check_mode: false
+
+    - name: Read main IPv4 routes
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, table, main]
+      register: router_ingress_routes
+      changed_when: false
+      check_mode: false
+
+    - name: Read directly connected IPv4 neighbors on Pi LAN
+      ansible.builtin.command:
+        argv: [ip, -4, neigh, show, dev, eth0]
+      register: router_ingress_neighbors
+      changed_when: false
+      check_mode: false
+
+    - name: Read dnsmasq DHCP lease candidates for ASUS WAN address
+      ansible.builtin.command:
+        argv: [cat, /var/lib/misc/dnsmasq.leases]
+      register: router_ingress_leases
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Read all current TCP listening sockets
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_ingress_tcp_listeners
+      changed_when: false
+      check_mode: false
+
+    - name: Read node exporter package status
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, '-f=${Status} ${Version}', prometheus-node-exporter]
+      register: router_ingress_exporter_package
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Verify four critical router units remain active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ router_exporter_ingress_services }}"
+      register: router_ingress_service_states
+      changed_when: false
+      check_mode: false
+
+    - name: Reject unhealthy active gateway services
+      ansible.builtin.assert:
+        that:
+          - (router_ingress_service_states.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Report router INPUT rules, ASUS address candidates and exporter status
+      ansible.builtin.debug:
+        msg:
+          firewall_rules: "{{ router_ingress_firewall.stdout_lines }}"
+          routes: "{{ router_ingress_routes.stdout_lines }}"
+          ipv4_lan_neighbors: "{{ router_ingress_neighbors.stdout_lines }}"
+          dhcp_leases: "{{ router_ingress_leases.stdout_lines | default([]) }}"
+          dhcp_lease_read_rc: "{{ router_ingress_leases.rc }}"
+          tcp_listeners: "{{ router_ingress_tcp_listeners.stdout_lines }}"
+          node_exporter_package: "{{ router_ingress_exporter_package.stdout | default('not installed') }}"
+          critical_services: "{{ router_ingress_service_states.results | map(attribute='stdout') | list }}"
+          changes: "READ ONLY. No services, interfaces, firewall, DHCP, routes or packages modified."
