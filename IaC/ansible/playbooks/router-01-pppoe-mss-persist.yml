@@ -1,0 +1,135 @@
+---
+# File-only persistence of already verified live MSS clamp. NO nft reload/restart.
+# Run only with the dedicated inventory and explicit approval after review.
+- name: Persist observed PPPoE MSS workaround without changing live nftables
+  hosts: router_mss_target
+  gather_facts: false
+  become: true
+  vars:
+    router_mss_persistence_approved: false
+  pre_tasks:
+    - name: Explicit controller-side safety gate before connecting to the Pi
+      ansible.builtin.assert:
+        that:
+          - router_mss_persistence_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Not approved or wrong target; no SSH or firewall change."
+      delegate_to: localhost
+      become: false
+
+  tasks:
+    - name: Confirm Pi onboard LAN MAC
+      ansible.builtin.command: cat /sys/class/net/eth0/address
+      register: router_mss_lan_mac
+      changed_when: false
+      failed_when: router_mss_lan_mac.stdout | trim | lower != 'd8:3a:dd:5a:51:44'
+
+    - name: Confirm current Pi LAN address
+      ansible.builtin.command: ip -4 -o addr show dev eth0
+      register: router_mss_lan_addr
+      changed_when: false
+      failed_when: "'192.168.3.1/24' not in router_mss_lan_addr.stdout"
+
+    - name: Confirm PPPoE MTU is 1492
+      ansible.builtin.command: cat /sys/class/net/ppp0/mtu
+      register: router_mss_wan_mtu
+      changed_when: false
+      failed_when: router_mss_wan_mtu.stdout | trim != '1492'
+
+    - name: Require active and enabled nftables before changing boot file
+      ansible.builtin.command:
+        argv: [systemctl, "{{ item.action }}", nftables.service]
+      loop:
+        - {action: is-active, expected: active}
+        - {action: is-enabled, expected: enabled}
+      register: router_mss_nft_service
+      changed_when: false
+      failed_when: router_mss_nft_service.stdout | trim != item.expected
+
+    - name: Read live strict filter and NAT tables (do not change)
+      ansible.builtin.command:
+        argv: [nft, list, table, "{{ item.family }}", "{{ item.table }}"]
+      loop:
+        - {family: inet, table: filter_router}
+        - {family: ip, table: nat_router}
+      register: router_mss_live_baseline
+      changed_when: false
+
+    - name: Require current working forward and masquerade rules
+      ansible.builtin.assert:
+        that:
+          - "'iifname \"eth0\" oifname \"ppp0\" ip saddr 192.168.3.0/24 accept' in router_mss_live_baseline.results[0].stdout"
+          - "'oifname \"ppp0\" ip saddr 192.168.3.0/24 masquerade' in router_mss_live_baseline.results[1].stdout"
+        fail_msg: "Unexpected live NAT/filter rules; refuse persistence until audited."
+
+    - name: Read tested live temporary MSS clamp
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, pppoe_mss_test]
+      register: router_mss_temporary
+      changed_when: false
+
+    - name: Require both previously tested 1452-byte MSS directions
+      ansible.builtin.assert:
+        that:
+          - "'iifname \"eth0\" oifname \"ppp0\"' in router_mss_temporary.stdout"
+          - "'iifname \"ppp0\" oifname \"eth0\"' in router_mss_temporary.stdout"
+          - "(router_mss_temporary.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2"
+        fail_msg: "Temporary tested MSS rules absent or unexpected; stop."
+
+    - name: Read current startup nftables file
+      ansible.builtin.slurp:
+        src: /etc/nftables.conf
+      register: router_mss_boot_file
+
+    - name: Refuse stale or externally rewritten firewall startup file
+      ansible.builtin.assert:
+        that:
+          - "(router_mss_boot_file.content | b64decode).startswith('#!/usr/sbin/nft -f\\nflush ruleset\\n')"
+          - "(router_mss_boot_file.content | b64decode).count('table inet filter_router') == 1"
+          - "(router_mss_boot_file.content | b64decode).count('table ip nat_router') == 1"
+          - "(router_mss_boot_file.content | b64decode).count('flush ruleset') == 1"
+          - "'iifname \"eth0\" oifname \"ppp0\" ip saddr 192.168.3.0/24 accept' in (router_mss_boot_file.content | b64decode)"
+          - "'oifname \"ppp0\" ip saddr 192.168.3.0/24 masquerade' in (router_mss_boot_file.content | b64decode)"
+          - "'table ip pppoe_mss_test' not in (router_mss_boot_file.content | b64decode)"
+          - "'table ip router_pppoe_mss' not in (router_mss_boot_file.content | b64decode) or '# BEGIN ANSIBLE MANAGED: Router-01 PPPoE MSS' in (router_mss_boot_file.content | b64decode)"
+        fail_msg: "Startup firewall diverged from 28 Oct observed baseline; no edits."
+
+    - name: Append persistent MSS table to existing firewall file only
+      ansible.builtin.blockinfile:
+        path: /etc/nftables.conf
+        create: false
+        backup: true
+        insertafter: EOF
+        marker: "# {mark} ANSIBLE MANAGED: Router-01 PPPoE MSS"
+        validate: "/usr/sbin/nft -c -f %s"
+        block: |
+          # PPPoE ppp0 MTU 1492 => IPv4 TCP MSS <= 1452.
+          # Existing filter_router / nat_router remain unchanged.
+          table ip router_pppoe_mss {
+            chain forward {
+              type filter hook forward priority mangle; policy accept;
+              iifname "eth0" oifname "ppp0" tcp flags syn tcp option maxseg size > 1452 counter tcp option maxseg size set 1452
+              iifname "ppp0" oifname "eth0" tcp flags syn tcp option maxseg size > 1452 counter tcp option maxseg size set 1452
+            }
+          }
+      register: router_mss_config_write
+
+    - name: Validate complete on-disk firewall without loading it
+      ansible.builtin.command:
+        argv: [/usr/sbin/nft, -c, -f, /etc/nftables.conf]
+      changed_when: false
+
+    - name: Verify temporary live clamp is still active (no reload)
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, pppoe_mss_test]
+      changed_when: false
+
+    - name: Explain what has and has not changed
+      ansible.builtin.debug:
+        msg:
+          - "Validated /etc/nftables.conf with persistent 1452 MSS table."
+          - "Ansible backup: {{ router_mss_config_write.backup_file | default('not created (idempotent)') }}"
+          - "NO nftables reload, restart, flush, table replacement or reboot was performed."
+          - "Temporary live pppoe_mss_test remains active until next reboot."
+          - "After a controlled reboot verify table ip router_pppoe_mss, internet and firewall."
