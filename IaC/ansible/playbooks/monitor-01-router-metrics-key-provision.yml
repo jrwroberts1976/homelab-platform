@@ -183,6 +183,9 @@
         home: "{{ router_c2_tunnel_home }}"
         shell: /usr/sbin/nologin
         password_lock: true
+      # Group creation is only PREDICTED in --check; an absent group
+      # cannot be resolved by useradd's preflight in that mode.
+      when: not ansible_check_mode
 
     - name: Generate dedicated ED25519 SSH client key locally on monitor only
       ansible.builtin.command:
@@ -259,7 +262,7 @@
     - name: Report bounded identity provisioning state
       ansible.builtin.debug:
         msg:
-          status: "{{ 'CHECK MODE: account/group preview only; no SSH keys generated' if ansible_check_mode else 'LIVE: isolated local SSH client identity and key provisioned' }}"
+          status: "{{ 'CHECK MODE: group predicted only; dependent user and SSH key tasks skipped' if ansible_check_mode else 'LIVE: isolated local SSH client identity and key provisioned' }}"
           monitor_identity: "{{ router_c2_tunnel_user }}"
           private_key_location: "{{ router_c2_private_key }}"
           private_key_contents: "NEVER PRINTED OR COMMITTED"
