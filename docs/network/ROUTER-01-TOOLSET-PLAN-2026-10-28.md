@@ -342,3 +342,37 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 **This is only architecture discovery, not a tunnel, not a Prometheus scrape.** Inspect results before deciding between a locked-down persistent SSH transport, a Docker-aware tunnel sidecar or a tightly restricted LAN-only exporter interface. Do not alter live ASUS/WAN, Pi `nftables`, SSH host trust, monitoring Compose services or Prometheus config until a separate IaC plan with validation and rollback has been approved.
+
+## 28 October ~16:38 — C2 secure SSH / Prometheus topology discovery LIVE PASS (no changes)
+
+User on `admin-01` fetched the C2 tunnel discovery playbook and ran `--syntax-check` PASS followed by `--check --limit monitor-01 -e router_c2_tunnel_audit_approved=true` PASS, **`monitor-01 ok=11 changed=0 unreachable=0 failed=0 skipped=0`**. It was *read-only* and executed all probes.
+
+- Prometheus **HTTP 200 ready** on monitor-01 localhost 9090; Docker inspect of `monitoring-prometheus-1` succeeded.
+- Prometheus runs in **Docker bridge `monitoring_default`**, container IPv4 `172.18.0.4`, network mode `monitoring_default`. Host TCP `19100` currently **unused**. Thus a hypothetical host-only SSH local forward `127.0.0.1:19100` is *not reachable as container-localhost* from the Prometheus Docker container. Do not expose it with an unsafeguarded `0.0.0.0:19100` binding.
+- `monitor-01` still routes `192.168.3.1 via 192.168.2.1 dev eth0 src 192.168.2.52` (via ASUS).
+- `monitor-01` user `james` SSH to `james@192.168.3.1` with `StrictHostKeyChecking=yes`, `BatchMode=yes`, `PasswordAuthentication=no` **did not authenticate**. Explicit error: **"No ED25519 host key is known for 192.168.3.1 ... Host key verification failed."** This demonstrates a **missing trusted host-key record** and does *not* yet test whether an eligible noninteractive private key exists or is authorized. It is not proof of a credential problem. No key was accepted or added, no SSH tunnel was established.
+
+### Next C2 security gate — verify actual Pi host fingerprint and existing trust (source-only)
+
+A read-only Ansible playbook `IaC/ansible/playbooks/router-01-ssh-trust-readonly.yml` is staged on draft PR #210, **NOT yet syntax-checked/executed on admin-01**. It must use **both inventories** because the isolated router audit inventory intentionally lacks monitor-01 and production hosts.yml lacks this exact Pi entry:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-trust-readonly.yml \
+  --limit router-01,monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-trust-readonly.yml \
+  --limit router-01,monitor-01 --ask-become-pass --check \
+  -e router_c2_ssh_trust_audit_approved=true
+```
+
+This verifies the **actual** physical router eth0 MAC, reads its `/etc/ssh/ssh_host_ed25519_key.pub` SHA256 fingerprint **directly on Pi** and effective `sshd -T` forwarding policies; validates monitor-01 hostname and IPv4, tests if `james` has an existing known_hosts record for `192.168.3.1` and presence of public key files (**does not print or read any private key**). No `ssh-keyscan`, TOFU acceptance, copy of private keys, key generation, `known_hosts` mutation, SSH daemon change, tunnel, Docker modification or firewall change is performed. **Compare fingerprints before any future explicit IaC-pinned known_hosts deployment.**
+
+C2 design remains pending: decide how a strictly restricted authenticated tunnel can be reached from the **Prometheus container** without an unsafe all-interface listener, using a dedicated nonprivileged identity/key with only `PermitOpen=127.0.0.1:9100` and no interactive privileges where practical. Future changes require a separate IaC proposal, dry-run and rollback. The live Pi exporter stays **only 127.0.0.1:9100**, and user-confirmed ASUS internet browsing remains OK.
