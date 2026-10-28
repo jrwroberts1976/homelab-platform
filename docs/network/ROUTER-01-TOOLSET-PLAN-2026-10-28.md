@@ -160,3 +160,37 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 **No monitoring agent packages have yet been installed; this playbook has not been executed on the controller and syntax is not yet tested there.** Interpret results: if admin-01 reaches the services but the router cannot, focus on directionality/routing through the ASUS (NAT) rather than asserting monitoring outage; if both fail, check the server/endpoint state from inside the ASUS LAN before any router-side changes. Any later changes to export traffic or access controls require separate reviewed IaC and narrow allowances; never WAN-expose Zabbix/Prometheus/Alloy.
+
+## 28 October — actual two-vantage network evidence (PASS; no changes)
+
+Operator ran `router-01-monitoring-path-readonly.yml --syntax-check` and `--check -e router_monitoring_path_audit_approved=true` on `admin-01`; **recap `router-01 ok=14 changed=0 unreachable=0 failed=0 skipped=0`**. All probes were read-only and actually executed (no check-mode skips).
+
+| Origin | IPv4 path to 192.168.2.52/.59 | Loki TCP/3100 HTTP /ready | Zabbix TCP/10051 |
+| --- | --- | --- | --- |
+| `admin-01` on ASUS LAN `192.168.2.48/24` | Direct `eth0` (no gateway) | **HTTP 503**: reachable but not ready | **CONNECTED** |
+| `router-01` upstream Pi `192.168.3.1/24` | **default `ppp0` ISP uplink** (not via ASUS) | Connection failed (status -1) | FAILED |
+
+**Conclusions grounded in live evidence:** Both central endpoints are in the ASUS downstream `192.168.2.0/24` subnet. The upstream Pi has no specific route toward it and attempts to send this private traffic via the ISP default PPPoE path. Blindly adding a `192.168.2.0/24` static route is **not a complete solution**: ASUS's WAN NAT/firewall normally blocks unsolicited upstream connections to LAN servers. `admin-01` does reach Zabbix locally and reaches Loki but gets HTTP 503, so Loki has an **independent local health/readiness problem**. Do not use "Ansible task ok" as HTTP 200: readiness 503 is currently a failure signal. Client internet from ASUS post-tool install remains unreported.
+
+### Staged next — monitor-01 local Loki audit, READ-ONLY only
+
+New `IaC/ansible/playbooks/monitor-01-loki-readiness-readonly.yml` (source-only; NOT yet syntax-checked or executed on controller) targets existing canonical `monitoring_hosts` inventory host and refuses wrong hostname/IP, requiring an explicit opt-in. Collects Docker active state, local `127.0.0.1:3100/ready` HTTP status, buildinfo API, `docker compose ps --all`, 35 recent Loki compose log lines, local 3100 TCP listen state, and free space in `/opt/monitoring`. **No Docker service/container restart, no compose up/down, no config/iptables/routing/IP changes.** On `admin-01`:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-loki-readiness-readonly.yml --syntax-check
+
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-loki-readiness-readonly.yml \
+  --limit monitor-01 --ask-become-pass --check \
+  -e monitor_loki_readonly_approved=true
+```
+
+**Do not run generic `playbooks/monitoring.yml`** to correct the 503 without reading this audit; it may pull and recreate monitoring containers. Avoid deploying `alloy` and `zabbix-agent2` from router-01 while it cannot route to their private server IPs.
+
+**Later topology options to design (not applied):** retrieve verified ASUS WAN `192.168.3.x` IP, then design least-privilege controlled LAN-to-Pi telemetry pull (e.g., Proxmox/monitor-01 uses the ASUS NATed path to a Pi Node Exporter endpoint on `192.168.3.1`; Pi firewall must narrowly permit this from a verified WAN-side ASUS source). If push of journald/active Zabbix is desired, consider explicit ASUS mode changes or tunnel/route+NAT rules only with independent console rollback, staged IaC and impact assessment. Keep Pi `ppp0` firewall default-deny and never expose 9100/10050 on ISP WAN.
