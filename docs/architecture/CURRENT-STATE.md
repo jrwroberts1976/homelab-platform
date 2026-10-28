@@ -2,6 +2,14 @@
 # Current-State Architecture
 
 
+## 28 October 2026 — verified persistence and new-LAN NAT reference after PPPoE MSS audit
+
+After the baseline and PR #212 merge, the operator ran the **read-only Ansible post-cutover MSS audit** on `admin-01` against Raspberry Pi `router-01` (`192.168.2.1`): **16 tasks OK, 0 changed, 0 failed, 0 unreachable**. Exact Pi MAC, active new LAN address, default `ppp0` route, **PPPoE MTU 1492** and IPv4 forwarding were confirmed. Core router systemd units remained active. Live `filter_router` (DROP policy), `nat_router` (masquerade) and the **two bidirectional 1452 MSS clamp rules** in `router_pppoe_mss` passed assertions. `/etc/nftables.conf` contained one managed persistent MSS block and passed `nft -c -f` without loading changes. The temporary `pppoe_mss_test` table was **absent**. Both live and saved NAT text **mentioned `192.168.2.0/24`**. This is verified real router evidence; no configuration edits performed. The read-only audit does not exhaustively audit NAT rule predicates or WAN exposure. Details in [Router-01 MSS post-cutover verification](../network/ROUTER-01-MSS-POSTCUTOVER-VERIFICATION-2026-10-28.md).
+
+The legacy PR #208 persistence-writer and old `192.168.3.1` inventory remain **not integrated** into the current primary gateway. Do not rerun the old writer or reload nftables; any future writer reconciliation requires a new reviewed IaC and safety gate.
+
+
+
 ## 28 October 2026 22:09 UTC — Raspberry Pi router-01 is the verified live LAN gateway (reconciliation pending)
 
 A **read-only operator-run Ansible baseline** on the physical Raspberry Pi 4 at `192.168.2.1/24` completed with **ok=15 changed=0 failed=0 unreachable=0 skipped=0** after passing exact onboard MAC, IPv4 default route via `ppp0` and core service health preflights. The LAN router currently uses `dnsmasq` for DHCP, `unbound` for DNS, `nftables` for filtering/NAT and PPPoE for WAN; these four systemd units were active before and after measurement. Node Exporter listens on **127.0.0.1:9100** only. At 22:09:06 UTC CPU busy 0.1% (3-sec idle sample), temperature 45.3°C, throttling flag `0x0`, estimated memory use 6.8%, disk use 4.5%, 0 interface RX/TX errors, and 5 WAN probes with 0% loss and 10.502 ms mean RTT. The previous 22:06:52 reading had identical LAN drop counters (150 RX, 23 TX); the lease file contained 18 rows. This is an idle snapshot, not a capacity test. Full immutable observations and cautious interpretation: [Router-01 post-cutover verified baseline](../network/ROUTER-01-BASELINE-2026-10-28.md).
