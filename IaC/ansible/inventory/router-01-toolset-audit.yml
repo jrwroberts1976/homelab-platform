@@ -1,0 +1,11 @@
+---
+# Isolated audit inventory. Does NOT replace canonical estate.json or hosts.yml.
+# Router eth0 MAC and .3.1 address were verified on 28 Oct 2026.
+# SSH uses admin-01's working identity selection; no host-key bypass.
+all:
+  children:
+    router_toolset_audit:
+      hosts:
+        router-01:
+          ansible_host: 192.168.3.1
+          ansible_user: james
