@@ -1,0 +1,267 @@
+---
+# Stage C2b2-d: READ-ONLY activation readiness inspection.
+# No sshd reload, daemon restart, changes to /etc, authorized_keys,
+# monitoring tunnel, Node Exporter, PPPoE or nftables.
+- name: Inspect installed restricted Pi SSH configuration and safe rollback before reload
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_ssh_activation_preflight_approved: false
+    router_c2_expected_metrics:
+      - "pubkeyauthentication yes"
+      - "authenticationmethods publickey"
+      - "passwordauthentication no"
+      - "kbdinteractiveauthentication no"
+      - "permittty no"
+      - "x11forwarding no"
+      - "allowagentforwarding no"
+      - "allowstreamlocalforwarding no"
+      - "allowtcpforwarding local"
+      - "permitopen 127.0.0.1:9100"
+      - "permitlisten none"
+      - "gatewayports no"
+      - "permittunnel no"
+      - "permituserrc no"
+      - "maxsessions 0"
+      - "forcecommand none"
+    router_c2_contexts:
+      - user=james,host=admin-01,addr=192.168.2.48
+      - user=james,host=admin-01,addr=192.168.2.1
+    router_c2_metrics_contexts:
+      - user=router-metrics,host=monitor-01,addr=192.168.2.52
+      - user=router-metrics,host=monitor-01,addr=192.168.2.1
+
+  pre_tasks:
+    - name: Verify original controller name
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: c2b2_activation_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require exact physical router, check mode, and explicit audit gate
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+          - router_c2_ssh_activation_preflight_approved | bool
+          - c2b2_activation_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify router Ethernet MAC to prevent targeting any other machine
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: c2b2_activation_mac
+      changed_when: false
+      check_mode: false
+
+    - name: Require known Raspberry Pi hardware
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+  tasks:
+    - name: Validate installed SSH config syntax without reloading daemon
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      changed_when: false
+      check_mode: false
+
+    - name: Require exactly one monitoring Match block in the installed main config
+      ansible.builtin.command:
+        argv: [grep, -nE, '^[[:space:]]*(Include|Match)[[:space:]]', /etc/ssh/sshd_config]
+      register: c2b2_activation_match_lines
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse changed Include structure or unexpected extra Match sections
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_match_lines.stdout_lines | length == 2
+          - c2b2_activation_match_lines.stdout_lines[0] == '12:Include /etc/ssh/sshd_config.d/*.conf'
+          - c2b2_activation_match_lines.stdout_lines[1].split(':', 1)[1] == 'Match User router-metrics'
+
+    - name: Confirm managed monitoring block is physically at EOF
+      ansible.builtin.command:
+        argv: [tail, -n, '1', /etc/ssh/sshd_config]
+      register: c2b2_activation_final_line
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse incomplete EOF monitoring block
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_final_line.stdout | trim == '# END ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)'
+
+    - name: Ensure no extra SSH daemon drop-ins
+      ansible.builtin.find:
+        paths: /etc/ssh/sshd_config.d
+        patterns: '*.conf'
+        recurse: false
+        file_type: file
+      register: c2b2_activation_fragments
+
+    - name: Refuse unreviewed SSH policy fragment
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_fragments.files | length == 0
+
+    - name: Discover Ansible main sshd_config backups retained for recovery
+      ansible.builtin.find:
+        paths: /etc/ssh
+        patterns: '^sshd_config\..*~$'
+        use_regex: true
+        recurse: false
+        file_type: file
+      register: c2b2_activation_backups
+
+    - name: Require a pre-change SSH config backup before considering any reload
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_backups.files | length >= 1
+          - (c2b2_activation_backups.files | sort(attribute='mtime', reverse=true) | first).pw_name == 'root'
+        fail_msg: "No trusted root-owned sshd_config rollback backup found. STOP before reload."
+
+    - name: Select newest existing backup; do not copy or modify it
+      ansible.builtin.set_fact:
+        c2b2_activation_latest_backup: "{{ (c2b2_activation_backups.files | sort(attribute='mtime', reverse=true) | first).path }}"
+
+    - name: Validate saved pre-change SSH config can be parsed for rollback
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t, -f, "{{ c2b2_activation_latest_backup }}"]
+      register: c2b2_activation_backup_syntax
+      changed_when: false
+      check_mode: false
+
+    - name: Ensure original backup does not contain monitoring Match block
+      ansible.builtin.command:
+        argv: [grep, -cE, '^Match[[:space:]]+User[[:space:]]+router-metrics', "{{ c2b2_activation_latest_backup }}"]
+      register: c2b2_activation_backup_match
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Require backup is genuinely older unrestricted policy
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_backup_match.rc == 1
+          - c2b2_activation_backup_match.stdout | trim == '0'
+
+    - name: Read original admin effective policy using trusted saved backup
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T, -f, "{{ c2b2_activation_latest_backup }}", -C, "{{ item }}"]
+      loop: "{{ router_c2_contexts }}"
+      loop_control:
+        label: "admin previous policy context"
+      register: c2b2_activation_admin_before
+      changed_when: false
+      check_mode: false
+
+    - name: Read current on-disk admin effective policy
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T, -C, "{{ item }}"]
+      loop: "{{ router_c2_contexts }}"
+      loop_control:
+        label: "admin installed policy context"
+      register: c2b2_activation_admin_after
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse any difference in administrative SSH effective policies
+      ansible.builtin.assert:
+        that:
+          - c2b2_activation_admin_before.results[0].stdout == c2b2_activation_admin_after.results[0].stdout
+          - c2b2_activation_admin_before.results[1].stdout == c2b2_activation_admin_after.results[1].stdout
+
+    - name: Read installed monitoring user effective SSH restrictions
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T, -C, "{{ item }}"]
+      loop: "{{ router_c2_metrics_contexts }}"
+      loop_control:
+        label: "monitoring policy context"
+      register: c2b2_activation_metrics_policy
+      changed_when: false
+      check_mode: false
+
+    - name: Require every documented monitoring restriction in both contexts
+      ansible.builtin.assert:
+        that:
+          - item.0 in item.1.stdout_lines
+        fail_msg: "Proposed monitoring SSH restrictions are not fully installed; do not reload."
+      loop: "{{ router_c2_expected_metrics | product(c2b2_activation_metrics_policy.results) | list }}"
+      loop_control:
+        label: "{{ item.0 }}"
+
+    - name: Inspect actual Debian SSH daemon service control without modifying it
+      ansible.builtin.command:
+        argv: [systemctl, show, ssh.service, -p, LoadState, -p, ActiveState, -p, SubState, -p, CanReload, -p, FragmentPath, -p, ExecReload]
+      register: c2b2_activation_service
+      check_mode: false
+      changed_when: false
+
+    - name: Require running SSH service supporting a reload rather than restart
+      ansible.builtin.assert:
+        that:
+          - "'LoadState=loaded' in c2b2_activation_service.stdout_lines"
+          - "'ActiveState=active' in c2b2_activation_service.stdout_lines"
+          - "'CanReload=yes' in c2b2_activation_service.stdout_lines"
+        fail_msg: "SSH service cannot safely support a future reload; stop."
+
+    - name: Check proposed monitoring user remains without authorized keys
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-metrics/.ssh/authorized_keys
+        - /var/lib/router-metrics/.ssh/authorized_keys2
+      register: c2b2_activation_authorization
+
+    - name: Refuse premature monitoring SSH authorization
+      ansible.builtin.assert:
+        that:
+          - not c2b2_activation_authorization.results[0].stat.exists
+          - not c2b2_activation_authorization.results[1].stat.exists
+
+    - name: Verify all critical home gateway services remain active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_activation_gateway
+      check_mode: false
+      changed_when: false
+
+    - name: Check SSH and Node Exporter listeners without changing bind addresses
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: c2b2_activation_sockets
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse degraded router or exposed exporter
+      ansible.builtin.assert:
+        that:
+          - (c2b2_activation_gateway.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+          - "'127.0.0.1:9100' in c2b2_activation_sockets.stdout"
+          - "'0.0.0.0:9100' not in c2b2_activation_sockets.stdout"
+          - "'[::]:9100' not in c2b2_activation_sockets.stdout"
+          - "'192.168.3.1:9100' not in c2b2_activation_sockets.stdout"
+          - "':22' in c2b2_activation_sockets.stdout"
+
+    - name: Report SSH activation prerequisites without activating anything
+      ansible.builtin.debug:
+        msg:
+          candidate_sshd_config_syntax: "PASS"
+          installed_monitoring_match: "EXACT RESTRICTIONS VERIFIED"
+          administrative_ssh_policy_from_backup_vs_current: "IDENTICAL FOR TWO SOURCE CONTEXTS"
+          rollback_backup: "{{ c2b2_activation_latest_backup }}"
+          rollback_backup_syntax: "PASS"
+          ssh_service_status_and_reload_capability: "{{ c2b2_activation_service.stdout_lines }}"
+          monitoring_public_key_authorized: false
+          pi_exporter_loopback_only: true
+          gateway_services: "ALL FOUR ACTIVE"
+          modifications: "NONE: no SSH reload/restart, file edits, network changes or tunnel"
+          next_gate: "Separately review rollback sequence and verify fresh admin SSH access before any authorized SSH reload"
