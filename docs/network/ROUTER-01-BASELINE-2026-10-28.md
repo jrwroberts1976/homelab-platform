@@ -60,9 +60,8 @@ From the `admin-01` IaC repository after fetching the updated `main`:
 
 ```bash
 cd ~/projects/homelab-platform/IaC/ansible
-python3 scripts/validate-ansible-assert-conditions.py playbooks/router-01-postcutover-baseline-readonly.yml
 ansible-playbook -i inventory/router-01-postcutover-baseline.yml playbooks/router-01-postcutover-baseline-readonly.yml --limit router-01 --syntax-check
 ansible-playbook -i inventory/router-01-postcutover-baseline.yml playbooks/router-01-postcutover-baseline-readonly.yml --limit router-01 --ask-become-pass --check -e router_postcutover_baseline_approved=true
 ```
 
-**Note:** The separate `validate-ansible-assert-conditions.py` helper currently lives on draft PR #210, not necessarily in `main`. If it is absent, omit that helper step rather than copying unrelated SSH changes. The built-in Ansible `--syntax-check` and exact reviewed read-only playbook remain required. This document records the previous real success and does not claim any later run.
+**Note:** The separate `validate-ansible-assert-conditions.py` helper used in the original successful operator run remains on draft PR #210. It is not part of this minimal merge. Ansible `--syntax-check` and exact reviewed read-only playbook remain required. This document records the previous real success and does not claim any later run.
