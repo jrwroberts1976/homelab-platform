@@ -315,3 +315,30 @@ Normal live postflight passed: local `http://127.0.0.1:9100/metrics` returned HT
 
 **C2 safety gate:** Before configuring a Prometheus scrape, choose and review a restricted transport from `monitor-01` (ASUS downstream `192.168.2.52`) to Pi `192.168.3.1`. SSH22 via ASUS works, but direct TCP9100 is intentionally absent and Pi `input` default drop. Do not arbitrarily open 9100 or loosen default-deny; earlier Pi leases showed `.3.142` (neighbour reachable, no hostname) and `.3.187` (ASUS-named), but did NOT establish actual NAT source for `monitor-01`. If choosing TCP9100, strict `eth0` + expected ASUS WAN source and end-to-end packet-capture/test are needed, and note ASUS SNAT obscures individual downstream hosts. Alternatively explicitly design a loopback-preserving authenticated SSH transport without exposing 9100; either is a separate reviewed IaC change. Consider scrape-target config update without blind full monitoring stack cutover, and ensure boot/restart persistence.
 
+
+## 28 October ~16:25+ — post-install ASUS browsing confirmed; Stage C2 SSH tunnel discovery staged
+
+Operator confirmed **"browsing all ok"** from their setup after the live Stage C1 Node Exporter install. Together with live Ansible `router-01 ok=37 changed=4 failed=0 skipped=2`, verified local metrics and gateway postflight, this **closes Stage C1 end-to-end operational safety acceptance**. No current internet disruption reported.
+
+**Stage C2 remains research/source-only, NOT deployed.** Secure monitoring architecture must account for existing Prometheus **inside Docker** on `monitor-01`: a normal SSH `-L 127.0.0.1:19100:127.0.0.1:9100` on the monitor host is **not directly reachable from a Prometheus container's loopback**. Do not assume a host-local tunnel can be scraped by Prometheus without a purpose-built container access path. Binding a tunnel to `0.0.0.0` to get around this is **not permitted**; any non-loopback listener would need explicit interface/source protection and risk review. We also have not proven passwordless SSH authentication or SSH server forwarding permissions.
+
+New source-only `IaC/ansible/playbooks/monitor-01-router-exporter-tunnel-readonly.yml` in draft PR #210 (not yet tested on admin-01) uses explicit approval `router_c2_tunnel_audit_approved=true`, strict `admin-01` controller and `monitor-01=192.168.2.52` identity guards. It reads `monitor-01` route to Pi, locally listening ports including proposed `19100`, Prometheus Docker container network topology **without printing container secrets**, and Prometheus HTTP readiness. It performs a safe, **non-interactive SSH authentication test** from monitor's `james` user to Pi `james@192.168.3.1` using `BatchMode=yes`, `StrictHostKeyChecking=yes`, no password prompts, and a read-only `true` command. Failure is **expected if keys or host trust have not been provisioned**; the audit does not create keys, alter `known_hosts` or start any SSH tunnel.
+
+Run after safe fetch/fast-forward of existing worktree:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-exporter-tunnel-readonly.yml \
+  --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-exporter-tunnel-readonly.yml \
+  --limit monitor-01 --ask-become-pass --check \
+  -e router_c2_tunnel_audit_approved=true
+```
+
+**This is only architecture discovery, not a tunnel, not a Prometheus scrape.** Inspect results before deciding between a locked-down persistent SSH transport, a Docker-aware tunnel sidecar or a tightly restricted LAN-only exporter interface. Do not alter live ASUS/WAN, Pi `nftables`, SSH host trust, monitoring Compose services or Prometheus config until a separate IaC plan with validation and rollback has been approved.
