@@ -1,0 +1,170 @@
+---
+# Evidence + candidate plan only. No DNS/DHCP configuration edits or reload.
+# Must run from admin-01 in --check mode with a specific opt-in.
+# Protecting .181/.195 requires a separate, approved deployment playbook
+# AFTER their current address ownership is confirmed.
+- name: Inspect current DHCP and propose protected dynamic ranges without changes
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_dhcp_exclusion_preflight_approved: false
+    router_dhcp_original_range: "dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h"
+    router_dhcp_candidate_ranges:
+      - "dhcp-range=192.168.2.100,192.168.2.180,255.255.255.0,24h"
+      - "dhcp-range=192.168.2.182,192.168.2.194,255.255.255.0,24h"
+      - "dhcp-range=192.168.2.196,192.168.2.199,255.255.255.0,24h"
+
+  pre_tasks:
+    - name: Identify IaC controller
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_dhcp_controller
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+
+    - name: Enforce exact controller and Pi target in read-only check mode
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+          - router_dhcp_exclusion_preflight_approved | bool
+          - router_dhcp_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Read-only only: use admin-01, correct isolated .2.1 inventory, --check and explicit gate."
+      delegate_to: localhost
+      become: false
+
+    - name: Read exact Pi hardware identity
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_dhcp_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Check current eth0 gateway address
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_dhcp_addr
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse unexpected gateway hardware or address
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in router_dhcp_addr.stdout"
+
+  tasks:
+    - name: Verify dnsmasq is active before inspection
+      ansible.builtin.command:
+        argv: [systemctl, is-active, dnsmasq]
+      register: router_dhcp_service_before
+      check_mode: false
+      changed_when: false
+
+    - name: Enforce active DHCP service
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_service_before.stdout | trim == 'active'
+
+    - name: Read dnsmasq process arguments without editing them
+      ansible.builtin.command:
+        argv: [pgrep, -a, -x, dnsmasq]
+      register: router_dhcp_process
+      check_mode: false
+      changed_when: false
+
+    - name: Verify expected dnsmasq config directory is in use
+      ansible.builtin.assert:
+        that:
+          - "'-7 /etc/dnsmasq.d,' in router_dhcp_process.stdout"
+        fail_msg: "Effective dnsmasq include-directory command line changed; do not trust exclusion proposal."
+
+    - name: Enumerate dnsmasq.d files
+      ansible.builtin.command:
+        argv: [find, /etc/dnsmasq.d, -maxdepth, '1', -type, f, -printf, '%f\n']
+      register: router_dhcp_fragments
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse extra config fragments until independently reviewed
+      ansible.builtin.assert:
+        that:
+          - "(router_dhcp_fragments.stdout_lines | sort | list) == ['README', 'router.conf']"
+        fail_msg: "Unexpected dnsmasq.d file; review source before any exclusion changes."
+
+    - name: Read top-level dnsmasq.conf
+      ansible.builtin.slurp:
+        src: /etc/dnsmasq.conf
+      register: router_dhcp_parent_config
+
+    - name: Read active router DHCP fragment
+      ansible.builtin.slurp:
+        src: /etc/dnsmasq.d/router.conf
+      register: router_dhcp_router_config
+
+    - name: Ensure exact working DHCP policy and absence of competing allocation files
+      ansible.builtin.assert:
+        that:
+          - "(router_dhcp_router_config.content | b64decode).count(router_dhcp_original_range) == 1"
+          - "((router_dhcp_router_config.content | b64decode) | regex_findall('(?m)^\\s*dhcp-range\\s*=')) | length == 1"
+          - "'interface=eth0' in (router_dhcp_router_config.content | b64decode)"
+          - "'bind-dynamic' in (router_dhcp_router_config.content | b64decode)"
+          - "'dhcp-authoritative' in (router_dhcp_router_config.content | b64decode)"
+          - "'dhcp-option=option:router,192.168.2.1' in (router_dhcp_router_config.content | b64decode)"
+          - "'dhcp-option=option:dns-server,192.168.2.1' in (router_dhcp_router_config.content | b64decode)"
+          - "(((router_dhcp_parent_config.content | b64decode) ~ (router_dhcp_router_config.content | b64decode)) | regex_findall('(?m)^\\s*(?:dhcp-host|dhcp-ignore|dhcp-hostsfile|dhcp-hostsdir|read-ethers|conf-file|conf-dir)\\s*(?:=|$)')) | length == 0"
+          - "((router_dhcp_parent_config.content | b64decode) | regex_findall('(?m)^\\s*dhcp-range\\s*=')) | length == 0"
+        fail_msg: "Unexpected active DHCP or reservation directives. Stop without modifying the router."
+
+    - name: Inspect only IP addresses in current DHCP lease file
+      ansible.builtin.command:
+        argv: [awk, '{print $3}', /var/lib/misc/dnsmasq.leases]
+      register: router_dhcp_lease_ips
+      check_mode: false
+      changed_when: false
+
+    - name: Require proposed excluded addresses absent from lease file
+      ansible.builtin.assert:
+        that:
+          - "'192.168.2.181' not in router_dhcp_lease_ips.stdout_lines"
+          - "'192.168.2.195' not in router_dhcp_lease_ips.stdout_lines"
+        fail_msg: "Excluded address now has a lease entry; stop and reconcile ownership/expiry."
+
+    - name: Run existing dnsmasq syntax check without restart or reload
+      ansible.builtin.command:
+        argv: [dnsmasq, --test]
+      register: router_dhcp_syntax
+      check_mode: false
+      changed_when: false
+
+    - name: Present exact proposed dynamic ranges, nothing written
+      ansible.builtin.debug:
+        msg:
+          audit: "LIVE CONFIG INSPECTED; NO CONFIGURATION CHANGES"
+          current_range: "{{ router_dhcp_original_range }}"
+          candidate_ranges: "{{ router_dhcp_candidate_ranges }}"
+          provisionally_protected_ips:
+            - "192.168.2.181 (ASUS AiMesh historical address, not yet independently confirmed)"
+            - "192.168.2.195 (media-01 historical static address, host offline)"
+          current_lease_count: "{{ router_dhcp_lease_ips.stdout_lines | length }}"
+          existing_198_lease_record_present: "{{ '192.168.2.198' in router_dhcp_lease_ips.stdout_lines }}"
+          current_dnsmasq_syntax: "{{ router_dhcp_syntax.stdout ~ router_dhcp_syntax.stderr }}"
+          safety: "No writes, DHCP restarts, reloads, lease removals or network changes."
+          deployment_gate: "Confirm ownership of both addresses and review rollback before creating separate writer."
+
+  post_tasks:
+    - name: Verify DHCP service remained active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, dnsmasq]
+      register: router_dhcp_service_after
+      check_mode: false
+      changed_when: false
+
+    - name: Fail if DHCP service is no longer running
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_service_after.stdout | trim == 'active'
