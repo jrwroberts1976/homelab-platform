@@ -764,3 +764,21 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Review actual check-mode recap before any normal-mode creation on the live Pi. Establish restricted sshd Match only via separate validated, rollback-capable change after the account is present, and **withhold authorized_keys installation until the restrictive sshd policy is independently verified**.
+
+### 28 October ~18:25 — C2b2-a dormant Pi system-account PREVIEW PASS, not deployed
+
+User fetched feature branch through `1ae298ba` into isolated `~/projects/homelab-router-toolset-audit`, executed `router-01-metrics-service-account.yml` **syntax-check PASS**, then `--check --diff -e router_c2_pi_account_approved=true --limit router-01` with the isolated router inventory. Actual recap: **`router-01 ok=18 changed=1 (PREDICTED) unreachable=0 failed=0 skipped=2 rescued=0 ignored=0`**. All Pi physical identity/MAC, valid `sshd -t`, proposed user/group collision, `/var/lib/router-metrics` home, Node Exporter bound to `127.0.0.1:9100` only, and gateway units (`nftables`, `router-pppoe`, `dnsmasq`, `unbound`) pre/postflight PASS. **Only predicted new system group `router-metrics`**; dependent user task deliberately skipped as new group does not exist during check mode. No physical Pi mutation, no user, no SSH authorized_keys, no SSH policy/reload, no tunnel or monitoring alteration.
+
+**Next separately gated normal-mode step approved by passed preview** is only to create dormant local Pi system user/group with a password lock and `/usr/sbin/nologin`, home `/var/lib/router-metrics`. Account will have no authorized keys and no changes to existing SSH daemon; no network/PPPoE/nftables/Prometheus changes.
+
+```bash
+# From admin-01 ~/projects/homelab-router-toolset-audit/IaC/ansible
+ansible-playbook \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-service-account.yml \
+  --limit router-01 \
+  --ask-become-pass \
+  -e router_c2_pi_account_approved=true
+```
+
+**Do not mark C2b2-a live complete until the normal-mode recap and postflight succeed.** Before allowing remote authentication, separately test a candidate end-of-main `Match User router-metrics` with `sshd -t` and effective `sshd -T -C` for `james` and `router-metrics`, explicit rollback and operator approval; only then consider authorized_keys of the verified monitor public key. Keep SSH key private only on monitor-01, Node Exporter localhost-only, and no tunnel started.
