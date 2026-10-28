@@ -456,3 +456,34 @@ ansible-playbook \
 ```
 
 **Do not mark C2a installed until a successful normal Ansible recap and installed fingerprint verification.** Even after trust is pinned, dedicated SSH client authentication and Prometheus Docker-aware tunnel design remain future, separately gated stages.
+
+### 28 October ~16:59 — Stage C2a public SSH host-key pin LIVE SUCCESS
+
+Operator executed `router-01-ssh-host-pin.yml` in **normal mode** (no `--check`), with exact two inventories, `--limit router-01,monitor-01` and explicit opt-in `router_c2_host_pin_approved=true`. **Actual recaps:** `router-01 ok=8 changed=0 unreachable=0 failed=0 skipped=0`; `monitor-01 ok=11 changed=2 unreachable=0 failed=0 skipped=2`. Only actual changes were creation of root-owned `/etc/homelab/router-metrics-ssh/` and `/etc/homelab/router-metrics-ssh/known_hosts` **on monitor-01**. The installed known_hosts public Pi SSH server key was independently verified **on monitor-01** after writing; the required SHA256 fingerprint matched **`SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`**. The real Pi remained read-only. No SSH client private keys or account, no tunnel, no SSH daemon/network/firewall/ASUS, and no Prometheus/Docker changes were made.
+
+**Stage C2a is COMPLETE and the host public-key trust is deployed**, not just previewed. This purpose-built file is separate from `/home/james/.ssh/known_hosts` and would need an explicit `UserKnownHostsFile=/etc/homelab/router-metrics-ssh/known_hosts` in a later restricted SSH tunnel; current unrelated `james` SSH sessions are unchanged. Stage C1 local metrics and confirmed downstream internet browsing remain intact. **Stage C2 overall is NOT DONE: no authenticated monitoring principal or reachable remote scrape exists yet.**
+
+### Stage C2b — new dedicated SSH tunnel identity, read-only preflight STAGED (NOT EXECUTED)
+
+New IaC `IaC/ansible/playbooks/router-01-ssh-metrics-identity-readonly.yml` on draft PR #210 checks **without modifying** either target: exact `admin-01` controller and Pi/monitor inventory identities, router physical MAC, planned `router-metrics` Pi service account/group availability, real `sshd -t` validity and global effective SSH permissions, isolated `127.0.0.1:9100` metrics socket, default-deny firewall and all critical router services. On monitor-01, it confirms the newly installed dedicated `known_hosts` path remains a normal root-owned file with the precise verified ED25519 SHA256 fingerprint, checks proposed nonprivileged `router-metrics-tunnel` local identity and dedicated private key path for potential conflicts (does not read keys), port 19100 availability, Prometheus HTTP readiness, and route to Pi SSH. `getent passwd` command output and account attributes are suppressed to avoid unnecessary disclosure, and only boolean availability is reported. **The preflight source is not yet syntax-checked on admin-01 or run**.
+
+From the existing isolated feature worktree, run only the syntax and **read-only check**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-metrics-identity-readonly.yml \
+  --limit router-01,monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-metrics-identity-readonly.yml \
+  --limit router-01,monitor-01 --ask-become-pass --check \
+  -e router_c2_identity_audit_approved=true
+```
+
+Only after seeing account/service conflicts and reviewing transport policy should we author **separate** tightly gated and rollback-capable identity/key/account installation, SSH policy restrictions, and Docker-side Prometheus tunnel. **No auto-generated private keys should be committed to the repository or printed by Ansible.** Protect client host trust using the pinned dedicated file with StrictHostKeyChecking=yes. Keep Pi node exporter bound to localhost and leave existing firewall and PPPoE untouched. Do not blindly run generic monitoring stack playbook or restart Prometheus stack.
