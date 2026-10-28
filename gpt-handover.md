@@ -1,4 +1,12 @@
 # GPT Handover — Homelab Platform
+## LATEST — 28 Oct 2026 18:33: Pi monitoring sshd restriction preview PASS, offline candidate check pending
+
+User executed `router-01-metrics-sshd-match-preview.yml` syntax-check PASS and --check --diff PASS: router-01 ok=27, changed=1 PREDICTED, failed=0, skipped=0. Proposed EOF-only `Match User router-metrics` block restricts public-key auth, forwarding only to Pi loopback TCP 9100, no shell/subsystem/PTY, agent, X11 or reverse forwarding. All Pi MAC, locked service identity, no authorized_keys, existing sshd syntax, four gateway services and localhost exporter checks passed. No live SSH configuration, user key, network, tunnel or monitoring change. Stage C2b2-a account completed earlier.
+
+New Git-only offline policy validator source: `IaC/ansible/scripts/router-01-sshd-candidate-validate.py` and gated `IaC/ansible/playbooks/router-01-metrics-sshd-candidate-effective-readonly.yml`. They have NOT been run by operator. The playbook refuses normal mode and evaluates the candidate using the Pi's sshd binary against a protected temporary file in /run; the temporary file is deleted immediately, with no persistent SSH config changes or service reload. Tests candidate sshd -t and -T -C for existing admin and monitoring identities; fails if full admin/global policy changes or required monitoring restrictions are absent.
+
+NEXT: fetch/fast-forward feature branch from admin-01 isolated worktree; syntax-check and run the new playbook with --check, --limit router-01 and `-e router_c2_sshd_candidate_audit_approved=true`. Exact commands in `docs/network/ROUTER-01-TOOLSET-PLAN-2026-10-28.md`. No Pi-side monitoring authorized_keys, no SSH policy deployed or tunnel started. See GitHub issue #209/draft PR #210.
+
 ## LATEST — 28 Oct 2026 ~18:30 C2b2-a Pi dormant monitoring user LIVE SUCCESS, C2b2-b check-only Match preview staged
 
 Operator executed `router-01-metrics-service-account.yml` **NORMAL mode** against physical `router-01` with opt-in. Actual **`router-01 ok=19 changed=2 unreachable=0 failed=0 skipped=1`**. Created Pi `router-metrics` system GROUP and locked-password, `/usr/sbin/nologin`, home `/var/lib/router-metrics` system USER. SSH config/daemon unchanged, no `authorized_keys` or SSH key grant, no port-forwarding SSH tunnel, no firewall/PPPoE/router-network/Node Exporter/Prometheus/Docker modifications. Existing administrator `james` SSH unaffected per playbook, Pi `sshd -t` and four gateway units PASS. **C2b2-a COMPLETE**.
