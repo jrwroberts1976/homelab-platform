@@ -33,12 +33,21 @@ def walk(obj, trail):
                                 f"got {type(expression).__name__}: {expression!r}"
                             )
             if key in {"when", "failed_when", "changed_when", "until"}:
+                # Ansible accepts YAML boolean conditions here, e.g.
+                # changed_when: false and failed_when: false.
+                # Reject accidental YAML dicts/lists, not valid booleans.
                 if isinstance(value, list):
                     for i, expression in enumerate(value):
-                        if not isinstance(expression, str):
-                            yield f"{trail}.{key}[{i}]: expected condition string, got {type(expression).__name__}"
-                elif not isinstance(value, str):
-                    yield f"{trail}.{key}: expected condition string, got {type(value).__name__}"
+                        if not isinstance(expression, (str, bool)):
+                            yield (
+                                f"{trail}.{key}[{i}]: expected condition string/boolean, "
+                                f"got {type(expression).__name__}"
+                            )
+                elif not isinstance(value, (str, bool)):
+                    yield (
+                        f"{trail}.{key}: expected condition string/boolean, "
+                        f"got {type(value).__name__}"
+                    )
             yield from walk(value, f"{trail}.{key}")
 
 
@@ -58,7 +67,7 @@ def main():
         print(problem, file=sys.stderr)
     if problems:
         raise SystemExit(1)
-    print("PASS: Ansible assert and condition expressions are YAML strings in "
+    print("PASS: Ansible assert expressions are strings, and when/failed_when/changed_when/until expressions are valid strings or booleans in "
           + ", ".join(map(str, args.playbooks)))
 
 
