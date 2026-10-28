@@ -1,4 +1,14 @@
 # GPT Handover — Homelab Platform
+## LATEST — 28 Oct 2026 ~16:38 C2 SSH tunnel feasibility audit PASSED read-only; host-key trust missing
+
+User ran `monitor-01-router-exporter-tunnel-readonly.yml --syntax-check` PASS, then normal read-only checks with `--check --limit monitor-01 --ask-become-pass -e router_c2_tunnel_audit_approved=true` PASS `monitor-01 ok=11 changed=0 unreachable=0 failed=0 skipped=0`. **No keys/tunnels/config changed.** Live `monitor-01` route to Pi `192.168.3.1 via 192.168.2.1 dev eth0 src 192.168.2.52`. Prometheus `monitoring-prometheus-1` Docker container network `monitoring_default`, IP `172.18.0.4`, Prometheus HTTP 9090 ready **200**; monitor host TCP 19100 unused.
+
+SSH `monitor-01:james -> james@192.168.3.1` with `StrictHostKeyChecking=yes BatchMode=yes PasswordAuthentication=no` failed **host-key verification**: `No ED25519 host key is known for 192.168.3.1`. **NOT YET evidence of invalid SSH authentication keys**; host trust prevented reaching auth. Do not disable strict host checking or blindly run `ssh-keyscan >> known_hosts`. Prometheus is containerized, so a monitor-host loopback `ssh -L 127.0.0.1:19100:127.0.0.1:9100` does NOT itself give Prometheus container localhost access; don't bind unrestricted `0.0.0.0:19100`.
+
+Prepared **source-only, not yet run** `IaC/ansible/playbooks/router-01-ssh-trust-readonly.yml` in draft PR #210 to obtain *genuine* Pi ED25519 SSH SHA256 fingerprint from **on-Pi host public-key file**, actual Pi sshd forwarding policy, monitor-01 `james` existing known_hosts existence and available SSH public-key file metadata (no private keys). Uses two inventories `-i inventory/hosts.yml -i inventory/router-01-toolset-audit.yml`, limit `router-01,monitor-01`, explicit `-e router_c2_ssh_trust_audit_approved=true`, --syntax-check first, then `--ask-become-pass --check`. Strict controller/host/address/Pi MAC guards; read-only. Full commands in `docs/network/ROUTER-01-TOOLSET-PLAN-2026-10-28.md`. User must run; afterwards decide whether an approved, pinned known_hosts configuration and dedicated identity/tunnel can be safe. No SSH service, host-key, Pi firewall, Prometheus stack changes authorised yet.
+
+Stage C1 Debian `prometheus-node-exporter` installed and live localhost `127.0.0.1:9100/metrics` HTTP200, Pi gateway unchanged, user confirmed "browsing all ok" behind ASUS. No remote scrape target currently. GitHub issue #209 tracks; PR #210 remains DRAFT.
+
 ## LATEST — 28 Oct 2026 ~16:25+ Stage C1 end-to-end safety confirmed; Stage C2 read-only SSH tunnel topology audit staged
 
 After live Node Exporter Stage C1 PASS (Ansible `router-01 ok=37 changed=4 failed=0 skipped=2`, loopback HTTP200/metrics, no exposed TCP9100 and all PPPoE/nftables/DHCP/DNS/MSS/NAT checks pass), user explicitly confirmed **"browsing all ok"** behind ASUS. Stage C1 **FULLY COMPLETE**, incl. user-side internet browsing. Note: no externally scraped metrics yet.
