@@ -810,3 +810,57 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Review exact proposed diff and recap. **Do not install Match, reload SSH, grant `authorized_keys`, start a forward or change Prometheus until a later separate approved gate.**
+
+### 28 October ~18:33 — C2b2-b monitoring-user sshd EOF Match PREVIEW PASS; offline effective-policy candidate source STAGED (not run)
+
+User fetched draft branch through `4144b36f` and ran `router-01-metrics-sshd-match-preview.yml --syntax-check` **PASS**, then gated `--check --diff -e router_c2_sshd_preview_approved=true` on `router-01` **PASS**. Actual recap **`router-01 ok=27 changed=1 (PREDICTED) unreachable=0 failed=0 skipped=0`**. Exact Pi controller/MAC, new user/group/home/locked password/nologin, no pre-existing `authorized_keys`, safe main sshd_config root-owner, Include at line12 only and empty snippets, `sshd -t` existing config, loopback Node Exporter and all gateway services passed. **Nothing written or reloaded.**
+
+The proposed diff **appends at very end of main `/etc/ssh/sshd_config`**, after all global-only directives, exactly:
+
+```text
+# BEGIN ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)
+Match User router-metrics
+    PubkeyAuthentication yes
+    AuthenticationMethods publickey
+    PasswordAuthentication no
+    KbdInteractiveAuthentication no
+    PermitTTY no
+    X11Forwarding no
+    AllowAgentForwarding no
+    AllowStreamLocalForwarding no
+    AllowTcpForwarding local
+    PermitOpen 127.0.0.1:9100
+    PermitListen none
+    GatewayPorts no
+    PermitTunnel no
+    PermitUserRC no
+    MaxSessions 0
+# END ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)
+```
+
+The only predicted change was this block; **NO installed SSH policy**, no sshd reload, no Pi key grant, no SSH tunnel. It is important that `--check --diff` does **not itself prove the staged candidate's actual `sshd -t -f` or effective `sshd -T -f -C` settings**; the postflight rechecked the still-installed original config, not the candidate. Per OpenSSH manual `MaxSessions 0` disallows shell/subsystem sessions while allowing forwarding; `AllowTcpForwarding local` + `PermitOpen 127.0.0.1:9100` limits forwarding. References: https://manpages.debian.org/trixie/openssh-server/sshd_config.5.en.html and https://docs.ansible.com/projects/ansible/latest/playbook_guide/playbooks_checkmode.html .
+
+**New source-only staged offline tester**:
+- `IaC/ansible/scripts/router-01-sshd-candidate-validate.py` reconstructs the exact candidate block above from the live read-only sshd_config, verifies no Include or Match drift, runs `/usr/sbin/sshd -t -f <candidate>` and `/usr/sbin/sshd -T -f <candidate> -C user=...,host=...,addr=...` for existing `james` and proposed `router-metrics` (both direct admin/monitor and ASUS-source address contexts). Checks complete global and admin effective policies are **unchanged** compared with the actual on-disk config, and that the monitoring account gets every stated forwarding/password/PTY/session/agent/X11 restriction exactly. Fails closed on mismatch.
+- `IaC/ansible/playbooks/router-01-metrics-sshd-candidate-effective-readonly.yml` gates `--check` only, `admin-01` controller, exact `router-01=192.168.3.1` inventory and physical MAC, absent `authorized_keys`, original `sshd -t`, core service health and still loopback exporter. Invokes the script on Pi via Ansible `python3 -` stdin from Git-managed source, no deployed script file.
+
+**File-system detail**: to test a real candidate, the validator creates a **temporary mode0600 sshd config file in a mode0700 temporary directory under `/run` on the Pi**, runs the installed sshd binary against it, and **deletes the temporary directory/file immediately, even if validation raises an exception**. This is an ephemeral local test-file write, but **NO mutation of `/etc/ssh/sshd_config`, no SSH daemon reload/restart, no account/authorized_keys changes, no network/PPPoE/firewall/Node Exporter/Prometheus configuration changes**. Both sources are currently **only committed**, not yet syntax-checked or run by the operator. This is a diagnostic staging step, **NOT** authorization to deploy a live SSH restriction.
+
+**Next operator command from `admin-01` to test candidate offline**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-candidate-effective-readonly.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-candidate-effective-readonly.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_c2_sshd_candidate_audit_approved=true
+```
+
+**No normal-mode execution allowed by this playbook.** Review candidate `sshd -t` and `-T -C` effective results and unchanged admin/global settings before authoring the separately gated, backup-and-rollback SSH configuration deployment. Do not install any monitoring public key or initiate tunnel yet. Existing household browsing and Pi gateway services remain unchanged.
