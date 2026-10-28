@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## LATEST — 28 Oct 2026 PPPoE MSS preflight live PASS, source-only Ansible check-mode hardening
+
+User-supplied Pi confirms `sudo nft -a list table ip pppoe_mss_test` PRESENT with **1010 eth0→ppp0** and **212 ppp0→eth0** matching SYN packets (MSS capped to 1452). `sudo nft -c -f /etc/nftables.conf` exited successfully with no output; `systemctl is-active nftables` returned `active`. This verifies that the temporary runtime rule is active and the old **disk** rules are syntactically valid; it does **not** establish on-disk MSS persistence or confirm a post-reboot test.
+
+In draft [PR #208](https://github.com/jrwroberts1976/homelab-platform/pull/208), hardened all read-only Ansible `command` probes with `check_mode: false` so they still gather actual state under `--check --diff`, without modifying the target. Explicitly label dry-run output as proposal only. Removed forced SSH key selection in the isolated MSS inventory because `ssh 192.168.3.1` already succeeded from `admin-01` using default SSH configuration. No live Pi changes or Ansible execution performed by ChatGPT. NEXT: fetch PR branch into a separate Git worktree on admin-01, run controller syntax check and Ansible transport ping, then preflight `--check --diff` before any controlled file-only deployment. Never reload/restart nftables, remove temporary clamp, or reboot until reviewed.
+
 ## LATEST — 28 Oct 2026 POST-RESET GATE CLEARED FOR READ-ONLY PRECHECKS (NOT DEPLOYMENT)
 
 **User-verified:** `admin-01 eth0 192.168.1.48/24` with default DHCP gateway `192.168.1.1`. From admin-01, `ssh 192.168.3.1` SUCCEEDED and identified Pi hostname `raspberrypi`. On Pi, `eth0=192.168.3.1/24`, `ppp0=212.228.171.118` with peer `212.158.250.40` and PPP default route. Therefore the ASUS reset affected the downstream `192.168.1.0/24` LAN but the Pi `192.168.3.1` target is verified still reachable. Do not arbitrarily renumber Pi or infer other hosts' new addresses.
