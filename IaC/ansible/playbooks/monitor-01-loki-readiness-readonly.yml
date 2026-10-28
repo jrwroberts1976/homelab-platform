@@ -102,7 +102,12 @@
 
     - name: Read local port 3100 listeners
       ansible.builtin.command:
-        argv: [ss, -ltn, sport, =, :3100]
+        argv:
+          - ss
+          - -ltn
+          - sport
+          - "="
+          - ":3100"
       check_mode: false
       changed_when: false
       failed_when: false
