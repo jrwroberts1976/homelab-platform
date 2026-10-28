@@ -1,7 +1,11 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 toolset baseline — 28 October 2026
 
-**Status (28 Oct): STAGE A COMPLETE — VERIFIED LIVE.** Ansible's corrected installer re-ran in normal mode at ~15:23 UK time and **PASSED** (`ok=28 changed=0 unreachable=0 failed=0 skipped=0`). All five real diagnostic packages returned `dpkg-query rc=0 / install ok installed`, and PPPoE routing, `nftables`, `router-pppoe`, `dnsmasq`, `unbound`, persistent MSS 1452, original firewall/NAT postflight passed. Earlier APT installation had already installed the packages; rerun was idempotent. Monitoring Loki/Zabbix connections from router remain unresolved; no agents installed. No router services/network/firewall were restarted or modified in this final run.
+**Status (28 Oct): STAGES A AND C1 COMPLETE — VERIFIED LIVE.**
+
+**Node Exporter Stage C1 LIVE PASS:** operator's approved normal-mode Ansible run completed **`router-01 ok=37 changed=4 unreachable=0 failed=0 skipped=2`**. Debian `prometheus-node-exporter` installed, a systemd override written to bind `127.0.0.1:9100`, only exporter service started/restarted. HTTP local metrics and required metric names passed; postflight confirmed localhost-only TCP 9100, original PPPoE default route, 4 critical gateway services, nft filter/NAT and MSS clamp unchanged. **No LAN/WAN monitoring ingress or Prometheus target is configured.** A client-side household internet test has not yet been reported.
+
+ Ansible's corrected installer re-ran in normal mode at ~15:23 UK time and **PASSED** (`ok=28 changed=0 unreachable=0 failed=0 skipped=0`). All five real diagnostic packages returned `dpkg-query rc=0 / install ok installed`, and PPPoE routing, `nftables`, `router-pppoe`, `dnsmasq`, `unbound`, persistent MSS 1452, original firewall/NAT postflight passed. Earlier APT installation had already installed the packages; rerun was idempotent. Monitoring Loki/Zabbix connections from router remain unresolved; no agents installed. No router services/network/firewall were restarted or modified in this final run.
 
 ## Confirmed router state
 
@@ -300,3 +304,14 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Monitor the full live recap and **require HTTP 200 localhost `127.0.0.1:9100/metrics`, node metrics, exclusively localhost TCP 9100, unchanged nftables/MSS/NAT/PPPoE route and four core services** before closing C1. Do not mistake dry-run `changed=1` for actual installation. No inbound TCP 9100 exception, Prometheus scrape, ASUS change, Loki/Alloy or Zabbix change is authorized in this stage. Verify household internet from a client after the live run.
+
+## 28 October ~16:24+ — C1 real Node Exporter installation SUCCESS, not just preview
+
+User executed the guarded `ansible-playbook -i inventory/router-01-toolset-audit.yml playbooks/router-01-node-exporter-local.yml --ask-become-pass -e router_node_exporter_local_install_approved=true` (normal mode, **not** `--check`). **Actual `PLAY RECAP`: `router-01 ok=37 changed=4 unreachable=0 failed=0 skipped=2 rescued=0 ignored=0`.** Reported four changes: APT install `prometheus-node-exporter`, create systemd override directory, write loopback-only systemd override, and enable/start/restart only `prometheus-node-exporter`.
+
+Normal live postflight passed: local `http://127.0.0.1:9100/metrics` returned HTTP 200 and included `node_uname_info` and `node_network_receive_bytes_total`; only 127.0.0.1 TCP9100 listener present (explicitly no `192.168.3.1:9100`, `0.0.0.0:9100`, `[::]:9100`); `nftables`, `router-pppoe`, `dnsmasq`, `unbound` all active; original `inet filter_router`, `ip nat_router`, ppp0 default route and persistent two MSS1452 rules intact. The two skipped tasks were conditional checks for a pre-existing override; this was a new installation. **NO changes to nftables/ISP WAN, ASUS, Prometheus job, Loki, Zabbix, Alloy or unrelated gateway services were made.**
+
+**Stage C1 is complete and accepted as localhost-only metrics; remote scraping is NOT configured or tested.** Obtain a client-side browser internet validation as an operational follow-up; no evidence of client check in the submitted excerpt.
+
+**C2 safety gate:** Before configuring a Prometheus scrape, choose and review a restricted transport from `monitor-01` (ASUS downstream `192.168.2.52`) to Pi `192.168.3.1`. SSH22 via ASUS works, but direct TCP9100 is intentionally absent and Pi `input` default drop. Do not arbitrarily open 9100 or loosen default-deny; earlier Pi leases showed `.3.142` (neighbour reachable, no hostname) and `.3.187` (ASUS-named), but did NOT establish actual NAT source for `monitor-01`. If choosing TCP9100, strict `eth0` + expected ASUS WAN source and end-to-end packet-capture/test are needed, and note ASUS SNAT obscures individual downstream hosts. Alternatively explicitly design a loopback-preserving authenticated SSH transport without exposing 9100; either is a separate reviewed IaC change. Consider scrape-target config update without blind full monitoring stack cutover, and ensure boot/restart persistence.
+
