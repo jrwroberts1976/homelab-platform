@@ -1,6 +1,11 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 28 October 2026 22:09 UTC — router-01 live post-cutover baseline VERIFIED
+
+An operator-run Ansible **read-only** baseline on `admin-01` against the physical Pi's **192.168.2.1/24** LAN succeeded **ok=15 changed=0 failed=0 unreachable=0**, verifying the Pi onboard MAC, default PPPoE route and healthy gateway services `nftables`, `router-pppoe`, `dnsmasq`, `unbound` before/after. At `2026-10-28T22:09:06+00:00`: CPU 0.1% (3 sec), 45.3°C, `throttled=0x0`, RAM 6.8% used, root filesystem 4.5% used, all eth0/eth1/ppp0 interface error counters 0, 0% loss / 10.502 ms mean across five WAN probes via ppp0, 18 dnsmasq lease-file rows. eth0 cumulative RX/TX drops 150/23 were unchanged from the earlier 22:06:52 baseline. Node Exporter is listening on **127.0.0.1:9100** only; SSH listens on wildcard IPv4/IPv6. This is an *idle snapshot*, not a throughput benchmark, DHCP reservation audit or proof of WAN SSH exposure. No router changes performed. Detailed measurements in `docs/network/ROUTER-01-TOOLSET-PLAN-2026-10-28.md`, PR #210, `gpt-handover.md`. Existing canonical estate inventory drift, old .3.1 Ansible guards, DNS/DHCP reservation overlap, monitoring SSH activation and ASUS management remain unresolved.
+
+
 ## 28 October 2026 evening — NEWER LIVE DHCP/GATEWAY CUTOVER EVIDENCE (RECONCILIATION REQUIRED)
 
 **Newer operator evidence supersedes the older ASUS-as-router row elsewhere in this historical document.** The Raspberry Pi 4 `router-01` now runs the active household IPv4 gateway and `dnsmasq` DHCP on `192.168.2.1/24`; `unbound` DNS, `nftables` and `router-pppoe`/PPPoE through `ppp0` are active. The configured DHCP scope is **`192.168.2.100–199`**, and the advertised router/DNS address is **`192.168.2.1`**. The observed client lease addresses `.125`, `.171` and `.186` fall within that pool; they are **not** its bounds. Laptop `.186` reported DHCP/gateway/DNS `192.168.2.1`, internet connectivity passed, traceroute first hop Pi `.2.1` then ISP `212.158.250.40`, removing ASUS from the observed NAT/gateway path. Cutover rollback timer was no longer listed. User reported wired AiMesh traffic functioning; individual Ethernet-backhaul node status not independently audited.
