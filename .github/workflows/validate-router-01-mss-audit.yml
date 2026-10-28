@@ -1,0 +1,62 @@
+name: Validate router-01 postcutover MSS audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-01-mss-audit.yml"
+      - "IaC/ansible/playbooks/router-01-mss-postcutover-readonly.yml"
+      - "IaC/ansible/inventory/router-01-postcutover-baseline.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-router-01-mss-audit.yml"
+      - "IaC/ansible/playbooks/router-01-mss-postcutover-readonly.yml"
+      - "IaC/ansible/inventory/router-01-postcutover-baseline.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-readonly-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ansible core for offline source validation
+        run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Assert read-only task surface and exact target safety gates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path = Path("IaC/ansible/playbooks/router-01-mss-postcutover-readonly.yml")
+          plays = yaml.safe_load(path.read_text())
+          assert isinstance(plays, list) and len(plays) == 1
+          play = plays[0]
+          assert play["hosts"] == "router_postcutover_baseline"
+          assert not play.get("handlers")
+          tasks = [t for section in ("pre_tasks", "tasks", "post_tasks") for t in play.get(section, [])]
+          safe_modules = {
+              "ansible.builtin.assert", "ansible.builtin.command",
+              "ansible.builtin.slurp", "ansible.builtin.debug"
+          }
+          for task in tasks:
+              modules = [k for k in task if k.startswith("ansible.builtin.")]
+              assert len(modules) == 1 and modules[0] in safe_modules, task.get("name")
+              if modules[0] == "ansible.builtin.command":
+                  assert task.get("check_mode") is False, task.get("name")
+                  assert task.get("changed_when") is False, task.get("name")
+          text = path.read_text()
+          for gate in ("ansible_check_mode", "router_mss_postcutover_audit_approved",
+                       "192.168.2.1", "d8:3a:dd:5a:51:44", "router_pppoe_mss"):
+              assert gate in text, gate
+          print("Read-only MSS audit source safety: PASS")
+          PY
+      - name: Validate current Ansible inventory and playbook syntax only
+        run: |
+          cd IaC/ansible
+          ansible-inventory -i inventory/router-01-postcutover-baseline.yml --list >/dev/null
+          ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+            playbooks/router-01-mss-postcutover-readonly.yml --limit router-01 --syntax-check
