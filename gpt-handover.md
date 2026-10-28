@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## LATEST — 28 Oct 2026 monitoring path comparison staged READ-ONLY (not run)
+
+Following full Stage A PASS (`router-01 ok=28 changed=0 failed=0 skipped=0`, all 5 tools installed, critical gateway postflight verified), prepared source-only `IaC/ansible/playbooks/router-01-monitoring-path-readonly.yml` on `feature/router-01-toolset-audit-20261028`, draft PR #210. This Ansible playbook compares local `admin-01` (ASUS downstream `192.168.2.0/24`) vs Pi router `192.168.3.1` routes and reachability to central `monitor-01` Loki `192.168.2.52:3100/ready` and Zabbix `192.168.2.59:10051`. Guarded by opt-in, admin-01 controller hostname, known Pi IP/MAC; all network probes marked check_mode:false (read-only) to run even under `--check`. No packages installed nor services or firewall/routing modified by this Git change; **not yet syntax-checked on admin-01 or executed**.
+
+Next: from isolated worktree `git fetch origin feature/router-01-toolset-audit-20261028 && git merge --ff-only FETCH_HEAD`; `cd IaC/ansible`; `ansible-playbook -i inventory/router-01-toolset-audit.yml playbooks/router-01-monitoring-path-readonly.yml --syntax-check` then `ansible-playbook -i inventory/router-01-toolset-audit.yml playbooks/router-01-monitoring-path-readonly.yml --check -e router_monitoring_path_audit_approved=true`. If admin succeeds but Pi fails, investigate NAT/traffic direction without opening ports or declaring service down. Prefer monitored server inside ASUS LAN scraping upstream router if narrow Pi INPUT allow rule can be safely designed; outbound Alloy/Zabbix active from Pi into downstream LAN need a separately approved solution. Do not auto-enable on WAN.
+
 ## LATEST — 28 Oct 2026 ~15:23 GMT router Stage A diagnostics VERIFIED COMPLETE
 
 User on `admin-01` fast-forwarded `feature/router-01-toolset-audit-20261028` to `cf4eae5e`, syntax-checked corrected `router-01-diagnostics-install.yml` (PASS), ran `--check --diff` (PASS: **ok=26 changed=0 failed=0 skipped=2**), and then executed the fully gated normal Ansible playbook successfully: **`router-01 ok=28 changed=0 unreachable=0 failed=0 skipped=0`**.
