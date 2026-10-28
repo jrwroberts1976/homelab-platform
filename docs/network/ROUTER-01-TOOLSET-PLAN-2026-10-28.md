@@ -896,3 +896,23 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Review full diff and check-mode recap before approval of normal mode. Under no circumstances reload Pi sshd, install `authorized_keys` from unverified source, open exporter to LAN, or start SSH tunnel based only on these staged results. Record live outcome and handover after any actual deployment. The monitor client's working private key remains isolated in `/var/lib/router-metrics-tunnel/.ssh/id_ed25519`.
+
+### 28 October ~18:46 — C2b2-c guarded sshd EOF Match on-disk installation PREVIEW PASS; no live SSH file change
+
+User on `admin-01` fetched isolated branch through `0e5d605e` then ran `router-01-metrics-sshd-install.yml` `--syntax-check` PASS, and `--check --diff -e router_c2_sshd_install_approved=true` on the physical router. Actual **`router-01 ok=26 changed=1 (PREDICTED) unreachable=0 failed=0 skipped=4 rescued=0 ignored=0`**. All strict controller/MAC/target, locked non-login monitoring identity, missing `authorized_keys`, safe root-owned main `sshd_config`, expected sole Include at line12/no snippets, live `sshd -t`, before/after router units and loopback exporter checks passed.
+
+Actual diff proposed exactly one EOF `Match User router-metrics` after main file's existing comments and directives, with the same restricted block separately validated in a temporary candidate with `sshd -t -f` and `sshd -T -f -C`: `PubkeyAuthentication yes`, `AuthenticationMethods publickey`, `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitTTY no`, `X11Forwarding no`, `AllowAgentForwarding no`, `AllowStreamLocalForwarding no`, `AllowTcpForwarding local`, `PermitOpen 127.0.0.1:9100`, `PermitListen none`, `GatewayPorts no`, `PermitTunnel no`, `PermitUserRC no`, `MaxSessions 0`. Normal-mode `sshd -t`/effective-postflight tasks deliberately SKIPPED during dry-run. **Actual `/etc/ssh/sshd_config` unchanged; NO SSH reload/restart, no Pi authorized_keys, no tunnel, no firewall/PPPoE or monitoring changes.**
+
+**Next separate, bounded step**: normal-mode execution of the same reviewed `router-01-metrics-sshd-install.yml`, using explicit approval. This would stage ONLY the restricted Match block ON DISK with `blockinfile backup: true` and `validate: /usr/sbin/sshd -t -f %s`, then check real installed `sshd -t`, entire effective global and ordinary `james` admin policy unaltered in two source contexts, restricted `router-metrics` policy in two contexts, four router services. If postflight fails, rescue attempts restoration using the Ansible-generated pre-change backup; investigate any partial state rather than assuming rollback was successful. It **does NOT reload/restart sshd**, create/modify user or authorized_keys, or affect routing/PPPoE/nftables. Note: staging a config on disk means a future unplanned sshd restart would use it; offline effective candidate has already passed, but SSH continuity must still be checked after any later reload.
+
+```bash
+# From admin-01 at ~/projects/homelab-router-toolset-audit/IaC/ansible
+ansible-playbook \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-install.yml \
+  --limit router-01 \
+  --ask-become-pass \
+  -e router_c2_sshd_install_approved=true
+```
+
+**Do not authorize any public key or reload SSH in this step.** Verify the live recap and the effective admin/monitor policy assertion tasks, then plan a separate activation/reload gate with fallback and admin SSH connectivity check. Do not touch the live PPPoE gateway network.
