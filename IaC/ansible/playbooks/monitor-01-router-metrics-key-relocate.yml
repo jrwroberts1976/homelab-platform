@@ -1,0 +1,338 @@
+---
+# Stage C2b1 remediation: copy valid keypair and pinned host public key
+# into the dedicated service home instead of weakening /etc/homelab (0750).
+# Source credentials are RETAINED until a separately reviewed clean-up.
+# No Pi/SSH daemon, firewall, tunnel, Docker or Prometheus changes.
+- name: Stage accessible private router metrics SSH credentials on monitor-01 only
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+  vars:
+    router_c2_key_relocate_approved: false
+    router_c2_user: router-metrics-tunnel
+    router_c2_home: /var/lib/router-metrics-tunnel
+    router_c2_ssh_dir: /var/lib/router-metrics-tunnel/.ssh
+    router_c2_old_dir: /etc/homelab/router-metrics-ssh
+    router_c2_old_private: /etc/homelab/router-metrics-ssh/id_ed25519
+    router_c2_old_public: /etc/homelab/router-metrics-ssh/id_ed25519.pub
+    router_c2_old_host_pin: /etc/homelab/router-metrics-ssh/known_hosts
+    router_c2_new_private: /var/lib/router-metrics-tunnel/.ssh/id_ed25519
+    router_c2_new_public: /var/lib/router-metrics-tunnel/.ssh/id_ed25519.pub
+    router_c2_new_host_pin: /var/lib/router-metrics-tunnel/.ssh/known_hosts
+    router_c2_expected_pi_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+
+  pre_tasks:
+    - name: Identify exact Ansible controller
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_c2_move_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse unapproved or wrong controller and monitoring target
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_relocate_approved | bool
+          - router_c2_move_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify actual monitor hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      check_mode: false
+      changed_when: false
+      register: router_c2_move_hostname
+
+    - name: Verify actual monitor address
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      check_mode: false
+      changed_when: false
+      register: router_c2_move_address
+
+    - name: Confirm actual destination identity
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_move_address.stdout"
+
+    - name: Verify the service account metadata without printing it
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_user }}"]
+      register: router_c2_move_account
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require dedicated, non-login existing account
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_account.stdout.split(':')[5] == router_c2_home
+          - router_c2_move_account.stdout.split(':')[6] == '/usr/sbin/nologin'
+
+    - name: Inspect service home and credential directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ router_c2_home }}"
+        - "{{ router_c2_old_dir }}"
+        - "{{ router_c2_ssh_dir }}"
+      register: router_c2_move_dirs
+
+    - name: Verify destination service home and original protected source
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_dirs.results[0].stat.isdir | default(false)
+          - not router_c2_move_dirs.results[0].stat.islnk | default(false)
+          - router_c2_move_dirs.results[0].stat.pw_name == router_c2_user
+          - router_c2_move_dirs.results[1].stat.isdir | default(false)
+          - not router_c2_move_dirs.results[1].stat.islnk | default(false)
+          - router_c2_move_dirs.results[1].stat.pw_name == 'root'
+          - router_c2_move_dirs.results[1].stat.mode == '0755'
+          - not router_c2_move_dirs.results[2].stat.islnk | default(false)
+          - (not router_c2_move_dirs.results[2].stat.exists) or (router_c2_move_dirs.results[2].stat.isdir | default(false))
+          - (not router_c2_move_dirs.results[2].stat.exists) or (router_c2_move_dirs.results[2].stat.pw_name == router_c2_user)
+          - (not router_c2_move_dirs.results[2].stat.exists) or (router_c2_move_dirs.results[2].stat.mode == '0700')
+
+    - name: Inspect source keypair and pinned Pi host key (never read private bytes into Ansible)
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ router_c2_old_private }}"
+        - "{{ router_c2_old_public }}"
+        - "{{ router_c2_old_host_pin }}"
+      register: router_c2_move_sources
+
+    - name: Refuse missing, linked or unsafe source credentials
+      ansible.builtin.assert:
+        that:
+          - (router_c2_move_sources.results | selectattr('stat.isreg', 'defined') | selectattr('stat.isreg', 'equalto', true) | list | length) == 3
+          - not router_c2_move_sources.results[0].stat.islnk
+          - not router_c2_move_sources.results[1].stat.islnk
+          - not router_c2_move_sources.results[2].stat.islnk
+          - router_c2_move_sources.results[0].stat.mode == '0600'
+          - router_c2_move_sources.results[0].stat.pw_name == router_c2_user
+          - router_c2_move_sources.results[1].stat.mode == '0644'
+          - router_c2_move_sources.results[2].stat.pw_name == 'root'
+
+    - name: Read original public client key within Ansible only
+      ansible.builtin.slurp:
+        src: "{{ router_c2_old_public }}"
+      register: router_c2_move_source_pub
+      no_log: true
+
+    - name: Derive source client public key using root to bypass protected parent
+      ansible.builtin.command:
+        argv: [ssh-keygen, -y, -P, "", -f, "{{ router_c2_old_private }}"]
+      register: router_c2_move_source_derived
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Refuse nonmatching original private/public credentials
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_source_derived.stdout.split()[:2] == (router_c2_move_source_pub.content | b64decode).split()[:2]
+          - router_c2_move_source_derived.stdout.split()[0] == 'ssh-ed25519'
+
+    - name: Verify pinned Pi server host-key fingerprint before any credential copy
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_old_host_pin }}", -E, sha256]
+      register: router_c2_move_host_pin_fingerprint
+      check_mode: false
+      changed_when: false
+
+    - name: Require independently established Pi ED25519 fingerprint
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_host_pin_fingerprint.stdout.split()[1] == router_c2_expected_pi_fingerprint
+          - "'(ED25519)' in router_c2_move_host_pin_fingerprint.stdout"
+
+    - name: Read original pinned host public file without exposing contents
+      ansible.builtin.slurp:
+        src: "{{ router_c2_old_host_pin }}"
+      register: router_c2_move_pin_bytes
+      no_log: true
+
+    - name: Inspect destination files before copying anything
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ router_c2_new_private }}"
+        - "{{ router_c2_new_public }}"
+        - "{{ router_c2_new_host_pin }}"
+      register: router_c2_move_dest
+
+    - name: Refuse existing nonregular, linked or wrong-owner destinations
+      ansible.builtin.assert:
+        that:
+          - (router_c2_move_dest.results | selectattr('stat.islnk', 'equalto', true) | list | length) == 0
+          - (router_c2_move_dest.results | selectattr('stat.exists', 'equalto', true) | rejectattr('stat.isreg', 'equalto', true) | list | length) == 0
+          - (router_c2_move_dest.results | selectattr('stat.exists', 'equalto', true) | rejectattr('stat.pw_name', 'equalto', router_c2_user) | list | length) == 0
+        fail_msg: "Destination credentials already exist with unexpected type or ownership; do not overwrite."
+
+    - name: Check existing destination private key equivalence, when present
+      ansible.builtin.command:
+        argv: [ssh-keygen, -y, -P, "", -f, "{{ router_c2_new_private }}"]
+      register: router_c2_move_existing_private
+      check_mode: false
+      changed_when: false
+      no_log: true
+      when: router_c2_move_dest.results[0].stat.exists | bool
+
+    - name: Refuse an existing different private key
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_existing_private.stdout.split()[:2] == (router_c2_move_source_pub.content | b64decode).split()[:2]
+      when: router_c2_move_dest.results[0].stat.exists | bool
+
+    - name: Read existing destination public files if present without printing
+      ansible.builtin.slurp:
+        src: "{{ item.path }}"
+      loop:
+        - path: "{{ router_c2_new_public }}"
+          exists: "{{ router_c2_move_dest.results[1].stat.exists }}"
+        - path: "{{ router_c2_new_host_pin }}"
+          exists: "{{ router_c2_move_dest.results[2].stat.exists }}"
+      when: item.exists | bool
+      register: router_c2_move_existing_public
+      no_log: true
+
+    - name: Refuse different destination public-key data if already staged
+      ansible.builtin.assert:
+        that:
+          - (router_c2_move_existing_public.results[0].content | b64decode).split()[:2] == (router_c2_move_source_pub.content | b64decode).split()[:2]
+      when: router_c2_move_dest.results[1].stat.exists | bool
+
+    - name: Refuse different destination pinned host-key data if already staged
+      ansible.builtin.assert:
+        that:
+          - (router_c2_move_existing_public.results[1].content | b64decode | trim) == (router_c2_move_pin_bytes.content | b64decode | trim)
+      when: router_c2_move_dest.results[2].stat.exists | bool
+
+    - name: Require Prometheus remains ready before staged credential copy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        timeout: 5
+        status_code: 200
+      changed_when: false
+      check_mode: false
+
+  tasks:
+    - name: Create private directory under service home rather than opening shared /etc/homelab
+      ansible.builtin.file:
+        path: "{{ router_c2_ssh_dir }}"
+        state: directory
+        owner: "{{ router_c2_user }}"
+        group: "{{ router_c2_user }}"
+        mode: "0700"
+
+    - name: Copy source private key locally on monitor WITHOUT changing or logging original
+      ansible.builtin.copy:
+        src: "{{ router_c2_old_private }}"
+        dest: "{{ router_c2_new_private }}"
+        remote_src: true
+        force: false
+        owner: "{{ router_c2_user }}"
+        group: "{{ router_c2_user }}"
+        mode: "0600"
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: Copy only the matching public client key locally on monitor
+      ansible.builtin.copy:
+        src: "{{ router_c2_old_public }}"
+        dest: "{{ router_c2_new_public }}"
+        remote_src: true
+        force: false
+        owner: "{{ router_c2_user }}"
+        group: "{{ router_c2_user }}"
+        mode: "0644"
+      when: not ansible_check_mode
+
+    - name: Copy the independently verified Pi SSH host public pin into service home
+      ansible.builtin.copy:
+        src: "{{ router_c2_old_host_pin }}"
+        dest: "{{ router_c2_new_host_pin }}"
+        remote_src: true
+        force: false
+        owner: "{{ router_c2_user }}"
+        group: "{{ router_c2_user }}"
+        mode: "0644"
+      when: not ansible_check_mode
+
+    - name: Verify private key is usable as non-login monitoring identity
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_user }}", --, ssh-keygen, -y, -P, "", -f, "{{ router_c2_new_private }}"]
+      register: router_c2_move_derived_by_service
+      check_mode: false
+      changed_when: false
+      no_log: true
+      when: not ansible_check_mode
+
+    - name: Verify copied SSH client key is the original matching ED25519 pair
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_derived_by_service.stdout.split()[:2] == (router_c2_move_source_pub.content | b64decode).split()[:2]
+          - router_c2_move_derived_by_service.stdout.split()[0] == 'ssh-ed25519'
+      when: not ansible_check_mode
+
+    - name: Verify service identity can read its pinned host-key file
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_user }}", --, test, -r, "{{ router_c2_new_host_pin }}"]
+      check_mode: false
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Check Pi SSH host pin inside the service home as service user
+      ansible.builtin.command:
+        argv: [runuser, -u, "{{ router_c2_user }}", --, ssh-keygen, -lf, "{{ router_c2_new_host_pin }}", -E, sha256]
+      register: router_c2_move_new_pin_fingerprint
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode
+
+    - name: Confirm copied Pi SSH host pin is still identical to independent fingerprint
+      ansible.builtin.assert:
+        that:
+          - router_c2_move_new_pin_fingerprint.stdout.split()[1] == router_c2_expected_pi_fingerprint
+          - "'(ED25519)' in router_c2_move_new_pin_fingerprint.stdout"
+      when: not ansible_check_mode
+
+  post_tasks:
+    - name: Require Prometheus readiness unchanged by credential staging
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        timeout: 5
+        status_code: 200
+      check_mode: false
+      changed_when: false
+
+    - name: Read listeners to ensure no SSH tunnel has been started
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_c2_move_listeners
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse unexpected monitoring tunnel on TCP19100
+      ansible.builtin.assert:
+        that:
+          - "':19100' not in router_c2_move_listeners.stdout"
+
+    - name: Report bounded monitor-only credential staging
+      ansible.builtin.debug:
+        msg:
+          state: "{{ 'CHECK MODE: private .ssh directory predicted; copies/verification intentionally skipped' if ansible_check_mode else 'LIVE: original ED25519 client pair and pinned Pi host trust verified in service home' }}"
+          canonical_future_private_key: "{{ router_c2_new_private }}"
+          canonical_future_known_hosts: "{{ router_c2_new_host_pin }}"
+          original_credentials: "RETAINED, not erased or changed until separate clean-up review"
+          shared_etc_homelab_permissions: "UNCHANGED"
+          router_changes: "NONE"
+          ssh_tunnel: "NONE"
+          docker_prometheus_changes: "NONE"
