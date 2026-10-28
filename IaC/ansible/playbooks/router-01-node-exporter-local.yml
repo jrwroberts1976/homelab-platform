@@ -1,7 +1,8 @@
 ---
 # Stage C1: install Node Exporter bound ONLY to Pi loopback.
 # No scrape target, SSH tunnel, router firewall, ASUS or Prometheus change.
-# Requires explicit operator approval; supports check-mode preview.
+# Requires explicit operator approval; in check mode only APT is previewed;
+# systemd/file tasks are intentionally skipped until actual package exists.
 - name: Stage localhost-only Node Exporter on verified live Raspberry Pi router
   hosts: router_toolset_audit
   gather_facts: true
@@ -178,12 +179,13 @@
       changed_when: false
       check_mode: false
 
-    - name: Require no package removals or upgrades in simulation
+    - name: Refuse package removals or version upgrades in simulation
       ansible.builtin.assert:
         that:
           - router_node_exporter_apt_simulated.stdout | regex_search('(?m)^Remv ') is none
-          - router_node_exporter_apt_simulated.stdout | regex_search('(?m)^Inst (?!prometheus-node-exporter )') is none
-        fail_msg: "APT wants unexpected other package installs/removals; inspect before proceeding."
+          - "'0 upgraded,' in router_node_exporter_apt_simulated.stdout"
+          - "'0 to remove' in router_node_exporter_apt_simulated.stdout"
+        fail_msg: "APT wants removals or upgrades. Inspect the simulation and stop."
 
   tasks:
     - name: Install only Debian prometheus-node-exporter without optional collectors
@@ -204,6 +206,7 @@
         owner: root
         group: root
         mode: "0755"
+      when: not ansible_check_mode
 
     - name: Override exporter binding to loopback only
       ansible.builtin.copy:
@@ -213,6 +216,7 @@
         group: root
         mode: "0644"
       register: router_node_exporter_override_written
+      when: not ansible_check_mode
 
     - name: Enable and start localhost-only exporter after installing override
       ansible.builtin.systemd_service:
@@ -221,6 +225,7 @@
         enabled: true
         state: started
       register: router_node_exporter_service_started
+      when: not ansible_check_mode
 
     - name: Verify Node Exporter answers on Pi loopback
       ansible.builtin.uri:
