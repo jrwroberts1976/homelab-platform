@@ -68,20 +68,41 @@
           - "'oifname \"ppp0\" ip saddr 192.168.3.0/24 masquerade' in router_mss_live_baseline.results[1].stdout"
         fail_msg: "Unexpected live NAT/filter rules; refuse persistence until audited."
 
-    - name: Read tested live temporary MSS clamp
+    # During first application the tested temporary rule is active.
+    # After reboot, nftables loads the persistent table instead. Support both
+    # states so this playbook can be rerun idempotently on the real router.
+    - name: Read persistent MSS clamp (expected after reboot)
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, router_pppoe_mss]
+      register: router_mss_persistent
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Read tested temporary MSS clamp (expected before reboot)
       ansible.builtin.command:
         argv: [nft, list, table, ip, pppoe_mss_test]
       register: router_mss_temporary
       check_mode: false
       changed_when: false
+      failed_when: false
 
-    - name: Require both previously tested 1452-byte MSS directions
+    - name: Require verified live 1452-byte MSS clamp in either table
       ansible.builtin.assert:
         that:
-          - "'iifname \"eth0\" oifname \"ppp0\"' in router_mss_temporary.stdout"
-          - "'iifname \"ppp0\" oifname \"eth0\"' in router_mss_temporary.stdout"
-          - "(router_mss_temporary.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2"
-        fail_msg: "Temporary tested MSS rules absent or unexpected; stop."
+          - >-
+            (
+              router_mss_persistent.rc == 0
+              and 'iifname "eth0" oifname "ppp0"' in router_mss_persistent.stdout
+              and 'iifname "ppp0" oifname "eth0"' in router_mss_persistent.stdout
+              and (router_mss_persistent.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+            ) or (
+              router_mss_temporary.rc == 0
+              and 'iifname "eth0" oifname "ppp0"' in router_mss_temporary.stdout
+              and 'iifname "ppp0" oifname "eth0"' in router_mss_temporary.stdout
+              and (router_mss_temporary.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+            )
+        fail_msg: "Neither the persistent nor temporary 1452-byte live MSS clamp matches the tested rules; stop."
 
     - name: Read current startup nftables file
       ansible.builtin.slurp:
@@ -127,9 +148,14 @@
       check_mode: false
       changed_when: false
 
-    - name: Verify temporary live clamp is still active (no reload)
+    - name: Verify the selected live MSS clamp is still active (no reload)
       ansible.builtin.command:
-        argv: [nft, list, table, ip, pppoe_mss_test]
+        argv:
+          - nft
+          - list
+          - table
+          - ip
+          - "{{ 'router_pppoe_mss' if router_mss_persistent.rc == 0 else 'pppoe_mss_test' }}"
       check_mode: false
       changed_when: false
 
@@ -139,5 +165,5 @@
           - "{{ 'CHECK MODE: proposal only, disk file unchanged' if ansible_check_mode else 'Validated /etc/nftables.conf with persistent 1452 MSS table' }}."
           - "Ansible backup: {{ router_mss_config_write.backup_file | default('not created (check mode or idempotent)') }}"
           - "NO nftables reload, restart, flush, table replacement or reboot was performed."
-          - "Temporary live pppoe_mss_test remains active until next reboot."
-          - "After a controlled reboot verify table ip router_pppoe_mss, internet and firewall."
+          - "Live MSS clamp currently verified: {{ 'router_pppoe_mss (persistent, post-reboot)' if router_mss_persistent.rc == 0 else 'pppoe_mss_test (temporary, pre-reboot)' }}."
+          - "After any future reboot, reverify table ip router_pppoe_mss, internet and firewall."
