@@ -1,0 +1,149 @@
+---
+# Stage C2b2 detailed sshd layout audit. No host writes or service reloads.
+# A Match directive in an early Include needs careful review of later
+# directives before authoring a restricted monitoring account policy.
+- name: Audit Pi SSH configuration directive ordering before any Match policy
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_sshd_layout_audit_approved: false
+  pre_tasks:
+    - name: Confirm Ansible controller
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: c2b2_layout_controller
+
+    - name: Require approved exact controller and physical router inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_sshd_layout_audit_approved | bool
+          - c2b2_layout_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify physical Raspberry Pi identity
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: c2b2_layout_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Require independently verified onboard Ethernet MAC
+      ansible.builtin.assert:
+        that:
+          - c2b2_layout_mac.stdout | lower | trim == 'd8:3a:dd:5a:51:44'
+  tasks:
+    - name: Validate running sshd configuration syntax without reloading
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      changed_when: false
+      check_mode: false
+
+    - name: Enumerate active main-config directives with line numbers and include ordering
+      ansible.builtin.command:
+        argv:
+          - awk
+          - 'BEGIN { seen=0 } /^[[:space:]]*($|#)/ { next } { name=tolower($1); if (name=="include") seen=1; printf "%d:%s:%s\n", NR, (seen ? "AT_OR_AFTER_INCLUDE" : "BEFORE_INCLUDE"), $1 }'
+          - /etc/ssh/sshd_config
+      register: c2b2_layout_main_directives
+      changed_when: false
+      check_mode: false
+
+    - name: List currently installed SSH configuration fragments
+      ansible.builtin.find:
+        paths: /etc/ssh/sshd_config.d
+        file_type: file
+        patterns: '*.conf'
+        recurse: false
+      register: c2b2_layout_fragments
+
+    - name: Check global effective sshd policy
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T]
+      register: c2b2_layout_global
+      changed_when: false
+      check_mode: false
+
+    - name: Check sshd effective policy for existing administrative identity
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - user=james,host=admin-01,addr=192.168.2.48
+      register: c2b2_layout_admin
+      changed_when: false
+      check_mode: false
+
+    - name: Check effective policy for proposed restricted identity without creating it
+      ansible.builtin.command:
+        argv:
+          - /usr/sbin/sshd
+          - -T
+          - -C
+          - user=router-metrics,host=monitor-01,addr=192.168.2.1
+      register: c2b2_layout_metrics
+      changed_when: false
+      check_mode: false
+
+    - name: Check proposed Pi monitoring account and group for collisions
+      ansible.builtin.command:
+        argv: [getent, passwd, router-metrics]
+      register: c2b2_layout_user
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      no_log: true
+
+    - name: Check proposed Pi monitoring group for collisions
+      ansible.builtin.command:
+        argv: [getent, group, router-metrics]
+      register: c2b2_layout_group
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      no_log: true
+
+    - name: Confirm Node Exporter remains isolated to localhost
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: c2b2_layout_listeners
+      changed_when: false
+      check_mode: false
+
+    - name: Confirm all essential internet gateway units remain active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_layout_units
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse degraded gateway service or externally exposed exporter
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in c2b2_layout_listeners.stdout"
+          - "'0.0.0.0:9100' not in c2b2_layout_listeners.stdout"
+          - "'[::]:9100' not in c2b2_layout_listeners.stdout"
+          - "'192.168.3.1:9100' not in c2b2_layout_listeners.stdout"
+          - (c2b2_layout_units.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Report main directive ordering and existing versus proposed identity policies
+      ansible.builtin.debug:
+        msg:
+          main_sshd_config_directive_order: "{{ c2b2_layout_main_directives.stdout_lines }}"
+          conf_fragment_files: "{{ c2b2_layout_fragments.files | map(attribute='path') | list }}"
+          global_policy: "{{ c2b2_layout_global.stdout_lines | select('match', '^(usepam|pubkeyauthentication|passwordauthentication|kbdinteractiveauthentication|authenticationmethods|allowtcpforwarding|permitopen|permitlisten|permittty|allowagentforwarding|x11forwarding|forcecommand|authorizedkeysfile) ') | list }}"
+          existing_admin_policy: "{{ c2b2_layout_admin.stdout_lines | select('match', '^(pubkeyauthentication|passwordauthentication|allowtcpforwarding|permitopen|permitlisten|permittty|forcecommand) ') | list }}"
+          proposed_metrics_policy_before_any_changes: "{{ c2b2_layout_metrics.stdout_lines | select('match', '^(pubkeyauthentication|passwordauthentication|kbdinteractiveauthentication|allowtcpforwarding|permitopen|permitlisten|permittty|forcecommand) ') | list }}"
+          proposed_monitor_user_exists: "{{ c2b2_layout_user.rc == 0 }}"
+          proposed_monitor_group_exists: "{{ c2b2_layout_group.rc == 0 }}"
+          loopback_exporter_and_router_services: "VERIFIED"
+          modifications: "NONE; SSH daemon and Pi/network settings untouched"
