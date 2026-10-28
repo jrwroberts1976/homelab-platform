@@ -1,0 +1,228 @@
+---
+# C2b2-b: CHECK-MODE ONLY. Render the exact intended SSH Match restriction
+# at EOF of the PI'S main sshd_config, without modifying the actual file.
+# This playbook deliberately refuses normal mode. There is NO reload.
+- name: Preview an isolated router-metrics SSH policy at end of Pi sshd_config
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_sshd_preview_approved: false
+    router_c2_pi_account: router-metrics
+    router_c2_pi_home: /var/lib/router-metrics
+  pre_tasks:
+    - name: Read original controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: c2b2_match_preview_controller
+
+    - name: Require check mode and exact controller/router inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_sshd_preview_approved | bool
+          - ansible_check_mode
+          - c2b2_match_preview_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Only read-only --check --diff from admin-01 to router-01 is permitted."
+      delegate_to: localhost
+      become: false
+
+    - name: Require verified Pi physical Ethernet hardware
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: c2b2_match_preview_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse other hardware
+      ansible.builtin.assert:
+        that:
+          - c2b2_match_preview_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+    - name: Validate existing SSH daemon configuration without restart
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Require dedicated Pi service user exists
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_pi_account }}"]
+      register: c2b2_match_preview_passwd
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require dedicated service group exists
+      ansible.builtin.command:
+        argv: [getent, group, "{{ router_c2_pi_account }}"]
+      register: c2b2_match_preview_group
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require isolated account, matching primary group and no login shell
+      ansible.builtin.assert:
+        that:
+          - c2b2_match_preview_passwd.stdout.split(':')[0] == router_c2_pi_account
+          - c2b2_match_preview_passwd.stdout.split(':')[5] == router_c2_pi_home
+          - c2b2_match_preview_passwd.stdout.split(':')[6] == '/usr/sbin/nologin'
+          - c2b2_match_preview_passwd.stdout.split(':')[3] == c2b2_match_preview_group.stdout.split(':')[2]
+
+    - name: Read password lock status of dedicated account
+      ansible.builtin.command:
+        argv: [passwd, -S, "{{ router_c2_pi_account }}"]
+      register: c2b2_match_preview_lock
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require monitoring account has a locked password
+      ansible.builtin.assert:
+        that:
+          - c2b2_match_preview_lock.stdout.split()[1] in ['L', 'LK']
+
+    - name: Ensure no authorised keys already grant SSH access
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ router_c2_pi_home }}/.ssh/authorized_keys"
+        - "{{ router_c2_pi_home }}/.ssh/authorized_keys2"
+      register: c2b2_match_preview_authorized_files
+
+    - name: Refuse enabling this policy when unexpected monitoring keys already exist
+      ansible.builtin.assert:
+        that:
+          - not c2b2_match_preview_authorized_files.results[0].stat.exists
+          - not c2b2_match_preview_authorized_files.results[1].stat.exists
+
+    - name: Check main SSH daemon config safety and ownership
+      ansible.builtin.stat:
+        path: /etc/ssh/sshd_config
+      register: c2b2_match_preview_main_config
+
+    - name: Require regular nonlinked root-owned main SSH config
+      ansible.builtin.assert:
+        that:
+          - c2b2_match_preview_main_config.stat.isreg | default(false)
+          - not (c2b2_match_preview_main_config.stat.islnk | default(false))
+          - c2b2_match_preview_main_config.stat.pw_name == 'root'
+          - c2b2_match_preview_main_config.stat.mode in ['0600', '0640', '0644']
+
+    - name: Inspect exact Include/Match directive ordering in main config
+      ansible.builtin.command:
+        argv: [grep, -nEi, '^[[:space:]]*(Include|Match)[[:space:]]', /etc/ssh/sshd_config]
+      register: c2b2_match_preview_include
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse drifted main sshd Include or unexpected Match blocks
+      ansible.builtin.assert:
+        that:
+          - c2b2_match_preview_include.stdout_lines == ['12:Include /etc/ssh/sshd_config.d/*.conf']
+
+    - name: Check no SSH daemon config snippets were installed since prior audit
+      ansible.builtin.find:
+        paths: /etc/ssh/sshd_config.d
+        patterns: '*.conf'
+        file_type: file
+        recurse: false
+      register: c2b2_match_preview_conf_fragments
+
+    - name: Refuse config fragment drift that might affect directive order
+      ansible.builtin.assert:
+        that:
+          - c2b2_match_preview_conf_fragments.files | length == 0
+
+    - name: Require exporter remains bound to Pi localhost only
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: c2b2_match_preview_sockets
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm local-only Node Exporter baseline
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in c2b2_match_preview_sockets.stdout"
+          - "'0.0.0.0:9100' not in c2b2_match_preview_sockets.stdout"
+          - "'[::]:9100' not in c2b2_match_preview_sockets.stdout"
+          - "'192.168.3.1:9100' not in c2b2_match_preview_sockets.stdout"
+
+    - name: Require all essential router units are active before SSH policy preview
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_match_preview_units
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse degraded physical router gateway
+      ansible.builtin.assert:
+        that:
+          - (c2b2_match_preview_units.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+  tasks:
+    - name: Preview ONLY end-of-main user-specific SSH authorization restrictions
+      ansible.builtin.blockinfile:
+        path: /etc/ssh/sshd_config
+        insertafter: EOF
+        marker: "# {mark} ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)"
+        block: |
+          Match User router-metrics
+              PubkeyAuthentication yes
+              AuthenticationMethods publickey
+              PasswordAuthentication no
+              KbdInteractiveAuthentication no
+              PermitTTY no
+              X11Forwarding no
+              AllowAgentForwarding no
+              AllowStreamLocalForwarding no
+              AllowTcpForwarding local
+              PermitOpen 127.0.0.1:9100
+              PermitListen none
+              GatewayPorts no
+              PermitTunnel no
+              PermitUserRC no
+              MaxSessions 0
+        validate: /usr/sbin/sshd -t -f %s
+        backup: false
+      # Play refuses normal mode above. The actual SSH config is never updated.
+
+  post_tasks:
+    - name: Re-validate real installed SSH config (not the candidate)
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm critical router units still active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_match_preview_after_units
+      check_mode: false
+      changed_when: false
+
+    - name: Assert no router services were disrupted during read-only preview
+      ansible.builtin.assert:
+        that:
+          - (c2b2_match_preview_after_units.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Report only a proposed config diff without deployment
+      ansible.builtin.debug:
+        msg:
+          status: "CHECK MODE ONLY: proposed Match User router-metrics at EOF, NOT DEPLOYED"
+          intended_authorization: "publickey-only, no sessions/pty/agent/X11/remote forwarding, local TCP to 127.0.0.1:9100 only"
+          existing_james_ssh_policy: "UNCHANGED"
+          authorized_keys: "ABSENT; no key installed"
+          sshd_config: "UNCHANGED on disk"
+          sshd_reload: "NONE"
+          node_exporter: "localhost only"
+          firewall_pppoe_router_services: "UNCHANGED"
