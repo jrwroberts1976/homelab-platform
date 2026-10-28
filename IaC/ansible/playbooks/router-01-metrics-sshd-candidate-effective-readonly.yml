@@ -1,0 +1,136 @@
+---
+# Stage C2b2-b2. CHECK MODE ONLY. Compute and validate an ephemeral SSH
+# candidate under /run, never modifying live /etc/ssh or reloading SSH.
+# The temporary file and 0700 directory are removed before task completes.
+- name: Prove proposed router monitoring Match policy without installing or reloading SSH
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_sshd_candidate_audit_approved: false
+  pre_tasks:
+    - name: Identify controller before touching the Pi
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: c2b2_candidate_controller
+
+    - name: Refuse normal execution, wrong controller and unexpected Pi target
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+          - router_c2_sshd_candidate_audit_approved | bool
+          - c2b2_candidate_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Stage C2b2 candidate evaluation requires --check and explicit approval."
+      delegate_to: localhost
+      become: false
+
+    - name: Confirm exact physical Pi onboard Ethernet MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: c2b2_candidate_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse any other hardware
+      ansible.builtin.assert:
+        that:
+          - c2b2_candidate_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+    - name: Ensure no SSH monitoring key has already been authorized
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-metrics/.ssh/authorized_keys
+        - /var/lib/router-metrics/.ssh/authorized_keys2
+      register: c2b2_candidate_authorization_files
+
+    - name: Refuse unexpected existing authorized keys
+      ansible.builtin.assert:
+        that:
+          - not c2b2_candidate_authorization_files.results[0].stat.exists
+          - not c2b2_candidate_authorization_files.results[1].stat.exists
+
+    - name: Validate live sshd configuration before offline candidate evaluation
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Verify essential router gateway services before candidate test
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_candidate_before_units
+      check_mode: false
+      changed_when: false
+
+    - name: Require all essential gateway services healthy
+      ansible.builtin.assert:
+        that:
+          - (c2b2_candidate_before_units.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+  tasks:
+    - name: Validate ephemeral sshd candidate for monitoring and admin contexts
+      ansible.builtin.command:
+        argv: [python3, -]
+        stdin: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../scripts/router-01-sshd-candidate-validate.py') }}"
+        stdin_add_newline: true
+      register: c2b2_candidate_effective_result
+      check_mode: false
+      changed_when: false
+
+    - name: Report validated proposed effective SSH policy and intact admin access
+      ansible.builtin.debug:
+        msg: "{{ c2b2_candidate_effective_result.stdout | from_json }}"
+
+  post_tasks:
+    - name: Confirm running sshd config remains valid after candidate test
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Verify Pi Node Exporter is still on localhost only
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: c2b2_candidate_sockets
+      check_mode: false
+      changed_when: false
+
+    - name: Require private metrics endpoint has not been exposed on LAN
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in c2b2_candidate_sockets.stdout"
+          - "'0.0.0.0:9100' not in c2b2_candidate_sockets.stdout"
+          - "'[::]:9100' not in c2b2_candidate_sockets.stdout"
+          - "'192.168.3.1:9100' not in c2b2_candidate_sockets.stdout"
+
+    - name: Recheck essential router gateway services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_candidate_after_units
+      check_mode: false
+      changed_when: false
+
+    - name: Require no gateway service degradation during offline audit
+      ansible.builtin.assert:
+        that:
+          - (c2b2_candidate_after_units.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: State the bounded pre-deployment assurance only
+      ansible.builtin.debug:
+        msg:
+          candidate_config: "Tested only in ephemeral /run file; removed afterward"
+          main_sshd_config: "UNCHANGED on disk"
+          current_admin_ssh_access: "UNMODIFIED"
+          sshd_reload: "NONE"
+          monitoring_authorized_keys: "ABSENT"
+          router_firewall_pppoe_and_exporter: "UNCHANGED"
+          status: "CHECK-MODE-ONLY offline effective-policy candidate evaluation"
