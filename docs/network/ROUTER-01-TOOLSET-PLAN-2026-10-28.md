@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 toolset baseline — 28 October 2026
 
-**Status (28 Oct):** live read-only Ansible audit **PASSED** (`ok=14`, `changed=0`, `failed=0`, `unreachable=0`, `skipped=2`). Phase-A five-package diagnostic installer is **staged, not deployed**. No router software, services, routes or firewall modified.
+**Status (28 Oct):** router toolset audit re-run **PASSED** (`ok=16`, `changed=0`, `failed=0`, `skipped=0`), but **Loki and Zabbix connectivity probes failed** (not Ansible task failures). Diagnostics installer `--syntax-check` and `--check --diff` **PASSED** (`ok=26`, `changed=1` predicted only, `failed=0`); **no packages have been installed yet**. No router services, routes or firewall modified.
 
 ## Confirmed router state
 
@@ -94,3 +94,27 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 **Do not run the installer without `--check` until this dry run passes and the APT simulation is inspected.** A later separately authorised live run uses the same command *without* `--check`, then requires post-install router and household browser checks. Agent rollout is an independent next stage. Legacy `docker-01` production inventory and base roles remain out of scope until reconciled.
+
+## 28 October — corrected audit and diagnostics preview evidence from admin-01
+
+Operator fast-forwarded the isolated worktree to commit `317f271e` and ran the actual router diagnostics `--syntax-check`, updated read-only audit in `--check` and the diagnostic installer `--check --diff`. All completed without Ansible failures.
+
+- **Corrected audit recap:** `ok=16 changed=0 unreachable=0 failed=0 skipped=0`. Expected Pi identity Debian 13 / aarch64, `eth0=192.168.3.1/24`, critical services enabled/active, and persistent MSS 1452 assertions all PASS. The network probes now genuinely ran.
+- **Loki check:** reported `Loki readiness (HTTP 200 = ready): -1` — HTTP request unsuccessful, not a valid readiness response. **Zabbix check:** `failed to connect` to `192.168.2.59:10051`. Their root causes remain unverified, but router `192.168.3.0/24` and monitored services `192.168.2.0/24` are separated by the downstream ASUS gateway/NAT. Do not assume unrestricted bidirectional routing or alter the firewall to make probes pass. Before Alloy/Zabbix enrollment inspect downstream topology, service state, and suitable *outbound vs. inbound* telemetry direction.
+- **Diagnostics installer preflight:** hardware/IP/PPP MTU/default route/forwarding, 4 active services, permanent MSS, original filter/NAT and 200MiB free-space gate all PASS. Simulated `apt-get -s` proposed no `Remv` lines.
+- **Installer dry-run recap:** `ok=26 changed=1 unreachable=0 failed=0 skipped=2`. The only planned change is APT installation: 16 new packages (5 requested package names plus dependency packages), **0 upgraded, 0 to remove, 20 not upgraded**. Requested `mtr-tiny`, `traceroute`, `dnsutils` (Debian resolves to bind9-dnsutils), `conntrack`, and `jq`; dependencies `bind9-host, bind9-libs, libfstrm0, libjemalloc2, libjq1, liblmdb0, libmaxminddb0, libncurses6, libonig5, liburcu8t64, libuv1t64`.
+- **No deployment yet:** dry-run correctly printed `CHECK MODE: no packages actually installed`. The two post-install package checks skipped in check mode by design; post-preflight route, critical services, MSS and original firewall/NAT checks passed. Do not report installed until real run and runtime checks.
+
+**Next approved bounded action after reviewing this preview:** from the same `admin-01` worktree `IaC/ansible` directory, run:
+
+```bash
+ansible-playbook \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-diagnostics-install.yml \
+  --ask-become-pass \
+  -e router_diagnostics_install_approved=true
+```
+
+This installs diagnostics ONLY; it does not touch interfaces, firewall, nftables, PPPoE, DHCP, DNS or router hostname. Its preflight checks are re-run before APT and postflight checks repeat after installation. Verify full live recap, installed package versions, and Windows/ASUS client browsing after the run. If anything unexpected occurs, **stop**, do not force an apt change or restart/reload the router firewall.
+
+Monitoring topology issue must remain open independent of successful diagnostic installation. Other monitoring and VPN products are not part of this live action.
