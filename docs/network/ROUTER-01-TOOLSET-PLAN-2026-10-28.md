@@ -1,6 +1,41 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 toolset baseline — 28 October 2026
 
+## NEW — 28 October ~22:00: post-cutover Pi router performance baseline, SOURCE ONLY (no measurements yet)
+
+User asked to establish baseline router readings after making Pi the `192.168.2.1` gateway and DHCP/DNS server. **Staged source-only in draft PR #210**:
+- `IaC/ansible/inventory/router-01-postcutover-baseline.yml` isolates the new Pi `192.168.2.1` target. It does **NOT** alter obsolete `router-01-toolset-audit.yml`, `hosts.yml` or canonical estate inventory.
+- `IaC/ansible/playbooks/router-01-postcutover-baseline-readonly.yml` refuses non-`--check` mode, requires `-e router_postcutover_baseline_approved=true`, exact controller `admin-01`, Pi `router-01` at `.2.1`, verified eth0 hardware MAC `d8:3a:dd:5a:51:44`, `eth0 inet 192.168.2.1/24`, and IPv4 default route over `ppp0`. Before/after ensures `nftables`, `router-pppoe`, `dnsmasq`, `unbound` active. Does not restart/reload/create config or authorize keys.
+- `IaC/ansible/scripts/router-01-postcutover-baseline.py`: executed via Ansible `python3 -` stdin in check-mode task (no script installed on Pi). Read-only 3-second CPU/eth0+eth1+ppp0 rate snapshot, CPU load/uptime/temperature/frequency/throttling flags, memory/swap, root disk, interface carrier/operstate/error/drop and byte totals, PPPoE route/address presence only (no public IP), service states, TCP/UDP listeners for SSH/DNS/DHCP/exporter, numeric dnsmasq lease count (no identities), and **five low-rate ICMP requests** from `ppp0` to `1.1.1.1` (no throughput saturation). Prints snapshot JSON to operator, not GitHub. Includes warning that three-second idle rate is not a WAN speed test. Ansible may use normal ephemeral SSH/module temp state, but no intended persistent router config mutations.
+
+**External baseline only (user-provided Windows PC test screenshot)**: download **47.96 Mbps**, upload **11.85 Mbps**, ping **16 ms**. This is a post-cutover PC internet speed-test reference, NOT yet verified as a wired test or directly measured router saturation; do not interpret it as the Pi maximum throughput. Interface/ISP test conditions not yet known.
+
+No Pi baseline Ansible playbook has yet been syntax-checked or executed by the operator. **Next command** from `admin-01`:
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+python3 - <<'PY'
+import ast
+from pathlib import Path
+ast.parse(Path('scripts/router-01-postcutover-baseline.py').read_text())
+print('Collector Python syntax: PASS')
+PY
+
+python3 scripts/validate-ansible-assert-conditions.py \
+  playbooks/router-01-postcutover-baseline-readonly.yml && \
+ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+  playbooks/router-01-postcutover-baseline-readonly.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+  playbooks/router-01-postcutover-baseline-readonly.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_postcutover_baseline_approved=true
+```
+**IMPORTANT**: This is an initial non-saturating baseline, *not* approval for further SSH monitoring activation, config change, packet capture, active port scanning or network cutover. Do not use old `192.168.3.1` SSH-monitor audit inventory for the new Pi LAN. After operator output arrives, review CPU/temp/throttling, interface errors/drop, services, packet loss and ping; repeat later at a verified controlled client load if useful. Complete DHCP reservation audit and reflect actual live DHCP/ASUS topology in Ansible/IaC before further routing changes. Record captured measurements with user consent and timestamp in docs after validation.
+
 ## URGENT LIVE-STATE RECONCILIATION — DHCP ROUTER CUTOVER LATER ON 28 OCTOBER 2026 (~19:26–19:47 UK)
 
 **Later user-supplied live tests SUPERSEDE the earlier 192.168.3.1-primary topology in historical sections below.** The Raspberry Pi `router-01` now runs the live household gateway/DHCP at **`192.168.2.1/24` on LAN**. `dnsmasq` provides DHCP; actual **configured offer range `192.168.2.100–199`**, with option gateway and DNS `192.168.2.1`. The previously reported `.125–.198` values describe **observed leases**, NOT scope boundaries. Latest live samples: laptop `192.168.2.186`, Google Home `.125`, Home Mini `.171`; stale old `192.168.3.x` leases remain historical entries only. Pi `unbound`, `dnsmasq`, `nftables` active; PPPoE WAN still through `ppp0`. Laptop DHCP/gateway/DNS all resolve to `192.168.2.1`; trace first hop Pi then ISP `212.158.250.40`, showing ASUS is no longer doing main LAN NAT/routing. Internet tests passed. Cutover rollback timer was observed no longer scheduled. Recent user reported wired AiMesh traffic working; individual node backhaul mode and link status have not been independently audited.
