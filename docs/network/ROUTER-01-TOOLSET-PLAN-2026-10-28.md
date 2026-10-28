@@ -945,3 +945,40 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 **Do not reload sshd, modify authorized_keys, enable a tunnel or change the exporter listener yet.** If preflight passes, separately design limited `systemctl reload ssh` gate with verified rollback to exact Ansible pre-change config, existing admin SSH reconnection test, and protection against interrupted network. Next steps require independent review/approval.
+
+### 28 October ~18:55 — C2b2-d read-only SSH activation preflight FAILED on YAML condition type; corrected source, nothing applied
+
+Operator on admin-01 fetched feature branch and ran `router-01-metrics-sshd-activation-preflight.yml` syntax check (PASS), followed by gated `--check -e router_c2_ssh_activation_preflight_approved=true`. Actual recap **`router-01 ok=8 changed=0 unreachable=0 failed=1 skipped=0`**. Physical Pi identity, existing `sshd -t`, and installed Include/Match structure checks completed successfully. Failure occurred at `Refuse incomplete EOF monitoring block` (line99) with **`Conditional expressions must be strings`**, not an SSH daemon failure and not evidence the EOF marker is missing. This stopped **before backup discovery, backup validation, effective-policy comparisons, ssh.service reload-capability and final gateway checks**. No SSH daemon reload, no file/key/network/PPPoE/firewall/monitoring change. The previously installed `Match User router-metrics` remains in sshd_config ON DISK but has not deliberately been activated by reload.
+
+**Root cause**: The `assert.that` expression contained a YAML plain scalar with a colon followed by a space inside an embedded quoted *comparison value*:
+```yaml
+- c2b2_activation_final_line.stdout | trim == '# END ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)'
+```
+YAML parsed it as a mapping, not a string. Ansible syntax-check does not catch this runtime assertion type error. The corrected IaC explicitly quotes the **whole conditional expression**:
+```yaml
+- "c2b2_activation_final_line.stdout | trim == '# END ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)'"
+```
+No SSH policy expectations, backup guards, approvals or deployment settings have been relaxed.
+
+A new controller-side static gate, `IaC/ansible/scripts/validate-ansible-assert-conditions.py`, parses playbooks using PyYAML to reject any `ansible.builtin.assert.that` expression (or `when`/`failed_when`/`changed_when`/`until`) that is not a YAML string. The existing `sshd-activation-preflight.yml` was inspected for similar unquoted colon-in-assert expressions; the EOF marker comparison was the one identified and corrected. Script is source-only until operator runs it.
+
+**Next: fetch and run LOCAL STATIC CHECK + syntax check + READ-ONLY preflight (NO SSH RELOAD)**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+python3 scripts/validate-ansible-assert-conditions.py \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-activation-preflight.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_c2_ssh_activation_preflight_approved=true
+```
+
+Do **not** use `ALLOW_BROKEN_CONDITIONALS`; the IaC fix avoids weakening validation. Do NOT run normal mode; this check-only playbook refuses it. If backup discovery/reload checks fail later, investigate from actual output; no permission loosening, blind service restart, monitoring key grant or tunnel activation. Stage C2b2-c on-disk Match installation was earlier LIVE PASS, router-01 ok=30 changed=1 failed=0, with actual daemon reload still pending approval.
