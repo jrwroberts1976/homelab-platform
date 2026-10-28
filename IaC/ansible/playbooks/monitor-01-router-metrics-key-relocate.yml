@@ -90,6 +90,7 @@
           - router_c2_move_dirs.results[0].stat.isdir | default(false)
           - not router_c2_move_dirs.results[0].stat.islnk | default(false)
           - router_c2_move_dirs.results[0].stat.pw_name == router_c2_user
+          - router_c2_move_dirs.results[0].stat.mode in ['0700', '0750', '0755']
           - router_c2_move_dirs.results[1].stat.isdir | default(false)
           - not router_c2_move_dirs.results[1].stat.islnk | default(false)
           - router_c2_move_dirs.results[1].stat.pw_name == 'root'
@@ -174,6 +175,9 @@
           - (router_c2_move_dest.results | selectattr('stat.islnk', 'equalto', true) | list | length) == 0
           - (router_c2_move_dest.results | selectattr('stat.exists', 'equalto', true) | rejectattr('stat.isreg', 'equalto', true) | list | length) == 0
           - (router_c2_move_dest.results | selectattr('stat.exists', 'equalto', true) | rejectattr('stat.pw_name', 'equalto', router_c2_user) | list | length) == 0
+          - (not router_c2_move_dest.results[0].stat.exists) or router_c2_move_dest.results[0].stat.mode == '0600'
+          - (not router_c2_move_dest.results[1].stat.exists) or router_c2_move_dest.results[1].stat.mode == '0644'
+          - (not router_c2_move_dest.results[2].stat.exists) or router_c2_move_dest.results[2].stat.mode == '0644'
         fail_msg: "Destination credentials already exist with unexpected type or ownership; do not overwrite."
 
     - name: Check existing destination private key equivalence, when present
