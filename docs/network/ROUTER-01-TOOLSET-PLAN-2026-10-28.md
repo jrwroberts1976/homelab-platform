@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 toolset baseline — 28 October 2026
 
-**Status:** design and read-only audit **staged in GitHub**. No software installed and no running Pi services, routes, nftables or addresses modified by this branch.
+**Status (28 Oct):** live read-only Ansible audit **PASSED** (`ok=14`, `changed=0`, `failed=0`, `unreachable=0`, `skipped=2`). Phase-A five-package diagnostic installer is **staged, not deployed**. No router software, services, routes or firewall modified.
 
 ## Confirmed router state
 
@@ -50,3 +50,47 @@ After reviewing audit output, author separate explicitly approved router-only An
 ## Non-goals and safeguards
 
 Do not install Docker, Komodo Periphery, Kea, inline IPS, new default-DROP chains, a new DHCP/DNS service or the generic estate-wide `automated-patching.yml` as part of the audit. Do not reload/restart nftables, pppd or NetworkManager. Keep the original firewall backup `/etc/nftables.conf.2112.2026-10-28@13:09:59~`, and update actual operational truth `docs/architecture/CURRENT-STATE.md` only after verified deployment. Related tickets: [Router conversion #206](https://github.com/jrwroberts1976/homelab-platform/issues/206), [MSS persistence PR #208](https://github.com/jrwroberts1976/homelab-platform/pull/208), [Toolset issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+
+## 28 October — actual admin-01 read-only audit (operator evidence)
+
+The user recovered SSH to `admin-01` at **192.168.2.48** (password login), fetched this branch to a separate detached worktree and ran the read-only toolset audit in `--check` mode with `-e router_toolset_audit_approved=true`. Syntax check passed. Real Ansible recap:
+
+```text
+router-01 : ok=14 changed=0 unreachable=0 failed=0 skipped=2
+```
+
+- Host authenticated/verified: `raspberrypi`, Debian 13 `aarch64`, eth0 MAC/IP and ppp0 1492 checks PASS.
+- Essential `nftables`, `router-pppoe`, `dnsmasq`, `unbound` passed both active and enabled checks.
+- Persistent nftables TCP MSS 1452 bidirectional rules present.
+- **Installed:** `tcpdump=4.99.5-2` and `ethtool=1:6.14.2-1`.
+- **Missing/uninstalled in package audit:** `prometheus-node-exporter`, `alloy`, `zabbix-agent2`, `unattended-upgrades`, `mtr-tiny`, `traceroute`, `dnsutils`, `conntrack`, `jq`, `nmap`, `iperf3`, `vnstat`, `chrony`, `auditd`, `wireguard-tools`, `suricata`. Missing optional unit `is-active` printed `inactive`; absence is established by package query, not by service state alone.
+- Listeners observed: SSH TCP 22 on all IPv4/IPv6, Unbound DNS TCP/UDP 53 at LAN and loopback, dnsmasq DHCP UDP 67, Avahi UDP 5353; no exporter/Zabbix listener.
+- Loki and Zabbix connectivity probes were **SKIPPED by Ansible check mode**, not proven unreachable. Audit playbook amended after this run: only these two read-only probes now set `check_mode: false`. Re-run the updated playbook to obtain actual network evidence.
+
+### Approved-tools candidate: Phase A diagnostics-only (NOT DEPLOYED)
+
+`playbooks/router-01-diagnostics-install.yml` uses the same isolated inventory and an additional opt-in variable `router_diagnostics_install_approved=true`. It checks exact router identity, LAN, PPPoE, four critical services, persistent MSS, original filter/NAT, free space and simulated APT removals before installing only **mtr-tiny, traceroute, dnsutils, conntrack, jq**. `tcpdump` and `ethtool` already exist and are left untouched. APT package installation uses `install_recommends: false` and a temporary `policy_rc_d: 101` to suppress service auto-start; no service/network/firewall restart task exists. Post-install verifications re-check PPPoE, four services, MSS and firewall/NAT.
+
+The new installer has **not yet passed an on-controller syntax check, check-mode preview or real run**. Follow this order from `admin-01`:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml playbooks/router-01-toolset-audit.yml --syntax-check
+ansible-playbook -i inventory/router-01-toolset-audit.yml playbooks/router-01-diagnostics-install.yml --syntax-check
+
+# No live changes: reads Loki/Zabbix even under --check after fix
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-toolset-audit.yml --ask-become-pass --check \
+  -e router_toolset_audit_approved=true
+
+# Preview diagnostic apt changes, no install:
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-diagnostics-install.yml --ask-become-pass \
+  --check --diff -e router_diagnostics_install_approved=true
+```
+
+**Do not run the installer without `--check` until this dry run passes and the APT simulation is inspected.** A later separately authorised live run uses the same command *without* `--check`, then requires post-install router and household browser checks. Agent rollout is an independent next stage. Legacy `docker-01` production inventory and base roles remain out of scope until reconciled.
