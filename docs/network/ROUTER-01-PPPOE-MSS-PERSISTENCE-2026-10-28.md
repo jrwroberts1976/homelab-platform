@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 PPPoE TCP MSS persistence — 28 October 2026
 
-**Status:** persistent MSS rules **confirmed present on Pi disk with valid nftables syntax**; temporary live workaround active. No reboot/reload has occurred in supplied evidence, so post-reboot persistence remains **unverified**. Ansible deployment recap/backup filename not yet supplied. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
+**Status:** persistent MSS rules **confirmed present on Pi disk with valid nftables syntax**; temporary live workaround active. No reboot/reload has occurred in supplied evidence, so post-reboot persistence remains **unverified**. Original backup filename now verified; Ansible deployment recap not yet supplied. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
 
 ## Observed problem and evidence
 
@@ -81,3 +81,12 @@ sudo systemctl is-active nftables          # active
 Therefore the **startup file now contains and validates** the persistent clamp, but no reload or reboot was carried out and the running kernel still uses `pppoe_mss_test`. No post-boot persistence claim is justified yet. The live Ansible deployment recap and backup filename have not been supplied; retrieve both before a separately approved, recoverable reboot.
 
 At the next reboot, the startup file's `flush ruleset` will remove the temporary table and load `router_pppoe_mss`; verify exact tables and operational traffic as specified above. Do not restart or reload nftables as a substitute for controlled boot verification, and do not conflate host DHCP renumbering after the ASUS reset with the Pi's verified `192.168.3.1`.
+
+## 28 October — Original-versus-persistent firewall diff verified
+
+User ran `sudo diff -u '/etc/nftables.conf.2112.2026-10-28@13:09:59~' /etc/nftables.conf` on the live Pi. **The complete unified diff shows one appended block only** (11 lines, from original line 24 through appended lines 27–37), containing `table ip router_pppoe_mss` and the two bidirectional SYN MSS 1452 rules. No pre-existing `filter_router` or `nat_router` lines were modified or removed.
+
+- Current file: `/etc/nftables.conf`, 1305 bytes; timestamp 28 October 2026 13:09.
+- Original automatic Ansible backup: `/etc/nftables.conf.2112.2026-10-28@13:09:59~`, 765 bytes, original timestamp 27 October 2026 18:22.
+- Disk `nft -c -f` validation already passed and temporary live MSS table remains active. The original deployment `PLAY RECAP` has not been provided.
+- The disk configuration is **ready for controlled boot validation**, but no reboot is authorised or reported. Before planning the reboot, read-only check `is-enabled` and `is-active` for `nftables`, `router-pppoe`, `kea-dhcp4-server` and `unbound`, IPv4 forwarding and any outstanding router rollback timer. Have physical recovery available. Do not reload/restart nftables as a test.
