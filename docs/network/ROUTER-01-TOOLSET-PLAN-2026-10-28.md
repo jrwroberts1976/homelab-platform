@@ -864,3 +864,35 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 **No normal-mode execution allowed by this playbook.** Review candidate `sshd -t` and `-T -C` effective results and unchanged admin/global settings before authoring the separately gated, backup-and-rollback SSH configuration deployment. Do not install any monitoring public key or initiate tunnel yet. Existing household browsing and Pi gateway services remain unchanged.
+
+### 28 October ~18:40 — C2b2-b2 OFFLINE SSH CANDIDATE POLICY VALIDATION PASS; guarded on-disk installation SOURCE-ONLY
+
+User on `admin-01` fetched branch through `6d786ec8` and ran `router-01-metrics-sshd-candidate-effective-readonly.yml`, syntax-check **PASS**, `--check -e router_c2_sshd_candidate_audit_approved=true` **PASS**. Exact recap **`router-01 ok=17 changed=0 unreachable=0 failed=0 skipped=0`**. The ephemeral protected candidate under `/run` was securely removed after validation. No live `/etc/ssh/sshd_config` change/reload, no `authorized_keys`, no router/network/monitoring changes. All physical Pi/router/Node Exporter baseline guards and before/after unit health checks passed.
+
+Crucial actual on-box evidence:
+- `candidate_sshd_syntax_valid: true` via `/usr/sbin/sshd -t -f <candidate>`.
+- `global_policy_unchanged: true`, `admin_policy_unchanged_both_contexts: true`; **full** effective `sshd -T` output matched installed baseline for global and `james` via direct source and ASUS NAT source.
+- `monitoring_policy_restrictions_verified_both_contexts: true` for the proposed `router-metrics` user (direct and ASUS contexts): `pubkeyauthentication yes`, `authenticationmethods publickey`, `passwordauthentication no`, `kbdinteractiveauthentication no`, `permittty no`, `x11forwarding no`, `allowagentforwarding no`, `allowstreamlocalforwarding no`, `allowtcpforwarding local`, `permitopen 127.0.0.1:9100`, `permitlisten none`, `gatewayports no`, `permittunnel no`, `permituserrc no`, `maxsessions 0`, `forcecommand none`.
+- `live_main_ssh_config_unchanged: true`, `temporary_candidate_cleaned_up: true`, `no_sshd_reload_or_network_changes: true`.
+- Pi `router-metrics` local system account/group is present, password-locked and nonlogin. **No SSH key authorized and NO active tunnel.**
+
+**New next stage source ONLY** `IaC/ansible/playbooks/router-01-metrics-sshd-install.yml` in draft PR #210. Despite its filename, **it has NOT been run, syntax-checked or deployed on the Pi**. Has explicit `router_c2_sshd_install_approved=true` gate, exact admin-01/physical Pi verified identity, locked monitoring account, no authorized_keys, safe `/etc/ssh/sshd_config` root ownership and known `Include` ordering/absent snippets, SSH syntax, gateway health and loopback-only exporter. In `--check --diff`, Ansible should predict the identical EOF `Match User router-metrics` block already validated offline. It uses `blockinfile` with `validate: /usr/sbin/sshd -t -f %s` and `backup: true` in future **separately approved** normal-mode operation. The real on-disk deployment, if later authorised, is explicitly **NO sshd reload or restart**; before/after effective global and both admin policies compared for exact equality, monitoring user restrictions asserted in both source contexts, and `block/rescue` attempts to restore generated Ansible backup and revalidate if checks fail. Original SSH daemon remains running on existing loaded config until a separate, reviewed reload gate; if system restarts, on-disk policy would be applied (validated candidate). **A normal run is NOT currently authorised.** No key deployment, no exposure of port9100, no PPPoE/firewall/Prometheus modifications.
+
+**Next operator task is SYNTAX AND CHECK-MODE ONLY**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-install.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-install.yml \
+  --limit router-01 --ask-become-pass --check --diff \
+  -e router_c2_sshd_install_approved=true
+```
+
+Review full diff and check-mode recap before approval of normal mode. Under no circumstances reload Pi sshd, install `authorized_keys` from unverified source, open exporter to LAN, or start SSH tunnel based only on these staged results. Record live outcome and handover after any actual deployment. The monitor client's working private key remains isolated in `/var/lib/router-metrics-tunnel/.ssh/id_ed25519`.
