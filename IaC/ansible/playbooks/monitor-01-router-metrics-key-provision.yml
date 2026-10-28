@@ -61,9 +61,18 @@
         path: "{{ router_c2_trust_file }}"
       register: router_c2_key_trust_stat
 
-    - name: Refuse absent, linked or non-root-owned trust file
+    - name: Check owning directory metadata for private key safety
+      ansible.builtin.stat:
+        path: "{{ router_c2_key_dir }}"
+      register: router_c2_key_dir_stat
+
+    - name: Refuse symlinked or writable-by-others trust directory
       ansible.builtin.assert:
         that:
+          - router_c2_key_dir_stat.stat.isdir | default(false)
+          - not router_c2_key_dir_stat.stat.islnk | default(false)
+          - router_c2_key_dir_stat.stat.pw_name == 'root'
+          - router_c2_key_dir_stat.stat.mode == '0755'
           - router_c2_key_trust_stat.stat.isreg | default(false)
           - not router_c2_key_trust_stat.stat.islnk | default(false)
           - router_c2_key_trust_stat.stat.pw_name == 'root'
@@ -89,6 +98,21 @@
       changed_when: false
       failed_when: false
       no_log: true
+
+    - name: Check proposed monitor service group for unexpected reuse
+      ansible.builtin.command:
+        argv: [getent, group, "{{ router_c2_tunnel_user }}"]
+      register: router_c2_key_existing_group
+      changed_when: false
+      check_mode: false
+      failed_when: false
+      no_log: true
+
+    - name: Refuse an existing service group if the related user is absent
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_existing_group.rc != 0 or router_c2_key_existing_user.rc == 0
+        fail_msg: "Group name is already claimed by an unrelated account; stop."
 
     - name: Refuse an unrelated pre-existing user account
       ansible.builtin.assert:
