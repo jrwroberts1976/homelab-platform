@@ -560,3 +560,29 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 This **only audits monitor-01**, not Pi; no trust, key, account or tunnel changes. If passes, treat account/key as existing and secure and proceed to **separately reviewed C2b2 Pi service account and restricted key authorisation**. No remote metrics scrape has yet been configured; Pi exporter still localhost-only. Do not print the actual private SSH key.
+
+### 28 October ~17:15 — C2b1 private-key postflight FAILED read-only; investigate without key disclosure
+
+The operator ran `monitor-01-router-metrics-key-postflight-readonly.yml`, syntax-check PASS, then gated read-only `--check`. **Actual recap `monitor-01 ok=17 changed=0 unreachable=0 failed=1 skipped=0`**. The task `Derive public key from PRIVATE key as the nonprivileged service user` failed with nonzero return code. That task deliberately uses `no_log: true`; the raw error is concealed and **the cause has NOT been diagnosed**. Earlier checked facts before failure: dedicated `router-metrics-tunnel` user and group present with home `/var/lib/router-metrics-tunnel`, nologin shell and locked password; key path exists as regular nonsymlink file owned by identity, mode `0600`; root-owned `/etc/homelab/router-metrics-ssh` mode 0755 and public key root-owned mode0644; known_hosts pinned trust file and metadata appropriate. **The check did not complete private/public key equivalence, SSH login eligibility, Prometheus postflight or the no-tunnel assertion.** Do not mark credential as functional or deploy Pi `authorized_keys`.
+
+Very plausible but **unverified** reason: an ancestor of the key path (`/etc/homelab`) might be inaccessible to non-root even though the final trust directory is mode0755 and private key belongs to service user. Other possible causes are key format, passphrase, or runuser execution. Do **not** broadly change `/etc/homelab` permissions or weaken protection, regenerate key, run `StrictHostKeyChecking=no`, or print private bytes until evidence identifies the fault.
+
+**Source-only** `IaC/ansible/playbooks/monitor-01-router-metrics-key-access-readonly.yml` added to draft PR #210 for targeted diagnosis. It runs only on `monitor-01`, requires exact `admin-01` controller and `router_c2_key_access_audit_approved=true`. It checks modes and ownership of every path segment (/etc, /etc/homelab, dedicated dir, private/public files); probes service-user runuser identity, `test -f` and `test -r` as service user; derives public key separately as root and as service user with `ssh-keygen -y -P "" -f`, all raw key outputs fully redacted with `no_log: true`, then reports only pass/fail booleans, matching against the stored public key, and coarse error category. **No keys, user accounts, directory modes, sshd, network or monitoring are modified.** The `ssh-keygen -y` outputs are public material but not printed to avoid leaking details into logs.
+
+**Next operator task is only to fetch latest branch, syntax-check, and execute this source as a read-only check**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-access-readonly.yml \
+  --limit monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-access-readonly.yml \
+  --limit monitor-01 --ask-become-pass --check \
+  -e router_c2_key_access_audit_approved=true
+```
+
+Inspect output flags and path metadata. If service-user read fails but root parse succeeds, next reviewed IaC fix should arrange a safe private-key path that the service can traverse, without altering shared parent directory permissions. If root parse also fails, inspect format/passphrase without copying secret into console. No change/deploy authorised in this diagnostic stage.
