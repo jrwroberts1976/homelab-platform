@@ -238,3 +238,40 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 **Design gate:** Identify real ASUS WAN IP on Pi `.3.x`, any stable DHCP reservation, trusted source semantics after ASUS NAT, current nft input-chain order and default-deny, and whether `9100` is already used. If source is SNATed to ASUS WAN IP, a Pi firewall rule restricted to ASUS WAN IP permits *downstream LAN hosts behind ASUS*, not just `monitor-01` specifically; avoid falsely representing it as host-specific protection. Do not apply a firewall rule, modify ASUS mode, restart router services or install/export Node Exporter until that evidence is reviewed. After a safely authorized exporter rollout, add exact scrape target in Prometheus via separate reviewed IaC; do not redeploy entire monitoring stack blindly. Zabbix/Alloy outbound paths remain unresolved.
+
+## 28 October ~16:11 — Live exporter ingress audit PASS, repeated; Stage C1 localhost-only prepared
+
+Operator executed `router-01-exporter-ingress-readonly.yml` **twice** from `admin-01` using `--syntax-check` and `--check`. Both PASS `router-01 ok=14 changed=0 unreachable=0 failed=0 skipped=0`. No router or ASUS services/config changed.
+
+**Live Pi firewall and routing:**
+- `inet filter_router input`: **policy drop**, loopback accept, `ct state established,related` accept, invalid drop; on `eth0` TCP allows **22 and 53 only**, UDP **53 and 67**, ICMP. **No TCP 9100 allow**.
+- `forward`: policy drop with established/related and `eth0 -> ppp0 ip saddr 192.168.3.0/24 accept`. Output policy accept.
+- Routes `default dev ppp0`, `192.168.3.0/24 dev eth0 src 192.168.3.1`; PPPoE WAN source is a public address (do **not** put monitoring on `ppp0`).
+- TCP listeners are SSH `0.0.0.0:22` and `[::]:22`; DNS `127.0.0.1:53` and `192.168.3.1:53`. **No TCP 9100 listener; `prometheus-node-exporter` package absent.**
+- DNSMASQ leases include `192.168.3.142` / MAC `04:d4:c4:b8:52:28` / **hostname `*`**, and `192.168.3.187` / MAC `04:d4:c4:c1:62:38` / **hostname `RT-AC86U-6238`**. The neighbour table listed `.142` with matching MAC as `REACHABLE`, but **neither DHCP hostname nor the neighbour listing conclusively proves which address performs source NAT for `monitor-01`**. Do not invent a source-IP firewall allowlist until verifying WAN-side ASUS IP and translated source during monitor traffic.
+- All four critical units (nftables, router-pppoe, dnsmasq, unbound) active.
+
+### Stage C1 — source-only LOCALHOST Node Exporter pilot (NOT INSTALLED)
+
+New `IaC/ansible/playbooks/router-01-node-exporter-local.yml` is staged in draft PR #210 and requires `-e router_node_exporter_local_install_approved=true`. It targets only isolated `router_toolset_audit` inventory `router-01` `192.168.3.1`, and checks admin-01 controller, Pi MAC, Debian 13/aarch64, LAN IP, PPPoE MTU/default route, four active router services, existing nft filter/NAT and MSS 1452, no externally bound TCP 9100, free space, existing override safety, and APT simulation for no removals/upgrades.
+
+It plans **only `prometheus-node-exporter`**, `install_recommends: false`, `policy_rc_d: 101` (suppress Debian package auto-start). Then Ansible configures a root-owned systemd `override.conf` with `ExecStart=/usr/bin/prometheus-node-exporter --web.listen-address=127.0.0.1:9100`, daemon-reloads and starts/enables only the exporter. `--web.listen-address` is supported by Debian 13 Node Exporter (Debian manual `https://manpages.debian.org/trixie/prometheus-node-exporter/prometheus-node-exporter.1.en.html`). On live run it verifies local HTTP 200 `127.0.0.1:9100/metrics`, expected node metrics, **only localhost listener**, gateway units, route, and unchanged original nftables filter/NAT/MSS. **No Pi INPUT rule or WAN port, ASUS config, Prometheus target, Zabbix, Alloy, or VPN change.**
+
+The stage C1 installer is **source-only and has not been controller syntax-tested, dry-run, or deployed**. In check mode, it previews the APT task; file/drop-in/systemd tasks are intentionally skipped because the package/unit is not yet present and cannot be safely verified in check mode. Stage C1 produces **local metrics only**, not remotely scraped until a separately staged solution is designed.
+
+First retrieve branch updates and perform *syntax-check and preview only*:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-node-exporter-local.yml --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-node-exporter-local.yml --check --diff \
+  --ask-become-pass -e router_node_exporter_local_install_approved=true
+```
+
+**Stop after `--check --diff` and review APT simulation / proposed changes first.** Do not remove `--check` until the source has passed live syntax and dry-run and the operator approves. Post-deployment household browser check is still advised. Later service access may be solved using restricted source-aware Pi INPUT allow rule, SSH tunnel, or another reviewed architecture; access from downstream via ASUS NAT needs a firm source IP verification, and a WAN-IP allow from ASUS might grant *all downstream clients*, not just monitor-01. Avoid automatic proxy-wide monitoring-stack redeploys.
