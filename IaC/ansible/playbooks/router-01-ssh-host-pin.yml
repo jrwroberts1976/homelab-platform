@@ -1,0 +1,186 @@
+---
+# Stage C2a: pin only the Pi's SSH host public key on monitor-01.
+# NO client private key, router login account, tunnel, firewall, SSH daemon,
+# Docker, or Prometheus config is created/modified here.
+- name: Read authenticated physical Pi SSH host key for a strict fingerprint pin
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_host_pin_approved: false
+    router_c2_expected_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+  pre_tasks:
+    - name: Identify controller
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_c2_pin_controller
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+
+    - name: Require explicit approval and exact router inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_host_pin_approved | bool
+          - router_c2_pin_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+      delegate_to: localhost
+      become: false
+
+    - name: Confirm genuine physical Pi onboard MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_c2_pin_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Require confirmed Pi identity
+      ansible.builtin.assert:
+        that:
+          - router_c2_pin_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+  tasks:
+    - name: Read Pi SSH ED25519 public host-key fingerprint
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -lf
+          - /etc/ssh/ssh_host_ed25519_key.pub
+          - -E
+          - sha256
+      register: router_c2_pin_fingerprint
+      check_mode: false
+      changed_when: false
+
+    - name: Assert exact independently observed host-key pin
+      ansible.builtin.assert:
+        that:
+          - router_c2_pin_fingerprint.stdout.split()[1] == router_c2_expected_fingerprint
+          - "'(ED25519)' in router_c2_pin_fingerprint.stdout"
+        fail_msg: "Pi SSH key does not match independently verified fingerprint. No trust changes."
+
+    - name: Read only the Pi's public SSH host key
+      ansible.builtin.slurp:
+        src: /etc/ssh/ssh_host_ed25519_key.pub
+      register: router_c2_pin_host_pub
+
+    - name: Validate public host-key file is genuinely ED25519
+      ansible.builtin.assert:
+        that:
+          - (router_c2_pin_host_pub.content | b64decode | trim) is match('^ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$')
+          - (router_c2_pin_host_pub.content | b64decode).split() | length >= 2
+
+- name: Pin the independently verified router SSH host key on monitor-01 only
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_host_pin_approved: false
+    router_c2_expected_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+    router_c2_trust_dir: /etc/homelab/router-metrics-ssh
+    router_c2_trust_path: /etc/homelab/router-metrics-ssh/known_hosts
+    router_c2_expected_trust_line: "192.168.3.1 {{ (hostvars['router-01'].router_c2_pin_host_pub.content | b64decode).split()[:2] | join(' ') }}"
+  pre_tasks:
+    - name: Confirm admin controller
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_c2_pin_controller_monitor
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+
+    - name: Require monitoring host and approval
+      ansible.builtin.assert:
+        that:
+          - router_c2_host_pin_approved | bool
+          - router_c2_pin_controller_monitor.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Confirm monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      check_mode: false
+      changed_when: false
+      register: router_c2_pin_hostname
+
+    - name: Confirm monitoring addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      check_mode: false
+      changed_when: false
+      register: router_c2_pin_address
+
+    - name: Reject unexpected monitoring host
+      ansible.builtin.assert:
+        that:
+          - router_c2_pin_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_pin_address.stdout"
+          - hostvars['router-01'].router_c2_pin_fingerprint.stdout.split()[1] == router_c2_expected_fingerprint
+
+    - name: Check if dedicated trust file already exists
+      ansible.builtin.stat:
+        path: "{{ router_c2_trust_path }}"
+      register: router_c2_trust_existing
+
+    - name: Read pre-existing dedicated trust file if present
+      ansible.builtin.slurp:
+        src: "{{ router_c2_trust_path }}"
+      register: router_c2_trust_existing_content
+      when: router_c2_trust_existing.stat.exists | bool
+
+    - name: Refuse to overwrite an existing different host pin or symlink
+      ansible.builtin.assert:
+        that:
+          - not router_c2_trust_existing.stat.islnk | default(false)
+          - (router_c2_trust_existing_content.content | b64decode | trim) == router_c2_expected_trust_line
+        fail_msg: "Dedicated trust file exists with unexpected contents; investigate before changing."
+      when: router_c2_trust_existing.stat.exists | bool
+
+  tasks:
+    - name: Create dedicated root-only SSH trust directory
+      ansible.builtin.file:
+        path: "{{ router_c2_trust_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Pin Pi public host key obtained through existing verified Ansible session
+      ansible.builtin.copy:
+        dest: "{{ router_c2_trust_path }}"
+        content: "{{ router_c2_expected_trust_line }}\n"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Read fingerprint of installed SSH pin
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_trust_path }}", -E, sha256]
+      register: router_c2_installed_pin
+      check_mode: false
+      changed_when: false
+      when: not ansible_check_mode
+
+    - name: Verify file pin is exact original Pi ED25519 host-key fingerprint
+      ansible.builtin.assert:
+        that:
+          - router_c2_installed_pin.stdout.split()[1] == router_c2_expected_fingerprint
+          - "'(ED25519)' in router_c2_installed_pin.stdout"
+      when: not ansible_check_mode
+
+    - name: Report bounded trust-only state
+      ansible.builtin.debug:
+        msg:
+          state: "{{ 'CHECK MODE: trust files not actually created' if ansible_check_mode else 'LIVE: independently verified router host pin installed on monitor only' }}"
+          expected_fingerprint: "{{ router_c2_expected_fingerprint }}"
+          monitor_trust_file: "{{ router_c2_trust_path }}"
+          key_generation: "NONE; no client private keys created or used"
+          pi_router_changes: "NONE"
+          ssh_tunnel: "NONE"
+          prometheus_or_docker_changes: "NONE"
