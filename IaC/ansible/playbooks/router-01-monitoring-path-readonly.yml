@@ -1,0 +1,150 @@
+---
+# Read-only comparison of current telemetry destinations as seen from the
+# downstream admin-01 controller and the upstream Raspberry Pi PPPoE router.
+# Safe in check mode. Does not change any service, network route or firewall.
+- name: Compare router and controller network paths to Loki and Zabbix
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: false
+  vars:
+    router_monitoring_path_audit_approved: false
+    router_monitoring_loki_address: 192.168.2.52
+    router_monitoring_loki_ready: http://192.168.2.52:3100/ready
+    router_monitoring_zabbix_address: 192.168.2.59
+
+  pre_tasks:
+    - name: Check controller identity before connecting to router
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      register: router_monitoring_controller_host
+      changed_when: false
+      check_mode: false
+
+    - name: Require operator opt-in, original controller and known router target
+      ansible.builtin.assert:
+        that:
+          - router_monitoring_path_audit_approved | bool
+          - router_monitoring_controller_host.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Read-only router path audit requires explicit opt-in and known controller/target."
+      delegate_to: localhost
+
+    - name: Confirm router identity by onboard Ethernet MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_monitoring_lan_mac
+      changed_when: false
+      check_mode: false
+
+    - name: Require actual approved Raspberry Pi
+      ansible.builtin.assert:
+        that:
+          - router_monitoring_lan_mac.stdout | lower | trim == 'd8:3a:dd:5a:51:44'
+        fail_msg: "Unexpected router hardware; stop read-only probe."
+
+  tasks:
+    - name: Controller own network addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      delegate_to: localhost
+      register: router_monitoring_controller_addresses
+      changed_when: false
+      check_mode: false
+
+    - name: Controller route to Loki host
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_loki_address }}"]
+      delegate_to: localhost
+      register: router_monitoring_controller_loki_route
+      changed_when: false
+      check_mode: false
+
+    - name: Controller route to Zabbix host
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_zabbix_address }}"]
+      delegate_to: localhost
+      register: router_monitoring_controller_zabbix_route
+      changed_when: false
+      check_mode: false
+
+    - name: Router route to Loki host
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_loki_address }}"]
+      register: router_monitoring_router_loki_route
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Router route to Zabbix host
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_zabbix_address }}"]
+      register: router_monitoring_router_zabbix_route
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Controller HTTP probe to central Loki readiness
+      ansible.builtin.uri:
+        url: "{{ router_monitoring_loki_ready }}"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 5
+      register: router_monitoring_controller_loki_probe
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Router HTTP probe to central Loki readiness
+      ansible.builtin.uri:
+        url: "{{ router_monitoring_loki_ready }}"
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 5
+      register: router_monitoring_router_loki_probe
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Controller TCP connection to Zabbix server passive endpoint
+      ansible.builtin.wait_for:
+        host: "{{ router_monitoring_zabbix_address }}"
+        port: 10051
+        connect_timeout: 2
+        timeout: 5
+        state: started
+      register: router_monitoring_controller_zabbix_probe
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Router TCP connection to Zabbix server passive endpoint
+      ansible.builtin.wait_for:
+        host: "{{ router_monitoring_zabbix_address }}"
+        port: 10051
+        connect_timeout: 2
+        timeout: 5
+        state: started
+      register: router_monitoring_router_zabbix_probe
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Report both vantage points without altering live network configuration
+      ansible.builtin.debug:
+        msg:
+          controller_ipv4: "{{ router_monitoring_controller_addresses.stdout_lines }}"
+          controller_loki_route: "{{ router_monitoring_controller_loki_route.stdout }}"
+          controller_zabbix_route: "{{ router_monitoring_controller_zabbix_route.stdout }}"
+          router_loki_route: "{{ router_monitoring_router_loki_route.stdout | default('') }}"
+          router_zabbix_route: "{{ router_monitoring_router_zabbix_route.stdout | default('') }}"
+          controller_loki_http_status: "{{ router_monitoring_controller_loki_probe.status | default('request error') }}"
+          router_loki_http_status: "{{ router_monitoring_router_loki_probe.status | default('request error') }}"
+          controller_zabbix_tcp_connected: "{{ router_monitoring_controller_zabbix_probe.state | default('') == 'started' }}"
+          router_zabbix_tcp_connected: "{{ router_monitoring_router_zabbix_probe.state | default('') == 'started' }}"
+          changes: "READ ONLY; no route, firewall, service or package changes"
