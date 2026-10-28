@@ -617,3 +617,32 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 **Do not run without `--check` until the full preview has been reviewed.** No further Pi-side `router-metrics` account or `authorized_keys` installation is authorised until the service can actually derive its own public key from its own safe private-key path. This fix is more secure than modifying the shared config directory and keeps the original key available for rollback.
+
+### 28 October ~18:02 — SSH key relocation dry-run caught missing-stat-field bug; source corrected, NOT deployed
+
+Operator on `admin-01` fetched isolated branch through `79f09778`, syntax-checked `monitor-01-router-metrics-key-relocate.yml` **PASS**, then tried `--check --diff -e router_c2_key_relocate_approved=true` against `monitor-01`. Actual recap **`monitor-01 ok=18 changed=0 unreachable=0 failed=1 skipped=0`**. The root/home/actual monitor identity checks, source keypair private-derived/public equivalence and independently pinned Pi host ED25519 fingerprint all passed again. Failure was at **`Refuse existing nonregular, linked or wrong-owner destinations`** *before any copy or directory creation*:
+```text
+Error while evaluating conditional: object of type 'dict' has no attribute 'islnk'
+```
+**Root cause is the Ansible playbook's filtering logic**, not a bad SSH key: `ansible.builtin.stat` does not necessarily return `islnk`, `isreg`, ownership or mode for nonexistent destination files. The previous `selectattr('stat.islnk', 'equalto', true)` failed to handle missing attributes. The live router, SSH, shared `/etc/homelab`, Prometheus and Docker remain unchanged. No private keys copied and no credential staging done.
+
+**GitHub IaC patch** to `IaC/ansible/playbooks/monitor-01-router-metrics-key-relocate.yml` replaces those `selectattr`/`rejectattr` filters with **one assertion per destination file**, looped over the existing `stat` results, applying `default(false)` to absent `exists/islnk/isreg`, `default('')` to absent `pw_name/mode`. A missing destination now passes the existence gate without relaxing anything: for *any existing file*, it still rejects symlinks, nonregular files, wrong owner and wrong mode (private 0600, public/known_hosts 0644) before copy. This source is now staged but **has not been re-syntax-checked or re-executed on admin-01**. Protected parent `/etc/homelab=0750` will not change.
+
+**Retry syntax and dry run ONLY** from the existing isolated worktree:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-relocate.yml \
+  --limit monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-relocate.yml \
+  --limit monitor-01 --ask-become-pass --check --diff \
+  -e router_c2_key_relocate_approved=true
+```
+
+Expected dry-run if destinations are still absent: identity/source/host-key assertions PASS, three absent destination file assertions PASS, and **only a predicted** `/var/lib/router-metrics-tunnel/.ssh` creation (mode0700). Actual private/public/known_hosts copies and service-account key usability verification intentionally skip during --check. **No live run until operator supplies and we review the full corrected dry-run output.** No Pi C2b2 authorized_keys until C2b1 fully proven functional.
