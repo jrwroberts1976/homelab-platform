@@ -1,0 +1,92 @@
+name: Validate router-01 DHCP exclusion preflight
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-01-dhcp-exclusion-preflight.yml"
+      - "IaC/ansible/playbooks/router-01-dhcp-exclusion-preflight-readonly.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-router-01-dhcp-exclusion-preflight.yml"
+      - "IaC/ansible/playbooks/router-01-dhcp-exclusion-preflight-readonly.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ansible-offline-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ansible for offline checks
+        run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Validate guarded read-only Ansible and proposed lease-preserving ranges
+        run: |
+          python - <<'PY'
+          import ipaddress
+          from pathlib import Path
+          import yaml
+
+          path = Path("IaC/ansible/playbooks/router-01-dhcp-exclusion-preflight-readonly.yml")
+          plays = yaml.safe_load(path.read_text())
+          assert isinstance(plays, list) and len(plays) == 1
+          play = plays[0]
+          assert play["hosts"] == "router_postcutover_baseline"
+          assert play["gather_facts"] is False
+          assert not play.get("handlers")
+          tasks = [task for section in ("pre_tasks", "tasks", "post_tasks") for task in play.get(section, [])]
+          allowed = {
+              "ansible.builtin.command", "ansible.builtin.slurp",
+              "ansible.builtin.assert", "ansible.builtin.debug"
+          }
+          assert len(tasks) >= 15
+          for task in tasks:
+              modules = [key for key in task if key.startswith("ansible.builtin.")]
+              assert len(modules) == 1 and modules[0] in allowed, task.get("name")
+              if modules[0] == "ansible.builtin.command":
+                  assert task.get("check_mode") is False, task.get("name")
+                  assert task.get("changed_when") is False, task.get("name")
+          source = path.read_text()
+          for guard in ("ansible_check_mode", "router_dhcp_exclusion_preflight_approved",
+                        "router_dhcp_controller", "192.168.2.1", "d8:3a:dd:5a:51:44",
+                        "router_dhcp_lease_ips", "router_dhcp_router_config"):
+              assert guard in source, guard
+
+          values = play["vars"]
+          original = values["router_dhcp_original_range"]
+          assert original == "dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h"
+          ranges = values["router_dhcp_candidate_ranges"]
+          assert len(ranges) == 3
+          allowed_ips = []
+          for line in ranges:
+              assert line.startswith("dhcp-range="), line
+              lo, hi, mask, expiry = line.split("=", 1)[1].split(",")
+              assert mask == "255.255.255.0" and expiry == "24h"
+              a, b = int(ipaddress.IPv4Address(lo)), int(ipaddress.IPv4Address(hi))
+              assert a <= b
+              allowed_ips.extend(range(a, b + 1))
+          assert len(allowed_ips) == len(set(allowed_ips)), "Ranges overlap"
+          full = set(range(int(ipaddress.IPv4Address("192.168.2.100")),
+                           int(ipaddress.IPv4Address("192.168.2.199")) + 1))
+          excluded = {int(ipaddress.IPv4Address(v)) for v in ("192.168.2.181", "192.168.2.195")}
+          assert set(allowed_ips) == full - excluded, "Missing or extra addresses"
+          observed_leases = (
+              "100 109 112 125 153 164 168 171 174 179 180 186 189 190 198"
+          ).split()
+          assert all(
+              int(ipaddress.IPv4Address("192.168.2." + v)) in allowed_ips
+              for v in observed_leases
+          ), "Previously observed in-pool lease lost"
+          print("Read-only tasks, preflight gates and exact 98-address proposal: PASS")
+          PY
+      - name: Validate isolated postcutover inventory and Ansible syntax
+        run: |
+          cd IaC/ansible
+          ansible-inventory -i inventory/router-01-postcutover-baseline.yml --list >/dev/null
+          ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+            playbooks/router-01-dhcp-exclusion-preflight-readonly.yml \
+            --limit router-01 --syntax-check
