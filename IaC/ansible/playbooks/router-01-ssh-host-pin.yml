@@ -158,6 +158,10 @@
         owner: root
         group: root
         mode: "0600"
+      # Parent directory is only predicted in check mode; do not try to copy
+      # into a path that does not yet exist. The operator's first preview
+      # remains mutation-free, with the exact target documented in debug.
+      when: not ansible_check_mode
 
     - name: Read fingerprint of installed SSH pin
       ansible.builtin.command:
