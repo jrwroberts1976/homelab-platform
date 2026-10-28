@@ -684,3 +684,25 @@ The four changes **only on monitor-01**:
 **Critical LIVE verification PASSED:** `runuser -u router-metrics-tunnel -- ssh-keygen -y -P '' -f /var/lib/router-metrics-tunnel/.ssh/id_ed25519` returned successfully and produced a public key **matching the original**, confirming actual service-user key readability and cryptographic validity. `router-metrics-tunnel` could read its new known_hosts and obtain exact Pi ED25519 server host fingerprint **`SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`**. Prometheus readiness postflight passed, host TCP19100 remains unbound. No SSH tunnel, no router/ASUS/firewall/PPPoE or sshd changes, no Docker/Prometheus modification. **Stage C2b1 now COMPLETE**. Original credentials **RETAINED** under root-protected `/etc/homelab/router-metrics-ssh`; shared `/etc/homelab` remains 0750. A separate reviewed cleanup may remove duplicated old credentials only after successful full rollout; do not blindly delete them.
 
 Next Stage C2b2 is a *distinct security gate*: decide how to authorize **only this dedicated monitor public key** to Pi `router-metrics` service account, with **local TCP forwarding limited to `127.0.0.1:9100`**, no password/session/PTY/agent/X11/remote forwarding, and no global SSH relaxation. This likely needs both `authorized_keys` key-level restrictions and a **user-specific sshd Match policy**. On Pi, current general `sshd -T` permits `allowtcpforwarding yes`, `permitopen any`, `passwordauthentication yes`, `permittty yes`, so **do not rely on the global policy as sufficient**. Before deploying any change, inspect actual sshd config structure, Include/Match ordering, effective policies and account homes to establish a safe gated `sshd -t` validation and reload/rollback plan; source tunnel key must come ONLY from the verified public key on monitor. **SSH client must use `IdentityFile=/var/lib/router-metrics-tunnel/.ssh/id_ed25519`, `UserKnownHostsFile=/var/lib/router-metrics-tunnel/.ssh/known_hosts`, `StrictHostKeyChecking=yes`** when eventually tested. Do not open Pi TCP9100 on LAN, do not edit PPPoE/NAT/nftables, do not launch a tunnel until a distinct transport and Docker Compose network namespace review. Containerized Prometheus still cannot access host-loopback local forward directly.
+
+### 28 October ~18:10+ — Stage C2b2 SSH-only Pi policy preflight STAGED (source only, NOT RUN)
+
+Having validated the dedicated monitoring private key works from its safe new home path, next inspect **the Pi's own SSH daemon policy and configuration ordering** before authorizing that key. New source-only, gated Ansible `IaC/ansible/playbooks/router-01-metrics-ssh-authorization-readonly.yml` in draft PR #210 checks original `admin-01` controller, `router-01=192.168.3.1` inventory, exact verified Pi onboard Ethernet MAC, whether proposed Pi `router-metrics` account already exists, `sshd -t` config syntax, general effective forwarding/password/public-key settings, main `sshd_config` Include/Match directive ordering, included fragment filenames, and still loopback-only `127.0.0.1:9100` export. Every probe is read-only, and there is **no account creation, no authorised key, no SSH daemon reload/restart, no firewall, no tunnel or Prometheus change**. This source has **not yet been syntax-checked or executed on `admin-01`**.
+
+Run from the isolated worktree after fetching the current draft branch:
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-ssh-authorization-readonly.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-ssh-authorization-readonly.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_c2_auth_audit_approved=true
+```
+
+Review actual include/match ordering BEFORE proposing a restrictive, user-specific sshd configuration. Future Pi-side `router-metrics` user must be locked-password/noninteractive, with exact public client key from `monitor-01:/var/lib/router-metrics-tunnel/.ssh/id_ed25519.pub`, an authorized_keys rule granting **only local TCP port-forwarding to `127.0.0.1:9100`**, and deny PTY/X11/agent/session/remote forwards where supported. An authorized-key `restrict,port-forwarding,permitopen=...` alone **is not sufficient to ensure no remote -R forwards**; use user-specific `AllowTcpForwarding local` and `PermitOpen 127.0.0.1:9100` enforced by sshd after understanding Include/Match behavior. Avoid a global SSH relaxation and any change to WAN/PPPoE/nftables/Node Exporter listener. Plan `sshd -t`, effective account-specific `sshd -T -C ...` verification and safe rollback before any daemon reload; don't deploy Pi auth during this preflight.
