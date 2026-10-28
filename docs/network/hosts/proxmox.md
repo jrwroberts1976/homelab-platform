@@ -112,8 +112,8 @@ PROXMOX is a confirmed physical Proxmox VE cluster node and cluster anchor at 19
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-27T09:43:05+00:00`
-- Pending updates: **4**
+- Last assessed: `2026-10-28T13:21:31+00:00`
+- Pending updates: **24**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
