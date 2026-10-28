@@ -1,0 +1,176 @@
+---
+# No apt, files, service changes or nft changes. Preflight only.
+# Router-01 is the household ISP gateway; do not apply generic estate
+# playbooks to this host without auditing hostname/ports and service impact.
+- name: Audit tools and agent readiness on live Raspberry Pi router
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_toolset_audit_approved: false
+    router_toolset_expected_mac: d8:3a:dd:5a:51:44
+    router_toolset_expected_ipv4: 192.168.3.1/24
+    router_toolset_required_services:
+      - nftables
+      - router-pppoe
+      - dnsmasq
+      - unbound
+    router_toolset_optional_services:
+      - prometheus-node-exporter
+      - alloy
+      - zabbix-agent2
+      - chrony
+      - unattended-upgrades
+      - vnstat
+      - auditd
+    router_toolset_packages:
+      - prometheus-node-exporter
+      - alloy
+      - zabbix-agent2
+      - unattended-upgrades
+      - tcpdump
+      - ethtool
+      - mtr-tiny
+      - traceroute
+      - dnsutils
+      - conntrack
+      - jq
+      - nmap
+      - iperf3
+      - vnstat
+      - chrony
+      - auditd
+      - wireguard-tools
+      - suricata
+
+  pre_tasks:
+    - name: Refuse unknown controller target before any connection
+      ansible.builtin.assert:
+        that:
+          - router_toolset_audit_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Router toolset audit requires explicit opt-in and the verified Pi address."
+      delegate_to: localhost
+      become: false
+
+  tasks:
+    - name: Read host facts
+      ansible.builtin.setup:
+
+    - name: Read onboard LAN MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      check_mode: false
+      changed_when: false
+      register: router_toolset_mac
+
+    - name: Read LAN address
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      check_mode: false
+      changed_when: false
+      register: router_toolset_lan
+
+    - name: Read PPPoE MTU
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/ppp0/mtu]
+      check_mode: false
+      changed_when: false
+      register: router_toolset_mtu
+
+    - name: Reject a host that is not the verified Pi router
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - router_toolset_mac.stdout | trim | lower == router_toolset_expected_mac
+          - router_toolset_expected_ipv4 in router_toolset_lan.stdout
+          - router_toolset_mtu.stdout | trim == '1492'
+        fail_msg: "Observed host identity differs: do not scan or deploy a generic baseline."
+
+    - name: Read essential router services and boot enablement
+      ansible.builtin.command:
+        argv: [systemctl, "{{ item.0 }}", "{{ item.1 }}"]
+      loop: "{{ ['is-active', 'is-enabled'] | product(router_toolset_required_services) | list }}"
+      register: router_toolset_required_status
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Reject unhealthy essential router services
+      ansible.builtin.assert:
+        that:
+          - (router_toolset_required_status.results | selectattr('rc', 'ne', 0) | list | length) == 0
+        fail_msg: "A PPPoE/DHCP/DNS/firewall service is not active/enabled: investigate before installing tools."
+
+    - name: Read optional agent and utility service states
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ router_toolset_optional_services }}"
+      register: router_toolset_optional_status
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Inventory installed diagnostic and monitoring packages
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, '-f=${Status} ${Version}', "{{ item }}"]
+      loop: "{{ router_toolset_packages }}"
+      register: router_toolset_package_status
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect LAN and WAN listening sockets (no firewall changes)
+      ansible.builtin.command:
+        argv: [ss, -lntup]
+      register: router_toolset_listeners
+      check_mode: false
+      changed_when: false
+
+    - name: Read persistent MSS table and counters
+      ansible.builtin.command:
+        argv: [nft, -a, list, table, ip, router_pppoe_mss]
+      register: router_toolset_mss
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm 1452-byte MSS rules on both directions after reboot
+      ansible.builtin.assert:
+        that:
+          - (router_toolset_mss.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+          - "'iifname \"eth0\" oifname \"ppp0\"' in router_toolset_mss.stdout"
+          - "'iifname \"ppp0\" oifname \"eth0\"' in router_toolset_mss.stdout"
+
+    - name: Test Loki readiness without changing anything
+      ansible.builtin.uri:
+        url: http://192.168.2.52:3100/ready
+        method: GET
+        timeout: 4
+        return_content: true
+        status_code: [200]
+      register: router_toolset_loki
+      failed_when: false
+      changed_when: false
+
+    - name: Test outbound Zabbix server port without installing an agent
+      ansible.builtin.wait_for:
+        host: 192.168.2.59
+        port: 10051
+        connect_timeout: 2
+        timeout: 4
+      register: router_toolset_zabbix
+      failed_when: false
+      changed_when: false
+
+    - name: Report host facts, observed agent state and reachability
+      ansible.builtin.debug:
+        msg:
+          - "Router hardware: {{ ansible_facts.hostname }} / {{ ansible_facts.architecture }} / {{ ansible_facts.distribution }} {{ ansible_facts.distribution_major_version }}"
+          - "LAN: {{ router_toolset_lan.stdout }}"
+          - "Node exporter/Alloy/Zabbix and other service states: {{ router_toolset_optional_status.results | map(attribute='item') | zip(router_toolset_optional_status.results | map(attribute='stdout')) | list }}"
+          - "Installed package audit: {{ router_toolset_package_status.results | map(attribute='item') | zip(router_toolset_package_status.results | map(attribute='stdout')) | list }}"
+          - "Listening sockets: {{ router_toolset_listeners.stdout_lines }}"
+          - "Loki readiness (200 = ready): {{ router_toolset_loki.status | default('not reachable') }}"
+          - "Zabbix TCP/10051 reachability: {{ 'connected' if router_toolset_zabbix.state | default('') == 'started' else 'not verified/reachable' }}"
+          - "No packages installed; no files, services, interfaces, firewall or routes modified."
