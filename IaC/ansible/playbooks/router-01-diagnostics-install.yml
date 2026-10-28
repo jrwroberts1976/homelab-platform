@@ -1,0 +1,240 @@
+---
+# Stage A only: non-daemon network troubleshooting utilities.
+# Never reload/restart router networking, nftables, PPPoE, DHCP or DNS.
+- name: Install minimal diagnostic toolkit on verified PPPoE Raspberry Pi router
+  hosts: router_toolset_audit
+  become: true
+  gather_facts: true
+
+  vars:
+    router_diagnostics_install_approved: false
+    router_diagnostics_expected_lan_mac: d8:3a:dd:5a:51:44
+    router_diagnostics_expected_lan_ip: 192.168.3.1/24
+    router_diagnostics_packages:
+      - mtr-tiny
+      - traceroute
+      - dnsutils
+      - conntrack
+      - jq
+    router_diagnostics_core_services:
+      - nftables
+      - router-pppoe
+      - dnsmasq
+      - unbound
+
+  pre_tasks:
+    - name: Controller approval and target guard before connection
+      ansible.builtin.assert:
+        that:
+          - router_diagnostics_install_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Explicit router diagnostics approval and verified target are required."
+      delegate_to: localhost
+      become: false
+
+    - name: Verify this is the real Debian Raspberry Pi router
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+        fail_msg: "Target OS and architecture unexpected; stop."
+
+    - name: Read actual router LAN MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_diagnostics_mac
+      changed_when: false
+      check_mode: false
+
+    - name: Read actual router LAN IP
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_diagnostics_ip
+      changed_when: false
+      check_mode: false
+
+    - name: Read PPPoE MTU
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/ppp0/mtu]
+      register: router_diagnostics_ppp_mtu
+      changed_when: false
+      check_mode: false
+
+    - name: Read default route
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_diagnostics_default_route
+      changed_when: false
+      check_mode: false
+
+    - name: Read IPv4 forwarding state
+      ansible.builtin.command:
+        argv: [sysctl, -n, net.ipv4.ip_forward]
+      register: router_diagnostics_forwarding
+      changed_when: false
+      check_mode: false
+
+    - name: Verify MAC, LAN, PPPoE and routing before package operations
+      ansible.builtin.assert:
+        that:
+          - router_diagnostics_mac.stdout | lower | trim == router_diagnostics_expected_lan_mac
+          - router_diagnostics_expected_lan_ip in router_diagnostics_ip.stdout
+          - router_diagnostics_ppp_mtu.stdout | trim == '1492'
+          - "'default dev ppp0' in router_diagnostics_default_route.stdout"
+          - router_diagnostics_forwarding.stdout | trim == '1'
+        fail_msg: "Live router identity or route differs from the tested working gateway."
+
+    - name: Read essential service active state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ router_diagnostics_core_services }}"
+      register: router_diagnostics_services_before
+      changed_when: false
+      check_mode: false
+
+    - name: Require all essential services currently active
+      ansible.builtin.assert:
+        that:
+          - router_diagnostics_services_before.results | selectattr('stdout', 'equalto', 'active') | list | length == 4
+
+    - name: Read existing persistent MSS clamp
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, router_pppoe_mss]
+      register: router_diagnostics_mss_before
+      changed_when: false
+      check_mode: false
+
+    - name: Read existing firewall
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, filter_router]
+      register: router_diagnostics_firewall_before
+      changed_when: false
+      check_mode: false
+
+    - name: Read existing NAT
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, nat_router]
+      register: router_diagnostics_nat_before
+      changed_when: false
+      check_mode: false
+
+    - name: Require the established MSS, firewall and NAT configuration
+      ansible.builtin.assert:
+        that:
+          - (router_diagnostics_mss_before.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+          - "'policy drop' in router_diagnostics_firewall_before.stdout"
+          - "'oifname \"ppp0\" ip saddr 192.168.3.0/24 masquerade' in router_diagnostics_nat_before.stdout"
+
+    - name: Check free space for diagnostic packages
+      ansible.builtin.command:
+        argv: [df, -Pk, /var]
+      register: router_diagnostics_disk
+      changed_when: false
+      check_mode: false
+
+    - name: Require at least 200 MiB free on package filesystem
+      ansible.builtin.assert:
+        that:
+          - (router_diagnostics_disk.stdout_lines[1].split()[3] | int) > 204800
+
+    - name: Simulate exact minimal package installation (no removals)
+      ansible.builtin.command:
+        argv:
+          - apt-get
+          - -s
+          - -o
+          - APT::Install-Recommends=false
+          - install
+          - mtr-tiny
+          - traceroute
+          - dnsutils
+          - conntrack
+          - jq
+      register: router_diagnostics_apt_simulate
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse any simulated package removal
+      ansible.builtin.assert:
+        that:
+          - router_diagnostics_apt_simulate.stdout | regex_search('(?m)^Remv ') is none
+        fail_msg: "Apt proposes removing packages. Investigate rather than proceeding."
+
+  tasks:
+    - name: Install the five approved diagnostic utilities only
+      ansible.builtin.apt:
+        name: "{{ router_diagnostics_packages }}"
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        install_recommends: false
+        policy_rc_d: 101
+        lock_timeout: 60
+      register: router_diagnostics_apt_result
+
+    - name: Verify installed utilities are present
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, '-f=${Status}', "{{ item }}"]
+      loop: "{{ router_diagnostics_packages }}"
+      register: router_diagnostics_installed
+      changed_when: false
+      check_mode: false
+      when: not ansible_check_mode
+
+    - name: Require all five utilities installed
+      ansible.builtin.assert:
+        that:
+          - (router_diagnostics_installed.results | selectattr('stdout', 'equalto', 'install ok installed') | list | length) == (router_diagnostics_packages | length)
+      when: not ansible_check_mode
+
+  post_tasks:
+    - name: Verify PPPoE route is still present
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_diagnostics_route_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify essential services stayed active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ router_diagnostics_core_services }}"
+      register: router_diagnostics_services_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify persistent MSS rule still exists
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, router_pppoe_mss]
+      register: router_diagnostics_mss_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify original firewall and NAT tables still exist
+      ansible.builtin.command:
+        argv: [nft, list, table, "{{ item.0 }}", "{{ item.1 }}"]
+      loop:
+        - [inet, filter_router]
+        - [ip, nat_router]
+      register: router_diagnostics_tables_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify router operations after diagnostic installation
+      ansible.builtin.assert:
+        that:
+          - "'default dev ppp0' in router_diagnostics_route_after.stdout"
+          - router_diagnostics_services_after.results | selectattr('stdout', 'equalto', 'active') | list | length == 4
+          - (router_diagnostics_mss_after.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+          - "'policy drop' in router_diagnostics_tables_after.results[0].stdout"
+          - "'masquerade' in router_diagnostics_tables_after.results[1].stdout"
+        fail_msg: "Router health has changed; investigate immediately with local console if unreachable."
+
+    - name: Summarise bounded diagnostic installation
+      ansible.builtin.debug:
+        msg:
+          - "{{ 'CHECK MODE: no packages actually installed' if ansible_check_mode else 'Five diagnostic packages verified installed' }}"
+          - "Apt task changed or predicts changed: {{ router_diagnostics_apt_result.changed | default(false) }}"
+          - "PPPoE, dnsmasq, Unbound, nftables, firewall/NAT and MSS verified unchanged in purpose; no network restart or reboot executed."
