@@ -646,3 +646,27 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 Expected dry-run if destinations are still absent: identity/source/host-key assertions PASS, three absent destination file assertions PASS, and **only a predicted** `/var/lib/router-metrics-tunnel/.ssh` creation (mode0700). Actual private/public/known_hosts copies and service-account key usability verification intentionally skip during --check. **No live run until operator supplies and we review the full corrected dry-run output.** No Pi C2b2 authorized_keys until C2b1 fully proven functional.
+
+### 28 October ~18:05 — C2b1 corrected SSH key relocation CHECK MODE PASS, live still pending
+
+The operator reran the corrected `monitor-01-router-metrics-key-relocate.yml` dry-run on `monitor-01` with `--check --diff -e router_c2_key_relocate_approved=true`. Full tail and recap provided: **`monitor-01 ok=25 changed=1 (PREDICTED) unreachable=0 failed=0 skipped=13 rescued=0 ignored=0`**.
+
+Critical newly fixed guard `Refuse unexpected existing destination files without assuming absent stat fields` ran successfully for all three intended destinations; actual `ansible.builtin.stat` showed **`exists: false`** for each:
+- `/var/lib/router-metrics-tunnel/.ssh/id_ed25519`
+- `/var/lib/router-metrics-tunnel/.ssh/id_ed25519.pub`
+- `/var/lib/router-metrics-tunnel/.ssh/known_hosts`
+
+The preflight private/public source keypair equivalence and Pi independently pinned ED25519 host-key fingerprint checks returned OK. The preview predicted **only directory creation** `/var/lib/router-metrics-tunnel/.ssh`; actual private/public/host pin copies, service-user derivation and fingerprint postflight deliberately skipped in check mode. Prometheus readiness and absent TCP19100 listener postflight passed. **No credentials copied, no directory created, no Pi SSH account, no tunnel, no Docker/Prometheus or router changes**.
+
+**Next accepted narrowly bounded normal-mode step** (operator approval required by playbook): from the existing `~/projects/homelab-router-toolset-audit/IaC/ansible` directory run the exact `monitor-01` scoped IaC playbook without `--check`:
+
+```bash
+ansible-playbook \
+  -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-relocate.yml \
+  --limit monitor-01 \
+  --ask-become-pass \
+  -e router_c2_key_relocate_approved=true
+```
+
+In normal mode, the playbook will create a `0700` service-owned directory, copy the existing validated ED25519 private key to the service home as `0600`, copy the matching public key and verified Pi public host-key pin, then **test key derivation as `router-metrics-tunnel`** and verify the copied pin SHA256. Copy is remote source to remote destination **on monitor-01 only**, no private key material to controller or GitHub and sensitive task `no_log`. Existing protected `/etc/homelab` remains `0750 root` and original keypair/public host pin **remain untouched for rollback**. The playbook does not create Pi users or router authorized_keys, open ports, start a tunnel, change Docker or alter Prometheus. Do **not** mark relocation done until after receiving a normal-mode success recap with service-key equality and Pi SHA256 postflight. If the live play fails partway through, inspect the partial state instead of applying manual permission changes or blindly rerunning.
