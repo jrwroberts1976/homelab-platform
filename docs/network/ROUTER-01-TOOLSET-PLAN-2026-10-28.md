@@ -285,3 +285,18 @@ APT proposed only **`prometheus-node-exporter` (1 new package)**, **0 upgraded, 
 **Final source-only safety improvement after this dry run:** Debian APT `policy_rc_d:101` should suppress maintainer service start, but if a package auto-started the unmodified vendor unit anyway, merely asking systemd `state: started` might leave it running without the new loopback-only flag. The playbook now uses **conditional `state: restarted` for only `prometheus-node-exporter` if either package or drop-in changes**, otherwise `started`, and conditionally daemon-reloads. This ensures any transient default listener is replaced by `127.0.0.1:9100` when first installed; existing Pi nft INPUT default-deny continues to protect from WAN and LAN. It never restarts PPPoE, Unbound, dnsmasq, nftables, or Docker. This change has **not yet been syntax-checked/dry-run on admin-01** and was not part of the previous preview.
 
 **Next gate:** fetch current audit branch, syntax-check `router-01-node-exporter-local.yml` and repeat `--check --diff`; only after clean results execute the live playbook without `--check` using explicit approval. Live postflight must show 127.0.0.1:9100 HTTP 200 and node metric family, no eth0/ppp0/IPv6 wildcard listener, original nft filter/NAT, PPPoE default route and four core services unchanged; obtain operator browser check. **No Prometheus job, upstream firewall ingress or Zabbix/Alloy change is part of Stage C1.**
+
+## 28 October ~16:24 — final safety-polished Stage C1 dry run PASS (NO LIVE INSTALL YET)
+
+User on `admin-01` fast-forwarded the isolated branch to `cfa5691b`, including the exporter-only restart-if-necessary source refinement, then ran `router-01-node-exporter-local.yml --syntax-check` **PASS** and `--check --diff -e router_node_exporter_local_install_approved=true` **PASS**, recap `router-01 ok=31 changed=1 (predicted) unreachable=0 failed=0 skipped=8`.
+
+APT preview: **one new `prometheus-node-exporter` package only**, `0 upgraded, 0 removed, 20 not upgraded`; `prometheus-node-exporter-collectors` only **recommended**, excluded by playbook. Exact router MAC/IP, Debian 13, PPPoE/default route/MTU, all four essential services, original nft filter/NAT/MSS, free space and no pre-existing exposed 9100 passed. Eight skips are expected for the absent package's override/systemd/HTTP-local-metrics post-deployment checks in check mode.
+
+**The final revised playbook is now accepted for a bounded operator-approved live execution, but the actual run has NOT occurred in this evidence.** In existing `~/projects/homelab-router-toolset-audit/IaC/ansible` directory:
+```bash
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-node-exporter-local.yml \
+  --ask-become-pass -e router_node_exporter_local_install_approved=true
+```
+
+Monitor the full live recap and **require HTTP 200 localhost `127.0.0.1:9100/metrics`, node metrics, exclusively localhost TCP 9100, unchanged nftables/MSS/NAT/PPPoE route and four core services** before closing C1. Do not mistake dry-run `changed=1` for actual installation. No inbound TCP 9100 exception, Prometheus scrape, ASUS change, Loki/Alloy or Zabbix change is authorized in this stage. Verify household internet from a client after the live run.
