@@ -1,6 +1,14 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+
+## 28 October 2026 22:09 UTC — Raspberry Pi router-01 is the verified live LAN gateway (reconciliation pending)
+
+A **read-only operator-run Ansible baseline** on the physical Raspberry Pi 4 at `192.168.2.1/24` completed with **ok=15 changed=0 failed=0 unreachable=0 skipped=0** after passing exact onboard MAC, IPv4 default route via `ppp0` and core service health preflights. The LAN router currently uses `dnsmasq` for DHCP, `unbound` for DNS, `nftables` for filtering/NAT and PPPoE for WAN; these four systemd units were active before and after measurement. Node Exporter listens on **127.0.0.1:9100** only. At 22:09:06 UTC CPU busy 0.1% (3-sec idle sample), temperature 45.3°C, throttling flag `0x0`, estimated memory use 6.8%, disk use 4.5%, 0 interface RX/TX errors, and 5 WAN probes with 0% loss and 10.502 ms mean RTT. The previous 22:06:52 reading had identical LAN drop counters (150 RX, 23 TX); the lease file contained 18 rows. This is an idle snapshot, not a capacity test. Full immutable observations and cautious interpretation: [Router-01 post-cutover verified baseline](../network/ROUTER-01-BASELINE-2026-10-28.md).
+
+**Important drift:** historical main-branch ASUS-as-router and `192.168.2.1` entries are now superseded by this newer live Pi evidence but **the canonical `IaC/inventory/estate.json` is not yet reconciled**. The `192.168.2.100–199` dnsmasq DHCP scope and overlap with historical static `media-01 .195` still require audited reservations/exclusions, and ASUS management/AiMesh topology requires a separate check. The old `192.168.3.1` router inventory / historical Kea and SSH monitoring stages on draft PRs #207, #208 and #210 must not be executed without adapted gates. **No runtime Pi/ASUS changes were made by this documentation/Ansible source-only merge.**
+
+
 **Status:** CURRENT OPERATIONAL TRUTH  
 **Current-state review:** 20 October 2026 (Trivy addendum; other sections retain their dated evidence)  
 **Identity/address authority:** `IaC/inventory/estate.json`  
