@@ -432,3 +432,27 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 If the preview passes without discrepancy, approve a **separate normal-mode** invocation to write *only the dedicated monitor host public-key pin*. Provisioning a dedicated limited-privilege SSH key pair and Pi account is **another distinct review/deploy gate**. No broad SSH daemon configuration change, no changes to existing `james` credentials and no ISP port exposure should occur.
+
+### 28 October ~16:50 — Stage C2a host-key pin **check-mode PASS**; live write pending
+
+User on `admin-01` fetched draft PR #210 branch to `f1c5bc88`, then ran `router-01-ssh-host-pin.yml` with both inventories, `--limit router-01,monitor-01`, syntax-check **PASS** and `--check --diff -e router_c2_host_pin_approved=true` **PASS**.
+
+Actual recaps: **`router-01 ok=8 changed=0 unreachable=0 failed=0 skipped=0`; `monitor-01 ok=8 changed=1 (predicted) unreachable=0 failed=0 skipped=5`.** The Pi's onboard hardware MAC, ED25519 public-key format and its independently pinned fingerprint **`SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`** were all revalidated; both monitor name/address guards passed.
+
+Only anticipated check-mode change is creating **`/etc/homelab/router-metrics-ssh/`** on `monitor-01`. Pre-existing dedicated trust file did **not** exist; so pre-existing-content checks skipped. Actual `known_hosts` copy and installed fingerprint checks were **intentionally skipped** in check mode because the predicted parent directory does not exist yet. **No real file was created**, no Pi/router operation changed and no SSH trust established during preview.
+
+**Review status: safe to run the exact bounded C2a playbook in normal mode after explicit operator approval.** This writes only the root-owned directory and root-owned `0644` **public** Pi host key to `/etc/homelab/router-metrics-ssh/known_hosts` on `monitor-01`; the playbook verifies the SHA256 of that installed trust file after writing. It does not write to Pi, restart SSH, generate client key, start tunnel, open TCP9100 or change Docker/Prometheus.
+
+From existing `~/projects/homelab-router-toolset-audit/IaC/ansible` worktree:
+
+```bash
+ansible-playbook \
+  -i inventory/hosts.yml \
+  -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-ssh-host-pin.yml \
+  --limit router-01,monitor-01 \
+  --ask-become-pass \
+  -e router_c2_host_pin_approved=true
+```
+
+**Do not mark C2a installed until a successful normal Ansible recap and installed fingerprint verification.** Even after trust is pinned, dedicated SSH client authentication and Prometheus Docker-aware tunnel design remain future, separately gated stages.
