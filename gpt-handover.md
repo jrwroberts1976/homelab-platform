@@ -1,4 +1,10 @@
 # GPT Handover — Homelab Platform
+## 28 Oct 2026 — Router boot-readiness gate: DHCP service NOT FOUND; do not reboot
+
+User ran read-only service checks on live `raspberrypi`: `nftables` enabled/active, `router-pppoe` enabled/active, `unbound` enabled/active; **`kea-dhcp4-server` returns not-found/inactive**. `sysctl net.ipv4.ip_forward=1` currently; no router/rollback timers shown by `systemctl list-timers --all` grep; `ip -4 route show default` -> `default dev ppp0 scope link`. Persistent MSS startup rules previously verified, original firewall backup verified, no reboot yet.
+
+**Critical uncertainty:** ASUS WAN is forwarding successfully to Pi but DHCP on Pi may be absent, static WAN setup in ASUS, alternate DHCP provider or an old lease. Do not assume reboot restores WAN IP/DNS. Need read-only Pi `ss` UDP/67 listener and DHCP unit inventory, persistent sysctl source; confirm ASUS WAN Automatic vs Static IPv4, active WAN address, gateway, DNS, and lease/restart behavior via ASUS UI. Do NOT install/start Kea on unknown LAN, reload nftables, or reboot before dependencies are understood. No live host changes in this update.
+
 ## LATEST — 28 Oct 2026 permanent MSS disk diff verified; reboot still pending
 
 User provided original-versus-new full unified diff on Pi comparing `/etc/nftables.conf.2112.2026-10-28@13:09:59~` (765 bytes) against `/etc/nftables.conf` (1305 bytes). **Only** appended `# BEGIN/END ANSIBLE MANAGED: Router-01 PPPoE MSS` and `table ip router_pppoe_mss` with two 1452 MSS clamp rules; original `inet filter_router` DROP and `ip nat_router` MASQUERADE unchanged. Previous `nft -c -f /etc/nftables.conf` syntax PASS; active temporary table `ip pppoe_mss_test` count 1581/306 and nftables active. Original Ansible PLAY RECAP not provided, but the backup filename now verified. Disk readiness PASS; **no live reload/restart/reboot or post-reboot persistence test**. Before reboot, inspect DHCP/DNS/PPP enablement and any rollback timers, plan physical rescue, then schedule controlled verification. No live changes in this documentation update.
