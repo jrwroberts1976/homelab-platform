@@ -735,3 +735,32 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Do not create Pi service user, authorized_keys or sshd Match fragment, and do not touch Pi SSH services/nftables or Prometheus yet. Review ordering and compare ordinary user vs dedicated user effective policies before authoring a separate, rollback-safe, least-privilege Pi authorization deployment. The verified public monitor client key is at `monitor-01:/var/lib/router-metrics-tunnel/.ssh/id_ed25519.pub`, with its protected matching private key local to monitor, but **NO Pi-side grant** yet. Don't copy private key to GitHub/admin-01 or relax host-key checking.
+
+### 28 October ~18:20 — Pi sshd layout read-only PASS; C2b2-a dormant Pi service identity SOURCE ONLY
+
+Operator on `admin-01` fast-forwarded the isolated feature branch through `aa90930e`, ran `router-01-sshd-layout-readonly.yml --syntax-check` PASS and `--check -e router_c2_sshd_layout_audit_approved=true` PASS: **`router-01 ok=16 changed=0 unreachable=0 failed=0 skipped=0`**. All real physical Pi MAC and controller guards passed, `sshd -t` passed, and `router-metrics` proposed user and group both **ABSENT**. Essential `nftables`, `router-pppoe`, `dnsmasq`, `unbound` active, and exporter remains local `127.0.0.1:9100`; nothing changed.
+
+The main `/etc/ssh/sshd_config` has `Include /etc/ssh/sshd_config.d/*.conf` **at line 12**, followed by active **`KbdInteractiveAuthentication` line64**, **`UsePAM` line87**, **`X11Forwarding` line92**, **`PrintMotd` line96**, **`AcceptEnv` line114**, **`Subsystem` line117**. No installed include fragments, no Match in main config. `sshd -T -C` evaluated for existing `james` and proposed `router-metrics` currently yields the SAME broad general forwarding/password/PTY policy (`passwordauthentication yes`, `allowtcpforwarding yes`, `permitopen any`, `permitlisten any`, `permittty yes`, `forcecommand none`). No current selective restriction exists.
+
+**Decision for later SSH policy design (NOT DEPLOYED):** Do NOT write a `Match User router-metrics` stanza in an early `sshd_config.d/*.conf`, where it can affect later non-Match-capable `UsePAM`/`Subsystem` directives in the main config or fail `sshd -t`. Append a tightly controlled `Match User router-metrics` block at the END of main config only after fully testing a candidate with `sshd -t`, account-context `sshd -T -C` for `james` and `router-metrics`, backup and immediate rollback plan; no Pi sshd reload until independently approved. Candidate constraints: `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `AuthenticationMethods publickey`, `AllowTcpForwarding local`, `PermitOpen 127.0.0.1:9100`, `PermitTTY no`, `X11Forwarding no`, `AllowAgentForwarding no`, `AllowStreamLocalForwarding no`, `MaxSessions 0`, possibly `PermitUserRC no`. Authorized_keys should also restrict specific public monitor key and permit only local forwarding. `MaxSessions 0` explicitly prevents shell/login/subsystem sessions while allowing forwarding, per OpenSSH manual `https://man.openbsd.org/sshd_config`. Avoid setting `DisableForwarding yes` (would break required local forwarding). SSH known_hosts and client ED25519 keys remain securely resident on monitor-01 only.
+
+**Next small, independent Pi-side step** is to create only an as-yet-UNAUTHORIZED service account, not install the key or change sshd. New **SOURCE-ONLY** gated IaC `IaC/ansible/playbooks/router-01-metrics-service-account.yml` in draft PR #210. It checks exact controller/admin Pi inventory and physical MAC, `sshd -t`, absent/no-collision proposed `router-metrics` user/group and home `/var/lib/router-metrics`, local exporter isolation, and essential router services. The only possible changes in **normal mode** are a dedicated system group and a new locked-password, `/usr/sbin/nologin` system user with a separate home; **no SSH keys, no `authorized_keys`, no SSH configuration/reload, no PPPoE/nftables, no tunnel or Prometheus modifications**. In `--check`, predict group creation only and skip dependent account creation, since the system group won't exist until normal mode. **This new source is not yet operator syntax-checked, previewed or deployed.**
+
+Run **syntax and dry-run only** with the isolated Pi inventory from admin-01:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-service-account.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-service-account.yml \
+  --limit router-01 --ask-become-pass --check --diff \
+  -e router_c2_pi_account_approved=true
+```
+
+Review actual check-mode recap before any normal-mode creation on the live Pi. Establish restricted sshd Match only via separate validated, rollback-capable change after the account is present, and **withhold authorized_keys installation until the restrictive sshd policy is independently verified**.
