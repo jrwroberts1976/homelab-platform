@@ -218,12 +218,15 @@
       register: router_node_exporter_override_written
       when: not ansible_check_mode
 
-    - name: Enable and start localhost-only exporter after installing override
+    - name: Apply localhost binding before allowing exporter to remain running
       ansible.builtin.systemd_service:
         name: "{{ router_node_exporter_service }}"
-        daemon_reload: true
+        daemon_reload: "{{ (router_node_exporter_override_written.changed | default(false)) or (router_node_exporter_apt.changed | default(false)) }}"
         enabled: true
-        state: started
+        # If Debian unexpectedly auto-started the vendor unit during apt,
+        # 'started' would leave its old broad listener in place. Restart
+        # *only this exporter* after the restrictive override is written.
+        state: "{{ 'restarted' if ((router_node_exporter_override_written.changed | default(false)) or (router_node_exporter_apt.changed | default(false))) else 'started' }}"
       register: router_node_exporter_service_started
       when: not ansible_check_mode
 
