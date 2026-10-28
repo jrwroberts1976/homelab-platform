@@ -1,7 +1,7 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 toolset baseline — 28 October 2026
 
-**Status (28 Oct):** router toolset audit re-run **PASSED** (`ok=16`, `changed=0`, `failed=0`, `skipped=0`), but **Loki and Zabbix connectivity probes failed** (not Ansible task failures). Diagnostics installer `--syntax-check` and `--check --diff` **PASSED** (`ok=26`, `changed=1` predicted only, `failed=0`); **no packages have been installed yet**. No router services, routes or firewall modified.
+**Status (28 Oct):** toolset audit and installer dry-run previously passed. **Actual diagnostic APT installation ran and reported `changed`, but the subsequent package assertion failed** (`ok=21 changed=1 failed=1`) before post-install router health checks. Debian 13 resolves virtual `dnsutils` to real `bind9-dnsutils`; source assertion corrected, **awaiting operator's post-install validation/re-run**. Loki and Zabbix connections also remain unresolved. No intentional network/firewall service changes were made.
 
 ## Confirmed router state
 
@@ -118,3 +118,13 @@ ansible-playbook \
 This installs diagnostics ONLY; it does not touch interfaces, firewall, nftables, PPPoE, DHCP, DNS or router hostname. Its preflight checks are re-run before APT and postflight checks repeat after installation. Verify full live recap, installed package versions, and Windows/ASUS client browsing after the run. If anything unexpected occurs, **stop**, do not force an apt change or restart/reload the router firewall.
 
 Monitoring topology issue must remain open independent of successful diagnostic installation. Other monitoring and VPN products are not part of this live action.
+
+## 28 October — live installation returned a verification assertion failure
+
+Operator ran the approved `router-01-diagnostics-install.yml` **without** `--check` after a successful dry-run on `admin-01`. All identity, PPPoE, IPv4 forwarding, four service, persistent MSS, original nft filter/NAT, space and APT simulation gates passed. APT task `Install the five approved diagnostic utilities only` returned **`changed: [router-01]`**, and all 5 individual `dpkg-query` tasks returned `ok`. Next aggregate assertion `selectattr('stdout','equalto','install ok installed')` failed. Ansible recap: **`ok=21 changed=1 unreachable=0 failed=1 skipped=0`**.
+
+**Important:** This is an **assertion failure after APT**, not evidence of an APT error. The play terminated before the `post_tasks` could verify route, four services, MSS and original filter/NAT. Do **not** claim those postflight checks passed. The user's subsequent browser outcome and exact `dpkg-query` values have not been supplied.
+
+**Root cause analysis:** Debian 13 / trixie `dnsutils` is a **virtual package**, provided by concrete `bind9-dnsutils`. Previous dry-run already showed APT installing `bind9-dnsutils` instead of a package called `dnsutils`. Querying aggregate dpkg statuses under the virtual name cannot reliably match 5 installed concrete packages. Debian package source: `https://packages.debian.org/search?keywords=dnsutils&lang=en`. The branch installer now explicitly requests and checks `bind9-dnsutils` and asserts each actual package with `item.rc == 0` and `item.stdout | trim == 'install ok installed'`, printing the failing item if any; APT simulation also uses the real package name. This is a **source-only repair; the real install has not been rerun since the fix**.
+
+**Recovery and verification path:** From `admin-01` separate worktree fetch and fast-forward `feature/router-01-toolset-audit-20261028`; syntax-check the modified installer; first run `--check --diff` again to confirm no pending package changes, then rerun the approved installation **without** `--check` so the per-package checks and postflight router service/MSS/NAT verification actually execute. If dry-run predicts an unexpected change, stop. After successful Ansible recap, confirm client-side internet. Do not reload/restart nftables or interfere with PPPoE/DHCP/DNS.
