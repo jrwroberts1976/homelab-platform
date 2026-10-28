@@ -706,3 +706,32 @@ ansible-playbook -i inventory/router-01-toolset-audit.yml \
 ```
 
 Review actual include/match ordering BEFORE proposing a restrictive, user-specific sshd configuration. Future Pi-side `router-metrics` user must be locked-password/noninteractive, with exact public client key from `monitor-01:/var/lib/router-metrics-tunnel/.ssh/id_ed25519.pub`, an authorized_keys rule granting **only local TCP port-forwarding to `127.0.0.1:9100`**, and deny PTY/X11/agent/session/remote forwards where supported. An authorized-key `restrict,port-forwarding,permitopen=...` alone **is not sufficient to ensure no remote -R forwards**; use user-specific `AllowTcpForwarding local` and `PermitOpen 127.0.0.1:9100` enforced by sshd after understanding Include/Match behavior. Avoid a global SSH relaxation and any change to WAN/PPPoE/nftables/Node Exporter listener. Plan `sshd -t`, effective account-specific `sshd -T -C ...` verification and safe rollback before any daemon reload; don't deploy Pi auth during this preflight.
+
+### 28 October ~18:15 — Pi Stage C2b2 SSH policy audit LIVE PASS; SSH Match ordering review STAGED only
+
+Operator on `admin-01` fast-forwarded isolated feature branch through `3fe2bffe` and ran `router-01-metrics-ssh-authorization-readonly.yml` syntax-check PASS and `--check -e router_c2_auth_audit_approved=true` PASS. **Actual `router-01 ok=12 changed=0 unreachable=0 failed=0 skipped=0`**. Pi MAC matched, existing `sshd -t` passed, the proposed `router-metrics` service user is **absent**, and Node Exporter still binds exclusively to `127.0.0.1:9100`. No router or SSH files changed.
+
+Actual globally effective Pi `sshd` includes: `pubkeyauthentication yes`, `passwordauthentication yes`, `kbdinteractiveauthentication no`, `x11forwarding yes`, `permittty yes`, `allowtcpforwarding yes`, `allowagentforwarding yes`, `disableforwarding no`, `authorizedkeysfile .ssh/authorized_keys .ssh/authorized_keys2`, `authenticationmethods any`, `permitopen any`, `permitlisten any`. Main `/etc/ssh/sshd_config` has **`Include /etc/ssh/sshd_config.d/*.conf` at LINE 12**, with **zero matching installed fragments**, and no existing main-file `Match` directive. Treat unrestricted settings as baseline only; do not alter those settings for existing admin users. No authenticated monitoring principal or tunnel is working on the Pi.
+
+**New specific safeguard before writing any `Match User router-metrics` fragment:** the SSH Include is EARLY in the main sshd config. A `Match` block's scope, directive precedence and included-file ordering could affect the remainder of main config or invalid directives, potentially breaking existing SSH access. Authoring a Match fragment without inspecting the active main config lines **AFTER line 12** is not acceptable on this live PPPoE gateway. The restriction must be proven both for `router-metrics` and ordinary `james` via `sshd -t` and `sshd -T -C user=...,addr=...,host=...` before any daemon reload. Official Debian OpenSSH man page: https://manpages.debian.org/trixie/openssh-server/sshd_config.5.en.html (Match allows only a subset of directives; `AllowTcpForwarding local` and `PermitOpen 127.0.0.1:9100` are supported). Any future config must deny remote -R forwarding and agent/X11/pty/session use, without disabling intended local forwarding or weakening global policy.
+
+Source-only **`IaC/ansible/playbooks/router-01-sshd-layout-readonly.yml`** added to draft PR #210. It requires exact `admin-01`, `router-01=192.168.3.1`, confirmed onboard MAC and `-e router_c2_sshd_layout_audit_approved=true`. It reads **only directive names with source line numbers**, tagged BEFORE versus AT_OR_AFTER line12 Include (does not disclose sshd config line values or private SSH keys); `sshd -t`, effective policy for globally and individually for existing `james` and proposed `router-metrics` (using current likely ASUS source address `192.168.2.1`), fragment filenames, proposed account/group name conflicts, localhost exporter and essential gateway service health. Nothing is written, reloaded or restarted. Staged source **NOT YET syntax-checked or run on admin-01**.
+
+Next exact user commands — **syntax and read-only --check ONLY**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-sshd-layout-readonly.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-sshd-layout-readonly.yml \
+  --limit router-01 --ask-become-pass --check \
+  -e router_c2_sshd_layout_audit_approved=true
+```
+
+Do not create Pi service user, authorized_keys or sshd Match fragment, and do not touch Pi SSH services/nftables or Prometheus yet. Review ordering and compare ordinary user vs dedicated user effective policies before authoring a separate, rollback-safe, least-privilege Pi authorization deployment. The verified public monitor client key is at `monitor-01:/var/lib/router-metrics-tunnel/.ssh/id_ed25519.pub`, with its protected matching private key local to monitor, but **NO Pi-side grant** yet. Don't copy private key to GitHub/admin-01 or relax host-key checking.
