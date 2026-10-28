@@ -487,3 +487,31 @@ ansible-playbook -i inventory/hosts.yml \
 ```
 
 Only after seeing account/service conflicts and reviewing transport policy should we author **separate** tightly gated and rollback-capable identity/key/account installation, SSH policy restrictions, and Docker-side Prometheus tunnel. **No auto-generated private keys should be committed to the repository or printed by Ansible.** Protect client host trust using the pinned dedicated file with StrictHostKeyChecking=yes. Keep Pi node exporter bound to localhost and leave existing firewall and PPPoE untouched. Do not blindly run generic monitoring stack playbook or restart Prometheus stack.
+
+### 28 October ~17:03 — Stage C2b identity feasibility read-only PASS; local client key source staged
+
+User fetched the isolated audit branch through `a851b964` and ran `router-01-ssh-metrics-identity-readonly.yml` **syntax-check PASS**, then `--check -e router_c2_identity_audit_approved=true` with both inventories. Real recap: **`router-01 ok=13 changed=0 unreachable=0 failed=0 skipped=0`**, **`monitor-01 ok=15 changed=0 unreachable=0 failed=0 skipped=0`**.
+
+Observed on actual Pi: `router-metrics` **user absent**, group **absent**; existing `/usr/sbin/sshd -t` PASS; global sshd policy allows public-key authentication and TCP forwarding but has broad `allowtcpforwarding yes; permitopen any; permittty yes`. Pi **metrics remain localhost-only `127.0.0.1:9100`**, default deny input firewall active, and all `nftables`, `router-pppoe`, `dnsmasq`, `unbound` units active. On monitor-01: `router-metrics-tunnel` user **absent**, intended dedicated `/etc/homelab/router-metrics-ssh/id_ed25519` private key **absent**; dedicated pinned Pi SSH host-key file exists and matches independent fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`. Host port **19100 unused**, route from monitor to Pi goes via ASUS `192.168.2.1`; Prometheus ready HTTP **200**. **Absolutely no modifications on either host from this diagnostic.**
+
+**Stage C2b design is split into small change gates.** First, generate dedicated client identity/key on `monitor-01` only (no access granted on Pi), then separately review Pi-side authorization/permissions (and only later a Docker-aware SSH tunnel). No changes to the Pi or router during key generation.
+
+Staged **SOURCE ONLY** `IaC/ansible/playbooks/monitor-01-router-metrics-key-provision.yml`, requiring `-e router_c2_key_provision_approved=true` and strict `admin-01`/monitor identity guard. The playbook re-verifies installed dedicated Pi fingerprint and Prometheus readiness, checks for account/key conflicts, and previews a new system group/user `router-metrics-tunnel` with `/usr/sbin/nologin`, dedicated home, password locked. In **normal mode only**, it generates a fresh ED25519 key **directly on monitor-01** at `/etc/homelab/router-metrics-ssh/id_ed25519`, applies `0600` and service-account ownership to the private key, root-owned `0644` public key, verifies ED25519 fingerprint, Prometheus readiness and no TCP19100 listener. **Private key content is never printed, slurped, copied to controller or committed to GitHub; it is deliberately unencrypted for future unattended SSH and must be restricted through key authorization/permissions.** It does **not** create Pi `router-metrics`, `authorized_keys`, SSH tunnel, Compose job, or any firewall change. In check mode it only predicts group/user creation; all dependent key operations are skipped. Its deployment/rollback process will be reviewed after syntax check and dry-run on admin-01; no runtime results exist yet.
+
+Run **syntax and preview ONLY**:
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-provision.yml \
+  --limit monitor-01 --syntax-check && \
+ansible-playbook -i inventory/hosts.yml \
+  playbooks/monitor-01-router-metrics-key-provision.yml \
+  --limit monitor-01 --ask-become-pass --check --diff \
+  -e router_c2_key_provision_approved=true
+```
+
+No live normal-mode action until reviewing syntax and proposed changes; no Pi account, tunnel or Prometheus scrape will be configured by this pilot.
