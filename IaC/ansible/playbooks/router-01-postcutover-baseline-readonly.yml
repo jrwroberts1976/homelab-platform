@@ -1,0 +1,125 @@
+---
+# Post-DHCP-cutover evidence only: no writes to the Pi's config or filesystem,
+# no SSH reload, DNS/DHCP restart, firewall/NAT edits or speed-test saturation.
+# Includes a 3-second CPU/network-rate sample and 5 low-rate WAN ICMP probes.
+# Requires the NEW isolated 192.168.2.1 inventory. Refuses normal mode.
+- name: Collect read-only performance baseline from router-01 after Pi DHCP migration
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_postcutover_baseline_approved: false
+
+  pre_tasks:
+    - name: Identify trusted IaC controller
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_baseline_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require the new router inventory, correct controller and check mode
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+          - router_postcutover_baseline_approved | bool
+          - router_baseline_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Stop: run only --check from admin-01 with postcutover inventory and explicit gate."
+      delegate_to: localhost
+      become: false
+
+    - name: Read physical Pi LAN Ethernet MAC (no network changes)
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_baseline_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse unexpected physical router hardware
+      ansible.builtin.assert:
+        that:
+          - router_baseline_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+    - name: Inspect actual eth0 LAN IPv4 configuration
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_baseline_lan
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm the verified new primary LAN gateway address
+      ansible.builtin.assert:
+        that:
+          - "'inet 192.168.2.1/24' in router_baseline_lan.stdout"
+        fail_msg: "Pi eth0 does not have the expected new primary LAN address."
+
+    - name: Inspect current router IPv4 default route
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_baseline_route
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm Pi is still PPPoE WAN gateway before sampling
+      ansible.builtin.assert:
+        that:
+          - "'ppp0' in router_baseline_route.stdout"
+        fail_msg: "No expected ppp0 default route. Stop and investigate without modifying the gateway."
+
+    - name: Confirm critical router units are active before sampling
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: router_baseline_units_before
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse baseline on degraded gateway
+      ansible.builtin.assert:
+        that:
+          - (router_baseline_units_before.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+  tasks:
+    - name: Collect 3-second CPU/interface and 5-probe WAN baseline without edits
+      ansible.builtin.command:
+        argv: [python3, -]
+        stdin: "{{ lookup('ansible.builtin.file', playbook_dir ~ '/../scripts/router-01-postcutover-baseline.py') }}"
+        stdin_add_newline: true
+      register: router_baseline_snapshot
+      check_mode: false
+      changed_when: false
+
+    - name: Show compact JSON baseline to operator (not uploaded or persisted)
+      ansible.builtin.debug:
+        msg: "{{ router_baseline_snapshot.stdout | from_json }}"
+
+  post_tasks:
+    - name: Verify critical router units remain active after sampling
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: router_baseline_units_after
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse any loss of gateway service after baseline
+      ansible.builtin.assert:
+        that:
+          - (router_baseline_units_after.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Summarize safety boundary
+      ansible.builtin.debug:
+        msg:
+          status: "POST-CUTOVER BASELINE COLLECTED; ZERO CONFIGURATION CHANGES"
+          new_router_target: "192.168.2.1/24 on eth0"
+          sample_type: "CPU/network 3s snapshot and five WAN ICMP probes"
+          filesystem_writes: "NONE BY THIS PLAYBOOK"
+          ssh_reload_restart: "NONE"
+          gateway_dns_dhcp_nftables_changes: "NONE"
+          leases: "ONLY count, no client identities"
+          public_wan_address: "NOT PRINTED"
+          next_step: "Review measurement output and compare at idle and during controlled client load"
