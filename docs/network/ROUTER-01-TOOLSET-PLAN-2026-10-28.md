@@ -782,3 +782,31 @@ ansible-playbook \
 ```
 
 **Do not mark C2b2-a live complete until the normal-mode recap and postflight succeed.** Before allowing remote authentication, separately test a candidate end-of-main `Match User router-metrics` with `sshd -t` and effective `sshd -T -C` for `james` and `router-metrics`, explicit rollback and operator approval; only then consider authorized_keys of the verified monitor public key. Keep SSH key private only on monitor-01, Node Exporter localhost-only, and no tunnel started.
+
+### 28 October ~18:30 — C2b2-a dormant Pi monitoring user LIVE PASS; check-only SSH policy preview staged
+
+Operator ran `router-01-metrics-service-account.yml` in **normal mode** with `--limit router-01 -e router_c2_pi_account_approved=true`; final debug `LIVE: dormant local service identity and group present`. Actual recap **`router-01 ok=19 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0`**. Two live changes are the new `router-metrics` system GROUP and new non-interactive `router-metrics` system USER, password locked, `/usr/sbin/nologin`, home `/var/lib/router-metrics`. Pi sshd config still valid; existing authenticated `james` login untouched; **no SSH public key installed, no `authorized_keys`, no sshd Match policy or reload, no new network listener/tunnel, no PPPoE/nftables/routing/Docker/Prometheus modifications**. Existing Node Exporter remains localhost-only. **Stage C2b2-a complete**.
+
+Next **C2b2-b** is the **SYNTACTIC PREVIEW**, not the installation, of a monitoring-user-only SSH restriction. OpenSSH official documentation permits in `Match User`: `AuthenticationMethods publickey`, `PasswordAuthentication no`, `AllowTcpForwarding local`, `PermitOpen 127.0.0.1:9100`, `PermitListen none`, `PermitTTY no`, `MaxSessions 0` (disables shell, login and subsystem sessions while retaining forwarding), X11/agent/streamlocal disables. Reference: https://man.openbsd.org/sshd_config . Because `sshd_config` has Include at LINE12 and later `UsePAM`/`Subsystem` global directives, insert Match **only at EOF of main config**, never inside early included fragments.
+
+Staged new **SOURCE-ONLY, CHECK-MODE-ENFORCED** Ansible `IaC/ansible/playbooks/router-01-metrics-sshd-match-preview.yml` in draft PR #210. It explicitly **fails if not running with `--check`**, checks exact controller/admin-01, router inventory/IP, physical Pi MAC, valid original `sshd -t`, the **actually existing** locked `router-metrics` user/group/nologin shell, no preexisting `authorized_keys`, safe root-owned main sshd config, exact main-file Include-only directive at line12 and zero installed sshd_config.d snippets, plus four gateway services and still isolated exporter. It invokes `ansible.builtin.blockinfile` **only to compute the `--check --diff` EOF insertion**, with `validate: /usr/sbin/sshd -t -f %s`, **never writes the real sshd_config** and never reloads SSH. The proposed block includes `Match User router-metrics`, `PubkeyAuthentication yes`, `AuthenticationMethods publickey`, `PasswordAuthentication no`, `KbdInteractiveAuthentication no`, `PermitTTY no`, `X11Forwarding no`, `AllowAgentForwarding no`, `AllowStreamLocalForwarding no`, `AllowTcpForwarding local`, `PermitOpen 127.0.0.1:9100`, `PermitListen none`, `GatewayPorts no`, `PermitTunnel no`, `PermitUserRC no` and `MaxSessions 0`. This only proposes a diff; no `authorized_keys` at this stage. **The playbook has not been syntax-checked or executed by the operator yet.**
+
+IMPORTANT: A clean `--check` and `sshd -t` preview does NOT alone prove effective `sshd -T -C` policy of an *installed* candidate. Before any actual sshd config edit or reload, separately plan/verify `sshd -T -C user=router-metrics,addr=<observed ASUS source>,host=monitor-01` against a candidate config and compare existing `james` effective policy. Protect existing SSH admin access, keep a tested rollback, and require independent operator approval before live deployment and subsequent public-key authorisation. **Never use `ForceCommand /usr/sbin/nologin` or `DisableForwarding yes` for this forwarding-only service account.**
+
+Next operator commands (CHECK MODE ONLY):
+
+```bash
+cd ~/projects/homelab-router-toolset-audit
+git fetch origin feature/router-01-toolset-audit-20261028
+git merge --ff-only FETCH_HEAD
+cd IaC/ansible
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-match-preview.yml \
+  --limit router-01 --syntax-check && \
+ansible-playbook -i inventory/router-01-toolset-audit.yml \
+  playbooks/router-01-metrics-sshd-match-preview.yml \
+  --limit router-01 --ask-become-pass --check --diff \
+  -e router_c2_sshd_preview_approved=true
+```
+
+Review exact proposed diff and recap. **Do not install Match, reload SSH, grant `authorized_keys`, start a forward or change Prometheus until a later separate approved gate.**
