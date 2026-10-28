@@ -100,11 +100,13 @@
       ansible.builtin.slurp:
         src: /etc/dnsmasq.conf
       register: router_dhcp_parent_config
+      no_log: true
 
     - name: Read active router DHCP fragment
       ansible.builtin.slurp:
         src: /etc/dnsmasq.d/router.conf
       register: router_dhcp_router_config
+      no_log: true
 
     - name: Ensure exact working DHCP policy and absence of competing allocation files
       ansible.builtin.assert:
