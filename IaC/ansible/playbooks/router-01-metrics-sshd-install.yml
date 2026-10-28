@@ -1,0 +1,320 @@
+---
+# Stage C2b2-c: reviewable on-disk SSH policy installation, NO daemon reload.
+# First run with --check --diff. A separate approval gate is required live.
+# OpenSSH tests candidate syntax before blockinfile writes it and verifies
+# effective settings for the existing admin and monitoring principals.
+# On postflight failure, restore the Ansible backup (no SSH daemon reload).
+- name: Stage router-metrics-specific SSH policy without activating sshd
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_sshd_install_approved: false
+    router_c2_account: router-metrics
+    router_c2_home: /var/lib/router-metrics
+    router_c2_sshd_main: /etc/ssh/sshd_config
+    router_c2_contexts:
+      - name: admin_direct
+        connection: user=james,host=admin-01,addr=192.168.2.48
+      - name: admin_via_asus
+        connection: user=james,host=admin-01,addr=192.168.2.1
+      - name: metrics_direct
+        connection: user=router-metrics,host=monitor-01,addr=192.168.2.52
+      - name: metrics_via_asus
+        connection: user=router-metrics,host=monitor-01,addr=192.168.2.1
+    router_c2_expected_restrictions:
+      - "pubkeyauthentication yes"
+      - "authenticationmethods publickey"
+      - "passwordauthentication no"
+      - "kbdinteractiveauthentication no"
+      - "permittty no"
+      - "x11forwarding no"
+      - "allowagentforwarding no"
+      - "allowstreamlocalforwarding no"
+      - "allowtcpforwarding local"
+      - "permitopen 127.0.0.1:9100"
+      - "permitlisten none"
+      - "gatewayports no"
+      - "permittunnel no"
+      - "permituserrc no"
+      - "maxsessions 0"
+      - "forcecommand none"
+  pre_tasks:
+    - name: Read current controller identity
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: c2b2_install_controller
+
+    - name: Require explicit SSH file approval and exact router/controller scope
+      ansible.builtin.assert:
+        that:
+          - router_c2_sshd_install_approved | bool
+          - c2b2_install_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Refusing SSH file change without explicit approval or exact Pi identity."
+      delegate_to: localhost
+      become: false
+
+    - name: Verify physical Raspberry Pi MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      check_mode: false
+      changed_when: false
+      register: c2b2_install_mac
+
+    - name: Require verified physical router MAC
+      ansible.builtin.assert:
+        that:
+          - c2b2_install_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+    - name: Validate currently installed SSH daemon configuration
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Read dedicated system identity without printing shadow or key contents
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_account }}"]
+      register: c2b2_install_user
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require existing non-login monitoring user
+      ansible.builtin.assert:
+        that:
+          - c2b2_install_user.stdout.split(':')[0] == router_c2_account
+          - c2b2_install_user.stdout.split(':')[5] == router_c2_home
+          - c2b2_install_user.stdout.split(':')[6] == '/usr/sbin/nologin'
+
+    - name: Check dedicated monitoring account password lock
+      ansible.builtin.command:
+        argv: [passwd, -S, "{{ router_c2_account }}"]
+      check_mode: false
+      changed_when: false
+      register: c2b2_install_password
+      no_log: true
+
+    - name: Require locked monitoring identity
+      ansible.builtin.assert:
+        that:
+          - c2b2_install_password.stdout.split()[1] in ['L', 'LK']
+
+    - name: Ensure monitoring account has not yet received any SSH keys
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/router-metrics/.ssh/authorized_keys
+        - /var/lib/router-metrics/.ssh/authorized_keys2
+      register: c2b2_install_authorization
+
+    - name: Refuse unreviewed monitoring SSH key authorization
+      ansible.builtin.assert:
+        that:
+          - not c2b2_install_authorization.results[0].stat.exists
+          - not c2b2_install_authorization.results[1].stat.exists
+
+    - name: Inspect main SSH config metadata and SHA before any staging
+      ansible.builtin.stat:
+        path: "{{ router_c2_sshd_main }}"
+        checksum_algorithm: sha256
+      register: c2b2_install_config_before
+
+    - name: Refuse unsafe sshd config path or metadata
+      ansible.builtin.assert:
+        that:
+          - c2b2_install_config_before.stat.isreg | default(false)
+          - not (c2b2_install_config_before.stat.islnk | default(false))
+          - c2b2_install_config_before.stat.pw_name == 'root'
+          - c2b2_install_config_before.stat.mode in ['0600', '0640', '0644']
+
+    - name: Read Include and Match order to prevent other SSH user effects
+      ansible.builtin.command:
+        argv: [grep, -nEi, '^[[:space:]]*(Include|Match)[[:space:]]', /etc/ssh/sshd_config]
+      register: c2b2_install_directives
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse main SSH config ordering drift
+      ansible.builtin.assert:
+        that:
+          - c2b2_install_directives.stdout_lines[0] == '12:Include /etc/ssh/sshd_config.d/*.conf'
+          - c2b2_install_directives.stdout_lines | length in [1, 2]
+          - (c2b2_install_directives.stdout_lines | length == 1) or (c2b2_install_directives.stdout_lines[1].split(':', 1)[1] == 'Match User router-metrics')
+        fail_msg: "Unexpected SSH Match or Include structure; do not modify the router."
+
+    - name: Inspect existing SSH drop-in fragments
+      ansible.builtin.find:
+        paths: /etc/ssh/sshd_config.d
+        patterns: '*.conf'
+        recurse: false
+        file_type: file
+      register: c2b2_install_fragments
+
+    - name: Require no unreviewed SSH fragment
+      ansible.builtin.assert:
+        that:
+          - c2b2_install_fragments.files | length == 0
+
+    - name: Read entire pre-change SSH policy for global and administrative contexts
+      ansible.builtin.command:
+        argv: "{{ ['/usr/sbin/sshd', '-T'] + (['-C', item.connection] if item.connection != 'GLOBAL' else []) }}"
+      loop: "{{ router_c2_contexts + [{'name': 'global', 'connection': 'GLOBAL'}] }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: c2b2_install_before_policies
+      check_mode: false
+      changed_when: false
+
+    - name: Check essential gateway units before changing any config file
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_install_before_services
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm all four gateway services remain active
+      ansible.builtin.assert:
+        that:
+          - (c2b2_install_before_services.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Inspect Pi Node Exporter listener before SSH policy staging
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: c2b2_install_sockets
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse exposing Node Exporter to router LAN
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in c2b2_install_sockets.stdout"
+          - "'0.0.0.0:9100' not in c2b2_install_sockets.stdout"
+          - "'[::]:9100' not in c2b2_install_sockets.stdout"
+          - "'192.168.3.1:9100' not in c2b2_install_sockets.stdout"
+
+  tasks:
+    - name: Stage user-scoped SSH restrictions and validate candidate syntax without reload
+      block:
+        - name: Append restricted router-metrics Match block at END of main SSH config
+          ansible.builtin.blockinfile:
+            path: "{{ router_c2_sshd_main }}"
+            insertafter: EOF
+            marker: "# {mark} ANSIBLE MANAGED: router-metrics forwarding-only (C2b2)"
+            block: |
+              Match User router-metrics
+                  PubkeyAuthentication yes
+                  AuthenticationMethods publickey
+                  PasswordAuthentication no
+                  KbdInteractiveAuthentication no
+                  PermitTTY no
+                  X11Forwarding no
+                  AllowAgentForwarding no
+                  AllowStreamLocalForwarding no
+                  AllowTcpForwarding local
+                  PermitOpen 127.0.0.1:9100
+                  PermitListen none
+                  GatewayPorts no
+                  PermitTunnel no
+                  PermitUserRC no
+                  MaxSessions 0
+            validate: /usr/sbin/sshd -t -f %s
+            backup: true
+          register: c2b2_install_change
+
+        - name: Confirm installed SSH file syntax in real mode, with no daemon reload
+          ansible.builtin.command:
+            argv: [/usr/sbin/sshd, -t]
+          check_mode: false
+          changed_when: false
+          when: not ansible_check_mode
+
+        - name: Read effective global/admin/monitor policies from staged on-disk file
+          ansible.builtin.command:
+            argv: "{{ ['/usr/sbin/sshd', '-T'] + (['-C', item.connection] if item.connection != 'GLOBAL' else []) }}"
+          loop: "{{ router_c2_contexts + [{'name': 'global', 'connection': 'GLOBAL'}] }}"
+          loop_control:
+            label: "{{ item.name }}"
+          register: c2b2_install_after_policies
+          check_mode: false
+          changed_when: false
+          when: not ansible_check_mode
+
+        - name: Require global and both admin context policies unchanged
+          ansible.builtin.assert:
+            that:
+              - c2b2_install_after_policies.results[0].stdout == c2b2_install_before_policies.results[0].stdout
+              - c2b2_install_after_policies.results[1].stdout == c2b2_install_before_policies.results[1].stdout
+              - c2b2_install_after_policies.results[4].stdout == c2b2_install_before_policies.results[4].stdout
+            fail_msg: "SSH policy drifted for an existing administrative or global context. Roll back."
+          when: not ansible_check_mode
+
+        - name: Require proposed monitoring user effective restrictions in both contexts
+          ansible.builtin.assert:
+            that:
+              - item.0 in item.1.stdout_lines
+            fail_msg: "Effective monitoring SSH policy not equal to reviewed candidate. Roll back."
+          loop: "{{ router_c2_expected_restrictions | product(c2b2_install_after_policies.results[2:4]) | list }}"
+          loop_control:
+            label: "{{ item.0 }}"
+          when: not ansible_check_mode
+
+      rescue:
+        - name: Restore main SSH config using the backup produced by blockinfile
+          ansible.builtin.copy:
+            src: "{{ c2b2_install_change.backup_file }}"
+            dest: "{{ router_c2_sshd_main }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "{{ c2b2_install_config_before.stat.mode }}"
+            validate: /usr/sbin/sshd -t -f %s
+          when:
+            - not ansible_check_mode
+            - c2b2_install_change is defined
+            - c2b2_install_change.backup_file is defined
+
+        - name: Verify restored original sshd config is valid
+          ansible.builtin.command:
+            argv: [/usr/sbin/sshd, -t]
+          check_mode: false
+          changed_when: false
+          when: not ansible_check_mode
+
+        - name: Stop explicitly if SSH policy staging failed, even after restoration
+          ansible.builtin.fail:
+            msg: "Monitoring-user SSH file staging failed and rollback was attempted. No sshd reload was requested."
+
+  post_tasks:
+    - name: Verify the SSH daemon has not been reloaded or started by this play
+      ansible.builtin.debug:
+        msg:
+          result: "{{ 'CHECK MODE ONLY: EOF Match block change predicted; no SSH file modified' if ansible_check_mode else 'LIVE: EOF monitoring Match block installed on disk, NOT YET activated by reload' }}"
+          exact_restriction: "publickey-only, local TCP to 127.0.0.1:9100, no sessions or remote forward"
+          existing_admin_policy: "UNCHANGED in both tested contexts"
+          private_monitoring_key: "NOT COPIED OR ACCESSED"
+          pi_authorized_keys: "ABSENT"
+          router_sshd_reload: "NONE"
+          router_firewall_pppoe: "UNCHANGED"
+          node_exporter_port: "Still Pi localhost TCP9100 only"
+          next_gate: "Separate sshd reload decision with explicit approval and verified rollback/SSH connectivity"
+
+    - name: Recheck essential live router services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: c2b2_install_final_services
+      check_mode: false
+      changed_when: false
+
+    - name: Refuse any unexpected gateway service degradation
+      ansible.builtin.assert:
+        that:
+          - (c2b2_install_final_services.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
