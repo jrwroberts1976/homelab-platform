@@ -376,3 +376,30 @@ ansible-playbook -i inventory/hosts.yml \
 This verifies the **actual** physical router eth0 MAC, reads its `/etc/ssh/ssh_host_ed25519_key.pub` SHA256 fingerprint **directly on Pi** and effective `sshd -T` forwarding policies; validates monitor-01 hostname and IPv4, tests if `james` has an existing known_hosts record for `192.168.3.1` and presence of public key files (**does not print or read any private key**). No `ssh-keyscan`, TOFU acceptance, copy of private keys, key generation, `known_hosts` mutation, SSH daemon change, tunnel, Docker modification or firewall change is performed. **Compare fingerprints before any future explicit IaC-pinned known_hosts deployment.**
 
 C2 design remains pending: decide how a strictly restricted authenticated tunnel can be reached from the **Prometheus container** without an unsafe all-interface listener, using a dedicated nonprivileged identity/key with only `PermitOpen=127.0.0.1:9100` and no interactive privileges where practical. Future changes require a separate IaC proposal, dry-run and rollback. The live Pi exporter stays **only 127.0.0.1:9100**, and user-confirmed ASUS internet browsing remains OK.
+
+## 28 October ~16:45+ — genuine Pi SSH fingerprint and monitor identity audit PASS (read-only)
+
+Operator ran **new** `router-01-ssh-trust-readonly.yml` from `admin-01` using both `-i inventory/hosts.yml` and `-i inventory/router-01-toolset-audit.yml`, `--limit router-01,monitor-01`, syntax check PASS then `--check -e router_c2_ssh_trust_audit_approved=true` PASS. **Real recaps: `router-01 ok=7 changed=0 unreachable=0 failed=0 skipped=0`; `monitor-01 ok=9 changed=0 unreachable=0 failed=0 skipped=0`.** No SSH service restart/host trust/key/file changes.
+
+Verified **on physical Pi** using `ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub -E sha256`:
+
+```text
+256 SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI root@raspberrypi (ED25519)
+```
+
+This fingerprint belongs to verified onboard eth0 MAC `d8:3a:dd:5a:51:44` / router alias `router-01`. Current general `sshd -T` output reports `pubkeyauthentication yes`, `passwordauthentication yes`, `gatewayports no`, `allowtcpforwarding yes`, `disableforwarding no`, `permitopen any`. This is **not a purpose-restricted metrics account**. It is general effective policy and may differ for specific Match conditions; validate actual effective policy for a future monitoring identity before deploying.
+
+On `monitor-01` for `james`: `/home/james/.ssh/known_hosts` exists but **has no entry for `192.168.3.1`**. Standard public-key files `/home/james/.ssh/id_ed25519.pub` and `id_rsa.pub` both **absent**. The audit did **not** inspect arbitrary alternate key paths or private keys, so do not assert no possible credentials anywhere. Prior strict BatchMode SSH probe failed on **host-key trust** before testing authentication. Do not disable strict checking and do not treat a network-returned key as trusted unless it matches this verified fingerprint.
+
+### Stage C2 design decision and security acceptance gates
+
+Preferred design for review, **not approved/deployed**:
+
+1. Provision an **independent, least-privilege SSH identity** just for monitoring, instead of `james` or existing fleet-wide private keys. Keep new private key restricted to monitor-01 (later a tunnel sidecar gets only the necessary read-only key material); never commit it to GitHub or Ansible output.
+2. Retrieve Pi's actual **ED25519 public host key** through the already-verified Ansible connection, compare the SHA256 fingerprint to the independently captured `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, and pin that exact key in a dedicated SSH known-hosts file on monitor-01; preserve `StrictHostKeyChecking=yes` and fail closed on mismatch.
+3. Restrict a dedicated Pi account's authorized public key to **local TCP forwarding to `127.0.0.1:9100` only**. For any service account ensure no password login, no PTY, no agent/X11 forwarding, no remote command and no access to other Pi services. Check `sshd` effective `Match User` policy and validate SSH syntax before reload; do **not** modify global `sshd` settings or restart the router's networking.
+4. Prometheus resides inside container `monitoring-prometheus-1` on Docker network `monitoring_default` (`172.18.0.4`). Prefer an **isolated tunnel sidecar that shares only the Prometheus container's network namespace** and binds its forwarding listener to container `127.0.0.1`, subject to image provenance, key restrictions, monitoring stack impact and rollback review. A host-local 127.0.0.1 tunnel is not accessible as Prometheus container's localhost; do not bind 19100 on all host interfaces as a shortcut.
+5. Configure `monitoring_node_exporter_targets` through reviewed IaC, and update/reload *only* Prometheus configuration when tunnel has been proven working. Existing `playbooks/monitoring.yml` performs Docker Compose pull/up and must **not** be used as the quick way to add a scrape target. Require independent `up{target_name="router-01"} == 1` and related node metric checks after change, plus rollback.
+6. Verify no TCP9100 on Pi LAN/ppp0 before and after, internet browsing behind ASUS, static monitoring host identity, router services/PPPoE/NAT/MSS intact, and SSH tunnel reconnection and system startup behavior. C2 remains **NOT INSTALLED** until separate branch-reviewed implementation and normal deployment approval.
+
+Do not expose the Pi host's live SSH public-key contents or any generated private key in user-facing notes or repository commits. The SHA256 public fingerprint alone is suitable as a documented security pin.
