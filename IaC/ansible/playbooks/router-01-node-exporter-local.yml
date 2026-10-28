@@ -1,0 +1,314 @@
+---
+# Stage C1: install Node Exporter bound ONLY to Pi loopback.
+# No scrape target, SSH tunnel, router firewall, ASUS or Prometheus change.
+# Requires explicit operator approval; supports check-mode preview.
+- name: Stage localhost-only Node Exporter on verified live Raspberry Pi router
+  hosts: router_toolset_audit
+  gather_facts: true
+  become: true
+  vars:
+    router_node_exporter_local_install_approved: false
+    router_node_exporter_expected_mac: d8:3a:dd:5a:51:44
+    router_node_exporter_expected_ipv4: 192.168.3.1/24
+    router_node_exporter_service: prometheus-node-exporter
+    router_node_exporter_override_path: /etc/systemd/system/prometheus-node-exporter.service.d/override.conf
+    router_node_exporter_override_text: |
+      [Service]
+      ExecStart=
+      ExecStart=/usr/bin/prometheus-node-exporter --web.listen-address=127.0.0.1:9100
+    router_node_exporter_core_services:
+      - nftables
+      - router-pppoe
+      - dnsmasq
+      - unbound
+
+  pre_tasks:
+    - name: Check deployment controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_node_exporter_controller
+      changed_when: false
+      check_mode: false
+
+    - name: Require explicit opt-in and exact controller and target
+      ansible.builtin.assert:
+        that:
+          - router_node_exporter_local_install_approved | bool
+          - router_node_exporter_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+        fail_msg: "Refuse unknown control host/target or missing explicit operator approval."
+      delegate_to: localhost
+      become: false
+
+    - name: Validate Debian Raspberry Pi platform
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+
+    - name: Read physical router MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_node_exporter_mac
+      changed_when: false
+      check_mode: false
+
+    - name: Read physical router LAN IP
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_node_exporter_lan
+      changed_when: false
+      check_mode: false
+
+    - name: Read PPPoE MTU
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/ppp0/mtu]
+      register: router_node_exporter_mtu
+      changed_when: false
+      check_mode: false
+
+    - name: Read default route
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_node_exporter_route_before
+      changed_when: false
+      check_mode: false
+
+    - name: Verify exact router identity and working internet uplink
+      ansible.builtin.assert:
+        that:
+          - router_node_exporter_mac.stdout | trim | lower == router_node_exporter_expected_mac
+          - router_node_exporter_expected_ipv4 in router_node_exporter_lan.stdout
+          - router_node_exporter_mtu.stdout | trim == '1492'
+          - "'default dev ppp0' in router_node_exporter_route_before.stdout"
+
+    - name: Read essential gateway service states
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ router_node_exporter_core_services }}"
+      register: router_node_exporter_core_before
+      changed_when: false
+      check_mode: false
+
+    - name: Require all router services healthy before installation
+      ansible.builtin.assert:
+        that:
+          - (router_node_exporter_core_before.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Read actual filter table before changes
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, filter_router]
+      register: router_node_exporter_filter_before
+      changed_when: false
+      check_mode: false
+
+    - name: Read original NAT table before changes
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, nat_router]
+      register: router_node_exporter_nat_before
+      changed_when: false
+      check_mode: false
+
+    - name: Read persistent MSS clamp
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, router_pppoe_mss]
+      register: router_node_exporter_mss_before
+      changed_when: false
+      check_mode: false
+
+    - name: Verify default-deny firewall and persistent MSS safety baseline
+      ansible.builtin.assert:
+        that:
+          - "'policy drop' in router_node_exporter_filter_before.stdout"
+          - "'masquerade' in router_node_exporter_nat_before.stdout"
+          - (router_node_exporter_mss_before.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+
+    - name: Read current TCP listeners
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_node_exporter_listeners_before
+      changed_when: false
+      check_mode: false
+
+    - name: Reject any pre-existing externally exposed metrics listener
+      ansible.builtin.assert:
+        that:
+          - "'0.0.0.0:9100' not in router_node_exporter_listeners_before.stdout"
+          - "'[::]:9100' not in router_node_exporter_listeners_before.stdout"
+          - "'192.168.3.1:9100' not in router_node_exporter_listeners_before.stdout"
+
+    - name: Check for an existing operator-managed Node Exporter override
+      ansible.builtin.stat:
+        path: "{{ router_node_exporter_override_path }}"
+      register: router_node_exporter_override_before
+
+    - name: Read existing override content, if present
+      ansible.builtin.slurp:
+        src: "{{ router_node_exporter_override_path }}"
+      register: router_node_exporter_override_existing
+      when: router_node_exporter_override_before.stat.exists | bool
+
+    - name: Do not overwrite an unrelated existing exporter configuration
+      ansible.builtin.assert:
+        that:
+          - (router_node_exporter_override_existing.content | b64decode) == router_node_exporter_override_text
+        fail_msg: "Existing Node Exporter override differs. Inspect before changing it."
+      when: router_node_exporter_override_before.stat.exists | bool
+
+    - name: Require package filesystem capacity
+      ansible.builtin.command:
+        argv: [df, -Pk, /var]
+      register: router_node_exporter_free
+      changed_when: false
+      check_mode: false
+
+    - name: Require more than 200 MiB free
+      ansible.builtin.assert:
+        that:
+          - (router_node_exporter_free.stdout_lines[1].split()[3] | int) > 204800
+
+    - name: Simulate Node Exporter package installation with no recommends
+      ansible.builtin.command:
+        argv: [apt-get, -s, -o, APT::Install-Recommends=false, install, prometheus-node-exporter]
+      register: router_node_exporter_apt_simulated
+      changed_when: false
+      check_mode: false
+
+    - name: Require no package removals or upgrades in simulation
+      ansible.builtin.assert:
+        that:
+          - router_node_exporter_apt_simulated.stdout | regex_search('(?m)^Remv ') is none
+          - router_node_exporter_apt_simulated.stdout | regex_search('(?m)^Inst (?!prometheus-node-exporter )') is none
+        fail_msg: "APT wants unexpected other package installs/removals; inspect before proceeding."
+
+  tasks:
+    - name: Install only Debian prometheus-node-exporter without optional collectors
+      ansible.builtin.apt:
+        name: prometheus-node-exporter
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+        install_recommends: false
+        policy_rc_d: 101
+        lock_timeout: 60
+      register: router_node_exporter_apt
+
+    - name: Ensure restricted exporter override directory exists
+      ansible.builtin.file:
+        path: /etc/systemd/system/prometheus-node-exporter.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Override exporter binding to loopback only
+      ansible.builtin.copy:
+        dest: "{{ router_node_exporter_override_path }}"
+        content: "{{ router_node_exporter_override_text }}"
+        owner: root
+        group: root
+        mode: "0644"
+      register: router_node_exporter_override_written
+
+    - name: Enable and start localhost-only exporter after installing override
+      ansible.builtin.systemd_service:
+        name: "{{ router_node_exporter_service }}"
+        daemon_reload: true
+        enabled: true
+        state: started
+      register: router_node_exporter_service_started
+
+    - name: Verify Node Exporter answers on Pi loopback
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9100/metrics
+        method: GET
+        status_code: 200
+        return_content: true
+        timeout: 10
+      register: router_node_exporter_local_metrics
+      until: router_node_exporter_local_metrics.status | default(0) == 200
+      retries: 5
+      delay: 2
+      when: not ansible_check_mode
+
+    - name: Require actual node health metrics locally
+      ansible.builtin.assert:
+        that:
+          - "'node_uname_info' in router_node_exporter_local_metrics.content"
+          - "'node_network_receive_bytes_total' in router_node_exporter_local_metrics.content"
+      when: not ansible_check_mode
+
+  post_tasks:
+    - name: Verify critical services remained active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ router_node_exporter_core_services }}"
+      register: router_node_exporter_core_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify unchanged default route
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: router_node_exporter_route_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify filter firewall unchanged
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, filter_router]
+      register: router_node_exporter_filter_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify NAT unchanged
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, nat_router]
+      register: router_node_exporter_nat_after
+      changed_when: false
+      check_mode: false
+
+    - name: Verify persistent MSS clamp unchanged in purpose
+      ansible.builtin.command:
+        argv: [nft, list, table, ip, router_pppoe_mss]
+      register: router_node_exporter_mss_after
+      changed_when: false
+      check_mode: false
+
+    - name: Read post-install TCP listeners
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_node_exporter_listeners_after
+      changed_when: false
+      check_mode: false
+
+    - name: Require essential gateway state and firewall still safe
+      ansible.builtin.assert:
+        that:
+          - (router_node_exporter_core_after.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+          - router_node_exporter_route_after.stdout == router_node_exporter_route_before.stdout
+          - router_node_exporter_filter_after.stdout == router_node_exporter_filter_before.stdout
+          - router_node_exporter_nat_after.stdout == router_node_exporter_nat_before.stdout
+          - (router_node_exporter_mss_after.stdout | regex_findall('tcp option maxseg size set 1452') | length) == 2
+          - "'0.0.0.0:9100' not in router_node_exporter_listeners_after.stdout"
+          - "'[::]:9100' not in router_node_exporter_listeners_after.stdout"
+          - "'192.168.3.1:9100' not in router_node_exporter_listeners_after.stdout"
+        fail_msg: "Router gateway changed or exporter exposed unexpectedly. Stop and investigate."
+
+    - name: Require exact localhost metrics listener in live run
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in router_node_exporter_listeners_after.stdout"
+      when: not ansible_check_mode
+
+    - name: Report Stage C1 deployment status
+      ansible.builtin.debug:
+        msg:
+          - "{{ 'CHECK MODE ONLY: nothing installed or started' if ansible_check_mode else 'LIVE: local metrics verified' }}"
+          - "APT change or prediction: {{ router_node_exporter_apt.changed | default(false) }}"
+          - "Firewall/NAT/PPP route unchanged, core services active, metrics port bound only to loopback when live."
+          - "NO Prometheus target or WAN/LAN firewall allowance configured."
