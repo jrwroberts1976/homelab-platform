@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 PPPoE TCP MSS persistence — 28 October 2026
 
 **Status:** live temporary workaround verified; persistence IaC proposed in draft PR, **not deployed**. This document records user-supplied live evidence, not a comprehensive router migration sign-off.
