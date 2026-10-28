@@ -1,0 +1,133 @@
+---
+# Read-only diagnostic playbook for HTTP 503 from the existing Loki endpoint.
+# This does NOT restart containers, run docker compose up, or change configs.
+- name: Diagnose Loki readiness on live monitor-01 without service changes
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    monitor_loki_readonly_approved: false
+    monitor_loki_expected_ipv4: 192.168.2.52
+    monitor_loki_root: /opt/monitoring
+
+  pre_tasks:
+    - name: Confirm controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: monitor_loki_controller_hostname
+
+    - name: Require intended controller, target and explicit read-only opt-in
+      ansible.builtin.assert:
+        that:
+          - monitor_loki_readonly_approved | bool
+          - monitor_loki_controller_hostname.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == monitor_loki_expected_ipv4
+        fail_msg: "Refusing ambiguous monitoring-host audit; no state changed."
+      delegate_to: localhost
+      become: false
+
+    - name: Verify actual system hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      check_mode: false
+      changed_when: false
+      register: monitor_loki_host_hostname
+
+    - name: Verify actual IPv4 addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      check_mode: false
+      changed_when: false
+      register: monitor_loki_host_addresses
+
+    - name: Refuse to inspect wrong host
+      ansible.builtin.assert:
+        that:
+          - monitor_loki_host_hostname.stdout | trim == 'monitor-01'
+          - monitor_loki_expected_ipv4 in monitor_loki_host_addresses.stdout
+
+  tasks:
+    - name: Check Docker service active status
+      ansible.builtin.command:
+        argv: [systemctl, is-active, docker]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_docker_active
+
+    - name: Check local Loki readiness on monitor-01
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3100/ready
+        method: GET
+        return_content: false
+        timeout: 5
+        status_code: [200, 503]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_local_ready
+
+    - name: Check Loki build-info endpoint
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3100/loki/api/v1/status/buildinfo
+        method: GET
+        return_content: false
+        timeout: 5
+        status_code: [200, 503]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_local_buildinfo
+
+    - name: List compose runtime state without changing containers
+      ansible.builtin.command:
+        argv: [docker, compose, -f, "{{ monitor_loki_root }}/docker-compose.yml", ps, --all]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_compose_ps
+
+    - name: Inspect recent Loki service logs without restarting anything
+      ansible.builtin.command:
+        argv: [docker, compose, -f, "{{ monitor_loki_root }}/docker-compose.yml", logs, --no-color, --tail, '35', loki]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_compose_logs
+
+    - name: Read local port 3100 listeners
+      ansible.builtin.command:
+        argv: [ss, -ltn, sport, =, :3100]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_listeners
+
+    - name: Check free capacity on monitoring storage
+      ansible.builtin.command:
+        argv: [df, -h, "{{ monitor_loki_root }}"]
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: monitor_loki_disk
+
+    - name: Summarise observed local health without assuming cause
+      ansible.builtin.debug:
+        msg:
+          hostname: "{{ monitor_loki_host_hostname.stdout }}"
+          addresses: "{{ monitor_loki_host_addresses.stdout_lines }}"
+          docker_active: "{{ monitor_loki_docker_active.stdout | default('unknown') }}"
+          local_loki_ready_http_status: "{{ monitor_loki_local_ready.status | default('probe error') }}"
+          local_loki_buildinfo_http_status: "{{ monitor_loki_local_buildinfo.status | default('probe error') }}"
+          compose_ps_rc: "{{ monitor_loki_compose_ps.rc }}"
+          compose_ps: "{{ monitor_loki_compose_ps.stdout_lines | default([]) }}"
+          loki_logs_rc: "{{ monitor_loki_compose_logs.rc }}"
+          loki_log_excerpt: "{{ ((monitor_loki_compose_logs.stdout_lines | default([])) + (monitor_loki_compose_logs.stderr_lines | default([])))[-35:] }}"
+          listeners_tcp_3100: "{{ monitor_loki_listeners.stdout_lines | default([]) }}"
+          disk: "{{ monitor_loki_disk.stdout_lines | default([]) }}"
+          changes: "READ ONLY; no docker, network or host state modified"
