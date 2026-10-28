@@ -1,0 +1,242 @@
+---
+# Stage C2b design preflight only. No accounts, keys, SSH trust, sshd, router,
+# Docker or Prometheus mutations. Does not reveal private/public key material.
+- name: Check Raspberry Pi restrictions before dedicated metrics SSH principal
+  hosts: router_toolset_audit
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_identity_audit_approved: false
+    router_c2_pi_service_account: router-metrics
+  pre_tasks:
+    - name: Read controller identity before connecting
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_c2_identity_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Guard exact controller and router inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_identity_audit_approved | bool
+          - router_c2_identity_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.3.1'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify physical Raspberry Pi LAN MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_c2_identity_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Require exact hardware identity
+      ansible.builtin.assert:
+        that:
+          - router_c2_identity_mac.stdout | lower | trim == 'd8:3a:dd:5a:51:44'
+
+  tasks:
+    - name: Check planned dedicated Pi service account availability
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_pi_service_account }}"]
+      register: router_c2_pi_account
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Check planned dedicated Pi service group availability
+      ansible.builtin.command:
+        argv: [getent, group, "{{ router_c2_pi_service_account }}"]
+      register: router_c2_pi_group
+      changed_when: false
+      failed_when: false
+      check_mode: false
+      no_log: true
+
+    - name: Validate existing SSH daemon configuration without reloading
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Read current effective SSH forwarding and authentication defaults
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T]
+      register: router_c2_pi_ssh_policy
+      check_mode: false
+      changed_when: false
+
+    - name: Read router local metrics listener
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_c2_pi_listeners
+      check_mode: false
+      changed_when: false
+
+    - name: Check Pi's existing inbound access policy
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, filter_router]
+      register: router_c2_pi_filter
+      check_mode: false
+      changed_when: false
+
+    - name: Check all critical Pi router services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [nftables, router-pppoe, dnsmasq, unbound]
+      register: router_c2_pi_services
+      check_mode: false
+      changed_when: false
+
+    - name: Require intact localhost metrics isolation and four router services
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in router_c2_pi_listeners.stdout"
+          - "'0.0.0.0:9100' not in router_c2_pi_listeners.stdout"
+          - "'[::]:9100' not in router_c2_pi_listeners.stdout"
+          - "'192.168.3.1:9100' not in router_c2_pi_listeners.stdout"
+          - "'policy drop' in router_c2_pi_filter.stdout"
+          - (router_c2_pi_services.results | selectattr('stdout', 'equalto', 'active') | list | length) == 4
+
+    - name: Report bounded Pi identity feasibility
+      ansible.builtin.debug:
+        msg:
+          proposed_service_account: "{{ router_c2_pi_service_account }}"
+          proposed_service_account_exists: "{{ router_c2_pi_account.rc == 0 }}"
+          proposed_group_exists: "{{ router_c2_pi_group.rc == 0 }}"
+          sshd_policy: "{{ router_c2_pi_ssh_policy.stdout_lines | select('match', '^(allowtcpforwarding|permitopen|gatewayports|pubkeyauthentication|passwordauthentication|disableforwarding|permittty) ') | list }}"
+          pi_exporter_listens_only_on_loopback: true
+          core_services: "{{ router_c2_pi_services.results | map(attribute='stdout') | list }}"
+          changes: "READ ONLY; no SSH accounts, keys, policies, or router services altered"
+
+- name: Check monitor-01 trust, service account and Docker tunnel constraints
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_identity_audit_approved: false
+    router_c2_monitor_service_account: router-metrics-tunnel
+    router_c2_expected_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+    router_c2_pinned_host_key_path: /etc/homelab/router-metrics-ssh/known_hosts
+  pre_tasks:
+    - name: Read controller identity for monitor check
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_c2_identity_monitor_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Guard exact controller and monitoring host
+      ansible.builtin.assert:
+        that:
+          - router_c2_identity_audit_approved | bool
+          - router_c2_identity_monitor_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Read physical monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_c2_identity_monitor_hostname
+      check_mode: false
+      changed_when: false
+
+    - name: Read monitoring IPv4 interface addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      register: router_c2_identity_monitor_address
+      check_mode: false
+      changed_when: false
+
+    - name: Reject an unexpected monitoring host
+      ansible.builtin.assert:
+        that:
+          - router_c2_identity_monitor_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_identity_monitor_address.stdout"
+
+  tasks:
+    - name: Check installed dedicated Pi SSH trust file metadata
+      ansible.builtin.stat:
+        path: "{{ router_c2_pinned_host_key_path }}"
+      register: router_c2_monitor_pin_stat
+
+    - name: Require real regular root-owned pinned host-key file
+      ansible.builtin.assert:
+        that:
+          - router_c2_monitor_pin_stat.stat.exists | bool
+          - router_c2_monitor_pin_stat.stat.isreg | default(false)
+          - not router_c2_monitor_pin_stat.stat.islnk | default(false)
+          - router_c2_monitor_pin_stat.stat.pw_name == 'root'
+
+    - name: Reverify installed Pi host-key fingerprint
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_pinned_host_key_path }}", -E, sha256]
+      register: router_c2_monitor_pinned_fingerprint
+      check_mode: false
+      changed_when: false
+
+    - name: Require known independent SHA256 host-key fingerprint
+      ansible.builtin.assert:
+        that:
+          - router_c2_monitor_pinned_fingerprint.stdout.split()[1] == router_c2_expected_fingerprint
+          - "'(ED25519)' in router_c2_monitor_pinned_fingerprint.stdout"
+
+    - name: Check planned monitor SSH service identity availability
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_monitor_service_account }}"]
+      register: router_c2_monitor_account
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Check whether intended tunnel key already exists
+      ansible.builtin.stat:
+        path: /etc/homelab/router-metrics-ssh/id_ed25519
+      register: router_c2_monitor_private_key
+
+    - name: Read current host TCP listeners to avoid local port conflict
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_c2_monitor_listeners
+      check_mode: false
+      changed_when: false
+
+    - name: Confirm monitor route towards Pi SSH
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "192.168.3.1"]
+      register: router_c2_monitor_route
+      check_mode: false
+      changed_when: false
+
+    - name: Check running Prometheus service readiness
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: router_c2_prometheus_ready
+      check_mode: false
+      changed_when: false
+
+    - name: Report monitor identity and tunnel limitations, without key contents
+      ansible.builtin.debug:
+        msg:
+          proposed_monitor_identity: "{{ router_c2_monitor_service_account }}"
+          proposed_monitor_identity_exists: "{{ router_c2_monitor_account.rc == 0 }}"
+          dedicated_tunnel_private_key_exists: "{{ router_c2_monitor_private_key.stat.exists | bool }}"
+          independent_pinned_pi_host_fingerprint_verified: "{{ router_c2_expected_fingerprint }}"
+          proposed_local_port_19100_unused: "{{ ':19100' not in router_c2_monitor_listeners.stdout }}"
+          monitor_to_pi_route: "{{ router_c2_monitor_route.stdout }}"
+          prometheus_ready_http_status: "{{ router_c2_prometheus_ready.status }}"
+          changes: "READ ONLY; no client private key, SSH identity, sshd, Docker or Prometheus edits"
