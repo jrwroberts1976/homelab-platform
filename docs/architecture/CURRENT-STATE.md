@@ -1,6 +1,11 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 29 October 2026 — independent Pi host-key pin postflight PASS on monitor-01
+
+A second, read-only operator test on `monitor-01 192.168.2.52`, separate from the approved live Ansible trust-pin installation, verified the protected `/etc/homelab/router-metrics-ssh/known_hosts` metadata (`TRUST_FILE_SECURITY=PASS`), then ran `ssh-keygen -F 192.168.2.1` as dedicated `router-metrics-tunnel`: `LOOKUP_EXIT_CODE=0`, `HOST_KEY_RECORDS=1`, `PINNED_FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, **`HOST_PIN_POSTFLIGHT=PASS`**. This SHA256 matches the genuine physical Pi ED25519 key. No SSH login, key installation or network changes occurred during the postflight (ad-hoc Ansible shell `CHANGED` reporting convention). Monitor-side private key access, keypair match and remote host trust now independently verified; **Pi service-user authorised keys, an actual restricted SSH connection/tunnel, and Prometheus node-metric collection remain unimplemented or unverified**. See [host pin runbook](../network/MONITOR-01-ROUTER-SSH-HOST-PIN-2026-10-29.md) and [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+
+
 ## 29 October 2026 — router-01 trusted SSH host-key pin LIVE on monitor-01
 
 **Operator verified LIVE**: following PR #228's scan-record filter correction and fresh explicit approval, `admin-01` ran the guarded `IaC/ansible/playbooks/monitor-01-router-ssh-host-pin.yml` on `monitor-01 192.168.2.52`. It rechecked the network-presented `router-01 192.168.2.1` ED25519 host key against the physical Pi's independently retrieved fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, with no conflicting keys; appended exactly the verified key to the dedicated existing `/etc/homelab/router-metrics-ssh/known_hosts` (**`changed`**), and validated the pin's usability by dedicated service identity `router-metrics-tunnel`. Trust-file original root ownership, `0644` mode and non-symlink status preserved. Exact recap: **`monitor-01 ok=27 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`**. The earlier conservative false-negative preflight failed with `changed=0`, but its corrected live retry **PASSED**.

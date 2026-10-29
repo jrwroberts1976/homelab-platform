@@ -1,6 +1,21 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # monitor-01 — fingerprint-gated router-01 SSH host pin (29 October 2026)
 
+## Independent post-deployment check — PASS (29 October 2026)
+
+After the corrected playbook's **successful live host-key installation** (Ansible `ok=27 changed=1 failed=0 rescued=0`), the operator ran a **separate read-only** Python/Ansible postflight. It checked `/etc/homelab/router-metrics-ssh/known_hosts` regular file ownership/mode, then executed `ssh-keygen -F 192.168.2.1` under the dedicated non-login `router-metrics-tunnel` user without printing key bytes. It counted the returned record and independently SHA256-hashed the ED25519 public-key blob:
+
+```text
+TRUST_FILE_SECURITY=PASS
+LOOKUP_EXIT_CODE=0
+HOST_KEY_RECORDS=1
+PINNED_FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+HOST_PIN_POSTFLIGHT=PASS
+```
+
+This confirms the dedicated service identity can read **exactly one correctly pinned Pi SSH host key**, matching independently verified physical router identity. The Ansible ad-hoc shell recap `CHANGED rc=0` reflects the shell module's convention, **not a modification**. This satisfies the previously pending optional independent postflight (historical instructions further below). **Host-key trust is complete; Pi-side public-key authorisation is still absent, and no authenticated connection or tunnel is working yet.** Do not start a tunnel or change Prometheus as a result of this postflight.
+
+
 ## CURRENT STATUS — successful live deployment (29 October 2026)
 
 **The host-key pin is LIVE on `monitor-01`**. The source-only preparation, first failed attempt and unpinned statements further below are preserved only as **historical** context and are superseded by this verified successful run. The Pi user authorised-key and monitoring tunnel remain separate **NOT DEPLOYED** work.

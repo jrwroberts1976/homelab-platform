@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — independent postflight confirms Pi SSH trust pin as monitoring service user
+
+Following separately approved live host-key installation on `monitor-01`, the operator ran a **separate read-only validation** (Ansible ad-hoc shell `CHANGED` is reporting convention, no writes). `lstat` verified `/etc/homelab/router-metrics-ssh/known_hosts` is an expected root-owned, protected, regular file: **`TRUST_FILE_SECURITY=PASS`**. `runuser -u router-metrics-tunnel -- ssh-keygen -F 192.168.2.1 -f /etc/homelab/router-metrics-ssh/known_hosts` succeeded (`LOOKUP_EXIT_CODE=0`) and returned **exactly one** recognised entry (`HOST_KEY_RECORDS=1`). SHA256 of that stored ED25519 public key independently matched the genuine physical Pi: **`PINNED_FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`**, `HOST_PIN_POSTFLIGHT=PASS`. No key content was printed.
+
+**State:** Monitor-side private-key ACL access PASS; the dedicated private/public key pair matches PASS; Pi host-key trust installed LIVE and independently postflight-verified PASS. **Do not claim SSH authentication or a working tunnel yet.** Pi-side `router-metrics` `authorized_keys` and `authorized_keys2` were absent at last read-only audit, with no `AuthorizedKeysCommand`. Next independently verify Pi service-user directory, effective sshd restrictions and monitor public-key fingerprint, then design a **separately reviewed and approved** Pi authorized-key change through Ansible/IaC. Node Exporter remains on Pi `127.0.0.1:9100`; no Prometheus router node-metrics ingestion established. See [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+
+
 ## 29 October 2026 — monitor-01 router-01 SSH ED25519 host-key pin LIVE deployed, PASS
 
 **OPERATOR LIVE PROOF:** After PR #228 fixed initial two-line `ssh-keyscan` failure, operator synced `admin-01` main to `af175185`, confirmed writer and rollback Ansible syntax PASS, and provided **fresh explicit approval** for the host-key pin ONLY. The corrected `IaC/ansible/playbooks/monitor-01-router-ssh-host-pin.yml` then executed successfully on `monitor-01 192.168.2.52`:
