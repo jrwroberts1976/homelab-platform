@@ -1,7 +1,16 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
-## 29 October 2026 — admin-01 DHCP management IP RECOVERED; QNetd clients back
+## 29 October 2026 12:55 UTC — FINAL RECOVERY VERIFIED: 3/3 Proxmox votes, QDevice connected on both nodes
+
+**Independently operator-verified after the admin-01 reboot:** Both `PROXMOX` and `Proxmox-2` reported via read-only `pvecm status` that cluster `jameshouse-pve` is **`Quorate: Yes`**, with **Expected votes: 3**, **Total votes: 3**, **Quorum: 2** and `Flags: Quorate Qdevice`. Membership identifies `PROXMOX 10.255.255.1` (1 vote, `A,V,NMW`), `Proxmox-2 10.255.255.2` (1 vote, `A,V,NMW`) and **`Qdevice` (1 vote)**. Read-only `corosync-qdevice-tool -s` on *both* nodes returned **`QNetd host: 192.168.2.48:5403`** and **`State: Connected`**, configuration version 3, model Net, Fifty-Fifty split algorithm. Thus the witness is actually contributing its vote, not just accepting TCP connections.
+
+Host-side recovery independently verified immediately beforehand: Windows SSH to `james@192.168.2.48` succeeded; `admin-01 eth0 UP 192.168.2.48/24`; `sudo corosync-qnetd-tool -s` showed **Connected clients: 2** and **Connected clusters: 1**. Router-01's approved, independently verified Ansible `dnsmasq` reservation is `dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48`, preserving the original ASUS `.180` entry and dynamic `.100-.199` range. The historical `.127` lease, disconnected client states, and 2/3 votes documented below are **incident history, not current operational status**.
+
+**Operational status: admin-01 DHCP recovery and Proxmox witness restoration COMPLETE.** No Proxmox cluster configuration changes or additional network restarts required. Canonical Ansible inventory was already correct at `.48`; preserve it. Issue [#206](https://github.com/jrwroberts1976/homelab-platform/issues/206) records the full operator evidence; this does not imply unrelated router migration work is complete.
+
+
+## Recovery interim evidence — admin-01 .48 and QNetd clients reconnected before vote verification
 
 **Confirmed live after admin-01 reboot:** Windows SSH to `james@192.168.2.48` succeeded and identified `admin-01`. Direct `ip -4 -br addr show eth0` reported **`eth0 UP 192.168.2.48/24`**. Direct `sudo corosync-qnetd-tool -s` reported QNetd listening `*:5403`, TLS supported, **Connected clients: 2**, **Connected clusters: 1**. The original `.48` address is restored using router-01's already activated and independently verified fixed DHCP reservation for `b8:27:eb:e8:36:cd`. Earlier incident sections about the observed `.127` address and zero QNetd clients are historical and are superseded by this evidence.
 
