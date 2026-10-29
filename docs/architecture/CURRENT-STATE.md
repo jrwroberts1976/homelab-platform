@@ -1,6 +1,15 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 29 October 2026 — router-01 restricted monitor public key deployed LIVE
+
+Following PR #231 and local syntax checks on `admin-01`, the operator **explicitly approved** the router-side restricted SSH monitoring public-key installation and executed `playbooks/router-01-metrics-authorized-key.yml` using both router and monitoring inventories. Live preflight verified physical Pi identity `192.168.2.1/24`, MAC `d8:3a:dd:5a:51:44`, restricted `router-metrics` UID999 account and on-disk sshd policy; the existing monitor-01 public/private keypair fingerprint `SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`; and the independently pinned Pi server host fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`. All checks passed.
+
+**Exactly two live changes:** `/var/lib/router-metrics/.ssh` created (UID999, mode `0700`), and `/var/lib/router-metrics/.ssh/authorized_keys` created (UID999, mode `0600`) holding exactly one existing monitor public key, restricted with `from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"`. File ownership/mode, exact content and sshd syntax postflights all passed. **Recap `router-01 ok=43 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0`.** No SSH reload/restart, tunnel, firewall, router services, Node Exporter listener, or Prometheus change.
+
+**Remaining distinction:** the key is installed but actual SSH authentication has not been tested, and the running daemon's effective in-memory policy is not yet independently proven. No local-forward tunnel or Prometheus node scrape has been established; exporter remains on Pi loopback `127.0.0.1:9100`. Next independent read-only audit of installed key and permissions, followed by separately approved SSH authentication testing if needed. See [runbook](../network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md) and [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+
+
 ## 29 October 2026 — independent Pi host-key pin postflight PASS on monitor-01
 
 A second, read-only operator test on `monitor-01 192.168.2.52`, separate from the approved live Ansible trust-pin installation, verified the protected `/etc/homelab/router-metrics-ssh/known_hosts` metadata (`TRUST_FILE_SECURITY=PASS`), then ran `ssh-keygen -F 192.168.2.1` as dedicated `router-metrics-tunnel`: `LOOKUP_EXIT_CODE=0`, `HOST_KEY_RECORDS=1`, `PINNED_FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, **`HOST_PIN_POSTFLIGHT=PASS`**. This SHA256 matches the genuine physical Pi ED25519 key. No SSH login, key installation or network changes occurred during the postflight (ad-hoc Ansible shell `CHANGED` reporting convention). Monitor-side private key access, keypair match and remote host trust now independently verified; **Pi service-user authorised keys, an actual restricted SSH connection/tunnel, and Prometheus node-metric collection remain unimplemented or unverified**. See [host pin runbook](../network/MONITOR-01-ROUTER-SSH-HOST-PIN-2026-10-29.md) and [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
