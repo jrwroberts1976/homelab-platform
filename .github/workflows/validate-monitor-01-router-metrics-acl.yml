@@ -1,0 +1,85 @@
+name: Validate monitor-01 router metrics ACL maintenance source
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-monitor-01-router-metrics-acl.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-metrics-acl-traverse.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-metrics-acl-rollback.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-monitor-01-router-metrics-acl.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-metrics-acl-traverse.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-metrics-acl-rollback.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install syntax checker
+        run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Check narrow permissions and mandatory deployment gates
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          base=Path("IaC/ansible/playbooks")
+          writer=base/"monitor-01-router-metrics-acl-traverse.yml"
+          rollback=base/"monitor-01-router-metrics-acl-rollback.yml"
+          for file in [writer, rollback]:
+              src=file.read_text()
+              plays=yaml.safe_load(src)
+              assert len(plays)==1
+              play=plays[0]
+              assert play["hosts"]=="monitoring_hosts"
+              assert play["become"] is True
+              assert play["gather_facts"] is False
+              assert "not ansible_check_mode" in src
+              assert "inventory_hostname == 'monitor-01'" in src
+              assert "ansible_host == '192.168.2.52'" in src
+              assert "admin-01" in src
+              assert "/etc/homelab" in src
+              assert "router-metrics-tunnel" in src
+              assert "setfacl" in src and "getfacl" in src
+              for forbidden in (
+                  "ansible.builtin.systemd_service", "ansible.builtin.service",
+                  "ansible.builtin.user", "ansible.builtin.copy",
+                  "ansible.builtin.template", "ssh-keygen -t",
+                  "chmod -R", "chown -R", "192.168.3.1",
+              ):
+                  assert forbidden not in src,(file,forbidden)
+          writer_data=yaml.safe_load(writer.read_text())[0]
+          rollback_data=yaml.safe_load(rollback.read_text())[0]
+          assert writer_data["vars"]["router_metrics_acl_package_install_approved"] is False
+          assert writer_data["vars"]["router_metrics_acl_apply_approved"] is False
+          assert rollback_data["vars"]["router_metrics_acl_rollback_approved"] is False
+          assert rollback_data["vars"]["router_metrics_acl_no_active_tunnel_verified"] is False
+          ws=writer.read_text()
+          rs=rollback.read_text()
+          assert "apt-get" in ws and "-s" in ws
+          assert ws.count("name: acl") == 1
+          assert 'state: present' in ws and "install_recommends: false" in ws
+          assert 'u:router-metrics-tunnel:--x' in ws
+          assert 'u:router-metrics-tunnel' in rs
+          assert "no_log: true" in ws
+          assert "no_log: true" not in rs  # no private key read or derivation
+          assert "no active" in rs.lower() or "no_active_tunnel_verified" in rs
+          print("PASS: exact monitor identity, separate approvals, package-only APT gate, narrowly scoped ACL and rollback")
+          PY
+      - name: Parse playbooks using current inventory without making connections
+        run: |
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/monitor-01-router-metrics-acl-traverse.yml \
+            --limit monitor-01 --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/monitor-01-router-metrics-acl-rollback.yml \
+            --limit monitor-01 --syntax-check
