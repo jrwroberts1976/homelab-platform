@@ -1494,3 +1494,14 @@ Outstanding:
 - Receiver writes to the legacy rt-ac86u.log.
 - Loki/Grafana integration remains unverified.
 - Journal replay and forwarding metrics remain outstanding.
+
+### Monitoring integration validation — 2026-10-29
+
+- Recovered monitoring code consolidated into an integration branch.
+- Offline unit tests: 186/186 passed.
+- Five Ansible playbook syntax checks passed.
+- Inventory review identified that inventory/hosts.yml does not
+  currently define router-01.
+- Legacy docker-01 entries remain in BirdNET, Komodo and monitoring groups.
+- Router inventory reconciliation is required before any deployment.
+- No monitoring roles, scans or services deployed by this integration.
