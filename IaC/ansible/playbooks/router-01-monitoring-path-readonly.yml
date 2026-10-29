@@ -1,0 +1,151 @@
+---
+# Migrated from superseded PR #210 to the verified 192.168.2.1 Pi.
+# Read-only monitoring connectivity checks from Pi and admin-01; no configuration,
+# service, firewall, metrics exposure, SSH or WAN changes. Run with --check.
+- name: Compare Pi router and controller paths to existing LAN monitoring endpoints
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: false
+  vars:
+    router_monitoring_path_audit_approved: false
+    router_monitoring_loki_address: 192.168.2.52
+    router_monitoring_loki_ready: http://192.168.2.52:3100/ready
+    router_monitoring_zabbix_address: 192.168.2.59
+
+  pre_tasks:
+    - name: Verify the trusted controller
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      register: router_monitoring_controller
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse non-check mode, unapproved audit or old router IP
+      ansible.builtin.assert:
+        that:
+          - ansible_check_mode
+          - router_monitoring_path_audit_approved | bool
+          - router_monitoring_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Use admin-01, postcutover .2.1 inventory, --check and explicit read-only gate."
+      delegate_to: localhost
+
+    - name: Read physical Pi LAN MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_monitoring_mac
+      changed_when: false
+      check_mode: false
+
+    - name: Read physical Pi eth0 address
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_monitoring_eth0
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse unexpected Pi or LAN identity
+      ansible.builtin.assert:
+        that:
+          - router_monitoring_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in router_monitoring_eth0.stdout"
+
+  tasks:
+    - name: Controller route to Loki
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_loki_address }}"]
+      register: controller_loki_route
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Controller route to Zabbix
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_zabbix_address }}"]
+      register: controller_zabbix_route
+      delegate_to: localhost
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Pi route to Loki
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_loki_address }}"]
+      register: router_loki_route
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Pi route to Zabbix
+      ansible.builtin.command:
+        argv: [ip, -4, route, get, "{{ router_monitoring_zabbix_address }}"]
+      register: router_zabbix_route
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Controller checks existing Loki readiness
+      ansible.builtin.uri:
+        url: "{{ router_monitoring_loki_ready }}"
+        method: GET
+        timeout: 4
+        status_code: 200
+        return_content: false
+      delegate_to: localhost
+      register: controller_loki
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Pi checks existing Loki readiness
+      ansible.builtin.uri:
+        url: "{{ router_monitoring_loki_ready }}"
+        method: GET
+        timeout: 4
+        status_code: 200
+        return_content: false
+      register: router_loki
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Controller checks Zabbix 10051 TCP reachability
+      ansible.builtin.wait_for:
+        host: "{{ router_monitoring_zabbix_address }}"
+        port: 10051
+        connect_timeout: 2
+        timeout: 4
+        state: started
+      delegate_to: localhost
+      register: controller_zabbix
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Pi checks Zabbix 10051 TCP reachability
+      ansible.builtin.wait_for:
+        host: "{{ router_monitoring_zabbix_address }}"
+        port: 10051
+        connect_timeout: 2
+        timeout: 4
+        state: started
+      register: router_zabbix
+      changed_when: false
+      check_mode: false
+      failed_when: false
+
+    - name: Report diagnostic findings only; no settings or metrics listeners modified
+      ansible.builtin.debug:
+        msg:
+          controller_loki_route: "{{ controller_loki_route.stdout | default('not available') }}"
+          pi_loki_route: "{{ router_loki_route.stdout | default('not available') }}"
+          controller_zabbix_route: "{{ controller_zabbix_route.stdout | default('not available') }}"
+          pi_zabbix_route: "{{ router_zabbix_route.stdout | default('not available') }}"
+          controller_loki_http_status: "{{ controller_loki.status | default('connection failed') }}"
+          pi_loki_http_status: "{{ router_loki.status | default('connection failed') }}"
+          controller_zabbix_connected: "{{ controller_zabbix.state | default('') == 'started' }}"
+          pi_zabbix_connected: "{{ router_zabbix.state | default('') == 'started' }}"
+          effects: "READ ONLY: no service, firewall, router or monitoring configuration change"
