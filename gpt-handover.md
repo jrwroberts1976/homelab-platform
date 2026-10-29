@@ -1273,3 +1273,16 @@ For **every** change we make:
 - No production services changed.
 - Remaining: isolated actual-playbook failure-path tests,
   partial-installation recovery verification, and CI review.
+
+### 2026-10-29 — isolated Ansible safety tests
+
+- Added reusable isolated tests under tests/router-metrics-tunnel/.
+- Real Ansible copy/slurp/SHA256 validation PASS.
+- Modified unit caused expected assertion failure; rescued=1, failed=0.
+- Temporary test directory cleaned up.
+- State-guard test suite PASS with changed=0, failed=0.
+- Unsafe active, enabled, failed, activating and inconsistent states rejected.
+- Tests do not execute the production installer or systemd activation.
+- Remaining: production-playbook failure-path verification,
+  systemd sandbox review and CI checks.
+- Deployment remains blocked.

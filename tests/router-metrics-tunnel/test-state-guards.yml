@@ -1,0 +1,36 @@
+---
+- name: Test router metrics tunnel state guards
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    test_cases:
+      - { name: NEW_UNIT, exists: false, active: inactive, enabled: not-found, allowed: true }
+      - { name: EXISTING_DISABLED, exists: true, active: inactive, enabled: disabled, allowed: true }
+      - { name: ACTIVE_UNIT, exists: true, active: active, enabled: disabled, allowed: false }
+      - { name: ENABLED_UNIT, exists: true, active: inactive, enabled: enabled, allowed: false }
+      - { name: FAILED_UNIT, exists: true, active: failed, enabled: disabled, allowed: false }
+      - { name: MISSING_BUT_ENABLED, exists: false, active: inactive, enabled: enabled, allowed: false }
+      - { name: EXISTING_NOT_FOUND, exists: true, active: inactive, enabled: not-found, allowed: false }
+      - { name: ACTIVATING_UNIT, exists: true, active: activating, enabled: disabled, allowed: false }
+
+  tasks:
+    - name: Evaluate actual installer state expressions
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              item.active == 'inactive'
+              and
+              (
+                (not item.exists and item.enabled == 'not-found')
+                or
+                (item.exists and item.enabled == 'disabled')
+              )
+            ) == item.allowed
+        success_msg: "{{ item.name }}=PASS"
+        fail_msg: "{{ item.name }}=FAIL"
+      loop: "{{ test_cases }}"
+      loop_control:
+        label: "{{ item.name }}"
