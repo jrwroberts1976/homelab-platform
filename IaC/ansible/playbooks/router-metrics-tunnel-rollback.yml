@@ -42,7 +42,7 @@
             (installed_unit.content | b64decode | hash('sha256'))
             ==
             (lookup('ansible.builtin.file',
-              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2')
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2', rstrip=False)
               | hash('sha256'))
         fail_msg: "Unit differs from Git-managed source; refusing removal."
 

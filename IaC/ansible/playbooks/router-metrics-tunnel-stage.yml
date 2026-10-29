@@ -117,7 +117,7 @@
             (tunnel_existing_content.content | b64decode | hash('sha256'))
             ==
             (lookup('ansible.builtin.file',
-              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2')
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2', rstrip=False)
               | hash('sha256'))
         fail_msg: "Existing unit differs from reviewed source."
       when: tunnel_existing_unit.stat.exists
@@ -139,8 +139,17 @@
     - name: Refuse active or enabled existing service
       ansible.builtin.assert:
         that:
-          - tunnel_existing_active.stdout | trim in ['inactive', 'unknown']
-          - tunnel_existing_enabled.stdout | trim in ['disabled', 'not-found']
+          - tunnel_existing_active.stdout | trim == 'inactive'
+          - >-
+            (
+              (not tunnel_existing_unit.stat.exists)
+              and (tunnel_existing_enabled.stdout | trim == 'not-found')
+            )
+            or
+            (
+              tunnel_existing_unit.stat.exists
+              and (tunnel_existing_enabled.stdout | trim == 'disabled')
+            )
         fail_msg: "Existing tunnel state requires manual review."
 
     - name: Install systemd unit without activation
@@ -151,6 +160,24 @@
         group: root
         mode: '0644'
       register: tunnel_installed
+
+    - name: Read installed service definition
+      ansible.builtin.slurp:
+        src: "{{ tunnel_unit_path }}"
+      register: tunnel_postinstall_content
+
+    - name: Verify installed service matches reviewed source
+      ansible.builtin.assert:
+        that:
+          - >-
+            (tunnel_postinstall_content.content | b64decode | hash('sha256'))
+            ==
+            (lookup('ansible.builtin.file',
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2',
+              rstrip=False) | hash('sha256'))
+        fail_msg: >-
+          Installed unit differs from reviewed source.
+          Stop and investigate before activation or rollback.
 
     - name: Validate installed unit
       ansible.builtin.command:

@@ -1253,3 +1253,23 @@ For **every** change we make:
 - Default-deny gate PASS.
 - No installation, systemd reload or service activation.
 - Installation remains pending independent preflight and failure-path tests.
+
+### 2026-10-29 — router metrics tunnel safety validation
+
+- Router SSH host-key tests PASS:
+  - Genuine pinned key accepted.
+  - Incorrect address rejected.
+  - Incorrect fingerprint rejected.
+  - Duplicate router host records rejected.
+- Corrected Ansible file lookups to use rstrip=False.
+- Verified template SHA256:
+  78280ee4f0910b49b7e72a9da8c4aa8a38cf0b536d74d7b076c116165915816d.
+- Existing-unit state checks tightened.
+- Added post-installation SHA256 verification.
+- Six local unit-guard model tests PASS.
+- Installer and rollback default-deny tests PASS in check mode.
+- Both approval tests reported changed=0.
+- Ansible syntax checks and estate validation PASS.
+- No production services changed.
+- Remaining: isolated actual-playbook failure-path tests,
+  partial-installation recovery verification, and CI review.
