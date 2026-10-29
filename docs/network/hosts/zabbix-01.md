@@ -120,7 +120,7 @@ zabbix-01 is the documented CT105 LXC container on PROXMOX, hosting the Zabbix m
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T06:59:05+00:00`
+- Last assessed: `2026-10-29T08:00:35+00:00`
 - Pending updates: **7**
 - Security updates pending: **0**
 - Reboot required: **No**
