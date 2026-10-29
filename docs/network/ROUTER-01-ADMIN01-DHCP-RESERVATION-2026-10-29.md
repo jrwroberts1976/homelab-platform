@@ -1,6 +1,18 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01: recover stable admin-01 DHCP address — 29 October 2026
 
+## Independently verified router-side postflight — PASS (29 October 2026)
+
+Following the approved live Ansible writer PASS (router-01 ok=33 changed=8 unreachable=0 failed=0), the operator checked the actual physical router directly using **only read-only commands**. Evidence:
+- `systemctl is-active dnsmasq` = **active**.
+- Live `/etc/dnsmasq.d/router.conf`: line 5 `dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h`; line 9 existing `dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180`; lines 11–13 exactly one Ansible managed `admin-01` reservation with `dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48`.
+- `sudo dnsmasq --test` = **dnsmasq: syntax check OK**.
+- Lease file still shows `b8:27:eb:e8:36:cd` at **`192.168.2.127`**, hostname `admin-01`, client ID `01:b8:27:eb:e8:36:cd`.
+- `systemctl is-active unbound router-pppoe nftables` = **active** for each service.
+
+**Interpretation:** The router configuration and essential services are now independently confirmed as intended. **No DHCP renewal or host-side address migration has occurred in the observed evidence**. The next independent stage is a controlled, separately authorised NetworkManager DHCP renewal on physical `admin-01`, with keyboard/monitor or other recovery access and a check on its Proxmox Corosync QNetd witness responsibilities. An SSH session may disconnect during the renewal. Do **not** restart/renew the admin interface from remote SSH alone, alter inventory/DNS prematurely, or assert `.48` is already live on admin-01. See router migration [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
+
+
 ## Current state: approved router-side deployment PASS; separate inspection pending
 
 After live read-only preflight (ok=17 changed=0 failed=0), the user expressly approved the narrowly scoped router reservation writer plus dnsmasq restart and the residual .48 static-IP conflict risk. The operator ran the versioned Ansible writer from admin-01; its pasted tail shows candidate cleanup and final router-01 recap: **ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. Eight changed tasks include temporary staging, backup and cleanup, not eight permanent changes. By playbook sequencing the deployment, dnsmasq activation and embedded assertions completed without Ansible failures. **An independent read-only inspection of the live router configuration is still outstanding.**
