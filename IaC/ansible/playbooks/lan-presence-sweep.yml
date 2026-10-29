@@ -1,0 +1,6 @@
+---
+- name: Deploy MAC-keyed LAN presence monitoring
+  hosts: monitor-01
+  become: true
+  roles:
+    - lan_presence_sweep

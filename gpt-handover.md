@@ -1404,3 +1404,19 @@ For **every** change we make:
 - No Ansible playbooks executed against live systems.
 - Original router toolset branch retained pending separate
   reconciliation of its remaining installation and rollback work.
+
+## 2026-10-29 — Router device monitoring recovery
+
+- Branch: `feature/router-device-monitoring-recovery-20261029`.
+- Recovered three Grafana router-device dashboards.
+- Recovered LAN presence, router device events and Nmap worker Ansible roles, source code, tests and playbooks.
+- Validation: 172/172 offline unit tests passed using network namespaces.
+- Validation: all three recovered Ansible playbooks passed syntax checks.
+- Corrected the DHCP collector test expectation from 0600 to 0640, matching its restricted group-readable inventory design.
+- Production router: `router-01`, 192.168.2.1, running dnsmasq.
+- DHCPACK events confirmed in the router's systemd journal.
+- `monitor-01`, 192.168.2.52, has an active rsyslog receiver listening on UDP/5514.
+- The receiver's old ASUS log file is empty; Pi DHCP forwarding is not configured.
+- Outstanding: secure DHCP-only log forwarding, shared inventory group-ownership verification, monitoring integration and Grafana metric availability.
+- No recovered roles deployed, no timers enabled, no live scans initiated.
+- Production changes require separately approved Ansible execution.

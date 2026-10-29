@@ -1,0 +1,19 @@
+[Unit]
+Description=Homelab MAC-keyed LAN presence sweep
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+WorkingDirectory={{ lan_presence_sweep_application_dir }}
+ExecStart=/usr/bin/python3 {{ lan_presence_sweep_application_dir }}/sweep_main.py --state {{ lan_presence_sweep_state_file }} --metrics {{ lan_presence_sweep_metrics_file }} --interface {{ lan_presence_sweep_interface }}
+TimeoutStartSec=120
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ lan_presence_sweep_state_dir }} {{ lan_presence_sweep_metrics_dir }}
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN

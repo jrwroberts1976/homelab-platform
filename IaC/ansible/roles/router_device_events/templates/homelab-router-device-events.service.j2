@@ -1,0 +1,21 @@
+[Unit]
+Description=Homelab ASUS Router Device Event Collector
+After=rsyslog.service
+
+[Service]
+Type=simple
+User={{ router_device_events_user }}
+Group={{ router_device_events_user }}
+SupplementaryGroups=adm
+ExecStart=/usr/bin/python3 {{ router_device_events_script }} --log {{ router_device_events_log }} --state {{ router_device_events_state }} --poll-seconds {{ router_device_events_poll_seconds }}
+Restart=on-failure
+RestartSec=10
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ router_device_events_state_dir }}
+
+[Install]
+WantedBy=multi-user.target
