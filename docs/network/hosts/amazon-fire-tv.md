@@ -35,18 +35,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `94:3a:91:cd:4c:51`
-- Observed IP address(es): `192.168.2.8`
-- Connections: **485**
-- Traffic sent: **255.2 KiB**
-- Traffic received: **16.9 KiB**
-- Top services: `dns` (449), `http` (6), `dhcp` (2)
-- Top destination ports: `udp/5353` (449), `udp/1900` (19), `tcp/80` (10), `tcp/58153` (4), `udp/67` (2), `udp/3702` (1)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
 |---|---|---|---|---|---|
@@ -67,7 +58,7 @@ Only bounded application/service evidence is retained here.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T13:00:41+01:00`
+- Assessed: `2026-10-29T13:02:13+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `94:3a:91:cd:4c:51`
 - Identity confidence: **high**
@@ -77,22 +68,22 @@ Only bounded application/service evidence is retained here.
 
 ### Assessment summary
 
-Likely Amazon Fire TV or Fire TV Stick at 192.168.2.8, supported by Amazon vendor data, Nmap fingerprinting, and corroborated Amazon Fire TV DNS activity. Exact OS is not established.
+Likely an Amazon Fire TV or Fire TV Stick. Hostname, vendor, Nmap media-device fingerprint, and corroborated Amazon Fire TV DNS activity support the identity; the exact OS is not established.
 
 ### Confirmed facts
 
-- IP address is 192.168.2.8.
-- MAC vendor is Amazon Technologies.
-- Nmap identified an Amazon Fire TV or Kindle Paperwhite fingerprint with 99% accuracy and classified it as an embedded media device.
-- TCP port 8009 is open; the Nmap service label was omitted.
-- DNS telemetry from both configured DNS servers included Amazon Fire TV, Amazon Video, and Alexa endpoint signals.
-- No matching actionable Greenbone findings were reported for the current IP; this does not establish that the device is vulnerability-free.
+- The device IP is 192.168.2.151.
+- The recorded hostname is fire-stick.jameshouse.
+- The MAC vendor is Amazon Technologies.
+- TCP port 8009 is open.
+- Nmap identified the device as an Amazon media device with a 99% match for Amazon Fire TV or Kindle Paperwhite.
+- Corroborated DNS signals include Amazon Fire TV, Amazon Video, and Alexa endpoints.
+- No matching actionable Greenbone findings were reported for the current IP; this does not establish that the host is vulnerability-free.
 
 ### Inferences
 
-- The device is most likely an Amazon Fire TV or Fire TV Stick.
-- The device likely uses embedded Amazon device firmware, but the exact OS and version are unsupported by the supplied evidence.
-- NordVPN-related DNS activity is associated with the device's observed DNS signals, but its purpose is not established.
+- The device is most likely an Amazon Fire TV or Fire TV Stick rather than a Kindle Paperwhite, based on its hostname and Fire TV-specific DNS activity.
+- The device likely runs embedded Amazon device firmware, but the exact OS and version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -28,13 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `c4:65:16:79:58:08`
-- MAC-attributable originated connections: **none observed in this window**
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -54,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T13:00:41+01:00`
+- Assessed: `2026-10-29T13:02:13+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:65:16:79:58:08`
 - Identity confidence: **high**
@@ -64,24 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-HP DeskJet 2600 series network printer identified by corroborated HTTP service fingerprints, HP vendor data, hostname, and printer-specific Nmap matches. Exact firmware/OS is not established.
+HP DeskJet 2600 series network printer, identified by corroborated service product data, HP hostnames, and printer-specific Nmap fingerprints. Exact firmware/OS is not established.
 
 ### Confirmed facts
 
-- The device hostname is hp-printer.jameshouse, with telemetry hostname hp-printer.
-- The DHCP/router hostname is HP795808.
-- The recorded vendor is Hewlett Packard.
+- The device hostname is hp-printer.jameshouse and the DHCP hostname is HP795808.
+- The inventory vendor is Hewlett Packard.
 - Ports 80, 443, 631, 8080, and 9100 are open over TCP.
 - Ports 80, 443, 631, and 8080 expose corroborated HP DeskJet 2600 series printer HTTP configuration services.
-- The reported serial is CN95O878PS06PX.
+- The reported device serial is CN95O878PS06PX.
 - The TLS certificate identifies HP795808 as both subject and issuer common name.
-- Greenbone reported zero actionable findings matching this current IP; this is not proof that the device is vulnerability-free or fully scanned.
+- No matching actionable Greenbone findings were reported for 192.168.2.123; this does not prove the device is vulnerability-free.
+- DNS samples include HP printer-related domains such as xmpp009.hpeprint.com, chat.hpeprint.com, h10141.www1.hp.com, and ccc.hpeprint.com.
 
 ### Inferences
 
-- The device is an HP DeskJet 2600 series printer.
-- Nmap fingerprints suggest an embedded printer platform and include VxWorks-based matches, but they do not establish the exact operating system or firmware.
-- The observed HP-related DNS domains are consistent with HP printer connectivity, but are supporting rather than definitive identity evidence.
+- The device is an HP DeskJet 2600 series network printer.
+- The device likely uses embedded printer firmware; the exact operating system or firmware platform is not established.
+- Nmap suggests VxWorks-related printer fingerprints, but this is treated as an unconfirmed inference rather than the exact OS.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

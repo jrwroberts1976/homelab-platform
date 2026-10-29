@@ -39,18 +39,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `24:4b:fe:5e:cc:c8`
-- Observed IP address(es): `192.168.2.1`
-- Connections: **1,110**
-- Traffic sent: **6.1 MiB**
-- Traffic received: **130 B**
-- Top services: `dhcp` (7), `http` (1)
-- Top destination ports: `udp/5514` (358), `udp/9999` (286), `udp/36996` (144), `tcp/2869` (140), `udp/1900` (98), `udp/61562` (18)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
 |---|---|---|---|---|---|
@@ -68,36 +59,32 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T13:00:41+01:00`
+- Assessed: `2026-10-29T13:02:13+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `24:4b:fe:5e:cc:c8`
-- Identity confidence: **high**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-ASUS RT-AC86U router at 192.168.2.1, serving as the estate gateway, DHCP/AiMesh controller, and OpenVPN remote-access endpoint. Exact firmware/OS is not identified by the supplied evidence.
+192.168.2.180 is an online ASUS-vendor device reporting the hostname _gateway. No ports, services, DNS hints, or OS fingerprints were available, so its exact role and operating system remain unresolved.
 
 ### Confirmed facts
 
-- The canonical estate identifies this device as ASUS RT-AC86U with the name asus-router.
-- The canonical role is Router, DHCP, AiMesh controller and OpenVPN remote-access endpoint.
-- The inventory vendor is ASUSTek Computer and the inventory hostname is _gateway.
-- The device IP is 192.168.2.1 and it is currently online.
-- TCP/22 exposes Dropbear SSH protocol 2.0.
-- TCP/53 exposes Cloudflare public DNS.
-- TCP/80 is open; the Nmap service label is omitted.
-- TCP/8443 exposes HTTPS-alt with TLS.
-- The TLS certificate subject is jrwroberts1976.asuscomm.com and is issued by Let's Encrypt.
-- No actionable Greenbone findings match the current host IP in the supplied scan results.
+- The device IP is 192.168.2.180.
+- The observed hostname is _gateway.
+- The MAC vendor is ASUSTek Computer.
+- The device is marked online in inventory.
+- Nmap OS identification is incomplete and returned no OS matches.
+- No TCP or UDP ports were reported by Nmap.
+- No actionable Greenbone findings matched this IP in the supplied scan result.
 
 ### Inferences
 
-- The device is an embedded consumer-router platform rather than a general-purpose server.
-- The documented gateway role and router model provide high-confidence device identification.
-- The exact operating system or firmware version cannot be determined from the supplied evidence.
+- The _gateway hostname suggests a gateway or other network-appliance role.
+- The device likely uses embedded network-appliance firmware, but the exact operating system is unsupported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

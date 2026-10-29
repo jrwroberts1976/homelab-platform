@@ -29,18 +29,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `ec:91:61:9c:a4:45`
-- Observed IP address(es): `192.168.2.219`
-- Connections: **10,696**
-- Traffic sent: **1.3 GiB**
-- Traffic received: **1.6 GiB**
-- Top services: `ssl` (8255), `http` (1388), `quic` (854), `dns` (241), `dhcp` (51), `websocket` (3)
-- Top destination ports: `tcp/443` (7269), `tcp/58153` (1069), `udp/443` (885), `tcp/8443` (585), `tcp/80` (300), `udp/5355` (104)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -60,34 +51,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T13:00:41+01:00`
+- Assessed: `2026-10-29T13:02:13+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `ec:91:61:9c:a4:45`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a work laptop at 192.168.2.219. Microsoft/Windows Update DNS activity suggests a Windows-oriented endpoint, but no authoritative or Nmap OS evidence is available.
+Online client at 192.168.2.113 with DHCP hostname APL-PF5F6D28 and a Cloud Network Technology Singapore PTE. MAC vendor. DNS activity includes Microsoft and Windows Update delivery endpoints, but no ports, service evidence, authoritative OS, or Nmap OS match are available.
 
 ### Confirmed facts
 
-- The host IP is 192.168.2.219.
-- The recorded hostname is work-laptop.jameshouse; telemetry hostname is work-laptop.
-- The DHCP/router hostname is APL-PF5F6D28.
-- The recorded MAC address is ec:91:61:9c:a4:45.
-- The recorded vendor is Cloud Network Technology Singapore PTE.
-- DNS telemetry includes Windows Update and Microsoft delivery endpoints.
-- Nmap returned no OS matches and no port or service evidence.
-- Authoritative OS information is unavailable.
+- The device is online at 192.168.2.113.
+- The DHCP and inventory hostname is APL-PF5F6D28.
+- The recorded MAC vendor is Cloud Network Technology Singapore PTE.
+- Nmap OS identification is incomplete and returned no OS matches.
+- No TCP or UDP ports were reported by Nmap.
+- DNS observations included Windows Update and Microsoft delivery endpoints.
+- No matching actionable Greenbone findings were reported for the current IP.
 
 ### Inferences
 
-- The hostname indicates this is probably a work laptop.
-- The Windows Update DNS signals are consistent with a Windows-oriented endpoint, but they do not establish the installed operating system.
-- The differing DHCP hostname prevents higher-confidence device identification.
+- The DNS activity is compatible with a Windows-related client or software component, but it does not establish the device operating system.
+- The device identity and device class remain unresolved.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
