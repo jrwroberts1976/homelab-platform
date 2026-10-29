@@ -1,0 +1,220 @@
+---
+# SOURCE ONLY until separately approved. Root-owned /etc/homelab is deliberately
+# 0750; grant ONLY router-metrics-tunnel 'x' through it, using a named user ACL.
+# Never loosen 'other', change key contents/ownership, reload sshd, or create tunnel.
+- name: Safely grant service identity traverse-only ACL to existing router metrics key
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_metrics_acl_package_install_approved: false
+    router_metrics_acl_apply_approved: false
+    router_metrics_acl_user: router-metrics-tunnel
+    router_metrics_acl_expected_uid: 992
+    router_metrics_acl_dir: /etc/homelab
+    router_metrics_acl_key_dir: /etc/homelab/router-metrics-ssh
+    router_metrics_acl_private: /etc/homelab/router-metrics-ssh/id_ed25519
+
+  pre_tasks:
+    - name: Verify controller identity before connecting to monitor
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: acl_controller
+
+    - name: Refuse unapproved writes, check mode or unintended target
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_metrics_acl_package_install_approved | bool
+          - router_metrics_acl_apply_approved | bool
+          - acl_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "No remote mutation. Require exact monitor-01, admin-01 and two explicit approvals."
+      delegate_to: localhost
+      become: false
+
+    - name: Read live hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      register: acl_hostname
+      changed_when: false
+
+    - name: Read live monitor LAN interface
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: acl_lan
+      changed_when: false
+
+    - name: Refuse different monitor host
+      ansible.builtin.assert:
+        that:
+          - acl_hostname.stdout | trim == 'monitor-01'
+          - "'inet 192.168.2.52/' in acl_lan.stdout"
+
+    - name: Inspect parent and SSH key directory metadata
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ router_metrics_acl_dir }}"
+        - "{{ router_metrics_acl_key_dir }}"
+        - "{{ router_metrics_acl_private }}"
+      register: acl_paths
+
+    - name: Refuse changed ownership/modes, symlinks or nonregular key
+      ansible.builtin.assert:
+        that:
+          - acl_paths.results[0].stat.isdir | default(false)
+          - not (acl_paths.results[0].stat.islnk | default(false))
+          - acl_paths.results[0].stat.pw_name == 'root'
+          - acl_paths.results[0].stat.gr_name == 'root'
+          - acl_paths.results[0].stat.mode == '0750'
+          - acl_paths.results[1].stat.isdir | default(false)
+          - not (acl_paths.results[1].stat.islnk | default(false))
+          - acl_paths.results[1].stat.pw_name == 'root'
+          - acl_paths.results[1].stat.mode == '0755'
+          - acl_paths.results[2].stat.isreg | default(false)
+          - not (acl_paths.results[2].stat.islnk | default(false))
+          - acl_paths.results[2].stat.pw_name == router_metrics_acl_user
+          - acl_paths.results[2].stat.mode == '0600'
+
+    - name: Verify dedicated user account metadata without printing passwd entry
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_metrics_acl_user }}"]
+      register: acl_passwd
+      no_log: true
+      changed_when: false
+
+    - name: Refuse a different service identity
+      ansible.builtin.assert:
+        that:
+          - acl_passwd.stdout.split(':')[2] | int == router_metrics_acl_expected_uid
+          - acl_passwd.stdout.split(':')[5] == '/var/lib/router-metrics-tunnel'
+          - acl_passwd.stdout.split(':')[6] == '/usr/sbin/nologin'
+
+    - name: Simulate an ACL package-only apt transaction without changing system
+      ansible.builtin.command:
+        argv: [apt-get, -s, -o, APT::Install-Recommends=false, install, acl]
+      register: acl_apt_simulation
+      changed_when: false
+
+    - name: Refuse package removals or any package additions/upgrades beyond acl
+      ansible.builtin.assert:
+        that:
+          - acl_apt_simulation.rc == 0
+          - acl_apt_simulation.stdout | regex_search('(?m)^(Remv|Conflicts) ') is none
+          - (acl_apt_simulation.stdout | regex_findall('(?m)^Inst ([^ ]+)') | difference(['acl']) | length) == 0
+        fail_msg: "APT simulation changed beyond acl. No package install or permissions change allowed."
+
+  tasks:
+    - name: Install ONLY minimal POSIX ACL userspace utility package
+      ansible.builtin.apt:
+        name: acl
+        state: present
+        install_recommends: false
+        policy_rc_d: 101
+        lock_timeout: 60
+
+    - name: Read actual ACL after utility installation
+      ansible.builtin.command:
+        argv: [getfacl, -cp, "{{ router_metrics_acl_dir }}"]
+      register: acl_before
+      changed_when: false
+
+    - name: Refuse unexpected owner/group/other effective ACL baseline
+      ansible.builtin.assert:
+        that:
+          - "'user::rwx' in acl_before.stdout_lines"
+          - "'group::r-x' in acl_before.stdout_lines"
+          - "'other::---' in acl_before.stdout_lines"
+          - (acl_before.stdout_lines | select('match', '^user:router-metrics-tunnel:') | list | length) <= 1
+          - >-
+            (acl_before.stdout_lines | select('match', '^user:router-metrics-tunnel:')
+            | list | length == 0)
+            or ('user:router-metrics-tunnel:--x' in acl_before.stdout_lines)
+        fail_msg: "Unexpected pre-existing ACL or changed ownership. Stop and inspect before authorizing."
+
+    - name: Remember whether the intended ACL already existed
+      ansible.builtin.set_fact:
+        acl_already_set: "{{ 'user:router-metrics-tunnel:--x' in acl_before.stdout_lines }}"
+        acl_change_attempted: false
+
+    - name: Apply scoped ACL and verify service access with rollback on failure
+      block:
+        - name: Mark that new ACL attempt needs recovery on any failure
+          ansible.builtin.set_fact:
+            acl_change_attempted: true
+          when: not acl_already_set | bool
+
+        - name: Grant only execute/traverse for metrics user on /etc/homelab
+          ansible.builtin.command:
+            argv: [setfacl, -m, "u:router-metrics-tunnel:--x", "{{ router_metrics_acl_dir }}"]
+          changed_when: true
+          when: not acl_already_set | bool
+
+        - name: Read verified ACL after modification
+          ansible.builtin.command:
+            argv: [getfacl, -cp, "{{ router_metrics_acl_dir }}"]
+          register: acl_after
+          changed_when: false
+
+        - name: Require narrow named-user ACL with parent owner/group/other preserved
+          ansible.builtin.assert:
+            that:
+              - "'user:router-metrics-tunnel:--x' in acl_after.stdout_lines"
+              - "'user::rwx' in acl_after.stdout_lines"
+              - "'group::r-x' in acl_after.stdout_lines"
+              - "'other::---' in acl_after.stdout_lines"
+              - "'mask::r-x' in acl_after.stdout_lines"
+
+        - name: Confirm dedicated non-login user can now read its own key
+          ansible.builtin.command:
+            argv: [runuser, -u, "{{ router_metrics_acl_user }}", --, test, -r, "{{ router_metrics_acl_private }}"]
+          changed_when: false
+
+        - name: Confirm dedicated user can parse private key without exposing bytes
+          ansible.builtin.command:
+            argv: [runuser, -u, "{{ router_metrics_acl_user }}", --, ssh-keygen, -y, -P, "", -f, "{{ router_metrics_acl_private }}"]
+          changed_when: false
+          no_log: true
+
+        - name: Confirm key and directory have not been chmodded or reowned
+          ansible.builtin.stat:
+            path: "{{ item }}"
+            follow: false
+          register: acl_verify_stat
+          loop:
+            - "{{ router_metrics_acl_dir }}"
+            - "{{ router_metrics_acl_private }}"
+
+        - name: Assert original non-ACL filesystem modes remain protected
+          ansible.builtin.assert:
+            that:
+              - acl_verify_stat.results[0].stat.pw_name == 'root'
+              - acl_verify_stat.results[0].stat.gr_name == 'root'
+              - acl_verify_stat.results[0].stat.mode == '0750'
+              - acl_verify_stat.results[1].stat.pw_name == router_metrics_acl_user
+              - acl_verify_stat.results[1].stat.mode == '0600'
+
+      rescue:
+        - name: Remove only new named-user ACL when postflight fails
+          ansible.builtin.command:
+            argv: [setfacl, -x, "u:router-metrics-tunnel", "{{ router_metrics_acl_dir }}"]
+          when: (acl_change_attempted | default(false) | bool) and not (acl_already_set | default(false) | bool)
+
+        - name: Refuse to report successful deployment after failed validation
+          ansible.builtin.fail:
+            msg: "ACL change failed verification; attempted removal of only the newly added named ACL. Independently inspect access and host state."
+
+    - name: Report exact completed scope and next independently gated stages
+      ansible.builtin.debug:
+        msg:
+          - "Traverse-only named user ACL for router-metrics-tunnel: PASS"
+          - "Private SSH key bytes, mode 0600, owner unchanged; other access remains denied"
+          - "No router authorised_keys, SSH trust/pinning, sshd reload, tunnel, firewall, exporter listener or Prometheus configuration changed"
+          - "Remaining stages require separate verification and approvals"
