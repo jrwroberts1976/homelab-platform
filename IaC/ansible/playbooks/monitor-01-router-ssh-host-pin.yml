@@ -103,19 +103,37 @@
       changed_when: false
       no_log: true
 
-    - name: Reject unexpected host keys or ambiguous scan results
+    # ssh-keyscan may include a non-key diagnostic/banner on stdout even if
+    # it succeeds and returns exactly one valid host key. Never select by
+    # stdout_lines[0] or accept additional SSH key records. The definitive
+    # security check is the independently obtained physical-Pi fingerprint.
+    - name: Classify current-Pi ED25519 records without revealing raw scan output
+      ansible.builtin.set_fact:
+        host_pin_valid_records: >-
+          {{ host_pin_scan.stdout_lines
+             | select('match', '^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+$')
+             | list }}
+        host_pin_unexpected_key_records: >-
+          {{ host_pin_scan.stdout_lines
+             | select('match', '^\S+\s+ssh-\S+\s+\S+')
+             | reject('match', '^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+$')
+             | list }}
+      no_log: true
+
+    - name: Reject missing, duplicate, or conflicting router SSH host keys
       ansible.builtin.assert:
         that:
           - host_pin_scan.rc == 0
-          - host_pin_scan.stdout_lines | length == 1
-          - >-
-            (host_pin_scan.stdout_lines | select('match',
-            '^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+$') | list | length) == 1
-        fail_msg: "Router SSH scan did not return exactly one ED25519 key for 192.168.2.1."
+          - host_pin_valid_records | length == 1
+          - host_pin_unexpected_key_records | length == 0
+        fail_msg: >-
+          SSH scan rejected: require exactly one valid ED25519 host-key
+          record for 192.168.2.1 and no additional SSH key records.
+          Non-key stdout lines alone are not evidence of a conflicting key.
 
-    - name: Retain scanned host key for in-memory fingerprint verification only
+    - name: Retain only the verified-format host key for fingerprint validation
       ansible.builtin.set_fact:
-        host_pin_verified_line: "{{ host_pin_scan.stdout_lines[0] }}"
+        host_pin_verified_line: "{{ host_pin_valid_records[0] }}"
       no_log: true
 
     - name: Compute SHA256 from network-presented ED25519 public key

@@ -1,5 +1,14 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — monitor-01 SSH host-pin initial deployment stopped, filtered scan fix SOURCE ONLY
+
+After the operator fast-forwarded local `admin-01` main to `57cfec26` and both host-pin/rollback syntax checks passed, the user explicitly approved the live host-pin action **only**. The `monitor-01-router-ssh-host-pin.yml` writer stopped at `host_pin_scan.stdout_lines | length == 1`: `monitor-01 ok=10 changed=0 unreachable=0 failed=1 skipped=0 rescued=0`. The `known_hosts` trust pin **WAS NOT INSTALLED**. This is a safe gate failure, not a router-key mismatch.
+
+The operator's follow-up read-only diagnostic: `ssh-keyscan -T 5 -t ed25519 192.168.2.1` returned `rc=0`, `OUTPUT_LINES=2`, `VALID_ED25519_LINES=1`, `UNIQUE_FINGERPRINTS=1`, `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, `EXPECTED_FINGERPRINT_PRESENT=True`. The second line's type/content was not displayed, so do not invent it. The initial one-total-line check (and `stdout_lines[0]` assumption) were overly restrictive. A **source-only** correction on branch `fix/monitor-01-host-pin-ssh-keyscan-record-filter-20261029` filters for exactly one valid current-Pi ED25519 record, fails on any other recognisable SSH host-key record, and cryptographically matches the independent physical-Pi SHA256 fingerprint **before** any trust write. Additional non-key stdout may be tolerated. CI adds synthetic cases for banner, no key, duplicate and unexpected key. No weaker SSH verification, no router/monitor runtime changes, no auto-accept and no replacement keys.
+
+**Next**: CI check and source-only PR merge, `admin-01` sync/syntax check, then **fresh, explicit** approval before trying the corrected writer. The prior approval does not silently authorise another run. Pi `authorized_keys` and secure tunnel remain entirely separate, unapproved stages. See [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209) and [host pin runbook](docs/network/MONITOR-01-ROUTER-SSH-HOST-PIN-2026-10-29.md).
+
+
 ## 29 October 2026 — genuine Pi SSH host key verified from monitor-01; trust pin source STAGED, NOT EXECUTED
 
 The operator read physical `router-01`'s actual `/etc/ssh/ssh_host_ed25519_key.pub` fingerprint directly after Pi MAC and live LAN `192.168.2.1/24` identity checks **PASS**: `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`. From `monitor-01` the operator then read the network-presented ED25519 key via **read-only** ssh-keyscan and compared the SHA256 fingerprint: **`ROUTER_HOST_KEY_MATCH=PASS`**. The existing dedicated host pin for `192.168.2.1` was **MISSING**. These facts independently establish genuine network host identity *for this observed key*, not existing SSH trust. No remote key acceptance, connection auth, pinned trust or tunnel has been executed.
