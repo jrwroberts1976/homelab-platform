@@ -1,6 +1,34 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # monitor-01 — fingerprint-gated router-01 SSH host pin (29 October 2026)
 
+## CURRENT STATUS — successful live deployment (29 October 2026)
+
+**The host-key pin is LIVE on `monitor-01`**. The source-only preparation, first failed attempt and unpinned statements further below are preserved only as **historical** context and are superseded by this verified successful run. The Pi user authorised-key and monitoring tunnel remain separate **NOT DEPLOYED** work.
+
+After PR #228 merged as `af175185`, operator synced `admin-01` main and independently passed Ansible syntax checks for the corrected writer and rollback. With **fresh, explicit operator approval** for this trust pin only, the corrected writer's live output confirmed:
+
+```text
+TASK [Classify current-Pi ED25519 records without revealing raw scan output] ok
+TASK [Reject missing, duplicate, or conflicting router SSH host keys] ok
+TASK [Require exact independent physical-Pi fingerprint before touching known_hosts] ok
+TASK [Fail closed on conflicting or ambiguous existing router pins] ok
+TASK [Append only verified router key to existing dedicated trust file] changed
+TASK [Require exactly one correct router key usable by the service user] ok
+TASK [Require root-owned non-symlink trust file with preserved access mode] ok
+"Physical router ED25519 fingerprint matched: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI"
+"Pinned 192.168.2.1 host key usable by router-metrics-tunnel: PASS"
+PLAY RECAP monitor-01: ok=27 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+```
+
+The monitoring identity `router-metrics-tunnel` can read exactly the matching, pinned ED25519 host key from its protected `/etc/homelab/router-metrics-ssh/known_hosts`. The writer verified existing `root:root 0644` mode and the originally independently verified physical Pi fingerprint. There was no rollback. The **first** deployment had been stopped by an over-strict total `ssh-keyscan` stdout-line count (`changed=0`); this later corrected run **succeeded**.
+
+No on-router `authorized_keys`, SSH daemon, tunnel, packet filter, exporter listener or Prometheus change was made by this trust stage. Router `router-metrics` public-key authorisation was previously unconfigured. **Do not confuse host trust with a completed SSH connection or scraped metrics.** Further actions require separate reviewed Ansible/IaC and explicit approval.
+
+### Optional independent read-only postflight (not yet supplied by operator)
+
+From `admin-01`, inspect the existing entry *as the dedicated monitoring identity* without printing key material, check it matches the independently verified physical Pi SHA256 fingerprint, and verify the trust file remains protected. Do not accept a new host key or attempt an SSH login. Any postflight output should show only a PASS/FAIL summary and safe metadata.
+
+
 ## Live preflight failure and corrected source — 29 October 2026
 
 The operator synchronised `admin-01` to source `57cfec26`, and both writer and rollback syntax checks PASSED. After explicit live approval **for this host pin only**, the writer attempted to validate a network SSH scan but stopped **before any write**:
@@ -26,10 +54,10 @@ The scanner returned two stdout lines, but exactly one **valid** key line for th
 
 **Source-only correction:** classify key records before the preflight: demand exactly one syntactically valid `192.168.2.1 ssh-ed25519` record, refuse duplicate/missing or other recognisable SSH host-key records, and select **that** validated record rather than `stdout_lines[0]`. Non-key output alone is no longer a reason to abort. The **independently verified physical-Pi SHA256 fingerprint check remains mandatory and unchanged** before the writer ever touches `known_hosts`. CI includes synthetic extra-line, missing, duplicate and conflicting host-key tests.
 
-**Current live state remains UNPINNED.** The original approved writer failed `changed=0`; this corrective source PR must pass CI and new local syntax checks before a **fresh approval** to rerun the corrected live writer. Do not bypass the host fingerprint, disable host-key verification, trust a key automatically, add Pi authorised keys or start the tunnel.
+**HISTORICAL INITIAL FAILURE ONLY:** The original approved writer failed with `changed=0` before any pin; this was subsequently corrected and the fresh approved deployment succeeded (see live status above). Never bypass the host fingerprint, disable host-key verification, add Pi authorised keys or start the tunnel as part of this stage.
 
 
-**STATUS: SOURCE ONLY, NOT DEPLOYED.** This change does not authorise a Pi monitoring account, accept a host key, start a tunnel, modify sshd, enable exporter access, or change Prometheus. It must be separately approved and executed only after local syntax checks.
+**HISTORICAL SOURCE-ONLY STATUS (SUPERSEDED BY LIVE PASS ABOVE):** This runbook initially described an unexecuted host-trust change. The pin was subsequently approved and deployed successfully; no Pi monitoring account authorisation, tunnel, sshd, exporter access or Prometheus changes were included.
 
 ## Verified operator evidence
 
@@ -71,9 +99,9 @@ ansible-playbook -i inventory/hosts.yml \
 
 **Neither syntax check modifies hosts. Do not use the runtime command without separate user approval.**
 
-## Proposed live deployment — NOT AUTHORISED YET
+## Historical live deployment procedure — executed successfully with fresh approval
 
-Only after explicit user approval of host-key pinning on monitor-01:
+The operator gave explicit fresh approval and executed this procedure successfully. Retained as historical reference, **not permission for another run**:
 
 ```bash
 cd ~/projects/homelab-platform/IaC/ansible
@@ -100,7 +128,7 @@ ansible-playbook -i inventory/hosts.yml \
 
 ## Remaining separately reviewed IaC gates
 
-1. Pin the genuine Pi host key (this source-only step).
+1. Genuine Pi host key pin — **COMPLETE and live verified on monitor-01**.
 2. Separately authorise the verified existing monitor public key for Pi `router-metrics` without copying secrets, weakening its sshd policy, or reloading unrelated services.
 3. Design an SSH tunnel using strict pinned host verification, restricted account, and the Prometheus `monitoring_default` Docker bridge (`172.18.0.0/16`, gateway `172.18.0.1`); a forward on monitor host `127.0.0.1` does not automatically reach a container. Firewall scope and tunnel activation require separate approval. Never expose Pi TCP/9100 to WAN or general LAN.
 4. Verify live Prometheus node metrics/health and logs independently; reachability is not evidence of ingestion.
