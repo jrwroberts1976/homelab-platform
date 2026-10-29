@@ -1456,3 +1456,21 @@ Outstanding:
 - Reconcile the existing ASUS-specific monitoring pipeline.
 
 Do not activate before these checks are completed.
+
+### Live DHCP forwarding verified — 2026-10-29
+
+- Forwarder installed through Ansible on router-01.
+- Installation-only repeat: changed=0, failed=0.
+- Dedicated non-root account confirmed.
+- systemd IP restrictions tested: monitor-01 allowed,
+  alternate destination blocked (EPERM).
+- Service activated through approved Ansible playbook.
+- Forwarder and journalctl child running successfully.
+- dnsmasq, nftables and Unbound remained active.
+- First genuine DHCPACK received by monitor-01 at 21:17:17:
+  IP 192.168.2.198, MAC 16:c1:05:ad:4b:8a,
+  hostname james-s-A13.
+- Receiver currently writes to legacy rt-ac86u.log.
+- Loki/Grafana device pipeline integration not yet verified.
+- Forwarder currently enabled at boot.
+- Journal replay and delivery metrics remain outstanding.
