@@ -1,0 +1,64 @@
+---
+- name: Stage router metrics Docker relay recovery
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    recovery_role: ../roles/router_metrics_relay
+
+  tasks:
+    - name: Require explicit staging approval
+      ansible.builtin.assert:
+        that:
+          - recovery_stage_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Install relay reconciliation script
+      ansible.builtin.copy:
+        src: ../roles/router_metrics_relay/files/router-metrics-relay-reconcile.sh
+        dest: /usr/local/sbin/router-metrics-relay-reconcile
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install reconciliation systemd service
+      ansible.builtin.template:
+        src: ../roles/router_metrics_relay/templates/router-metrics-relay-reconcile.service.j2
+        dest: /etc/systemd/system/router-metrics-relay-reconcile.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install reconciliation timer
+      ansible.builtin.template:
+        src: ../roles/router_metrics_relay/templates/router-metrics-relay-reconcile.timer.j2
+        dest: /etc/systemd/system/router-metrics-relay-reconcile.timer
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd definitions
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Inspect timer state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-relay-reconcile.timer
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: timer_state
+      changed_when: false
+
+    - name: Require timer disabled and inactive
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in timer_state.stdout_lines"
+          - "'UnitFileState=disabled' in timer_state.stdout_lines"
+        success_msg: "RECOVERY_STAGING=PASS"

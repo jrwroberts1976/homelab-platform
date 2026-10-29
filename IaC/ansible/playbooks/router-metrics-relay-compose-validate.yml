@@ -1,0 +1,48 @@
+---
+- name: Validate router metrics relay Docker Compose configuration
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require correct host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Create temporary validation directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: router-relay-compose-
+      register: validation_dir
+
+    - name: Validate and clean up
+      block:
+        - name: Copy relay Compose definition
+          ansible.builtin.copy:
+            src: ../roles/router_metrics_relay/files/docker-compose.yml
+            dest: "{{ validation_dir.path }}/docker-compose.yml"
+            mode: "0600"
+
+        - name: Validate Docker Compose syntax
+          ansible.builtin.command:
+            argv:
+              - docker
+              - compose
+              - -f
+              - "{{ validation_dir.path }}/docker-compose.yml"
+              - config
+              - --quiet
+          changed_when: false
+
+        - name: Report validation result
+          ansible.builtin.debug:
+            msg: "ROUTER_RELAY_COMPOSE_VALIDATION=PASS"
+
+      always:
+        - name: Remove temporary validation directory
+          ansible.builtin.file:
+            path: "{{ validation_dir.path }}"
+            state: absent
+          when: validation_dir.path is defined

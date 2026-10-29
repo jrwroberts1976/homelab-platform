@@ -1347,3 +1347,24 @@ For **every** change we make:
 - Existing Prometheus and Docker configuration unchanged.
 - Remaining: container-side relay, Prometheus scrape job,
   end-to-end verification and boot persistence.
+
+### 2026-10-29 — router metrics Prometheus integration
+
+- Router Node Exporter scraped through restricted SSH forwarding.
+- monitor-01 tunnel: 127.0.0.1:19100.
+- Private Unix relay: /run/router-metrics-relay/metrics.sock.
+- Docker sidecar shares Prometheus network namespace.
+- Prometheus job router-node-exporter verified UP.
+- 34 other targets UP during independent verification.
+- Existing 192.168.2.220:9100 target DOWN; likely stale
+  docker-01 identity, requiring separate inventory reconciliation.
+- SSH tunnel and host Unix relay enabled at boot.
+- Docker relay recovery timer enabled and active.
+- Recovery tested by stopping only the relay container.
+- Reconciler confirmed healthy-container idempotence.
+- Prometheus container not restarted or recreated.
+- Original configuration backup retained at
+  /opt/homelab-router-metrics-relay/prometheus.yml.pre-router.
+- Guarded rollback playbook created; not executed.
+- Prometheus-container recreation recovery not independently
+  tested; do not claim that scenario verified.

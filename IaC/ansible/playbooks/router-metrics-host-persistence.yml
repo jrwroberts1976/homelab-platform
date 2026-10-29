@@ -1,0 +1,57 @@
+---
+- name: Enable persistent router metrics host services
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit approval and correct host
+      ansible.builtin.assert:
+        that:
+          - router_metrics_persistence_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Verify both services already running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - router-metrics-tunnel.service
+        - router-metrics-relay.service
+      register: running_services
+      changed_when: false
+
+    - name: Require all services active
+      ansible.builtin.assert:
+        that:
+          - running_services.results | map(attribute='stdout') | list == ['active', 'active']
+
+    - name: Enable existing services without restarting
+      ansible.builtin.systemd_service:
+        name: "{{ item }}"
+        enabled: true
+      loop:
+        - router-metrics-tunnel.service
+        - router-metrics-relay.service
+
+    - name: Inspect persistent state
+      ansible.builtin.command:
+        argv: [systemctl, show, "{{ item }}", -p, ActiveState, -p, UnitFileState]
+      loop:
+        - router-metrics-tunnel.service
+        - router-metrics-relay.service
+      register: verified
+      changed_when: false
+
+    - name: Require persistent and running services
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=active' in item.stdout_lines"
+          - "'UnitFileState=enabled' in item.stdout_lines"
+      loop: "{{ verified.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Report persistence
+      ansible.builtin.debug:
+        msg: "ROUTER_HOST_PERSISTENCE=PASS"

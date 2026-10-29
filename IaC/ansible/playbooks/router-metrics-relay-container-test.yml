@@ -1,0 +1,145 @@
+---
+- name: Test router metrics container relay
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    relay_compose: /opt/homelab-router-metrics-relay/docker-compose.yml
+    relay_project: router-metrics-relay-test
+
+  tasks:
+    - name: Require explicit test approval
+      ansible.builtin.assert:
+        that:
+          - relay_container_test_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Check host relay initial state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-relay.service
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: initial_relay
+      changed_when: false
+
+    - name: Require relay stopped and disabled
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in initial_relay.stdout_lines"
+          - "'UnitFileState=disabled' in initial_relay.stdout_lines"
+
+    - name: Require SSH tunnel active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-metrics-tunnel.service]
+      register: tunnel_state
+      changed_when: false
+      failed_when: tunnel_state.stdout | trim != 'active'
+
+    - name: Ensure no relay container already exists
+      ansible.builtin.command:
+        argv: [docker, container, inspect, router-metrics-relay]
+      register: existing_container
+      changed_when: false
+      failed_when: false
+
+    - name: Require isolated test starting point
+      ansible.builtin.assert:
+        that:
+          - existing_container.rc != 0
+
+    - name: Test and clean up relay
+      block:
+        - name: Start host Unix-socket relay
+          ansible.builtin.systemd_service:
+            name: router-metrics-relay.service
+            state: started
+            enabled: false
+
+        - name: Wait for private Unix socket
+          ansible.builtin.stat:
+            path: /run/router-metrics-relay/metrics.sock
+          register: relay_socket
+          until: relay_socket.stat.exists | default(false)
+          retries: 5
+          delay: 1
+
+        - name: Start isolated Docker relay
+          ansible.builtin.command:
+            argv:
+              - docker
+              - compose
+              - -p
+              - "{{ relay_project }}"
+              - -f
+              - "{{ relay_compose }}"
+              - up
+              - -d
+              - --no-deps
+          changed_when: true
+
+        - name: Test metrics inside Prometheus network namespace
+          ansible.builtin.shell: |
+            set -o pipefail
+            pid=$(docker inspect monitoring-prometheus-1 |
+              python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["State"]["Pid"])')
+            test "$pid" -gt 1
+            nsenter -t "$pid" -n curl -fsS --max-time 8 \
+              http://127.0.0.1:19101/metrics |
+              awk '/^node_exporter_build_info/ {found=1} END {exit !found}'
+          args:
+            executable: /bin/bash
+          register: relay_test
+          retries: 5
+          delay: 2
+          until: relay_test.rc == 0
+          changed_when: false
+
+        - name: Report successful integration
+          ansible.builtin.debug:
+            msg: "CONTAINER_TO_ROUTER_METRICS=PASS"
+
+      always:
+        - name: Stop and remove isolated relay container
+          ansible.builtin.command:
+            argv:
+              - docker
+              - compose
+              - -p
+              - "{{ relay_project }}"
+              - -f
+              - "{{ relay_compose }}"
+              - down
+          changed_when: true
+
+        - name: Stop host relay
+          ansible.builtin.systemd_service:
+            name: router-metrics-relay.service
+            state: stopped
+            enabled: false
+
+        - name: Verify relay stopped
+          ansible.builtin.command:
+            argv:
+              - systemctl
+              - show
+              - router-metrics-relay.service
+              - -p
+              - ActiveState
+              - -p
+              - UnitFileState
+          register: final_relay
+          changed_when: false
+
+        - name: Require safe final state
+          ansible.builtin.assert:
+            that:
+              - "'ActiveState=inactive' in final_relay.stdout_lines"
+              - "'UnitFileState=disabled' in final_relay.stdout_lines"
+            success_msg: "CONTAINER_RELAY_CLEANUP=PASS"
