@@ -1,0 +1,11 @@
+[Unit]
+Description=Run LAN presence discovery every ten minutes
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=10min
+Unit=homelab-lan-presence.service
+AccuracySec=1min
+
+[Install]
+WantedBy=timers.target

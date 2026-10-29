@@ -1,0 +1,44 @@
+---
+- name: Roll back Pi router DHCP log forwarding
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  vars:
+    router_dhcp_forwarder_rollback_approved: false
+    router_dhcp_forwarder_remove_files_approved: false
+    router_dhcp_forwarder_unit: homelab-router-dhcp-forwarder.service
+    router_dhcp_forwarder_directory: /usr/local/lib/homelab-router-dhcp-forwarder
+
+  tasks:
+    - name: Require explicit rollback approval and router identity
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_forwarder_rollback_approved | bool
+          - not ansible_check_mode
+          - ansible_facts.hostname == "raspberrypi"
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+        fail_msg: "STOP: rollback requires approval and verified router identity."
+
+    - name: Stop and disable only the DHCP forwarder
+      ansible.builtin.systemd_service:
+        name: "{{ router_dhcp_forwarder_unit }}"
+        state: stopped
+        enabled: false
+
+    - name: Remove DHCP forwarder systemd unit
+      ansible.builtin.file:
+        path: "/etc/systemd/system/{{ router_dhcp_forwarder_unit }}"
+        state: absent
+      when: router_dhcp_forwarder_remove_files_approved | bool
+
+    - name: Remove DHCP forwarder application directory
+      ansible.builtin.file:
+        path: "{{ router_dhcp_forwarder_directory }}"
+        state: absent
+      when: router_dhcp_forwarder_remove_files_approved | bool
+
+    - name: Reload systemd after file removal
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: router_dhcp_forwarder_remove_files_approved | bool

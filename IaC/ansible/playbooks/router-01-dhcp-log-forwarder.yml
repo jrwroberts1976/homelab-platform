@@ -1,0 +1,8 @@
+---
+- name: Install approved Pi router DHCP log forwarder
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  roles:
+    - router_dhcp_log_forwarder

@@ -1,0 +1,11 @@
+---
+lan_presence_sweep_allow_deploy: false
+lan_presence_sweep_enable_timer: false
+
+lan_presence_sweep_interface: eth0
+lan_presence_sweep_application_dir: /usr/local/lib/homelab-lan-presence
+lan_presence_sweep_state_dir: /var/lib/homelab-lan-presence
+lan_presence_sweep_state_file: "{{ lan_presence_sweep_state_dir }}/presence.json"
+
+lan_presence_sweep_metrics_dir: /var/lib/prometheus/node-exporter
+lan_presence_sweep_metrics_file: "{{ lan_presence_sweep_metrics_dir }}/homelab_lan_presence.prom"

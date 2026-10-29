@@ -1440,3 +1440,68 @@ OUTSTANDING:
   its DHCP lease at 23:18:32, retaining 192.168.2.195.
 - Reserve .195 through Ansible before future pool changes.
 - No DHCP pool exclusions have been deployed.
+
+### Historical monitoring recovery — 2026-10-29
+
+- Recovered three Grafana router-device dashboards.
+- Recovered LAN presence, router device events and Nmap worker
+  Ansible roles, source code, tests and playbooks.
+- Original recovery validation: 172 offline unit tests passed.
+- Three recovered Ansible playbooks passed syntax checks.
+- No recovered device-scanning roles or timers were deployed.
+- At recovery time, DHCP forwarding was not yet configured.
+  It was subsequently deployed and verified on router-01.
+- Further Grafana integration and monitoring validation remain pending.
+
+### Router DHCP forwarder implementation — 2026-10-29
+
+Original implementation: c5a00284
+Process cleanup hardening: 7355e494
+
+Purpose:
+- Forward filtered dnsmasq DHCPACK events from router-01
+  to monitor-01 at 192.168.2.52:5514.
+
+IaC:
+- Role: IaC/ansible/roles/router_dhcp_log_forwarder
+- Deploy: router-01-dhcp-log-forwarder.yml
+- Rollback: router-01-dhcp-log-forwarder-rollback.yml
+
+Validation:
+- Deployment and rollback syntax checks passed.
+- Non-root journal access verified.
+- systemd unit validation passed.
+- Tests cover filtering, transport, journal exit and cleanup.
+- Forwarder subsequently deployed and enabled on router-01.
+- Genuine DHCPACK delivery to monitor-01 verified.
+
+Outstanding:
+- Grafana and log pipeline integration.
+- Durable journal replay/cursor support.
+- Continued monitoring of forwarding reliability.
+
+### Live DHCP forwarding verified — 2026-10-29
+
+- Forwarder deployed through approved Ansible playbooks on router-01.
+- Installation-only repeat: changed=0, failed=0.
+- Dedicated non-root service account confirmed.
+- systemd IP restrictions tested: monitor-01 allowed;
+  an alternative destination was blocked (EPERM).
+- Forwarder enabled at boot and running successfully.
+- dnsmasq, nftables and Unbound remained active.
+- Genuine DHCPACK received by monitor-01 at 21:17:17:
+  192.168.2.198, MAC 16:c1:05:ad:4b:8a, james-s-A13.
+- Receiver writes to the legacy rt-ac86u.log.
+- Loki/Grafana integration remains unverified.
+- Journal replay and forwarding metrics remain outstanding.
+
+### Monitoring integration validation — 2026-10-29
+
+- Recovered monitoring code consolidated into an integration branch.
+- Offline unit tests: 186/186 passed.
+- Five Ansible playbook syntax checks passed.
+- Inventory review identified that inventory/hosts.yml does not
+  currently define router-01.
+- Legacy docker-01 entries remain in BirdNET, Komodo and monitoring groups.
+- Router inventory reconciliation is required before any deployment.
+- No monitoring roles, scans or services deployed by this integration.

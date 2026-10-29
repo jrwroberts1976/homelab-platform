@@ -1,0 +1,19 @@
+[Unit]
+Description=Homelab MAC-keyed device metrics publisher
+After=homelab-router-device-events.service
+ConditionPathExists={{ router_nmap_worker_collector_state }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+SupplementaryGroups={{ router_nmap_worker_inventory_group }}
+WorkingDirectory=/usr/local/lib/homelab-router-nmap-worker
+ExecStart=/usr/bin/python3 /usr/local/lib/homelab-router-nmap-worker/device_metrics_main.py --collector {{ router_nmap_worker_collector_state }} --profiles {{ router_nmap_worker_profile_state }} --output {{ router_nmap_worker_metrics_file }} --vendors /usr/share/nmap/nmap-mac-prefixes
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ router_nmap_worker_metrics_dir }}
+CapabilityBoundingSet=

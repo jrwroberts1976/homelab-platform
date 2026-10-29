@@ -1,0 +1,27 @@
+[Unit]
+Description=Homelab Router DHCPACK Log Forwarder
+After=systemd-journald.service network-online.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User={{ router_dhcp_forwarder_user }}
+Group={{ router_dhcp_forwarder_group }}
+SupplementaryGroups={{ router_dhcp_forwarder_journal_group }}
+ExecStart=/usr/bin/python3 {{ router_dhcp_forwarder_script }} --host {{ router_dhcp_forwarder_destination }} --port {{ router_dhcp_forwarder_port }}
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectControlGroups=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow={{ router_dhcp_forwarder_destination }}/32
+UMask=0077
+
+[Install]
+WantedBy=multi-user.target
