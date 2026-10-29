@@ -1,5 +1,7 @@
 # Documentation branch evidence archive
 
+<!-- estate-authority: IaC/inventory/estate.json -->
+
 Captured 29 October 2026.
 
 These patches preserve the branch-specific file changes
