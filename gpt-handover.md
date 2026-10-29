@@ -1,5 +1,17 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — monitor-01 router-01 SSH ED25519 host-key pin LIVE deployed, PASS
+
+**OPERATOR LIVE PROOF:** After PR #228 fixed initial two-line `ssh-keyscan` failure, operator synced `admin-01` main to `af175185`, confirmed writer and rollback Ansible syntax PASS, and provided **fresh explicit approval** for the host-key pin ONLY. The corrected `IaC/ansible/playbooks/monitor-01-router-ssh-host-pin.yml` then executed successfully on `monitor-01 192.168.2.52`:
+- Router SSH scan classification, no duplicate/conflicting key, exact SHA256 comparison to **direct physical Pi** fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` all PASS.
+- `TASK [Append only verified router key to existing dedicated trust file]`: **changed**.
+- Dedicated `router-metrics-tunnel` SSH host-pin lookup matches the verified key **PASS**.
+- Existing `root:root 0644` protected `/etc/homelab/router-metrics-ssh/known_hosts` ownership/mode and non-symlink status **PASS**.
+- Exact Ansible recap: **`monitor-01 ok=27 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`**. No rollback attempted. No router key authorisation, SSH authentication, sshd reload, tunnel, exporter/firewall or Prometheus change. The *earlier failed* attempt `ok=10 changed=0 failed=1` is resolved and superseded by this **verified successful live deployment**.
+
+**CURRENT STATE:** local restricted private-key access and public/private pair PASS; **dedicated SSH host-key trust for `router-01 192.168.2.1` is now LIVE and verified by writer postflight**. Next independent read-only postflight may confirm exact record/fingerprint from `monitor-01` as the service identity without printing raw keys or opening SSH. **The Pi `router-metrics` authorised keys remain absent** from previous audit; do not start SSH tunnel or claim router node metrics ingestion. Next changes require separate, reviewed, opt-in Ansible/IaC authorisation of existing monitor public key, then a container-aware SSH tunnel design. Pi Node Exporter remains `127.0.0.1:9100` only. See [host pin runbook](docs/network/MONITOR-01-ROUTER-SSH-HOST-PIN-2026-10-29.md) and [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+
+
 ## 29 October 2026 09:45 UTC — scheduled DHCP/router reconciliation checkpoint (GitHub read-only review)
 
 This is a **repository-only review**, not a new Pi/ASUS probe or deployment. Current operator-verified truth, from main-branch runbooks and `docs/architecture/CURRENT-STATE.md`: physical Pi `router-01` serves `192.168.2.1/24`, PPPoE default via `ppp0`, dnsmasq DHCP single `192.168.2.100–199` 24h pool and router/DNS `.2.1`, Unbound and nftables active. ASUS Home `192.168.2.2` is static AP/AiMesh controller. ASUS Bedroom Ethernet-backed AiMesh at `192.168.2.180` has a **LIVE verified MAC-bound dnsmasq reservation**, deployed by approved Ansible PR #219 with operator recap `ok=28 changed=9 failed=0` and independent postflight PASS. Third ASUS unused; old `.181` is NOT a verified current node. `media-01` is **online and DHCP-managed** at `192.168.2.195`, `NetworkManager ipv4.method=auto` and default route from DHCP via `.2.1`; its *fixed reservation* is still pending independent MAC verification and separate approval. **DO NOT apply historical DHCP split-range exclusion for `.181/.195`**. Current `router-01-dhcp-exclusion-preflight-readonly.yml` incorrectly assumes zero `dhcp-host` rules; do not run until updated to accept the real Bedroom `.180` reservation.
