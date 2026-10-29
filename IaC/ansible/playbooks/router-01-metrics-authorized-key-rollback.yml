@@ -58,8 +58,7 @@
       ansible.builtin.assert:
         that:
           - metrics_auth_rollback_monitor.stdout | trim == 'monitor-01'
-          - "':19100 ' not in metrics_auth_rollback_listeners.stdout"
-          - "':19100\n' not in metrics_auth_rollback_listeners.stdout"
+          - "':19100' not in metrics_auth_rollback_listeners.stdout"
         fail_msg: "A monitor-01 SSH forwarding listener may be active; rollback disallowed."
 
     - name: Verify physical router Ethernet MAC
