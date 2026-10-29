@@ -79,8 +79,9 @@ def forward_entries(lines, send_packet, hostname="router-01"):
 
 
 
+
 def run(host, port):
-    """Follow new DHCP journal events; fail if journalctl stops."""
+    """Forward new DHCP journal events, cleaning up journalctl on exit."""
     import socket
     import subprocess
 
@@ -93,21 +94,33 @@ def run(host, port):
         "--no-pager",
     ]
 
-    with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
-        with subprocess.Popen(
-            command,
-            stdout=subprocess.PIPE,
-            text=True,
-            bufsize=1,
-        ) as process:
+    process = None
+    try:
+        with socket.socket(socket.AF_INET, socket.SOCK_DGRAM) as sock:
+            process = subprocess.Popen(
+                command,
+                stdout=subprocess.PIPE,
+                text=True,
+                bufsize=1,
+            )
             forward_entries(
                 process.stdout,
                 lambda packet: sock.sendto(packet, (host, port)),
             )
-
             raise RuntimeError(
                 f"journalctl stream ended; status={process.poll()}"
             )
+    finally:
+        if process is not None:
+            if process.poll() is None:
+                process.terminate()
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    process.kill()
+                    process.wait(timeout=5)
+            if process.stdout is not None:
+                process.stdout.close()
 
 
 def main():

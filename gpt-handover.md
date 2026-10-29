@@ -1420,3 +1420,39 @@ For **every** change we make:
 - Outstanding: secure DHCP-only log forwarding, shared inventory group-ownership verification, monitoring integration and Grafana metric availability.
 - No recovered roles deployed, no timers enabled, no live scans initiated.
 - Production changes require separately approved Ansible execution.
+
+## Router DHCP journal forwarder — 2026-10-29
+
+Branch: feature/router-device-monitoring-recovery-20261029
+Initial implementation commit: c5a00284
+
+Purpose: forward filtered dnsmasq DHCPACK events from
+router-01 (192.168.2.1) to monitor-01 (192.168.2.52:5514).
+
+IaC components:
+- Role: IaC/ansible/roles/router_dhcp_log_forwarder
+- Deploy: IaC/ansible/playbooks/router-01-dhcp-log-forwarder.yml
+- Rollback: IaC/ansible/playbooks/router-01-dhcp-log-forwarder-rollback.yml
+
+Validation:
+- Deployment and rollback syntax checks passed.
+- Non-root access to the dnsmasq journal confirmed.
+- systemd unit rendered and passed local systemd-analyze verify.
+- Forwarder tests cover filtering, transport, journal exit
+  and subprocess cleanup.
+
+Safety:
+- Deployment disabled by default.
+- Activation requires separate explicit approval.
+- Dedicated non-root service account.
+- No deployment to router-01 has occurred.
+
+Outstanding:
+- Verify service sandbox restrictions on router-01.
+- Validate end-to-end UDP syslog delivery to monitor-01.
+- Test Ansible installation, update and rollback behaviour.
+- Verify shutdown under systemd.
+- Consider durable journal cursor/replay support.
+- Reconcile the existing ASUS-specific monitoring pipeline.
+
+Do not activate before these checks are completed.
