@@ -1452,3 +1452,30 @@ OUTSTANDING:
 - At recovery time, DHCP forwarding was not yet configured.
   It was subsequently deployed and verified on router-01.
 - Further Grafana integration and monitoring validation remain pending.
+
+### Router DHCP forwarder implementation — 2026-10-29
+
+Original implementation: c5a00284
+Process cleanup hardening: 7355e494
+
+Purpose:
+- Forward filtered dnsmasq DHCPACK events from router-01
+  to monitor-01 at 192.168.2.52:5514.
+
+IaC:
+- Role: IaC/ansible/roles/router_dhcp_log_forwarder
+- Deploy: router-01-dhcp-log-forwarder.yml
+- Rollback: router-01-dhcp-log-forwarder-rollback.yml
+
+Validation:
+- Deployment and rollback syntax checks passed.
+- Non-root journal access verified.
+- systemd unit validation passed.
+- Tests cover filtering, transport, journal exit and cleanup.
+- Forwarder subsequently deployed and enabled on router-01.
+- Genuine DHCPACK delivery to monitor-01 verified.
+
+Outstanding:
+- Grafana and log pipeline integration.
+- Durable journal replay/cursor support.
+- Continued monitoring of forwarding reliability.

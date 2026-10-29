@@ -13,7 +13,8 @@ class JournalExitTests(unittest.TestCase):
     def test_unexpected_clean_exit_is_failure(self):
         process = MagicMock()
         process.__enter__.return_value = process
-        process.stdout = iter([])
+        process.stdout = MagicMock()
+        process.stdout.__iter__.return_value = iter([])
         process.poll.return_value = 0
 
         with (
@@ -26,3 +27,5 @@ class JournalExitTests(unittest.TestCase):
                 RuntimeError, "journalctl stream ended"
             ):
                 module.run("192.168.2.52", 5514)
+
+        process.stdout.close.assert_called_once()
