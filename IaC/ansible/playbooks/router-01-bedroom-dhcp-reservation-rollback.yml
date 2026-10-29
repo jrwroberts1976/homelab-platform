@@ -1,0 +1,178 @@
+---
+# Explicit operator-approved restoration of only the Bedroom DHCP reservation.
+# No broad router.conf replacement; unrelated edits and DHCP leases preserved.
+# Requires same protected local MAC extra vars file as deployment.
+- name: Roll back only the Bedroom ASUS DHCP reservation
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_bedroom_reservation_rollback_approved: false
+    router_bedroom_reservation_restart_approved: false
+    router_bedroom_client_mac: ""
+    router_bedroom_dhcp_conf: /etc/dnsmasq.d/router.conf
+    router_bedroom_backup_dir: /var/backups/homelab-router/dnsmasq
+    router_bedroom_managed_marker: "# {mark} ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION"
+
+  pre_tasks:
+    - name: Verify trusted controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: bedroom_rollback_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require explicit rollback approval and correct controller/target
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_bedroom_reservation_rollback_approved | bool
+          - router_bedroom_reservation_restart_approved | bool
+          - bedroom_rollback_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - router_bedroom_client_mac is match('(?i)^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$')
+        fail_msg: "Refusing rollback: exact target, protected MAC file and two explicit approvals required."
+
+    - name: Verify physical Pi Ethernet identity
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: bedroom_rollback_pi_mac
+      changed_when: false
+
+    - name: Verify current Pi eth0 address
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: bedroom_rollback_pi_ipv4
+      changed_when: false
+
+    - name: Refuse rollback on unexpected target identity
+      ansible.builtin.assert:
+        that:
+          - bedroom_rollback_pi_mac.stdout | lower | trim == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in bedroom_rollback_pi_ipv4.stdout"
+
+    - name: Verify current router.conf contains exactly the approved managed block
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import pathlib, re, sys
+            mac = sys.stdin.read().strip().lower()
+            assert re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", mac)
+            text = pathlib.Path("/etc/dnsmasq.d/router.conf").read_text()
+            start = "# BEGIN ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION"
+            end = "# END ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION"
+            expected = "dhcp-host=" + mac + ",192.168.2.180"
+            assert text.count(start) == 1 and text.count(end) == 1
+            section = text.split(start, 1)[1].split(end, 1)[0]
+            assert section.strip().lower() == expected
+            assert text.count("dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h") == 1
+            lines = [x.strip() for x in text.splitlines() if x.strip() and not x.lstrip().startswith("#")]
+            assert sum(x.startswith("dhcp-host=") for x in lines) == 1
+            print("PASS: exact managed Bedroom reservation to remove")
+        stdin: "{{ router_bedroom_client_mac }}"
+      changed_when: false
+      no_log: true
+
+    - name: Verify dnsmasq service is active before rollback
+      ansible.builtin.command:
+        argv: [systemctl, is-active, dnsmasq]
+      register: bedroom_rollback_service_before
+      changed_when: false
+      failed_when: bedroom_rollback_service_before.rc != 0 or (bedroom_rollback_service_before.stdout | trim) != 'active'
+
+    - name: Confirm current dnsmasq syntax before rollback
+      ansible.builtin.command:
+        argv: [dnsmasq, --test]
+      changed_when: false
+
+  tasks:
+    - name: Remove only the approved reservation and restore DHCP service
+      block:
+        - name: Create private backup directory outside active dnsmasq includes
+          ansible.builtin.file:
+            path: "{{ router_bedroom_backup_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Read UTC backup timestamp
+          ansible.builtin.command:
+            argv: [date, -u, +%Y%m%dT%H%M%SZ]
+          register: bedroom_rollback_stamp
+          changed_when: false
+
+        - name: Back up current configuration before rollback
+          ansible.builtin.copy:
+            src: "{{ router_bedroom_dhcp_conf }}"
+            dest: "{{ router_bedroom_backup_dir }}/router.conf.before-bedroom-rollback-{{ bedroom_rollback_stamp.stdout }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0600'
+          register: bedroom_rollback_backup
+
+        - name: Remove only the managed Bedroom DHCP block
+          ansible.builtin.blockinfile:
+            path: "{{ router_bedroom_dhcp_conf }}"
+            marker: "{{ router_bedroom_managed_marker }}"
+            state: absent
+            backup: false
+          register: bedroom_removed
+          no_log: true
+
+        - name: Validate complete rolled-back dnsmasq configuration
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restart dnsmasq during approved rollback window
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when: bedroom_removed.changed | bool
+
+        - name: Confirm DHCP service active after rollback
+          ansible.builtin.command:
+            argv: [systemctl, is-active, dnsmasq]
+          register: bedroom_rollback_service_after
+          changed_when: false
+          failed_when: bedroom_rollback_service_after.rc != 0 or (bedroom_rollback_service_after.stdout | trim) != 'active'
+
+        - name: Display non-identifying rollback summary
+          ansible.builtin.debug:
+            msg:
+              result: "Bedroom reservation removed; original .100-.199 dynamic pool still active"
+              config: "{{ router_bedroom_dhcp_conf }}"
+              backup: "{{ bedroom_rollback_backup.dest }}"
+              leases: "Not edited"
+
+      rescue:
+        - name: Restore only the Bedroom managed block after rollback failure
+          ansible.builtin.blockinfile:
+            path: "{{ router_bedroom_dhcp_conf }}"
+            marker: "{{ router_bedroom_managed_marker }}"
+            insertafter: EOF
+            block: "dhcp-host={{ router_bedroom_client_mac | lower }},192.168.2.180"
+          when: bedroom_removed is defined and bedroom_removed.changed | default(false) | bool
+          no_log: true
+
+        - name: Validate restored configuration
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Attempt service recovery
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when: bedroom_removed is defined and bedroom_removed.changed | default(false) | bool
+
+        - name: Require operator inspection after rollback failure
+          ansible.builtin.fail:
+            msg: "Rollback failed; attempted reinsert of original reservation and dnsmasq recovery. Inspect service and protected backup before further work."
