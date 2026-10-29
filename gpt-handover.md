@@ -1314,3 +1314,19 @@ For **every** change we make:
 - This is a model test, not execution of the production rollback.
 - Real systemd reload/recovery and sandbox behaviour remain untested.
 - Production staging and activation remain blocked.
+
+### 2026-10-29 — router metrics tunnel runtime activated
+
+- Guarded unit installation completed successfully on monitor-01.
+- Actual staged-unit rollback completed successfully.
+- Unit reinstalled and activation tested.
+- Initial activation exposed an Ansible handling issue:
+  systemctl is-enabled returns rc=1 for disabled units.
+- Corrected activation playbook and repeated successfully.
+- Runtime verification PASS:
+  service active, disabled at boot, listener 127.0.0.1:19100,
+  Node Exporter metrics accessible through restricted SSH.
+- Router Node Exporter remains loopback-only.
+- Prometheus and Docker networking not yet modified.
+- Remaining: secured Prometheus connectivity, monitoring verification,
+  persistent tunnel activation decision, CI and PR review.
