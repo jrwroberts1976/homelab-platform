@@ -1,5 +1,14 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — approved router admin-01 reservation writer LIVE PASS, host still observed .127
+
+User approved source-staged fixed admin-01 DHCP reservation plus dnsmasq restart following successful read-only operator preflight: router-01 **ok=17 changed=0 failed=0**. Scope: mapping b8:27:eb:e8:36:cd -> 192.168.2.48 on router-01, preserving the existing .180 ASUS reservation and the .100-.199 dynamic pool; accepted the small residual possibility of an offline static-IP host at .48. Prior router read-only: no .48 lease, zero ping replies, neighbour INCOMPLETE, dnsmasq --test OK.
+
+User's live Ansible writer output ends with temporary candidate cleanup and **router-01 ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. As deployed playbook had offline syntax staging, protected backup, scoped marked configuration write, dnsmasq restart and built-in postflight, successful recap means those stages did not fail. Changes count includes temporary work, not eight permanent router changes. **An independent router postflight is pending**, and no user output yet confirms admin-01 DHCP renewal to .48.
+
+**Current last verified admin-01 address is 192.168.2.127, NetworkManager DHCP.** No administrator interface cutover or network service restart was approved beyond router dnsmasq. Keep admin host at .127 pending independent live router checks and *new* approval for console-backed NetworkManager renewal and Windows SSH reconnection. Do not update inventory/DNS to assert .48 prematurely. See router issue #206 and dated runbook docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md.
+
+
 ## 29 October 2026 — admin-01 DHCP address drift; safe reservation IaC STAGED ONLY
 
 **Operational incident/recovery:** The admin-01 physical Raspberry Pi 3 (eth0 MAC `b8:27:eb:e8:36:cd`) stopped responding at its documented `192.168.2.48`; ASUS `.2.2`, router `.2.1` and monitor `.2.52` were reachable. After operator reboot, SSH to `admin-01` at **`192.168.2.127`** works. NetworkManager active with `netplan-eth0`, `ipv4.method=auto`, DHCP server identifier `192.168.2.1`, 24h lease; Netplan has two separate DHCP YAML files, only one observed active NM profile. Router's `dnsmasq` active, dynamic pool `.100-.199`, existing independent ASUS reservation `24:4b:fe:5e:cc:c8 -> .180`, but **no admin-01 reservation**; lease record explicitly gives admin MAC -> `.127`. Router direct read-only target `.48` check: no lease, 3 ping losses, `ip neigh INCOMPLETE`, `dnsmasq --test` PASS. This does not exclude an offline statically assigned .48; no causal evidence ties address drift to restricted router-metrics SSH key installation.
