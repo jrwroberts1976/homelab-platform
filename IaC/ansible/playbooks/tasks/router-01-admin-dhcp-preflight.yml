@@ -1,0 +1,159 @@
+---
+# Shared READ-ONLY preflight: included by the standalone preflight and approval-gated writer.
+# No service restarts, lease edits, network changes or configuration changes.
+- name: Identify admin controller without escalation
+  ansible.builtin.command:
+    argv: [hostname]
+  delegate_to: localhost
+  become: false
+  register: admin_res_controller
+  check_mode: false
+  changed_when: false
+
+- name: Read controller eth0 hardware MAC
+  ansible.builtin.command:
+    argv: [cat, /sys/class/net/eth0/address]
+  delegate_to: localhost
+  become: false
+  register: admin_res_controller_mac
+  check_mode: false
+  changed_when: false
+
+- name: Read controller eth0 IPv4
+  ansible.builtin.command:
+    argv: [ip, -4, -o, addr, show, dev, eth0]
+  delegate_to: localhost
+  become: false
+  register: admin_res_controller_ip
+  check_mode: false
+  changed_when: false
+
+- name: Refuse unexpected controller and target identity or admin address
+  ansible.builtin.assert:
+    that:
+      - admin_res_controller.stdout | trim == 'admin-01'
+      - admin_res_controller_mac.stdout | trim | lower == 'b8:27:eb:e8:36:cd'
+      - "'inet 192.168.2.127/24' in admin_res_controller_ip.stdout"
+      - inventory_hostname == 'router-01'
+      - ansible_host == '192.168.2.1'
+    fail_msg: "STOP: admin controller/IP or physical-router inventory differs; re-review before touching DHCP."
+
+- name: Verify actual router eth0 MAC
+  ansible.builtin.command:
+    argv: [cat, /sys/class/net/eth0/address]
+  register: admin_res_router_mac
+  check_mode: false
+  changed_when: false
+
+- name: Verify router eth0 IPv4
+  ansible.builtin.command:
+    argv: [ip, -4, -o, addr, show, dev, eth0]
+  register: admin_res_router_ip
+  check_mode: false
+  changed_when: false
+
+- name: Verify WAN default route remains PPPoE
+  ansible.builtin.command:
+    argv: [ip, -4, route, show, default]
+  register: admin_res_default
+  check_mode: false
+  changed_when: false
+
+- name: Refuse unexpected physical router LAN or WAN
+  ansible.builtin.assert:
+    that:
+      - admin_res_router_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+      - "'inet 192.168.2.1/24' in admin_res_router_ip.stdout"
+      - "'ppp0' in admin_res_default.stdout"
+
+- name: Confirm router infrastructure services remain active
+  ansible.builtin.command:
+    argv: [systemctl, is-active, "{{ item }}"]
+  loop: [dnsmasq, unbound, router-pppoe, nftables]
+  register: admin_res_service_states
+  check_mode: false
+  changed_when: false
+  failed_when: admin_res_service_states.rc != 0 or (admin_res_service_states.stdout | trim) != 'active'
+
+- name: Confirm live dnsmasq configuration include
+  ansible.builtin.command:
+    argv: [pgrep, -a, -x, dnsmasq]
+  register: admin_res_dnsmasq_process
+  check_mode: false
+  changed_when: false
+
+- name: Verify expected dnsmasq fragment directory is active
+  ansible.builtin.assert:
+    that:
+      - "'-7 /etc/dnsmasq.d,' in admin_res_dnsmasq_process.stdout"
+    fail_msg: "STOP: running dnsmasq may not be loading the reviewed fragment."
+
+- name: List active dnsmasq fragment filenames
+  ansible.builtin.command:
+    argv: [find, /etc/dnsmasq.d, -maxdepth, '1', -type, f, -printf, '%f\n']
+  register: admin_res_fragment_list
+  check_mode: false
+  changed_when: false
+
+- name: Refuse unreviewed dnsmasq fragments
+  ansible.builtin.assert:
+    that:
+      - "(admin_res_fragment_list.stdout_lines | sort | list) == ['README', 'router.conf']"
+    fail_msg: "STOP: unexpected dnsmasq fragments; review before proceeding."
+
+- name: Inspect current DHCP directives and live lease without changes
+  ansible.builtin.command:
+    argv:
+      - python3
+      - -c
+      - |
+        from pathlib import Path
+        import time
+        top = Path('/etc/dnsmasq.conf').read_text()
+        router = Path('/etc/dnsmasq.d/router.conf').read_text()
+        lines = [s.strip() for s in (top + '\n' + router).splitlines()
+                 if s.strip() and not s.lstrip().startswith('#')]
+        range_line = 'dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h'
+        bedroom = 'dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180'
+        assert [s for s in lines if s.startswith('dhcp-range=')] == [range_line], 'DHCP range differs'
+        assert [s for s in lines if s.startswith('dhcp-host=')] == [bedroom], 'Existing reservation differs'
+        forbidden = ('dhcp-hostsfile=', 'dhcp-hostsdir=', 'dhcp-ignore=',
+                     'read-ethers', 'conf-file=', 'conf-dir=')
+        assert not any(s.startswith(forbidden) for s in lines), 'Additional config source'
+        for s in ('interface=eth0', 'bind-dynamic', 'dhcp-authoritative',
+                  'dhcp-option=option:router,192.168.2.1',
+                  'dhcp-option=option:dns-server,192.168.2.1'):
+            assert s in lines, 'Required policy differs: ' + s
+        leases = [s.split() for s in Path('/var/lib/misc/dnsmasq.leases').read_text().splitlines()]
+        assert not any(len(s) >= 3 and s[2] == '192.168.2.48' for s in leases), 'Target .48 leased'
+        admin = [s for s in leases if len(s) >= 4 and
+                 (s[1].lower() == 'b8:27:eb:e8:36:cd' or s[3] == 'admin-01')]
+        assert len(admin) == 1, 'Admin lease missing, duplicate or conflicting'
+        assert admin[0][1].lower() == 'b8:27:eb:e8:36:cd', 'Admin MAC mismatch'
+        assert admin[0][2] == '192.168.2.127', 'Admin lease no longer at .127'
+        assert admin[0][3] == 'admin-01', 'Admin hostname mismatch'
+        assert int(admin[0][0]) > time.time(), 'Admin lease expired'
+        print('ADMIN_DHCP_PREFLIGHT=PASS')
+        print('ADMIN_CURRENT_IP=192.168.2.127')
+        print('ADMIN_PROPOSED_IP=192.168.2.48')
+        print('DYNAMIC_POOL_AND_EXISTING_180_RESERVATION=UNCHANGED')
+  register: admin_res_policy_inspection
+  check_mode: false
+  changed_when: false
+
+- name: Verify existing dnsmasq syntax without restart
+  ansible.builtin.command:
+    argv: [dnsmasq, --test]
+  register: admin_res_original_syntax
+  check_mode: false
+  changed_when: false
+
+- name: Report read-only safety findings
+  ansible.builtin.debug:
+    msg:
+      state: "Admin-01 observed at .127; target .48 has no dnsmasq lease"
+      admin_mac: "b8:27:eb:e8:36:cd"
+      original_pool: "192.168.2.100-199"
+      existing_180_reservation: "preserved"
+      caveat: "No lease/no ping/INCOMPLETE ARP alone cannot exclude an offline device statically configured at .48."
+      writes: "NONE"
