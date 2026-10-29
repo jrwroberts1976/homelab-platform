@@ -1,0 +1,33 @@
+---
+- name: Clean up redundant Pi-hole DNS cutover backup
+  hosts: router-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Read preserved recovery backup
+      ansible.builtin.slurp:
+        src: /var/backups/router-01-pihole-dns-before.conf
+      register: recovery
+
+    - name: Read redundant Ansible backup
+      ansible.builtin.slurp:
+        src: /etc/dnsmasq.d/router.conf.7956.2026-10-29@21:41:05~
+      register: redundant
+
+    - name: Read active DHCP configuration
+      ansible.builtin.slurp:
+        src: /etc/dnsmasq.d/router.conf
+      register: active
+
+    - name: Verify backup identity and active DNS
+      ansible.builtin.assert:
+        that:
+          - recovery.content == redundant.content
+          - "'dhcp-option=option:dns-server,192.168.2.1' in (recovery.content | b64decode)"
+          - "'dhcp-option=option:dns-server,192.168.2.51,192.168.2.50' in (active.content | b64decode)"
+          - "(active.content | b64decode) == ((recovery.content | b64decode) | replace('dhcp-option=option:dns-server,192.168.2.1', 'dhcp-option=option:dns-server,192.168.2.51,192.168.2.50'))"
+
+    - name: Remove verified redundant backup only
+      ansible.builtin.file:
+        path: /etc/dnsmasq.d/router.conf.7956.2026-10-29@21:41:05~
+        state: absent

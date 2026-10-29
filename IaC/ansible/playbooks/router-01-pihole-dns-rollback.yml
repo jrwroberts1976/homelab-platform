@@ -1,0 +1,68 @@
+---
+- name: Restore router DHCP DNS advertisement
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  vars:
+    dns_rollback_approved: false
+    dns_rollback_restart_approved: false
+    dns_config: /etc/dnsmasq.d/router.conf
+    dns_backup: /var/backups/router-01-pihole-dns-before.conf
+    dns_old: "dhcp-option=option:dns-server,192.168.2.1"
+    dns_new: "dhcp-option=option:dns-server,192.168.2.51,192.168.2.50"
+
+  tasks:
+    - name: Verify rollback approval and router identity
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - dns_rollback_approved | bool
+          - dns_rollback_restart_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+
+    - name: Read rollback backup
+      ansible.builtin.slurp:
+        src: "{{ dns_backup }}"
+      register: backup
+
+    - name: Read current configuration
+      ansible.builtin.slurp:
+        src: "{{ dns_config }}"
+      register: current
+
+    - name: Validate exact rollback contents
+      ansible.builtin.assert:
+        that:
+          - "((backup.content | b64decode).splitlines() | select('equalto', dns_old) | list | length) == 1"
+          - "(current.content | b64decode) == ((backup.content | b64decode) | replace(dns_old, dns_new))"
+        fail_msg: "STOP: live config or rollback backup differs from expected."
+
+    - name: Restore original configuration and restart DHCP
+      block:
+        - name: Restore backed-up router configuration
+          ansible.builtin.copy:
+            dest: "{{ dns_config }}"
+            content: "{{ backup.content | b64decode }}"
+            owner: root
+            group: root
+            mode: '0644'
+
+        - name: Validate restored dnsmasq configuration
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restart dnsmasq after restoration
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+
+        - name: Verify DHCP service is active
+          ansible.builtin.command:
+            argv: [systemctl, is-active, dnsmasq]
+          register: dhcp_status
+          changed_when: false
+          failed_when: dhcp_status.stdout | trim != 'active'

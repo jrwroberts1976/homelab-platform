@@ -117,8 +117,10 @@
           - "'bind-dynamic' in (router_dhcp_router_config.content | b64decode)"
           - "'dhcp-authoritative' in (router_dhcp_router_config.content | b64decode)"
           - "'dhcp-option=option:router,192.168.2.1' in (router_dhcp_router_config.content | b64decode)"
-          - "'dhcp-option=option:dns-server,192.168.2.1' in (router_dhcp_router_config.content | b64decode)"
-          - "(((router_dhcp_parent_config.content | b64decode) ~ (router_dhcp_router_config.content | b64decode)) | regex_findall('(?m)^\\s*(?:dhcp-host|dhcp-ignore|dhcp-hostsfile|dhcp-hostsdir|read-ethers|conf-file|conf-dir)\\s*(?:=|$)')) | length == 0"
+          - "'dhcp-option=option:dns-server,192.168.2.51,192.168.2.50' in (router_dhcp_router_config.content | b64decode)"
+          - "((router_dhcp_router_config.content | b64decode) | regex_findall('(?m)^dhcp-host=.*$') | sort) == (['dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180', 'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48'] | sort)"
+          - "(((router_dhcp_parent_config.content | b64decode) ~ (router_dhcp_router_config.content | b64decode)) | regex_findall('(?m)^\\s*(?:dhcp-ignore|dhcp-hostsfile|dhcp-hostsdir|read-ethers|conf-file|conf-dir)\\s*(?:=|$)')) | length == 0"
+          - "((router_dhcp_parent_config.content | b64decode) | regex_findall('(?m)^\\s*dhcp-host\\s*=')) | length == 0"
           - "((router_dhcp_parent_config.content | b64decode) | regex_findall('(?m)^\\s*dhcp-range\\s*=')) | length == 0"
         fail_msg: "Unexpected active DHCP or reservation directives. Stop without modifying the router."
 
