@@ -1,0 +1,209 @@
+---
+# SEPARATE EXPLICIT APPROVAL. Remove only the exact managed authorisation,
+# and only after independent confirmation no SSH tunnel depends on it.
+# Run from admin-01 with BOTH inventories (router baseline + main hosts).
+# Does not remove/rotate any SSH private key, restart sshd or edit firewall.
+- name: Safely revoke only the dedicated monitor-01 metrics public-key authorisation
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_metrics_authorize_rollback_approved: false
+    router_metrics_authorize_no_active_tunnel_verified: false
+    router_metrics_authorize_expected_fingerprint: "SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY"
+    router_metrics_authorize_home: /var/lib/router-metrics
+    router_metrics_authorize_dir: /var/lib/router-metrics/.ssh
+    router_metrics_authorize_file: /var/lib/router-metrics/.ssh/authorized_keys
+
+  pre_tasks:
+    - name: Verify admin Ansible controller
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: metrics_auth_rollback_controller
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse unapproved revocation or unexpected network assets
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_metrics_authorize_rollback_approved | bool
+          - router_metrics_authorize_no_active_tunnel_verified | bool
+          - metrics_auth_rollback_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - "'monitor-01' in hostvars"
+          - hostvars['monitor-01'].ansible_host == '192.168.2.52'
+        fail_msg: "Missing explicit rollback / no-active-tunnel approval or wrong assets."
+      delegate_to: localhost
+      become: false
+
+    - name: Read current monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: monitor-01
+      register: metrics_auth_rollback_monitor
+      changed_when: false
+
+    - name: Read monitor forwarding TCP listeners without modifying them
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      delegate_to: monitor-01
+      register: metrics_auth_rollback_listeners
+      changed_when: false
+
+    - name: Fail closed if monitoring forward appears active
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_rollback_monitor.stdout | trim == 'monitor-01'
+          - "':19100 ' not in metrics_auth_rollback_listeners.stdout"
+          - "':19100\n' not in metrics_auth_rollback_listeners.stdout"
+        fail_msg: "A monitor-01 SSH forwarding listener may be active; rollback disallowed."
+
+    - name: Verify physical router Ethernet MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: metrics_auth_rollback_mac
+      changed_when: false
+
+    - name: Verify physical router LAN IP
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: metrics_auth_rollback_lan
+      changed_when: false
+
+    - name: Require physical Pi identity and exact router LAN
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_rollback_mac.stdout | trim == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in metrics_auth_rollback_lan.stdout"
+
+    - name: Read restricted router account identity
+      ansible.builtin.command:
+        argv: [getent, passwd, router-metrics]
+      register: metrics_auth_rollback_user
+      changed_when: false
+      no_log: true
+
+    - name: Read restricted router account primary GID
+      ansible.builtin.command:
+        argv: [id, -g, router-metrics]
+      register: metrics_auth_rollback_gid
+      changed_when: false
+
+    - name: Refuse router service account identity drift
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_rollback_user.stdout.split(':')[2] | int == 999
+          - metrics_auth_rollback_user.stdout.split(':')[5] == router_metrics_authorize_home
+          - metrics_auth_rollback_user.stdout.split(':')[6] == '/usr/sbin/nologin'
+
+    - name: Check router service SSH path metadata without following symlinks
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ router_metrics_authorize_home }}"
+        - "{{ router_metrics_authorize_dir }}"
+        - "{{ router_metrics_authorize_file }}"
+        - "{{ router_metrics_authorize_dir }}/authorized_keys2"
+      register: metrics_auth_rollback_paths
+
+    - name: Require account home and managed paths have not been replaced
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_rollback_paths.results[0].stat.isdir | default(false)
+          - not (metrics_auth_rollback_paths.results[0].stat.islnk | default(false))
+          - metrics_auth_rollback_paths.results[0].stat.uid == 999
+          - metrics_auth_rollback_paths.results[0].stat.mode == '0700'
+          - >-
+            (not (metrics_auth_rollback_paths.results[1].stat.exists | default(false)))
+            or (metrics_auth_rollback_paths.results[1].stat.isdir | default(false)
+                and not (metrics_auth_rollback_paths.results[1].stat.islnk | default(false))
+                and metrics_auth_rollback_paths.results[1].stat.uid == 999
+                and metrics_auth_rollback_paths.results[1].stat.gid == metrics_auth_rollback_gid.stdout | int
+                and metrics_auth_rollback_paths.results[1].stat.mode == '0700')
+          - >-
+            (not (metrics_auth_rollback_paths.results[2].stat.exists | default(false)))
+            or (metrics_auth_rollback_paths.results[2].stat.isreg | default(false)
+                and not (metrics_auth_rollback_paths.results[2].stat.islnk | default(false))
+                and metrics_auth_rollback_paths.results[2].stat.uid == 999
+                and metrics_auth_rollback_paths.results[2].stat.gid == metrics_auth_rollback_gid.stdout | int
+                and metrics_auth_rollback_paths.results[2].stat.mode == '0600')
+          - not (metrics_auth_rollback_paths.results[3].stat.exists | default(false))
+        fail_msg: "Unexpected SSH directory, key file or authorized_keys2. No deletion permitted."
+
+    - name: Read existing restricted authorised-key contents privately
+      ansible.builtin.slurp:
+        src: "{{ router_metrics_authorize_file }}"
+      register: metrics_auth_rollback_file_contents
+      when: metrics_auth_rollback_paths.results[2].stat.exists | default(false)
+      no_log: true
+
+    - name: Extract existing single authorised-key line into memory
+      ansible.builtin.set_fact:
+        metrics_auth_rollback_line: "{{ metrics_auth_rollback_file_contents.content | b64decode | trim }}"
+      when: metrics_auth_rollback_paths.results[2].stat.exists | default(false)
+      no_log: true
+
+    - name: Require exactly one original restricted key record and no unrelated text
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_rollback_line is match('^from="192\.168\.2\.52",restrict,port-forwarding,permitopen="127\.0\.0\.1:9100" ssh-ed25519 [A-Za-z0-9+/=]+ router-metrics-tunnel@monitor-01$')
+          - metrics_auth_rollback_file_contents.content | b64decode == metrics_auth_rollback_line + '\n'
+        fail_msg: "File has unexpected/multiple authorisations; refuse deletion."
+      when: metrics_auth_rollback_paths.results[2].stat.exists | default(false)
+      no_log: true
+
+    - name: Cryptographically verify the existing managed public key before removing it
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "-", -E, sha256]
+        stdin: "ssh-ed25519 {{ metrics_auth_rollback_line.split()[2] }}\n"
+      register: metrics_auth_rollback_fingerprint
+      changed_when: false
+      when: metrics_auth_rollback_paths.results[2].stat.exists | default(false)
+      no_log: true
+
+    - name: Require exact independently trusted monitoring public key fingerprint
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_rollback_fingerprint.rc == 0
+          - metrics_auth_rollback_fingerprint.stdout.split()[1] == router_metrics_authorize_expected_fingerprint
+        fail_msg: "Authorised key fingerprint changed; preserve for manual review."
+      when: metrics_auth_rollback_paths.results[2].stat.exists | default(false)
+
+  tasks:
+    - name: Revoke only the singly verified, account-specific authorisation
+      ansible.builtin.file:
+        path: "{{ router_metrics_authorize_file }}"
+        state: absent
+      when: metrics_auth_rollback_paths.results[2].stat.exists | default(false)
+      no_log: true
+
+    - name: Delete only an empty service SSH directory after key revocation
+      ansible.builtin.command:
+        argv: [rmdir, "{{ router_metrics_authorize_dir }}"]
+      register: metrics_auth_rollback_rmdir
+      changed_when: metrics_auth_rollback_rmdir.rc == 0
+      failed_when: false
+      when: metrics_auth_rollback_paths.results[1].stat.exists | default(false)
+
+    - name: Verify managed key file absent after rollback
+      ansible.builtin.stat:
+        path: "{{ router_metrics_authorize_file }}"
+        follow: false
+      register: metrics_auth_rollback_postfile
+
+    - name: Confirm scoped revocation completed without touching other SSH identities
+      ansible.builtin.assert:
+        that:
+          - not (metrics_auth_rollback_postfile.stat.exists | default(false))
+
+    - name: Report exact revocation scope
+      ansible.builtin.debug:
+        msg:
+          - "Single fingerprint-verified router-metrics public-key authorisation removed or already absent: PASS"
+          - "Empty service .ssh directory removed only if rmdir allowed; unrelated files remain preserved"
+          - "No sshd restart/reload, private keys, tunnel, firewall, Node Exporter or Prometheus changed"
