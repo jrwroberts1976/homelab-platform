@@ -73,7 +73,23 @@ Do not run cloud-stack.yml as a routine HTTPS repair.
 - Hook checks the renewed certificate lineage
 - Nginx configuration is tested before reload
 
-Certbot renewal dry-run (Cloudflare DNS-01) and deploy-hook Nginx reload were tested successfully on 2026-10-26. The hook was invoked directly with the expected lineage; actual production certificate renewal remains unobserved. See the separate renewal-evidence PR #190.
+Certbot renewal dry-run (Cloudflare DNS-01) and deploy-hook Nginx reload were tested successfully on 2026-10-26. The hook was invoked directly with the expected lineage; actual production certificate renewal remains unobserved. The detailed dated evidence below supersedes the original conflicted PR #190.
+
+## Certificate renewal verification — 2026-10-26
+
+- Certbot 4.0.0, with Cloudflare DNS validation.
+- Renewal timer enabled and active at the time of the test.
+- Production certificate expires 2027-01-19.
+- `certbot renew --dry-run` completed successfully.
+- Simulated renewal did not replace the production certificate.
+- Deploy hook tested with the expected `RENEWED_LINEAGE`.
+- Nginx reload succeeded at 08:17:32 GMT (exit status 0).
+- Nginx configuration and HTTPS health passed after reload.
+- Real production certificate renewal has not yet been observed.
+- Cloudflare Python library 2.20.x generated a non-blocking
+  deprecation warning; review dependency compatibility through IaC.
+
+
 
 ## Recovery
 
