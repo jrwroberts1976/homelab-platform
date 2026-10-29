@@ -1,0 +1,14 @@
+---
+# Dedicated read-only DHCP baseline and preflight. No approval is needed to inspect.
+# Safe to run even while admin-01 is connected at .127. Do not add --become without control.
+- name: Inspect admin-01 DHCP drift and prospective .48 reservation without writing
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Perform shared read-only router and admin identity and DHCP checks
+      ansible.builtin.import_tasks: tasks/router-01-admin-dhcp-preflight.yml
+
+    - name: Confirm no mutation has been requested
+      ansible.builtin.debug:
+        msg: "PREPARED ONLY: no DHCP reservation, lease renewal, restart, router firewall or admin interface changes."
