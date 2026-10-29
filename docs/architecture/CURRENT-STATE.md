@@ -1,6 +1,13 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 29 October 2026 — independently verified router-01 admin DHCP reservation, host renewal NOT yet performed
+
+After the separately approved router DHCP writer completed `ok=33 changed=8 failed=0`, a separate operator read-only on-router audit confirmed **dnsmasq active**, live `router.conf` holding exactly the new `admin-01` MAC `b8:27:eb:e8:36:cd` -> `192.168.2.48` Ansible-managed reservation, preserved existing ASUS `24:4b:fe:5e:cc:c8` -> `.180`, untouched `.100-.199` pool, and `dnsmasq --test` **PASS**. `unbound`, `router-pppoe`, `nftables` also active. The live lease table still showed the admin MAC as **`192.168.2.127`** (the last observed live admin address).
+
+**Next distinct planned change:** separately approve and perform console-backed NetworkManager renewal on `admin-01`, verifying implications for its Proxmox QNetd witness, reconnect Windows SSH at `.48`, check gateway/critical services, and only then reconcile inventory, DNS, host docs and monitoring. No evidence of admin-01 renewal, SSH login at `.48`, firewall change or network-interface modification yet. [Issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206); [runbook](../network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md).
+
+
 ## 29 October 2026 — router-side admin-01 DHCP reservation activation PASSED
 
 After approved user change scope and read-only preflight (router-01 ok=17 changed=0), the admin-01 fixed DHCP reservation writer ran successfully on router-01: **ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The expected fixed mapping is b8:27:eb:e8:36:cd -> 192.168.2.48, preserving the existing ASUS .180 reservation and dynamic pool .100-.199. The changed count includes backup and temporary staging/cleanup; no failed Ansible tasks. A separate independent live router postflight is still pending.
