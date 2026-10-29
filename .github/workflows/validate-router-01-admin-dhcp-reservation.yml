@@ -71,7 +71,7 @@ jobs:
           assert 'import_tasks: tasks/router-01-admin-dhcp-preflight.yml' in w
           assert 'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48' in w
           assert 'dnsmasq, --test' in w and '--conf-dir=' in w
-          assert 'router_admin_backup_dir' in w
+          assert 'router_admin_reservation_backup_dir' in w
           assert 'rescue:' in w and 'always:' in w
           assert 'when: router_admin_write.changed | bool' in w
           assert 'state: restarted' in w
