@@ -1,5 +1,14 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — restricted router-metrics monitoring public key LIVE deployed (operator PASS)
+
+**New live state:** After PR #231 and independent operator local syntax checks, the user explicitly approved the existing restricted Pi authorisation Ansible writer only. Operator ran `router-01-metrics-authorized-key.yml` with both inventories, targeted `router-01`, approved `router_metrics_authorize_apply_approved=true`. All real Pi MAC/IP, `router-metrics` UID999 home/nologin, on-disk sshd restriction, monitor-01 original private/public ED25519 pair and exact client fingerprint `SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`, and independently pinned genuine Pi host fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` assertions **PASS**.
+
+Exactly **two router changes**: created `/var/lib/router-metrics/.ssh` owner UID999 mode `0700`; created `/var/lib/router-metrics/.ssh/authorized_keys` owner UID999 mode `0600` with one matching monitored ED25519 public key and `from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"` restrictions. Exact postflight content, file security and `sshd -t` PASS. Final **`router-01 ok=43 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0`**. No sshd reload, SSH tunnel, firewall/router networking, exporter binding, or Prometheus change. The earlier router `.ssh=MISSING` baseline elsewhere in this file is now **historical**, not current.
+
+**Next independent gate:** read-only physical Pi verification of installed `authorized_keys` (one constrained key, correct fingerprint, no unexpected keys/symlinks, UID999 and directory permissions) without printing key bytes. **Do not yet claim SSH authentication, working tunnel or Prometheus router node-metrics ingestion**; those are separate proposed future stages. All further changes via GitHub Ansible/IaC, separately approved, with [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209) and [runbook](docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md) updated.
+
+
 ## 29 October 2026 — restricted router-metrics public key authorisation STAGED in IaC only; no router change
 
 Fresh independent read-only `monitor-01` source key audit **PASS**:
