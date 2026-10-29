@@ -1,6 +1,13 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01: recover stable admin-01 DHCP address — 29 October 2026
 
+## Current state: approved router-side deployment PASS; separate inspection pending
+
+After live read-only preflight (ok=17 changed=0 failed=0), the user expressly approved the narrowly scoped router reservation writer plus dnsmasq restart and the residual .48 static-IP conflict risk. The operator ran the versioned Ansible writer from admin-01; its pasted tail shows candidate cleanup and final router-01 recap: **ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. Eight changed tasks include temporary staging, backup and cleanup, not eight permanent changes. By playbook sequencing the deployment, dnsmasq activation and embedded assertions completed without Ansible failures. **An independent read-only inspection of the live router configuration is still outstanding.**
+
+The target mapping is b8:27:eb:e8:36:cd -> 192.168.2.48, retaining the .180 ASUS reservation and DHCP pool 192.168.2.100-199. The last independently observed admin-01 IP remains **192.168.2.127**. The writer does not renew its DHCP lease, and no admin-01 cutover or firewall change has been authorised. Do not update inventory, DNS or claim admin SSH at .48 yet. The original source-only text below describes the earlier state, before approval and deployment. Issue #206 tracks this change.
+
+
 **STATE: IaC STAGED ONLY; NO LIVE DHCP CHANGE OR RESTART.** Merge and offline syntax tests do not grant deployment permission.
 
 ## Operator evidence
