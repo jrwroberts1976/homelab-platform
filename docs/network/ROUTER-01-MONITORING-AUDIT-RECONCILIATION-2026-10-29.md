@@ -1,6 +1,21 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 legacy monitoring PR #210 reconciliation — 29 October 2026
 
+## Live read-only connectivity check — VERIFIED PASS (29 October 2026)
+
+After merging the isolated read-only probe in PR #221, the operator synced `admin-01` main to `06c00912`, ran its Ansible `--syntax-check` successfully, then executed the exact documented `--check` command with explicit approval. **Operator recap: `router-01 ok=14 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`.** Trusted controller, physical Pi MAC and `eth0 192.168.2.1/24` checks all passed.
+
+| Probe | `admin-01` result | `router-01` result |
+|---|---|---|
+| Route to Loki `192.168.2.52` | direct via `eth0`, source `192.168.2.48` | direct via `eth0`, source `192.168.2.1` |
+| Loki `http://192.168.2.52:3100/ready` | **HTTP 200** | **HTTP 200** |
+| Route to Zabbix `192.168.2.59` | direct via `eth0`, source `192.168.2.48` | direct via `eth0`, source `192.168.2.1` |
+| Zabbix TCP/`10051` | **connected=true** | **connected=true** |
+
+**Interpretation:** The controller and the actual router can reach the existing Loki readiness and Zabbix server socket. No change to Pi LAN addressing, route, DNS, DHCP, firewall, service, monitoring configuration or agent software was made. This **does not** prove Pi logs are being shipped or consumed by Loki; that Node Exporter is being scraped; that Zabbix has a configured Pi host/agent or receives any metrics; or that relevant Grafana dashboards are populated. Those remain independent read-only checks before any new activation. Raw evidence and scope notes are preserved in [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+
+
+
 **Status: source-only read-only audit; NO live monitoring install, SSH/sshd change, package install, firewall change, exporter exposure or service restart.**
 
 The original [draft PR #210](https://github.com/jrwroberts1976/homelab-platform/pull/210) mixed an older router toolset model (`192.168.3.1/24`), diagnostics package installation, local Node Exporter install, SSH metrics identity/provisioning, monitoring tunnels, many preflights and previously recovered `192.168.2.1` postcutover-baseline work. **The draft is not safe to merge wholesale.** Keep original branch as historical evidence; never run its `.3.1` inventories or service writers on the current Pi.
