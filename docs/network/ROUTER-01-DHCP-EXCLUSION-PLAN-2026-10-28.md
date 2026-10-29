@@ -1,6 +1,17 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 DHCP static-address protection: draft only — 28 October 2026
 
+## Live preflight VERIFIED — 29 October 2026 (no changes)
+
+After merged [PR #214](https://github.com/jrwroberts1976/homelab-platform/pull/214), the operator on `admin-01` fast-forwarded clean `main` to `43c69dbf` and ran syntax-check **PASS** followed by the approval-gated, **read-only** `router-01-dhcp-exclusion-preflight-readonly.yml` against the isolated `192.168.2.1` inventory with `--check -e router_dhcp_exclusion_preflight_approved=true`. Actual final Ansible recap: **`router-01 ok=20 changed=0 unreachable=0 failed=0 skipped=0`**.
+
+All assertions passed: exact controller and Pi MAC, live `eth0 192.168.2.1/24`, active dnsmasq before/after, expected running configuration directory and only `README` plus `router.conf` in `/etc/dnsmasq.d`, exact single dynamic `.100–.199` range, gateway and DNS `.2.1`, no unreviewed per-host/other DHCP allocation directives, and `dnsmasq --test` syntax OK. **The currently configured DHCP pool was NOT changed.**
+
+The lease file held **21 records** at this observation, versus **18** at the preceding observation; the three additional IPs and their expiry/status were **not output**. The proposed protected addresses `192.168.2.181` and `192.168.2.195` had no lease-file rows at the time, and `192.168.2.198` remained listed. The candidate three ranges, retaining 98 IPs total, were printed only as a proposal. Absence of a lease row does not prove the address unused or establish static addressing. **ASUS AiMesh actual address and static-vs-DHCP setting remain unverified, and `media-01` is offline; no deployment is approved.**
+
+**Next decision gate:** reconcile the 21 lease IP records without MAC/hostname disclosure; independently confirm `.181` and `.195` ownership and whether they use manual IPs or DHCP. Use split-pool exclusions only for genuine static assignments; otherwise plan verified MAC-based reservations. Any implementation requires an independent reviewed IaC change, targeted candidate-config syntax check, backups, safe activation and rollback. Do not restart dnsmasq from this documentation update.
+
+
 ## Observed live facts
 
 This is the **observed** Raspberry Pi 4 at `192.168.2.1/24` on `eth0`, physically pinned by onboard MAC `d8:3a:dd:5a:51:44`, currently serving internet through PPPoE. The earlier read-only gateway baseline and MSS audit both passed without changing the router (merged PRs #211, #212 and #213).
