@@ -1,6 +1,13 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 29 October 2026 — router-side admin-01 DHCP reservation activation PASSED
+
+After approved user change scope and read-only preflight (router-01 ok=17 changed=0), the admin-01 fixed DHCP reservation writer ran successfully on router-01: **ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The expected fixed mapping is b8:27:eb:e8:36:cd -> 192.168.2.48, preserving the existing ASUS .180 reservation and dynamic pool .100-.199. The changed count includes backup and temporary staging/cleanup; no failed Ansible tasks. A separate independent live router postflight is still pending.
+
+The admin-01 host has **not** been renewed or verified at .48; the latest actual host network evidence remains NetworkManager DHCP address **192.168.2.127**. No change to running admin host interface, router firewall or canonical inventory is authorised. Perform read-only router verification and only then seek separate approval for console-backed admin-01 lease migration. See docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md and issue #206.
+
+
 ## 29 October 2026 — admin-01 management IPv4 address drift observed, no cutover authorised
 
 **Actual live on-host state:** physical `admin-01` Raspberry Pi 3, eth0 MAC `b8:27:eb:e8:36:cd`, successfully recovered by SSH at **`192.168.2.127/24`** (not documented preferred `192.168.2.48`). Active NetworkManager profile `netplan-eth0` uses DHCP; lease server is `router-01 192.168.2.1` with a 24-hour lease. Physical router's live dnsmasq lease shows `admin-01` MAC at `.127`, dynamic `.100-.199`, an existing ASUS MAC `24:4b:fe:5e:cc:c8` reservation at `.180` and no admin-01 reservation in the reviewed configuration. Router `.48` checks: lease absent, ICMP unanswered, ARP `INCOMPLETE`, dnsmasq syntax PASS. These checks do not prove absence of a powered-off static host at `.48`.
