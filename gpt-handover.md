@@ -1375,3 +1375,11 @@ For **every** change we make:
 - Removed obsolete docker-01 (192.168.2.220:9100) from monitoring_node_exporter_targets in Git. This is a template/defaults correction only; the live Prometheus config has NOT yet been re-rendered/reloaded to apply this removal.
 - Draft PR previously described Git-only staging and was stale; PR metadata updated to reflect deployed services and remaining validation.
 - Remaining checks before merge: validate the updated target list, scoped live config update/reload with rollback, review CI checks, and verify recovery after Prometheus container recreation (not yet tested).
+
+### 2026-10-29 — live stale Docker exporter target cleanup
+
+- Approval-gated `router-metrics-stale-target-cleanup.yml` completed on monitor-01: ok=11, changed=2, failed=0, rescued=0.
+- Scoped Prometheus template was validated with promtool beforehand. The cleanup playbook asserted removal of only retired docker-01 (`192.168.2.220:9100`) and required router-node-exporter target health UP.
+- Previous live Prometheus configuration backed up at `/opt/homelab-router-metrics-relay/prometheus.yml.pre-stale-cleanup`; original pre-router backup remains separate.
+- Note: the new cleanup playbook is currently local/uncommitted on admin-01; add it to the PR via Git before merge.
+- Prometheus-container recreation recovery remains untested; do not recreate production Prometheus merely to test it.
