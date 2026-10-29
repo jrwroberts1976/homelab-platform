@@ -1,0 +1,64 @@
+name: Validate router-01 monitoring path read-only audit
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-01-monitoring-path-readonly.yml"
+      - "IaC/ansible/playbooks/router-01-monitoring-path-readonly.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-router-01-monitoring-path-readonly.yml"
+      - "IaC/ansible/playbooks/router-01-monitoring-path-readonly.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-source-only:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Enforce read-only Ansible and current Pi target
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          path=Path("IaC/ansible/playbooks/router-01-monitoring-path-readonly.yml")
+          source=path.read_text()
+          plays=yaml.safe_load(source)
+          assert isinstance(plays,list) and len(plays)==1
+          play=plays[0]
+          assert play["hosts"]=="router_postcutover_baseline"
+          assert play["gather_facts"] is False and play["become"] is False
+          assert play["vars"]["router_monitoring_path_audit_approved"] is False
+          assert not play.get("handlers")
+          assert "ansible_check_mode" in source
+          assert "192.168.2.1" in source and "192.168.3.1" not in source
+          assert "d8:3a:dd:5a:51:44" in source
+          assert "router_monitoring_controller.stdout" in source
+          assert "admin-01" in source
+          allowed={"ansible.builtin.command","ansible.builtin.assert","ansible.builtin.uri","ansible.builtin.wait_for","ansible.builtin.debug"}
+          tasks=[t for phase in ("pre_tasks","tasks","post_tasks") for t in play.get(phase,[])]
+          assert len(tasks)>=10
+          for task in tasks:
+              modules=[k for k in task if k.startswith("ansible.builtin.")]
+              assert len(modules)==1 and modules[0] in allowed,task["name"]
+              if modules[0] in ("ansible.builtin.command","ansible.builtin.uri","ansible.builtin.wait_for"):
+                  assert task.get("check_mode") is False and task.get("changed_when") is False
+              assert not any(k in task for k in ("become","notify","loop","with_items"))
+          for token in ("192.168.2.52","192.168.2.59","3100/ready","port: 10051","return_content: false"):
+              assert token in source,token
+          print("PASS: read-only postcutover router audit and exact current identity")
+          PY
+      - name: Check syntax using isolated Pi postcutover inventory
+        run: |
+          cd IaC/ansible
+          ansible-inventory -i inventory/router-01-postcutover-baseline.yml --list > /dev/null
+          ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+            playbooks/router-01-monitoring-path-readonly.yml \
+            --limit router-01 --syntax-check
