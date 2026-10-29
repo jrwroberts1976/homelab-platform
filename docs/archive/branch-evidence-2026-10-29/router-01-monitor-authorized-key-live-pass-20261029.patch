@@ -1,0 +1,68 @@
+diff --git a/docs/architecture/CURRENT-STATE.md b/docs/architecture/CURRENT-STATE.md
+index de9b3db58667303b95708e62df3ed6884c3d5cce..32113a28e48ed5b0b1692885f9a1437667bd9104 100644
+--- a/docs/architecture/CURRENT-STATE.md
++++ b/docs/architecture/CURRENT-STATE.md
+@@ -1,6 +1,15 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Current-State Architecture
+ 
++## 29 October 2026 — router-01 restricted monitor public key deployed LIVE
++
++Following PR #231 and local syntax checks on `admin-01`, the operator **explicitly approved** the router-side restricted SSH monitoring public-key installation and executed `playbooks/router-01-metrics-authorized-key.yml` using both router and monitoring inventories. Live preflight verified physical Pi identity `192.168.2.1/24`, MAC `d8:3a:dd:5a:51:44`, restricted `router-metrics` UID999 account and on-disk sshd policy; the existing monitor-01 public/private keypair fingerprint `SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`; and the independently pinned Pi server host fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`. All checks passed.
++
++**Exactly two live changes:** `/var/lib/router-metrics/.ssh` created (UID999, mode `0700`), and `/var/lib/router-metrics/.ssh/authorized_keys` created (UID999, mode `0600`) holding exactly one existing monitor public key, restricted with `from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"`. File ownership/mode, exact content and sshd syntax postflights all passed. **Recap `router-01 ok=43 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0`.** No SSH reload/restart, tunnel, firewall, router services, Node Exporter listener, or Prometheus change.
++
++**Remaining distinction:** the key is installed but actual SSH authentication has not been tested, and the running daemon's effective in-memory policy is not yet independently proven. No local-forward tunnel or Prometheus node scrape has been established; exporter remains on Pi loopback `127.0.0.1:9100`. Next independent read-only audit of installed key and permissions, followed by separately approved SSH authentication testing if needed. See [runbook](../network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md) and [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
++
++
+ ## 29 October 2026 — independent Pi host-key pin postflight PASS on monitor-01
+ 
+ A second, read-only operator test on `monitor-01 192.168.2.52`, separate from the approved live Ansible trust-pin installation, verified the protected `/etc/homelab/router-metrics-ssh/known_hosts` metadata (`TRUST_FILE_SECURITY=PASS`), then ran `ssh-keygen -F 192.168.2.1` as dedicated `router-metrics-tunnel`: `LOOKUP_EXIT_CODE=0`, `HOST_KEY_RECORDS=1`, `PINNED_FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, **`HOST_PIN_POSTFLIGHT=PASS`**. This SHA256 matches the genuine physical Pi ED25519 key. No SSH login, key installation or network changes occurred during the postflight (ad-hoc Ansible shell `CHANGED` reporting convention). Monitor-side private key access, keypair match and remote host trust now independently verified; **Pi service-user authorised keys, an actual restricted SSH connection/tunnel, and Prometheus node-metric collection remain unimplemented or unverified**. See [host pin runbook](../network/MONITOR-01-ROUTER-SSH-HOST-PIN-2026-10-29.md) and [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
+diff --git a/docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md b/docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md
+index 360bd19e8d27f55ed7827ddf092f2ac8a38bd178..df257d6712d5eaa09a5d17f39fcf35a8b9e2433c 100644
+--- a/docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md
++++ b/docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md
+@@ -1,6 +1,24 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Router-01 restricted monitoring ED25519 public-key authorisation — 29 October 2026
+ 
++## Current status — successfully deployed (29 October 2026)
++
++**LIVE on router-01.** After the operator separately approved running the Ansible writer, both intended changes completed. The physical Pi, monitor source key, independently pinned router host key, service account and restricted on-disk SSH policy checks all passed.
++
++```text
++TASK [Create dedicated router-metrics .ssh with strict owner/mode if absent] changed
++TASK [Create exactly one restricted public-key authorisation if absent] changed
++TASK [Require exactly protected service-owned path metadata] ok
++TASK [Confirm only the intended restricted, fingerprint-verified key exists] ok
++TASK [Revalidate sshd syntax after authorised-key installation without reload] ok
++PLAY RECAP router-01: ok=43 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0
++```
++
++The deployed directory `/var/lib/router-metrics/.ssh` is owned by UID999 and has mode `0700`; `authorized_keys` is UID999 mode `0600` with exactly the independently verified monitor-01 ED25519 public key (client SHA256 `JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`). The key is restricted to source `192.168.2.52` with local forwarding only to `127.0.0.1:9100`. No private key was copied, sshd reloaded, SSH tunnel activated or firewall, DNS/DHCP, exporter listener or Prometheus configuration modified.
++
++**Not yet established:** actual SSH authentication, live sshd policy reload state, tunnel operation or Prometheus router node scrape. The source-only and absent-file descriptions below document the original, now-superseded baseline. Next step: separate read-only inspection of the installed key fingerprint and permissions before any approved authentication probe.
++
++
+ **STATE: SOURCE-ONLY / NOT DEPLOYED.** This document stages a narrowly scoped, *independently approval-gated* router-side public-key authorisation. The existence of this source code or its CI results **does not authorise a live write**. No SSH login, tunnel or Prometheus router node-metrics scrape has been demonstrated.
+ 
+ ## Operator-verified baseline
+diff --git a/gpt-handover.md b/gpt-handover.md
+index 6f7d96d49c4c49a3ed39fa4f01d7d41b3c9800fa..5b4d6432044cb45e3a1f5379ee53b4eca0e43583 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,14 @@
+ # GPT Handover — Homelab Platform
+ 
++## 29 October 2026 — restricted router-metrics monitoring public key LIVE deployed (operator PASS)
++
++**New live state:** After PR #231 and independent operator local syntax checks, the user explicitly approved the existing restricted Pi authorisation Ansible writer only. Operator ran `router-01-metrics-authorized-key.yml` with both inventories, targeted `router-01`, approved `router_metrics_authorize_apply_approved=true`. All real Pi MAC/IP, `router-metrics` UID999 home/nologin, on-disk sshd restriction, monitor-01 original private/public ED25519 pair and exact client fingerprint `SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`, and independently pinned genuine Pi host fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` assertions **PASS**.
++
++Exactly **two router changes**: created `/var/lib/router-metrics/.ssh` owner UID999 mode `0700`; created `/var/lib/router-metrics/.ssh/authorized_keys` owner UID999 mode `0600` with one matching monitored ED25519 public key and `from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"` restrictions. Exact postflight content, file security and `sshd -t` PASS. Final **`router-01 ok=43 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0`**. No sshd reload, SSH tunnel, firewall/router networking, exporter binding, or Prometheus change. The earlier router `.ssh=MISSING` baseline elsewhere in this file is now **historical**, not current.
++
++**Next independent gate:** read-only physical Pi verification of installed `authorized_keys` (one constrained key, correct fingerprint, no unexpected keys/symlinks, UID999 and directory permissions) without printing key bytes. **Do not yet claim SSH authentication, working tunnel or Prometheus router node-metrics ingestion**; those are separate proposed future stages. All further changes via GitHub Ansible/IaC, separately approved, with [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209) and [runbook](docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md) updated.
++
++
+ ## 29 October 2026 — restricted router-metrics public key authorisation STAGED in IaC only; no router change
+ 
+ Fresh independent read-only `monitor-01` source key audit **PASS**:

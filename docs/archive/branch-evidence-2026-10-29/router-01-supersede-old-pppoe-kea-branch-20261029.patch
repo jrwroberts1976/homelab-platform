@@ -1,0 +1,49 @@
+diff --git a/docs/network/ROUTER-01-PR207-MIGRATION-RETIREMENT-2026-10-29.md b/docs/network/ROUTER-01-PR207-MIGRATION-RETIREMENT-2026-10-29.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..c100a7fe6840370e0884e6a7a34649468e4c8933
+--- /dev/null
++++ b/docs/network/ROUTER-01-PR207-MIGRATION-RETIREMENT-2026-10-29.md
+@@ -0,0 +1,26 @@
++<!-- estate-authority: IaC/inventory/estate.json -->
++# Obsolete Pi router migration draft PR #207 — supersession record (29 October 2026)
++
++**STATUS: historical IaC plan only; do NOT execute or merge the original draft.**
++
++The [2026-10-27 draft PR #207](https://github.com/jrwroberts1976/homelab-platform/pull/207) was written when converting the `docker-01` / BirdNET proof-of-concept or a staged Pi to become an Internet router. It includes temporary Kea DHCP service on `192.168.3.1`, delayed Ethernet/IP/PPPoE cabling changes and systemd rollback timers, router firewall and LAN switch scripts, Netplan/NetworkManager migration, and an approval-gated **Docker retirement** writer that would stop BirdNET and Komodo services and remove `docker.io`/Compose/containerd/runc on **`docker-01 192.168.2.220`**.
++
++**These are no longer valid change instructions.** The operator already verified a distinct physical Raspberry Pi `router-01` at `192.168.2.1` is the working PPPoE gateway with nftables/NAT, Unbound DNS and **dnsmasq**, not Kea; the single live DHCP pool is `192.168.2.100–199`. On 29 October an approval-gated Ansible playbook installed and independently verified a MAC-bound ASUS Bedroom `192.168.2.180` DHCP reservation; the pool remains unchanged. Both ASUS units remain reachable (Home `192.168.2.2` static AP, Bedroom `.180` DHCP reserved), and `media-01` `192.168.2.195` is confirmed DHCP-managed. Pi DNS and outside HTTPS were verified from `admin-01`.
++
++Current `docker-01 192.168.2.220` is a **separate in-use Docker/BirdNET/Komodo host**, not the new physical `router-01`. **Never run the PR #207 Docker retirement playbooks on that live host merely to tidy the migration branch.** They were designed to remove live packages/containers, and could interrupt existing BirdNET and Komodo workloads. This closure record is **not** authorisation to stop or decommission anything. The original PR branch and source remain available for historical examination; they should not form the base of a new live router configuration.
++
++## Disposition of original draft content
++
++| Historical #207 work | Disposition |
++|---|---|
++| Pi PPPoE, `.3.1`, Kea, Netplan, router LAN/NAT switches and rollback timers | Obsolete. Current `.2.1` Pi cutover has its own verified production implementation; **no transplant of old writer code** |
++| `docker-01` Docker/BirdNET/Komodo retirement and package removal | **Not authorised**. Preserving active Docker workloads is the current requirement; any retirement is a wholly separate future infrastructure project |
++| Historical router migration observations and diagnostic evidence | Preserved by Git history and old PR; not treated as current estate truth |
++| DHCP reservations/static overlap | Tracked by issue #206. Bedroom `.180` completed; `media-01 .195` is DHCP, and optional separate `.195` reservation requires MAC verification; never deploy obsolete `.181/.195` split pool |
++| Router diagnostics, secure telemetry/SSH tunnelling | Tracked under issue #209, with independent `.2.1`-scoped read-only monitoring audit merged by PR #221; SSH/package writers remain unapplied |
++
++## Boundaries and next steps
++
++No command in this document performs changes. The live `docs/architecture/CURRENT-STATE.md` and `gpt-handover.md` take precedence over dated migration plans; canonical `IaC/inventory/estate.json` still needs a separate, independently validated current-state reconciliation. Any remaining security, Docker lifecycle, or router tooling changes must start from **current main**, use Ansible/IaC with a narrow PR, exact host/IP/service gates, backups and rollback, and obtain distinct user approval for any live restarts or package removals.
++
++The obsolete draft #207 can be **closed as superseded**, not merged, after this decision record passes normal documentation checks. Closing a PR does not delete its branch or commits.
+diff --git a/gpt-handover.md b/gpt-handover.md
+index 557df45775dcfa75b51f0617a712d40ff351f38f..db8993ed3aebcbf69ff190d66a7a5abd441c50be 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,12 @@
+ # GPT Handover — Homelab Platform
+ 
++## 29 October 2026 — legacy router PR merge reconciliation (source-only)
++
++After the separate successful live ASUS Bedroom DHCP reservation and independent Pi LAN/DNS/HTTPS postflight, the only old open GitHub drafts were **#207** (retired `192.168.3.1` Kea/PPPoE/Netplan/IP switch and `docker-01` BirdNET/Komodo retirement writer) and **#210** (older `.3.1` router diagnostics, SSH/monitoring tools). **Neither draft should be merged wholesale or run**: current physical `router-01` already works at `192.168.2.1` with `dnsmasq`, and `docker-01` remains an independent in-use BirdNET/Komodo host, not the new gateway. Source-only [PR #221](https://github.com/jrwroberts1976/homelab-platform/pull/221) recovered only a read-only Loki/Zabbix monitoring path diagnostic from #210, rebuilt for the current `.2.1` Pi and exact `admin-01`/MAC/`--check` guards; **both CI checks passed; it was merged**. No on-host monitoring probe run or agent/SSH/package activation is claimed. Remaining #210 packages, secure metrics/SSH writers and exporter/agent configuration remain unmerged and tracked under issue #209. Dated [PR #210 reconciliation](docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md) documents what to review next.
++
++The old #207's disruptive Docker retirement and `.3.1` change scripts are superseded, not authorised for any operational use. [PR #207 disposition](docs/network/ROUTER-01-PR207-MIGRATION-RETIREMENT-2026-10-29.md) records why this branch is historical and must not be used to remove live Docker/BirdNET/Komodo or replace the verified `.2.1` gateway. Original GitHub PRs/branches can be closed as superseded after documenting remaining design work; no original migration writers have been cherry-picked or executed. `media-01 .195` remains DHCP, with optional separate reservation pending MAC verification; broader DHCP issue #206 is not complete merely because Bedroom .180 is.
++
++
+ ## LATEST VERIFIED — 29 October 2026: Bedroom ASUS DHCP reservation DEPLOYED; full LAN, DNS and HTTPS postflight PASS
+ 
+ **Live change complete** on the real Raspberry Pi `router-01` at `192.168.2.1`, via approved Git-managed Ansible `IaC/ansible/playbooks/router-01-bedroom-dhcp-reservation.yml` (source from merged PR #219, commit `7ff09647`). The operator fast-forwarded `main`, both deployment and rollback `ansible-playbook --syntax-check` passed, and the privately encrypted Ansible Vault file for the Bedroom client MAC returned `BEDROOM_MAC_VAULT=PASS` without disclosing its contents. **Deployment recap:** `router-01 ok=28 changed=9 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`. Ansible's guarded writer backs up `router.conf` privately outside dnsmasq's active include path and does a targeted dnsmasq restart; the operator supplied only the final task and recap, not the exact runtime backup filename. Automatic rescue was **not** invoked.

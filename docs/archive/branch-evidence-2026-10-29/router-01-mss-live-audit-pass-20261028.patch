@@ -1,0 +1,67 @@
+diff --git a/docs/architecture/CURRENT-STATE.md b/docs/architecture/CURRENT-STATE.md
+index 567a50714f415e63af74715501b8e6193ae511b5..9e736d99267f9dd37dacf22b40b17e28bd77959c 100644
+--- a/docs/architecture/CURRENT-STATE.md
++++ b/docs/architecture/CURRENT-STATE.md
+@@ -2,6 +2,14 @@
+ # Current-State Architecture
+ 
+ 
++## 28 October 2026 — verified persistence and new-LAN NAT reference after PPPoE MSS audit
++
++After the baseline and PR #212 merge, the operator ran the **read-only Ansible post-cutover MSS audit** on `admin-01` against Raspberry Pi `router-01` (`192.168.2.1`): **16 tasks OK, 0 changed, 0 failed, 0 unreachable**. Exact Pi MAC, active new LAN address, default `ppp0` route, **PPPoE MTU 1492** and IPv4 forwarding were confirmed. Core router systemd units remained active. Live `filter_router` (DROP policy), `nat_router` (masquerade) and the **two bidirectional 1452 MSS clamp rules** in `router_pppoe_mss` passed assertions. `/etc/nftables.conf` contained one managed persistent MSS block and passed `nft -c -f` without loading changes. The temporary `pppoe_mss_test` table was **absent**. Both live and saved NAT text **mentioned `192.168.2.0/24`**. This is verified real router evidence; no configuration edits performed. The read-only audit does not exhaustively audit NAT rule predicates or WAN exposure. Details in [Router-01 MSS post-cutover verification](../network/ROUTER-01-MSS-POSTCUTOVER-VERIFICATION-2026-10-28.md).
++
++The legacy PR #208 persistence-writer and old `192.168.3.1` inventory remain **not integrated** into the current primary gateway. Do not rerun the old writer or reload nftables; any future writer reconciliation requires a new reviewed IaC and safety gate.
++
++
++
+ ## 28 October 2026 22:09 UTC — Raspberry Pi router-01 is the verified live LAN gateway (reconciliation pending)
+ 
+ A **read-only operator-run Ansible baseline** on the physical Raspberry Pi 4 at `192.168.2.1/24` completed with **ok=15 changed=0 failed=0 unreachable=0 skipped=0** after passing exact onboard MAC, IPv4 default route via `ppp0` and core service health preflights. The LAN router currently uses `dnsmasq` for DHCP, `unbound` for DNS, `nftables` for filtering/NAT and PPPoE for WAN; these four systemd units were active before and after measurement. Node Exporter listens on **127.0.0.1:9100** only. At 22:09:06 UTC CPU busy 0.1% (3-sec idle sample), temperature 45.3°C, throttling flag `0x0`, estimated memory use 6.8%, disk use 4.5%, 0 interface RX/TX errors, and 5 WAN probes with 0% loss and 10.502 ms mean RTT. The previous 22:06:52 reading had identical LAN drop counters (150 RX, 23 TX); the lease file contained 18 rows. This is an idle snapshot, not a capacity test. Full immutable observations and cautious interpretation: [Router-01 post-cutover verified baseline](../network/ROUTER-01-BASELINE-2026-10-28.md).
+diff --git a/docs/network/ROUTER-01-MSS-POSTCUTOVER-VERIFICATION-2026-10-28.md b/docs/network/ROUTER-01-MSS-POSTCUTOVER-VERIFICATION-2026-10-28.md
+index 4635c9cd8b7d9e3142591246d0d07fdd23cf3711..49cf54ac31f32578846e18b26b02c742ace514df 100644
+--- a/docs/network/ROUTER-01-MSS-POSTCUTOVER-VERIFICATION-2026-10-28.md
++++ b/docs/network/ROUTER-01-MSS-POSTCUTOVER-VERIFICATION-2026-10-28.md
+@@ -1,6 +1,24 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Router-01 PPPoE MSS — post-cutover verification
+ 
++
++## LIVE VERIFIED — 28 October 2026, after post-cutover audit was merged (PR #212)
++
++**Operator-executed read-only Ansible on `admin-01`: PASS**. The working tree was fast-forwarded to `main` at `6c573fee`; the `router-01-mss-postcutover-readonly.yml` syntax check passed. Actual command used isolated `inventory/router-01-postcutover-baseline.yml`, `--limit router-01 --ask-become-pass --check -e router_mss_postcutover_audit_approved=true`. Final recap: **`router-01 ok=16 changed=0 unreachable=0 failed=0 skipped=0`**.
++
++Read-only guard assertions passed on exact controller/target and physical onboard Pi MAC; active eth0 **`192.168.2.1/24`**, live PPPoE **`ppp0` MTU 1492**, default route and IPv4 forwarding. `nftables`, `router-pppoe`, `dnsmasq`, `unbound` remained active both before and after. The live **`filter_router`** and **`nat_router`** tables were readable; default-drop and masquerade checks passed. The live **`router_pppoe_mss`** table had **two expected bidirectional TCP MSS 1452 rules**; on-disk `/etc/nftables.conf` contained exactly one managed persistent MSS block and passed **`nft -c -f`** (validation only; no reload). The obsolete temporary `pppoe_mss_test` table was **absent**.
++
++Importantly, the audit explicitly returned:
++- `live_nat_mentions_new_lan_subnet: true`
++- `disk_nat_mentions_new_lan_subnet: true`
++- `temporary_pppoe_mss_test_present: false`
++- `nftables_file_syntax: PASS`
++
++**Interpretation:** the post-migration live and persistent configurations both mention `192.168.2.0/24`, removing the earlier uncertainty about whether the new LAN was represented at all. This audit checks *presence of the subnet string*, basic masquerade and live MSS rule shape; it **does not exhaustively prove exact NAT match expressions, rule precedence, comprehensive WAN firewall exposure or high-load performance**. There is no need to replay the historical `.3.1` writer to make the existing MSS rule persistent: persistence has now been verified in live kernel and saved file on the new LAN.
++
++**Outstanding integration safety:** Draft PR **#208** still contains legacy `192.168.3.1` inventory, `192.168.3.0/24` assertions and an active `blockinfile` writer. Do **not** merge or execute that code unchanged; reconcile it with desired current state in a separately reviewed PR only if a maintenance writer is actually needed. No firewall, LAN, DNS, SSH or router service changes were made during this audit.
++
++
+ ## Proven historical fix and current topology
+ 
+ On 28 October 2026, before the later DHCP/LAN migration, the Pi's PPPoE `ppp0` MTU was 1492; a temporary bidirectional TCP MSS clamp to **1452 bytes** restored previously failing BBC HTTPS requests from a Windows client. The operator then installed the persistent `table ip router_pppoe_mss` in `/etc/nftables.conf` via an approval-gated Ansible blockinfile and rebooted. Post-reboot observation showed both live MSS rules with **288 LAN-to-WAN / 22 WAN-to-LAN matches**, active `nftables`, PPPoE, dnsmasq and Unbound, default route `ppp0` and forwarding on. The pre-reboot original backup was `/etc/nftables.conf.2112.2026-10-28@13:09:59~`. The original deployment playbook recap and explicit absence of temporary `pppoe_mss_test` were not separately verified.
+diff --git a/gpt-handover.md b/gpt-handover.md
+index 2938bfc2ab0f9746f10d7e8fd3dfca1c4d3add82..0008d9ae40cfbe48e3bb85eb33e7a96465c98791 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,14 @@
+ # GPT Handover — Homelab Platform
+ 
++## LATEST — 28 October 2026: live Pi 192.168.2.1 MSS audit PASS after PR #212 merge
++
++Operator on `admin-01` confirmed fast-forward of `main` to `6c573fee`, Ansible syntax PASS, then ran `router-01-mss-postcutover-readonly.yml` with isolated new Pi inventory, `--check`, become password and `-e router_mss_postcutover_audit_approved=true`. **PLAY RECAP router-01 ok=16 changed=0 unreachable=0 failed=0 skipped=0**. All exact controller/MAC/eth0 `192.168.2.1/24`/PPPoE default-route and MTU 1492/IPv4 forwarding checks passed. `nftables`, `router-pppoe`, `dnsmasq`, `unbound` active before and after. Live default-drop filter and NAT masquerade check PASS; **two bidirectional TCP MSS set 1452** rules in `table ip router_pppoe_mss` present. Persistent `/etc/nftables.conf` had one managed MSS block and syntax `nft -c -f` **PASS**; obsolete `pppoe_mss_test` table **absent**. Both `live_nat_mentions_new_lan_subnet` and `disk_nat_mentions_new_lan_subnet` **true** for `192.168.2.0/24`. This proves subnet text presence, not complete NAT predicate equivalence or traffic/capacity tests. **No live router modifications** by audit.
++
++**Git integration decision:** Preserve verified results in a small documentation-only branch and merge after estate/docs CI. Existing PR #208 writer/inventory is **still pinned to historical .3.1/.3.0/24**, so avoid merging or rerunning it on current gateway; the persistent fix is already active and needs no blind restage. PR #207 contains historical Kea/firewall migration and remains held; PR #210 SSH activation remains held. DHCP .100–.199/static .195 collision possibility, estate.json drift, and ASUS management address still outstanding.
++
++**Local worktree note:** user showed untracked `IaC/ansible/FETCH_HEAD`, `IaC/ansible/localhost]`, and `IaC/ansible/{` before switching feature branch to `main`. These are not evidence of network change. Do not auto-delete or `git clean -fd` them; inspect safely before cleanup.
++
++
+ ## 28 October 2026 — MSS PR #208 split: safe post-cutover verification staged
+ 
+ The operator approved continuing GitHub merges after safe read-only baseline PR #211 was squash-merged (main `851a915f94f57e325faec7cc18b52cea3d7d5af8`). Audit of historical draft PR #208 confirms the original 28 Oct live reboot **did** load `table ip router_pppoe_mss` with bidirectional 1452-byte SYN clamp and matched packets; the *writer* playbook and isolated inventory still assert `eth0 192.168.3.1/24`, `192.168.3.0/24` NAT. Later verified DHCP/primary LAN cutover moved Pi to `192.168.2.1/24`; no postcutover live nftables NAT-file comparison was supplied. Do **not** merge PR #208 or blindly replace the firewall from draft #207.

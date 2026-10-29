@@ -1,0 +1,61 @@
+diff --git a/docs/architecture/CURRENT-STATE.md b/docs/architecture/CURRENT-STATE.md
+index 598fb15c0700703a6a2b74b6bca20b21ab9fd24b..8be0cc37f40bf1a0e30b1d65c1569576cfa17bef 100644
+--- a/docs/architecture/CURRENT-STATE.md
++++ b/docs/architecture/CURRENT-STATE.md
+@@ -1,6 +1,12 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Current-State Architecture
+ 
++## 29 October 2026 — live router monitoring network reachability independently verified
++
++Operator-run **read-only** Ansible monitoring audit `router-01-monitoring-path-readonly.yml` (merged PR #221), with `--check` and explicit approval, passed `ok=14 changed=0 failed=0 unreachable=0 skipped=0`. `admin-01 192.168.2.48` and the physically verified Pi `router-01 192.168.2.1` both have direct `eth0` LAN routes to `192.168.2.52` (Loki) and `192.168.2.59` (Zabbix). Loki HTTP readiness on `:3100/ready` returned **200 from both hosts**; Zabbix TCP/10051 connected successfully from both hosts. These are verified **transport/readiness** facts only, not evidence of actual router log ingestion, exporter scraping, Zabbix agent data, or dashboards. No live network, firewall, package, SSH or service changes were made. Source and follow-up: [router monitoring audit reconciliation](../network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md), issue #209.
++
++
++
+ ## 29 October 2026 — verified live Pi gateway and Bedroom ASUS DHCP reservation
+ 
+ **Latest operator-verified router truth (supersedes historical ASUS-as-main-gateway assertions further below, pending canonical estate registry reconciliation):** Physical Raspberry Pi `router-01` has LAN gateway `192.168.2.1/24` on `eth0`, PPPoE `ppp0` default route, active `dnsmasq`, `unbound`, `router-pppoe` and `nftables`. Dynamic DHCP scope remains a **single** `192.168.2.100–199/24` range, lease duration 24h, with gateway/DNS `192.168.2.1`. ASUS Home RT-AC86U at `192.168.2.2` operates in AP/AiMesh controller mode with a **manually static** LAN IP. ASUS Bedroom RT-AC86U (`RT-AC86U-CCC8`) is Ethernet-backed AiMesh and DHCP-managed at `192.168.2.180`. Its fixed address is now issued through an **active MAC-bound dnsmasq `dhcp-host` reservation** at `.180`, implemented by Git-managed Ansible PR #219 (source merge `7ff09647`). The third ASUS router is unused; historical `192.168.2.181` was not reachable during read-only inspection and no static exclusion at `.181` has been approved.
+diff --git a/docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md b/docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md
+index fba7ff7cc043a94f35c4be99b3cd79d99f0c681c..e4d6302acbfab243b4609a09ba08c8dba00ad8eb 100644
+--- a/docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md
++++ b/docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md
+@@ -1,6 +1,21 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Router-01 legacy monitoring PR #210 reconciliation — 29 October 2026
+ 
++## Live read-only connectivity check — VERIFIED PASS (29 October 2026)
++
++After merging the isolated read-only probe in PR #221, the operator synced `admin-01` main to `06c00912`, ran its Ansible `--syntax-check` successfully, then executed the exact documented `--check` command with explicit approval. **Operator recap: `router-01 ok=14 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`.** Trusted controller, physical Pi MAC and `eth0 192.168.2.1/24` checks all passed.
++
++| Probe | `admin-01` result | `router-01` result |
++|---|---|---|
++| Route to Loki `192.168.2.52` | direct via `eth0`, source `192.168.2.48` | direct via `eth0`, source `192.168.2.1` |
++| Loki `http://192.168.2.52:3100/ready` | **HTTP 200** | **HTTP 200** |
++| Route to Zabbix `192.168.2.59` | direct via `eth0`, source `192.168.2.48` | direct via `eth0`, source `192.168.2.1` |
++| Zabbix TCP/`10051` | **connected=true** | **connected=true** |
++
++**Interpretation:** The controller and the actual router can reach the existing Loki readiness and Zabbix server socket. No change to Pi LAN addressing, route, DNS, DHCP, firewall, service, monitoring configuration or agent software was made. This **does not** prove Pi logs are being shipped or consumed by Loki; that Node Exporter is being scraped; that Zabbix has a configured Pi host/agent or receives any metrics; or that relevant Grafana dashboards are populated. Those remain independent read-only checks before any new activation. Raw evidence and scope notes are preserved in [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
++
++
++
+ **Status: source-only read-only audit; NO live monitoring install, SSH/sshd change, package install, firewall change, exporter exposure or service restart.**
+ 
+ The original [draft PR #210](https://github.com/jrwroberts1976/homelab-platform/pull/210) mixed an older router toolset model (`192.168.3.1/24`), diagnostics package installation, local Node Exporter install, SSH metrics identity/provisioning, monitoring tunnels, many preflights and previously recovered `192.168.2.1` postcutover-baseline work. **The draft is not safe to merge wholesale.** Keep original branch as historical evidence; never run its `.3.1` inventories or service writers on the current Pi.
+diff --git a/gpt-handover.md b/gpt-handover.md
+index b4fb07e5e806c6a50a8ac36234163bbd9a585cd4..1b8249be788609917549c290206124d5a073653c 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,13 @@
+ # GPT Handover — Homelab Platform
+ 
++## 29 October 2026 — LIVE router-01 monitoring path audit PASS (read-only)
++
++After merge of [PR #221](https://github.com/jrwroberts1976/homelab-platform/pull/221), operator on `admin-01` fast-forwarded `main` to `06c00912`, then ran syntax-check **PASS** and `playbooks/router-01-monitoring-path-readonly.yml` using `inventory/router-01-postcutover-baseline.yml`, `--limit router-01 --check -e router_monitoring_path_audit_approved=true`. **Final recap `router-01 ok=14 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`.** Exact controller, physical Pi Ethernet MAC and `eth0 192.168.2.1/24` safeguards PASSED. Both `admin-01 192.168.2.48` and Pi `router-01 192.168.2.1` routed directly on `eth0` to Loki `192.168.2.52` and Zabbix `192.168.2.59`. Loki `http://192.168.2.52:3100/ready` gave **HTTP 200 from each host**. Zabbix TCP/10051 was **connected=true from both hosts**. Both paths healthy; no network/firewall change needed to establish these endpoints.
++
++This was an actual operator-run read-only check, **not** just CI. No packages, services, SSH keys, exporter listeners, agent configuration, firewall or routes were modified. **Do not interpret HTTP readiness or TCP socket reachability as proof of Loki log ingestion, Zabbix item values, Prometheus scraping, Node Exporter tunnel, SSH credentials or dashboard data.** Next gate is read-only discovery of existing agents/listeners/configuration (prefer no credential disclosure) and query-side metric/log ingestion evidence before proposing separately approved additions. Track issue #209; dated [audit reconciliation](docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md). The previous handover claim that no live monitoring probe had run is a **historical pre-audit statement**, superseded by this entry.
++
++
++
+ ## 29 October 2026 — legacy router PR merge reconciliation (source-only)
+ 
+ After the separate successful live ASUS Bedroom DHCP reservation and independent Pi LAN/DNS/HTTPS postflight, the only old open GitHub drafts were **#207** (retired `192.168.3.1` Kea/PPPoE/Netplan/IP switch and `docker-01` BirdNET/Komodo retirement writer) and **#210** (older `.3.1` router diagnostics, SSH/monitoring tools). **Neither draft should be merged wholesale or run**: current physical `router-01` already works at `192.168.2.1` with `dnsmasq`, and `docker-01` remains an independent in-use BirdNET/Komodo host, not the new gateway. Source-only [PR #221](https://github.com/jrwroberts1976/homelab-platform/pull/221) recovered only a read-only Loki/Zabbix monitoring path diagnostic from #210, rebuilt for the current `.2.1` Pi and exact `admin-01`/MAC/`--check` guards; **both CI checks passed; it was merged**. No on-host monitoring probe run or agent/SSH/package activation is claimed. Remaining #210 packages, secure metrics/SSH writers and exporter/agent configuration remain unmerged and tracked under issue #209. Dated [PR #210 reconciliation](docs/network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md) documents what to review next.

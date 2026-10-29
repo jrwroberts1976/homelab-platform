@@ -1,0 +1,253 @@
+[
+  {
+    "branch": "docs/admin01-dhcp-and-qnetd-recovery-20261029",
+    "base": "b871925a57fd1bb087e8e9acc551934585f478c7",
+    "head": "016e659aa38be8466fb0bc0da4ff7c6f9ae4f446",
+    "patch": "docs/archive/branch-evidence-2026-10-29/admin01-dhcp-and-qnetd-recovery-20261029.patch",
+    "sha256": "cad1d93c18f2ac0440f5f29103076bd9b5f3e3aab5c139f06ae3f74702549fc4",
+    "commits": [
+      "016e659aa38be8466fb0bc0da4ff7c6f9ae4f446 2026-10-29T12:53:05Z docs(architecture): mark admin IP and QNetd live restored, quorum vote check pending",
+      "446b7f099a29f124cbf007349cbe5ccd8b9cf720 2026-10-29T12:52:45Z docs(architecture): mark admin IP and QNetd live restored, quorum vote check pending",
+      "c3b568a6b46b9176bf84aae76d204477a4280a33 2026-10-29T12:52:09Z docs(router): confirm admin .48 recovery and QNetd two clients after reboot"
+    ]
+  },
+  {
+    "branch": "docs/admin01-qdevice-final-3-votes-pass-20261029",
+    "base": "1691b2cd2c9c911ae9ac5e0a8b40d94142edaedb",
+    "head": "c5df825891571f7db534e26b9e1ee53a7d9486a1",
+    "patch": "docs/archive/branch-evidence-2026-10-29/admin01-qdevice-final-3-votes-pass-20261029.patch",
+    "sha256": "144fdd6d777b08ff1e0c18473aaf3a3952f49664fe41485559e91897586ae596",
+    "commits": [
+      "c5df825891571f7db534e26b9e1ee53a7d9486a1 2026-10-29T12:59:06Z docs(network): confirm recovered Proxmox quorum 3/3 and both QDevice clients connected",
+      "a9e3ee1a95150868a13d6193ed4d646a52aa54fa 2026-10-29T12:58:46Z docs(network): confirm recovered Proxmox quorum 3/3 and both QDevice clients connected",
+      "64ac98f45dc93d43a7d9b09d22b1c2ba2b6d90bb 2026-10-29T12:58:25Z docs(network): confirm recovered Proxmox quorum 3/3 and both QDevice clients connected"
+    ]
+  },
+  {
+    "branch": "docs/admin01-qnetd-target-mismatch-confirmed-20261029",
+    "base": "5cab42f3bb49d7736ed7338c66994ffaf7606f00",
+    "head": "46cae0a6055ee4c05cca59790860b55f4003f454",
+    "patch": "docs/archive/branch-evidence-2026-10-29/admin01-qnetd-target-mismatch-confirmed-20261029.patch",
+    "sha256": "c649a1f631aa3e541318ce149c1bd0d69dbad45c7e7704c02170a86432e78e6d",
+    "commits": [
+      "46cae0a6055ee4c05cca59790860b55f4003f454 2026-10-29T12:43:50Z docs(network): confirm Proxmox QDevice target old admin IP and protect witness recovery",
+      "b5bb8cc857a38c8820d29858c2e68f6161702aef 2026-10-29T12:43:29Z docs(network): confirm Proxmox QDevice target old admin IP and protect witness recovery",
+      "2344648341a39605cedcb275b7cebba4fe0bdb67 2026-10-29T12:43:07Z docs(network): confirm Proxmox QDevice target old admin IP and protect witness recovery"
+    ]
+  },
+  {
+    "branch": "docs/branch-merge-reconciliation-20261029",
+    "base": "0f27cb3df590228259774ad7fa77f97d21aef731",
+    "head": "b340c4149dcc9bf60826ee1c37b9c58cb08e6ba0",
+    "patch": "docs/archive/branch-evidence-2026-10-29/branch-merge-reconciliation-20261029.patch",
+    "sha256": "1889144d436344d118d3b7d0fc995bee5a66ea1d8c810a0948f4e3b2d39e4e5b",
+    "commits": [
+      "b340c4149dcc9bf60826ee1c37b9c58cb08e6ba0 2026-10-29T13:50:55Z docs(handover): record merged PR #238 and no safe old-branch merge queue",
+      "6e82814e02fa33fe6cb0874f4d66d6670462046c 2026-10-29T13:50:15Z docs(git): audit 52 retained branch refs and distinguish merged from stale drafts"
+    ]
+  },
+  {
+    "branch": "docs/close-superseded-router-drafts-20261029",
+    "base": "49c1e553983c03c40bfdea4f80ddf06ffe1207c8",
+    "head": "c2a34cfb92f56eaa4ece0e4d44078407529d90ae",
+    "patch": "docs/archive/branch-evidence-2026-10-29/close-superseded-router-drafts-20261029.patch",
+    "sha256": "a70dccead97533dd840bdb7186c2afe85a03aed7e1e3a69f7f3b2c17fc14aadb",
+    "commits": [
+      "c2a34cfb92f56eaa4ece0e4d44078407529d90ae 2026-10-29T07:50:20Z docs(router-01): record superseded PR #207/#210 closure and no remaining open drafts",
+      "0ced8ff2066540f8ef48919450d783d9228640d2 2026-10-29T07:50:11Z docs(router-01): record superseded PR #207/#210 closure and no remaining open drafts"
+    ]
+  },
+  {
+    "branch": "docs/grafana-1324-runbook-reconcile-20261029",
+    "base": "e02cbab1b035fbaa7389d2117a4cbbedfb59deba",
+    "head": "04a6db791c93eaffe2d3036da915de50b631bd2a",
+    "patch": "docs/archive/branch-evidence-2026-10-29/grafana-1324-runbook-reconcile-20261029.patch",
+    "sha256": "0502a240778d8f9b2e2f9f05be910d83d5dc26041572d71fc2df02d6168042b0",
+    "commits": [
+      "04a6db791c93eaffe2d3036da915de50b631bd2a 2026-10-29T06:13:16Z docs(handover): record source-only Grafana patch runbook recovery, no deployment",
+      "bc95fcfe60d374fecb2e3621d477c180e0b0ce31 2026-10-29T06:12:54Z docs(grafana): recover bounded security patch runbook from conflicted #204"
+    ]
+  },
+  {
+    "branch": "docs/handover-trivy-prometheus-confirmed-20261026",
+    "base": "8abe59d79a4c7528c569efd5c9ccf1b680dc5347",
+    "head": "ee887eba98182d68e4448db753868502c1aee368",
+    "patch": "docs/archive/branch-evidence-2026-10-29/handover-trivy-prometheus-confirmed-20261026.patch",
+    "sha256": "f902cd69de89d2fcb285eae51f381fbf2db2a5ceef99166829e2f0552a417c6f",
+    "commits": [
+      "ee887eba98182d68e4448db753868502c1aee368 2026-10-26T15:46:27Z docs(handover): confirm manual Trivy 16/16 and next gated unified Grafana rollout",
+      "94f31c3c7666ba3647a7c302aeee7e29883c51ad 2026-10-26T14:53:12Z docs(handover): record successful Trivy evening timer change and scheduled coverage verification",
+      "c470a2223789209dba7826e0b36050814fa3dfcf 2026-10-26T14:24:47Z docs(handover): flag Trivy 09 UTC versus Greenbone feed refresh 10 scheduling race",
+      "ded98d0d7b293efb0667cc7973917ad50a6f39c2 2026-10-26T14:22:57Z docs(handover): verify seven running Greenbone image IDs changed; rescan evidence required",
+      "98852fbbc3067ad06409818f34ae101f023f0641 2026-10-26T14:16:17Z docs(handover): distinguish Greenbone feed tag drift from running immutable image IDs",
+      "9b15a74ed906bb68139f910dc368d9f363e63877 2026-10-26T13:42:07Z docs(handover): record 4-host Trivy CVE rollout and greenbone-01 9/16 blocker",
+      "61844b80beae0228dcbec8362ab271d1fc1df80e 2026-10-26T13:33:30Z docs(handover): track separate proposed host and image CVE dashboard PR #197",
+      "022db34c6de70d02eadba1a7ee30b7af5ac0401f 2026-10-26T13:10:23Z docs(handover): record completed cloud-01 CVE canary and central Prometheus verification"
+    ]
+  },
+  {
+    "branch": "docs/monitor-01-metrics-acl-live-postflight-20261029",
+    "base": "93cbbcb2a7a9378d03cf4d00bbffc5f5eceb9c7f",
+    "head": "6aacd55201e3a31641511ba8e4fdadb50a9fce8e",
+    "patch": "docs/archive/branch-evidence-2026-10-29/monitor-01-metrics-acl-live-postflight-20261029.patch",
+    "sha256": "32300bdc3753d23bbdf29f0792d8a4260a624b62b47fd4ed67e506ca305097cc",
+    "commits": [
+      "6aacd55201e3a31641511ba8e4fdadb50a9fce8e 2026-10-29T08:42:07Z docs(monitor-01): record verified live router-metrics ACL repair postflight",
+      "c8b4cc53e5faef35269b5aeab57b1c82cd08d41a 2026-10-29T08:41:51Z docs(monitor-01): record verified live router-metrics ACL repair postflight",
+      "5e46d25a6279259ab55c77fa57a24a8669c6d077 2026-10-29T08:41:41Z docs(monitor-01): record verified live router-metrics ACL repair postflight"
+    ]
+  },
+  {
+    "branch": "docs/monitor-01-pinned-host-key-independent-audit-20261029",
+    "base": "d40d4e6a72a6723354633e12de1d99fc54d57c69",
+    "head": "17df2e88b6e6adb9ea5a0b17b46af07ea7aa408f",
+    "patch": "docs/archive/branch-evidence-2026-10-29/monitor-01-pinned-host-key-independent-audit-20261029.patch",
+    "sha256": "709797a4ef66b22225d0f46ac2ae7e4cf69dffe39150c7101f6d7dc1ea0f4201",
+    "commits": [
+      "17df2e88b6e6adb9ea5a0b17b46af07ea7aa408f 2026-10-29T10:01:01Z docs(monitor-01): record independent restricted-user SSH host pin postflight PASS",
+      "3371bcd74172f3a1395bbff92aee5ea4d0a6d55e 2026-10-29T10:00:33Z docs(monitor-01): record independent restricted-user SSH host pin postflight PASS",
+      "6a1113cc1462728bf4682999090cd34ca519ad31 2026-10-29T09:59:51Z docs(monitor-01): record independent restricted-user SSH host pin postflight PASS"
+    ]
+  },
+  {
+    "branch": "docs/monitor-01-router-host-pin-live-pass-20261029",
+    "base": "9fd39a8929e0beb177feb18778016e1cdf77e6d1",
+    "head": "87b2ab6847089b9524b39c09c37949a5b8e3d918",
+    "patch": "docs/archive/branch-evidence-2026-10-29/monitor-01-router-host-pin-live-pass-20261029.patch",
+    "sha256": "8e39c639b03f9128c31fd1159be9ab682c2dc673ef906e07d270f1f8b303f2f0",
+    "commits": [
+      "87b2ab6847089b9524b39c09c37949a5b8e3d918 2026-10-29T09:53:42Z docs(monitor-01): record successful live Pi SSH host-key pin postflight",
+      "19ae2eb6a5a1300d93527a05ef50764e9925e2f8 2026-10-29T09:53:18Z docs(monitor-01): record successful live Pi SSH host-key pin postflight",
+      "84d04d52ff58ef8033b304cf551f9a0535509e38 2026-10-29T09:53:01Z docs(monitor-01): record successful live Pi SSH host-key pin postflight"
+    ]
+  },
+  {
+    "branch": "docs/nextcloud-renewal-evidence-rebased-20261029",
+    "base": "995086a71a0027fe51760518a95557750d7e985c",
+    "head": "bf4ea2c9c640b50893a5369275e23e033633e53c",
+    "patch": "docs/archive/branch-evidence-2026-10-29/nextcloud-renewal-evidence-rebased-20261029.patch",
+    "sha256": "30b388222823695c021ed973b83c7ce3cdd95f837fd88e43225a0f336b10f3b6",
+    "commits": [
+      "bf4ea2c9c640b50893a5369275e23e033633e53c 2026-10-29T06:05:44Z docs(handover): record no-deploy recovery of Nextcloud renewal evidence",
+      "a0ed73ee1c5c0f6c8cc331b4a650d05876aed550 2026-10-29T06:05:28Z docs(nextcloud): safely incorporate Oct 26 renewal evidence from #190 onto main"
+    ]
+  },
+  {
+    "branch": "docs/router-01-admin01-dhcp-live-writer-pass-20261029",
+    "base": "231b78525ca18818c93565bbf7a10b69bafa96ec",
+    "head": "231e996f812b636c7c7cc11f785e7cbb849d983c",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router-01-admin01-dhcp-live-writer-pass-20261029.patch",
+    "sha256": "6a2712252c08b77197765c7c6984ef7e8af9797e1df782a99acf6744a33b1354",
+    "commits": [
+      "231e996f812b636c7c7cc11f785e7cbb849d983c 2026-10-29T12:23:27Z docs(router): record approved live DHCP reservation writer PASS and pending independent verification",
+      "fae4a759f9bfd16163bc81206ab546fb3ff07286 2026-10-29T12:23:00Z docs(router): record approved live DHCP reservation writer PASS and pending independent verification",
+      "c09abf585133fc608619f47d709a69c0f8b446b9 2026-10-29T12:22:34Z docs(router): record approved live DHCP reservation writer PASS and pending independent verification"
+    ]
+  },
+  {
+    "branch": "docs/router-01-dhcp-live-preflight-pass-20261029",
+    "base": "43c69dbf98202c9ccb64ad386d84a67c50f78d53",
+    "head": "1e48dc25b7aa24afa9be01d562574ea669187f53",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router-01-dhcp-live-preflight-pass-20261029.patch",
+    "sha256": "463cb14c2c641147860d5ea384b9af417bae9ea599db1bb063d0da723e3cb105",
+    "commits": [
+      "1e48dc25b7aa24afa9be01d562574ea669187f53 2026-10-29T06:19:06Z docs(handover): preserve verified router DHCP preflight and pending assignment gate",
+      "d8a7764f484b0454b9d51fa527d92fbd819eac80 2026-10-29T06:18:42Z docs(router): record live 20/20 DHCP exclusion preflight and remaining ownership gates"
+    ]
+  },
+  {
+    "branch": "docs/router-01-monitor-authorized-key-live-pass-20261029",
+    "base": "b91a7a8f8d868bb0dfb40f79f047235f28791585",
+    "head": "d92580c5c329e77c280fa6fa1b5a0a2ee1482a72",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router-01-monitor-authorized-key-live-pass-20261029.patch",
+    "sha256": "3a134789a88d8488bcbd3efb0d8388b975a5f90762e5fe1ba7985e85893fff68",
+    "commits": [
+      "d92580c5c329e77c280fa6fa1b5a0a2ee1482a72 2026-10-29T11:11:38Z docs(handover): record operator-verified live Pi SSH monitoring key authorisation",
+      "cb0bc739bef3843eb2e963047e381303faca8ca3 2026-10-29T11:11:02Z docs(architecture): record live restricted router SSH public-key authorisation",
+      "3c3ab3e03cb9a30566a6767ebdd1bd2e3b0dd052 2026-10-29T11:10:28Z docs(router-01): record approved live restricted SSH public-key installation PASS"
+    ]
+  },
+  {
+    "branch": "docs/router-01-mss-live-audit-pass-20261028",
+    "base": "6c573feeee7359c2f7250d68512f5b099843dfa9",
+    "head": "50f0cd9ccd1a79ea4fbb6dd3c8a7e3748612ac60",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router-01-mss-live-audit-pass-20261028.patch",
+    "sha256": "08ce0fdf9c7fa4aeb8c6fda25f6317891e1b84ae0e054ef1dcddb3dbc581da15",
+    "commits": [
+      "50f0cd9ccd1a79ea4fbb6dd3c8a7e3748612ac60 2026-10-28T22:24:19Z docs(router-01): capture successful postcutover live MSS/NAT audit",
+      "e401874fde8aaac76e9a5862c0115b166c6235de 2026-10-28T22:24:16Z docs(router-01): capture successful postcutover live MSS/NAT audit",
+      "e1e512fc68f4ee5b738a56e8d62c6f09d0cd7cab 2026-10-28T22:24:13Z docs(router-01): capture successful postcutover live MSS/NAT audit"
+    ]
+  },
+  {
+    "branch": "docs/router-01-supersede-old-pppoe-kea-branch-20261029",
+    "base": "2fd8227e18dacb4be766cadba148885621e45b0e",
+    "head": "6819a1abed58a082eaa59ef650e22d016d9831d5",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router-01-supersede-old-pppoe-kea-branch-20261029.patch",
+    "sha256": "576114a51a18c77df6bb10c0e6141b9b75580a99b9eefddecddefab43d7f018d",
+    "commits": [
+      "6819a1abed58a082eaa59ef650e22d016d9831d5 2026-10-29T07:46:36Z docs(handover): track legacy PRs #207/#210 supersession and merged safe audit #221",
+      "b076f5df1696c6b5c2480c56226ff9e9d39eaf31 2026-10-29T07:46:03Z docs(router-01): formally supersede old .3.1 Kea and Docker-retirement migration draft"
+    ]
+  },
+  {
+    "branch": "docs/router-admin01-dhcp-independent-postflight-pass-20261029",
+    "base": "1b258ef0714f02ff93c0eb04f69fa67b28f13a9d",
+    "head": "93dc5a1ba80cbf6679144a139f12eb9fb7547816",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router-admin01-dhcp-independent-postflight-pass-20261029.patch",
+    "sha256": "3f6161f1eb5f4f2056a25fcfd87a72f30cb01b76669df0a77a3874a79f70c742",
+    "commits": [
+      "93dc5a1ba80cbf6679144a139f12eb9fb7547816 2026-10-29T12:29:40Z docs(handover): record independently verified router DHCP configuration",
+      "52961ad3920c88898bed807f0dc47dfed5207a4b 2026-10-29T12:28:35Z docs(router): reconcile independently verified admin DHCP reservation and pending lease move",
+      "a97ee53b432bcef3a0743589eb90c779465368d4 2026-10-29T12:28:14Z docs(router): reconcile independently verified admin DHCP reservation and pending lease move"
+    ]
+  },
+  {
+    "branch": "docs/router01-bedroom-dhcp-live-verified-20261029",
+    "base": "b0263406d026a3cd89311188856a1f3496a61dbf",
+    "head": "da00242f10bbcecf8b7f291d95639d2e747eec8c",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router01-bedroom-dhcp-live-verified-20261029.patch",
+    "sha256": "2501de4cfb4ab9d2b9f10f21b3d54396d546a56e08dc494fa69a5581934c19dd",
+    "commits": [
+      "da00242f10bbcecf8b7f291d95639d2e747eec8c 2026-10-29T07:36:04Z docs(current-state): record Pi router, ASUS and media live DHCP topology and postflight",
+      "201db1f13bbacb381bdc362c2955816b432289d3 2026-10-29T07:35:37Z docs(router-01): finalize Bedroom DHCP deployment runbook with live validation evidence",
+      "616ae4b214c1a4231daca7d5b387aa24c2c6cd91 2026-10-29T07:34:58Z docs(handover): record verified live Bedroom DHCP reservation and successful LAN/DNS/HTTPS tests"
+    ]
+  },
+  {
+    "branch": "docs/router01-monitoring-path-live-audit-20261029",
+    "base": "06c0091243060a75b38317737cebfa7ed7a2b67d",
+    "head": "6d4a7b34b0ff44f04b17f103ac98dfe3db3bb797",
+    "patch": "docs/archive/branch-evidence-2026-10-29/router01-monitoring-path-live-audit-20261029.patch",
+    "sha256": "fc7ee01c7e7ba599260b5ad04d2c6a5da588be8ede2981b2455c2ae9321912b3",
+    "commits": [
+      "6d4a7b34b0ff44f04b17f103ac98dfe3db3bb797 2026-10-29T07:58:42Z docs(router-01): capture independent PASS of Loki/Zabbix monitoring network audit",
+      "ea7db7773aa2c9bc36fdb5669a8d942d2b4924f8 2026-10-29T07:58:28Z docs(router-01): capture independent PASS of Loki/Zabbix monitoring network audit",
+      "98fd2861b2637e2a41c384b6ca0220ac4dd782d7 2026-10-29T07:58:18Z docs(router-01): capture independent PASS of Loki/Zabbix monitoring network audit"
+    ]
+  },
+  {
+    "branch": "docs/security-programme-reconcile-20261029",
+    "base": "91effac3de8b6263e4cd978d138be3c4fb98225b",
+    "head": "74fcfa07f5e2e13df2ae1eeacc17eae63f9f28ad",
+    "patch": "docs/archive/branch-evidence-2026-10-29/security-programme-reconcile-20261029.patch",
+    "sha256": "95f3ae99e84da3d11fa82998c7ec5ba855cbbc205cbe74388e9e138f364919e1",
+    "commits": [
+      "74fcfa07f5e2e13df2ae1eeacc17eae63f9f28ad 2026-10-29T06:09:06Z docs(handover): track security programme historical correction and zero-deploy gate",
+      "5f7426b5481a56ff8bccad51a7c8663880ed2c80 2026-10-29T06:08:47Z docs(backlog): link dated security remediation programme without replacing newer routing truth",
+      "1510509aaf591f4290dc51917d99b3a17c847de5 2026-10-29T06:08:29Z docs(security): recover dated Greenbone Trivy programme with Pi gateway attribution correction"
+    ]
+  },
+  {
+    "branch": "docs/security-remediation-programme-2026-10-20",
+    "base": "66d769b857e6270c5a560bc215a1175428e89b65",
+    "head": "9191c01f01b6d70a744398304f0db5f8a4fe4a5d",
+    "patch": "docs/archive/branch-evidence-2026-10-29/security-remediation-programme-2026-10-20.patch",
+    "sha256": "fa11caccb90415463d983f20a0c8c8ea11f6657b237196cdd6383f973b61fdf7",
+    "commits": [
+      "9191c01f01b6d70a744398304f0db5f8a4fe4a5d 2026-10-20T18:37:39+01:00 docs: hand over security remediation priorities and evidence without deployment",
+      "583a2babfaf424e7dd4970834fbff306ebfd968c 2026-10-20T18:37:04+01:00 docs(architecture): prioritise cross-project security findings remediation",
+      "53f33351d091b4347aa8b0a5e3c5811f61b771f7 2026-10-20T18:36:10+01:00 docs(security): define evidence-led Greenbone and Trivy remediation programme"
+    ]
+  }
+]

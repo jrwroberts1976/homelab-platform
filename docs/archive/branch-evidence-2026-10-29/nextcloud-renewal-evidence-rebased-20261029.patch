@@ -1,0 +1,44 @@
+diff --git a/docs/security/NEXTCLOUD-HTTPS-HARDENING.md b/docs/security/NEXTCLOUD-HTTPS-HARDENING.md
+index e3244b0c7b6e6ddc56ad2494c6adab8217d039a1..783c06e0ee23941c4ae5fae57a220587ca7693a3 100644
+--- a/docs/security/NEXTCLOUD-HTTPS-HARDENING.md
++++ b/docs/security/NEXTCLOUD-HTTPS-HARDENING.md
+@@ -73,7 +73,23 @@ Do not run cloud-stack.yml as a routine HTTPS repair.
+ - Hook checks the renewed certificate lineage
+ - Nginx configuration is tested before reload
+ 
+-Certbot renewal dry-run (Cloudflare DNS-01) and deploy-hook Nginx reload were tested successfully on 2026-10-26. The hook was invoked directly with the expected lineage; actual production certificate renewal remains unobserved. See the separate renewal-evidence PR #190.
++Certbot renewal dry-run (Cloudflare DNS-01) and deploy-hook Nginx reload were tested successfully on 2026-10-26. The hook was invoked directly with the expected lineage; actual production certificate renewal remains unobserved. The detailed dated evidence below supersedes the original conflicted PR #190.
++
++## Certificate renewal verification — 2026-10-26
++
++- Certbot 4.0.0, with Cloudflare DNS validation.
++- Renewal timer enabled and active at the time of the test.
++- Production certificate expires 2027-01-19.
++- `certbot renew --dry-run` completed successfully.
++- Simulated renewal did not replace the production certificate.
++- Deploy hook tested with the expected `RENEWED_LINEAGE`.
++- Nginx reload succeeded at 08:17:32 GMT (exit status 0).
++- Nginx configuration and HTTPS health passed after reload.
++- Real production certificate renewal has not yet been observed.
++- Cloudflare Python library 2.20.x generated a non-blocking
++  deprecation warning; review dependency compatibility through IaC.
++
++
+ 
+ ## Recovery
+ 
+diff --git a/gpt-handover.md b/gpt-handover.md
+index 6551700d4d0345aa4ae8ab49cead69bbdb449202..9fc3191e8624b4b9255f0d528a5d917e9114c843 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,10 @@
+ # GPT Handover — Homelab Platform
+ 
++## 29 October 2026 — Nextcloud certificate renewal evidence recovery (docs-only)
++
++The historical 26 October 2026 Nextcloud certificate renewal verification from old PR #190 was reconciled onto current `main` in a fresh **documentation-only** branch after GitHub rejected a direct merge as conflicting. The dated evidence added to `docs/security/NEXTCLOUD-HTTPS-HARDENING.md` records Certbot 4.0.0 with Cloudflare DNS validation, enabled renewal timer at test time, production certificate expiry 2027-01-19, staging `certbot renew --dry-run` PASS, successful isolated deploy-hook Nginx reload at 08:17:32 GMT, and HTTPS health PASS. **No real production certificate renewal was observed**, and Cloudflare Python library 2.20.x dependency deprecation review remains open. This Git-only integration runs no Ansible and changes no actual certificate or Nginx process; do not infer deployed state from a documentation merge. Original PR #190 needs to be closed as superseded only after the replacement PR passes CI and merges.
++
++
+ ## LATEST — 28 October 2026: DHCP static-pool conflict audit complete; guarded source-only preflight STAGED
+ 
+ Live on physical Pi `router-01` at `192.168.2.1/24` with `dnsmasq` active: actual `/etc/dnsmasq.d/router.conf` contains `interface=eth0`, `bind-dynamic`, `dhcp-authoritative`, **one `dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h`**, DHCP router and DNS options both `192.168.2.1`. No DHCP host/reservation/exclusion entries surfaced in direct file grep. Debian vendor `dnsmasq.service` has no drop-ins; active systemd-helper launches dnsmasq with `-7 /etc/dnsmasq.d,.dpkg-dist,.dpkg-old,.dpkg-new`; directory contains `README` and `router.conf`. `dnsmasq --test` PASS. Output is **read-only** although ad-hoc Ansible shell reports `CHANGED` by default. On prior user lease inspection, 15 current pool addresses unexpired at observation, plus 3 legacy `192.168.3.x` records (until 29 October); **no lease** for `.181` or `.195`. Empty neighbour entries for those addresses prove neither ownership nor lack of conflict. Canonical `IaC/inventory/estate.json` validated 17 Sep still lists AiMesh node `.181` and `media-01 .195` inside dynamic scope. **media-01 offline**, AiMesh IP and both static/DHCP modes unverified. No confirmed duplicate address; potential future allocation collision exists.
