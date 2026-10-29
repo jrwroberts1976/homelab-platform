@@ -1,0 +1,459 @@
+---
+# SOURCE ONLY: no router write without separate operator approval.
+# Authorise only the exact existing monitor-01 public key, never private key.
+# Run from admin-01 with BOTH inventories:
+#  -i inventory/router-01-postcutover-baseline.yml -i inventory/hosts.yml
+# No sshd reload, tunnel, exporter, Prometheus, DHCP, DNS or firewall writes.
+- name: Authorise dedicated, restricted monitor-01 tunnel public key on physical router-01
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_metrics_authorize_apply_approved: false
+    router_metrics_authorize_expected_fingerprint: "SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY"
+    router_metrics_authorize_host_fingerprint: "SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI"
+    router_metrics_authorize_user: router-metrics
+    router_metrics_authorize_home: /var/lib/router-metrics
+    router_metrics_authorize_ssh_dir: /var/lib/router-metrics/.ssh
+    router_metrics_authorize_file: /var/lib/router-metrics/.ssh/authorized_keys
+    router_metrics_authorize_monitor_dir: /etc/homelab/router-metrics-ssh
+    router_metrics_authorize_comment: router-metrics-tunnel@monitor-01
+
+  pre_tasks:
+    - name: Read controller hostname without escalation
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: metrics_auth_controller
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse unapproved writes, wrong controller or wrong inventories
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_metrics_authorize_apply_approved | bool
+          - metrics_auth_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - "'monitor-01' in hostvars"
+          - hostvars['monitor-01'].ansible_host == '192.168.2.52'
+        fail_msg: "Requires new explicit approval, admin-01, real Pi router and both inventories."
+      delegate_to: localhost
+      become: false
+
+    - name: Read actual source monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: monitor-01
+      register: metrics_auth_source_name
+      changed_when: false
+
+    - name: Read actual source monitoring IPv4 addresses
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr]
+      delegate_to: monitor-01
+      register: metrics_auth_source_addresses
+      changed_when: false
+
+    - name: Require exact monitoring source identity
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_source_name.stdout | trim == 'monitor-01'
+          - "'inet 192.168.2.52/' in metrics_auth_source_addresses.stdout"
+
+    - name: Inspect existing dedicated monitoring public and private keys and pinned host trust
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      delegate_to: monitor-01
+      loop:
+        - "{{ router_metrics_authorize_monitor_dir }}"
+        - "{{ router_metrics_authorize_monitor_dir }}/id_ed25519.pub"
+        - "{{ router_metrics_authorize_monitor_dir }}/id_ed25519"
+        - "{{ router_metrics_authorize_monitor_dir }}/known_hosts"
+      register: metrics_auth_source_stats
+
+    - name: Require original protected source files and no symlinks
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_source_stats.results[0].stat.isdir | default(false)
+          - not (metrics_auth_source_stats.results[0].stat.islnk | default(false))
+          - metrics_auth_source_stats.results[0].stat.mode == '0755'
+          - metrics_auth_source_stats.results[1].stat.isreg | default(false)
+          - not (metrics_auth_source_stats.results[1].stat.islnk | default(false))
+          - metrics_auth_source_stats.results[1].stat.uid == 0
+          - metrics_auth_source_stats.results[1].stat.mode == '0644'
+          - metrics_auth_source_stats.results[2].stat.isreg | default(false)
+          - not (metrics_auth_source_stats.results[2].stat.islnk | default(false))
+          - metrics_auth_source_stats.results[2].stat.uid == 992
+          - metrics_auth_source_stats.results[2].stat.mode == '0600'
+          - metrics_auth_source_stats.results[3].stat.isreg | default(false)
+          - not (metrics_auth_source_stats.results[3].stat.islnk | default(false))
+          - metrics_auth_source_stats.results[3].stat.uid == 0
+          - metrics_auth_source_stats.results[3].stat.mode == '0644'
+
+    - name: Read only existing monitor public key into Ansible memory
+      ansible.builtin.slurp:
+        src: "{{ router_metrics_authorize_monitor_dir }}/id_ed25519.pub"
+      delegate_to: monitor-01
+      register: metrics_auth_source_public_file
+      no_log: true
+
+    - name: Select exactly the one existing public key record
+      ansible.builtin.set_fact:
+        metrics_auth_public_line: "{{ metrics_auth_source_public_file.content | b64decode | trim }}"
+      no_log: true
+
+    - name: Require a single unoptioned ED25519 monitoring public key
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_public_line.splitlines() | length == 1
+          - metrics_auth_public_line.split() | length >= 2
+          - metrics_auth_public_line.split()[0] == 'ssh-ed25519'
+          - metrics_auth_public_line.split()[1] is match('^[A-Za-z0-9+/=]+$')
+        fail_msg: "Monitoring source public key is missing or unexpected; no router authorization."
+      no_log: true
+
+    - name: Re-derive source public key from existing private key as service user
+      ansible.builtin.command:
+        argv:
+          - runuser
+          - -u
+          - router-metrics-tunnel
+          - --
+          - ssh-keygen
+          - -y
+          - -P
+          - ""
+          - -f
+          - "{{ router_metrics_authorize_monitor_dir }}/id_ed25519"
+      delegate_to: monitor-01
+      register: metrics_auth_source_derived
+      changed_when: false
+      no_log: true
+
+    - name: Ensure no source private/public key substitution
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_source_derived.rc == 0
+          - metrics_auth_source_derived.stdout.split()[:2] == metrics_auth_public_line.split()[:2]
+        fail_msg: "Existing monitoring SSH private/public pair changed; refuse authorisation."
+      no_log: true
+
+    - name: Verify monitor source public key SHA256 independently
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "-", -E, sha256]
+        stdin: "{{ metrics_auth_public_line }}\n"
+      delegate_to: monitor-01
+      register: metrics_auth_public_fingerprint
+      changed_when: false
+      no_log: true
+
+    - name: Require the independently verified exact monitoring public key
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_public_fingerprint.rc == 0
+          - metrics_auth_public_fingerprint.stdout.split()[1] == router_metrics_authorize_expected_fingerprint
+          - "'(ED25519)' in metrics_auth_public_fingerprint.stdout"
+        fail_msg: "Monitor public key fingerprint mismatches independent operator audit; no router write."
+
+    - name: Read pinned Pi host key as monitoring service account
+      ansible.builtin.command:
+        argv:
+          - runuser
+          - -u
+          - router-metrics-tunnel
+          - --
+          - ssh-keygen
+          - -F
+          - 192.168.2.1
+          - -f
+          - "{{ router_metrics_authorize_monitor_dir }}/known_hosts"
+      delegate_to: monitor-01
+      register: metrics_auth_pinned_host
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Retain only host-key records and not ssh-keygen comments
+      ansible.builtin.set_fact:
+        metrics_auth_pinned_lines: "{{ metrics_auth_pinned_host.stdout_lines | reject('match', '^#') | reject('equalto', '') | list }}"
+      no_log: true
+
+    - name: Require exactly one independently pinned Pi ED25519 host key
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_pinned_host.rc == 0
+          - metrics_auth_pinned_lines | length == 1
+          - metrics_auth_pinned_lines[0] is match('^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+( .*)?$')
+        fail_msg: "Monitoring service-user Pi SSH host-key trust is missing/ambiguous."
+      no_log: true
+
+    - name: Recheck pinned Pi host key SHA256 before router-side action
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "-", -E, sha256]
+        stdin: "{{ metrics_auth_pinned_lines[0] }}\n"
+      delegate_to: monitor-01
+      register: metrics_auth_host_fingerprint
+      changed_when: false
+      no_log: true
+
+    - name: Require independently verified physical-Pi host-key fingerprint
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_host_fingerprint.rc == 0
+          - metrics_auth_host_fingerprint.stdout.split()[1] == router_metrics_authorize_host_fingerprint
+        fail_msg: "Previously trusted physical Pi host-key pin mismatch; abort."
+
+    - name: Read physical router Ethernet MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: metrics_auth_pi_mac
+      changed_when: false
+
+    - name: Read physical router LAN IPv4
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: metrics_auth_pi_lan
+      changed_when: false
+
+    - name: Refuse nonphysical router or wrong LAN
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_pi_mac.stdout | trim == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in metrics_auth_pi_lan.stdout"
+
+    - name: Read router-metrics passwd entry
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_metrics_authorize_user }}"]
+      register: metrics_auth_pi_user
+      changed_when: false
+      no_log: true
+
+    - name: Read router-metrics primary group numeric ID
+      ansible.builtin.command:
+        argv: [id, -g, "{{ router_metrics_authorize_user }}"]
+      register: metrics_auth_pi_gid
+      changed_when: false
+
+    - name: Require exact dedicated router-metrics identity, not admin user
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_pi_user.stdout.split(':')[2] | int == 999
+          - metrics_auth_pi_user.stdout.split(':')[5] == router_metrics_authorize_home
+          - metrics_auth_pi_user.stdout.split(':')[6] == '/usr/sbin/nologin'
+          - metrics_auth_pi_gid.stdout | trim is match('^[0-9]+$')
+        fail_msg: "Router service-account UID/home/shell changed; refusing any write."
+
+    - name: Check router sshd configuration syntax without reload
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      changed_when: false
+
+    - name: Read effective on-disk router-metrics SSH policy
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T, -C, "user=router-metrics,host=monitor-01,addr=192.168.2.52"]
+      register: metrics_auth_effective_sshd
+      changed_when: false
+
+    - name: Refuse any unexpected weakening of router-metrics SSH restrictions
+      ansible.builtin.assert:
+        that:
+          - "'strictmodes yes' in metrics_auth_effective_sshd.stdout_lines"
+          - "'authorizedkeysfile .ssh/authorized_keys .ssh/authorized_keys2' in metrics_auth_effective_sshd.stdout_lines"
+          - "'authorizedkeyscommand none' in metrics_auth_effective_sshd.stdout_lines"
+          - "'authenticationmethods publickey' in metrics_auth_effective_sshd.stdout_lines"
+          - "'passwordauthentication no' in metrics_auth_effective_sshd.stdout_lines"
+          - "'kbdinteractiveauthentication no' in metrics_auth_effective_sshd.stdout_lines"
+          - "'allowtcpforwarding local' in metrics_auth_effective_sshd.stdout_lines"
+          - "'permitopen 127.0.0.1:9100' in metrics_auth_effective_sshd.stdout_lines"
+          - "'permitlisten none' in metrics_auth_effective_sshd.stdout_lines"
+          - "'gatewayports no' in metrics_auth_effective_sshd.stdout_lines"
+          - "'permittty no' in metrics_auth_effective_sshd.stdout_lines"
+          - "'maxsessions 0' in metrics_auth_effective_sshd.stdout_lines"
+        fail_msg: "On-disk dedicated router SSH Match policy differs from audited restricted profile."
+
+    - name: Inspect router service home, .ssh, and both authorised key paths
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ router_metrics_authorize_home }}"
+        - "{{ router_metrics_authorize_ssh_dir }}"
+        - "{{ router_metrics_authorize_file }}"
+        - "{{ router_metrics_authorize_ssh_dir }}/authorized_keys2"
+      register: metrics_auth_router_paths
+
+    - name: Refuse unsafe router home, symlinks or unexpected authorised-key files
+      ansible.builtin.assert:
+        that:
+          - metrics_auth_router_paths.results[0].stat.isdir | default(false)
+          - not (metrics_auth_router_paths.results[0].stat.islnk | default(false))
+          - metrics_auth_router_paths.results[0].stat.uid == 999
+          - metrics_auth_router_paths.results[0].stat.mode == '0700'
+          - >-
+            (not (metrics_auth_router_paths.results[1].stat.exists | default(false)))
+            or (metrics_auth_router_paths.results[1].stat.isdir | default(false)
+                and not (metrics_auth_router_paths.results[1].stat.islnk | default(false))
+                and metrics_auth_router_paths.results[1].stat.uid == 999
+                and metrics_auth_router_paths.results[1].stat.gid == metrics_auth_pi_gid.stdout | int
+                and metrics_auth_router_paths.results[1].stat.mode == '0700')
+          - >-
+            (not (metrics_auth_router_paths.results[2].stat.exists | default(false)))
+            or (metrics_auth_router_paths.results[2].stat.isreg | default(false)
+                and not (metrics_auth_router_paths.results[2].stat.islnk | default(false))
+                and metrics_auth_router_paths.results[2].stat.uid == 999
+                and metrics_auth_router_paths.results[2].stat.gid == metrics_auth_pi_gid.stdout | int
+                and metrics_auth_router_paths.results[2].stat.mode == '0600')
+          - not (metrics_auth_router_paths.results[3].stat.exists | default(false))
+        fail_msg: "Unexpected router-metrics SSH directory/file or authorized_keys2; manual reconcile before write."
+
+    - name: Construct exact restricted one-key authorisation in Ansible memory
+      ansible.builtin.set_fact:
+        metrics_auth_exact_line: >-
+          from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"
+          {{ metrics_auth_public_line.split()[0] }}
+          {{ metrics_auth_public_line.split()[1] }}
+          {{ router_metrics_authorize_comment }}
+      no_log: true
+
+    - name: Read preexisting authorised key file only when present
+      ansible.builtin.slurp:
+        src: "{{ router_metrics_authorize_file }}"
+      register: metrics_auth_existing_file
+      when: metrics_auth_router_paths.results[2].stat.exists | default(false)
+      no_log: true
+
+    - name: Fail closed on any unexpected existing authorised-key contents
+      ansible.builtin.assert:
+        that:
+          - >-
+            not (metrics_auth_router_paths.results[2].stat.exists | default(false))
+            or (metrics_auth_existing_file.content | b64decode
+                == metrics_auth_exact_line + '\n')
+        fail_msg: "An existing router-metrics authorized_keys differs from the exact restricted monitored key."
+      no_log: true
+
+  tasks:
+    - name: Initialise narrowly scoped recovery flags
+      ansible.builtin.set_fact:
+        metrics_auth_created_dir: false
+        metrics_auth_created_file: false
+
+    - name: Add and independently validate only the restricted router authorised key
+      block:
+        - name: Create dedicated router-metrics .ssh with strict owner/mode if absent
+          ansible.builtin.file:
+            path: "{{ router_metrics_authorize_ssh_dir }}"
+            state: directory
+            owner: "{{ router_metrics_authorize_user }}"
+            group: "{{ metrics_auth_pi_gid.stdout | trim }}"
+            mode: '0700'
+          when: not (metrics_auth_router_paths.results[1].stat.exists | default(false))
+          register: metrics_auth_mkdir_result
+
+        - name: Record whether this play created the router service .ssh directory
+          ansible.builtin.set_fact:
+            metrics_auth_created_dir: "{{ metrics_auth_mkdir_result is changed }}"
+
+        - name: Create exactly one restricted public-key authorisation if absent
+          ansible.builtin.copy:
+            dest: "{{ router_metrics_authorize_file }}"
+            content: "{{ metrics_auth_exact_line }}\n"
+            owner: "{{ router_metrics_authorize_user }}"
+            group: "{{ metrics_auth_pi_gid.stdout | trim }}"
+            mode: '0600'
+            force: false
+            backup: false
+          when: not (metrics_auth_router_paths.results[2].stat.exists | default(false))
+          register: metrics_auth_write_result
+          no_log: true
+
+        - name: Record whether this play created router authorised key file
+          ansible.builtin.set_fact:
+            metrics_auth_created_file: "{{ metrics_auth_write_result is changed }}"
+
+        - name: Revalidate new directory and authorised key metadata
+          ansible.builtin.stat:
+            path: "{{ item }}"
+            follow: false
+          loop:
+            - "{{ router_metrics_authorize_ssh_dir }}"
+            - "{{ router_metrics_authorize_file }}"
+          register: metrics_auth_post_paths
+
+        - name: Require exactly protected service-owned path metadata
+          ansible.builtin.assert:
+            that:
+              - metrics_auth_post_paths.results[0].stat.isdir | default(false)
+              - not (metrics_auth_post_paths.results[0].stat.islnk | default(false))
+              - metrics_auth_post_paths.results[0].stat.uid == 999
+              - metrics_auth_post_paths.results[0].stat.gid == metrics_auth_pi_gid.stdout | int
+              - metrics_auth_post_paths.results[0].stat.mode == '0700'
+              - metrics_auth_post_paths.results[1].stat.isreg | default(false)
+              - not (metrics_auth_post_paths.results[1].stat.islnk | default(false))
+              - metrics_auth_post_paths.results[1].stat.uid == 999
+              - metrics_auth_post_paths.results[1].stat.gid == metrics_auth_pi_gid.stdout | int
+              - metrics_auth_post_paths.results[1].stat.mode == '0600'
+
+        - name: Privately inspect exact authorised key file content
+          ansible.builtin.slurp:
+            src: "{{ router_metrics_authorize_file }}"
+          register: metrics_auth_post_content
+          no_log: true
+
+        - name: Confirm only the intended restricted, fingerprint-verified key exists
+          ansible.builtin.assert:
+            that:
+              - metrics_auth_post_content.content | b64decode == metrics_auth_exact_line + '\n'
+            fail_msg: "Router authorised key content mismatch: do not attempt SSH."
+          no_log: true
+
+        - name: Revalidate sshd syntax after authorised-key installation without reload
+          ansible.builtin.command:
+            argv: [/usr/sbin/sshd, -t]
+          changed_when: false
+
+      rescue:
+        - name: Read newly created authorised-key contents if this play created it
+          ansible.builtin.slurp:
+            src: "{{ router_metrics_authorize_file }}"
+          register: metrics_auth_recovery_content
+          when: metrics_auth_created_file | bool
+          no_log: true
+
+        - name: Refuse recovery deletion if key content is no longer exactly ours
+          ansible.builtin.assert:
+            that:
+              - metrics_auth_recovery_content.content | b64decode == metrics_auth_exact_line + '\n'
+            fail_msg: "Authorised key changed concurrently; preserve it for manual inspection."
+          when: metrics_auth_created_file | bool
+          no_log: true
+
+        - name: Delete only our newly created authorisation after postflight failure
+          ansible.builtin.file:
+            path: "{{ router_metrics_authorize_file }}"
+            state: absent
+          when: metrics_auth_created_file | bool
+          no_log: true
+
+        - name: Remove only an empty directory created in this run
+          ansible.builtin.command:
+            argv: [rmdir, "{{ router_metrics_authorize_ssh_dir }}"]
+          register: metrics_auth_recovery_rmdir
+          failed_when: false
+          changed_when: metrics_auth_recovery_rmdir.rc == 0
+          when: metrics_auth_created_dir | bool
+
+        - name: Fail closed after any attempted scoped restoration
+          ansible.builtin.fail:
+            msg: "Router public-key authorisation postflight failed. Scoped recovery attempted. Audit live state before retry."
+
+    - name: Report safe scope without printing SSH key bytes
+      ansible.builtin.debug:
+        msg:
+          - "Source monitoring ED25519 public-key fingerprint: {{ router_metrics_authorize_expected_fingerprint }}"
+          - "router-01 restricted authorization for monitor-01 to 127.0.0.1:9100: PASS"
+          - "No private keys, sshd reload, SSH tunnel, firewall, DNS, DHCP, exporter listener or Prometheus changes"

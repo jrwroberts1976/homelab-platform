@@ -1,5 +1,26 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — restricted router-metrics public key authorisation STAGED in IaC only; no router change
+
+Fresh independent read-only `monitor-01` source key audit **PASS**:
+```text
+MONITOR_IDENTITY=PASS
+PUBLIC_KEY_METADATA=PASS
+PRIVATE_KEY_METADATA=PASS
+PRIVATE_PUBLIC_KEY_MATCH=PASS
+PUBLIC_KEY_ALGORITHM=ssh-ed25519
+PUBLIC_KEY_FINGERPRINT=SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY
+PUBLIC_KEY_PREFLIGHT=PASS
+```
+This is the exact existing dedicated monitoring **client** public key fingerprint, *not* router server's ED25519 **host** fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` (already independently pinned and checked by the monitor account).
+
+Previous physical Pi read-only check **PASS**: `router-01` real eth0 MAC `d8:3a:dd:5a:51:44`, address `192.168.2.1/24`, `router-metrics` UID999 and nologin, home `/var/lib/router-metrics` mode0700; `.ssh`/`authorized_keys`/`authorized_keys2` all **MISSING**; `sshd -T -C` public-key-only, strictmodes, local-only TCP forwarding, only `127.0.0.1:9100` destination, maxsessions0. These checks are on-disk policy not proof sshd active process reloaded configuration. Pi Node Exporter still loopback `127.0.0.1:9100`; no tunnel or Pi exporter scrape.
+
+**SOURCE-ONLY IaC** branch `feature/router-01-restricted-monitor-key-authorisation-20261029` includes `IaC/ansible/playbooks/router-01-metrics-authorized-key.yml` writer, separate `router-01-metrics-authorized-key-rollback.yml`, offline CI safety/syntax workflow and [runbook](docs/network/ROUTER-01-RESTRICTED-MONITOR-KEY-AUTH-2026-10-29.md). The default-disabled writer requires `router_metrics_authorize_apply_approved=true` under separate explicit operator consent, exact controller/Pi/monitor checks, protected existing source ED25519 public/private match and *exact source SHA256*, independently trusted Pi host-key SHA256, router `sshd` policy, absent/expected-only SSH files. It uses **delegated Ansible slurp directly from monitor** in-memory, no key bytes in GitHub, writes exactly one `from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"` line to dedicated UID999 `authorized_keys` mode0600 and `.ssh` mode0700, verifies byte-for-byte and uses scoped rescue. Rollback separately requires `router_metrics_authorize_rollback_approved=true`, a no-active-tunnel attestation and trust fingerprint match before removal; only empty directory cleaned up. No key rotation, router sshd reload, DHCP/DNS/network/firewall, Node Exporter listener, actual tunnel or Prometheus changes.
+
+**IMPORTANT:** **No router-side authorisation has been deployed or approved**. Operator next syncs merged source and runs only `--syntax-check` using BOTH inventories: `-i inventory/router-01-postcutover-baseline.yml -i inventory/hosts.yml`; new explicit operator approval is required before any live key installation. The next live step may need monitor and Pi sudo escalation; do not bypass secure delegation with manual key transfer. All changes through Ansible/IaC; keep [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209) updated.
+
+
 ## 29 October 2026 — independent postflight confirms Pi SSH trust pin as monitoring service user
 
 Following separately approved live host-key installation on `monitor-01`, the operator ran a **separate read-only validation** (Ansible ad-hoc shell `CHANGED` is reporting convention, no writes). `lstat` verified `/etc/homelab/router-metrics-ssh/known_hosts` is an expected root-owned, protected, regular file: **`TRUST_FILE_SECURITY=PASS`**. `runuser -u router-metrics-tunnel -- ssh-keygen -F 192.168.2.1 -f /etc/homelab/router-metrics-ssh/known_hosts` succeeded (`LOOKUP_EXIT_CODE=0`) and returned **exactly one** recognised entry (`HOST_KEY_RECORDS=1`). SHA256 of that stored ED25519 public key independently matched the genuine physical Pi: **`PINNED_FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`**, `HOST_PIN_POSTFLIGHT=PASS`. No key content was printed.

@@ -1,0 +1,113 @@
+name: Validate router-01 restricted monitoring public-key authorisation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-01-metrics-authorized-key.yml"
+      - "IaC/ansible/playbooks/router-01-metrics-authorized-key.yml"
+      - "IaC/ansible/playbooks/router-01-metrics-authorized-key-rollback.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-router-01-metrics-authorized-key.yml"
+      - "IaC/ansible/playbooks/router-01-metrics-authorized-key.yml"
+      - "IaC/ansible/playbooks/router-01-metrics-authorized-key-rollback.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install syntax checker and test parser
+        run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Static identity, fingerprint, scope and gate checks
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          root=Path('IaC/ansible/playbooks')
+          writer=root/'router-01-metrics-authorized-key.yml'
+          rollback=root/'router-01-metrics-authorized-key-rollback.yml'
+          marker='SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY'
+          genuine_pi='SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI'
+          for path in (writer,rollback):
+              src=path.read_text()
+              play=yaml.safe_load(src)
+              assert isinstance(play,list) and len(play)==1
+              assert play[0]['hosts']=='router_postcutover_baseline'
+              assert play[0]['become'] is True
+              assert play[0]['gather_facts'] is False
+              assert marker in src
+              assert "not ansible_check_mode" in src
+              assert "inventory_hostname == 'router-01'" in src
+              assert "ansible_host == '192.168.2.1'" in src
+              assert "hostvars['monitor-01'].ansible_host == '192.168.2.52'" in src
+              assert "d8:3a:dd:5a:51:44" in src
+              assert "admin-01" in src
+              assert '/var/lib/router-metrics/.ssh/authorized_keys' in src
+              assert "no_log: true" in src
+              for forbidden in (
+                  "StrictHostKeyChecking=no",
+                  "UserKnownHostsFile=/dev/null",
+                  "ssh-keygen -t",
+                  "ansible.builtin.apt:",
+                  "ansible.builtin.systemd:",
+                  "ansible.builtin.systemd_service:",
+                  "ansible.builtin.service:",
+                  "ansible.builtin.authorized_key:",
+                  "192.168.3.1",
+              ):
+                  assert forbidden not in src,(path,forbidden)
+          ws=writer.read_text()
+          rs=rollback.read_text()
+          w=yaml.safe_load(ws)[0]
+          r=yaml.safe_load(rs)[0]
+          assert w['vars']['router_metrics_authorize_apply_approved'] is False
+          assert r['vars']['router_metrics_authorize_rollback_approved'] is False
+          assert r['vars']['router_metrics_authorize_no_active_tunnel_verified'] is False
+          assert genuine_pi in ws
+          assert 'runuser' in ws and 'ssh-keygen' in ws and 'slurp:' in ws
+          assert "metrics_auth_public_fingerprint.stdout.split()[1] == router_metrics_authorize_expected_fingerprint" in ws
+          assert "metrics_auth_host_fingerprint.stdout.split()[1] == router_metrics_authorize_host_fingerprint" in ws
+          assert 'from="192.168.2.52",restrict,port-forwarding,permitopen="127.0.0.1:9100"' in ws
+          assert "metrics_auth_existing_file.content | b64decode" in ws
+          assert "state: directory" in ws and "mode: '0700'" in ws
+          assert "mode: '0600'" in ws and "force: false" in ws
+          assert "ansible.builtin.copy:" in ws
+          assert "rescue:" in ws
+          assert "argv: [rmdir," in ws
+          assert "authorizedkeyscommand none" in ws
+          assert "allowtcpforwarding local" in ws
+          assert "maxsessions 0" in ws
+          assert "permitopen 127.0.0.1:9100" in ws
+          assert "metrics_auth_rollback_fingerprint.stdout.split()[1] == router_metrics_authorize_expected_fingerprint" in rs
+          assert "':19100' not in metrics_auth_rollback_listeners.stdout" in rs
+          assert "state: absent" in rs
+          assert "ansible.builtin.slurp:" in rs
+          assert 'router-metrics-tunnel@monitor-01' in rs
+          # Two supplied inventories must provide both monitoring and Pi groups.
+          inv_router=yaml.safe_load(Path('IaC/ansible/inventory/router-01-postcutover-baseline.yml').read_text())
+          inv_main=yaml.safe_load(Path('IaC/ansible/inventory/hosts.yml').read_text())
+          assert inv_router['all']['children']['router_postcutover_baseline']['hosts']['router-01']['ansible_host']=='192.168.2.1'
+          assert inv_main['all']['children']['monitoring_hosts']['hosts']['monitor-01']['ansible_host']=='192.168.2.52'
+          print("PASS: read-only fingerprint source, default-denied writer/rollback, exact Pi, one restricted key, no sshd or tunnel changes")
+          PY
+      - name: Local Ansible syntax checks with both current inventories
+        run: |
+          cd IaC/ansible
+          ansible-playbook \
+            -i inventory/router-01-postcutover-baseline.yml \
+            -i inventory/hosts.yml \
+            playbooks/router-01-metrics-authorized-key.yml \
+            --limit router-01 --syntax-check
+          ansible-playbook \
+            -i inventory/router-01-postcutover-baseline.yml \
+            -i inventory/hosts.yml \
+            playbooks/router-01-metrics-authorized-key-rollback.yml \
+            --limit router-01 --syntax-check
