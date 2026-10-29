@@ -1,0 +1,118 @@
+---
+# Approval-gated removal of ONLY the named user ACL granted by ACL writer.
+# Does not uninstall acl package, alter keys, SSH config, services or tunneling.
+# Operator must verify any dependent secure metrics tunnel is disabled first.
+- name: Roll back only monitor-01 router metrics user traverse ACL
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_metrics_acl_rollback_approved: false
+    router_metrics_acl_no_active_tunnel_verified: false
+
+  pre_tasks:
+    - name: Validate administrative controller identity
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: rollback_controller
+
+    - name: Require separately approved rollback and no dependent tunnel
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_metrics_acl_rollback_approved | bool
+          - router_metrics_acl_no_active_tunnel_verified | bool
+          - rollback_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Refusing rollback without exact host, controller and two explicit gates."
+      delegate_to: localhost
+      become: false
+
+    - name: Verify expected live host
+      ansible.builtin.command:
+        argv: [hostname]
+      register: rollback_hostname
+      changed_when: false
+
+    - name: Refuse wrong host
+      ansible.builtin.assert:
+        that:
+          - rollback_hostname.stdout | trim == 'monitor-01'
+
+  tasks:
+    - name: Inspect protected parent directory metadata
+      ansible.builtin.stat:
+        path: /etc/homelab
+        follow: false
+      register: rollback_dir
+
+    - name: Refuse unrelated ownership or mode
+      ansible.builtin.assert:
+        that:
+          - rollback_dir.stat.isdir | default(false)
+          - not rollback_dir.stat.islnk | default(false)
+          - rollback_dir.stat.pw_name == 'root'
+          - rollback_dir.stat.gr_name == 'root'
+          - rollback_dir.stat.mode == '0750'
+
+    - name: Inspect current ACL with already installed utility
+      ansible.builtin.command:
+        argv: [getfacl, -cp, /etc/homelab]
+      changed_when: false
+      register: rollback_before
+
+    - name: Require only expected named-user entry for a safe rollback
+      ansible.builtin.assert:
+        that:
+          - "'user::rwx' in rollback_before.stdout_lines"
+          - "'group::r-x' in rollback_before.stdout_lines"
+          - "'other::---' in rollback_before.stdout_lines"
+          - (rollback_before.stdout_lines | select('match', '^user:router-metrics-tunnel:') | list | length) <= 1
+          - >-
+            (rollback_before.stdout_lines | select('match', '^user:router-metrics-tunnel:')
+            | list | length == 0)
+            or ('user:router-metrics-tunnel:--x' in rollback_before.stdout_lines)
+        fail_msg: "Unexpected user ACL; do not change."
+
+    - name: Remove only previously granted traverse ACL
+      ansible.builtin.command:
+        argv: [setfacl, -x, "u:router-metrics-tunnel", /etc/homelab]
+      when: "'user:router-metrics-tunnel:--x' in rollback_before.stdout_lines"
+      changed_when: true
+
+    - name: Reinspect only parent directory ACL
+      ansible.builtin.command:
+        argv: [getfacl, -cp, /etc/homelab]
+      register: rollback_after
+      changed_when: false
+
+    - name: Assert the single named user ACL is gone and base access retained
+      ansible.builtin.assert:
+        that:
+          - (rollback_after.stdout_lines | select('match', '^user:router-metrics-tunnel:') | list | length) == 0
+          - "'user::rwx' in rollback_after.stdout_lines"
+          - "'group::r-x' in rollback_after.stdout_lines"
+          - "'other::---' in rollback_after.stdout_lines"
+
+    - name: Verify original private key remains protected and is not readable by service user
+      ansible.builtin.command:
+        argv: [runuser, -u, router-metrics-tunnel, --, test, -r, /etc/homelab/router-metrics-ssh/id_ed25519]
+      register: rollback_access
+      changed_when: false
+      failed_when: false
+
+    - name: Confirm read access was revoked without altering key bytes
+      ansible.builtin.assert:
+        that:
+          - rollback_access.rc != 0
+
+    - name: Report rollback boundaries
+      ansible.builtin.debug:
+        msg:
+          - "Named traverse ACL absent: PASS; prior root/group/other protections preserved"
+          - "No package uninstall; no key copy/delete, sshd reload, tunnel, firewall or exporter changes"
