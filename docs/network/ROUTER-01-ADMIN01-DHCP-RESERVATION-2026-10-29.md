@@ -1,6 +1,15 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01: recover stable admin-01 DHCP address — 29 October 2026
 
+## 29 October 2026 — Proxmox QDevice outage diagnosed: old admin-01 address
+
+**Read-only definitive operator evidence** after physical router admin DHCP reservation installation and independent postflight PASS: on both Proxmox nodes, `corosync-qdevice-tool -s` reports **`QNetd host: 192.168.2.48:5403`**. `PROXMOX` shows `State: Connect failed`; `Proxmox-2` shows `State: Connecting`. The shared `/etc/pve/corosync.conf` has QDevice model `net`, algorithm `ffsplit`, `host: 192.168.2.48`, `tls: on`, `votes: 1`, config version `3`. Both Proxmox nodes' `corosync-qdevice.service` are running but show repeated connection timeouts, and `admin-01`'s `corosync-qnetd-tool -s` showed zero connected clients/clusters. The 2-node cluster `jameshouse-pve` is presently quorate with **2 votes out of 3 expected** (witness vote absent), so failure of either Proxmox host could cause quorum loss.
+
+**Confirmed causal network mismatch:** `admin-01` is independently observed at DHCP **`192.168.2.127/24`**, so it does not currently own `.48` as QDevice clients require. Router `router-01` now has independently verified `dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48` with dnsmasq active and syntax PASS; admin-01 has **not** renewed the old `.127` lease. This explains the failed connection to the configured endpoint; do not claim certificates/firewall or additional issues before re-checking after host reconnection.
+
+**Next change not yet approved:** restore `admin-01` original IPv4 through a planned console-backed NetworkManager DHCP disconnect/reconnect of `netplan-eth0`; avoid running `nmcli connection down` over remote SSH. Preserve QDevice configuration on Proxmox and router DHCP configuration. Check the console and sudo access before interruption. Afterwards prove `admin-01 eth0 .48/24`, gateway/router reachability, Windows SSH `.48`, `corosync-qnetd-tool -s` restored client connections, both PVE `corosync-qdevice-tool -s` connected, and cluster quorum/witness vote. Only then update stale inventory/docs/DNS monitoring facts. This requires fresh explicit user approval, separately from prior router dnsmasq change. Tracked in [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
+
+
 ## Independently verified router-side postflight — PASS (29 October 2026)
 
 Following the approved live Ansible writer PASS (router-01 ok=33 changed=8 unreachable=0 failed=0), the operator checked the actual physical router directly using **only read-only commands**. Evidence:
