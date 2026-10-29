@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `f0:ef:86:35:bc:55`
-- Observed IP address(es): `192.168.2.249`
-- Connections: **10,654**
-- Traffic sent: **13.5 MiB**
-- Traffic received: **14.0 MiB**
-- Top services: `dns` (4412), `ssl` (1276), `quic` (643), `ntp` (96), `http` (29), `dhcp` (7)
-- Top destination ports: `udp/53` (2853), `udp/10101` (2640), `udp/5353` (1559), `udp/9478` (1153), `udp/9999` (970), `tcp/443` (660)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f0:ef:86:35:bc:55`
 - Identity confidence: **high**
@@ -69,26 +60,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-High-confidence Google Home Mini identity based on the documented DHCP hostname, Google vendor attribution, Nmap Google Home device match, and Chromecast/Google TLS certificate. Exact OS or firmware is not established.
+Identified as a Google Home Mini smart speaker. The exact firmware/OS is not established; Nmap reports a tentative Google Home device fingerprint and three open TCP ports.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.249.
-- The router documents the DHCP hostname as Google-Home-Mini.
-- Inventory and Nmap identify the vendor as Google.
-- Nmap includes a 98% match for Google Home device.
-- TCP ports 8008, 8009, and 8443 are open according to Nmap.
-- TCP 8443 is identified by service enrichment as HTTPS-alt and has a Google Chromecast ICA certificate.
-- TCP 9000 is identified by service enrichment as cslistener over SSL.
-- The TLS certificate subject and issuer identify Google and Chromecast-related certificate authorities.
-- Greenbone reported zero actionable findings matching this current IP; this does not prove the host is vulnerability-free.
-- No sampled warning or error entries were present in the bounded 24-hour Loki sample.
+- The inventory and DHCP hostname are Google-Home-Mini.
+- The inventory and Nmap vendor are Google.
+- Nmap identifies the device as a Google Home device with 98% fingerprint accuracy.
+- TCP ports 8008, 8009, and 8443 are open.
+- Observed DNS domains include Google services such as homeplatformmesh-pa.googleapis.com and connectivitycheck.gstatic.com.
+- Greenbone reports zero matching actionable findings for the current IP; this does not establish that the device is vulnerability-free.
 
 ### Inferences
 
-- The device is most likely a Google Home Mini smart speaker or closely related Google Home media device.
-- The device likely uses embedded firmware with a Linux-based implementation, but the Nmap Linux kernel matches do not establish an exact OS or firmware version.
-- The observed Google service domains are consistent with Google ecosystem connectivity but do not independently identify the device model.
+- The device is most likely a Google Home Mini smart speaker.
+- The platform is best classified broadly as embedded IoT firmware.
+- Nmap Linux kernel matches are tentative and do not establish the exact OS or firmware.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

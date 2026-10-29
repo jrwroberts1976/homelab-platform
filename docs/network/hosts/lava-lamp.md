@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `68:ff:7b:1b:2d:07`
-- Observed IP address(es): `192.168.2.233`
-- Connections: **164**
-- Traffic sent: **64.5 KiB**
-- Traffic received: **234.6 KiB**
-- Top services: `ntp` (79), `ssl` (50), `dhcp` (35)
-- Top destination ports: `udp/123` (79), `tcp/443` (50), `udp/67` (35)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,32 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `68:ff:7b:1b:2d:07`
-- Identity confidence: **medium**
+- Identity confidence: **high**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **Yes**
+- Manual review required: **No**
 
 ### Assessment summary
 
-Likely a TP-Link HS100 smart plug, identified from the DHCP hostname and TP-Link vendor evidence. OS/firmware is not identified; TCP port 9999 is open. No matching actionable Greenbone findings were reported.
+Likely a TP-Link HS100 smart plug using embedded IoT firmware. TCP port 9999 is open; no actionable Greenbone findings matched the current IP, but security status is not established.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.233.
-- The inventory hostname is lava-lamp.jameshouse and the telemetry hostname is lava-lamp.
-- The DHCP hostname and router hostname are HS100.
+- The device hostname is HS100.
 - The recorded vendor is TP-Link Technologies.
+- The device is online at 192.168.2.189.
 - TCP port 9999 is open.
-- Nmap OS identification is incomplete and returned no OS matches.
-- No actionable Greenbone findings match the current IP.
+- Nmap OS identification is unavailable and returned no OS matches.
+- No actionable Greenbone findings matched 192.168.2.189.
+- No authoritative OS fact is available.
 
 ### Inferences
 
-- The device is likely a TP-Link HS100 smart plug, based on the HS100 DHCP hostname and TP-Link vendor evidence.
-- The device likely runs embedded IoT firmware, but the exact OS and firmware version are unsupported by the supplied evidence.
+- HS100 is consistent with a TP-Link HS100 smart plug.
+- The device likely runs embedded IoT firmware rather than a general-purpose operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
