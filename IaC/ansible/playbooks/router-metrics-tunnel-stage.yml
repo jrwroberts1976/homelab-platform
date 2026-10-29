@@ -153,7 +153,7 @@
         fail_msg: "Existing tunnel state requires manual review."
 
     - name: Install systemd unit without activation
-      ansible.builtin.template:
+      ansible.builtin.copy:
         src: ../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2
         dest: "{{ tunnel_unit_path }}"
         owner: root

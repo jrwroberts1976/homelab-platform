@@ -1286,3 +1286,19 @@ For **every** change we make:
 - Remaining: production-playbook failure-path verification,
   systemd sandbox review and CI checks.
 - Deployment remains blocked.
+
+### 2026-10-29 — static systemd unit rendering correction
+
+- Found that Jinja2's default rendering strips the trailing newline.
+- Verified the mismatch using standalone Jinja2 rendering.
+- Tested actual Ansible rendering with newline preservation.
+- Selected ansible.builtin.copy for the static systemd unit.
+- Removed the temporary Jinja2 directive.
+- Verified source SHA256:
+  78280ee4f0910b49b7e72a9da8c4aa8a38cf0b536d74d7b076c116165915816d.
+- Isolated Ansible content and state-guard regression tests PASS.
+- Installer and rollback syntax checks PASS.
+- Estate validation PASS: 20 active assets.
+- No production changes.
+- Outstanding: systemd sandbox access, partial-installation
+  recovery, production installer/rollback execution tests and CI.
