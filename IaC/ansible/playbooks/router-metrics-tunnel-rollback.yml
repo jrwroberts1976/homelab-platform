@@ -46,6 +46,69 @@
               | hash('sha256'))
         fail_msg: "Unit differs from Git-managed source; refusing removal."
 
+    - name: Inspect loaded systemd unit without reloading
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ tunnel_unit }}"
+          - -p
+          - LoadState
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+          - -p
+          - FragmentPath
+      register: tunnel_loaded_state
+      changed_when: false
+
+    - name: Refuse unsafe loaded unit
+      ansible.builtin.assert:
+        that:
+          - >-
+            'ActiveState=inactive' in tunnel_loaded_state.stdout_lines
+          - >-
+            (
+              'LoadState=not-found' in tunnel_loaded_state.stdout_lines
+              and 'FragmentPath=' in tunnel_loaded_state.stdout_lines
+              and 'UnitFileState=' in tunnel_loaded_state.stdout_lines
+            )
+            or
+            (
+              'LoadState=loaded' in tunnel_loaded_state.stdout_lines
+              and
+              ('FragmentPath=' ~ tunnel_unit_path)
+                in tunnel_loaded_state.stdout_lines
+              and 'UnitFileState=disabled'
+                in tunnel_loaded_state.stdout_lines
+            )
+        fail_msg: "Unexpected loaded systemd unit; refusing rollback."
+
+    - name: Register verified staged unit with systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Verify reloaded unit resolves to reviewed path
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ tunnel_unit }}"
+          - -p
+          - LoadState
+          - -p
+          - FragmentPath
+      register: reloaded_unit
+      changed_when: false
+
+    - name: Require exact systemd unit resolution
+      ansible.builtin.assert:
+        that:
+          - "'LoadState=loaded' in reloaded_unit.stdout_lines"
+          - "('FragmentPath=' ~ tunnel_unit_path) in reloaded_unit.stdout_lines"
+        fail_msg: "Reloaded unit does not resolve to expected file."
+
     - name: Check unit active state
       ansible.builtin.command:
         argv: [systemctl, is-active, "{{ tunnel_unit }}"]
@@ -66,6 +129,48 @@
           - active_state.stdout | trim == 'inactive'
           - enabled_state.stdout | trim == 'disabled'
         fail_msg: "Service active or enabled; use a separately reviewed runtime rollback."
+
+    - name: Recheck staged unit before removal
+      ansible.builtin.stat:
+        path: "{{ tunnel_unit_path }}"
+        follow: false
+        checksum_algorithm: sha256
+      register: final_unit_stat
+
+    - name: Refuse removal if staged unit changed
+      ansible.builtin.assert:
+        that:
+          - final_unit_stat.stat.isreg | default(false)
+          - final_unit_stat.stat.uid == 0
+          - final_unit_stat.stat.mode == '0644'
+          - final_unit_stat.stat.checksum ==
+            (lookup('ansible.builtin.file',
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2',
+              rstrip=False) | hash('sha256'))
+        fail_msg: "Staged unit changed since verification; refusing removal."
+
+    - name: Recheck service state immediately before removal
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - "{{ tunnel_unit }}"
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+          - -p
+          - FragmentPath
+      register: final_systemd_state
+      changed_when: false
+
+    - name: Refuse removal if service state changed
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in final_systemd_state.stdout_lines"
+          - "'UnitFileState=disabled' in final_systemd_state.stdout_lines"
+          - "('FragmentPath=' ~ tunnel_unit_path) in final_systemd_state.stdout_lines"
+        fail_msg: "Service state changed; refusing rollback."
 
     - name: Remove exact staged unit
       ansible.builtin.file:

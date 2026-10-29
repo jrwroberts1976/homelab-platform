@@ -1302,3 +1302,15 @@ For **every** change we make:
 - No production changes.
 - Outstanding: systemd sandbox access, partial-installation
   recovery, production installer/rollback execution tests and CI.
+
+### 2026-10-29 — router metrics rollback recovery review
+
+- Added checks for loaded systemd unit identity and state.
+- Verified exact FragmentPath before allowing unit removal.
+- Added post-reload and final pre-removal state checks.
+- Added final unit SHA256, ownership and permission checks.
+- Isolated rollback-resolution test PASS: failed=0, changed=0.
+- Test covers missing, disabled, active, enabled and unexpected-path states.
+- This is a model test, not execution of the production rollback.
+- Real systemd reload/recovery and sandbox behaviour remain untested.
+- Production staging and activation remain blocked.

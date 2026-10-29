@@ -1,0 +1,51 @@
+---
+- name: Test router tunnel rollback unit resolution
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    expected_path: /etc/systemd/system/router-metrics-tunnel.service
+    scenarios:
+      - name: MISSING_UNIT
+        lines: ['LoadState=not-found', 'ActiveState=inactive', 'UnitFileState=', 'FragmentPath=']
+        allowed: true
+      - name: VERIFIED_DISABLED_UNIT
+        lines: ['LoadState=loaded', 'ActiveState=inactive', 'UnitFileState=disabled', 'FragmentPath=/etc/systemd/system/router-metrics-tunnel.service']
+        allowed: true
+      - name: ACTIVE_UNIT
+        lines: ['LoadState=loaded', 'ActiveState=active', 'UnitFileState=disabled', 'FragmentPath=/etc/systemd/system/router-metrics-tunnel.service']
+        allowed: false
+      - name: ENABLED_UNIT
+        lines: ['LoadState=loaded', 'ActiveState=inactive', 'UnitFileState=enabled', 'FragmentPath=/etc/systemd/system/router-metrics-tunnel.service']
+        allowed: false
+      - name: UNEXPECTED_PATH
+        lines: ['LoadState=loaded', 'ActiveState=inactive', 'UnitFileState=disabled', 'FragmentPath=/usr/lib/systemd/system/router-metrics-tunnel.service']
+        allowed: false
+
+  tasks:
+    - name: Verify rollback resolution rules
+      ansible.builtin.assert:
+        that:
+          - >-
+            (
+              'ActiveState=inactive' in item.lines
+              and
+              (
+                (
+                  'LoadState=not-found' in item.lines
+                  and 'FragmentPath=' in item.lines
+                  and 'UnitFileState=' in item.lines
+                )
+                or
+                (
+                  'LoadState=loaded' in item.lines
+                  and ('FragmentPath=' ~ expected_path) in item.lines
+                  and 'UnitFileState=disabled' in item.lines
+                )
+              )
+            ) == item.allowed
+        success_msg: "{{ item.name }}=PASS"
+      loop: "{{ scenarios }}"
+      loop_control:
+        label: "{{ item.name }}"
