@@ -1,0 +1,200 @@
+---
+# SOURCE ONLY: requires fresh explicit operator approval for the config write,
+# dnsmasq restart and no-conflict confirmation. Never run as an automatic cutover.
+# Preserves the existing .180 reservation and .100-.199 dynamic pool.
+- name: Add admin-01 fixed DHCP reservation on router-01 with staged validation
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_admin_reservation_apply_approved: false
+    router_admin_reservation_restart_approved: false
+    router_admin_address48_unclaimed_approved: false
+    router_admin_reservation_config: /etc/dnsmasq.d/router.conf
+    router_admin_reservation_backup_dir: /var/backups/homelab-router/dnsmasq
+    router_admin_reservation_marker: "# {mark} ANSIBLE MANAGED ADMIN-01 DHCP RESERVATION"
+    router_admin_reservation_line: "dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48"
+
+  pre_tasks:
+    - name: Require independently approved router configuration change and restart
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_admin_reservation_apply_approved | bool
+          - router_admin_reservation_restart_approved | bool
+          - router_admin_address48_unclaimed_approved | bool
+        fail_msg: "STOP: separately approve fixed reservation, dnsmasq restart and address-conflict risk first."
+      delegate_to: localhost
+      become: false
+
+    - name: Recheck exact physical target, controller, leases and policy with no writes
+      ansible.builtin.import_tasks: tasks/router-01-admin-dhcp-preflight.yml
+
+  tasks:
+    - name: Stage only admin-01 DHCP reservation and retain a scoped rollback
+      block:
+        - name: Create temporary OFFLINE candidate config directory
+          ansible.builtin.tempfile:
+            state: directory
+            path: /run
+            prefix: router-admin01-dhcp-
+          register: router_admin_candidate
+
+        - name: Copy untouched active router fragment to offline candidate
+          ansible.builtin.copy:
+            src: "{{ router_admin_reservation_config }}"
+            dest: "{{ router_admin_candidate.path }}/router.conf"
+            remote_src: true
+            mode: '0600'
+
+        - name: Copy existing README into candidate config directory
+          ansible.builtin.copy:
+            src: /etc/dnsmasq.d/README
+            dest: "{{ router_admin_candidate.path }}/README"
+            remote_src: true
+            mode: '0600'
+
+        - name: Insert ONLY new admin-01 reservation in offline candidate
+          ansible.builtin.blockinfile:
+            path: "{{ router_admin_candidate.path }}/router.conf"
+            marker: "{{ router_admin_reservation_marker }}"
+            insertafter: EOF
+            block: "{{ router_admin_reservation_line }}"
+            create: false
+
+        - name: Check full candidate config syntax before any live file change
+          ansible.builtin.command:
+            argv:
+              - dnsmasq
+              - --test
+              - --conf-file=/etc/dnsmasq.conf
+              - "--conf-dir={{ router_admin_candidate.path }},.dpkg-dist,.dpkg-old,.dpkg-new"
+          changed_when: false
+
+        - name: Create protected backup directory outside active DHCP config path
+          ansible.builtin.file:
+            path: "{{ router_admin_reservation_backup_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Read UTC backup timestamp
+          ansible.builtin.command:
+            argv: [date, -u, +%Y%m%dT%H%M%SZ]
+          register: router_admin_backup_stamp
+          changed_when: false
+
+        - name: Back up the exact pre-change DHCP configuration
+          ansible.builtin.copy:
+            src: "{{ router_admin_reservation_config }}"
+            dest: "{{ router_admin_reservation_backup_dir }}/router.conf.before-admin01-{{ router_admin_backup_stamp.stdout }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0600'
+          register: router_admin_backup
+
+        - name: Write only the approved admin-01 DHCP reservation block
+          ansible.builtin.blockinfile:
+            path: "{{ router_admin_reservation_config }}"
+            marker: "{{ router_admin_reservation_marker }}"
+            insertafter: EOF
+            block: "{{ router_admin_reservation_line }}"
+            create: false
+            backup: false
+          register: router_admin_write
+
+        - name: Validate complete live DHCP config before restart
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restart ONLY dnsmasq during separately approved window
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when: router_admin_write.changed | bool
+
+        - name: Confirm dnsmasq active after activation
+          ansible.builtin.command:
+            argv: [systemctl, is-active, dnsmasq]
+          register: router_admin_dnsmasq_active
+          changed_when: false
+          failed_when: router_admin_dnsmasq_active.rc != 0 or (router_admin_dnsmasq_active.stdout | trim) != 'active'
+
+        - name: Inspect final config; require exactly the two intended reservations
+          ansible.builtin.command:
+            argv:
+              - python3
+              - -c
+              - |
+                from pathlib import Path
+                text=Path('/etc/dnsmasq.d/router.conf').read_text()
+                main=Path('/etc/dnsmasq.conf').read_text()
+                start='# BEGIN ANSIBLE MANAGED ADMIN-01 DHCP RESERVATION'
+                end='# END ANSIBLE MANAGED ADMIN-01 DHCP RESERVATION'
+                assert text.count(start)==1 and text.count(end)==1
+                assert text.split(start,1)[1].split(end,1)[0].strip()=='dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48'
+                lines=[s.strip() for s in (main+'\n'+text).splitlines()
+                       if s.strip() and not s.lstrip().startswith('#')]
+                assert [s for s in lines if s.startswith('dhcp-host=')]==[
+                    'dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180',
+                    'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48']
+                assert [s for s in lines if s.startswith('dhcp-range=')]==[
+                    'dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h']
+                print('ADMIN_RESERVATION_ACTIVE_CONFIG=PASS')
+          changed_when: false
+
+        - name: Revalidate dnsmasq configuration syntax after activation
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Report exact scope without renewing the controller lease
+          ansible.builtin.debug:
+            msg:
+              result: "Admin reservation configured on router, dnsmasq active and syntax PASS"
+              fixed_ip: "192.168.2.48"
+              service: "dnsmasq only"
+              existing_reservation: "192.168.2.180 unchanged"
+              dynamic_pool: "192.168.2.100-199 unchanged"
+              backup: "{{ router_admin_backup.dest }}"
+              leases: "Unmodified; admin-01 still at .127 until separately coordinated renewal"
+              next: "Independently check config and services, then schedule console-backed controller lease renewal."
+
+      rescue:
+        - name: Undo ONLY newly inserted admin-01 block if active write occurred
+          ansible.builtin.blockinfile:
+            path: "{{ router_admin_reservation_config }}"
+            marker: "{{ router_admin_reservation_marker }}"
+            state: absent
+          when:
+            - router_admin_write is defined
+            - router_admin_write.changed | default(false) | bool
+
+        - name: Validate recovered DHCP config
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restore dnsmasq service after failed activation
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when:
+            - router_admin_write is defined
+            - router_admin_write.changed | default(false) | bool
+
+        - name: Require human inspection on any failed rollout
+          ansible.builtin.fail:
+            msg: "Admin reservation failed; attempted to remove only new block and restore dnsmasq. Check protected backup, DHCP status, and host connectivity. Do not renew admin-01."
+
+      always:
+        - name: Remove temporary candidate files OUTSIDE live dnsmasq include path
+          ansible.builtin.file:
+            path: "{{ router_admin_candidate.path }}"
+            state: absent
+          when:
+            - router_admin_candidate is defined
+            - router_admin_candidate.path is defined

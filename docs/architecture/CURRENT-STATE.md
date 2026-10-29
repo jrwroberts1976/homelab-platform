@@ -1,6 +1,13 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 29 October 2026 — admin-01 management IPv4 address drift observed, no cutover authorised
+
+**Actual live on-host state:** physical `admin-01` Raspberry Pi 3, eth0 MAC `b8:27:eb:e8:36:cd`, successfully recovered by SSH at **`192.168.2.127/24`** (not documented preferred `192.168.2.48`). Active NetworkManager profile `netplan-eth0` uses DHCP; lease server is `router-01 192.168.2.1` with a 24-hour lease. Physical router's live dnsmasq lease shows `admin-01` MAC at `.127`, dynamic `.100-.199`, an existing ASUS MAC `24:4b:fe:5e:cc:c8` reservation at `.180` and no admin-01 reservation in the reviewed configuration. Router `.48` checks: lease absent, ICMP unanswered, ARP `INCOMPLETE`, dnsmasq syntax PASS. These checks do not prove absence of a powered-off static host at `.48`.
+
+**Recovery IaC source staged only:** exactly one additional fixed DHCP reservation `b8:27:eb:e8:36:cd -> 192.168.2.48` proposed with fail-closed Ansible preflight, distinct approvals for config write and dnsmasq restart, preserved pool and `.180` reservation, backup and rollback. **Nothing deployed to dnsmasq and no DHCP renewal attempted.** Do not yet change `inventory/hosts.yml` or `estate.json` to claim the observed `.127` is the long-term desired address. Validate and approve staged writer, then independently validate DHCP and coordinate console-backed admin DHCP renewal; update canonical files only upon verified return to `.48`. See [runbook](../network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md) and [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206). This address issue is distinct from the router monitoring SSH authorisation and provides no evidence the firewall caused an admin lockout.
+
+
 ## 29 October 2026 — router-01 restricted monitor public key deployed LIVE
 
 Following PR #231 and local syntax checks on `admin-01`, the operator **explicitly approved** the router-side restricted SSH monitoring public-key installation and executed `playbooks/router-01-metrics-authorized-key.yml` using both router and monitoring inventories. Live preflight verified physical Pi identity `192.168.2.1/24`, MAC `d8:3a:dd:5a:51:44`, restricted `router-metrics` UID999 account and on-disk sshd policy; the existing monitor-01 public/private keypair fingerprint `SHA256:JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`; and the independently pinned Pi server host fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`. All checks passed.
