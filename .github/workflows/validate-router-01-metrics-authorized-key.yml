@@ -87,7 +87,7 @@ jobs:
           assert "maxsessions 0" in ws
           assert "permitopen 127.0.0.1:9100" in ws
           assert "metrics_auth_rollback_fingerprint.stdout.split()[1] == router_metrics_authorize_expected_fingerprint" in rs
-          assert "':19100 " in rs
+          assert "':19100' not in metrics_auth_rollback_listeners.stdout" in rs
           assert "state: absent" in rs
           assert "ansible.builtin.slurp:" in rs
           assert 'router-metrics-tunnel@monitor-01' in rs
