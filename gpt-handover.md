@@ -1440,3 +1440,15 @@ OUTSTANDING:
   its DHCP lease at 23:18:32, retaining 192.168.2.195.
 - Reserve .195 through Ansible before future pool changes.
 - No DHCP pool exclusions have been deployed.
+
+### Historical monitoring recovery — 2026-10-29
+
+- Recovered three Grafana router-device dashboards.
+- Recovered LAN presence, router device events and Nmap worker
+  Ansible roles, source code, tests and playbooks.
+- Original recovery validation: 172 offline unit tests passed.
+- Three recovered Ansible playbooks passed syntax checks.
+- No recovered device-scanning roles or timers were deployed.
+- At recovery time, DHCP forwarding was not yet configured.
+  It was subsequently deployed and verified on router-01.
+- Further Grafana integration and monitoring validation remain pending.

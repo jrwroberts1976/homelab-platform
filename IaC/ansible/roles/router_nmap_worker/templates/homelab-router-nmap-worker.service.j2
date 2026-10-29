@@ -1,0 +1,21 @@
+[Unit]
+Description=Homelab MAC-keyed Nmap profiling worker
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists={{ router_nmap_worker_collector_state }}
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+SupplementaryGroups={{ router_nmap_worker_inventory_group }}
+WorkingDirectory=/usr/local/lib/homelab-router-nmap-worker
+ExecStart=/usr/bin/python3 /usr/local/lib/homelab-router-nmap-worker/worker_main.py
+TimeoutStartSec=40min
+UMask=0077
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ router_nmap_worker_state_dir }}
+CapabilityBoundingSet=CAP_NET_RAW CAP_NET_ADMIN

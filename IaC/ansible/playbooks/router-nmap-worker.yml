@@ -1,0 +1,8 @@
+---
+- name: Deploy MAC-keyed router Nmap worker
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+
+  roles:
+    - router_nmap_worker

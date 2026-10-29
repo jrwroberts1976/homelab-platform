@@ -1,0 +1,10 @@
+---
+- name: Deploy router device event collector
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Install collector on monitor-01 only
+      ansible.builtin.include_role:
+        name: router_device_events
+      when: ansible_facts.hostname == "monitor-01"

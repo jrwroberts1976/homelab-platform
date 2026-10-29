@@ -1,0 +1,72 @@
+---
+- name: Require explicit LAN sweep deployment approval
+  ansible.builtin.assert:
+    that:
+      - lan_presence_sweep_allow_deploy | bool
+    fail_msg: "LAN sweep deployment requires explicit approval."
+
+- name: Verify existing Node Exporter metrics directory
+  ansible.builtin.stat:
+    path: "{{ lan_presence_sweep_metrics_dir }}"
+  register: lan_presence_metrics_directory
+
+- name: Require existing Node Exporter metrics directory
+  ansible.builtin.assert:
+    that:
+      - lan_presence_metrics_directory.stat.isdir | default(false)
+
+- name: Create LAN sweep application directory
+  ansible.builtin.file:
+    path: "{{ lan_presence_sweep_application_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Create private LAN presence state directory
+  ansible.builtin.file:
+    path: "{{ lan_presence_sweep_state_dir }}"
+    state: directory
+    owner: root
+    group: root
+    mode: "0700"
+
+- name: Install LAN discovery Python modules
+  ansible.builtin.copy:
+    src: "{{ item }}"
+    dest: "{{ lan_presence_sweep_application_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - presence_state.py
+    - sweep_parser.py
+    - sweep_guard.py
+    - sweep_runner.py
+    - host_identity.py
+    - presence_metrics.py
+    - sweep_main.py
+
+- name: Install LAN presence service
+  ansible.builtin.template:
+    src: homelab-lan-presence.service.j2
+    dest: /etc/systemd/system/homelab-lan-presence.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Install LAN presence timer
+  ansible.builtin.template:
+    src: homelab-lan-presence.timer.j2
+    dest: /etc/systemd/system/homelab-lan-presence.timer
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure LAN presence timer
+  when: not ansible_check_mode
+  ansible.builtin.systemd:
+    name: homelab-lan-presence.timer
+    daemon_reload: true
+    enabled: "{{ lan_presence_sweep_enable_timer | bool }}"
+    state: "{{ 'started' if lan_presence_sweep_enable_timer | bool else 'stopped' }}"

@@ -1,0 +1,10 @@
+[Unit]
+Description=Refresh MAC-keyed device metrics
+
+[Timer]
+OnBootSec=5min
+OnUnitInactiveSec=2min
+Unit=homelab-router-device-metrics.service
+
+[Install]
+WantedBy=timers.target
