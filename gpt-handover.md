@@ -1368,3 +1368,10 @@ For **every** change we make:
 - Guarded rollback playbook created; not executed.
 - Prometheus-container recreation recovery not independently
   tested; do not claim that scenario verified.
+
+### 2026-10-29 — PR #240 post-deployment review
+
+- Runtime confirmed: router-node-exporter UP; 34 other targets UP; SSH tunnel and Unix relay active/enabled, Docker relay running; recovery timer enabled/active.
+- Removed obsolete docker-01 (192.168.2.220:9100) from monitoring_node_exporter_targets in Git. This is a template/defaults correction only; the live Prometheus config has NOT yet been re-rendered/reloaded to apply this removal.
+- Draft PR previously described Git-only staging and was stale; PR metadata updated to reflect deployed services and remaining validation.
+- Remaining checks before merge: validate the updated target list, scoped live config update/reload with rollback, review CI checks, and verify recovery after Prometheus container recreation (not yet tested).
