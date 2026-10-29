@@ -1,0 +1,182 @@
+---
+# SOURCE ONLY: explicit approval and alternative admin-01 access required.
+# Roll back ONLY the Ansible-managed admin-01 reservation; preserve .180 and the pool.
+- name: Roll back only admin-01 router-side DHCP reservation
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_admin_rollback_approved: false
+    router_admin_rollback_restart_approved: false
+    router_admin_rollback_alt_access_verified: false
+    router_admin_rollback_marker: "# {mark} ANSIBLE MANAGED ADMIN-01 DHCP RESERVATION"
+    router_admin_config: /etc/dnsmasq.d/router.conf
+    router_admin_backup_dir: /var/backups/homelab-router/dnsmasq
+
+  pre_tasks:
+    - name: Refuse rollback without three separate approvals
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_admin_rollback_approved | bool
+          - router_admin_rollback_restart_approved | bool
+          - router_admin_rollback_alt_access_verified | bool
+        fail_msg: "STOP: rollback, dnsmasq restart and alternative admin access approvals required."
+      delegate_to: localhost
+      become: false
+
+    - name: Check controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_admin_rb_controller
+      changed_when: false
+
+    - name: Check controller physical MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      delegate_to: localhost
+      become: false
+      register: router_admin_rb_controller_mac
+      changed_when: false
+
+    - name: Check physical router MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: router_admin_rb_router_mac
+      changed_when: false
+
+    - name: Check physical router LAN address
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: router_admin_rb_router_ip
+      changed_when: false
+
+    - name: Refuse wrong controller, physical Pi or router address
+      ansible.builtin.assert:
+        that:
+          - router_admin_rb_controller.stdout | trim == 'admin-01'
+          - router_admin_rb_controller_mac.stdout | trim | lower == 'b8:27:eb:e8:36:cd'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - router_admin_rb_router_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in router_admin_rb_router_ip.stdout"
+
+    - name: Require exact installed reservation and unchanged other DHCP directives
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            from pathlib import Path
+            text=Path('/etc/dnsmasq.d/router.conf').read_text()
+            main=Path('/etc/dnsmasq.conf').read_text()
+            start='# BEGIN ANSIBLE MANAGED ADMIN-01 DHCP RESERVATION'
+            end='# END ANSIBLE MANAGED ADMIN-01 DHCP RESERVATION'
+            assert text.count(start)==1 and text.count(end)==1, 'Not the expected managed block'
+            assert text.split(start,1)[1].split(end,1)[0].strip()=='dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48'
+            lines=[s.strip() for s in (main+'\n'+text).splitlines()
+                   if s.strip() and not s.lstrip().startswith('#')]
+            assert [s for s in lines if s.startswith('dhcp-host=')]==[
+                'dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180',
+                'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48']
+            assert [s for s in lines if s.startswith('dhcp-range=')]==[
+                'dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h']
+            print('EXACT_ROUTER_ADMIN_RESERVATION_ROLLBACK_SCOPE=PASS')
+      changed_when: false
+
+    - name: Ensure dnsmasq is active before proposed rollback
+      ansible.builtin.command:
+        argv: [systemctl, is-active, dnsmasq]
+      changed_when: false
+
+    - name: Verify original dnsmasq syntax before rollback
+      ansible.builtin.command:
+        argv: [dnsmasq, --test]
+      changed_when: false
+
+  tasks:
+    - name: Remove only reviewed admin-01 reservation with backup and recovery
+      block:
+        - name: Ensure protected backup directory exists
+          ansible.builtin.file:
+            path: "{{ router_admin_backup_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Read backup time
+          ansible.builtin.command:
+            argv: [date, -u, +%Y%m%dT%H%M%SZ]
+          register: router_admin_rb_time
+          changed_when: false
+
+        - name: Back up live DHCP fragment before rollback
+          ansible.builtin.copy:
+            src: "{{ router_admin_config }}"
+            dest: "{{ router_admin_backup_dir }}/router.conf.before-admin01-rollback-{{ router_admin_rb_time.stdout }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0600'
+          register: router_admin_rb_backup
+
+        - name: Remove precisely the Ansible-managed admin-01 DHCP block
+          ansible.builtin.blockinfile:
+            path: "{{ router_admin_config }}"
+            marker: "{{ router_admin_rollback_marker }}"
+            state: absent
+          register: router_admin_rb_edit
+
+        - name: Verify dnsmasq syntax after scoped block removal
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restart dnsmasq in separately approved rollback window
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when: router_admin_rb_edit.changed | bool
+
+        - name: Require dnsmasq active after rollback
+          ansible.builtin.command:
+            argv: [systemctl, is-active, dnsmasq]
+          changed_when: false
+
+        - name: Report preserved existing DHCP allocation
+          ansible.builtin.debug:
+            msg:
+              result: "Only admin-01 reservation removed; existing .180 and pool preserved."
+              protected_backup: "{{ router_admin_rb_backup.dest }}"
+              caveat: "Admin-01 may lose .48 on its next DHCP renewal; alternate access required."
+
+      rescue:
+        - name: Restore exactly original managed admin-01 block if this run removed it
+          ansible.builtin.blockinfile:
+            path: "{{ router_admin_config }}"
+            marker: "{{ router_admin_rollback_marker }}"
+            insertafter: EOF
+            block: "dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48"
+          when:
+            - router_admin_rb_edit is defined
+            - router_admin_rb_edit.changed | default(false) | bool
+
+        - name: Check restored configuration syntax
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restart dnsmasq to restore configuration
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when:
+            - router_admin_rb_edit is defined
+            - router_admin_rb_edit.changed | default(false) | bool
+
+        - name: Require manual inspection after rollback failure
+          ansible.builtin.fail:
+            msg: "Scoped admin reservation rollback FAILED; recovery attempted. Verify DHCP, backup and physical admin connectivity."
