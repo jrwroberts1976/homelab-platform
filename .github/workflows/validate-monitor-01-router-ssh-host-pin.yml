@@ -74,6 +74,26 @@ jobs:
           rs=rollback.read_text()
           assert "ssh-keyscan" in ws
           assert "ssh-keygen" in ws
+          assert "host_pin_valid_records | length == 1" in ws
+          assert "host_pin_unexpected_key_records | length == 0" in ws
+          assert "host_pin_verified_line: \"{{ host_pin_valid_records[0] }}\"" in ws
+          assert "host_pin_scan.stdout_lines | length == 1" not in ws
+          # Simulate the production anchored record regex with non-key extra stdout.
+          import re
+          good=re.compile(r'^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+$')
+          other_key=re.compile(r'^\S+\s+ssh-\S+\s+\S+')
+          def acceptable(lines):
+              matches=[line for line in lines if good.match(line)]
+              conflicts=[line for line in lines if other_key.match(line) and not good.match(line)]
+              return len(matches)==1 and not conflicts
+          record="192.168.2.1 ssh-ed25519 AAAAB3NzaC1lZDI1NTE5AAAA"
+          assert acceptable(["# SSH banner",record])
+          assert acceptable(["non-key scan metadata",record])
+          assert acceptable([record,"# SSH banner"])
+          assert not acceptable(["# SSH banner"])
+          assert not acceptable([record,record])
+          assert not acceptable([record,"192.168.2.1 ssh-rsa AAAAB3Nza"])
+          assert not acceptable([record,"192.168.2.2 ssh-ed25519 AAAAB3Nz"])
           assert "host_pin_fingerprint_result.stdout.split()[1] == router_host_pin_fingerprint" in ws
           assert "router_host_pin_user" in ws
           assert "host_pin_added_by_this_run" in ws
