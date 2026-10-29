@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T17:02:35+01:00`
+- Assessed: `2026-10-29T17:01:31+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:a5:cb:28`
 - Identity confidence: **high**
@@ -97,24 +97,23 @@ complete household browsing history.
 
 ### Assessment summary
 
-mail-relay-01 is CT102, an Ansible-managed Proxmox LXC running Debian GNU/Linux 13 (trixie) as the internal Postfix SMTP relay. SSH and SMTP are corroborated open services; three security updates are available, with no matching actionable Greenbone findings.
+mail-relay-01 is CT102, an LXC container on PROXMOX running authoritative Debian GNU/Linux 13 (trixie). It provides an internal Postfix SMTP relay with SSH access. Port 9100 is open, but no service identification is available for that port.
 
 ### Confirmed facts
 
-- The device hostname is mail-relay-01.jameshouse and its IP address is 192.168.2.54.
-- The canonical estate identity is mail-relay-01, an LXC with role Internal Postfix SMTP relay, CT102 on PROXMOX.
-- Proxmox inventory identifies the guest as LXC mail-relay-01 with VMID 102.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, kernel 7.0.14-23-pve.
+- The canonical estate identity is mail-relay-01, an LXC container identified as CT102 on PROXMOX.
+- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-23-pve.
 - TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
 - TCP port 25 is open and provides corroborated Postfix smtpd.
 - TCP port 9100 is open; its Nmap service label was omitted.
+- The host is managed by Ansible and is online at 192.168.2.54.
 - Greenbone reports zero matching actionable findings for the current host IP.
-- Patching reports three security updates and five total updates available; unattended upgrades are enabled and no reboot is required.
+- Three updates are available, including zero reported security updates; unattended upgrades are enabled.
 
 ### Inferences
 
-- The device is a Debian-based mail-relay workload hosted as a Proxmox LXC container.
-- The documented role and corroborated Postfix SMTP service indicate that this host functions as an internal SMTP relay.
+- The host functions as an internal SMTP relay, consistent with its canonical role and the corroborated Postfix service.
+- The container is hosted through the Proxmox environment identified by the supplied inventory and enrichment data.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

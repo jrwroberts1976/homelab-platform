@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T17:02:35+01:00`
+- Assessed: `2026-10-29T17:01:31+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:0b:16:a2`
 - Identity confidence: **high**
@@ -97,24 +97,25 @@ complete household browsing history.
 
 ### Assessment summary
 
-Managed Debian 13 VM202 on Proxmox-2 providing Prometheus, Grafana, Alertmanager, Blackbox, Loki, and network-discovery services. OpenSSH is available on TCP 22, Grafana HTTP on TCP 3000, and TCP 9100 is open. Greenbone reports medium-severity kernel mitigation findings; a reboot is required and pending updates merit review.
+monitor-01 is the managed VM202 monitoring platform on Proxmox-2, running Debian GNU/Linux 13. Open services include SSH on TCP 22, Grafana HTTP on TCP 3000, and TCP 9100. Greenbone reports one medium-severity Linux kernel mitigation finding; patch telemetry reports three updates available and no security updates, so both conditions merit review.
 
 ### Confirmed facts
 
-- The device is named monitor-01 and has IP address 192.168.2.52.
-- The canonical estate kind is VM, managed by Ansible, with role covering Prometheus, Grafana, Alertmanager, Blackbox, Loki, and active network discovery.
-- The VM is identified as VM202 on Proxmox-2 and uses QEMU virtualization.
-- The vendor is Proxmox Server Solutions GmbH.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), x86_64, with kernel 6.12.111+deb13-cloud-amd64.
-- Corroborated services include OpenSSH 10.0p2 Debian 7+deb13u4 on TCP 22 and Grafana HTTP on TCP 3000.
+- The canonical estate identity is monitor-01.
+- The device is a VM managed by Ansible and identified as VM202 on Proxmox-2.
+- The Proxmox guest type is QEMU.
+- The authoritative OS is Debian GNU/Linux 13 (trixie), with x86_64 architecture and kernel 6.12.111+deb13-cloud-amd64.
+- The vendor is recorded as Proxmox Server Solutions GmbH.
+- TCP 22 is open with corroborated OpenSSH 10.0p2 Debian 7+deb13u4 service evidence.
+- TCP 3000 is open with corroborated Grafana HTTP service evidence.
 - TCP 9100 is open; its Nmap service label was omitted.
-- Greenbone reports one actionable medium-severity finding concerning missing Linux kernel mitigations for Processor MMIO Stale Data, with CVEs CVE-2022-21123, CVE-2022-21125, and CVE-2022-21166.
-- Patching telemetry reports two updates available, no security updates available, and a reboot required.
+- Greenbone reports one matching actionable medium-severity finding concerning Linux kernel mitigations for Processor MMIO Stale Data hardware vulnerabilities, listing CVE-2022-21123, CVE-2022-21125, and CVE-2022-21166.
+- Patch telemetry reports three updates available, zero security updates available, and no reboot required.
 
 ### Inferences
 
-- This is a managed infrastructure and monitoring-services VM rather than a general client device.
-- The authoritative OS facts supersede any Nmap or DNS-based OS inference.
+- The VM functions as the documented monitoring and observability collector described by the canonical estate role.
+- The host is likely administered as a Debian-based Linux server.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

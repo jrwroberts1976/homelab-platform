@@ -59,37 +59,33 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T17:02:35+01:00`
+- Assessed: `2026-10-29T17:01:31+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `d8:3a:dd:5a:51:44`
-- Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- Identity confidence: **low**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-docker-01 is a managed Raspberry Pi 4 running Debian 13 (trixie) on aarch64 and hosting BirdNET-Go in Docker. Open services include SSH, HTTP/HTTPS, and two additional open TCP ports. No matching actionable Greenbone findings were reported; 25 updates are available, including zero security updates.
+192.168.2.1 is documented as the ASUS RT-AC86U router, DHCP server, AiMesh controller, and OpenVPN endpoint, but current inventory identifies an online _gateway with Raspberry Pi Trading hardware and Nmap results resembling several Linux/NAS platforms. Identity requires manual review.
 
 ### Confirmed facts
 
-- The canonical estate identity is docker-01, a physical host managed by Ansible.
-- The documented role is Raspberry Pi 4 BirdNET-Go Docker host.
-- The vendor is Raspberry Pi Trading.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), with aarch64 architecture and kernel 6.18.50+rpt-rpi-v8.
-- The hostname is docker-01.jameshouse and the IP address is 192.168.2.220.
-- TCP ports 22, 80, 111, 443, and 9100 are open.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is identified on TCP port 22.
-- nginx is identified on TCP ports 80 and 443, with TLS indicated on port 443.
-- A Golang net/http server is identified on TCP port 8080.
-- Greenbone reported zero matching actionable findings for the current host IP.
-- Patch telemetry reports 25 updates available, zero security updates available, unattended upgrades enabled, and no reboot required.
-- Bounded Loki samples contain BirdNET_V2.4 pipeline activity using the Garden Room USB Microphone.
+- The canonical estate record labels this device ASUS RT-AC86U, named asus-router, with router, DHCP, AiMesh-controller, and OpenVPN-endpoint roles.
+- The device is online at 192.168.2.1 with hostname and telemetry hostname _gateway.
+- Inventory and Nmap identify the vendor as Raspberry Pi Trading; MAC address is d8:3a:dd:5a:51:44.
+- TCP ports 22, 53, 80, 443, 111, 8443, and 9100 are reported open across the supplied evidence.
+- Port 8443 is reported as HTTPS-alt and presents a Let's Encrypt certificate for jrwroberts1976.asuscomm.com.
+- Nmap reports nginx on ports 80 and 443.
+- The Nmap OS matches are conflicting and include Western Digital My Cloud, Linux kernel 3.x through 5.x, and QNAP QTS.
 
 ### Inferences
 
-- The host is serving infrastructure and application workloads consistent with its documented Docker-host role.
-- The BirdNET-Go workload is evidenced by the documented estate role and sampled BirdNET_V2.4 application logs.
+- The host is likely a Linux-based embedded gateway or network appliance, but the supplied evidence does not establish the exact hardware or firmware.
+- The canonical ASUS router identity conflicts with the Raspberry Pi Trading inventory identity and the _gateway hostname.
+- The differing SSH service reports—Dropbear in enrichment and OpenSSH in the Nmap profile—should be treated as unresolved service evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

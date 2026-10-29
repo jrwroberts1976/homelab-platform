@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T17:02:35+01:00`
+- Assessed: `2026-10-29T17:01:31+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Identity confidence: **high**
@@ -97,22 +97,23 @@ complete household browsing history.
 
 ### Assessment summary
 
-edge-01 is a managed Debian 13 LXC container, CT103 on Proxmox-2. SSH is exposed on TCP/22; TCP/9100 is also open. No matching actionable Greenbone findings were reported, while two non-security updates are available.
+edge-01 is CT103, a managed Debian 13 LXC on Proxmox-2. OpenSSH 10.0p2 is exposed on TCP/22 and TCP/9100 is open. No actionable Greenbone findings match the current IP; three updates are available.
 
 ### Confirmed facts
 
-- The documented estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
-- Proxmox inventory identifies the guest type as LXC and the vendor as Proxmox Server Solutions GmbH.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie), architecture x86_64, with kernel 7.0.14-20-pve.
+- Canonical identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
+- The Proxmox guest type is LXC and the Proxmox VMID is 103.
+- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-20-pve.
+- The vendor is Proxmox Server Solutions GmbH.
 - TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
 - TCP/9100 is open; its Nmap service label was omitted.
-- Greenbone reports zero matching actionable findings for the current host IP.
-- Patching reports two updates available, zero security updates available, and no reboot required.
+- No actionable Greenbone findings match 192.168.2.56.
+- Three updates are available, zero security updates are reported, and no reboot is required.
 
 ### Inferences
 
-- This is a managed infrastructure/container host rather than a standalone home IoT device, based on the canonical estate record and Proxmox LXC inventory.
-- The authoritative OS facts supersede Nmap OS identification, which was intentionally skipped.
+- The device is a managed Debian-based application or infrastructure container hosted by Proxmox rather than a standalone physical endpoint.
+- The recorded role indicates this is reserved edge infrastructure; cloudflared is not deployed according to the canonical estate record.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
