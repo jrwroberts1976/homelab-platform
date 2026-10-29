@@ -59,7 +59,7 @@ Use bounded domain/service summaries only.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T16:05:03+01:00`
+- Assessed: `2026-10-29T16:03:23+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1a:9f:0c:30:3b`
 - Identity confidence: **high**
@@ -69,22 +69,24 @@ Use bounded domain/service summaries only.
 
 ### Assessment summary
 
-Proxmox-2 is a managed physical Proxmox VE cluster node running authoritative Debian GNU/Linux 13 (trixie) OS facts. SSH and the Proxmox Virtual Environment REST API are confirmed open; ports 111 and 9100 are also open. No matching actionable Greenbone findings were reported.
+Proxmox-2 is a managed physical Proxmox VE cluster node running the authoritative Debian 13 (trixie) platform. OpenSSH and the Proxmox Virtual Environment REST API were identified; ports 111 and 9100 are also open without service labels. No actionable Greenbone findings currently match this IP, while patch telemetry is unavailable.
 
 ### Confirmed facts
 
 - The canonical estate identifies this device as Proxmox-2, a physical Proxmox VE cluster node 2.
-- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie) on x86_64 with kernel 7.0.14-20-pve.
-- The device hostname is proxmox-2.jameshouse and its IP address is 192.168.2.71.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is confirmed on TCP port 22.
-- Proxmox Virtual Environment REST API version 3.0 is identified on TCP port 3128.
-- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
-- Greenbone reported zero matching actionable findings for the current host IP.
+- The device is managed by Ansible.
+- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie), on x86_64, with kernel 7.0.14-20-pve.
+- The hostname is proxmox-2.jameshouse and the IP address is 192.168.2.71.
+- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP port 3128 is open and provides the corroborated Proxmox Virtual Environment REST API, version 3.0.
+- TCP ports 111 and 9100 are open; no service labels are supplied for these ports.
+- Greenbone reports zero matching actionable findings for this host IP.
+- Patch telemetry is unavailable.
 
 ### Inferences
 
-- The host functions as a physical virtualization and cluster-management node based on its canonical estate role and confirmed Proxmox service.
-- A-Link is the vendor reported by inventory and Nmap evidence.
+- This is a server-class virtualization host rather than a general-purpose endpoint, based on its canonical Proxmox VE cluster-node role.
+- The A-Link vendor value is likely inventory-associated hardware or interface vendor data; the supplied evidence does not establish the system manufacturer.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

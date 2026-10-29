@@ -87,7 +87,7 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T16:05:03+01:00`
+- Assessed: `2026-10-29T16:03:23+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:35:3b:11`
 - Identity confidence: **high**
@@ -97,25 +97,24 @@ complete household browsing history.
 
 ### Assessment summary
 
-dns-02 is CT100, an Ansible-managed Proxmox LXC running Debian 13. It provides Pi-hole/dnsmasq DNS service and Unbound according to the canonical estate record; SSH and HTTPS/WebDAV are also exposed.
+dns-02 is CT100 on PROXMOX, running Debian GNU/Linux 13 (trixie) and serving Pi-hole/Unbound DNS. SSH and DNS are corroborated; ports 80, 443, and 9100 are open. Three updates are available, with no pending security updates or matching Greenbone findings.
 
 ### Confirmed facts
 
-- Canonical estate identity is dns-02, CT100 on PROXMOX, with role Pi-hole and Unbound.
-- The Proxmox cluster API identifies the guest as an LXC named dns-02 on node PROXMOX with VMID 100.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie) on x86_64.
-- The inventory vendor is Proxmox Server Solutions GmbH.
-- TCP ports 22, 53, 80, 443, and 9100 are open.
-- TCP 22 provides OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP 53 provides dnsmasq 2.93 with Pi-hole enrichment.
-- TCP 443 is identified as WebDAV over TLS by the service enrichment.
-- Greenbone reports zero matching actionable findings for the current host IP.
-- No security updates are currently available; two non-security updates are available and no reboot is required.
+- The canonical estate identity is dns-02, an LXC container designated for Pi-hole and Unbound, CT100 on PROXMOX.
+- The Proxmox cluster identifies the guest as LXC dns-02 on node PROXMOX with VMID 100.
+- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, kernel 7.0.14-23-pve.
+- OpenSSH 10.0p2 Debian 7+deb13u4 is available on TCP port 22.
+- dnsmasq 2.93 is available on TCP port 53 with Pi-hole noted.
+- TCP ports 80, 443, and 9100 are open; their Nmap labels were omitted.
+- The TCP 443 service is recorded as corroborated WebDAV over TLS, and the certificate identifies pi.hole.
+- There are 3 updates available, 0 security updates available, and no reboot is required.
+- Greenbone reports zero actionable findings matching this host IP.
 
 ### Inferences
 
-- The host is a containerized DNS infrastructure service rather than a standalone physical device.
-- The Debian OS facts apply to the LXC guest and are authoritative for this classification.
+- The host is a managed infrastructure service container rather than a standalone physical device.
+- Its primary network function is local DNS filtering and resolution through Pi-hole and Unbound.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

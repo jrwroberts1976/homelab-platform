@@ -59,7 +59,7 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T16:05:03+01:00`
+- Assessed: `2026-10-29T16:03:23+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `2c:cf:67:30:be:1f`
 - Identity confidence: **high**
@@ -69,27 +69,26 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 ### Assessment summary
 
-media-01 is a managed Raspberry Pi 5 running authoritative Debian GNU/Linux 13 (trixie) on aarch64. It serves as a Kodi endpoint and primary Proxmox NFS backup target, with SSH, HTTPS/nginx, Samba, and an additional open TCP port 9100. No actionable Greenbone findings matched the current IP; sampled logs contain media-device, audio, and authentication errors.
+media-01 is a managed Raspberry Pi 5 running Debian GNU/Linux 13 (trixie), serving as the Kodi endpoint and primary Proxmox NFS backup target. Open services include SSH, HTTPS via nginx, and Samba; TCP/9100 is also open. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The canonical device name is media-01 and it is a physical host.
-- The documented role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
+- The canonical device name is media-01.
+- The device is a physical host managed by Ansible.
+- The canonical role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
 - The vendor is Raspberry Pi (Trading).
-- The authoritative OS is Debian GNU/Linux 13 (trixie), with aarch64 architecture and kernel 6.18.50+rpt-rpi-2712.
-- The host is managed by Ansible.
-- TCP ports 22, 443, 445, and 9100 are open.
-- TCP 22 provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP 443 provides corroborated nginx over TLS.
-- TCP 445 provides corroborated Samba smbd version 4.
-- No actionable Greenbone findings matched 192.168.2.195 in the supplied report.
-- The bounded 24-hour Loki sample contains media-device, audio, HTTP parsing, and authentication-related warning or error samples.
+- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), kernel 6.18.50+rpt-rpi-2712, and aarch64 architecture.
+- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
+- TCP/443 is open and provides corroborated nginx over TLS.
+- TCP/445 is open and provides corroborated Samba smbd version 4.
+- TCP/9100 is open; its service label was omitted.
+- Greenbone reported zero matching actionable findings for this host IP.
+- Patch telemetry reports 31 available updates, zero security updates, and no reboot required.
 
 ### Inferences
 
-- The host is suitable for the documented media-playback and backup roles based on its canonical estate record and observed services.
-- The host was recently reachable through DHCP/router telemetry, although inventory telemetry reports it as offline.
-- The sampled log messages merit operational review, but the bounded sample does not establish an incident or overall host health.
+- The device identity is consistent across the canonical estate record, hostname, vendor data, and authoritative host inventory.
+- The host functions as a Linux-based network storage and media endpoint, consistent with its documented estate role and exposed services.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

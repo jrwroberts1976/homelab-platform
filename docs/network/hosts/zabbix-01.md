@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T16:05:03+01:00`
+- Assessed: `2026-10-29T16:03:23+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:05`
 - Identity confidence: **high**
@@ -82,24 +82,25 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-zabbix-01 is the documented CT105 LXC container on PROXMOX, hosting the Zabbix monitoring platform. Authoritative Zabbix Agent 2 data identifies Debian GNU/Linux 13 (trixie). SSH and Nginx HTTP/HTTPS services are exposed; port 9100 is open without a reported service label. One medium Greenbone Debian advisory is present for review.
+zabbix-01 is CT105, an Ansible-managed Proxmox LXC running the Zabbix monitoring platform on Debian GNU/Linux 13. Zabbix services, PostgreSQL/TimescaleDB, Nginx, SSH, and a Prometheus-compatible metrics endpoint are present. No actionable Greenbone findings matched the current IP; seven updates are available, including security updates reported as zero.
 
 ### Confirmed facts
 
-- The canonical estate identity is zabbix-01, CT105, managed as an LXC container on PROXMOX.
-- The documented role is Zabbix monitoring platform with PostgreSQL, TimescaleDB, Zabbix Server, Agent 2, and Nginx active.
-- Authoritative Zabbix Agent 2 facts identify the OS as Debian GNU/Linux 13 (trixie) on x86_64.
-- The reported kernel is 7.0.14-23-pve.
-- TCP port 22 is open with corroborated OpenSSH 10.0p2 Debian 7+deb13u4 evidence.
-- TCP ports 80 and 443 are open with corroborated Nginx HTTP/HTTPS evidence.
+- The canonical estate identifies the device as zabbix-01, a Zabbix monitoring platform in CT105 on PROXMOX.
+- Proxmox identifies the guest as an LXC container named zabbix-01 with VMID 105.
+- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-23-pve.
+- OpenSSH 10.0p2 on Debian is exposed on TCP port 22.
+- Nginx is exposed on TCP ports 80 and 443, with TLS on port 443.
 - TCP port 9100 is open; its Nmap service label was omitted.
-- The host has one matching Greenbone actionable finding: Debian Security Advisory DSA-6572-1, severity Medium, score 5.0.
-- Patch telemetry reports six updates available and zero security updates available; unattended upgrades are enabled.
+- The TLS certificate for port 443 is for zabbix.home.jrwroberts.co.uk.
+- Greenbone reports zero actionable findings matching this current IP.
+- Patch telemetry reports seven updates available, zero security updates available, and no reboot required.
 
 ### Inferences
 
-- The device is a Linux-based managed infrastructure server running inside an LXC container.
-- The HTTPS service is associated with zabbix.home.jrwroberts.co.uk based on the presented TLS certificate.
+- The device is a managed Linux server container dedicated to monitoring infrastructure.
+- The HTTPS service is likely associated with the Zabbix web interface based on the canonical role and certificate hostname.
+- Port 9100 is consistent with an exposed metrics endpoint, but the supplied evidence does not provide its service label.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

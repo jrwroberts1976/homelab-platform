@@ -72,7 +72,7 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T16:05:03+01:00`
+- Assessed: `2026-10-29T16:03:23+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:04`
 - Identity confidence: **high**
@@ -82,22 +82,26 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 ### Assessment summary
 
-komodo-01 is the Proxmox CT104 LXC control-plane host running Debian 13 on x86_64. OpenSSH is exposed on TCP/22; TCP/9100 is open. No actionable Greenbone findings match the current IP.
+komodo-01 is CT104, a Proxmox LXC container running Debian GNU/Linux 13 (trixie). It serves as the Komodo container-management control-plane host, with Docker, MongoDB and Komodo Core commissioned. OpenSSH 10.0p2 is exposed on TCP/22 and TCP/9100 is open. No actionable Greenbone findings match the current IP; nine updates are available, including zero security updates.
 
 ### Confirmed facts
 
-- Canonical estate identity is komodo-01, an LXC container with role CT104 on PROXMOX.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), kernel 7.0.14-23-pve, and x86_64 architecture.
-- TCP/22 is open and runs OpenSSH 10.0p2 Debian 7+deb13u4 using SSH protocol 2.0.
-- TCP/9100 is open; its Nmap service label was omitted.
-- The canonical role identifies this host as a Komodo container-management control-plane host with Docker, MongoDB, and Komodo Core commissioned.
+- The canonical device name is komodo-01.
+- The device is an LXC guest, CT104, hosted on PROXMOX.
+- The documented role is Komodo container-management control-plane host.
+- Authoritative Zabbix Agent 2 evidence identifies the OS as Debian GNU/Linux 13 (trixie) on x86_64.
+- Docker, MongoDB and Komodo Core are documented as commissioned.
+- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 with protocol 2.0.
+- TCP/9100 is open; its Nmap service label is omitted.
 - Greenbone reports zero actionable findings matching 192.168.2.58.
-- Patch telemetry reports seven updates available, zero security updates available, unattended upgrades enabled, and no reboot required.
+- Patch telemetry reports nine updates available, zero security updates available, and no reboot required.
+- The bounded Loki sample contains network-connectivity wait-online error and timeout messages.
 
 ### Inferences
 
-- The host is a managed Debian-based application/control-plane container rather than a standalone physical network appliance.
-- The MAC address does not provide a usable hardware-vendor identity for this LXC host.
+- The host is a managed application/control-plane server rather than a general-purpose end-user device.
+- Its platform is a Debian-based Linux environment running inside Proxmox LXC.
+- The device identity is corroborated by canonical estate data, Proxmox inventory, hostname, and authoritative OS telemetry.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
