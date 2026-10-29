@@ -153,6 +153,13 @@
             remote_src: true
             mode: '0600'
 
+        - name: Copy existing README fragment to preserve candidate directory composition
+          ansible.builtin.copy:
+            src: /etc/dnsmasq.d/README
+            dest: "{{ bedroom_candidate.path }}/README"
+            remote_src: true
+            mode: '0600'
+
         - name: Insert Bedroom reservation in OFFLINE candidate only
           ansible.builtin.blockinfile:
             path: "{{ bedroom_candidate.path }}/router.conf"
