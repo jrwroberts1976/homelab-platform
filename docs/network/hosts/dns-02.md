@@ -127,7 +127,7 @@ dns-02 is CT100, an Ansible-managed Proxmox LXC running Debian 13. It provides P
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T06:11:59+00:00`
+- Last assessed: `2026-10-29T07:16:59+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
