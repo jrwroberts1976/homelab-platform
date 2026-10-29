@@ -1,0 +1,101 @@
+name: Validate router-01 admin-01 fixed DHCP reservation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-01-admin-dhcp-reservation.yml"
+      - "IaC/ansible/playbooks/router-01-admin-dhcp-reservation*.yml"
+      - "IaC/ansible/playbooks/tasks/router-01-admin-dhcp-preflight.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-router-01-admin-dhcp-reservation.yml"
+      - "IaC/ansible/playbooks/router-01-admin-dhcp-reservation*.yml"
+      - "IaC/ansible/playbooks/tasks/router-01-admin-dhcp-preflight.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install local static and Ansible YAML parsers
+        run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Enforce source-only gates and preserved existing DHCP reservation
+        run: |
+          python - <<'PY'
+          from pathlib import Path
+          import yaml
+          base=Path('IaC/ansible/playbooks')
+          shared=base/'tasks/router-01-admin-dhcp-preflight.yml'
+          read=base/'router-01-admin-dhcp-reservation-preflight-readonly.yml'
+          writer=base/'router-01-admin-dhcp-reservation.yml'
+          rollback=base/'router-01-admin-dhcp-reservation-rollback.yml'
+          expected=[shared,read,writer,rollback]
+          for p in expected:
+              assert p.is_file(),p
+              assert yaml.safe_load(p.read_text())
+              assert '192.168.3.1' not in p.read_text(),p
+              assert 'StrictHostKeyChecking=no' not in p.read_text(),p
+          for p in (read,writer,rollback):
+              play=yaml.safe_load(p.read_text())
+              assert len(play)==1 and play[0]['hosts']=='router_postcutover_baseline'
+              assert play[0]['gather_facts'] is False and play[0]['become'] is True
+          s=shared.read_text()
+          assert 'b8:27:eb:e8:36:cd' in s and 'd8:3a:dd:5a:51:44' in s
+          assert '192.168.2.127/24' in s
+          assert "admin_res_controller.stdout | trim == 'admin-01'" in s
+          assert "inventory_hostname == 'router-01'" in s
+          assert "ansible_host == '192.168.2.1'" in s
+          assert 'dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h' in s
+          assert 'dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180' in s
+          assert 'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48' not in s
+          assert "'192.168.2.48' for s in leases" in s
+          assert 'dnsmasq, --test' in s
+          r=read.read_text()
+          assert 'import_tasks: tasks/router-01-admin-dhcp-preflight.yml' in r
+          for forbidden in ('ansible.builtin.file:', 'ansible.builtin.copy:',
+                            'ansible.builtin.blockinfile:', 'ansible.builtin.systemd_service:'):
+              assert forbidden not in r and forbidden not in s, forbidden
+          w=writer.read_text()
+          wplay=yaml.safe_load(w)[0]
+          assert wplay['vars']['router_admin_reservation_apply_approved'] is False
+          assert wplay['vars']['router_admin_reservation_restart_approved'] is False
+          assert wplay['vars']['router_admin_address48_unclaimed_approved'] is False
+          assert 'not ansible_check_mode' in w
+          assert 'import_tasks: tasks/router-01-admin-dhcp-preflight.yml' in w
+          assert 'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48' in w
+          assert 'dnsmasq, --test' in w and '--conf-dir=' in w
+          assert 'router_admin_backup_dir' in w
+          assert 'rescue:' in w and 'always:' in w
+          assert 'when: router_admin_write.changed | bool' in w
+          assert 'state: restarted' in w
+          assert 'lease' in w.lower()
+          rb=rollback.read_text()
+          rbplay=yaml.safe_load(rb)[0]
+          assert rbplay['vars']['router_admin_rollback_approved'] is False
+          assert rbplay['vars']['router_admin_rollback_restart_approved'] is False
+          assert rbplay['vars']['router_admin_rollback_alt_access_verified'] is False
+          assert 'not ansible_check_mode' in rb
+          assert '192.168.2.180' in rb and '192.168.2.48' in rb
+          assert 'rescue:' in rb and 'state: absent' in rb
+          assert 'router_admin_rb_edit.changed | bool' in rb
+          inv=yaml.safe_load(Path('IaC/ansible/inventory/router-01-postcutover-baseline.yml').read_text())
+          assert inv['all']['children']['router_postcutover_baseline']['hosts']['router-01']['ansible_host']=='192.168.2.1'
+          print('PASS: exact identity, preflight, fail-closed gate, scoped write/rollback and preserved DHCP pool')
+          PY
+      - name: Offline Ansible YAML syntax checks (no router connection)
+        run: |
+          set -euo pipefail
+          cd IaC/ansible
+          for p in \
+            playbooks/router-01-admin-dhcp-reservation-preflight-readonly.yml \
+            playbooks/router-01-admin-dhcp-reservation.yml \
+            playbooks/router-01-admin-dhcp-reservation-rollback.yml; do
+            ansible-playbook -i inventory/router-01-postcutover-baseline.yml "$p" --syntax-check
+          done
