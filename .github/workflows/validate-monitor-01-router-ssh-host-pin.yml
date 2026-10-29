@@ -1,0 +1,95 @@
+name: Validate monitor-01 router SSH host pin safety
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-monitor-01-router-ssh-host-pin.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-ssh-host-pin.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-ssh-host-pin-rollback.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-monitor-01-router-ssh-host-pin.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-ssh-host-pin.yml"
+      - "IaC/ansible/playbooks/monitor-01-router-ssh-host-pin-rollback.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-offline:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install Ansible source syntax checker
+        run: python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+      - name: Validate exact scope and approval gates
+        run: |
+          python - <<'PY'
+          import yaml
+          from pathlib import Path
+          base=Path("IaC/ansible/playbooks")
+          writer=base/"monitor-01-router-ssh-host-pin.yml"
+          rollback=base/"monitor-01-router-ssh-host-pin-rollback.yml"
+          fp="SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI"
+          marker="router-metrics-ansible-managed-20261029"
+          for path in (writer,rollback):
+              src=path.read_text()
+              plays=yaml.safe_load(src)
+              assert isinstance(plays,list) and len(plays)==1
+              play=plays[0]
+              assert play["hosts"]=="monitoring_hosts"
+              assert play["gather_facts"] is False
+              assert play["become"] is True
+              assert "not ansible_check_mode" in src
+              assert "inventory_hostname == 'monitor-01'" in src
+              assert "ansible_host == '192.168.2.52'" in src
+              assert "admin-01" in src
+              assert fp in src
+              assert marker in src
+              assert "/etc/homelab/router-metrics-ssh/known_hosts" in src
+              assert "no_log: true" in src
+              assert "state: absent" in src or path == writer
+              for forbidden in (
+                  "StrictHostKeyChecking=no",
+                  "UserKnownHostsFile=/dev/null",
+                  "ssh-keyscan -H",
+                  "ansible.builtin.apt:",
+                  "ansible.builtin.user:",
+                  "ansible.builtin.service:",
+                  "ansible.builtin.systemd_service:",
+                  "ssh-keygen -t",
+                  "192.168.3.1",
+              ):
+                  assert forbidden not in src,(path,forbidden)
+          w=yaml.safe_load(writer.read_text())[0]
+          r=yaml.safe_load(rollback.read_text())[0]
+          assert w["vars"]["router_host_pin_apply_approved"] is False
+          assert r["vars"]["router_host_pin_rollback_approved"] is False
+          assert r["vars"]["router_host_pin_no_active_tunnel_verified"] is False
+          ws=writer.read_text()
+          rs=rollback.read_text()
+          assert "ssh-keyscan" in ws
+          assert "ssh-keygen" in ws
+          assert "host_pin_fingerprint_result.stdout.split()[1] == router_host_pin_fingerprint" in ws
+          assert "router_host_pin_user" in ws
+          assert "host_pin_added_by_this_run" in ws
+          assert "rescue:" in ws
+          assert "backup: true" in ws
+          assert "backup: true" in rs
+          assert "state: absent" in rs
+          assert "rollback_host_pin_key_fingerprint.stdout.split()[1] == router_host_pin_fingerprint" in rs
+          print("PASS: verified router key, scoped trust file, no raw key commits, independent runtime gates and rollback")
+          PY
+      - name: Validate Ansible syntax offline against canonical monitor-01 inventory
+        run: |
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/monitor-01-router-ssh-host-pin.yml \
+            --limit monitor-01 --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/monitor-01-router-ssh-host-pin-rollback.yml \
+            --limit monitor-01 --syntax-check

@@ -1,0 +1,245 @@
+---
+# SOURCE ONLY until independently approved. Pin only the physical Pi's
+# separately verified ED25519 SSH host fingerprint, never auto-accept a key.
+# No SSH authentication, service reload, router SSH authorisation or tunnel.
+- name: Pin verified router-01 ED25519 host key for restricted monitoring client
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_host_pin_apply_approved: false
+    router_host_pin_address: 192.168.2.1
+    router_host_pin_fingerprint: "SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI"
+    router_host_pin_file: /etc/homelab/router-metrics-ssh/known_hosts
+    router_host_pin_user: router-metrics-tunnel
+    router_host_pin_marker: router-metrics-ansible-managed-20261029
+
+  pre_tasks:
+    - name: Read Ansible controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: host_pin_controller
+      changed_when: false
+      check_mode: false
+
+    - name: Refuse check mode, wrong host, or missing independent approval
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_host_pin_apply_approved | bool
+          - host_pin_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Refusing host-trust mutation without deliberate approval and exact monitor identity."
+      delegate_to: localhost
+      become: false
+
+    - name: Read live monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      register: host_pin_hostname
+      changed_when: false
+
+    - name: Read live monitoring LAN IPv4
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr]
+      register: host_pin_addresses
+      changed_when: false
+
+    - name: Require correct runtime monitoring node
+      ansible.builtin.assert:
+        that:
+          - host_pin_hostname.stdout | trim == 'monitor-01'
+          - "'inet 192.168.2.52/' in host_pin_addresses.stdout"
+
+    - name: Inspect SSH trust parent and existing known_hosts file without following symlinks
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab
+        - /etc/homelab/router-metrics-ssh
+        - "{{ router_host_pin_file }}"
+      register: host_pin_paths
+
+    - name: Refuse symlinks, missing trust file, or relaxed original ownership and modes
+      ansible.builtin.assert:
+        that:
+          - host_pin_paths.results[0].stat.isdir | default(false)
+          - not (host_pin_paths.results[0].stat.islnk | default(false))
+          - host_pin_paths.results[0].stat.pw_name == 'root'
+          - host_pin_paths.results[0].stat.gr_name == 'root'
+          - host_pin_paths.results[0].stat.mode == '0750'
+          - host_pin_paths.results[1].stat.isdir | default(false)
+          - not (host_pin_paths.results[1].stat.islnk | default(false))
+          - host_pin_paths.results[1].stat.pw_name == 'root'
+          - host_pin_paths.results[1].stat.mode == '0755'
+          - host_pin_paths.results[2].stat.isreg | default(false)
+          - not (host_pin_paths.results[2].stat.islnk | default(false))
+          - host_pin_paths.results[2].stat.pw_name == 'root'
+          - host_pin_paths.results[2].stat.gr_name == 'root'
+          - host_pin_paths.results[2].stat.mode == '0644'
+
+    - name: Require restricted SSH service identity, not the root account
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_host_pin_user }}"]
+      register: host_pin_account
+      changed_when: false
+      no_log: true
+
+    - name: Require verified UID, home, and non-login shell
+      ansible.builtin.assert:
+        that:
+          - host_pin_account.stdout.split(':')[2] | int == 992
+          - host_pin_account.stdout.split(':')[5] == '/var/lib/router-metrics-tunnel'
+          - host_pin_account.stdout.split(':')[6] == '/usr/sbin/nologin'
+
+    - name: Read network-presented router ED25519 public host key without trusting or storing it
+      ansible.builtin.command:
+        argv: [ssh-keyscan, -T, "5", -t, ed25519, "{{ router_host_pin_address }}"]
+      register: host_pin_scan
+      changed_when: false
+      no_log: true
+
+    - name: Reject unexpected host keys or ambiguous scan results
+      ansible.builtin.assert:
+        that:
+          - host_pin_scan.rc == 0
+          - host_pin_scan.stdout_lines | length == 1
+          - >-
+            (host_pin_scan.stdout_lines | select('match',
+            '^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+$') | list | length) == 1
+        fail_msg: "Router SSH scan did not return exactly one ED25519 key for 192.168.2.1."
+
+    - name: Retain scanned host key for in-memory fingerprint verification only
+      ansible.builtin.set_fact:
+        host_pin_verified_line: "{{ host_pin_scan.stdout_lines[0] }}"
+      no_log: true
+
+    - name: Compute SHA256 from network-presented ED25519 public key
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "-", -E, sha256]
+        stdin: "{{ host_pin_verified_line }}\n"
+      register: host_pin_fingerprint_result
+      changed_when: false
+      no_log: true
+
+    - name: Require exact independent physical-Pi fingerprint before touching known_hosts
+      ansible.builtin.assert:
+        that:
+          - host_pin_fingerprint_result.rc == 0
+          - host_pin_fingerprint_result.stdout.split()[1] == router_host_pin_fingerprint
+          - "'(ED25519)' in host_pin_fingerprint_result.stdout"
+        fail_msg: "Fingerprint mismatch: DO NOT accept the router key or write known_hosts."
+
+    - name: Search known_hosts for any existing entry including hashed addresses
+      ansible.builtin.command:
+        argv: [ssh-keygen, -F, "{{ router_host_pin_address }}", -f, "{{ router_host_pin_file }}"]
+      register: host_pin_existing
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Extract existing non-comment host-key lines in memory
+      ansible.builtin.set_fact:
+        host_pin_existing_lines: "{{ host_pin_existing.stdout_lines | reject('match', '^#') | reject('equalto', '') | list }}"
+      no_log: true
+
+    - name: Fail closed on conflicting or ambiguous existing router pins
+      ansible.builtin.assert:
+        that:
+          - host_pin_existing.rc in [0, 1]
+          - >-
+            (host_pin_existing.rc == 1 and host_pin_existing_lines | length == 0)
+            or (host_pin_existing.rc == 0 and host_pin_existing_lines | length == 1
+            and host_pin_existing_lines[0].split()[1:3] == host_pin_verified_line.split()[1:3])
+        fail_msg: "Conflicting router host-key pin already exists; manual reconciliation required."
+
+  tasks:
+    - name: Track whether this run needs recovery of a newly added pin
+      ansible.builtin.set_fact:
+        host_pin_added_by_this_run: false
+
+    - name: Install and verify only a genuine Pi key, with scoped postflight rollback
+      block:
+        - name: Flag only a new pin for recovery on any subsequent failure
+          ansible.builtin.set_fact:
+            host_pin_added_by_this_run: true
+          when: host_pin_existing.rc == 1
+
+        - name: Append only verified router key to existing dedicated trust file
+          ansible.builtin.lineinfile:
+            path: "{{ router_host_pin_file }}"
+            line: "{{ host_pin_verified_line }} {{ router_host_pin_marker }}"
+            state: present
+            create: false
+            backup: true
+          when: host_pin_existing.rc == 1
+          no_log: true
+
+        - name: Read effective router host pin as restricted monitoring identity
+          ansible.builtin.command:
+            argv:
+              - runuser
+              - -u
+              - "{{ router_host_pin_user }}"
+              - --
+              - ssh-keygen
+              - -F
+              - "{{ router_host_pin_address }}"
+              - -f
+              - "{{ router_host_pin_file }}"
+          register: host_pin_postflight
+          changed_when: false
+          failed_when: false
+          no_log: true
+
+        - name: Extract service user's host key lines for postflight comparison
+          ansible.builtin.set_fact:
+            host_pin_postflight_lines: "{{ host_pin_postflight.stdout_lines | reject('match', '^#') | reject('equalto', '') | list }}"
+          no_log: true
+
+        - name: Require exactly one correct router key usable by the service user
+          ansible.builtin.assert:
+            that:
+              - host_pin_postflight.rc == 0
+              - host_pin_postflight_lines | length == 1
+              - host_pin_postflight_lines[0].split()[1:3] == host_pin_verified_line.split()[1:3]
+            fail_msg: "Service-user host-key postflight failed. Do not start an SSH tunnel."
+
+        - name: Reinspect trust file metadata after write
+          ansible.builtin.stat:
+            path: "{{ router_host_pin_file }}"
+            follow: false
+          register: host_pin_post_stat
+
+        - name: Require root-owned non-symlink trust file with preserved access mode
+          ansible.builtin.assert:
+            that:
+              - host_pin_post_stat.stat.isreg | default(false)
+              - not (host_pin_post_stat.stat.islnk | default(false))
+              - host_pin_post_stat.stat.pw_name == 'root'
+              - host_pin_post_stat.stat.gr_name == 'root'
+              - host_pin_post_stat.stat.mode == '0644'
+
+      rescue:
+        - name: Remove only the newly added marked pin on failed postflight
+          ansible.builtin.lineinfile:
+            path: "{{ router_host_pin_file }}"
+            line: "{{ host_pin_verified_line }} {{ router_host_pin_marker }}"
+            state: absent
+          when: host_pin_added_by_this_run | bool
+          no_log: true
+
+        - name: Fail closed after any attempted scoped trust rollback
+          ansible.builtin.fail:
+            msg: "Host pin failed postflight. Newly inserted marked pin was selected for removal; verify live state before any SSH connection."
+
+    - name: Report exact host trust scope without displaying public key bytes
+      ansible.builtin.debug:
+        msg:
+          - "Physical router ED25519 fingerprint matched: {{ router_host_pin_fingerprint }}"
+          - "Pinned 192.168.2.1 host key usable by router-metrics-tunnel: PASS"
+          - "No SSH authentication, router authorized_keys, SSH reload, tunnel, exporter, firewall or Prometheus changes"
