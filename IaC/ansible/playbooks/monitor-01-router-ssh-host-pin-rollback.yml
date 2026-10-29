@@ -1,0 +1,158 @@
+---
+# Separate approval needed. Removes only the uniquely marked router-01 host
+# trust entry installed by the paired playbook, never other known_hosts lines.
+- name: Roll back only the managed Pi monitoring host-key pin
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_host_pin_rollback_approved: false
+    router_host_pin_no_active_tunnel_verified: false
+    router_host_pin_file: /etc/homelab/router-metrics-ssh/known_hosts
+    router_host_pin_fingerprint: "SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI"
+    router_host_pin_marker: router-metrics-ansible-managed-20261029
+
+  pre_tasks:
+    - name: Check admin controller identity
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: rollback_host_pin_controller
+      changed_when: false
+      check_mode: false
+
+    - name: Require exact monitor and independent approval of tunnel-free rollback
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_host_pin_rollback_approved | bool
+          - router_host_pin_no_active_tunnel_verified | bool
+          - rollback_host_pin_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Refusing rollback: require exact host and proof no dependent SSH tunnel is active."
+      delegate_to: localhost
+      become: false
+
+    - name: Read live host name
+      ansible.builtin.command:
+        argv: [hostname]
+      register: rollback_host_pin_hostname
+      changed_when: false
+
+    - name: Refuse wrong host
+      ansible.builtin.assert:
+        that:
+          - rollback_host_pin_hostname.stdout | trim == 'monitor-01'
+
+    - name: Verify host port 19100 not in use before removing trust
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: rollback_host_pin_listeners
+      changed_when: false
+
+    - name: Refuse removal while intended local forward port is listening
+      ansible.builtin.assert:
+        that:
+          - "':19100 ' not in rollback_host_pin_listeners.stdout"
+          - "':19100\\n' not in rollback_host_pin_listeners.stdout"
+
+    - name: Inspect known_hosts metadata before any write
+      ansible.builtin.stat:
+        path: "{{ router_host_pin_file }}"
+        follow: false
+      register: rollback_host_pin_stat
+
+    - name: Require original trust file ownership and protection
+      ansible.builtin.assert:
+        that:
+          - rollback_host_pin_stat.stat.isreg | default(false)
+          - not (rollback_host_pin_stat.stat.islnk | default(false))
+          - rollback_host_pin_stat.stat.pw_name == 'root'
+          - rollback_host_pin_stat.stat.gr_name == 'root'
+          - rollback_host_pin_stat.stat.mode == '0644'
+
+  tasks:
+    - name: Read host pin file privately without printing any host-key bytes
+      ansible.builtin.slurp:
+        src: "{{ router_host_pin_file }}"
+      register: rollback_host_pin_file_content
+      no_log: true
+
+    - name: Identify only exact managed audit-marker lines
+      ansible.builtin.set_fact:
+        rollback_host_pin_marked_lines: >-
+          {{ (rollback_host_pin_file_content.content | b64decode).splitlines()
+             | select('search', ' router-metrics-ansible-managed-20261029$') | list }}
+      no_log: true
+
+    - name: Refuse ambiguous or unrelated marked entries
+      ansible.builtin.assert:
+        that:
+          - rollback_host_pin_marked_lines | length <= 1
+          - >-
+            (rollback_host_pin_marked_lines | length == 0)
+            or (rollback_host_pin_marked_lines[0] is match(
+            '^192\.168\.2\.1 ssh-ed25519 [A-Za-z0-9+/=]+ router-metrics-ansible-managed-20261029$'))
+        fail_msg: "Unexpected marker or multiple entries; refuse to touch known_hosts."
+
+    - name: Derive fingerprint for the marked key before attempting deletion
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "-", -E, sha256]
+        stdin: "{{ rollback_host_pin_marked_lines[0] }}\n"
+      register: rollback_host_pin_key_fingerprint
+      changed_when: false
+      no_log: true
+      when: rollback_host_pin_marked_lines | length == 1
+
+    - name: Refuse to remove any line with wrong physical-Pi fingerprint
+      ansible.builtin.assert:
+        that:
+          - rollback_host_pin_key_fingerprint.rc == 0
+          - rollback_host_pin_key_fingerprint.stdout.split()[1] == router_host_pin_fingerprint
+        fail_msg: "The marked line is not the independently verified Pi host key."
+      when: rollback_host_pin_marked_lines | length == 1
+
+    - name: Remove only marked and independently fingerprint-verified Pi key line
+      ansible.builtin.lineinfile:
+        path: "{{ router_host_pin_file }}"
+        line: "{{ rollback_host_pin_marked_lines[0] }}"
+        state: absent
+        backup: true
+      when: rollback_host_pin_marked_lines | length == 1
+      no_log: true
+
+    - name: Read trust file after scoped removal
+      ansible.builtin.slurp:
+        src: "{{ router_host_pin_file }}"
+      register: rollback_host_pin_after
+      no_log: true
+
+    - name: Require managed marker absent after rollback
+      ansible.builtin.assert:
+        that:
+          - >-
+            ((rollback_host_pin_after.content | b64decode).splitlines()
+            | select('search', ' router-metrics-ansible-managed-20261029$')
+            | list | length) == 0
+
+    - name: Confirm trust file owner and mode were preserved
+      ansible.builtin.stat:
+        path: "{{ router_host_pin_file }}"
+        follow: false
+      register: rollback_host_pin_after_stat
+
+    - name: Require no broad host-key trust permissions
+      ansible.builtin.assert:
+        that:
+          - rollback_host_pin_after_stat.stat.isreg | default(false)
+          - rollback_host_pin_after_stat.stat.pw_name == 'root'
+          - rollback_host_pin_after_stat.stat.gr_name == 'root'
+          - rollback_host_pin_after_stat.stat.mode == '0644'
+
+    - name: Report narrowly scoped rollback result
+      ansible.builtin.debug:
+        msg:
+          - "Marked physical Pi SSH host pin removed or already absent: PASS"
+          - "Other known_hosts entries left intact; no keys/accounts/SSH services/tunnels/router/Prometheus edited"
