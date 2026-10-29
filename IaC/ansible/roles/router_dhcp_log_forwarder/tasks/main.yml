@@ -1,0 +1,103 @@
+---
+- name: Validate router DHCP forwarder deployment
+  ansible.builtin.assert:
+    that:
+      - ansible_facts.hostname == router_dhcp_forwarder_expected_hostname
+      - ansible_facts.os_family == "Debian"
+      - router_dhcp_forwarder_expected_lan in ansible_facts.all_ipv4_addresses
+      - router_dhcp_forwarder_allow_deploy | bool
+      - not (router_dhcp_forwarder_enable_service | bool) or (router_dhcp_forwarder_activation_approved | bool)
+      - router_dhcp_forwarder_destination == "192.168.2.52"
+      - router_dhcp_forwarder_port | int == 5514
+    fail_msg: "STOP: router identity, destination or deployment approval invalid."
+
+- name: Create DHCP forwarder group
+  ansible.builtin.group:
+    name: "{{ router_dhcp_forwarder_group }}"
+    system: true
+    state: present
+
+- name: Create restricted DHCP forwarder account
+  ansible.builtin.user:
+    name: "{{ router_dhcp_forwarder_user }}"
+    group: "{{ router_dhcp_forwarder_group }}"
+    groups:
+      - "{{ router_dhcp_forwarder_journal_group }}"
+    append: true
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+    state: present
+
+- name: Create forwarder application directory
+  ansible.builtin.file:
+    path: /usr/local/lib/homelab-router-dhcp-forwarder
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install DHCP forwarder
+  ansible.builtin.copy:
+    src: dhcp_forwarder.py
+    dest: "{{ router_dhcp_forwarder_script }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: router_dhcp_forwarder_script_install
+
+- name: Install forwarder systemd unit
+  ansible.builtin.template:
+    src: homelab-router-dhcp-forwarder.service.j2
+    dest: "/etc/systemd/system/{{ router_dhcp_forwarder_service }}"
+    owner: root
+    group: root
+    mode: "0644"
+  register: router_dhcp_forwarder_unit_install
+
+- name: Reload systemd after unit installation
+  ansible.builtin.systemd_service:
+    daemon_reload: true
+  when: not ansible_check_mode
+
+- name: Inspect forwarder service state read-only
+  ansible.builtin.service_facts:
+  when:
+    - not ansible_check_mode
+    - router_dhcp_forwarder_enable_service | bool
+    - router_dhcp_forwarder_activation_approved | bool
+
+- name: Restart running forwarder only when files change
+  ansible.builtin.systemd_service:
+    name: "{{ router_dhcp_forwarder_service }}"
+    enabled: true
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - router_dhcp_forwarder_enable_service | bool
+    - router_dhcp_forwarder_activation_approved | bool
+    - (ansible_facts.services.get(router_dhcp_forwarder_service, {}).get("state", "unknown")) == "running"
+    - router_dhcp_forwarder_script_install is changed or router_dhcp_forwarder_unit_install is changed
+
+- name: Start approved forwarder if not already running
+  ansible.builtin.systemd_service:
+    name: "{{ router_dhcp_forwarder_service }}"
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode
+    - router_dhcp_forwarder_enable_service | bool
+    - router_dhcp_forwarder_activation_approved | bool
+    - (ansible_facts.services.get(router_dhcp_forwarder_service, {}).get("state", "unknown")) != "running"
+
+- name: Enable unchanged running forwarder
+  ansible.builtin.systemd_service:
+    name: "{{ router_dhcp_forwarder_service }}"
+    enabled: true
+  when:
+    - not ansible_check_mode
+    - router_dhcp_forwarder_enable_service | bool
+    - router_dhcp_forwarder_activation_approved | bool
+    - (ansible_facts.services.get(router_dhcp_forwarder_service, {}).get("state", "unknown")) == "running"
+    - router_dhcp_forwarder_script_install is not changed
+    - router_dhcp_forwarder_unit_install is not changed
