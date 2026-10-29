@@ -1,6 +1,24 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 restricted monitoring ED25519 public-key authorisation — 29 October 2026
 
+## Current status — successfully deployed (29 October 2026)
+
+**LIVE on router-01.** After the operator separately approved running the Ansible writer, both intended changes completed. The physical Pi, monitor source key, independently pinned router host key, service account and restricted on-disk SSH policy checks all passed.
+
+```text
+TASK [Create dedicated router-metrics .ssh with strict owner/mode if absent] changed
+TASK [Create exactly one restricted public-key authorisation if absent] changed
+TASK [Require exactly protected service-owned path metadata] ok
+TASK [Confirm only the intended restricted, fingerprint-verified key exists] ok
+TASK [Revalidate sshd syntax after authorised-key installation without reload] ok
+PLAY RECAP router-01: ok=43 changed=2 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0
+```
+
+The deployed directory `/var/lib/router-metrics/.ssh` is owned by UID999 and has mode `0700`; `authorized_keys` is UID999 mode `0600` with exactly the independently verified monitor-01 ED25519 public key (client SHA256 `JB8L+7kC5lArmXoRLWfZThwuGblCjzeEHqYxct2JpqY`). The key is restricted to source `192.168.2.52` with local forwarding only to `127.0.0.1:9100`. No private key was copied, sshd reloaded, SSH tunnel activated or firewall, DNS/DHCP, exporter listener or Prometheus configuration modified.
+
+**Not yet established:** actual SSH authentication, live sshd policy reload state, tunnel operation or Prometheus router node scrape. The source-only and absent-file descriptions below document the original, now-superseded baseline. Next step: separate read-only inspection of the installed key fingerprint and permissions before any approved authentication probe.
+
+
 **STATE: SOURCE-ONLY / NOT DEPLOYED.** This document stages a narrowly scoped, *independently approval-gated* router-side public-key authorisation. The existence of this source code or its CI results **does not authorise a live write**. No SSH login, tunnel or Prometheus router node-metrics scrape has been demonstrated.
 
 ## Operator-verified baseline
