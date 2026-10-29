@@ -1,0 +1,190 @@
+---
+- name: Cut over router DHCP DNS to Pi-hole
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  vars:
+    dns_apply_approved: false
+    dns_restart_approved: false
+    dns_config: /etc/dnsmasq.d/router.conf
+    dns_old: "dhcp-option=option:dns-server,192.168.2.1"
+    dns_new: "dhcp-option=option:dns-server,192.168.2.51,192.168.2.50"
+
+  tasks:
+    - name: Require explicit approval and verified router identity
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - dns_apply_approved | bool
+          - dns_restart_approved | bool
+          - inventory_hostname == "router-01"
+          - ansible_facts.hostname == "raspberrypi"
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+        fail_msg: "STOP - deployment approval or router identity invalid."
+
+    - name: Read existing router DHCP configuration
+      ansible.builtin.slurp:
+        src: "{{ dns_config }}"
+      register: original
+
+    - name: Require exactly one original DNS option
+      ansible.builtin.assert:
+        that:
+          - "((original.content | b64decode).splitlines() | select('equalto', dns_old) | list | length) == 1"
+          - "dns_new not in (original.content | b64decode)"
+
+    - name: Preserve gateway, pool and existing DHCP reservations
+      ansible.builtin.assert:
+        that:
+          - "'dhcp-option=option:router,192.168.2.1' in (original.content | b64decode)"
+          - "'dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h' in (original.content | b64decode)"
+          - "'dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180' in (original.content | b64decode)"
+          - "'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48' in (original.content | b64decode)"
+        fail_msg: "STOP: DHCP baseline or reservations differ."
+
+    - name: Verify original configuration syntax
+      ansible.builtin.command:
+        argv: [dnsmasq, --test]
+      changed_when: false
+
+    - name: Validate complete DNS candidate before applying
+      block:
+        - name: Create temporary candidate directory
+          ansible.builtin.tempfile:
+            state: directory
+            path: /run
+            prefix: router-pihole-dns-
+          register: dns_candidate
+
+        - name: Stage original DHCP configuration
+          ansible.builtin.copy:
+            content: "{{ original.content | b64decode }}"
+            dest: "{{ dns_candidate.path }}/router.conf"
+            mode: "0600"
+
+        - name: Change only candidate DNS option
+          ansible.builtin.lineinfile:
+            path: "{{ dns_candidate.path }}/router.conf"
+            regexp: '^dhcp-option=option:dns-server,'
+            line: "{{ dns_new }}"
+
+        - name: Validate candidate with dnsmasq
+          ansible.builtin.command:
+            argv:
+              - dnsmasq
+              - --test
+              - --conf-file=/etc/dnsmasq.conf
+              - "--conf-dir={{ dns_candidate.path }},.dpkg-dist,.dpkg-old,.dpkg-new"
+          changed_when: false
+
+      always:
+        - name: Remove temporary candidate directory
+          ansible.builtin.file:
+            path: "{{ dns_candidate.path }}"
+            state: absent
+          when: dns_candidate.path is defined
+
+    - name: Inspect existing DNS rollback backup
+      ansible.builtin.stat:
+        path: /var/backups/router-01-pihole-dns-before.conf
+      register: dns_existing_backup
+
+    - name: Read existing rollback backup when present
+      ansible.builtin.slurp:
+        src: /var/backups/router-01-pihole-dns-before.conf
+      register: dns_backup_content
+      when: dns_existing_backup.stat.exists
+
+    - name: Refuse an unexpected existing rollback backup
+      ansible.builtin.assert:
+        that:
+          - "not dns_existing_backup.stat.exists or (dns_backup_content.content | b64decode) == (original.content | b64decode)"
+        fail_msg: "STOP: Existing DNS rollback backup differs from live configuration."
+
+    - name: Verify both Pi-hole DNS servers immediately before cutover
+      ansible.builtin.command:
+        argv:
+          - dig
+          - "@{{ item }}"
+          - bbc.co.uk
+          - +time=2
+          - +tries=1
+          - +short
+      loop:
+        - 192.168.2.51
+        - 192.168.2.50
+      register: dns_cutover_resolvers
+      changed_when: false
+      failed_when: >-
+        dns_cutover_resolvers.rc != 0 or
+        (dns_cutover_resolvers.stdout | trim | length == 0)
+
+    - name: Create private backup
+      ansible.builtin.copy:
+        dest: /var/backups/router-01-pihole-dns-before.conf
+        content: "{{ original.content | b64decode }}"
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+
+    - name: Apply and verify DNS change with automatic restoration
+      block:
+        - name: Change DHCP option 6 only
+          ansible.builtin.lineinfile:
+            path: "{{ dns_config }}"
+            regexp: '^dhcp-option=option:dns-server,'
+            line: "{{ dns_new }}"
+            backup: true
+
+        - name: Validate updated dnsmasq configuration
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Read updated DHCP configuration
+          ansible.builtin.slurp:
+            src: "{{ dns_config }}"
+          register: updated
+
+        - name: Verify exactly the approved DNS line changed
+          ansible.builtin.assert:
+            that:
+              - "(updated.content | b64decode) == ((original.content | b64decode) | replace(dns_old, dns_new))"
+            fail_msg: "STOP: Unexpected configuration changes."
+
+        - name: Restart dnsmasq
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+
+        - name: Verify dnsmasq remains operational
+          ansible.builtin.command:
+            argv: [systemctl, is-active, dnsmasq]
+          register: dns_state
+          changed_when: false
+          failed_when: dns_state.stdout | trim != "active"
+
+      rescue:
+        - name: Restore original DHCP configuration
+          ansible.builtin.copy:
+            dest: "{{ dns_config }}"
+            content: "{{ original.content | b64decode }}"
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Validate restored configuration
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Restart dnsmasq with original configuration
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+
+        - name: Stop after rollback
+          ansible.builtin.fail:
+            msg: "DNS cutover failed; original configuration restored."

@@ -1474,3 +1474,39 @@ Do not activate before these checks are completed.
 - Loki/Grafana device pipeline integration not yet verified.
 - Forwarder currently enabled at boot.
 - Journal replay and delivery metrics remain outstanding.
+
+### Pi-hole DHCP DNS cutover — 2026-10-29
+
+Branch: feature/router-01-pihole-dhcp-dns-20261029
+
+LIVE CUTOVER SUCCESSFUL:
+- router-01 DHCP now advertises 192.168.2.51 and 192.168.2.50.
+- Default gateway remains 192.168.2.1.
+- DHCP pool remains 192.168.2.100-199, 24h.
+- Bedroom ASUS reservation .180 preserved.
+- admin-01 reservation .48 preserved.
+- dnsmasq --test passed.
+- dnsmasq, Unbound, nftables and router-pppoe active.
+- Both Pi-hole servers successfully resolved bbc.co.uk
+  when queried directly from router-01.
+- Cutover Ansible recap: failed=0, rescued=0.
+- Original DHCP configuration backed up on router-01.
+
+OUTSTANDING:
+- Verify DHCP option 6 on a renewed client.
+- Correct older reservation-sensitive DHCP preflight assertions.
+- Retain rollback backup until client verification succeeds.
+
+### Router DNS/DHCP final verification — 2026-10-29
+
+- Windows client James-LT confirmed DHCP from 192.168.2.1.
+- Client received DNS servers 192.168.2.51 and 192.168.2.50.
+- Original DNS recovery backup retained under /var/backups/.
+- Redundant Ansible backup removed from /etc/dnsmasq.d/ via
+  validated cleanup playbook; no service restart required.
+- DHCP exclusion preflight now recognises existing reservations.
+- DHCP exclusion deployment remains blocked by a lease on .195.
+- media-01 (2c:cf:67:30:be:1f) successfully rebooted and renewed
+  its DHCP lease at 23:18:32, retaining 192.168.2.195.
+- Reserve .195 through Ansible before future pool changes.
+- No DHCP pool exclusions have been deployed.
