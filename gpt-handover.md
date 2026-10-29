@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — independent live router DHCP postflight PASS; admin lease remains .127
+
+After approved admin-01 DHCP reservation playbook completed with Ansible recap **router-01 ok=33 changed=8 failed=0**, the operator independently inspected router-01. Live dnsmasq was **active**; `/etc/dnsmasq.d/router.conf` retained dynamic pool `192.168.2.100-199`, original ASUS MAC `24:4b:fe:5e:cc:c8` reservation at `.180`, and exactly one new Ansible-managed reservation `b8:27:eb:e8:36:cd -> 192.168.2.48`. `dnsmasq --test` passed; `unbound`, `router-pppoe`, and `nftables` were active. The **live lease** still showed `admin-01` at **192.168.2.127**.
+
+This independently confirms the router side only, **not** admin-01 DHCP renewal or ability to SSH at .48. Keep host at the observed .127 until separately approved, console-backed NetworkManager DHCP renewal. This host also provides a Proxmox Corosync QNetd witness, so check quorum connectivity/dependencies and allow for SSH disruption. Do not change canonical inventory, DNS or host records to claim .48 is already active. Next step is read-only pre-cutover health checks and explicit host-side renewal approval. See issue #206 and the dated admin DHCP runbook.
+
+
 ## 29 October 2026 — approved router admin-01 reservation writer LIVE PASS, host still observed .127
 
 User approved source-staged fixed admin-01 DHCP reservation plus dnsmasq restart following successful read-only operator preflight: router-01 **ok=17 changed=0 failed=0**. Scope: mapping b8:27:eb:e8:36:cd -> 192.168.2.48 on router-01, preserving the existing .180 ASUS reservation and the .100-.199 dynamic pool; accepted the small residual possibility of an offline static-IP host at .48. Prior router read-only: no .48 lease, zero ping replies, neighbour INCOMPLETE, dnsmasq --test OK.
