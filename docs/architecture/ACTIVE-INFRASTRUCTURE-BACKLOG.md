@@ -125,6 +125,8 @@ Practical programme completion remains approximately **70–80%** when optional/
 
 ## Current sequence
 
+**29 October integration — security remediation programme:** The original 20 October Greenbone and Trivy triage plan has been preserved at [Security remediation programme](../security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md), with explicit dated-report limitations and the Pi router gateway identity correction. Track decisions in [issue #187](https://github.com/jrwroberts1976/homelab-platform/issues/187); evaluate the most recent report, scanner freshness, address ownership and CVE/image identity before any fix. This is a planning/documentation addition, not a scanner or router change. The historical priorities immediately below are dated and must not supersede newer `CURRENT-STATE.md` evidence.
+
 1. **Diagnose Greenbone gvmd readiness after Proxmox-2 recovery, then validate a fresh completed scan.** The 18 October run failed while the latest saved evidence was from 16 October. This is the remaining gate on the current patching/vulnerability/TLS workstream.
 2. **Next user-selected investigation: Raspberry Pi overclocking feasibility.** Start read-only: inventory Pi models, cooling, power supplies, current frequencies/thermal throttling and workload headroom before proposing any clock/voltage change.
 3. **Encode the existing Proxmox GDS mitigation in IaC.** Live `gather_data_sampling=force` mitigation is proven but remains a manual GRUB/kernel-parameter configuration.
