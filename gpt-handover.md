@@ -1479,3 +1479,18 @@ Outstanding:
 - Grafana and log pipeline integration.
 - Durable journal replay/cursor support.
 - Continued monitoring of forwarding reliability.
+
+### Live DHCP forwarding verified — 2026-10-29
+
+- Forwarder deployed through approved Ansible playbooks on router-01.
+- Installation-only repeat: changed=0, failed=0.
+- Dedicated non-root service account confirmed.
+- systemd IP restrictions tested: monitor-01 allowed;
+  an alternative destination was blocked (EPERM).
+- Forwarder enabled at boot and running successfully.
+- dnsmasq, nftables and Unbound remained active.
+- Genuine DHCPACK received by monitor-01 at 21:17:17:
+  192.168.2.198, MAC 16:c1:05:ad:4b:8a, james-s-A13.
+- Receiver writes to the legacy rt-ac86u.log.
+- Loki/Grafana integration remains unverified.
+- Journal replay and forwarding metrics remain outstanding.
