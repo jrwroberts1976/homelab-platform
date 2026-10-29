@@ -1,0 +1,59 @@
+---
+- name: Verify Pi-hole DHCP DNS cutover prerequisites
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  vars:
+    old_dns: "dhcp-option=option:dns-server,192.168.2.1"
+    new_dns: "dhcp-option=option:dns-server,192.168.2.51,192.168.2.50"
+    router_config: /etc/dnsmasq.d/router.conf
+
+  tasks:
+    - name: Verify target router
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+
+    - name: Read existing DHCP configuration
+      ansible.builtin.slurp:
+        src: "{{ router_config }}"
+      register: config
+
+    - name: Verify current configuration and reservations
+      ansible.builtin.assert:
+        that:
+          - "((config.content | b64decode).splitlines() | select('equalto', old_dns) | list | length) == 1"
+          - "new_dns not in (config.content | b64decode)"
+          - "'dhcp-option=option:router,192.168.2.1' in (config.content | b64decode)"
+          - "'dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h' in (config.content | b64decode)"
+          - "'dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180' in (config.content | b64decode)"
+          - "'dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48' in (config.content | b64decode)"
+        fail_msg: "STOP: DHCP baseline differs from the reviewed configuration."
+
+    - name: Validate existing dnsmasq configuration
+      ansible.builtin.command:
+        argv: [dnsmasq, --test]
+      changed_when: false
+
+    - name: Confirm both Pi-hole resolvers
+      ansible.builtin.command:
+        argv:
+          - dig
+          - "@{{ item }}"
+          - bbc.co.uk
+          - +time=2
+          - +tries=1
+          - +short
+      loop:
+        - 192.168.2.51
+        - 192.168.2.50
+      register: dns_tests
+      changed_when: false
+      failed_when: dns_tests.rc != 0 or (dns_tests.stdout | trim | length == 0)
+
+    - name: Confirm preflight completed
+      ansible.builtin.debug:
+        msg: "DNS_CUTOVER_PREFLIGHT=PASS; no live configuration changed"
