@@ -1,0 +1,33 @@
+[Unit]
+Description=Restricted SSH tunnel to router-01 Node Exporter
+Documentation=man:ssh(1)
+Wants=network-online.target
+After=network-online.target
+
+[Service]
+Type=simple
+User=router-metrics-tunnel
+Group=router-metrics-tunnel
+ExecStart=/usr/bin/ssh -F /dev/null -N -T \
+  -o BatchMode=yes \
+  -o StrictHostKeyChecking=yes \
+  -o UserKnownHostsFile=/etc/homelab/router-metrics-ssh/known_hosts \
+  -o IdentitiesOnly=yes \
+  -o IdentityFile=/etc/homelab/router-metrics-ssh/id_ed25519 \
+  -o AddressFamily=inet \
+  -o ForkAfterAuthentication=no \
+  -o ExitOnForwardFailure=yes \
+  -o ServerAliveInterval=15 \
+  -o ServerAliveCountMax=3 \
+  -o ConnectTimeout=10 \
+  -L 127.0.0.1:19100:127.0.0.1:9100 \
+  router-metrics@192.168.2.1
+Restart=on-failure
+RestartSec=15
+NoNewPrivileges=yes
+PrivateTmp=yes
+ProtectSystem=strict
+ProtectHome=yes
+
+[Install]
+WantedBy=multi-user.target

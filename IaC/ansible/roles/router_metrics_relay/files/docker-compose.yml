@@ -1,0 +1,17 @@
+services:
+  router-metrics-relay:
+    image: homelab/router-metrics-relay:20261029
+    container_name: router-metrics-relay
+    network_mode: "container:monitoring-prometheus-1"
+    user: "991:982"
+    restart: "no"
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    volumes:
+      - /run/router-metrics-relay:/run/router-metrics-relay:ro
+    command:
+      - TCP-LISTEN:19101,bind=127.0.0.1,reuseaddr,fork
+      - UNIX-CONNECT:/run/router-metrics-relay/metrics.sock

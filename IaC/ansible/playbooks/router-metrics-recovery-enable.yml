@@ -1,0 +1,53 @@
+---
+- name: Enable router metrics relay recovery timer
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - recovery_enable_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Require host services active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - router-metrics-tunnel.service
+        - router-metrics-relay.service
+      register: services
+      changed_when: false
+
+    - name: Require both active
+      ansible.builtin.assert:
+        that:
+          - services.results | map(attribute='stdout') | list == ['active', 'active']
+
+    - name: Enable recovery timer
+      ansible.builtin.systemd_service:
+        name: router-metrics-relay-reconcile.timer
+        enabled: true
+        state: started
+
+    - name: Inspect recovery timer
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-relay-reconcile.timer
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: timer
+      changed_when: false
+
+    - name: Require timer enabled and active
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=active' in timer.stdout_lines"
+          - "'UnitFileState=enabled' in timer.stdout_lines"
+        success_msg: "ROUTER_RECOVERY_TIMER=PASS"

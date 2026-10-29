@@ -1,0 +1,83 @@
+---
+- name: Roll back router metrics Prometheus integration
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    config: /opt/monitoring/prometheus/prometheus.yml
+    backup: /opt/homelab-router-metrics-relay/prometheus.yml.pre-router
+    compose_file: /opt/homelab-router-metrics-relay/docker-compose.yml
+
+  tasks:
+    - name: Require explicit rollback approval
+      ansible.builtin.assert:
+        that:
+          - router_metrics_rollback_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Check original Prometheus backup
+      ansible.builtin.stat:
+        path: "{{ backup }}"
+      register: previous_config
+
+    - name: Require original configuration
+      ansible.builtin.assert:
+        that:
+          - previous_config.stat.isreg | default(false)
+        fail_msg: "Original Prometheus backup missing. No changes made."
+
+    - name: Restore previous Prometheus configuration
+      ansible.builtin.copy:
+        src: "{{ backup }}"
+        dest: "{{ config }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload original Prometheus configuration
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/reload
+        method: POST
+        status_code: 200
+
+    - name: Disable recovery timer
+      ansible.builtin.systemd_service:
+        name: router-metrics-relay-reconcile.timer
+        enabled: false
+        state: stopped
+
+    - name: Stop dedicated Docker relay
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -p
+          - router-metrics-relay
+          - -f
+          - "{{ compose_file }}"
+          - down
+      changed_when: true
+
+    - name: Stop host relay
+      ansible.builtin.systemd_service:
+        name: router-metrics-relay.service
+        enabled: false
+        state: stopped
+
+    - name: Stop SSH tunnel
+      ansible.builtin.systemd_service:
+        name: router-metrics-tunnel.service
+        enabled: false
+        state: stopped
+
+    - name: Confirm original Prometheus remains healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/healthy
+        status_code: 200
+
+    - name: Report rollback
+      ansible.builtin.debug:
+        msg: "ROUTER_METRICS_ROLLBACK=PASS"

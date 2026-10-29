@@ -1,0 +1,99 @@
+---
+- name: Temporarily activate router metrics SSH tunnel
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit activation approval
+      ansible.builtin.assert:
+        that:
+          - tunnel_activate_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Verify installed systemd unit state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-tunnel.service
+          - -p
+          - LoadState
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+          - -p
+          - FragmentPath
+      register: initial_state
+      changed_when: false
+
+    - name: Require reviewed disabled and inactive unit
+      ansible.builtin.assert:
+        that:
+          - "'LoadState=loaded' in initial_state.stdout_lines"
+          - "'ActiveState=inactive' in initial_state.stdout_lines"
+          - "'UnitFileState=disabled' in initial_state.stdout_lines"
+          - "'FragmentPath=/etc/systemd/system/router-metrics-tunnel.service' in initial_state.stdout_lines"
+
+    - name: Start and verify temporary tunnel
+      block:
+        - name: Start tunnel without enabling at boot
+          ansible.builtin.systemd_service:
+            name: router-metrics-tunnel.service
+            state: started
+            enabled: false
+
+        - name: Wait for router Node Exporter metrics
+          ansible.builtin.uri:
+            url: http://127.0.0.1:19100/metrics
+            return_content: true
+            timeout: 5
+          register: router_metrics
+          until: >-
+            router_metrics.status | default(0) == 200
+            and 'node_exporter_build_info' in
+                (router_metrics.content | default(''))
+          retries: 8
+          delay: 3
+
+        - name: Inspect forwarding listener
+          ansible.builtin.command:
+            argv: [ss, -H, -ltn, "sport = :19100"]
+          register: listener
+          changed_when: false
+
+        - name: Require localhost-only forwarding
+          ansible.builtin.assert:
+            that:
+              - listener.stdout_lines | length == 1
+              - listener.stdout_lines[0] is search('127[.]0[.]0[.]1:19100')
+              - listener.stdout_lines[0] is not search('0[.]0[.]0[.]0:19100')
+
+        - name: Confirm service remains disabled
+          ansible.builtin.command:
+            argv: [systemctl, is-enabled, router-metrics-tunnel.service]
+          register: enabled_state
+          failed_when: false
+          changed_when: false
+
+        - name: Require no automatic boot activation
+          ansible.builtin.assert:
+            that:
+              - enabled_state.stdout | trim == 'disabled'
+
+        - name: Report success
+          ansible.builtin.debug:
+            msg: "TUNNEL_ACTIVATION=PASS; METRICS=PASS; LOCALHOST_ONLY=PASS; BOOT_DISABLED=PASS"
+
+      rescue:
+        - name: Stop tunnel following failed activation verification
+          ansible.builtin.systemd_service:
+            name: router-metrics-tunnel.service
+            state: stopped
+            enabled: false
+
+        - name: Report activation failure
+          ansible.builtin.fail:
+            msg: "Tunnel verification failed; stop attempted. Independently verify service and listener state."

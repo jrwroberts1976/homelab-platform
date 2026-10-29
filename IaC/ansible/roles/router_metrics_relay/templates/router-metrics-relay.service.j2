@@ -1,0 +1,23 @@
+[Unit]
+Description=Private Unix socket relay for router Node Exporter
+After=network-online.target router-metrics-tunnel.service
+PartOf=router-metrics-tunnel.service
+
+[Service]
+Type=simple
+User=router-metrics-relay
+Group=router-metrics-relay
+RuntimeDirectory=router-metrics-relay
+RuntimeDirectoryMode=0750
+UMask=0007
+ExecStart=/usr/bin/socat UNIX-LISTEN:/run/router-metrics-relay/metrics.sock,fork,mode=0660 TCP:127.0.0.1:19100
+Restart=on-failure
+RestartSec=5
+SuccessExitStatus=143
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+
+[Install]
+WantedBy=multi-user.target

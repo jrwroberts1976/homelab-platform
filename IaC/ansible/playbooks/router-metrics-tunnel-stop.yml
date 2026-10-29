@@ -1,0 +1,42 @@
+---
+- name: Stop temporary router metrics SSH tunnel
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit stop approval
+      ansible.builtin.assert:
+        that:
+          - tunnel_stop_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Stop and disable tunnel
+      ansible.builtin.systemd_service:
+        name: router-metrics-tunnel.service
+        state: stopped
+        enabled: false
+
+    - name: Check service state
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-tunnel.service
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: stopped_state
+      changed_when: false
+
+    - name: Require inactive and disabled
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in stopped_state.stdout_lines"
+          - "'UnitFileState=disabled' in stopped_state.stdout_lines"
+
+    - name: Report stopped
+      ansible.builtin.debug:
+        msg: "TUNNEL_STOP=PASS"

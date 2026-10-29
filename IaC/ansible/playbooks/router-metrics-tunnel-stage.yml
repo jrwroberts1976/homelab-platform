@@ -1,0 +1,221 @@
+---
+- name: Stage restricted router metrics SSH tunnel
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    tunnel_unit: router-metrics-tunnel.service
+    tunnel_unit_path: /etc/systemd/system/router-metrics-tunnel.service
+    tunnel_key: /etc/homelab/router-metrics-ssh/id_ed25519
+    tunnel_known_hosts: /etc/homelab/router-metrics-ssh/known_hosts
+
+  tasks:
+    - name: Require explicit installation approval
+      ansible.builtin.assert:
+        that:
+          - tunnel_stage_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Installation not approved or wrong target."
+
+    - name: Check dedicated service account
+      ansible.builtin.command:
+        argv: [getent, passwd, router-metrics-tunnel]
+      register: tunnel_account
+      changed_when: false
+
+    - name: Require existing restricted service identity
+      ansible.builtin.assert:
+        that:
+          - tunnel_account.stdout.split(':')[2] == '992'
+          - tunnel_account.stdout.split(':')[5] == '/var/lib/router-metrics-tunnel'
+          - tunnel_account.stdout.split(':')[6] == '/usr/sbin/nologin'
+
+    - name: Inspect existing SSH identity and host trust
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ tunnel_key }}"
+        - "{{ tunnel_known_hosts }}"
+      register: tunnel_files
+
+    - name: Require protected existing credentials
+      ansible.builtin.assert:
+        that:
+          - tunnel_files.results[0].stat.isreg
+          - tunnel_files.results[0].stat.mode == '0600'
+          - tunnel_files.results[0].stat.uid == 992
+          - tunnel_files.results[1].stat.isreg
+          - tunnel_files.results[1].stat.mode == '0644'
+          - tunnel_files.results[1].stat.uid == 0
+
+    - name: Verify exact pinned router SSH host key
+      ansible.builtin.shell: |
+        python3 - <<'CHECK'
+        import base64
+        import hashlib
+        from pathlib import Path
+
+        path = Path("/etc/homelab/router-metrics-ssh/known_hosts")
+        expected = "SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI"
+
+        records = []
+        for line in path.read_text().splitlines():
+            fields = line.split()
+            if len(fields) < 3:
+                continue
+            if fields[0] == "192.168.2.1":
+                records.append(fields)
+
+        assert len(records) == 1, "Expected exactly one router host record"
+        assert records[0][1] == "ssh-ed25519", "Wrong host-key type"
+
+        key = base64.b64decode(records[0][2], validate=True)
+        fingerprint = "SHA256:" + base64.b64encode(
+            hashlib.sha256(key).digest()
+        ).decode().rstrip("=")
+
+        assert fingerprint == expected, "Router fingerprint mismatch"
+        print("ROUTER_HOST_PIN=PASS")
+        CHECK
+      register: tunnel_host_pin
+      changed_when: false
+      no_log: true
+
+    - name: Check port 19100 is unused
+      ansible.builtin.command:
+        argv: [ss, -H, -ltn, "sport = :19100"]
+      register: tunnel_port
+      changed_when: false
+
+    - name: Require free tunnel port
+      ansible.builtin.assert:
+        that:
+          - tunnel_port.stdout | trim | length == 0
+
+    - name: Check no existing unit would be overwritten
+      ansible.builtin.stat:
+        path: "{{ tunnel_unit_path }}"
+        follow: false
+      register: tunnel_existing_unit
+
+    - name: Read existing unit if present
+      ansible.builtin.slurp:
+        src: "{{ tunnel_unit_path }}"
+      register: tunnel_existing_content
+      when: tunnel_existing_unit.stat.exists
+
+    - name: Refuse unknown unit content
+      ansible.builtin.assert:
+        that:
+          - tunnel_existing_unit.stat.isreg | default(false)
+          - tunnel_existing_unit.stat.uid == 0
+          - tunnel_existing_unit.stat.mode == '0644'
+          - >-
+            (tunnel_existing_content.content | b64decode | hash('sha256'))
+            ==
+            (lookup('ansible.builtin.file',
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2', rstrip=False)
+              | hash('sha256'))
+        fail_msg: "Existing unit differs from reviewed source."
+      when: tunnel_existing_unit.stat.exists
+
+    - name: Check existing unit active state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ tunnel_unit }}"]
+      register: tunnel_existing_active
+      failed_when: false
+      changed_when: false
+
+    - name: Check existing unit enablement
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ tunnel_unit }}"]
+      register: tunnel_existing_enabled
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse active or enabled existing service
+      ansible.builtin.assert:
+        that:
+          - tunnel_existing_active.stdout | trim == 'inactive'
+          - >-
+            (
+              (not tunnel_existing_unit.stat.exists)
+              and (tunnel_existing_enabled.stdout | trim == 'not-found')
+            )
+            or
+            (
+              tunnel_existing_unit.stat.exists
+              and (tunnel_existing_enabled.stdout | trim == 'disabled')
+            )
+        fail_msg: "Existing tunnel state requires manual review."
+
+    - name: Install systemd unit without activation
+      ansible.builtin.copy:
+        src: ../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2
+        dest: "{{ tunnel_unit_path }}"
+        owner: root
+        group: root
+        mode: '0644'
+      register: tunnel_installed
+
+    - name: Read installed service definition
+      ansible.builtin.slurp:
+        src: "{{ tunnel_unit_path }}"
+      register: tunnel_postinstall_content
+
+    - name: Verify installed service matches reviewed source
+      ansible.builtin.assert:
+        that:
+          - >-
+            (tunnel_postinstall_content.content | b64decode | hash('sha256'))
+            ==
+            (lookup('ansible.builtin.file',
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2',
+              rstrip=False) | hash('sha256'))
+        fail_msg: >-
+          Installed unit differs from reviewed source.
+          Stop and investigate before activation or rollback.
+
+    - name: Validate installed unit
+      ansible.builtin.command:
+        argv: [systemd-analyze, verify, "{{ tunnel_unit_path }}"]
+      changed_when: false
+
+    - name: Load systemd definition without starting service
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: tunnel_installed.changed
+
+    - name: Confirm service is inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ tunnel_unit }}"]
+      register: tunnel_active
+      failed_when: false
+      changed_when: false
+
+    - name: Require no tunnel activation
+      ansible.builtin.assert:
+        that:
+          - tunnel_active.stdout | trim != 'active'
+          - tunnel_active.stdout | trim != 'activating'
+
+    - name: Confirm service is disabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ tunnel_unit }}"]
+      register: tunnel_enabled
+      failed_when: false
+      changed_when: false
+
+    - name: Require service remains disabled
+      ansible.builtin.assert:
+        that:
+          - tunnel_enabled.stdout | trim == 'disabled'
+          - tunnel_active.stdout | trim == 'inactive'
+        fail_msg: "Tunnel service must remain disabled and inactive."
+
+    - name: Report staged status
+      ansible.builtin.debug:
+        msg: "TUNNEL_STAGE=PASS; SERVICE_NOT_STARTED=PASS"

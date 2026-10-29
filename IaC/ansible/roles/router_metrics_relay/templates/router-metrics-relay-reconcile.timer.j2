@@ -1,0 +1,11 @@
+[Unit]
+Description=Periodic router metrics Docker relay recovery
+
+[Timer]
+OnBootSec=90s
+OnUnitInactiveSec=60s
+AccuracySec=10s
+Unit=router-metrics-relay-reconcile.service
+
+[Install]
+WantedBy=timers.target

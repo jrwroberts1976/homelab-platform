@@ -1,0 +1,71 @@
+---
+- name: Test router metrics unit content guards
+  hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    source_unit: "{{ playbook_dir }}/../../IaC/ansible/roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2"
+    expected_hash: "{{ lookup('ansible.builtin.file', source_unit, rstrip=False) | hash('sha256') }}"
+
+  tasks:
+    - name: Create temporary test directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: router-metrics-test-
+      register: test_directory
+
+    - name: Test unit deployment and validation
+      block:
+        - name: Copy reviewed template to isolated path
+          ansible.builtin.copy:
+            src: "{{ source_unit }}"
+            dest: "{{ test_directory.path }}/router-metrics-tunnel.service"
+            mode: '0644'
+
+        - name: Read installed test unit
+          ansible.builtin.slurp:
+            src: "{{ test_directory.path }}/router-metrics-tunnel.service"
+          register: installed_unit
+
+        - name: Require exact matching content
+          ansible.builtin.assert:
+            that:
+              - (installed_unit.content | b64decode | hash('sha256')) == expected_hash
+            success_msg: "IDENTICAL_UNIT=PASS"
+
+        - name: Modify isolated test unit
+          ansible.builtin.lineinfile:
+            path: "{{ test_directory.path }}/router-metrics-tunnel.service"
+            line: "# deliberate test modification"
+
+        - name: Read modified test unit
+          ansible.builtin.slurp:
+            src: "{{ test_directory.path }}/router-metrics-tunnel.service"
+          register: modified_unit
+
+        - name: Exercise actual rejection of modified content
+          block:
+            - name: Apply production-style content assertion
+              ansible.builtin.assert:
+                that:
+                  - (modified_unit.content | b64decode | hash('sha256')) == expected_hash
+                fail_msg: "Modified unit rejected as expected"
+
+            - name: Fail if modified unit was accepted
+              ansible.builtin.fail:
+                msg: "SECURITY FAILURE - modified unit accepted"
+
+          rescue:
+            - name: Confirm expected assertion was rejected
+              ansible.builtin.assert:
+                that:
+                  - ansible_failed_task.name == 'Apply production-style content assertion'
+                success_msg: "MODIFIED_UNIT_REJECTED=PASS"
+
+      always:
+        - name: Remove temporary test directory
+          ansible.builtin.file:
+            path: "{{ test_directory.path }}"
+            state: absent
+          when: test_directory.path is defined

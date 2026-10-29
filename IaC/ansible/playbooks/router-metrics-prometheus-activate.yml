@@ -1,0 +1,176 @@
+---
+- name: Activate router metrics Prometheus integration
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+
+  vars:
+    relay_compose: /opt/homelab-router-metrics-relay/docker-compose.yml
+    prometheus_config: /opt/monitoring/prometheus/prometheus.yml
+    prometheus_backup: /opt/homelab-router-metrics-relay/prometheus.yml.pre-router
+
+  tasks:
+    - name: Require explicit activation approval
+      ansible.builtin.assert:
+        that:
+          - router_prometheus_activate_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Require existing tunnel active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-metrics-tunnel.service]
+      register: tunnel
+      changed_when: false
+      failed_when: tunnel.stdout | trim != 'active'
+
+    - name: Check for existing relay container
+      ansible.builtin.command:
+        argv: [docker, inspect, router-metrics-relay]
+      register: existing
+      failed_when: false
+      changed_when: false
+
+    - name: Require no existing relay container
+      ansible.builtin.assert:
+        that:
+          - existing.rc != 0
+
+    - name: Inspect host relay initial state
+      ansible.builtin.command:
+        argv: [systemctl, show, router-metrics-relay.service, -p, ActiveState, -p, UnitFileState]
+      register: relay_initial
+      changed_when: false
+
+    - name: Require relay initially stopped and disabled
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in relay_initial.stdout_lines"
+          - "'UnitFileState=disabled' in relay_initial.stdout_lines"
+
+    - name: Require no existing rollback backup
+      ansible.builtin.stat:
+        path: "{{ prometheus_backup }}"
+      register: prior_backup
+
+    - name: Protect existing rollback state
+      ansible.builtin.assert:
+        that:
+          - not prior_backup.stat.exists
+
+    - name: Activate and verify
+      block:
+        - name: Back up live Prometheus configuration
+          ansible.builtin.copy:
+            src: "{{ prometheus_config }}"
+            dest: "{{ prometheus_backup }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Start private host relay without enabling boot startup
+          ansible.builtin.systemd_service:
+            name: router-metrics-relay.service
+            state: started
+            enabled: false
+
+        - name: Start isolated Docker relay
+          ansible.builtin.command:
+            argv:
+              - docker
+              - compose
+              - -p
+              - router-metrics-relay
+              - -f
+              - "{{ relay_compose }}"
+              - up
+              - -d
+              - --no-deps
+          changed_when: true
+
+        - name: Verify private relay endpoint from Prometheus namespace
+          ansible.builtin.shell: |
+            set -o pipefail
+            pid=$(docker inspect monitoring-prometheus-1 |
+              python3 -c 'import json,sys; print(json.load(sys.stdin)[0]["State"]["Pid"])')
+            test "$pid" -gt 1
+            nsenter -t "$pid" -n curl -fsS --max-time 8 \
+              http://127.0.0.1:19101/metrics |
+              awk '/^node_exporter_build_info/ {found=1} END {exit !found}'
+          args:
+            executable: /bin/bash
+          register: relay_metrics
+          retries: 5
+          delay: 2
+          until: relay_metrics.rc == 0
+          changed_when: false
+
+        - name: Install validated Prometheus configuration
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/prometheus.yml.j2
+            dest: "{{ prometheus_config }}"
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Reload Prometheus without recreating container
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+
+        - name: Wait for router target to become UP
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/api/v1/targets
+            return_content: true
+            timeout: 10
+          register: targets
+          until: >-
+            (
+              targets.json.data.activeTargets | default([])
+              | selectattr('labels.job', 'equalto', 'router-node-exporter')
+              | selectattr('health', 'equalto', 'up')
+              | list | length
+            ) == 1
+          retries: 12
+          delay: 5
+          changed_when: false
+
+        - name: Report verified Prometheus integration
+          ansible.builtin.debug:
+            msg: "ROUTER_PROMETHEUS_TARGET=UP"
+
+      rescue:
+        - name: Restore previous Prometheus configuration
+          ansible.builtin.copy:
+            src: "{{ prometheus_backup }}"
+            dest: "{{ prometheus_config }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Reload previous Prometheus configuration
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+
+        - name: Stop isolated Docker relay
+          ansible.builtin.command:
+            argv: [docker, compose, -p, router-metrics-relay, -f, "{{ relay_compose }}", down]
+          changed_when: true
+
+        - name: Stop host relay
+          ansible.builtin.systemd_service:
+            name: router-metrics-relay.service
+            state: stopped
+            enabled: false
+
+        - name: Report rollback
+          ansible.builtin.fail:
+            msg: "Router Prometheus activation failed; rollback attempted. Verify actual state before retrying."

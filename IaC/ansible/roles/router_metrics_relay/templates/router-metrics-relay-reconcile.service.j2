@@ -1,0 +1,12 @@
+[Unit]
+Description=Reconcile private router metrics Docker relay
+After=docker.service router-metrics-tunnel.service router-metrics-relay.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/local/sbin/router-metrics-relay-reconcile
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true

@@ -1,0 +1,122 @@
+---
+- name: Build isolated router metrics relay image
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit build approval
+      ansible.builtin.assert:
+        that:
+          - router_relay_build_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Verify existing tunnel is active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - router-metrics-tunnel.service
+      register: tunnel_state
+      changed_when: false
+      failed_when: tunnel_state.stdout | trim != 'active'
+
+    - name: Verify host relay remains disabled
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-relay.service
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: relay_state
+      changed_when: false
+
+    - name: Require safe host relay state
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in relay_state.stdout_lines"
+          - "'UnitFileState=disabled' in relay_state.stdout_lines"
+
+    - name: Create dedicated build directory
+      ansible.builtin.file:
+        path: /opt/homelab-router-metrics-relay
+        state: directory
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Install pinned Dockerfile
+      ansible.builtin.copy:
+        src: ../roles/router_metrics_relay/files/Dockerfile
+        dest: /opt/homelab-router-metrics-relay/Dockerfile
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install isolated Compose definition
+      ansible.builtin.copy:
+        src: ../roles/router_metrics_relay/files/docker-compose.yml
+        dest: /opt/homelab-router-metrics-relay/docker-compose.yml
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Validate Compose configuration
+      ansible.builtin.command:
+        argv:
+          - docker
+          - compose
+          - -f
+          - /opt/homelab-router-metrics-relay/docker-compose.yml
+          - config
+          - --quiet
+      changed_when: false
+
+    - name: Build dedicated relay image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - build
+          - --pull
+          - --tag
+          - homelab/router-metrics-relay:20261029
+          - /opt/homelab-router-metrics-relay
+      register: relay_build
+      changed_when: true
+
+    - name: Inspect built relay image
+      ansible.builtin.command:
+        argv:
+          - docker
+          - image
+          - inspect
+          - homelab/router-metrics-relay:20261029
+      register: image_inspect
+      changed_when: false
+
+    - name: Require correct image architecture
+      ansible.builtin.assert:
+        that:
+          - (image_inspect.stdout | from_json)[0].Architecture == 'amd64'
+          - (image_inspect.stdout | from_json)[0].Config.User == '991:982'
+        success_msg: "RELAY_IMAGE_BUILD=PASS"
+
+    - name: Confirm Prometheus remains running
+      ansible.builtin.command:
+        argv:
+          - docker
+          - inspect
+          - -f
+          - "{% raw %}{{.State.Running}}{% endraw %}"
+          - monitoring-prometheus-1
+      register: prometheus_state
+      changed_when: false
+
+    - name: Require Prometheus running
+      ansible.builtin.assert:
+        that:
+          - prometheus_state.stdout | trim == 'true'

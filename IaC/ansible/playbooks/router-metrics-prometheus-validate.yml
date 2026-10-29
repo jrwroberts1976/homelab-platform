@@ -1,0 +1,60 @@
+---
+- name: Validate router metrics Prometheus configuration
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+
+  tasks:
+    - name: Require correct monitoring host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Create temporary configuration directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: router-prometheus-
+      register: candidate_dir
+
+    - name: Render, validate and clean up
+      block:
+        - name: Render candidate Prometheus configuration
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/prometheus.yml.j2
+            dest: "{{ candidate_dir.path }}/prometheus.yml"
+            mode: "0644"
+
+        - name: Validate candidate with promtool
+          ansible.builtin.command:
+            argv:
+              - docker
+              - run
+              - --rm
+              - --network
+              - none
+              - --entrypoint
+              - /bin/promtool
+              - -v
+              - /opt/monitoring/prometheus:/etc/prometheus:ro
+              - -v
+              - "{{ candidate_dir.path }}/prometheus.yml:/tmp/candidate.yml:ro"
+              - "{{ monitoring_prometheus_image }}"
+              - check
+              - config
+              - /tmp/candidate.yml
+          changed_when: false
+
+        - name: Report validation success
+          ansible.builtin.debug:
+            msg: "ROUTER_PROMETHEUS_CONFIG=PASS"
+
+      always:
+        - name: Remove temporary candidate
+          ansible.builtin.file:
+            path: "{{ candidate_dir.path }}"
+            state: absent
+          when: candidate_dir.path is defined

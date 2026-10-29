@@ -1229,3 +1229,157 @@ For **every** change we make:
 - [ ] Update status and next actionable step here; update canonical docs/backlog if impacted.
 - [ ] Validate with `python3 scripts/validate-estate.py` and applicable tests/workflows where execution is available.
 - [ ] Commit/push changes and this handover together when possible; verify the new repository state.
+
+## 2026-10-29 — router-01 metrics tunnel staged (Git-only)
+
+- Branch: feature/router-01-prometheus-metrics-tunnel-20261029.
+- Estate validation PASS: 20 active, 0 planned, 5 retired guarded.
+- Restricted SSH authentication from monitor-01 to router-01 previously verified PASS.
+- OpenSSH 10.0p2 on monitor-01.
+- Effective SSH configuration confirms localforward [127.0.0.1]:19100 [127.0.0.1]:9100.
+- Existing tunnel service: inactive / not-found.
+- Local TCP/19100 listener: absent.
+- Stage installer and staged-unit rollback pass Ansible syntax checks.
+- systemd unit template passes local systemd-analyze verify.
+- Installer fingerprint and idempotency logic staged but not runtime-tested.
+- No tunnel, firewall changes, Docker changes, Prometheus reload or router changes deployed.
+- Next: add exact failure-safe installation handling, offline tests and independent staging verification before authorising installation.
+
+### 29 October 2026 — installation approval gate verified
+
+- Ran router-metrics-tunnel-stage.yml without approval.
+- Expected failure at first task: Require explicit installation approval.
+- Ansible recap: ok=0 changed=0 unreachable=0 failed=1.
+- Default-deny gate PASS.
+- No installation, systemd reload or service activation.
+- Installation remains pending independent preflight and failure-path tests.
+
+### 2026-10-29 — router metrics tunnel safety validation
+
+- Router SSH host-key tests PASS:
+  - Genuine pinned key accepted.
+  - Incorrect address rejected.
+  - Incorrect fingerprint rejected.
+  - Duplicate router host records rejected.
+- Corrected Ansible file lookups to use rstrip=False.
+- Verified template SHA256:
+  78280ee4f0910b49b7e72a9da8c4aa8a38cf0b536d74d7b076c116165915816d.
+- Existing-unit state checks tightened.
+- Added post-installation SHA256 verification.
+- Six local unit-guard model tests PASS.
+- Installer and rollback default-deny tests PASS in check mode.
+- Both approval tests reported changed=0.
+- Ansible syntax checks and estate validation PASS.
+- No production services changed.
+- Remaining: isolated actual-playbook failure-path tests,
+  partial-installation recovery verification, and CI review.
+
+### 2026-10-29 — isolated Ansible safety tests
+
+- Added reusable isolated tests under tests/router-metrics-tunnel/.
+- Real Ansible copy/slurp/SHA256 validation PASS.
+- Modified unit caused expected assertion failure; rescued=1, failed=0.
+- Temporary test directory cleaned up.
+- State-guard test suite PASS with changed=0, failed=0.
+- Unsafe active, enabled, failed, activating and inconsistent states rejected.
+- Tests do not execute the production installer or systemd activation.
+- Remaining: production-playbook failure-path verification,
+  systemd sandbox review and CI checks.
+- Deployment remains blocked.
+
+### 2026-10-29 — static systemd unit rendering correction
+
+- Found that Jinja2's default rendering strips the trailing newline.
+- Verified the mismatch using standalone Jinja2 rendering.
+- Tested actual Ansible rendering with newline preservation.
+- Selected ansible.builtin.copy for the static systemd unit.
+- Removed the temporary Jinja2 directive.
+- Verified source SHA256:
+  78280ee4f0910b49b7e72a9da8c4aa8a38cf0b536d74d7b076c116165915816d.
+- Isolated Ansible content and state-guard regression tests PASS.
+- Installer and rollback syntax checks PASS.
+- Estate validation PASS: 20 active assets.
+- No production changes.
+- Outstanding: systemd sandbox access, partial-installation
+  recovery, production installer/rollback execution tests and CI.
+
+### 2026-10-29 — router metrics rollback recovery review
+
+- Added checks for loaded systemd unit identity and state.
+- Verified exact FragmentPath before allowing unit removal.
+- Added post-reload and final pre-removal state checks.
+- Added final unit SHA256, ownership and permission checks.
+- Isolated rollback-resolution test PASS: failed=0, changed=0.
+- Test covers missing, disabled, active, enabled and unexpected-path states.
+- This is a model test, not execution of the production rollback.
+- Real systemd reload/recovery and sandbox behaviour remain untested.
+- Production staging and activation remain blocked.
+
+### 2026-10-29 — router metrics tunnel runtime activated
+
+- Guarded unit installation completed successfully on monitor-01.
+- Actual staged-unit rollback completed successfully.
+- Unit reinstalled and activation tested.
+- Initial activation exposed an Ansible handling issue:
+  systemctl is-enabled returns rc=1 for disabled units.
+- Corrected activation playbook and repeated successfully.
+- Runtime verification PASS:
+  service active, disabled at boot, listener 127.0.0.1:19100,
+  Node Exporter metrics accessible through restricted SSH.
+- Router Node Exporter remains loopback-only.
+- Prometheus and Docker networking not yet modified.
+- Remaining: secured Prometheus connectivity, monitoring verification,
+  persistent tunnel activation decision, CI and PR review.
+
+### 2026-10-29 — router metrics private Unix relay
+
+- Staged router-metrics-relay.service on monitor-01 using Ansible.
+- Dedicated non-root service account: router-metrics-relay.
+- Private socket: /run/router-metrics-relay/metrics.sock.
+- Socket permissions: 0660; runtime directory: 0750.
+- Initial test identified systemd shutdown exit-status handling.
+- Added SuccessExitStatus=143 to the systemd unit.
+- Corrected cleanup handling and repeated activation test.
+- Final test: 12 successful tasks, 2 changes, 0 failures.
+- Non-root process successfully retrieved Node Exporter metrics
+  through Unix socket and restricted SSH tunnel.
+- Relay remains disabled at boot and is stopped after testing.
+- Existing Prometheus and Docker configuration unchanged.
+- Remaining: container-side relay, Prometheus scrape job,
+  end-to-end verification and boot persistence.
+
+### 2026-10-29 — router metrics Prometheus integration
+
+- Router Node Exporter scraped through restricted SSH forwarding.
+- monitor-01 tunnel: 127.0.0.1:19100.
+- Private Unix relay: /run/router-metrics-relay/metrics.sock.
+- Docker sidecar shares Prometheus network namespace.
+- Prometheus job router-node-exporter verified UP.
+- 34 other targets UP during independent verification.
+- Existing 192.168.2.220:9100 target DOWN; likely stale
+  docker-01 identity, requiring separate inventory reconciliation.
+- SSH tunnel and host Unix relay enabled at boot.
+- Docker relay recovery timer enabled and active.
+- Recovery tested by stopping only the relay container.
+- Reconciler confirmed healthy-container idempotence.
+- Prometheus container not restarted or recreated.
+- Original configuration backup retained at
+  /opt/homelab-router-metrics-relay/prometheus.yml.pre-router.
+- Guarded rollback playbook created; not executed.
+- Prometheus-container recreation recovery not independently
+  tested; do not claim that scenario verified.
+
+### 2026-10-29 — PR #240 post-deployment review
+
+- Runtime confirmed: router-node-exporter UP; 34 other targets UP; SSH tunnel and Unix relay active/enabled, Docker relay running; recovery timer enabled/active.
+- Removed obsolete docker-01 (192.168.2.220:9100) from monitoring_node_exporter_targets in Git. This is a template/defaults correction only; the live Prometheus config has NOT yet been re-rendered/reloaded to apply this removal.
+- Draft PR previously described Git-only staging and was stale; PR metadata updated to reflect deployed services and remaining validation.
+- Remaining checks before merge: validate the updated target list, scoped live config update/reload with rollback, review CI checks, and verify recovery after Prometheus container recreation (not yet tested).
+
+### 2026-10-29 — live stale Docker exporter target cleanup
+
+- Approval-gated `router-metrics-stale-target-cleanup.yml` completed on monitor-01: ok=11, changed=2, failed=0, rescued=0.
+- Scoped Prometheus template was validated with promtool beforehand. The cleanup playbook asserted removal of only retired docker-01 (`192.168.2.220:9100`) and required router-node-exporter target health UP.
+- Previous live Prometheus configuration backed up at `/opt/homelab-router-metrics-relay/prometheus.yml.pre-stale-cleanup`; original pre-router backup remains separate.
+- Note: the new cleanup playbook is currently local/uncommitted on admin-01; add it to the PR via Git before merge.
+- Prometheus-container recreation recovery remains untested; do not recreate production Prometheus merely to test it.
