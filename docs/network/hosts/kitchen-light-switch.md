@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `f8:17:2d:64:ca:04`
-- Observed IP address(es): `192.168.2.167`
-- Connections: **67**
-- Traffic sent: **52.4 KiB**
-- Traffic received: **45.7 KiB**
-- Top services: `ssl` (66), `dhcp` (1)
-- Top destination ports: `tcp/443` (66), `udp/67` (1)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T14:00:35+01:00`
+- Assessed: `2026-10-29T14:02:32+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f8:17:2d:64:ca:04`
 - Identity confidence: **low**
@@ -69,22 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a kitchen light-switch IoT device based on the inventory hostname, but identity is unresolved because the DHCP hostname is wlan0 and no service, vendor, DNS, or Nmap evidence is available.
+Identity is unresolved: inventory identifies this as kitchen-light-switch, while the router reports DHCP hostname wlan0. No vendor, service, or OS evidence is available.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.167.
-- The inventory hostname is kitchen-light-switch.jameshouse and the telemetry hostname is kitchen-light-switch.
-- The router reports DHCP hostname wlan0 for 192.168.2.167.
-- No Nmap TCP or UDP ports, OS matches, or service evidence are available.
-- No MAC vendor, DNS device hint, or canonical estate metadata is available.
-- There are no matching actionable Greenbone findings for the current IP; this does not prove the host is vulnerability-free.
-- No Loki warning or error samples were recorded in the bounded sample.
+- The device uses IP address 192.168.2.167.
+- Inventory hostname is kitchen-light-switch.jameshouse and telemetry hostname is kitchen-light-switch.
+- The router reports DHCP hostname and hostname wlan0 for this IP.
+- The device MAC address is f8:17:2d:64:ca:04.
+- Nmap is partial and reports no TCP or UDP ports and no OS matches.
+- No authoritative OS data is available.
+- No matching actionable Greenbone findings were reported for this IP.
+- The router currently reports the device as online, while inventory reports it as offline.
 
 ### Inferences
 
-- The device may be a kitchen light-switch IoT device.
-- An embedded IoT firmware platform is plausible, but unsupported by direct OS evidence.
+- The inventory hostname suggests a kitchen light-switch or other embedded IoT device.
+- The conflicting DHCP hostname and contradictory online-state reports make the device identity uncertain.
+- The platform is cautiously classified as embedded IoT firmware; no precise OS is supported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

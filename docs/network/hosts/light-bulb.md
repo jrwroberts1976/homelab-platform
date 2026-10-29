@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `40:ed:00:7c:7b:80`
-- Observed IP address(es): `192.168.2.252`
-- Connections: **5**
-- Traffic sent: **2.0 KiB**
-- Traffic received: **930.4 KiB**
-- Top services: `ssl` (2), `http` (1), `dhcp` (1), `ntp` (1)
-- Top destination ports: `tcp/443` (2), `tcp/80` (1), `udp/67` (1), `udp/123` (1)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,31 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T14:00:35+01:00`
+- Assessed: `2026-10-29T14:02:32+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `40:ed:00:7c:7b:80`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link L510 smart light bulb at 192.168.2.252. No exact operating system or service exposure is established by the supplied evidence.
+Likely a TP-Link L510-series IoT device, probably a smart bulb. The hostname and vendor are consistent, but DHCP/router evidence associates L510 with a different IP address, so address identity should be reviewed.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.252.
-- The documented hostname is light-bulb.jameshouse.
-- The DHCP hostname is L510.
-- The recorded vendor is TP-Link Limited.
-- Nmap has no recorded TCP or UDP ports, OS matches, or service results.
-- No actionable Greenbone findings match the current IP.
+- The observed hostname is L510.
+- The inventory and Nmap vendor are TP-Link Limited.
+- The observed IP address is 192.168.2.174 with MAC address 40:ed:00:7c:7b:80.
+- The device is currently reported online.
+- Nmap has no recorded TCP or UDP ports and no OS matches.
+- The router reports hostname L510 at 192.168.2.252, creating an address-association discrepancy.
 
 ### Inferences
 
-- The device is likely a TP-Link L510 smart light bulb based on the DHCP hostname, hostname, and vendor.
-- The device likely runs embedded IoT firmware, but the exact firmware or operating system is unsupported by the evidence.
+- L510 is likely a TP-Link L510-series IoT device, commonly associated with a smart-bulb product line.
+- The device likely runs embedded IoT firmware, but no exact operating system or firmware version is supported.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

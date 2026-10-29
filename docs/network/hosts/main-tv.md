@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `5c:34:00:50:df:b3`
-- Observed IP address(es): `192.168.2.234`
-- Connections: **5,959**
-- Traffic sent: **3.4 MiB**
-- Traffic received: **8.0 MiB**
-- Top services: `ssl` (399), `http` (95), `dns` (49), `dhcp` (12), `ntp` (12)
-- Top destination ports: `udp/1900` (3716), `tcp/1883` (914), `udp/443` (695), `tcp/443` (441), `tcp/80` (93), `udp/53` (49)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T14:00:35+01:00`
+- Assessed: `2026-10-29T14:02:32+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `5c:34:00:50:df:b3`
 - Identity confidence: **high**
@@ -69,23 +60,24 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Identified as a Hisense smart TV, likely using VIDAA services. Exact operating system or firmware is unavailable; no open ports or Nmap OS matches were observed. No actionable Greenbone findings matched the current IP.
+Likely a Hisense smart TV using VIDAA-related services. Exact operating system or firmware is not identified by the supplied evidence.
 
 ### Confirmed facts
 
-- The device hostname is main-tv.jameshouse and telemetry hostname is main-tv.
-- The recorded vendor is Hisense Electric.
-- The device IP is 192.168.2.234 and MAC address is 5c:34:00:50:df:b3.
-- DNS samples include multiple vidaahub.com domains and Netflix service domains, along with www.youtube.com.
-- Nmap collection was partial with no TCP or UDP ports and no OS matches.
-- No actionable Greenbone findings matched this current IP.
-- Authoritative OS information is unavailable.
+- The device hostname is main-tv.jameshouse.
+- The inventory vendor is Hisense Electric.
+- The device MAC address is 5c:34:00:50:df:b3.
+- The device IP address is 192.168.2.234.
+- DNS activity includes multiple vidaahub.com domains.
+- No Nmap TCP or UDP ports, services, or OS matches were recorded.
+- No matching actionable Greenbone findings were reported for this IP; this does not establish that the device is vulnerability-free.
+- The router currently reports the device as online, while inventory marks it offline.
 
 ### Inferences
 
-- The device identity is consistent with a Hisense smart TV.
-- The vidaahub.com DNS activity is consistent with VIDAA platform services.
-- The exact operating system and firmware version cannot be determined from the supplied evidence.
+- The device is most likely a Hisense smart TV.
+- The vidaahub.com DNS domains are consistent with a VIDAA-based smart-TV platform.
+- The underlying OS or firmware version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

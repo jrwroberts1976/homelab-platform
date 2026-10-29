@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `58:02:05:fd:e1:8b`
-- Observed IP address(es): `192.168.2.6`
-- Connections: **3,367**
-- Traffic sent: **29.6 MiB**
-- Traffic received: **2.5 GiB**
-- Top services: `ssl` (1593), `http` (1304), `quic` (549), `dns` (58), `dhcp` (7), `ntp` (1)
-- Top destination ports: `tcp/443` (1338), `tcp/58153` (945), `udp/443` (549), `tcp/80` (368), `udp/5353` (31), `udp/3478` (24)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T14:00:35+01:00`
+- Assessed: `2026-10-29T14:02:32+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `58:02:05:fd:e1:8b`
 - Identity confidence: **medium**
@@ -69,22 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a laptop identified as rosie-laptop, with DHCP hostname LAPTOP-SRR7CFCE. DNS telemetry includes Windows Update and Microsoft delivery endpoints, but no authoritative or Nmap OS evidence is available.
+Likely an AlertMe/Hive smart-home hub at 192.168.2.7, but the available DHCP hostname evidence refers to a different IP and should be reconciled.
 
 ### Confirmed facts
 
-- The inventory hostname is rosie-laptop.jameshouse.
-- The router reports DHCP hostname LAPTOP-SRR7CFCE for 192.168.2.6.
-- The device is associated with MAC address 58:02:05:fd:e1:8b.
-- DNS telemetry includes Windows Update and Microsoft delivery endpoint signals.
-- No authoritative OS information is available.
-- No Nmap ports, services, or OS matches are available.
-- No matching actionable Greenbone findings were reported for the current IP.
+- The target IP is 192.168.2.7.
+- The recorded hostname is myhivehub.jameshouse, with telemetry hostname myhivehub.
+- The recorded vendor is Alertme.com Limited.
+- Nmap completed only partially and reported no TCP or UDP ports or OS matches.
+- No authoritative OS fact is available.
+- No matching actionable Greenbone findings were reported for this IP.
+- No sampled Loki entries were available for this host.
 
 ### Inferences
 
-- The host is likely a laptop based on its documented hostname and DHCP hostname.
-- The DNS signals are consistent with a Windows-compatible platform, but do not establish an exact OS or version.
+- The hostname and vendor strongly suggest an AlertMe/Hive smart-home hub.
+- The platform is most cautiously classified as embedded IoT firmware; the exact OS or firmware is unsupported by the evidence.
+- The Windows Update DNS signal may indicate Windows-related activity in the observed DNS data, but it does not establish this device's operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

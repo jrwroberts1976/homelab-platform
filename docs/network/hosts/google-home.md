@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `a4:77:33:5f:94:fe`
-- Observed IP address(es): `192.168.2.17`
-- Connections: **7,287**
-- Traffic sent: **10.0 MiB**
-- Traffic received: **9.3 MiB**
-- Top services: `dns` (3981), `ssl` (966), `quic` (467), `ntp` (96), `http` (24), `dhcp` (1)
-- Top destination ports: `udp/53` (2448), `udp/5353` (1533), `udp/9478` (1184), `udp/9999` (981), `tcp/443` (522), `udp/443` (467)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T14:00:35+01:00`
+- Assessed: `2026-10-29T14:02:32+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `a4:77:33:5f:94:fe`
 - Identity confidence: **high**
@@ -69,25 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Google Home device at 192.168.2.17, identified by DHCP hostname, inventory metadata, Nmap fingerprint, and a Google Chromecast certificate. Open TCP ports include 8008, 8009, 8443, and 9000; no actionable Greenbone findings matched this IP.
+Likely Google Home smart speaker/media device. The hostname, Google vendor attribution, and Nmap device classification align; exact firmware/OS is not supported by the evidence. TCP ports 8008, 8009, and 8443 are open. No matching actionable Greenbone findings were reported for 192.168.2.125.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.17.
-- The documented DHCP hostname is Google-Home.
-- Inventory identifies the vendor as Google and the hostname as google-home.jameshouse.
-- Nmap reports a Google Home device fingerprint with 98% accuracy.
-- A TLS certificate on port 8443 identifies Google Inc. and Chromecast ICA 6 (Audio Assist).
-- TCP ports 8008, 8009, and 8443 are open according to Nmap.
-- TCP ports 8443 and 9000 have corroborated TLS service records labeled https-alt and cslistener, respectively.
-- Greenbone reported zero actionable findings matching the current IP in the supplied scan results.
-- No authoritative operating-system fact is available.
+- The device hostname is Google-Home.
+- The inventory and Nmap vendor fields identify Google.
+- Nmap reports a Google Home device classification.
+- TCP ports 8008, 8009, and 8443 are open.
+- The device is online at 192.168.2.125.
+- Greenbone reported zero matching actionable findings for 192.168.2.125.
+- The router data contains a Google-Home record at 192.168.2.17.
 
 ### Inferences
 
-- The device is likely a Google Home/Chromecast-family embedded media or smart-speaker device.
-- The underlying platform may include Linux components, but the supplied evidence does not support identifying an exact operating system or version.
-- Google-related DNS activity is consistent with the device identity but is not independently conclusive.
+- The device is most likely a Google Home smart speaker or related Google media device.
+- It likely uses embedded IoT firmware, possibly Linux-based, but the exact OS and firmware version cannot be determined.
+- The separate router IP record may reflect a stale or separate DHCP observation and does not by itself establish a second device.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

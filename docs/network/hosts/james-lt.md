@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `24:b2:b9:30:f8:55`
-- Observed IP address(es): `192.168.2.183`
-- Connections: **6,631**
-- Traffic sent: **138.8 MiB**
-- Traffic received: **890.8 MiB**
-- Top services: `ssl` (4995), `quic` (2327), `dns` (447), `http` (138), `ayiya` (6), `dhcp` (1)
-- Top destination ports: `tcp/443` (3252), `udp/443` (2335), `udp/5353` (426), `tcp/80` (139), `udp/3702` (71), `udp/138` (54)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,32 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T14:00:35+01:00`
+- Assessed: `2026-10-29T14:02:32+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `24:b2:b9:30:f8:55`
-- Identity confidence: **low**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-James-LT is an online network endpoint at 192.168.2.183. Its hostname suggests a laptop, but no vendor, OS, port, service, or DNS identity evidence is available to confirm the device type or platform.
+James-LT is an online network client identified by its documented hostname. The hostname suggests a laptop, but no vendor, service, or operating-system evidence is available; the Nmap scan is incomplete.
 
 ### Confirmed facts
 
-- The router reports DHCP hostname James-LT for 192.168.2.183.
-- The inventory hostname is james-lt.jameshouse, with telemetry hostname james-lt.
-- The device MAC address is 24:b2:b9:30:f8:55.
-- The router currently reports the device as online.
-- Nmap OS and port identification is incomplete because OS evidence is missing.
-- No actionable Greenbone findings match the current IP; this is not proof that the host is vulnerability-free.
-- No patching telemetry is available.
+- The documented hostname is James-LT.
+- The host is online at 192.168.2.186 with MAC address 24:b2:b9:30:f8:55.
+- The inventory and telemetry hostname are both James-LT.
+- Nmap status is partial and reports missing OS evidence; no TCP or UDP ports were recorded.
+- No actionable Greenbone findings matched the current IP.
 
 ### Inferences
 
-- The hostname suffix LT may indicate a laptop, but this is not confirmed.
-- The exact operating system and firmware are unknown.
+- The hostname suffix LT cautiously suggests a laptop or portable computer.
+- The exact operating system and hardware vendor cannot be determined from the supplied evidence.
+- The router also reports James-LT at 192.168.2.183, which may reflect a stale or separate DHCP observation.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
