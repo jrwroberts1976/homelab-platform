@@ -127,7 +127,7 @@ monitor-01 is the managed VM202 monitoring platform on Proxmox-2, running Debian
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T18:30:28+00:00`
+- Last assessed: `2026-10-29T19:32:54+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
