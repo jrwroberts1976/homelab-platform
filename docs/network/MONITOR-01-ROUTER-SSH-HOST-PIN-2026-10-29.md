@@ -1,6 +1,34 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # monitor-01 — fingerprint-gated router-01 SSH host pin (29 October 2026)
 
+## Live preflight failure and corrected source — 29 October 2026
+
+The operator synchronised `admin-01` to source `57cfec26`, and both writer and rollback syntax checks PASSED. After explicit live approval **for this host pin only**, the writer attempted to validate a network SSH scan but stopped **before any write**:
+
+```text
+TASK [Reject unexpected host keys or ambiguous scan results] FAILED
+assertion: host_pin_scan.stdout_lines | length == 1
+PLAY RECAP monitor-01 ok=10 changed=0 unreachable=0 failed=1 skipped=0 rescued=0 ignored=0
+```
+
+A follow-up **read-only** diagnostic on `monitor-01` captured the exact scan shape **without exposing public key bytes**:
+
+```text
+SCAN_RETURN_CODE=0
+OUTPUT_LINES=2
+VALID_ED25519_LINES=1
+UNIQUE_FINGERPRINTS=1
+FINGERPRINT=SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+EXPECTED_FINGERPRINT_PRESENT=True
+```
+
+The scanner returned two stdout lines, but exactly one **valid** key line for the current Pi and that one fingerprint **matches the independently verified physical Pi**. The content/type of the second non-key line was not collected; no assumption is made that it is a specific banner or error. The strict total-line count was too broad, and the first-line selection had an unsafe order assumption.
+
+**Source-only correction:** classify key records before the preflight: demand exactly one syntactically valid `192.168.2.1 ssh-ed25519` record, refuse duplicate/missing or other recognisable SSH host-key records, and select **that** validated record rather than `stdout_lines[0]`. Non-key output alone is no longer a reason to abort. The **independently verified physical-Pi SHA256 fingerprint check remains mandatory and unchanged** before the writer ever touches `known_hosts`. CI includes synthetic extra-line, missing, duplicate and conflicting host-key tests.
+
+**Current live state remains UNPINNED.** The original approved writer failed `changed=0`; this corrective source PR must pass CI and new local syntax checks before a **fresh approval** to rerun the corrected live writer. Do not bypass the host fingerprint, disable host-key verification, trust a key automatically, add Pi authorised keys or start the tunnel.
+
+
 **STATUS: SOURCE ONLY, NOT DEPLOYED.** This change does not authorise a Pi monitoring account, accept a host key, start a tunnel, modify sshd, enable exporter access, or change Prometheus. It must be separately approved and executed only after local syntax checks.
 
 ## Verified operator evidence
