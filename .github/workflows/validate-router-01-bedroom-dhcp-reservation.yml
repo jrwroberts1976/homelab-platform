@@ -1,0 +1,117 @@
+name: Validate router-01 Bedroom DHCP reservation
+
+on:
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-01-bedroom-dhcp-reservation.yml"
+      - "IaC/ansible/playbooks/router-01-bedroom-dhcp-reservation.yml"
+      - "IaC/ansible/playbooks/router-01-bedroom-dhcp-reservation-rollback.yml"
+  push:
+    paths:
+      - ".github/workflows/validate-router-01-bedroom-dhcp-reservation.yml"
+      - "IaC/ansible/playbooks/router-01-bedroom-dhcp-reservation.yml"
+      - "IaC/ansible/playbooks/router-01-bedroom-dhcp-reservation-rollback.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  syntax-and-safety:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - name: Install offline tooling
+        run: |
+          python -m pip install 'ansible-core>=2.18,<2.21' pyyaml
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq dnsmasq-base
+      - name: Validate explicit approvals, exact scope and non-disclosure
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+          import yaml
+
+          root = pathlib.Path("IaC/ansible/playbooks")
+          deploy = (root / "router-01-bedroom-dhcp-reservation.yml").read_text()
+          rollback = (root / "router-01-bedroom-dhcp-reservation-rollback.yml").read_text()
+          for text, op in ((deploy, "apply"), (rollback, "rollback")):
+              plays = yaml.safe_load(text)
+              assert len(plays) == 1
+              p = plays[0]
+              assert p["hosts"] == "router_postcutover_baseline"
+              assert p["gather_facts"] is False
+              assert p["become"] is True
+              assert p["vars"]["router_bedroom_client_mac"] == ""
+              assert p["vars"]["router_bedroom_dhcp_conf"] == "/etc/dnsmasq.d/router.conf"
+              assert p["vars"]["router_bedroom_backup_dir"] == "/var/backups/homelab-router/dnsmasq"
+              assert p["vars"]["router_bedroom_managed_marker"] == "# {mark} ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION"
+              assert "not ansible_check_mode" in text
+              assert "inventory_hostname == 'router-01'" in text
+              assert "ansible_host == '192.168.2.1'" in text
+              assert "d8:3a:dd:5a:51:44" in text
+              assert "bedroom_controller.stdout" in text if op == "apply" else "bedroom_rollback_controller.stdout" in text
+              assert "router_bedroom_reservation_restart_approved | bool" in text
+              assert "router_bedroom_reservation_" + op + "_approved | bool" in text
+              assert "dnsmasq, --test" in text
+              assert "state: restarted" in text
+              assert "backup: false" in text
+              assert "no_log: true" in text
+              assert "192.168.2.180" in text
+              assert "192.168.2.100,192.168.2.199" in text
+              assert "dhcp-host=" in text
+              assert "dhcp-range=192.168.2.100,192.168.2.180" not in text
+              assert not re.search(r"24:4b:fe:5e:cc:c8", text, flags=re.I)
+              assert "state: absent" in text
+              assert "remote_src: true" in text
+
+          # Candidate must validate before touching the running configuration.
+          assert deploy.index("Parse full candidate config") < deploy.index("Write only the reviewed managed reservation block")
+          assert deploy.index("Verify entire updated current dnsmasq config") < deploy.index("Activate revised DHCP configuration")
+          assert deploy.index("Back up original active router.conf") < deploy.index("Write only the reviewed managed reservation block")
+          assert rollback.index("Back up current configuration before rollback") < rollback.index("Remove only the managed Bedroom DHCP block")
+          assert "router_bedroom_reservation_apply_approved: false" in deploy
+          assert "router_bedroom_reservation_rollback_approved: false" in rollback
+          print("PASS: source-only guarded deployment, rollback and protected MAC variable")
+          PY
+
+      - name: Validate independent dnsmasq candidate syntax with synthetic MAC
+        run: |
+          python - <<'PY'
+          import pathlib, subprocess, tempfile
+          with tempfile.TemporaryDirectory() as t:
+              root=pathlib.Path(t)
+              base=root/"dnsmasq.conf"
+              include=root/"fragments"
+              include.mkdir()
+              base.write_text("# synthetic test main configuration\n")
+              (include/"router.conf").write_text(
+                  "interface=eth0\nbind-dynamic\ndhcp-authoritative\n"
+                  "dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h\n"
+                  "dhcp-option=option:router,192.168.2.1\n"
+                  "dhcp-option=option:dns-server,192.168.2.1\n"
+                  "# BEGIN ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION\n"
+                  "dhcp-host=02:11:22:33:44:55,192.168.2.180\n"
+                  "# END ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION\n"
+              )
+              subprocess.run([
+                  "dnsmasq", "--test", "--conf-file="+str(base),
+                  "--conf-dir="+str(include)+",.dpkg-dist,.dpkg-old,.dpkg-new"
+              ],check=True)
+              print("PASS: installed dnsmasq parses candidate reservation inside original dynamic range")
+          PY
+
+      - name: Check Ansible playbook syntax against isolated post-cutover Pi inventory
+        run: |
+          cd IaC/ansible
+          ansible-inventory -i inventory/router-01-postcutover-baseline.yml --list >/dev/null
+          ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+            playbooks/router-01-bedroom-dhcp-reservation.yml \
+            --limit router-01 --syntax-check
+          ansible-playbook -i inventory/router-01-postcutover-baseline.yml \
+            playbooks/router-01-bedroom-dhcp-reservation-rollback.yml \
+            --limit router-01 --syntax-check

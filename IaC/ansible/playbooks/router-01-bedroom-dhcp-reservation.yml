@@ -1,0 +1,283 @@
+---
+# SOURCE ONLY until independently approved for a short DHCP/DNS maintenance window.
+# MAC passed by local, protected extra-vars file (NEVER put it in Git or CLI history).
+# Only adds a fixed DHCP reservation for the already-DHCP-managed Bedroom ASUS.
+# Does NOT narrow the existing .100-.199 range, modify DHCP leases or alter PPPoE.
+- name: Reserve Bedroom ASUS current DHCP address with rollback
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_bedroom_reservation_apply_approved: false
+    router_bedroom_reservation_restart_approved: false
+    router_bedroom_client_mac: ""
+    router_bedroom_dhcp_conf: /etc/dnsmasq.d/router.conf
+    router_bedroom_backup_dir: /var/backups/homelab-router/dnsmasq
+    router_bedroom_managed_marker: "# {mark} ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION"
+    router_bedroom_reservation_ip: "192.168.2.180"
+    router_bedroom_expected_hostname: "RT-AC86U-CCC8"
+
+  pre_tasks:
+    - name: Read trusted Ansible controller hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: bedroom_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require explicitly approved real deployment on exact controller and target
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_bedroom_reservation_apply_approved | bool
+          - router_bedroom_reservation_restart_approved | bool
+          - bedroom_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - router_bedroom_client_mac is match('(?i)^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$')
+        fail_msg: "STOP: protected MAC vars, exact live Pi and explicit change + restart approvals required."
+
+    - name: Read physical Pi Ethernet MAC and current IPv4
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: bedroom_pi_mac
+      changed_when: false
+
+    - name: Read current gateway interface IPv4
+      ansible.builtin.command:
+        argv: [ip, -4, -o, addr, show, dev, eth0]
+      register: bedroom_pi_ipv4
+      changed_when: false
+
+    - name: Read current WAN default route
+      ansible.builtin.command:
+        argv: [ip, -4, route, show, default]
+      register: bedroom_default_route
+      changed_when: false
+
+    - name: Refuse any unexpected hardware, LAN or WAN identity
+      ansible.builtin.assert:
+        that:
+          - bedroom_pi_mac.stdout | lower | trim == 'd8:3a:dd:5a:51:44'
+          - "'inet 192.168.2.1/24' in bedroom_pi_ipv4.stdout"
+          - "'ppp0' in bedroom_default_route.stdout"
+
+    - name: Require critical router services active before change
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [dnsmasq, unbound, router-pppoe, nftables]
+      changed_when: false
+
+    - name: Confirm live dnsmasq uses the expected configuration directory
+      ansible.builtin.command:
+        argv: [pgrep, -a, -x, dnsmasq]
+      register: bedroom_dnsmasq_process
+      changed_when: false
+
+    - name: Refuse a different active dnsmasq configuration source
+      ansible.builtin.assert:
+        that:
+          - "'-7 /etc/dnsmasq.d,' in bedroom_dnsmasq_process.stdout"
+
+    - name: Inspect existing dnsmasq config fragments
+      ansible.builtin.command:
+        argv: [find, /etc/dnsmasq.d, -maxdepth, '1', -type, f, -printf, '%f\n']
+      register: bedroom_dnsmasq_files
+      changed_when: false
+
+    - name: Refuse unreviewed config fragments
+      ansible.builtin.assert:
+        that:
+          - "(bedroom_dnsmasq_files.stdout_lines | sort | list) == ['README', 'router.conf']"
+
+    - name: Validate MAC-bound, unexpired current lease and exact existing DHCP policy
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import pathlib, re, sys, time
+            expected = sys.stdin.read().strip().lower()
+            assert re.fullmatch(r"(?:[0-9a-f]{2}:){5}[0-9a-f]{2}", expected)
+            leases = []
+            for line in pathlib.Path("/var/lib/misc/dnsmasq.leases").read_text().splitlines():
+                parts = line.split()
+                if len(parts) >= 4 and (parts[2] == "192.168.2.180" or parts[1].lower() == expected):
+                    leases.append(parts)
+            assert len(leases) == 1, "Missing, conflicting or duplicate Bedroom lease"
+            entry = leases[0]
+            assert entry[1].lower() == expected, "Bedroom MAC does not match approved MAC"
+            assert entry[2] == "192.168.2.180", "Bedroom address changed"
+            assert entry[3] == "RT-AC86U-CCC8", "Bedroom hostname changed"
+            assert int(entry[0]) > time.time(), "Bedroom lease no longer unexpired"
+            main = pathlib.Path("/etc/dnsmasq.conf").read_text()
+            router = pathlib.Path("/etc/dnsmasq.d/router.conf").read_text()
+            assert router.count("dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h") == 1
+            for token in ("interface=eth0", "bind-dynamic", "dhcp-authoritative",
+                          "dhcp-option=option:router,192.168.2.1",
+                          "dhcp-option=option:dns-server,192.168.2.1"):
+                assert token in router, "Expected router policy absent"
+            active = [s.strip() for s in (main + "\n" + router).splitlines()
+                      if s.strip() and not s.lstrip().startswith("#")]
+            assert sum(s.startswith("dhcp-range=") for s in active) == 1
+            assert not any(s.startswith(("dhcp-host=", "dhcp-hostsfile=", "dhcp-hostsdir=",
+                                         "conf-dir=", "conf-file=", "read-ethers")) for s in active), "Unexpected reservation or extra include"
+            assert "ANSIBLE MANAGED BEDROOM ASUS DHCP RESERVATION" not in router
+            print("PASS: matching unexpired Bedroom client and unchanged DHCP policy")
+        stdin: "{{ router_bedroom_client_mac }}"
+        stdin_add_newline: true
+      changed_when: false
+      no_log: true
+
+    - name: Verify original dnsmasq syntax before any file change
+      ansible.builtin.command:
+        argv: [dnsmasq, --test]
+      changed_when: false
+
+  tasks:
+    - name: Safely stage, validate, back up and apply only the Bedroom reservation
+      block:
+        - name: Create temporary candidate config directory outside active dnsmasq path
+          ansible.builtin.tempfile:
+            state: directory
+            path: /run
+            prefix: router-bedroom-dhcp-
+          register: bedroom_candidate
+
+        - name: Copy current router.conf to candidate config directory
+          ansible.builtin.copy:
+            src: "{{ router_bedroom_dhcp_conf }}"
+            dest: "{{ bedroom_candidate.path }}/router.conf"
+            remote_src: true
+            mode: '0600'
+
+        - name: Copy existing README fragment to preserve candidate directory composition
+          ansible.builtin.copy:
+            src: /etc/dnsmasq.d/README
+            dest: "{{ bedroom_candidate.path }}/README"
+            remote_src: true
+            mode: '0600'
+
+        - name: Insert Bedroom reservation in OFFLINE candidate only
+          ansible.builtin.blockinfile:
+            path: "{{ bedroom_candidate.path }}/router.conf"
+            marker: "{{ router_bedroom_managed_marker }}"
+            insertafter: EOF
+            block: "dhcp-host={{ router_bedroom_client_mac | lower }},{{ router_bedroom_reservation_ip }}"
+            create: false
+          no_log: true
+
+        - name: Parse full candidate config using installed dnsmasq (no service change)
+          ansible.builtin.command:
+            argv:
+              - dnsmasq
+              - --test
+              - --conf-file=/etc/dnsmasq.conf
+              - "--conf-dir={{ bedroom_candidate.path }},.dpkg-dist,.dpkg-old,.dpkg-new"
+          changed_when: false
+
+        - name: Prepare private backup directory outside active dnsmasq include path
+          ansible.builtin.file:
+            path: "{{ router_bedroom_backup_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+
+        - name: Get backup timestamp
+          ansible.builtin.command:
+            argv: [date, -u, +%Y%m%dT%H%M%SZ]
+          register: bedroom_backup_stamp
+          changed_when: false
+
+        - name: Back up original active router.conf in protected non-config directory
+          ansible.builtin.copy:
+            src: "{{ router_bedroom_dhcp_conf }}"
+            dest: "{{ router_bedroom_backup_dir }}/router.conf.before-bedroom-{{ bedroom_backup_stamp.stdout }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0600'
+          register: bedroom_backup
+
+        - name: Write only the reviewed managed reservation block
+          ansible.builtin.blockinfile:
+            path: "{{ router_bedroom_dhcp_conf }}"
+            marker: "{{ router_bedroom_managed_marker }}"
+            insertafter: EOF
+            block: "dhcp-host={{ router_bedroom_client_mac | lower }},{{ router_bedroom_reservation_ip }}"
+            create: false
+            backup: false
+          register: bedroom_edit
+          no_log: true
+
+        - name: Verify entire updated current dnsmasq config before restart
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Activate revised DHCP configuration in approved maintenance window
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when: bedroom_edit.changed | bool
+
+        - name: Require dnsmasq active after restart
+          ansible.builtin.command:
+            argv: [systemctl, is-active, dnsmasq]
+          register: bedroom_after
+          changed_when: false
+          failed_when: bedroom_after.rc != 0 or (bedroom_after.stdout | trim) != 'active'
+
+        - name: Confirm config syntax after activation
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Show non-identifying deployment result
+          ansible.builtin.debug:
+            msg:
+              status: "Bedroom DHCP reservation installed; dnsmasq active; syntax PASS"
+              ip: "{{ router_bedroom_reservation_ip }}"
+              network_pool: "192.168.2.100–199 unchanged"
+              config_file: "{{ router_bedroom_dhcp_conf }}"
+              private_backup_path: "{{ bedroom_backup.dest }}"
+              lease_file: "Not modified"
+              next: "Verify Bedroom renews at .180; confirm DNS and internet client connectivity"
+
+      rescue:
+        - name: Remove only the managed Bedroom reservation if this run inserted it
+          ansible.builtin.blockinfile:
+            path: "{{ router_bedroom_dhcp_conf }}"
+            marker: "{{ router_bedroom_managed_marker }}"
+            state: absent
+          when:
+            - bedroom_edit is defined
+            - bedroom_edit.changed | default(false) | bool
+          no_log: true
+
+        - name: Check restored dnsmasq syntax after failed activation
+          ansible.builtin.command:
+            argv: [dnsmasq, --test]
+          changed_when: false
+
+        - name: Attempt restoration of original dnsmasq service
+          ansible.builtin.systemd_service:
+            name: dnsmasq
+            state: restarted
+          when:
+            - bedroom_edit is defined
+            - bedroom_edit.changed | default(false) | bool
+
+        - name: Stop and require operator inspection after failed application
+          ansible.builtin.fail:
+            msg: "Bedroom reservation FAILED; attempted block removal and service restoration. Verify dnsmasq, backup and client reachability before further changes."
+
+      always:
+        - name: Remove temporary candidate directory outside live dnsmasq path
+          ansible.builtin.file:
+            path: "{{ bedroom_candidate.path }}"
+            state: absent
+          when: bedroom_candidate is defined and bedroom_candidate.path is defined

@@ -1,6 +1,9 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 DHCP static-address protection: draft only — 28 October 2026
 
+> **SUPERSEDED DECISION, 29 October:** Operator confirmed active ASUS Home controller `192.168.2.2` is **static**, Bedroom RT-AC86U `192.168.2.180` is **DHCP**, and the `.180` lease MAC matches the ASUS GUI. Historical `.181` no longer responds and the third ASUS is unused; `.195` media-01 remains offline with unknown addressing. **Do not deploy the three split ranges below.** The source-only proposal is now a MAC-bound reservation of `.180`, maintaining the original `.100–.199` pool, per [Bedroom DHCP reservation plan](ROUTER-01-BEDROOM-ASUS-DHCP-RESERVATION-2026-10-29.md). This historical document remains evidence of earlier investigation, not instructions for deployment.
+
+
 ## Live preflight VERIFIED — 29 October 2026 (no changes)
 
 After merged [PR #214](https://github.com/jrwroberts1976/homelab-platform/pull/214), the operator on `admin-01` fast-forwarded clean `main` to `43c69dbf` and ran syntax-check **PASS** followed by the approval-gated, **read-only** `router-01-dhcp-exclusion-preflight-readonly.yml` against the isolated `192.168.2.1` inventory with `--check -e router_dhcp_exclusion_preflight_approved=true`. Actual final Ansible recap: **`router-01 ok=20 changed=0 unreachable=0 failed=0 skipped=0`**.
