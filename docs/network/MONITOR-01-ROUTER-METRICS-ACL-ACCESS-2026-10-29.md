@@ -1,7 +1,31 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # monitor-01 restricted router metrics SSH key: minimal ACL access — 29 October 2026
 
-**STATUS: SOURCE ONLY — NOT DEPLOYED.** No ACL package installation, permissions change, key rotation, router SSH authorisation, tunnel activation, Prometheus modification or SSH restart has been approved or executed by this PR.
+**CURRENT STATUS: DEPLOYED on monitor-01; operator postflight PASS (29 October 2026).** The source-only status below records pre-deployment history. After separately approved live deployment, the service account can read and parse its original private key; no router SSH authorisation, tunnel, host-key pin, Prometheus change, exporter exposure or SSH reload is claimed.
+
+## Live operator postflight — verified success (29 October 2026)
+
+Following merged [PR #225](https://github.com/jrwroberts1976/homelab-platform/pull/225), the operator fast-forwarded `admin-01` to commit `93cbbcb2`, and both ACL writer and rollback syntax checks **PASSED**. The operator explicitly approved **both** Debian `acl` package installation and granting `router-metrics-tunnel` `--x` on `/etc/homelab`, then ran the source-controlled, guard-railed ACL writer with two approval variables.
+
+**Verified from pasted live Ansible playbook tail:**
+```text
+TASK [Confirm dedicated non-login user can now read its own key] ok: [monitor-01]
+TASK [Confirm dedicated user can parse private key without exposing bytes] ok: [monitor-01]
+TASK [Confirm key and directory have not been chmodded or reowned] ok: [monitor-01] (2 items)
+TASK [Assert original non-ACL filesystem modes remain protected] ok: [monitor-01]
+TASK [Report exact completed scope and next independently gated stages] ok: [monitor-01]
+"Traverse-only named user ACL for router-metrics-tunnel: PASS"
+"Private SSH key bytes, mode 0600, owner unchanged; other access remains denied"
+"No router authorised_keys, SSH trust/pinning, sshd reload, tunnel, firewall, exporter listener or Prometheus configuration changed"
+PLAY RECAP monitor-01: ok=24 changed=2 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
+```
+
+**Interpretation:** The approved live writer succeeded, with no failures/rescues. The non-login `router-metrics-tunnel` user can now access and parse the existing valid key; safety assertions passed with directory and key protection unchanged. `changed=2` is consistent with `acl` package install and creating its narrow user ACL, although the pasted tail does not separately show the earlier package/ACL writer tasks. Keep the rollback playbook for separately approved future recovery; it was **not run**. This completed step **does not** constitute live SSH authentication or Prometheus router metrics ingestion.
+
+**Next read-only verification:** test the private/public pair match without logging either key; inspect router's authentic SSH host-key fingerprint via direct Pi SSH command, compare to monitor's pinned entry once established, and only then design independent approvals for Pi authorised-key installation and container-safe tunnel. Do not commit credentials or run obsolete `.3.1` scripts.
+
+## Historical initial source-only plan (completed for ACL access only)
+
 
 ## Evidence and problem
 
@@ -20,7 +44,7 @@ Operator ran multiple independent read-only Ansible checks from `admin-01` again
 
 `IaC/ansible/playbooks/monitor-01-router-metrics-acl-traverse.yml` has **two independent, false-by-default approvals**, one to install only Debian's `acl` userspace package (necessary because the utilities are absent), and a second to grant only `u:router-metrics-tunnel:--x` on `/etc/homelab`. The source enforces the exact `admin-01` controller and `monitor-01 192.168.2.52` target, service account UID `992`, root-owned `0750` parent, `0755` child and account-owned `0600` private key. It simulates APT and rejects removals or unexpected installations/upgrades before installing anything. It then inspects the real ACL after `acl` is available, fails closed on unexpected named-user permissions, applies the narrow rule only if not present, and tests readability and private-key parsing **as the dedicated account**. It checks owner/group/other permissions after. Sensitive key derivation is hidden with Ansible `no_log`. On failure after attempting the ACL, the rescue step tries to remove **only its newly added named-user ACL**.
 
-The named ACL allows traversal of the parent, **not** listing it. It neither opens `/etc/homelab` for other users nor changes the key's owner/mode. It does not adjust SSH daemon, Node Exporter or Prometheus. `acl` package install is a limited OS change and remains subject to explicit deployment approval; there is **no claim of zero operational risk**, and installation is not inferred from merging this PR.
+The named ACL allows traversal of the parent, **not** listing it. It neither opens `/etc/homelab` for other users nor changes the key's owner/mode. It does not adjust SSH daemon, Node Exporter or Prometheus. The `acl` package was included in a separately approved limited OS change; there is **no claim of zero operational risk**, and installation is not inferred from merging this PR.
 
 ## Source review commands (no remote change)
 
@@ -34,11 +58,11 @@ ansible-playbook -i inventory/hosts.yml \
   playbooks/monitor-01-router-metrics-acl-rollback.yml --limit monitor-01 --syntax-check
 ```
 
-The writer is **intentionally blocked in `--check` mode**. APT simulation and safety checks run inside the specifically approved writer before any install/ACL mutation; use read-only shell preflights for further evidence without granting writer approvals.
+The writer is **intentionally blocked in `--check` mode** (the operator ran real deployment only after separate approval). APT simulation and safety checks run inside the specifically approved writer before any install/ACL mutation; use read-only shell preflights for further evidence without granting writer approvals.
 
-## Future separately approved operator deployment command — NOT YET EXECUTED
+## Historical operator deployment command — EXECUTED successfully on 29 October 2026
 
-Requires explicit user authorisation for package install and directory ACL modification. The first real run would execute:
+The operator explicitly approved both named gates and executed this guarded writer. This command is retained as historical reference, **not an instruction to rerun without a new approval**:
 
 ```bash
 cd ~/projects/homelab-platform/IaC/ansible
