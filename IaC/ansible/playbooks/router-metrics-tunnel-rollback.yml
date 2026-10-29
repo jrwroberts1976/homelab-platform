@@ -1,0 +1,81 @@
+---
+- name: Roll back staged router metrics tunnel unit
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars:
+    tunnel_unit: router-metrics-tunnel.service
+    tunnel_unit_path: /etc/systemd/system/router-metrics-tunnel.service
+
+  tasks:
+    - name: Require explicit rollback approval
+      ansible.builtin.assert:
+        that:
+          - tunnel_rollback_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Rollback not approved or wrong target."
+
+    - name: Inspect existing unit
+      ansible.builtin.stat:
+        path: "{{ tunnel_unit_path }}"
+        follow: false
+      register: tunnel_unit_stat
+
+    - name: Require known regular unit
+      ansible.builtin.assert:
+        that:
+          - tunnel_unit_stat.stat.isreg | default(false)
+          - tunnel_unit_stat.stat.uid == 0
+          - tunnel_unit_stat.stat.mode == '0644'
+
+    - name: Read installed unit
+      ansible.builtin.slurp:
+        src: "{{ tunnel_unit_path }}"
+      register: installed_unit
+
+    - name: Require exact managed unit content
+      ansible.builtin.assert:
+        that:
+          - >-
+            (installed_unit.content | b64decode | hash('sha256'))
+            ==
+            (lookup('ansible.builtin.file',
+              playbook_dir ~ '/../roles/router_metrics_tunnel/templates/router-metrics-tunnel.service.j2')
+              | hash('sha256'))
+        fail_msg: "Unit differs from Git-managed source; refusing removal."
+
+    - name: Check unit active state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ tunnel_unit }}"]
+      register: active_state
+      failed_when: false
+      changed_when: false
+
+    - name: Check unit enablement
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ tunnel_unit }}"]
+      register: enabled_state
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse live-service rollback
+      ansible.builtin.assert:
+        that:
+          - active_state.stdout | trim == 'inactive'
+          - enabled_state.stdout | trim == 'disabled'
+        fail_msg: "Service active or enabled; use a separately reviewed runtime rollback."
+
+    - name: Remove exact staged unit
+      ansible.builtin.file:
+        path: "{{ tunnel_unit_path }}"
+        state: absent
+
+    - name: Reload systemd definitions
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Report rollback completion
+      ansible.builtin.debug:
+        msg: "TUNNEL_STAGING_ROLLBACK=PASS"

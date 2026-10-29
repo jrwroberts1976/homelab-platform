@@ -1229,3 +1229,27 @@ For **every** change we make:
 - [ ] Update status and next actionable step here; update canonical docs/backlog if impacted.
 - [ ] Validate with `python3 scripts/validate-estate.py` and applicable tests/workflows where execution is available.
 - [ ] Commit/push changes and this handover together when possible; verify the new repository state.
+
+## 2026-10-29 — router-01 metrics tunnel staged (Git-only)
+
+- Branch: feature/router-01-prometheus-metrics-tunnel-20261029.
+- Estate validation PASS: 20 active, 0 planned, 5 retired guarded.
+- Restricted SSH authentication from monitor-01 to router-01 previously verified PASS.
+- OpenSSH 10.0p2 on monitor-01.
+- Effective SSH configuration confirms localforward [127.0.0.1]:19100 [127.0.0.1]:9100.
+- Existing tunnel service: inactive / not-found.
+- Local TCP/19100 listener: absent.
+- Stage installer and staged-unit rollback pass Ansible syntax checks.
+- systemd unit template passes local systemd-analyze verify.
+- Installer fingerprint and idempotency logic staged but not runtime-tested.
+- No tunnel, firewall changes, Docker changes, Prometheus reload or router changes deployed.
+- Next: add exact failure-safe installation handling, offline tests and independent staging verification before authorising installation.
+
+### 29 October 2026 — installation approval gate verified
+
+- Ran router-metrics-tunnel-stage.yml without approval.
+- Expected failure at first task: Require explicit installation approval.
+- Ansible recap: ok=0 changed=0 unreachable=0 failed=1.
+- Default-deny gate PASS.
+- No installation, systemd reload or service activation.
+- Installation remains pending independent preflight and failure-path tests.
