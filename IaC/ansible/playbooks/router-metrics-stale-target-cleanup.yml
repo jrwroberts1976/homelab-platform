@@ -1,0 +1,122 @@
+---
+- name: Remove obsolete Docker exporter target
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+
+  vars:
+    config_path: /opt/monitoring/prometheus/prometheus.yml
+    backup_path: /opt/homelab-router-metrics-relay/prometheus.yml.pre-stale-cleanup
+
+  tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - stale_target_cleanup_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Check cleanup backup is absent
+      ansible.builtin.stat:
+        path: "{{ backup_path }}"
+      register: backup_state
+
+    - name: Protect previous cleanup backup
+      ansible.builtin.assert:
+        that:
+          - not backup_state.stat.exists
+
+    - name: Read existing Prometheus configuration
+      ansible.builtin.slurp:
+        src: "{{ config_path }}"
+      register: original
+
+    - name: Render candidate configuration locally
+      ansible.builtin.set_fact:
+        candidate: "{{ lookup('ansible.builtin.template', '../roles/monitoring_stack/templates/prometheus.yml.j2') }}"
+
+    - name: Require narrowly scoped target change
+      ansible.builtin.assert:
+        that:
+          - "'192.168.2.220:9100' in (original.content | b64decode)"
+          - "'192.168.2.220:9100' not in candidate"
+          - "'job_name: router-node-exporter' in candidate"
+          - >-
+            (original.content | b64decode) | regex_replace(
+            '(?m)^      - targets:\n          - "192\\.168\\.2\\.220:9100"\n        labels:\n          target_name: "docker-01"\n', '')
+            == candidate
+        fail_msg: "Unexpected Prometheus configuration differences. No changes made."
+
+    - name: Update Prometheus with rollback protection
+      block:
+        - name: Preserve current configuration
+          ansible.builtin.copy:
+            src: "{{ config_path }}"
+            dest: "{{ backup_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0600"
+
+        - name: Install updated configuration
+          ansible.builtin.copy:
+            content: "{{ candidate }}"
+            dest: "{{ config_path }}"
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Reload Prometheus
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+
+        - name: Verify router healthy and stale target absent
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/api/v1/targets
+            return_content: true
+          register: target_response
+          until: >-
+            (
+              target_response.json.data.activeTargets | default([])
+              | selectattr('labels.job', 'equalto', 'router-node-exporter')
+              | selectattr('health', 'equalto', 'up')
+              | list | length
+            ) == 1
+            and
+            (
+              target_response.json.data.activeTargets | default([])
+              | selectattr('labels.instance', 'equalto', '192.168.2.220:9100')
+              | list | length
+            ) == 0
+          retries: 8
+          delay: 5
+          changed_when: false
+
+        - name: Report success
+          ansible.builtin.debug:
+            msg: "STALE_TARGET_REMOVED=PASS; ROUTER_TARGET=UP"
+
+      rescue:
+        - name: Restore previous configuration
+          ansible.builtin.copy:
+            src: "{{ backup_path }}"
+            dest: "{{ config_path }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: "0644"
+
+        - name: Reload previous configuration
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+
+        - name: Report failed cleanup
+          ansible.builtin.fail:
+            msg: "Cleanup failed; previous configuration restored. Verify Prometheus state."
