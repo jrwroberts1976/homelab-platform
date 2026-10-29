@@ -1,6 +1,12 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 29 October 2026 — live router monitoring network reachability independently verified
+
+Operator-run **read-only** Ansible monitoring audit `router-01-monitoring-path-readonly.yml` (merged PR #221), with `--check` and explicit approval, passed `ok=14 changed=0 failed=0 unreachable=0 skipped=0`. `admin-01 192.168.2.48` and the physically verified Pi `router-01 192.168.2.1` both have direct `eth0` LAN routes to `192.168.2.52` (Loki) and `192.168.2.59` (Zabbix). Loki HTTP readiness on `:3100/ready` returned **200 from both hosts**; Zabbix TCP/10051 connected successfully from both hosts. These are verified **transport/readiness** facts only, not evidence of actual router log ingestion, exporter scraping, Zabbix agent data, or dashboards. No live network, firewall, package, SSH or service changes were made. Source and follow-up: [router monitoring audit reconciliation](../network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md), issue #209.
+
+
+
 ## 29 October 2026 — verified live Pi gateway and Bedroom ASUS DHCP reservation
 
 **Latest operator-verified router truth (supersedes historical ASUS-as-main-gateway assertions further below, pending canonical estate registry reconciliation):** Physical Raspberry Pi `router-01` has LAN gateway `192.168.2.1/24` on `eth0`, PPPoE `ppp0` default route, active `dnsmasq`, `unbound`, `router-pppoe` and `nftables`. Dynamic DHCP scope remains a **single** `192.168.2.100–199/24` range, lease duration 24h, with gateway/DNS `192.168.2.1`. ASUS Home RT-AC86U at `192.168.2.2` operates in AP/AiMesh controller mode with a **manually static** LAN IP. ASUS Bedroom RT-AC86U (`RT-AC86U-CCC8`) is Ethernet-backed AiMesh and DHCP-managed at `192.168.2.180`. Its fixed address is now issued through an **active MAC-bound dnsmasq `dhcp-host` reservation** at `.180`, implemented by Git-managed Ansible PR #219 (source merge `7ff09647`). The third ASUS router is unused; historical `192.168.2.181` was not reachable during read-only inspection and no static exclusion at `.181` has been approved.
