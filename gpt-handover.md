@@ -1394,3 +1394,13 @@ For **every** change we make:
 - Do not delete source branches until the reconciliation
   PR is merged and archived content is verified.
 - Router configuration and security feature branches retained.
+
+### 2026-10-29 — router toolset reconciliation
+
+- Recovered the monitor-01 Loki readiness and router metrics
+  SSH key access read-only diagnostic playbooks.
+- Excluded obsolete router-side diagnostics targeting the
+  former 192.168.3.1 staging network.
+- No Ansible playbooks executed against live systems.
+- Original router toolset branch retained pending separate
+  reconciliation of its remaining installation and rollback work.
