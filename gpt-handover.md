@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+## 29 October 2026 — GitHub PR/branch reconciliation after admin-01 recovery
+
+Final Proxmox vote verification has now been merged by PR #238: both PVE nodes `Quorate: Yes`, `Total votes: 3` of 3 expected, Qdevice vote 1, both QDevice clients `Connected` to admin-01 `.48`; no additional runtime changes. GitHub audit of `homelab-platform` found **zero open PRs** and **53 branch refs including main**. Of 52 other refs, 42 have merged PR history (mostly squash merged), 6 have only intentionally **closed unmerged** PRs (#196, #188, #207, #210, #208, #190), and 4 have no PR history. Three no-PR branches are ancestors of main (zero ahead), and `backup/router-device-grafana-wip-20261011` is a distinct old unreviewed WIP, not authorised for bulk merge.
+
+**Do not merge old `.3.1` / Kea Pi cutover, broad router diagnostics, MSS writer, unsafe Docker retirement, or historical stale documentation wholesale.** Merged PRs #211, #212, #213, #215, #216, #217, #221, #222 and subsequent #233–#238 already provide reviewed current-state slices. Squash-merged branch refs may remain different from main; compare file contents, not only ahead/behind counts. No current safe open merge queue after #238. The [branch reconciliation runbook](docs/network/BRANCH-MERGE-RECONCILIATION-2026-10-29.md) records the full decisions. Future work should be reimplemented narrowly from latest main with offline CI and explicit runtime gates. This is source/documentation-only; no host changes or branch deletions.
+
+
 ## 29 October 2026 12:55 UTC — FINAL RECOVERY VERIFIED: 3/3 Proxmox votes, QDevice connected on both nodes
 
 **Independently operator-verified after the admin-01 reboot:** Both `PROXMOX` and `Proxmox-2` reported via read-only `pvecm status` that cluster `jameshouse-pve` is **`Quorate: Yes`**, with **Expected votes: 3**, **Total votes: 3**, **Quorum: 2** and `Flags: Quorate Qdevice`. Membership identifies `PROXMOX 10.255.255.1` (1 vote, `A,V,NMW`), `Proxmox-2 10.255.255.2` (1 vote, `A,V,NMW`) and **`Qdevice` (1 vote)**. Read-only `corosync-qdevice-tool -s` on *both* nodes returned **`QNetd host: 192.168.2.48:5403`** and **`State: Connected`**, configuration version 3, model Net, Fifty-Fifty split algorithm. Thus the witness is actually contributing its vote, not just accepting TCP connections.
