@@ -158,28 +158,74 @@
         fail_msg: "Conflicting router host-key pin already exists; manual reconciliation required."
 
   tasks:
-    - name: Track whether this run attempted to add a new pin
+    - name: Track whether this run needs recovery of a newly added pin
       ansible.builtin.set_fact:
         host_pin_added_by_this_run: false
 
-    - name: Install only a matching, audit-marked host-key line with recovery
-      when: host_pin_existing.rc == 1
+    - name: Install and verify only a genuine Pi key, with scoped postflight rollback
       block:
-        - name: Flag the new host-key insertion for scoped rescue
+        - name: Flag only a new pin for recovery on any subsequent failure
           ansible.builtin.set_fact:
             host_pin_added_by_this_run: true
+          when: host_pin_existing.rc == 1
 
-        - name: Add verified router key to the dedicated existing trust file
+        - name: Append only verified router key to existing dedicated trust file
           ansible.builtin.lineinfile:
             path: "{{ router_host_pin_file }}"
             line: "{{ host_pin_verified_line }} {{ router_host_pin_marker }}"
             state: present
             create: false
             backup: true
+          when: host_pin_existing.rc == 1
           no_log: true
 
+        - name: Read effective router host pin as restricted monitoring identity
+          ansible.builtin.command:
+            argv:
+              - runuser
+              - -u
+              - "{{ router_host_pin_user }}"
+              - --
+              - ssh-keygen
+              - -F
+              - "{{ router_host_pin_address }}"
+              - -f
+              - "{{ router_host_pin_file }}"
+          register: host_pin_postflight
+          changed_when: false
+          failed_when: false
+          no_log: true
+
+        - name: Extract service user's host key lines for postflight comparison
+          ansible.builtin.set_fact:
+            host_pin_postflight_lines: "{{ host_pin_postflight.stdout_lines | reject('match', '^#') | reject('equalto', '') | list }}"
+          no_log: true
+
+        - name: Require exactly one correct router key usable by the service user
+          ansible.builtin.assert:
+            that:
+              - host_pin_postflight.rc == 0
+              - host_pin_postflight_lines | length == 1
+              - host_pin_postflight_lines[0].split()[1:3] == host_pin_verified_line.split()[1:3]
+            fail_msg: "Service-user host-key postflight failed. Do not start an SSH tunnel."
+
+        - name: Reinspect trust file metadata after write
+          ansible.builtin.stat:
+            path: "{{ router_host_pin_file }}"
+            follow: false
+          register: host_pin_post_stat
+
+        - name: Require root-owned non-symlink trust file with preserved access mode
+          ansible.builtin.assert:
+            that:
+              - host_pin_post_stat.stat.isreg | default(false)
+              - not (host_pin_post_stat.stat.islnk | default(false))
+              - host_pin_post_stat.stat.pw_name == 'root'
+              - host_pin_post_stat.stat.gr_name == 'root'
+              - host_pin_post_stat.stat.mode == '0644'
+
       rescue:
-        - name: Remove only the new audit-marked pin if installation fails
+        - name: Remove only the newly added marked pin on failed postflight
           ansible.builtin.lineinfile:
             path: "{{ router_host_pin_file }}"
             line: "{{ host_pin_verified_line }} {{ router_host_pin_marker }}"
@@ -187,56 +233,11 @@
           when: host_pin_added_by_this_run | bool
           no_log: true
 
-        - name: Stop after attempted scoped insertion recovery
+        - name: Fail closed after any attempted scoped trust rollback
           ansible.builtin.fail:
-            msg: "Host pin failed to install; scoped recovery attempted. Do not run a tunnel."
+            msg: "Host pin failed postflight. Newly inserted marked pin was selected for removal; verify live state before any SSH connection."
 
-    - name: Read effective router host pin as restricted monitoring identity
-      ansible.builtin.command:
-        argv:
-          - runuser
-          - -u
-          - "{{ router_host_pin_user }}"
-          - --
-          - ssh-keygen
-          - -F
-          - "{{ router_host_pin_address }}"
-          - -f
-          - "{{ router_host_pin_file }}"
-      register: host_pin_postflight
-      changed_when: false
-      failed_when: false
-      no_log: true
-
-    - name: Extract restricted-user host key lines for postflight comparison
-      ansible.builtin.set_fact:
-        host_pin_postflight_lines: "{{ host_pin_postflight.stdout_lines | reject('match', '^#') | reject('equalto', '') | list }}"
-      no_log: true
-
-    - name: Require exactly one correct router key, usable by dedicated service user
-      ansible.builtin.assert:
-        that:
-          - host_pin_postflight.rc == 0
-          - host_pin_postflight_lines | length == 1
-          - host_pin_postflight_lines[0].split()[1:3] == host_pin_verified_line.split()[1:3]
-        fail_msg: "Service-user pinned-key postflight failed; do not start SSH tunnel."
-
-    - name: Reinspect trust file metadata after write
-      ansible.builtin.stat:
-        path: "{{ router_host_pin_file }}"
-        follow: false
-      register: host_pin_post_stat
-
-    - name: Require root-owned non-symlink trust file, unchanged safe access
-      ansible.builtin.assert:
-        that:
-          - host_pin_post_stat.stat.isreg | default(false)
-          - not (host_pin_post_stat.stat.islnk | default(false))
-          - host_pin_post_stat.stat.pw_name == 'root'
-          - host_pin_post_stat.stat.gr_name == 'root'
-          - host_pin_post_stat.stat.mode == '0644'
-
-    - name: Summarise exact trust-pinning scope without key material
+    - name: Report exact host trust scope without displaying public key bytes
       ansible.builtin.debug:
         msg:
           - "Physical router ED25519 fingerprint matched: {{ router_host_pin_fingerprint }}"
