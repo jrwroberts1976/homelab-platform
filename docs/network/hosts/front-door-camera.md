@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `3c:52:a1:86:bc:56`
-- Observed IP address(es): `192.168.2.78`
-- Connections: **189**
-- Traffic sent: **16.2 MiB**
-- Traffic received: **148.1 KiB**
-- Top services: `dns` (86), `ssl` (35), `dhcp` (1), `ntp` (1)
-- Top destination ports: `udp/53` (86), `tcp/443` (35), `udp/3478` (30), `udp/8089` (8), `tcp/58153` (1), `udp/67` (1)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,33 +50,34 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `3c:52:a1:86:bc:56`
-- Identity confidence: **high**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo network camera, identified by the TC65 DHCP hostname, TP-Link/Tapo cloud DNS activity, vendor data, and camera-oriented estate hostname. Exact firmware/OS is not supported by the evidence.
+Likely a TP-Link Tapo TC65 IoT camera. TP-Link/Tapo DNS activity and the documented TC65 hostname support the identity, but conflicting low-level Nmap fingerprints require review. TCP/443 is open; no exact OS is established.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.78.
-- The recorded vendor is TP-Link Limited.
-- Its DHCP hostname is TC65 and its inventory hostname is front-door-camera.jameshouse.
-- DNS activity includes TP-Link cloud and Tapo endpoints.
+- The device hostname and telemetry hostname are TC65.
+- Inventory and Nmap vendor identification report TP-Link Limited.
+- DNS signals include TP-Link cloud and Tapo endpoints.
 - TCP port 443 is open.
-- The presented TLS certificate identifies itself as TPRI-DEVICE.
-- No actionable Greenbone findings matched this IP in the supplied report; this does not establish that the host is vulnerability-free.
+- Nmap reported multiple conflicting fingerprints, including Linksys, Asus, AXIS, Linux 2.6.x, and OpenWrt candidates.
+- Greenbone reported zero actionable findings matching the current IP; this does not establish that the host is vulnerability-free.
+- No authoritative OS identification is available.
 
 ### Inferences
 
-- The device is most likely a TP-Link Tapo camera; TC65 is treated as a model-like hostname rather than a definitively confirmed model.
-- The device likely runs embedded IoT firmware.
-- The Nmap fingerprint is ambiguous and does not support selecting a precise OS or kernel version.
+- The device is likely a TP-Link Tapo TC65 network camera or related IoT device.
+- The platform is best classified cautiously as embedded IoT firmware.
+- The Nmap Linux 2.6.x and embedded-device matches are tentative and are not sufficient to identify the exact OS.
+- Manual review is warranted because the Nmap identity results conflict with the TP-Link/Tapo evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

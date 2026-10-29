@@ -40,18 +40,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `80:e8:2c:1c:55:d2`
-- Observed IP address(es): `192.168.2.70`
-- Connections: **366**
-- Traffic sent: **43.2 KiB**
-- Traffic received: **513.4 KiB**
-- Top services: `ntp` (346), `ssl` (12), `http` (8)
-- Top destination ports: `udp/123` (346), `tcp/443` (12), `tcp/80` (8)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
 |---|---|---|---|---|---|
@@ -121,7 +112,7 @@ PROXMOX is a confirmed physical Proxmox VE cluster node and cluster anchor at 19
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T14:11:05+00:00`
+- Last assessed: `2026-10-29T15:15:05+00:00`
 - Pending updates: **24**
 - Security updates pending: **0**
 - Reboot required: **No**

@@ -30,13 +30,9 @@ The targeted profile completed but did not yield a reliable OS fingerprint. Devi
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `68:ff:7b:1b:1e:ab`
-- MAC-attributable originated connections: **none observed in this window**
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -56,7 +52,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `68:ff:7b:1b:1e:ab`
 - Identity confidence: **high**
@@ -66,21 +62,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a TP-Link HS100 smart plug using embedded IoT firmware. The host exposes TCP port 9999; no exact OS evidence is available.
+TP-Link HS100 device identified from its model-like hostname and vendor data. It has TCP port 9999 open, but no supported exact OS or firmware evidence is available.
 
 ### Confirmed facts
 
 - The device hostname is HS100.
-- The inventory and Nmap vendor is TP-Link Technologies.
-- The device is online at 192.168.2.76.
+- The recorded vendor is TP-Link Technologies.
+- The device uses IP address 192.168.2.76 and MAC address 68:ff:7b:1b:1e:ab.
 - TCP port 9999 is open.
-- No authoritative OS, Nmap OS match, or OS inventory evidence is available.
-- There are no matching actionable Greenbone findings for the current IP.
+- Nmap OS identification is incomplete and reports missing OS evidence.
+- No authoritative OS record is available.
+- Greenbone returned zero actionable findings matching this IP; this does not prove the device is vulnerability-free.
 
 ### Inferences
 
-- The combination of the HS100 model-like hostname and TP-Link vendor strongly indicates a TP-Link HS100 smart plug.
-- The device likely runs embedded IoT firmware, but the exact OS or firmware is unsupported by the supplied evidence.
+- HS100 is a model-like identifier consistent with a TP-Link HS100 smart-home device, commonly a smart plug.
+- The device likely runs embedded IoT firmware rather than a general-purpose desktop or server OS.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

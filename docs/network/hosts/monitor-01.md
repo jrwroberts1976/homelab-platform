@@ -45,18 +45,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `bc:24:11:0b:16:a2`
-- Observed IP address(es): `192.168.2.52`
-- Connections: **2,871**
-- Traffic sent: **2.4 MiB**
-- Traffic received: **135.1 MiB**
-- Top services: `ssh` (651), `ssl` (168)
-- Top destination ports: `tcp/22` (2703), `tcp/443` (168)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 Record reviewed, useful flow summaries rather than raw packet captures.
@@ -135,7 +126,7 @@ Managed Debian 13 VM202 on Proxmox-2 providing Prometheus, Grafana, Alertmanager
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T14:21:04+00:00`
+- Last assessed: `2026-10-29T15:25:41+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**

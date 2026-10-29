@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `c4:82:e1:f2:f9:9f`
-- Observed IP address(es): `192.168.2.30`
-- Connections: **68**
-- Traffic sent: **52.6 KiB**
-- Traffic received: **46.6 KiB**
-- Top services: `ssl` (67), `dhcp` (1)
-- Top destination ports: `tcp/443` (67), `udp/67` (1)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:82:e1:f2:f9:9f`
 - Identity confidence: **medium**
@@ -69,23 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online Tuya Smart device at 192.168.2.30. Hostname evidence is inconsistent: telemetry/Nmap identify it as patio.jameshouse, while DHCP reports wlan0. No ports or OS matches were obtained, so the exact device type and OS remain unresolved.
+Likely a Tuya Smart embedded IoT device at 192.168.2.109. The hostname is wlan0, but the specific product and operating system are not identified; Nmap returned no OS or port evidence.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.30.
-- The inventory and Nmap vendor field identify the vendor as Tuya Smart.
-- The recorded hostname is patio.jameshouse, with telemetry hostname patio.
-- The DHCP hostname is wlan0.
+- The device is online at 192.168.2.109.
+- The recorded hostname and DHCP hostname are wlan0.
+- The inventory and Nmap data identify the vendor as Tuya Smart.
 - The MAC address is c4:82:e1:f2:f9:9f.
-- Nmap status is partial, with no reported TCP or UDP ports and no OS matches.
+- Nmap status is partial with os_evidence_missing and no reported TCP or UDP ports.
 - No matching actionable Greenbone findings were reported for this IP.
+- No sampled Loki entries, recent high-risk DNS policy matches, or patch telemetry were reported.
 
 ### Inferences
 
-- The device is likely an embedded Tuya-based IoT or smart-home device.
-- The specific product type and operating system cannot be determined from the supplied evidence.
-- The differing hostname signals require review before assigning a definitive device identity.
+- The device is likely a Tuya Smart embedded IoT product or firmware-based appliance.
+- The specific Tuya product model and function cannot be determined from the supplied evidence.
+- The operating system or firmware family cannot be determined.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

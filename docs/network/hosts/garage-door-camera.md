@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `78:8c:b5:38:16:83`
-- Observed IP address(es): `192.168.2.49`
-- Connections: **5,475**
-- Traffic sent: **4.2 GiB**
-- Traffic received: **21.6 MiB**
-- Top services: `ssl` (3069), `ntp` (1)
-- Top destination ports: `tcp/443` (3071), `udp/3478` (1437), `udp/8089` (479), `icmp/3` (8), `udp/20239` (3), `udp/26778` (2)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `78:8c:b5:38:16:83`
 - Identity confidence: **high**
@@ -69,24 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-TP-Link smart camera, likely model KC420WS, identified from estate naming, DHCP hostname, vendor data, and TP-Link/Tapo DNS activity. Exact firmware/OS is not supported by the evidence. TCP port 9999 is open; no matching actionable Greenbone findings were reported.
+Likely a TP-Link Tapo camera, identified by the camera hostname, TP-Link vendor data, KC420WS DHCP hostname, and Tapo cloud DNS activity. Exact firmware/OS is not established. TCP port 9999 is open without service identification.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.49.
-- The documented inventory hostname is garage-door-camera.jameshouse, with telemetry hostname garage-door-camera.
+- The device is at 192.168.2.49 with MAC address 78:8c:b5:38:16:83.
 - The recorded vendor is TP-Link Limited.
-- The DHCP hostname is KC420WS.
-- DNS telemetry includes TP-Link cloud, Tapo, and tplinkra.com endpoints.
-- TCP port 9999 is open.
-- Greenbone reported zero matching actionable findings for the current IP.
+- The inventory and Nmap hostname is garage-door-camera.jameshouse.
+- The router reports DHCP hostname KC420WS.
+- DNS observations include TP-Link/Tapo-related cloud domains, including tplinkcloud.com and tplinkra.com.
+- TCP port 9999 is open; no service label is available.
+- Nmap reported several Linux/OpenWrt and embedded-device fingerprint matches, but these are fingerprint results rather than an authoritative OS identification.
+- No actionable Greenbone findings match the current IP in the supplied scan data.
 
 ### Inferences
 
-- The device is a TP-Link smart security camera associated with a garage-door monitoring role.
-- KC420WS is likely a model-like identifier for the device.
-- The device likely uses embedded IoT firmware, but the exact OS and firmware version cannot be established.
-- Nmap produced Linux/OpenWrt-oriented and other embedded-device candidates, but these are not sufficient to identify the exact OS.
+- The device is most likely a TP-Link Tapo camera, with KC420WS serving as a model-like DHCP hostname.
+- The device likely uses embedded Linux-based firmware, but the exact OS, firmware, and version cannot be determined from this evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

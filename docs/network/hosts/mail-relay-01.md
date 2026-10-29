@@ -45,18 +45,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `bc:24:11:a5:cb:28`
-- Observed IP address(es): `192.168.2.54`
-- Connections: **29**
-- Traffic sent: **217.5 KiB**
-- Traffic received: **461.4 KiB**
-- Top services: `ssl` (27), `smtp` (19), `http` (2)
-- Top destination ports: `tcp/587` (19), `tcp/443` (8), `tcp/80` (2)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 Record reviewed, useful flow summaries rather than raw packet captures.
@@ -135,7 +126,7 @@ mail-relay-01 is CT102, an Ansible-managed Proxmox LXC running Debian GNU/Linux 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T14:27:34+00:00`
+- Last assessed: `2026-10-29T15:30:04+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**

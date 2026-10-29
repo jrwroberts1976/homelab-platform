@@ -28,18 +28,9 @@ A `baseline` profile means the controlled seven-day backlog has not yet supplied
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `00:1c:2b:5a:6d:fd`
-- Observed IP address(es): `192.168.2.7`
-- Connections: **1,899**
-- Traffic sent: **1.8 MiB**
-- Traffic received: **4.7 MiB**
-- Top services: `dns` (933), `ssl` (923), `ntp` (42)
-- Top destination ports: `udp/5353` (933), `tcp/443` (506), `tcp/853` (418), `udp/123` (42)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
@@ -59,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-22T15:00:05+01:00`
+- Assessed: `2026-10-29T15:01:29+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `00:1c:2b:5a:6d:fd`
 - Identity confidence: **high**
@@ -69,21 +60,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online AlertMe device identified as a likely Hive home-automation hub from its documented hostname and vendor metadata. Exact operating system is not available.
+myHivehub is an identified AlertMe home-automation hub at 192.168.2.103. The exact firmware or operating system is not available; no open ports or actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.7.
-- The documented DHCP and router hostname is myHivehub.
-- Inventory identifies the vendor as Alertme.com Limited.
-- The MAC vendor is Alertme.com Limited.
-- Nmap OS identification is incomplete and reports no OS matches.
-- No actionable Greenbone findings match the current IP in the supplied scan data.
+- The device hostname and telemetry hostname are myHivehub.
+- The inventory and Nmap vendor are Alertme.com Limited.
+- The device is online at 192.168.2.103.
+- Nmap is partial and reports no OS matches or ports.
+- No actionable Greenbone findings match the current IP.
+- No authoritative OS, patch, or service telemetry is available.
 
 ### Inferences
 
-- The hostname and AlertMe vendor strongly indicate a Hive/AlertMe home-automation hub.
-- The device likely runs embedded IoT firmware, but the exact operating system and version are unsupported by the evidence.
+- The hostname and Alertme.com Limited vendor strongly indicate a Hive/AlertMe home-automation hub.
+- The device likely runs embedded IoT firmware, but the underlying operating system and firmware version are unsupported by the evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

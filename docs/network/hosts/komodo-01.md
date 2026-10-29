@@ -40,18 +40,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `02:00:00:00:01:04`
-- Observed IP address(es): `192.168.2.58`
-- Connections: **62**
-- Traffic sent: **306.6 KiB**
-- Traffic received: **132.4 MiB**
-- Top services: `ssl` (60), `http` (2)
-- Top destination ports: `tcp/443` (60), `tcp/80` (2)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
 |---|---|---|---|---|---|
@@ -118,7 +109,7 @@ komodo-01 is the Proxmox CT104 LXC control-plane host running Debian 13 on x86_6
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T14:31:44+00:00`
+- Last assessed: `2026-10-29T15:32:08+00:00`
 - Pending updates: **9**
 - Security updates pending: **0**
 - Reboot required: **No**

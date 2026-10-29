@@ -45,18 +45,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `b8:27:eb:e8:36:cd`
-- Observed IP address(es): `192.168.2.48`
-- Connections: **108**
-- Traffic sent: **1.6 MiB**
-- Traffic received: **3.5 MiB**
-- Top services: `ssh` (50), `ntp` (42), `ssl` (12), `http` (4)
-- Top destination ports: `tcp/22` (50), `udp/123` (42), `tcp/443` (12), `tcp/80` (4)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 
 Record reviewed, useful flow summaries rather than raw packet captures.
@@ -135,7 +126,7 @@ admin-01 is a managed Raspberry Pi 3 administration and SSH jump host running au
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T13:55:00+00:00`
+- Last assessed: `2026-10-29T14:56:13+00:00`
 - Pending updates: **9**
 - Security updates pending: **0**
 - Reboot required: **No**

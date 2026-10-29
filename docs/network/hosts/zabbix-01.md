@@ -40,18 +40,9 @@
 <!-- BEGIN AUTO:ZEEK-FLOW -->
 ### Automated Zeek summary
 
-- Evidence source: `sensor-01` Zeek connection telemetry
-- Rolling window: 24 hours
-- Summary generated: `2026-10-27T00:23:49+00:00`
-- MAC identity: `02:00:00:00:01:05`
-- Observed IP address(es): `192.168.2.59`
-- Connections: **6,109**
-- Traffic sent: **1.0 MiB**
-- Traffic received: **422.4 KiB**
-- Top services: `ssl` (11), `http` (2)
-- Top destination ports: `tcp/443` (11), `tcp/80` (2)
+- Zeek flow evidence is not configured for this estate.
 
-> This bounded summary intentionally excludes raw packet data and external destination IP history.
+> No absence-of-traffic conclusion is made when the Zeek source is unavailable.
 <!-- END AUTO:ZEEK-FLOW -->
 | Direction | Peer / destination | Protocol / port | Purpose | First/last observed | Expected? |
 |---|---|---|---|---|---|
@@ -120,7 +111,7 @@ zabbix-01 is the documented CT105 LXC container on PROXMOX, hosting the Zabbix m
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T14:12:07+00:00`
+- Last assessed: `2026-10-29T15:16:48+00:00`
 - Pending updates: **7**
 - Security updates pending: **0**
 - Reboot required: **No**
