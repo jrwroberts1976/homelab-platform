@@ -1,0 +1,16 @@
+---
+router_dhcp_forwarder_expected_hostname: raspberrypi
+router_dhcp_forwarder_expected_lan: 192.168.2.1
+router_dhcp_forwarder_destination: 192.168.2.52
+router_dhcp_forwarder_port: 5514
+
+router_dhcp_forwarder_allow_deploy: false
+router_dhcp_forwarder_enable_service: false
+router_dhcp_forwarder_activation_approved: false
+
+router_dhcp_forwarder_script: /usr/local/lib/homelab-router-dhcp-forwarder/dhcp_forwarder.py
+router_dhcp_forwarder_service: homelab-router-dhcp-forwarder.service
+
+router_dhcp_forwarder_user: router-dhcp-forwarder
+router_dhcp_forwarder_group: router-dhcp-forwarder
+router_dhcp_forwarder_journal_group: systemd-journal
