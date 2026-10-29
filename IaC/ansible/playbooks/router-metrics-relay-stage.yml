@@ -1,0 +1,46 @@
+---
+- name: Stage router metrics relay without activating
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  pre_tasks:
+    - name: Require explicit staging approval
+      ansible.builtin.assert:
+        that:
+          - router_relay_stage_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Confirm existing tunnel remains active
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - router-metrics-tunnel.service
+      register: tunnel_state
+      changed_when: false
+      failed_when: tunnel_state.stdout | trim != 'active'
+
+  roles:
+    - router_metrics_relay
+
+  post_tasks:
+    - name: Inspect staged relay service
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-relay.service
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: relay_state
+      changed_when: false
+
+    - name: Require relay not running or enabled
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in relay_state.stdout_lines"
+          - "'UnitFileState=disabled' in relay_state.stdout_lines"

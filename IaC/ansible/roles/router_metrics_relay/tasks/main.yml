@@ -1,0 +1,41 @@
+---
+- name: Require correct monitoring host
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == 'monitor-01'
+      - ansible_host == '192.168.2.52'
+
+- name: Verify socat is installed
+  ansible.builtin.stat:
+    path: /usr/bin/socat
+  register: router_relay_socat
+
+- name: Require socat
+  ansible.builtin.assert:
+    that:
+      - router_relay_socat.stat.exists
+
+- name: Create restricted relay group
+  ansible.builtin.group:
+    name: router-metrics-relay
+    system: true
+
+- name: Create restricted relay service account
+  ansible.builtin.user:
+    name: router-metrics-relay
+    group: router-metrics-relay
+    system: true
+    create_home: false
+    shell: /usr/sbin/nologin
+
+- name: Install private router metrics relay unit
+  ansible.builtin.template:
+    src: router-metrics-relay.service.j2
+    dest: /etc/systemd/system/router-metrics-relay.service
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Reload systemd without starting relay
+  ansible.builtin.systemd_service:
+    daemon_reload: true

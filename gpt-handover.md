@@ -1330,3 +1330,20 @@ For **every** change we make:
 - Prometheus and Docker networking not yet modified.
 - Remaining: secured Prometheus connectivity, monitoring verification,
   persistent tunnel activation decision, CI and PR review.
+
+### 2026-10-29 — router metrics private Unix relay
+
+- Staged router-metrics-relay.service on monitor-01 using Ansible.
+- Dedicated non-root service account: router-metrics-relay.
+- Private socket: /run/router-metrics-relay/metrics.sock.
+- Socket permissions: 0660; runtime directory: 0750.
+- Initial test identified systemd shutdown exit-status handling.
+- Added SuccessExitStatus=143 to the systemd unit.
+- Corrected cleanup handling and repeated activation test.
+- Final test: 12 successful tasks, 2 changes, 0 failures.
+- Non-root process successfully retrieved Node Exporter metrics
+  through Unix socket and restricted SSH tunnel.
+- Relay remains disabled at boot and is stopped after testing.
+- Existing Prometheus and Docker configuration unchanged.
+- Remaining: container-side relay, Prometheus scrape job,
+  end-to-end verification and boot persistence.

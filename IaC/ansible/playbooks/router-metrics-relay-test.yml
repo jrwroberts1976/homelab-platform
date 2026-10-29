@@ -1,0 +1,123 @@
+---
+- name: Test private router metrics relay
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit approval and correct host
+      ansible.builtin.assert:
+        that:
+          - router_relay_test_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Verify tunnel is already running
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - router-metrics-tunnel.service
+      register: tunnel_state
+      changed_when: false
+      failed_when: tunnel_state.stdout | trim != 'active'
+
+    - name: Verify relay initially inactive and disabled
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-metrics-relay.service
+          - -p
+          - ActiveState
+          - -p
+          - UnitFileState
+      register: initial_relay
+      changed_when: false
+
+    - name: Require safe initial relay state
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=inactive' in initial_relay.stdout_lines"
+          - "'UnitFileState=disabled' in initial_relay.stdout_lines"
+
+    - name: Test relay and always stop afterwards
+      block:
+        - name: Start relay temporarily
+          ansible.builtin.systemd_service:
+            name: router-metrics-relay.service
+            state: started
+            enabled: false
+
+        - name: Check Unix socket permissions
+          ansible.builtin.command:
+            argv:
+              - stat
+              - -c
+              - "%U:%G %a"
+              - /run/router-metrics-relay/metrics.sock
+          register: socket_permissions
+          retries: 5
+          delay: 1
+          until: socket_permissions.rc == 0
+          changed_when: false
+
+        - name: Require restricted socket
+          ansible.builtin.assert:
+            that:
+              - socket_permissions.stdout == 'router-metrics-relay:router-metrics-relay 660'
+
+        - name: Fetch metrics as non-root relay account
+          ansible.builtin.command:
+            argv:
+              - runuser
+              - -u
+              - router-metrics-relay
+              - --
+              - curl
+              - --fail
+              - --silent
+              - --show-error
+              - --max-time
+              - "5"
+              - --unix-socket
+              - /run/router-metrics-relay/metrics.sock
+              - http://localhost/metrics
+          register: relay_metrics
+          retries: 3
+          delay: 2
+          until: relay_metrics.rc == 0
+          changed_when: false
+
+        - name: Verify Node Exporter response
+          ansible.builtin.assert:
+            that:
+              - "'node_exporter_build_info' in relay_metrics.stdout"
+            success_msg: "RELAY_METRICS_TEST=PASS"
+
+      always:
+        - name: Stop and disable temporary relay
+          ansible.builtin.systemd_service:
+            name: router-metrics-relay.service
+            state: stopped
+            enabled: false
+
+        - name: Verify relay stopped
+          ansible.builtin.command:
+            argv:
+              - systemctl
+              - show
+              - router-metrics-relay.service
+              - -p
+              - ActiveState
+              - -p
+              - UnitFileState
+          register: final_relay
+          changed_when: false
+
+        - name: Require relay inactive and disabled
+          ansible.builtin.assert:
+            that:
+              - "'ActiveState=inactive' in final_relay.stdout_lines"
+              - "'UnitFileState=disabled' in final_relay.stdout_lines"
+            success_msg: "RELAY_CLEANUP=PASS"
