@@ -1,0 +1,165 @@
+diff --git a/docs/architecture/ACTIVE-INFRASTRUCTURE-BACKLOG.md b/docs/architecture/ACTIVE-INFRASTRUCTURE-BACKLOG.md
+index d2bc3ad7ae6e4043bb595de3629ab2d3df27bb4d..078011b7195848e45b8ea3a1be3ceb3bb6903637 100644
+--- a/docs/architecture/ACTIVE-INFRASTRUCTURE-BACKLOG.md
++++ b/docs/architecture/ACTIVE-INFRASTRUCTURE-BACKLOG.md
+@@ -1,6 +1,6 @@
+ # Active Infrastructure Backlog
+ 
+-**Last reconciled:** 20 October 2026 (Trivy workstream updated; other historical statuses remain dated)  
++**Last reconciled:** 20 October 2026 (security remediation programme activated; historical statuses remain dated)  
+ **Authority:** Planning register only. Validate implementation claims against `docs/architecture/CURRENT-STATE.md`, `IaC/inventory/estate.json` and live evidence.  
+ **Current documentation work:** 16 October patching/TLS/security reconciliation applied to the canonical current-state and installed-solutions documents.
+ 
+@@ -125,12 +125,14 @@ Practical programme completion remains approximately **70–80%** when optional/
+ 
+ ## Current sequence
+ 
+-1. **Diagnose Greenbone gvmd readiness after Proxmox-2 recovery, then validate a fresh completed scan.** The 18 October run failed while the latest saved evidence was from 16 October. This is the remaining gate on the current patching/vulnerability/TLS workstream.
+-2. **Next user-selected investigation: Raspberry Pi overclocking feasibility.** Start read-only: inventory Pi models, cooling, power supplies, current frequencies/thermal throttling and workload headroom before proposing any clock/voltage change.
+-3. **Encode the existing Proxmox GDS mitigation in IaC.** Live `gather_data_sampling=force` mitigation is proven but remains a manual GRUB/kernel-parameter configuration.
+-4. **Address the Certbot Cloudflare Python dependency warning.** Decide whether to pin the currently working 2.x dependency or deliberately migrate when compatibility with 3.x is established.
+-5. Resume **Project 7** estate-wide Docker image lifecycle work unless James reprioritises.
+-6. Default resilience priority remains **Project 6 Backup/DR**, followed by **Project 8 legacy cleanup**.
++**20 October user priority: Security Remediation Programme.** [Tracking issue #187](https://github.com/jrwroberts1976/homelab-platform/issues/187) and [programme plan](../security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md) now coordinate Greenbone and Trivy **assessment and controlled fixes**, without creating a new numbered roadmap project.
++
++1. **Verify the evidence before changing anything.** A 20 October authenticated Managed Infrastructure email reports 0 Critical/High/Medium/Low; a separate Full LAN Weekly email reports 7 Medium and 25 Low. Different scopes mean different remediation queues. Validate five Trivy timer runs scheduled on 21 October against fresh image IDs and Prometheus metric age; do not assume a prior completed manual scan proves next-day automation.
++2. **Triage Trivy Critical root causes.** The baseline records 191 Critical package-finding occurrences across 30 host-local running image references; deduplicate, assess reachability/fix availability and identify safe single-image canaries.
++3. **Resolve the seven Full LAN Medium detections.** Identify unknown endpoints, check the managed switch cookie, weak TLS signatures and ASUS/AiMesh TLS renegotiation findings without disrupting core networking.
++4. **Reconcile the 13 ICMP + 12 TCP Low detections** with the earlier managed-host ICMP mitigation programme and recorded accepted-risk decisions; no blanket policy change.
++5. **Continue Project 7 remediation one workload at a time**, with Git-backed IaC, approvals, rollback and fresh scans. Grafana/alerting and credential-safe inspection are supporting tasks. Unrelated optional Pi overclocking, legacy cleanup, Proxmox GDS IaC and Certbot dependency reviews remain separate.
++6. **Project 6 Backup/DR remains deferred by user choice.** Only the rollback/backup safeguards needed for a particular approved security remediation remain in scope.
+ 
+ Projects 5, 9 and 10 remain optional/deferred and are not automatic commitments.
+ 
+@@ -151,7 +153,12 @@ Both PVE nodes remained quorate with QDevice present. Pi-hole, Greenbone, Grafan
+ 
+ The Proxmox Ceph enterprise repository was found enabled even though Ceph is not configured or in use. IaC now explicitly disables that repository so normal package operations do not depend on the enterprise Ceph channel.
+ 
+-## Vulnerability management — FINAL VALIDATION PENDING
++## Vulnerability management — SECURITY REMEDIATION ACTIVE (20 OCTOBER 2026)
++
++The earlier 18 October GMP/boot-readiness failure described in older dated entries is no longer the latest scan evidence. The **20 October** authenticated Managed Infrastructure email (report `680f0ee6-fbd1-421a-ada2-27250d0d2f3a`) records **0 actionable entries**, while the separate **Full LAN Weekly** email (report `ffced3ba-fc6d-4d60-b949-277b8b70de89`) records **7 Medium, 25 Low**. Trivy's completed five-host baseline contains **191 Critical package occurrences** (not unique CVEs). Tracking now lives at [issue #187](https://github.com/jrwroberts1976/homelab-platform/issues/187) and the [programme plan](../security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md). This is new reporting/triage evidence, **not** proof the wider LAN or container estate is clean, and it does not undo previously approved risk acceptances.
++
++### Earlier validation history (retained)
++
+ 
+ **19 October 2026 latest decision — HTTPS-only LAN cutover approved, Git-staged, not deployed:** User confirmed the qBittorrent HTTPS WebUI works and administrator password recovery succeeded, then explicitly requested closure of LAN HTTP/8081. The managed firewall defaults now select HTTPS/443=true, HTTP/8081=false, retaining Nginx→qBittorrent loopback, Kodi, SMB, SSH, NFS and monitoring traffic. A scoped HTTPS-only `qbittorrent-https-cutover.yml`, manual recovery `qbittorrent-https-http-rollback.yml`, and offline validators are staged. No production cutover performed yet. Next run offline/estate/syntax validation, deploy the scoped playbook from admin-01, verify HTTPS and loopback access plus refusal of new LAN 8081 connections, then run a completed authenticated Greenbone scan. Review 14 accepted ICMP timestamps and BirdNET CSRF missing HttpOnly next.
+ 
+diff --git a/docs/security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md b/docs/security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..4464c5fdf6049fe8a668a009a843dfac64e87f6b
+--- /dev/null
++++ b/docs/security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md
+@@ -0,0 +1,88 @@
++<!-- estate-authority: IaC/inventory/estate.json -->
++
++# Security remediation programme — Greenbone and Trivy
++
++**Opened:** 20 October 2026  
++**Status:** ACTIVE — assessment and tracked remediation; this plan itself authorises no live changes  
++**Tracking issue:** [#187 — Security remediation programme](https://github.com/jrwroberts1976/homelab-platform/issues/187)  
++**Owner:** Homelab operator (approve disruptive changes individually)  
++**Sources of authority:** `IaC/inventory/estate.json`, `docs/architecture/CURRENT-STATE.md`, Git-managed IaC, completed scan reports and validated live state  
++**Related work:** Project 7 (Docker lifecycle), existing Greenbone/ICMP accepted-risk work, `CONTAINER-VULNERABILITY-STATUS.md`, `CONTAINER-VULNERABILITY-REMEDIATION-RUNBOOK.md`
++
++## Goal and non-goals
++
++Reduce meaningful vulnerabilities and unsafe service exposure across the existing estate while retaining DNS, routing/AiMesh, Proxmox quorum, SSH, Nextcloud, monitoring, Greenbone and BirdNET functionality. Track every finding through evidence → ownership → assessed risk → supported mitigation/fix → approved deployment → independent recheck → closure, instead of chasing raw severity totals.
++
++**Not authorised:** unattended upgrades, unreviewed firmware changes, mass firewall changes, disruptive scans, blanket dismissals, removal of current risk acceptances, or restarting Greenbone while a scan is active. Backup/DR is a separate, currently deferred priority; workload-specific data-safe rollback remains mandatory for an individual approved security change.
++
++Do not expose credentials, full `docker inspect` environment data, secrets from container command arguments, or private detailed vulnerability artifacts in GitHub issues or commits.
++
++## Evidence snapshot — 20 October 2026
++
++| Source | Scope | Observed results | Important qualification |
++| --- | --- | --- | --- |
++| Greenbone **Full LAN — Weekly** email, report `ffced3ba-fc6d-4d60-b949-277b8b70de89` | Wider LAN (reported 20 Oct) | **0 Critical, 0 High, 7 Medium, 25 Low**, 1,132 Log, 0 Accepted | Scan scope/policy differs from authenticated managed daily. Seven Medium entries are the active network triage queue. |
++| Greenbone **Managed Infrastructure — Authenticated Daily** email, report `680f0ee6-fbd1-421a-ada2-27250d0d2f3a` | Managed targets (reported 20 Oct) | **0 Critical, 0 High, 0 Medium, 0 Low**, 864 Log, 0 Accepted; no actionable items | Does not negate findings on other LAN devices or establish that all endpoints were authenticated. |
++| Trivy full running-image baseline, `CONTAINER-VULNERABILITY-STATUS.md` | Five Docker hosts, 32 running containers, 30 host-local running image references | **30/30** image references valid in manual batches; **191 Critical package-finding rows** | Repeated package/advisory occurrences are not 191 unique CVEs, nor proof of reachability. First unattended daily scans scheduled for 21 Oct; confirm execution. |
++
++All of these are **dated snapshots**, not live current-state assertions. Before any decision, verify report timestamps, host inventory, image IDs and any later reports.
++
++### Greenbone Medium triage register
++
++| ID | Recorded endpoint / device | Finding | First action | State |
++| --- | --- | --- | --- | --- |
++| G-M01 | `192.168.2.183:135/tcp` — ownership not verified | DCE/RPC / MSRPC service enumeration (5.0) | Identify endpoint and whether RPC is expected or unnecessarily exposed; check host firewall/service dependencies | **Investigate** |
++| G-M02 | `192.168.2.16:80/tcp` — **HP ProCurve 2510G-24** in estate | Cookie without `HttpOnly` (5.0) | Read-only header/session validation; check firmware and management access restrictions before judging compatibility | **Investigate** |
++| G-M03 | `192.168.2.17:8443,10001/tcp` — ownership not verified | Certificate signed using weak signature algorithm (two 4.0 findings) | Identify exact device, cert chain/signature/management role, vendor firmware and safe certificate replacement path | **Investigate** |
++| G-M04 | `192.168.2.1`, `.181`, `.218` on `8443/tcp` — **ASUS router and two AiMesh nodes** in estate | TLS renegotiation DoS indicator (three 5.0 findings) | Check exposure, firmware, TLS capabilities and vendor support; avoid changes that interrupt wireless mesh/routing | **Investigate** |
++
++**Seven Medium findings, grouped into four root-cause investigations.** Neither a scanner detection nor a missing security header proves exploitation. Do not disable an administrative endpoint or change certificates before proving safe access and rollback. Unknown `.17` and `.183` are not in the canonical estate inventory; use monitoring discovery or approved local investigation to identify them rather than inventing device identities.
++
++### Greenbone Low and accepted-risk reconciliation
++
++The weekly LAN email reports **13 ICMP timestamp-reply disclosures** and **12 TCP timestamp disclosures** (25 Low). Treat these as a *newer, broader-scope finding set*, not an automatic continuation of the earlier 14 managed-host ICMP findings. Compare exact device identity, scanner target, NVT OID, report ID and mitigation status before claiming a regression or reopening an accepted risk.
++
++Prior separately documented ICMP programme: media-01, docker-01 and monitor-01 were scanner-perspective validated as blocked; sensor-01 subsequently had an independently reproduced no-reply post-change result, with controller/playbook validation caveats. The older accepted-risk allowlist was not automatically cleared. See `GREENBONE-ACCEPTED-RISKS-2026-10-19.md` and `GREENBONE-ICMP-REMAINING-ROLLOUT-2026-10-19.md`. Never use the old 14-host denominator to describe the new weekly LAN scan.
++
++For unmanaged/consumer devices, check whether a safe fix exists. Where not, consider restricting administration exposure, support/firmware lifecycle and explicit risk acceptance with a review date. Do not indiscriminately disable TCP timestamps or modify Proxmox/Docker/LXC packet filtering. Keep the separate BirdNET-Go JavaScript-readable `csrf` / `HttpOnly` exception open pending compatibility evidence.
++
++### Trivy image findings
++
++Start from the existing per-image JSON reports at `/var/lib/homelab-container-security/` on the affected host and central `homelab_container_estate_*` metrics; **do not rerun or recreate the already installed scanning stack** just to plan changes.
++
++1. Require `scan_complete=1`, current timestamp and `valid_images=running_images` on each host; verify scan report `Metadata.ImageID` against running image. Missing/stale scans mean **unknown**, never clean.
++2. Group detections by **image ID/digest + advisory/CVE + package** so repeated Komodo Periphery instances or duplicate package rows do not generate redundant remediation tickets.
++3. Rank confirmed exploitable/reachable or exposed authentication/remote execution issues first, then vendor-fixable Critical/High, then mitigations/no-fix findings. Record upstream advice, tested image tag/digest and compatibility; do not treat `FixedVersion` as proof a compatible upstream image exists.
++4. Limit first production image change to one workload/canary. Preserve dependencies and stateful rollback; validate application health, rescan the exact *new* image ID, and prove the specific CVE has cleared.
++5. Keep the already completed Blackbox Exporter upgrade `v0.28.0` → `v0.29.0` as a reference pattern (17/17 probes remained healthy). Do not repeat it unless fresh evidence identifies a new problem. Other images have not been remediated merely because Trivy monitoring is deployed.
++
++## Work packages and verification gates
++
++| Phase | Work and evidence | Exit gate |
++| --- | --- | --- |
++| **S0 — Evidence assurance (start here)** | Verify latest Greenbone scopes and reports, Trivy 5/5 age/identity/coverage, first unattended 21 Oct timer runs, and CI documentation guard status; identify unowned LAN endpoints | Exact reports, timestamps, owners, and outstanding validation gaps recorded |
++| **S1 — Critical image triage** | Deduplicate the 191 Critical package occurrences; assess each root cause by reachability, severity, exploit status, patch availability, and impact; create scoped change items | High-risk root causes ordered with a defensible fix/mitigation/acceptance decision |
++| **S2 — Seven Medium Greenbone findings** | Four investigations G-M01–G-M04; verify ownership/firmware/management policy and propose safe targeted fixes | Each finding has a decision, reviewed change or accepted-risk reason |
++| **S3 — Low-risk / exceptions** | Reconcile 13 ICMP + 12 TCP detections and older managed ICMP/CSRF exceptions without resetting their decisions | Dated accepted/mitigated register, no duplicated or misattributed findings |
++| **S4 — Change and verify** | Git-backed IaC, per-change approval, preflight, backup/rollback, one-service cutover, functional checks, new targeted scan evidence | Specific issue cleared or transparently marked mitigated/accepted; services healthy |
++| **S5 — Keep it working** | Dashboards show host-separated and fresh findings; age/coverage alerts checked; secrets-handling hygiene assessed without outputting secrets; successful next unattended runs documented | Repeatable evidence and a sustainable review cadence established |
++
++Security-sensitive observations, including unsafe exposure of process arguments or runtime credentials, must be assessed **privately first**; any rotation requires a coordinated change plan and application validation. Do not print credentials during inspection.
++
++## Per-finding tracking contract
++
++For each independently actionable **root cause**, link a GitHub issue/change record containing:
++
++- Stable finding ID and source (report ID/date, NVT OID or CVE/advisory; avoid secret-bearing raw artifacts).
++- Affected device identity/service or exact running image ID and affected hosts; confidence in owner mapping.
++- Exposure/reachability and verified impact; upstream vendor/version/fix evidence.
++- Disposition: `Investigating`, `Planned`, `Mitigated`, `Fixed`, `Accepted`, or `Blocked`, including reason, reviewer and review date.
++- Scoped Git change, pre/post operational checks, and independent scanner proof; rollback and service dependency notes.
++
++**Do not close on a version number, Git commit or `rc=0` alone.** Closure requires a new report tied to the affected identity/CVE and a successful service/functional check. If risk is intentionally accepted, record compensating controls and re-review date instead of claiming fixed.
++
++## First safe action
++
++Use **read-only evidence review**, not another deployment: confirm 21 October timer runs and freshness on all five hosts, then extract and deduplicate *Critical root causes* from the existing JSON reports. In parallel, identify the two unowned weekly LAN Medium endpoints via already collected monitoring inventory. Propose the first specific fix only after ownership, supported upstream remediation and rollback are established.
++
++**No live changes, active scan disruptions, or permission to bulk-remediate are implied by adoption of this project.**
+diff --git a/gpt-handover.md b/gpt-handover.md
+index 1d913829dbbe2c729ca5263b0f7e08cf23214e5b..f0aef799883b1e53c9974d7905b9218fcbe589b0 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,6 +1,18 @@
+ # GPT Handover — Homelab Platform
+ 
+-**Last updated:** 19 October 2026
++**Last updated:** 20 October 2026
++
++**Session focus:** Security Remediation Programme — new cross-project assessment and tracked fixes
++
++**Current status (20 October 2026):** User authorised a new security workstream addressing both Greenbone Full LAN detections and Trivy image CVEs. GitHub issue [#187](https://github.com/jrwroberts1976/homelab-platform/issues/187) created; review-branch plan `docs/security/SECURITY-REMEDIATION-PROGRAMME-2026-10-20.md` and active backlog priority staged on branch `docs/security-remediation-programme-2026-10-20`. **This is planning/tracking only:** no Ansible execution, service/image upgrade, firewall, firmware, Greenbone scan or risk-acceptance change. Source/CI validation and merge remain pending review.
++
++**Evidence / scope:** Latest emailed Greenbone *Full LAN Weekly* report `ffced3ba-fc6d-4d60-b949-277b8b70de89` (20 October): **0 Critical, 0 High, 7 Medium, 25 Low, 1,132 Log, 0 Accepted**. Medium investigations: unknown RPC host (1), managed HP switch missing HttpOnly (1), unidentified endpoint weak TLS certificate signatures on two ports (2), ASUS router/AiMesh renegotiation DoS indications (3). Low: 13 ICMP and 12 TCP timestamps on broader LAN. Different-scope *Managed Infrastructure Authenticated Daily* report `680f0ee6-fbd1-421a-ada2-27250d0d2f3a`: **0 Critical/High/Medium/Low; 864 Log; no actionable findings**. Keep older accepted-risk and independently verified managed-host ICMP mitigations; do not equate the newer LAN findings with earlier managed-host scope. The existing Trivy 20 Oct completed-manual-scan baseline is **5/5 hosts, 30/30 host-local running image references, 32 containers, 191 Critical package rows**; root-cause deduplication and remediation not yet performed. First unattended daily Trivy runs on 21 Oct require proof, along with dashboard freshness and current CI documentation guard status.
++
++**Priority and next safe action:** Review #187 work packages S0–S5. Verify 21 Oct Trivy unattended scanner journal/Prometheus recency, deduplicate Critical image CVEs from existing per-host JSON, and identify two unknown LAN Medium endpoints read-only. Draft a per-root-cause supported fix and rollback before user-approved scoped Ansible deployment. **Do not recreate scanning infrastructure or restart active Greenbone workloads.** Backup/DR remains separately deferred.
++
++---
++
++### Earlier handover context — 19 October 2026
+ 
+ **Session focus:** Greenbone vulnerability validation and remediation
+ 

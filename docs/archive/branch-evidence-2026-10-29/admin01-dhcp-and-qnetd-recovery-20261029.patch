@@ -1,0 +1,59 @@
+diff --git a/docs/architecture/CURRENT-STATE.md b/docs/architecture/CURRENT-STATE.md
+index 1cf6a160d7f1bcb4088b419d2459be5392c8f8f1..52936e75b46955cdf59fdc8b161aae538c7c3284 100644
+--- a/docs/architecture/CURRENT-STATE.md
++++ b/docs/architecture/CURRENT-STATE.md
+@@ -1,7 +1,14 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Current-State Architecture
+ 
+-## 29 October 2026 — Proxmox QDevice outage diagnosed: old admin-01 address
++## 29 October 2026 — admin-01 DHCP management IP RECOVERED; QNetd clients back
++
++**Confirmed live after admin-01 reboot:** Windows SSH to `james@192.168.2.48` succeeded and identified `admin-01`. Direct `ip -4 -br addr show eth0` reported **`eth0 UP 192.168.2.48/24`**. Direct `sudo corosync-qnetd-tool -s` reported QNetd listening `*:5403`, TLS supported, **Connected clients: 2**, **Connected clusters: 1**. The original `.48` address is restored using router-01's already activated and independently verified fixed DHCP reservation for `b8:27:eb:e8:36:cd`. Earlier incident sections about the observed `.127` address and zero QNetd clients are historical and are superseded by this evidence.
++
++**Still pending independent verification:** both Proxmox nodes' `pvecm status` and `corosync-qdevice-tool -s` for QDevice vote/quorum status. Two clients connected to QNetd is not proof of the final counted witness vote. No Proxmox/Corosync configuration edit or router firewall change observed. Canonical inventory has already retained `.48` correctly. Preserve the router DHCP pool `.100-.199` and existing ASUS reservation `.180`. Runbook: [admin DHCP recovery](../network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md); [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
++
++
++## Historical pre-recovery snapshot — Proxmox QDevice outage diagnosed
+ 
+ **Read-only definitive operator evidence** after physical router admin DHCP reservation installation and independent postflight PASS: on both Proxmox nodes, `corosync-qdevice-tool -s` reports **`QNetd host: 192.168.2.48:5403`**. `PROXMOX` shows `State: Connect failed`; `Proxmox-2` shows `State: Connecting`. The shared `/etc/pve/corosync.conf` has QDevice model `net`, algorithm `ffsplit`, `host: 192.168.2.48`, `tls: on`, `votes: 1`, config version `3`. Both Proxmox nodes' `corosync-qdevice.service` are running but show repeated connection timeouts, and `admin-01`'s `corosync-qnetd-tool -s` showed zero connected clients/clusters. The 2-node cluster `jameshouse-pve` is presently quorate with **2 votes out of 3 expected** (witness vote absent), so failure of either Proxmox host could cause quorum loss.
+ 
+diff --git a/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md b/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md
+index 06c2814282b2a43aa321dea53557a5a51562873d..ee9b51f34ea7f38ed1705b51daf14e0743902502 100644
+--- a/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md
++++ b/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md
+@@ -1,7 +1,14 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Router-01: recover stable admin-01 DHCP address — 29 October 2026
+ 
+-## 29 October 2026 — Proxmox QDevice outage diagnosed: old admin-01 address
++## 29 October 2026 — RECOVERED: admin-01 at .48 and QNetd two clients connected
++
++**New live operator evidence supersedes the historical .127 / zero-client snapshots below.** From Windows 192.168.2.186, SSH to james@192.168.2.48 succeeded and identified host admin-01. After the reboot, a direct `ip -4 -br addr show eth0` reported **eth0 UP 192.168.2.48/24**. On admin-01, `sudo corosync-qnetd-tool -s` reported **Connected clients: 2** and **Connected clusters: 1**, QNetd listening at `*:5403` with TLS supported. The original management IP was recovered by restarting admin-01 after the independently verified router DHCP reservation for its MAC `b8:27:eb:e8:36:cd` at `.48` was installed.
++
++**Final verification still outstanding:** independent post-recovery `pvecm status` and `corosync-qdevice-tool -s` on both Proxmox nodes before claiming the extra vote is counted. Two clients connected to the QNetd server do not independently prove both nodes count a QDevice vote. No Proxmox/Corosync config changes or additional firewall changes are required by this observed evidence. Ansible inventory already uses the intended `.48` address; keep it unchanged. Router dynamic pool `.100-.199` and existing ASUS `.180` reservation were independently verified intact. See [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
++
++
++## Historical pre-recovery snapshot — Proxmox QDevice outage diagnosed
+ 
+ **Read-only definitive operator evidence** after physical router admin DHCP reservation installation and independent postflight PASS: on both Proxmox nodes, `corosync-qdevice-tool -s` reports **`QNetd host: 192.168.2.48:5403`**. `PROXMOX` shows `State: Connect failed`; `Proxmox-2` shows `State: Connecting`. The shared `/etc/pve/corosync.conf` has QDevice model `net`, algorithm `ffsplit`, `host: 192.168.2.48`, `tls: on`, `votes: 1`, config version `3`. Both Proxmox nodes' `corosync-qdevice.service` are running but show repeated connection timeouts, and `admin-01`'s `corosync-qnetd-tool -s` showed zero connected clients/clusters. The 2-node cluster `jameshouse-pve` is presently quorate with **2 votes out of 3 expected** (witness vote absent), so failure of either Proxmox host could cause quorum loss.
+ 
+diff --git a/gpt-handover.md b/gpt-handover.md
+index ac8f9db6dc96671c3b58b25c797a7736fea82c0c..da8e4cb0c0c413e771264125ee4187913e051d2d 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,6 +1,13 @@
+ # GPT Handover — Homelab Platform
+ 
+-## 29 October 2026 — Proxmox QDevice outage diagnosed: old admin-01 address
++## 29 October 2026 — admin-01 DHCP management IP RECOVERED; QNetd clients back
++
++**Confirmed live after admin-01 reboot:** Windows SSH to `james@192.168.2.48` succeeded and identified `admin-01`. Direct `ip -4 -br addr show eth0` reported **`eth0 UP 192.168.2.48/24`**. Direct `sudo corosync-qnetd-tool -s` reported QNetd listening `*:5403`, TLS supported, **Connected clients: 2**, **Connected clusters: 1**. The original `.48` address is restored using router-01's already activated and independently verified fixed DHCP reservation for `b8:27:eb:e8:36:cd`. Earlier incident sections about the observed `.127` address and zero QNetd clients are historical and are superseded by this evidence.
++
++**Still pending independent verification:** both Proxmox nodes' `pvecm status` and `corosync-qdevice-tool -s` for QDevice vote/quorum status. Two clients connected to QNetd is not proof of the final counted witness vote. No Proxmox/Corosync configuration edit or router firewall change observed. Canonical inventory has already retained `.48` correctly. Preserve the router DHCP pool `.100-.199` and existing ASUS reservation `.180`. Runbook: [admin DHCP recovery](../network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md); [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
++
++
++## Historical pre-recovery snapshot — Proxmox QDevice outage diagnosed
+ 
+ **Read-only definitive operator evidence** after physical router admin DHCP reservation installation and independent postflight PASS: on both Proxmox nodes, `corosync-qdevice-tool -s` reports **`QNetd host: 192.168.2.48:5403`**. `PROXMOX` shows `State: Connect failed`; `Proxmox-2` shows `State: Connecting`. The shared `/etc/pve/corosync.conf` has QDevice model `net`, algorithm `ffsplit`, `host: 192.168.2.48`, `tls: on`, `votes: 1`, config version `3`. Both Proxmox nodes' `corosync-qdevice.service` are running but show repeated connection timeouts, and `admin-01`'s `corosync-qnetd-tool -s` showed zero connected clients/clusters. The 2-node cluster `jameshouse-pve` is presently quorate with **2 votes out of 3 expected** (witness vote absent), so failure of either Proxmox host could cause quorum loss.
+ 

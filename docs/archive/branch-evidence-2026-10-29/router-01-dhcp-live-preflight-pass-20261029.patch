@@ -1,0 +1,37 @@
+diff --git a/docs/network/ROUTER-01-DHCP-EXCLUSION-PLAN-2026-10-28.md b/docs/network/ROUTER-01-DHCP-EXCLUSION-PLAN-2026-10-28.md
+index 83840e0959bf4e635c7f7f068fc312f051b25730..39a4ce0014bd137bf037baf9f2478376c7d427d9 100644
+--- a/docs/network/ROUTER-01-DHCP-EXCLUSION-PLAN-2026-10-28.md
++++ b/docs/network/ROUTER-01-DHCP-EXCLUSION-PLAN-2026-10-28.md
+@@ -1,6 +1,17 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Router-01 DHCP static-address protection: draft only — 28 October 2026
+ 
++## Live preflight VERIFIED — 29 October 2026 (no changes)
++
++After merged [PR #214](https://github.com/jrwroberts1976/homelab-platform/pull/214), the operator on `admin-01` fast-forwarded clean `main` to `43c69dbf` and ran syntax-check **PASS** followed by the approval-gated, **read-only** `router-01-dhcp-exclusion-preflight-readonly.yml` against the isolated `192.168.2.1` inventory with `--check -e router_dhcp_exclusion_preflight_approved=true`. Actual final Ansible recap: **`router-01 ok=20 changed=0 unreachable=0 failed=0 skipped=0`**.
++
++All assertions passed: exact controller and Pi MAC, live `eth0 192.168.2.1/24`, active dnsmasq before/after, expected running configuration directory and only `README` plus `router.conf` in `/etc/dnsmasq.d`, exact single dynamic `.100–.199` range, gateway and DNS `.2.1`, no unreviewed per-host/other DHCP allocation directives, and `dnsmasq --test` syntax OK. **The currently configured DHCP pool was NOT changed.**
++
++The lease file held **21 records** at this observation, versus **18** at the preceding observation; the three additional IPs and their expiry/status were **not output**. The proposed protected addresses `192.168.2.181` and `192.168.2.195` had no lease-file rows at the time, and `192.168.2.198` remained listed. The candidate three ranges, retaining 98 IPs total, were printed only as a proposal. Absence of a lease row does not prove the address unused or establish static addressing. **ASUS AiMesh actual address and static-vs-DHCP setting remain unverified, and `media-01` is offline; no deployment is approved.**
++
++**Next decision gate:** reconcile the 21 lease IP records without MAC/hostname disclosure; independently confirm `.181` and `.195` ownership and whether they use manual IPs or DHCP. Use split-pool exclusions only for genuine static assignments; otherwise plan verified MAC-based reservations. Any implementation requires an independent reviewed IaC change, targeted candidate-config syntax check, backups, safe activation and rollback. Do not restart dnsmasq from this documentation update.
++
++
+ ## Observed live facts
+ 
+ This is the **observed** Raspberry Pi 4 at `192.168.2.1/24` on `eth0`, physically pinned by onboard MAC `d8:3a:dd:5a:51:44`, currently serving internet through PPPoE. The earlier read-only gateway baseline and MSS audit both passed without changing the router (merged PRs #211, #212 and #213).
+diff --git a/gpt-handover.md b/gpt-handover.md
+index ea725820bd50d644e35dbf36d94f80180cfe2155..f9485ad931199d098823cc28c9e13e6676f04ef2 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,10 @@
+ # GPT Handover — Homelab Platform
+ 
++## NEWEST VERIFIED — 29 October 2026: Pi DHCP exclusion preflight 20/20 PASS, no router changes
++
++Operator on `admin-01` updated `main` to `43c69dbf` and confirmed clean `## main...origin/main`. After syntax-check PASS, ran **merged** `IaC/ansible/playbooks/router-01-dhcp-exclusion-preflight-readonly.yml` via `inventory/router-01-postcutover-baseline.yml`, `--limit router-01 --ask-become-pass --check -e router_dhcp_exclusion_preflight_approved=true`. Final **`router-01 ok=20 changed=0 unreachable=0 failed=0 skipped=0`**. Exact trusted controller, physical Pi MAC, `eth0 192.168.2.1/24`, active dnsmasq, loaded `/etc/dnsmasq.d` exactly `README` and `router.conf`, unchanged single `192.168.2.100–199/24 24h` range, gateway/DNS `.2.1`, no unexpected DHCP directives, syntax test PASS and active service after: **all assertions PASS**. Lease-file IP rows **21** (18 in previous snapshot, identities of three additional rows unknown); no current lease entry at historically documented `192.168.2.181` (AiMesh) or `.195` (media-01, offline), and a `.198` record remains. **No DHCP change was deployed**, no dnsmasq reload/restart, no lease deletion. Reported split ranges `.100–.180`, `.182–.194`, `.196–.199` are **conditional candidate only**, not applied. Absence of a lease is not proof of a static assignment or offline client. Verify ASUS actual management address/static-vs-DHCP and media-01 intended addressing before deciding exclusion vs explicit reservations; a separate review, rollback and approval are mandatory for writer. Evidence in `docs/network/ROUTER-01-DHCP-EXCLUSION-PLAN-2026-10-28.md` and issue #206. Old router PRs #207/#208/#210 remain drafts, not safe for bulk merge. Canonical estate.json still needs post-cutover reconcile; no blind updates.
++
++
+ ## 29 October 2026 — Grafana patch PR #204 docs-only reconciliation (NO RUNTIME UPDATE)
+ 
+ The current main repository already has the **approval-gated** `IaC/ansible/playbooks/grafana-security-patch-1324.yml`, validated source pin `monitoring_grafana_image: grafana/grafana:13.2.4`, corresponding secondary Komodo reference `compose.yml`, and `scripts/validate-grafana-security-patch-1324.py`. **This does not establish the live monitor-01 Grafana image has been upgraded.** Former open PR #204 is 92 commits behind main and has only its dated 27 October runbook plus an obsolete first-page handover prefix remaining in its current diff. Reconcile just the runbook with an explicit 29 Oct caveat: target playbook expects old live 13.2.1 and may fail closed if runtime has changed; no restart, Docker image pull or live patch is performed by docs merge. Before any deployment, read-only current runtime/Compose/SQLite verification, operator approval, risk review and backups/rollback are required. The original #204 is to be closed as superseded **only after** the replacement documentation PR is merged and confirmed; keep exact IaC as-is in main.

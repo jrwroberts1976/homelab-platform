@@ -1383,3 +1383,14 @@ For **every** change we make:
 - Previous live Prometheus configuration backed up at `/opt/homelab-router-metrics-relay/prometheus.yml.pre-stale-cleanup`; original pre-router backup remains separate.
 - Note: the new cleanup playbook is currently local/uncommitted on admin-01; add it to the PR via Git before merge.
 - Prometheus-container recreation recovery remains untested; do not recreate production Prometheus merely to test it.
+
+### 2026-10-29 — historical documentation branch reconciliation
+
+- Archived 21 unmerged documentation branches under
+  docs/archive/branch-evidence-2026-10-29/.
+- Original patch content, branch heads, base commits and
+  commit summaries preserved in the archive manifest.
+- Historical records have not been applied to live IaC.
+- Do not delete source branches until the reconciliation
+  PR is merged and archived content is verified.
+- Router configuration and security feature branches retained.

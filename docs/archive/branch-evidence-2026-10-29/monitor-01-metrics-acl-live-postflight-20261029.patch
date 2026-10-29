@@ -1,0 +1,98 @@
+diff --git a/docs/architecture/CURRENT-STATE.md b/docs/architecture/CURRENT-STATE.md
+index 8be0cc37f40bf1a0e30b1d65c1569576cfa17bef..3d4d6c3987045481f87ef8969b6b79116ffbf164 100644
+--- a/docs/architecture/CURRENT-STATE.md
++++ b/docs/architecture/CURRENT-STATE.md
+@@ -1,6 +1,13 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Current-State Architecture
+ 
++## 29 October 2026 — monitor-01 restricted SSH key directory ACL repair LIVE / verified
++
++After operator-approved Ansible execution of `IaC/ansible/playbooks/monitor-01-router-metrics-acl-traverse.yml` (merged source PR #225), **monitor-01 192.168.2.52** now has successful `router-metrics-tunnel` (UID 992) read and private-key parse checks against the original `/etc/homelab/router-metrics-ssh/id_ed25519`. Root-owned `/etc/homelab` retains its protected ownership and base `0750` mode, and the key retains original account ownership and `0600` mode. The fix is a specifically approved named-user **traverse-only `--x` ACL** for that parent directory, using Debian `acl` utilities, not a global chmod or key regeneration. Final operator Ansible recap: **`monitor-01 ok=24 changed=2 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`**; all posted ACL and access postflight assertions PASS. The two changes are consistent with package install and ACL application; individual earlier task outputs were not included in the pasted tail.
++
++This is only a completed **local SSH private-key access repair**. On the physical Pi router `router-01 192.168.2.1`, the `router-metrics` `authorized_keys` and `authorized_keys2` were absent on inspection, and `monitor-01` lacked a pinned Pi SSH host-key entry. **No SSH tunnel, sshd reload, Prometheus router node scrape, Zabbix/Alloy agent, firewall change or exposure of Node Exporter has been deployed by this fix.** Pi Node Exporter remains loopback-only `127.0.0.1:9100`. Next read-only gate is verify existing public/private key matching and genuine Pi SSH host-key fingerprint; any key authorisation/tunnel changes need separate review/approval. See [ACL runbook](../network/MONITOR-01-ROUTER-METRICS-ACL-ACCESS-2026-10-29.md), [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209) and `gpt-handover.md`.
++
++
+ ## 29 October 2026 — live router monitoring network reachability independently verified
+ 
+ Operator-run **read-only** Ansible monitoring audit `router-01-monitoring-path-readonly.yml` (merged PR #221), with `--check` and explicit approval, passed `ok=14 changed=0 failed=0 unreachable=0 skipped=0`. `admin-01 192.168.2.48` and the physically verified Pi `router-01 192.168.2.1` both have direct `eth0` LAN routes to `192.168.2.52` (Loki) and `192.168.2.59` (Zabbix). Loki HTTP readiness on `:3100/ready` returned **200 from both hosts**; Zabbix TCP/10051 connected successfully from both hosts. These are verified **transport/readiness** facts only, not evidence of actual router log ingestion, exporter scraping, Zabbix agent data, or dashboards. No live network, firewall, package, SSH or service changes were made. Source and follow-up: [router monitoring audit reconciliation](../network/ROUTER-01-MONITORING-AUDIT-RECONCILIATION-2026-10-29.md), issue #209.
+diff --git a/docs/network/MONITOR-01-ROUTER-METRICS-ACL-ACCESS-2026-10-29.md b/docs/network/MONITOR-01-ROUTER-METRICS-ACL-ACCESS-2026-10-29.md
+index 69477bdae36e666ba59587d001b17b6b5204e6db..957eeb347480af3155857af39a316783fe50ebd0 100644
+--- a/docs/network/MONITOR-01-ROUTER-METRICS-ACL-ACCESS-2026-10-29.md
++++ b/docs/network/MONITOR-01-ROUTER-METRICS-ACL-ACCESS-2026-10-29.md
+@@ -1,7 +1,31 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # monitor-01 restricted router metrics SSH key: minimal ACL access — 29 October 2026
+ 
+-**STATUS: SOURCE ONLY — NOT DEPLOYED.** No ACL package installation, permissions change, key rotation, router SSH authorisation, tunnel activation, Prometheus modification or SSH restart has been approved or executed by this PR.
++**CURRENT STATUS: DEPLOYED on monitor-01; operator postflight PASS (29 October 2026).** The source-only status below records pre-deployment history. After separately approved live deployment, the service account can read and parse its original private key; no router SSH authorisation, tunnel, host-key pin, Prometheus change, exporter exposure or SSH reload is claimed.
++
++## Live operator postflight — verified success (29 October 2026)
++
++Following merged [PR #225](https://github.com/jrwroberts1976/homelab-platform/pull/225), the operator fast-forwarded `admin-01` to commit `93cbbcb2`, and both ACL writer and rollback syntax checks **PASSED**. The operator explicitly approved **both** Debian `acl` package installation and granting `router-metrics-tunnel` `--x` on `/etc/homelab`, then ran the source-controlled, guard-railed ACL writer with two approval variables.
++
++**Verified from pasted live Ansible playbook tail:**
++```text
++TASK [Confirm dedicated non-login user can now read its own key] ok: [monitor-01]
++TASK [Confirm dedicated user can parse private key without exposing bytes] ok: [monitor-01]
++TASK [Confirm key and directory have not been chmodded or reowned] ok: [monitor-01] (2 items)
++TASK [Assert original non-ACL filesystem modes remain protected] ok: [monitor-01]
++TASK [Report exact completed scope and next independently gated stages] ok: [monitor-01]
++"Traverse-only named user ACL for router-metrics-tunnel: PASS"
++"Private SSH key bytes, mode 0600, owner unchanged; other access remains denied"
++"No router authorised_keys, SSH trust/pinning, sshd reload, tunnel, firewall, exporter listener or Prometheus configuration changed"
++PLAY RECAP monitor-01: ok=24 changed=2 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0
++```
++
++**Interpretation:** The approved live writer succeeded, with no failures/rescues. The non-login `router-metrics-tunnel` user can now access and parse the existing valid key; safety assertions passed with directory and key protection unchanged. `changed=2` is consistent with `acl` package install and creating its narrow user ACL, although the pasted tail does not separately show the earlier package/ACL writer tasks. Keep the rollback playbook for separately approved future recovery; it was **not run**. This completed step **does not** constitute live SSH authentication or Prometheus router metrics ingestion.
++
++**Next read-only verification:** test the private/public pair match without logging either key; inspect router's authentic SSH host-key fingerprint via direct Pi SSH command, compare to monitor's pinned entry once established, and only then design independent approvals for Pi authorised-key installation and container-safe tunnel. Do not commit credentials or run obsolete `.3.1` scripts.
++
++## Historical initial source-only plan (completed for ACL access only)
++
+ 
+ ## Evidence and problem
+ 
+@@ -20,7 +44,7 @@ Operator ran multiple independent read-only Ansible checks from `admin-01` again
+ 
+ `IaC/ansible/playbooks/monitor-01-router-metrics-acl-traverse.yml` has **two independent, false-by-default approvals**, one to install only Debian's `acl` userspace package (necessary because the utilities are absent), and a second to grant only `u:router-metrics-tunnel:--x` on `/etc/homelab`. The source enforces the exact `admin-01` controller and `monitor-01 192.168.2.52` target, service account UID `992`, root-owned `0750` parent, `0755` child and account-owned `0600` private key. It simulates APT and rejects removals or unexpected installations/upgrades before installing anything. It then inspects the real ACL after `acl` is available, fails closed on unexpected named-user permissions, applies the narrow rule only if not present, and tests readability and private-key parsing **as the dedicated account**. It checks owner/group/other permissions after. Sensitive key derivation is hidden with Ansible `no_log`. On failure after attempting the ACL, the rescue step tries to remove **only its newly added named-user ACL**.
+ 
+-The named ACL allows traversal of the parent, **not** listing it. It neither opens `/etc/homelab` for other users nor changes the key's owner/mode. It does not adjust SSH daemon, Node Exporter or Prometheus. `acl` package install is a limited OS change and remains subject to explicit deployment approval; there is **no claim of zero operational risk**, and installation is not inferred from merging this PR.
++The named ACL allows traversal of the parent, **not** listing it. It neither opens `/etc/homelab` for other users nor changes the key's owner/mode. It does not adjust SSH daemon, Node Exporter or Prometheus. The `acl` package was included in a separately approved limited OS change; there is **no claim of zero operational risk**, and installation is not inferred from merging this PR.
+ 
+ ## Source review commands (no remote change)
+ 
+@@ -34,11 +58,11 @@ ansible-playbook -i inventory/hosts.yml \
+   playbooks/monitor-01-router-metrics-acl-rollback.yml --limit monitor-01 --syntax-check
+ ```
+ 
+-The writer is **intentionally blocked in `--check` mode**. APT simulation and safety checks run inside the specifically approved writer before any install/ACL mutation; use read-only shell preflights for further evidence without granting writer approvals.
++The writer is **intentionally blocked in `--check` mode** (the operator ran real deployment only after separate approval). APT simulation and safety checks run inside the specifically approved writer before any install/ACL mutation; use read-only shell preflights for further evidence without granting writer approvals.
+ 
+-## Future separately approved operator deployment command — NOT YET EXECUTED
++## Historical operator deployment command — EXECUTED successfully on 29 October 2026
+ 
+-Requires explicit user authorisation for package install and directory ACL modification. The first real run would execute:
++The operator explicitly approved both named gates and executed this guarded writer. This command is retained as historical reference, **not an instruction to rerun without a new approval**:
+ 
+ ```bash
+ cd ~/projects/homelab-platform/IaC/ansible
+diff --git a/gpt-handover.md b/gpt-handover.md
+index 39a0840898bafc6b1d62b73a5e4f203fa42e9034..99a8a8e1071949cf3849920ae6b09ee9788c7e8d 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,14 @@
+ # GPT Handover — Homelab Platform
+ 
++## 29 October 2026 — LIVE monitor-01 traverse-only ACL repair deployed and verified (supersedes source-only preflight below)
++
++**OPERATOR-VERIFIED LIVE SUCCESS.** After separate user approval of both installing Debian `acl` and applying a named-user traverse-only ACL on `/etc/homelab`, the operator ran the previously merged approval-gated `IaC/ansible/playbooks/monitor-01-router-metrics-acl-traverse.yml` on `monitor-01`. Pasted playbook tail confirmed `runuser` service-key readability **PASS**; non-login account private-key parsing **PASS**; root/group directory and private-key owner/mode assertions **PASS**; final debug: `Traverse-only named user ACL for router-metrics-tunnel: PASS`; private key `0600` and ownership unchanged; no Pi/sshd/SSH trust/tunnel/firewall/exporter/Prometheus edits. **Ansible recap: `monitor-01 ok=24 changed=2 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0`.** The two changes are consistent with package install and named ACL application, but the pasted tail did not show individual package and ACL task output; preserve that evidence distinction.
++
++**STATE:** This ACL repair is **LIVE**, not merely source-only. The linked source-only runbook and previous handover below describe its earlier preflight state and are superseded by the deployment postflight. Rollback playbook remains in repo for separately approved future use; it was **not** invoked. Do not recreate the SSH key or weaken `/etc/homelab` globally.
++
++**NEXT GATES — still NOT implemented:** From monitor-01 independently verify private/public key match without printing contents; fetch Pi's genuine ED25519 public-host-key fingerprint locally on physical `router-01 192.168.2.1`, check it against a carefully verified pinned host-key entry (currently missing at last check). Pi `router-metrics` had neither `.ssh/authorized_keys` nor `.ssh/authorized_keys2` (and no AuthorizedKeysCommand), so a new public-key authorisation needs separate approved IaC; do not force SSH authentication, auto-accept host key, expose TCP/9100 or start tunnel yet. Prometheus Docker bridge is `monitoring_default` with gateway `172.18.0.1`; monitor host-loopback forwarding would not automatically be container reachable, needing a separately reviewed network path. Source [runbook](docs/network/MONITOR-01-ROUTER-METRICS-ACL-ACCESS-2026-10-29.md), [issue #209](https://github.com/jrwroberts1976/homelab-platform/issues/209).
++
++
+ ## 29 October 2026 — monitoring SSH key access blocker found on monitor-01; ACL FIX SOURCE ONLY, NOT RUN
+ 
+ After Prometheus transport/ICMP audit, independent on-host Pi and `monitor-01` investigation showed Node Exporter already serves `http://127.0.0.1:9100/metrics` (HTTP 200, 1547 `node_` lines), but `monitor-01` Prometheus has no confirmed Pi node-exporter scrape. The restricted `router-metrics` SSH policy on Pi is already configured (`permitopen 127.0.0.1:9100`, local forwarding only, noninteractive) but **both authorised-key files are absent**. Monitor-01 bridge `monitoring_default` is `172.18.0.0/16` with gateway `.0.1`; port 19100 unused, no matching tunnel unit; monitor-side `router-metrics-tunnel` UID 992 has a private key at `/etc/homelab/router-metrics-ssh/id_ed25519` (mode 0600, owner account). Host-key pin for the current Pi `192.168.2.1` **missing**. Nothing has authenticated or forwarded yet.

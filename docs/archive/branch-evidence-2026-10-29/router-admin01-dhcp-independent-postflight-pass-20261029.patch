@@ -1,0 +1,58 @@
+diff --git a/docs/architecture/CURRENT-STATE.md b/docs/architecture/CURRENT-STATE.md
+index ef36655c227b339ff4f64b7c920ae7c303db41ac..d729958e954011e20de69ed15f53ec468f2adc46 100644
+--- a/docs/architecture/CURRENT-STATE.md
++++ b/docs/architecture/CURRENT-STATE.md
+@@ -1,6 +1,13 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Current-State Architecture
+ 
++## 29 October 2026 — independently verified router-01 admin DHCP reservation, host renewal NOT yet performed
++
++After the separately approved router DHCP writer completed `ok=33 changed=8 failed=0`, a separate operator read-only on-router audit confirmed **dnsmasq active**, live `router.conf` holding exactly the new `admin-01` MAC `b8:27:eb:e8:36:cd` -> `192.168.2.48` Ansible-managed reservation, preserved existing ASUS `24:4b:fe:5e:cc:c8` -> `.180`, untouched `.100-.199` pool, and `dnsmasq --test` **PASS**. `unbound`, `router-pppoe`, `nftables` also active. The live lease table still showed the admin MAC as **`192.168.2.127`** (the last observed live admin address).
++
++**Next distinct planned change:** separately approve and perform console-backed NetworkManager renewal on `admin-01`, verifying implications for its Proxmox QNetd witness, reconnect Windows SSH at `.48`, check gateway/critical services, and only then reconcile inventory, DNS, host docs and monitoring. No evidence of admin-01 renewal, SSH login at `.48`, firewall change or network-interface modification yet. [Issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206); [runbook](../network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md).
++
++
+ ## 29 October 2026 — router-side admin-01 DHCP reservation activation PASSED
+ 
+ After approved user change scope and read-only preflight (router-01 ok=17 changed=0), the admin-01 fixed DHCP reservation writer ran successfully on router-01: **ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The expected fixed mapping is b8:27:eb:e8:36:cd -> 192.168.2.48, preserving the existing ASUS .180 reservation and dynamic pool .100-.199. The changed count includes backup and temporary staging/cleanup; no failed Ansible tasks. A separate independent live router postflight is still pending.
+diff --git a/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md b/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md
+index a1b7c897c7d2627b027c0a9579c7069648c4d0fa..7ca728a9bf74ae1c0823b4112d4254fc049fd4e7 100644
+--- a/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md
++++ b/docs/network/ROUTER-01-ADMIN01-DHCP-RESERVATION-2026-10-29.md
+@@ -1,6 +1,18 @@
+ <!-- estate-authority: IaC/inventory/estate.json -->
+ # Router-01: recover stable admin-01 DHCP address — 29 October 2026
+ 
++## Independently verified router-side postflight — PASS (29 October 2026)
++
++Following the approved live Ansible writer PASS (router-01 ok=33 changed=8 unreachable=0 failed=0), the operator checked the actual physical router directly using **only read-only commands**. Evidence:
++- `systemctl is-active dnsmasq` = **active**.
++- Live `/etc/dnsmasq.d/router.conf`: line 5 `dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h`; line 9 existing `dhcp-host=24:4b:fe:5e:cc:c8,192.168.2.180`; lines 11–13 exactly one Ansible managed `admin-01` reservation with `dhcp-host=b8:27:eb:e8:36:cd,192.168.2.48`.
++- `sudo dnsmasq --test` = **dnsmasq: syntax check OK**.
++- Lease file still shows `b8:27:eb:e8:36:cd` at **`192.168.2.127`**, hostname `admin-01`, client ID `01:b8:27:eb:e8:36:cd`.
++- `systemctl is-active unbound router-pppoe nftables` = **active** for each service.
++
++**Interpretation:** The router configuration and essential services are now independently confirmed as intended. **No DHCP renewal or host-side address migration has occurred in the observed evidence**. The next independent stage is a controlled, separately authorised NetworkManager DHCP renewal on physical `admin-01`, with keyboard/monitor or other recovery access and a check on its Proxmox Corosync QNetd witness responsibilities. An SSH session may disconnect during the renewal. Do **not** restart/renew the admin interface from remote SSH alone, alter inventory/DNS prematurely, or assert `.48` is already live on admin-01. See router migration [issue #206](https://github.com/jrwroberts1976/homelab-platform/issues/206).
++
++
+ ## Current state: approved router-side deployment PASS; separate inspection pending
+ 
+ After live read-only preflight (ok=17 changed=0 failed=0), the user expressly approved the narrowly scoped router reservation writer plus dnsmasq restart and the residual .48 static-IP conflict risk. The operator ran the versioned Ansible writer from admin-01; its pasted tail shows candidate cleanup and final router-01 recap: **ok=33 changed=8 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. Eight changed tasks include temporary staging, backup and cleanup, not eight permanent changes. By playbook sequencing the deployment, dnsmasq activation and embedded assertions completed without Ansible failures. **An independent read-only inspection of the live router configuration is still outstanding.**
+diff --git a/gpt-handover.md b/gpt-handover.md
+index fee8233d12fb16efab84a46b3f7563fe9c4a64e4..139eeaccd7299ce6cbc9d2b4514d9ba708f3a0f3 100644
+--- a/gpt-handover.md
++++ b/gpt-handover.md
+@@ -1,5 +1,12 @@
+ # GPT Handover — Homelab Platform
+ 
++## 29 October 2026 — independent live router DHCP postflight PASS; admin lease remains .127
++
++After approved admin-01 DHCP reservation playbook completed with Ansible recap **router-01 ok=33 changed=8 failed=0**, the operator independently inspected router-01. Live dnsmasq was **active**; `/etc/dnsmasq.d/router.conf` retained dynamic pool `192.168.2.100-199`, original ASUS MAC `24:4b:fe:5e:cc:c8` reservation at `.180`, and exactly one new Ansible-managed reservation `b8:27:eb:e8:36:cd -> 192.168.2.48`. `dnsmasq --test` passed; `unbound`, `router-pppoe`, and `nftables` were active. The **live lease** still showed `admin-01` at **192.168.2.127**.
++
++This independently confirms the router side only, **not** admin-01 DHCP renewal or ability to SSH at .48. Keep host at the observed .127 until separately approved, console-backed NetworkManager DHCP renewal. This host also provides a Proxmox Corosync QNetd witness, so check quorum connectivity/dependencies and allow for SSH disruption. Do not change canonical inventory, DNS or host records to claim .48 is already active. Next step is read-only pre-cutover health checks and explicit host-side renewal approval. See issue #206 and the dated admin DHCP runbook.
++
++
+ ## 29 October 2026 — approved router admin-01 reservation writer LIVE PASS, host still observed .127
+ 
+ User approved source-staged fixed admin-01 DHCP reservation plus dnsmasq restart following successful read-only operator preflight: router-01 **ok=17 changed=0 failed=0**. Scope: mapping b8:27:eb:e8:36:cd -> 192.168.2.48 on router-01, preserving the existing .180 ASUS reservation and the .100-.199 dynamic pool; accepted the small residual possibility of an offline static-IP host at .48. Prior router read-only: no .48 lease, zero ping replies, neighbour INCOMPLETE, dnsmasq --test OK.
