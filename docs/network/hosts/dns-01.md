@@ -128,7 +128,7 @@ Managed Debian 13 LXC container CT101 on Proxmox-2, providing Pi-hole and Unboun
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-30T13:29:32+00:00`
+- Last assessed: `2026-10-30T14:30:32+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
