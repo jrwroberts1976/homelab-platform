@@ -1,0 +1,174 @@
+---
+- name: Deploy WAN probe scrape and alerts only on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+  vars:
+    wan_probe_deploy_approved: false
+    wan_prometheus_config: /opt/monitoring/prometheus/prometheus.yml
+    wan_prometheus_alerts: /opt/monitoring/prometheus/alerts.yml
+  tasks:
+    - name: Require approval and expected monitoring host
+      ansible.builtin.assert:
+        that:
+          - wan_probe_deploy_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Require Prometheus ready before deployment
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+        timeout: 10
+      changed_when: false
+
+    - name: Create temporary working directory for candidate and backup
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .wan-probe-deployment
+      register: wan_deploy_dir
+      changed_when: false
+
+    - name: Render, validate, back up and deploy narrowly
+      block:
+        - name: Render candidate scrape config
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/prometheus.yml.j2
+            dest: "{{ wan_deploy_dir.path }}/prometheus.candidate.yml"
+            mode: '0600'
+
+        - name: Render candidate alert rules
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/alerts.yml.j2
+            dest: "{{ wan_deploy_dir.path }}/alerts.candidate.yml"
+            mode: '0600'
+
+        - name: Validate candidate Prometheus configuration
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ (wan_deploy_dir.path + '/prometheus.candidate.yml') | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check config /dev/stdin
+          args:
+            executable: /bin/bash
+          changed_when: false
+
+        - name: Validate candidate alerts
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ (wan_deploy_dir.path + '/alerts.candidate.yml') | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check rules /dev/stdin
+          args:
+            executable: /bin/bash
+          changed_when: false
+
+        - name: Back up existing Prometheus scrape config
+          ansible.builtin.copy:
+            src: "{{ wan_prometheus_config }}"
+            dest: "{{ wan_deploy_dir.path }}/prometheus.backup.yml"
+            remote_src: true
+            mode: '0600'
+
+        - name: Back up existing alert rules
+          ansible.builtin.copy:
+            src: "{{ wan_prometheus_alerts }}"
+            dest: "{{ wan_deploy_dir.path }}/alerts.backup.yml"
+            remote_src: true
+            mode: '0600'
+
+        - name: Install validated scrape config
+          ansible.builtin.copy:
+            src: "{{ wan_deploy_dir.path }}/prometheus.candidate.yml"
+            dest: "{{ wan_prometheus_config }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          register: wan_scrape_installed
+
+        - name: Install validated alert rules
+          ansible.builtin.copy:
+            src: "{{ wan_deploy_dir.path }}/alerts.candidate.yml"
+            dest: "{{ wan_prometheus_alerts }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          register: wan_alerts_installed
+
+        - name: Reload Prometheus without restarting containers
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+            timeout: 15
+
+        - name: Verify Prometheus reports both WAN probe targets
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/api/v1/targets
+            return_content: true
+            timeout: 15
+          register: wan_live_targets
+          retries: 10
+          delay: 3
+          until: >-
+            (wan_live_targets.json.data.activeTargets | default([])
+             | selectattr('labels.job', 'equalto', 'blackbox-wan-icmp')
+             | selectattr('health', 'equalto', 'up') | list | length) == 2
+          changed_when: false
+
+        - name: Verify WAN alert definitions loaded
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/api/v1/rules
+            return_content: true
+            timeout: 15
+          register: wan_live_rules
+          changed_when: false
+
+        - name: Require three WAN alert definitions
+          ansible.builtin.assert:
+            that:
+              - wan_expected | difference(wan_loaded) | length == 0
+          vars:
+            wan_expected:
+              - WANExternalConnectivityDown
+              - WANExternalProbeDegraded
+              - WANProbeCollectionFailed
+            wan_loaded: "{{ wan_live_rules.json.data.groups | map(attribute='rules') | flatten | selectattr('type', 'equalto', 'alerting') | map(attribute='name') | list }}"
+      rescue:
+        - name: Restore original Prometheus scrape config if backup exists
+          ansible.builtin.copy:
+            src: "{{ wan_deploy_dir.path }}/prometheus.backup.yml"
+            dest: "{{ wan_prometheus_config }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          when: wan_scrape_installed is defined
+          failed_when: false
+
+        - name: Restore original alerts if backup exists
+          ansible.builtin.copy:
+            src: "{{ wan_deploy_dir.path }}/alerts.backup.yml"
+            dest: "{{ wan_prometheus_alerts }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          when: wan_alerts_installed is defined
+          failed_when: false
+
+        - name: Attempt Prometheus reload of original configs
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+          failed_when: false
+
+        - name: Abort and retain backup directory for inspection
+          ansible.builtin.fail:
+            msg: "WAN monitoring deployment failed; rollback attempted. Backup retained at {{ wan_deploy_dir.path }}."
