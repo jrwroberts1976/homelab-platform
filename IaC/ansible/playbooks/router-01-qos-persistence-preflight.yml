@@ -25,7 +25,7 @@
         echo '=== WAN NETWORKD CONFIGURATION ==='
         networkctl status eth1 --no-pager
         echo '=== EXISTING QOS SERVICE/UNIT ==='
-        systemctl list-unit-files '*qos*' '*cake*' --no-pager
+        systemctl list-unit-files '*qos*' '*cake*' --no-pager || test $? -eq 1
         echo '=== CONFIGURED QOS MANAGEMENT ==='
         if test -e /etc/systemd/system/router-qos-upload.service; then
           echo PERSISTENT_UNIT_EXISTS
