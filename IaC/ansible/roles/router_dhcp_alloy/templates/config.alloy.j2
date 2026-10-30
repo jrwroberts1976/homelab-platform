@@ -1,0 +1,17 @@
+// Ansible-managed: router DHCP journald only. No router configuration writes.
+loki.source.journal "router_dhcp" {
+  matches    = "_SYSTEMD_UNIT=dnsmasq.service SYSLOG_IDENTIFIER=dnsmasq-dhcp"
+  max_age    = "1h"
+  labels     = {
+    host    = "router-01",
+    service = "dnsmasq",
+    source  = "journal",
+  }
+  forward_to = [loki.write.router_dhcp.receiver]
+}
+
+loki.write "router_dhcp" {
+  endpoint {
+    url = "http://{{ router_dhcp_alloy_loki_host }}:{{ router_dhcp_alloy_loki_port }}/loki/api/v1/push"
+  }
+}
