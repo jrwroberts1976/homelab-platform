@@ -126,7 +126,7 @@ dns-02 is CT100 on PROXMOX, running Debian GNU/Linux 13 (trixie) and serving Pi-
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-29T23:52:22+00:00`
+- Last assessed: `2026-10-30T00:56:59+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
