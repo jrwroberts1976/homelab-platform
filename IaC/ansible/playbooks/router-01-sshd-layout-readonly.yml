@@ -3,7 +3,7 @@
 # A Match directive in an early Include needs careful review of later
 # directives before authoring a restricted monitoring account policy.
 - name: Audit Pi SSH configuration directive ordering before any Match policy
-  hosts: router_toolset_audit
+  hosts: router_postcutover_baseline
   gather_facts: false
   become: true
   vars:
