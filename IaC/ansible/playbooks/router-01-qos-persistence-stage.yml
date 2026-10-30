@@ -1,0 +1,93 @@
+---
+# Stage only: install persistent upload QoS files without enabling or executing.
+- name: Stage router upload CAKE persistence without activation
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_persistence_stage_approved: false
+  tasks:
+    - name: Validate approval and exact router
+      ansible.builtin.assert:
+        that:
+          - router_qos_persistence_stage_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect existing persistent script
+      ansible.builtin.stat:
+        path: /usr/local/sbin/router-qos-upload
+      register: script_old
+    - name: Inspect existing persistent service
+      ansible.builtin.stat:
+        path: /etc/systemd/system/router-qos-upload.service
+      register: service_old
+    - name: Refuse to overwrite preexisting QoS management
+      ansible.builtin.assert:
+        that:
+          - not script_old.stat.exists
+          - not service_old.stat.exists
+    - name: Confirm active trial matches known CAKE settings
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: qdisc
+      changed_when: false
+      failed_when: "'qdisc cake' not in qdisc.stdout or 'bandwidth 13Mbit' not in qdisc.stdout or 'ptm overhead 30' not in qdisc.stdout"
+    - name: Install idempotent WAN CAKE script
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/router-qos-upload
+        owner: root
+        group: root
+        mode: '0755'
+        content: |
+          #!/bin/sh
+          set -eu
+          case "$(/usr/sbin/tc qdisc show dev eth1)" in
+            *"qdisc cake "*"bandwidth 13Mbit "*"ptm overhead 30"*) exit 0 ;;
+          esac
+          /usr/sbin/tc qdisc replace dev eth1 root cake bandwidth 13mbit pppoe-ptm besteffort flows
+          /usr/sbin/tc qdisc show dev eth1 | /bin/grep -q 'qdisc cake.*bandwidth 13Mbit'
+    - name: Install disabled QoS systemd unit
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/router-qos-upload.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Apply CAKE upload shaping to physical WAN eth1
+          Wants=systemd-networkd.service
+          After=systemd-networkd.service
+          Before=router-pppoe.service
+          ConditionPathExists=/sys/class/net/eth1
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/router-qos-upload
+          RemainAfterExit=yes
+
+          [Install]
+          WantedBy=multi-user.target
+    - name: Validate unit file without activation
+      ansible.builtin.command:
+        argv: [systemd-analyze, verify, /etc/systemd/system/router-qos-upload.service]
+      changed_when: false
+    - name: Refresh systemd definitions without enabling new unit
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+    - name: Show current new service state
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-qos-upload.service]
+      register: enabled_state
+      changed_when: false
+      failed_when: enabled_state.stdout not in ['disabled', 'static']
+    - name: Confirm CAKE runtime queue unchanged
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: qdisc_after
+      changed_when: false
+      failed_when: qdisc_after.stdout != qdisc.stdout
+    - name: Report staging only
+      ansible.builtin.debug:
+        msg: Persistent unit installed but disabled and not started; activation requires separate change and approval.
