@@ -46,12 +46,14 @@
       changed_when: false
       failed_when: services.rc != 0 or services.stdout_lines | select('ne', 'active') | list | length != 0
     - name: Require default PPP route
-      ansible.builtin.command: [ip, -4, route, show, default]
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
       register: route
       changed_when: false
       failed_when: route.rc != 0 or 'default dev ppp0' not in route.stdout
     - name: Check CAKE module available
-      ansible.builtin.command: [modinfo, -F, filename, sch_cake]
+      ansible.builtin.command:
+        argv: [modinfo, '-F', filename, sch_cake]
       changed_when: false
     - name: Create root-owned trial recovery directory
       ansible.builtin.file:
@@ -113,7 +115,8 @@
           ansible.builtin.fail:
             msg: CAKE trial did not validate; immediate restore attempted. Check timer and qdisc.
     - name: Verify recovery timer is armed
-      ansible.builtin.command: [systemctl, is-active, router-qos-upload-rollback.timer]
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload-rollback.timer]
       register: timer
       changed_when: false
       failed_when: timer.stdout != 'active'
