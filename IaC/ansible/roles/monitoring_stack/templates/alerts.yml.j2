@@ -319,3 +319,45 @@ groups:
         annotations:
           summary: "Router PPPoE interface missing"
           description: "Router exporter is reachable but ppp0 traffic counters are absent for more than 2 minutes. Check whether PPPoE exists and whether the WAN route remains present. This does not independently prove external Internet reachability."
+
+  - name: homelab-wan-connectivity
+    rules:
+      # Both endpoint failures are required. Absent telemetry is monitored
+      # independently, not classified as a WAN outage.
+      - alert: InternetConnectivityLost
+        expr: |
+          (count(probe_success{job="blackbox-wan-icmp"} == 0) == 2)
+          and on() (count(up{job="blackbox-wan-icmp"} == 1) == 2)
+          and on() (up{job="blackbox-exporter"} == 1)
+        for: 3m
+        labels:
+          severity: critical
+          service: wan-connectivity
+        annotations:
+          summary: "Both external Internet connectivity probes are failing"
+          description: "Blackbox Exporter can be scraped, but ICMP probes to 1.1.1.1 and 9.9.9.9 both failed for 3 minutes from monitor-01. This does not conclusively isolate the cause to the router or ISP."
+
+      - alert: ExternalProbeFailure
+        expr: |
+          (probe_success{job="blackbox-wan-icmp"} == 0)
+          and on(instance, job) (up{job="blackbox-wan-icmp"} == 1)
+        for: 5m
+        labels:
+          severity: warning
+          service: wan-connectivity
+        annotations:
+          summary: "External probe failing: {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "ICMP probe has failed for 5 minutes; check destination and reachability. A single failed endpoint does not prove broadband outage."
+
+      - alert: WANProbeMetricsUnavailable
+        expr: |
+          (up{job="blackbox-wan-icmp"} == 0)
+          or absent(probe_success{job="blackbox-wan-icmp",instance="1.1.1.1"})
+          or absent(probe_success{job="blackbox-wan-icmp",instance="9.9.9.9"})
+        for: 3m
+        labels:
+          severity: warning
+          service: wan-monitoring
+        annotations:
+          summary: "External connectivity probe telemetry unavailable"
+          description: "One of the two external Blackbox scrape paths is unavailable; investigate the monitoring pipeline before interpreting probe failures."
