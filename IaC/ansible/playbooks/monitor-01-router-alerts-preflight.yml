@@ -1,0 +1,65 @@
+---
+# Read-only for live Prometheus. A temporary candidate rules file is created on
+# monitor-01 and removed afterwards. No reload, service restart or alert writes.
+- name: Validate router alert rules in the existing Prometheus image
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+  vars:
+    router_alert_preflight_approved: false
+  tasks:
+    - name: Require approval and verified monitor identity
+      ansible.builtin.assert:
+        that:
+          - router_alert_preflight_approved | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.distribution == 'Debian'
+        fail_msg: 'STOP: missing approval or unexpected monitor.'
+
+    - name: Validate existing Prometheus container is running
+      ansible.builtin.command:
+        argv: [docker, inspect, --format, '{{ '{{' }}.State.Running{{ '}}' }}', monitoring-prometheus-1]
+      register: router_alert_container
+      changed_when: false
+      failed_when: router_alert_container.stdout | trim != 'true'
+
+    - name: Create temporary candidate file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .router-alerts.yml
+      register: router_alert_candidate
+      changed_when: false
+
+    - name: Render and validate candidate rules without touching live config
+      block:
+        - name: Render proposed alert rules
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/alerts.yml.j2
+            dest: "{{ router_alert_candidate.path }}"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Check candidate with promtool inside existing Prometheus image
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ router_alert_candidate.path | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check rules /dev/stdin
+          args:
+            executable: /bin/bash
+          register: router_alert_promtool
+          changed_when: false
+
+        - name: Report promtool validation
+          ansible.builtin.debug:
+            var: router_alert_promtool.stdout_lines
+      always:
+        - name: Remove temporary candidate
+          ansible.builtin.file:
+            path: "{{ router_alert_candidate.path }}"
+            state: absent
+          changed_when: false
