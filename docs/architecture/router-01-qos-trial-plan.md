@@ -2,6 +2,10 @@
 
 Status: **DESIGN ONLY — no QoS modifications authorised or deployed**.
 
+## Access technology confirmed by owner
+- Vodafone **SoGEA VDSL2 through a separate modem**, with router-managed PPPoE. CAKE trial overhead candidate: `pppoe-ptm` (30-byte overhead plus PTM framing). Check for modem/ISP VLAN tag(s) before applying; additional tag overhead may be required. This is not FTTP/ONT.
+
+
 ## Baseline evidence
 - Vodafone Ookla tests from wired admin-01: 47.42 / 14.75 Mbps and 47.37 / 14.52 Mbps download/upload.
 - Idle RTT 9.43–9.66 ms; loaded download RTT ~31.5–32 ms; loaded upload RTT ~156–157 ms.
@@ -11,7 +15,7 @@ Status: **DESIGN ONLY — no QoS modifications authorised or deployed**.
 - Baseline router temperature ~41.8C and PPPoE, dnsmasq, unbound, nftables all active.
 
 ## Deployment prerequisites and safety gates
-1. Confirm the ISP access technology and encapsulation (ONT fibre vs DSL, VLAN tagging) before choosing CAKE overhead. Do not assume `pppoe-ptm` on the basis of PPPoE alone.
+1. SoGEA VDSL2 with separate modem is confirmed. Verify presence of VLAN tagging; use the `pppoe-ptm` overhead profile as the initial candidate and tune after measurement.
 2. Determine correct egress location by inspecting ppp0 and eth1 packet paths. Prefer applying CAKE where it can see the desired flow classification and shaping; physical eth1 is PPPoE-encapsulated and may not permit desired host isolation.
 3. Choose a controlled, reversible **temporary** trial, not persistence in the first step. Provisional targets: 13 Mbit/s upload, 43 Mbit/s download. Re-test and tune.
 4. Verify before mutating: named router identity, working key-based admin SSH, WAN route, DNS, PPPoE service, existing tc filters/qdiscs, no prior trial transaction, and a functioning rollback timer.
