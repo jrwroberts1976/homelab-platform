@@ -1,0 +1,100 @@
+---
+- name: Require explicit approval and verify the live router before any install
+  ansible.builtin.assert:
+    that:
+      - router_dhcp_alloy_deploy_approved | bool
+      - inventory_hostname == "router-01"
+      - ansible_facts.hostname == router_dhcp_alloy_expected_hostname
+      - ansible_facts.distribution == "Debian"
+      - ansible_facts.distribution_major_version == "13"
+      - ansible_facts.architecture in ["aarch64", "arm64"]
+      - router_dhcp_alloy_expected_ip in ansible_facts.all_ipv4_addresses
+      - router_dhcp_alloy_loki_host == "192.168.2.52"
+      - router_dhcp_alloy_loki_port | int == 3100
+    fail_msg: "STOP: router identity, destination, or explicit approval invalid."
+
+- name: Verify Loki readiness before making changes
+  ansible.builtin.uri:
+    url: "http://{{ router_dhcp_alloy_loki_host }}:{{ router_dhcp_alloy_loki_port }}/ready"
+    method: GET
+    status_code: 200
+    timeout: 5
+  changed_when: false
+
+- name: Ensure Grafana repository key directory
+  ansible.builtin.file:
+    path: /etc/apt/keyrings
+    state: directory
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Install Grafana repository signing key
+  ansible.builtin.get_url:
+    url: https://apt.grafana.com/gpg-full.key
+    dest: /etc/apt/keyrings/grafana.asc
+    owner: root
+    group: root
+    mode: "0644"
+
+- name: Configure official Grafana stable repository
+  ansible.builtin.apt_repository:
+    repo: "deb [signed-by=/etc/apt/keyrings/grafana.asc] https://apt.grafana.com stable main"
+    filename: grafana
+    state: present
+    update_cache: false
+
+- name: Install Alloy without starting unrelated services
+  ansible.builtin.apt:
+    name: alloy
+    state: present
+    update_cache: true
+    policy_rc_d: 101  # Prevent package post-install auto-start before approval
+  environment:
+    DEBIAN_FRONTEND: noninteractive
+
+- name: Allow dedicated Alloy account to read the systemd journal
+  ansible.builtin.user:
+    name: alloy
+    groups:
+      - adm
+      - systemd-journal
+    append: true
+
+- name: Render DHCP-only Alloy configuration
+  ansible.builtin.template:
+    src: config.alloy.j2
+    dest: /etc/alloy/config.alloy
+    owner: root
+    group: alloy
+    mode: "0640"
+  register: router_dhcp_alloy_config
+
+- name: Validate Alloy configuration locally before activation
+  ansible.builtin.command:
+    argv:
+      - /usr/bin/alloy
+      - validate
+      - /etc/alloy/config.alloy
+  changed_when: false
+  when: not ansible_check_mode
+
+- name: Start Alloy only with separate explicit activation approval
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: restarted
+  when:
+    - not ansible_check_mode
+    - router_dhcp_alloy_activate_approved | bool
+    - router_dhcp_alloy_config is changed
+
+- name: Start previously configured Alloy only with activation approval
+  ansible.builtin.systemd_service:
+    name: alloy
+    enabled: true
+    state: started
+  when:
+    - not ansible_check_mode
+    - router_dhcp_alloy_activate_approved | bool
+    - router_dhcp_alloy_config is not changed

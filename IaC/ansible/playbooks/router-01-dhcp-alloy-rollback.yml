@@ -1,0 +1,20 @@
+---
+- name: Explicitly stop only the new Alloy agent on router-01
+  hosts: router_hosts
+  become: true
+  gather_facts: false
+  vars:
+    router_dhcp_alloy_rollback_approved: false
+  tasks:
+    - name: Require dedicated rollback approval and router target
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_alloy_rollback_approved | bool
+          - inventory_hostname == "router-01"
+          - ansible_host == "192.168.2.1"
+        fail_msg: "STOP: explicit router DHCP Alloy rollback approval required."
+    - name: Stop and disable only Alloy (keep package and configuration for inspection)
+      ansible.builtin.systemd_service:
+        name: alloy
+        state: stopped
+        enabled: false
