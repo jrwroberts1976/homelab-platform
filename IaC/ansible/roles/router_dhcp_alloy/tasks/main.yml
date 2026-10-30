@@ -52,6 +52,12 @@
     policy_rc_d: 101  # Prevent package post-install auto-start before approval
   environment:
     DEBIAN_FRONTEND: noninteractive
+  when: not ansible_check_mode
+
+- name: Explain deferred package and service steps during first dry run
+  ansible.builtin.debug:
+    msg: "CHECK MODE: repository/key changes are simulated. Alloy package installation, account, config validation and activation require a separately approved real run."
+  when: ansible_check_mode
 
 - name: Allow dedicated Alloy account to read the systemd journal
   ansible.builtin.user:
@@ -60,6 +66,7 @@
       - adm
       - systemd-journal
     append: true
+  when: not ansible_check_mode
 
 - name: Render DHCP-only Alloy configuration
   ansible.builtin.template:
@@ -69,6 +76,7 @@
     group: alloy
     mode: "0640"
   register: router_dhcp_alloy_config
+  when: not ansible_check_mode
 
 - name: Validate Alloy configuration locally before activation
   ansible.builtin.command:
@@ -87,6 +95,7 @@
   when:
     - not ansible_check_mode
     - router_dhcp_alloy_activate_approved | bool
+    - router_dhcp_alloy_config is defined
     - router_dhcp_alloy_config is changed
 
 - name: Start previously configured Alloy only with activation approval
@@ -97,4 +106,5 @@
   when:
     - not ansible_check_mode
     - router_dhcp_alloy_activate_approved | bool
+    - router_dhcp_alloy_config is defined
     - router_dhcp_alloy_config is not changed
