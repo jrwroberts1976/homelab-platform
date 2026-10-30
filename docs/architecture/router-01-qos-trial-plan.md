@@ -14,6 +14,11 @@ Status: **DESIGN ONLY — no QoS modifications authorised or deployed**.
 - sch_cake and ifb modules available, not yet active. PPPoE managed by router-pppoe.service with Restart=always; no custom PPP lifecycle hooks installed.
 - Baseline router temperature ~41.8C and PPPoE, dnsmasq, unbound, nftables all active.
 
+## Ethernet capture evidence (30 October 2026)
+- A 15-frame header-only tcpdump on eth1 showed PPPoE session frames in both directions, with no visible 802.1Q tags on the router-to-modem Ethernet segment. This does not exclude VLAN encapsulation applied inside the modem.
+- Kernel capture reported zero dropped frames. Captured `tcp 1452` lengths represent TCP payload lengths, **not** direct MSS negotiation evidence; existing MSS clamp should be validated independently if needed.
+- Owner confirms SoGEA via standalone VDSL modem. Use `pppoe-ptm` as the initial CAKE overhead candidate, then test latency/throughput.
+
 ## Deployment prerequisites and safety gates
 1. SoGEA VDSL2 with separate modem is confirmed. Verify presence of VLAN tagging; use the `pppoe-ptm` overhead profile as the initial candidate and tune after measurement.
 2. Determine correct egress location by inspecting ppp0 and eth1 packet paths. Prefer applying CAKE where it can see the desired flow classification and shaping; physical eth1 is PPPoE-encapsulated and may not permit desired host isolation.
