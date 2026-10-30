@@ -1,0 +1,234 @@
+---
+# Stage C2b1 read-only reconciliation. Verify that the existing private key
+# matches the public key and is readable by the locked, dedicated service user.
+# There are NO user/group/key/SSH/tunnel/Prometheus writes in this play.
+- name: Reconcile dedicated router metrics SSH identity on monitor-01 without modifying it
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_key_postflight_approved: false
+    router_c2_tunnel_user: router-metrics-tunnel
+    router_c2_tunnel_home: /var/lib/router-metrics-tunnel
+    router_c2_key_dir: /etc/homelab/router-metrics-ssh
+    router_c2_private_key: /etc/homelab/router-metrics-ssh/id_ed25519
+    router_c2_public_key: /etc/homelab/router-metrics-ssh/id_ed25519.pub
+    router_c2_trust_file: /etc/homelab/router-metrics-ssh/known_hosts
+    router_c2_expected_pi_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+
+  pre_tasks:
+    - name: Check controller identity
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_c2_postflight_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require explicit approval, controller and exact monitored host
+      ansible.builtin.assert:
+        that:
+          - router_c2_key_postflight_approved | bool
+          - router_c2_postflight_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Read actual monitoring hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_c2_postflight_hostname
+      check_mode: false
+      changed_when: false
+
+    - name: Read actual monitor address
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      register: router_c2_postflight_ipv4
+      check_mode: false
+      changed_when: false
+
+    - name: Require expected runtime host identity
+      ansible.builtin.assert:
+        that:
+          - router_c2_postflight_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_postflight_ipv4.stdout"
+
+  tasks:
+    - name: Read dedicated service user metadata without printing account details
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ router_c2_tunnel_user }}"]
+      register: router_c2_postflight_passwd
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Read dedicated group metadata without printing account details
+      ansible.builtin.command:
+        argv: [getent, group, "{{ router_c2_tunnel_user }}"]
+      register: router_c2_postflight_group
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Verify dedicated identity and private group
+      ansible.builtin.assert:
+        that:
+          - router_c2_postflight_passwd.stdout.split(':')[0] == router_c2_tunnel_user
+          - router_c2_postflight_passwd.stdout.split(':')[5] == router_c2_tunnel_home
+          - router_c2_postflight_passwd.stdout.split(':')[6] == '/usr/sbin/nologin'
+          - router_c2_postflight_group.stdout.split(':')[0] == router_c2_tunnel_user
+          - router_c2_postflight_group.stdout.split(':')[2] == router_c2_postflight_passwd.stdout.split(':')[3]
+
+    - name: Read service account password lock status
+      ansible.builtin.command:
+        argv: [passwd, -S, "{{ router_c2_tunnel_user }}"]
+      register: router_c2_postflight_password
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require service account password is locked
+      ansible.builtin.assert:
+        that:
+          - router_c2_postflight_password.stdout.split()[1] in ['L', 'LK']
+
+    - name: Inspect dedicated home directory
+      ansible.builtin.stat:
+        path: "{{ router_c2_tunnel_home }}"
+      register: router_c2_postflight_home
+
+    - name: Inspect pinned trust directory
+      ansible.builtin.stat:
+        path: "{{ router_c2_key_dir }}"
+      register: router_c2_postflight_key_dir
+
+    - name: Inspect private key metadata without reading its contents
+      ansible.builtin.stat:
+        path: "{{ router_c2_private_key }}"
+      register: router_c2_postflight_private
+
+    - name: Inspect public key metadata
+      ansible.builtin.stat:
+        path: "{{ router_c2_public_key }}"
+      register: router_c2_postflight_public
+
+    - name: Inspect installed SSH trust file metadata
+      ansible.builtin.stat:
+        path: "{{ router_c2_trust_file }}"
+      register: router_c2_postflight_trust
+
+    - name: Require private-key owner, protected permissions, safe parent and no symlinks
+      ansible.builtin.assert:
+        that:
+          - router_c2_postflight_home.stat.isdir | default(false)
+          - not router_c2_postflight_home.stat.islnk | default(false)
+          - router_c2_postflight_home.stat.pw_name == router_c2_tunnel_user
+          - router_c2_postflight_key_dir.stat.isdir | default(false)
+          - not router_c2_postflight_key_dir.stat.islnk | default(false)
+          - router_c2_postflight_key_dir.stat.pw_name == 'root'
+          - router_c2_postflight_key_dir.stat.mode == '0755'
+          - router_c2_postflight_private.stat.isreg | default(false)
+          - not router_c2_postflight_private.stat.islnk | default(false)
+          - router_c2_postflight_private.stat.pw_name == router_c2_tunnel_user
+          - router_c2_postflight_private.stat.gr_name == router_c2_tunnel_user
+          - router_c2_postflight_private.stat.mode == '0600'
+          - router_c2_postflight_public.stat.isreg | default(false)
+          - not router_c2_postflight_public.stat.islnk | default(false)
+          - router_c2_postflight_public.stat.pw_name == 'root'
+          - router_c2_postflight_public.stat.mode == '0644'
+          - router_c2_postflight_trust.stat.isreg | default(false)
+          - not router_c2_postflight_trust.stat.islnk | default(false)
+          - router_c2_postflight_trust.stat.pw_name == 'root'
+          - router_c2_postflight_trust.stat.mode == '0644'
+
+    - name: Read public key bytes inside Ansible without logging
+      ansible.builtin.slurp:
+        src: "{{ router_c2_public_key }}"
+      register: router_c2_postflight_public_bytes
+      no_log: true
+
+    - name: Derive public key from PRIVATE key as the nonprivileged service user
+      ansible.builtin.command:
+        argv:
+          - runuser
+          - -u
+          - "{{ router_c2_tunnel_user }}"
+          - --
+          - ssh-keygen
+          - -y
+          - -f
+          - "{{ router_c2_private_key }}"
+      register: router_c2_postflight_derived_public
+      check_mode: false
+      changed_when: false
+      no_log: true
+
+    - name: Require private/public keypair matches without printing key contents
+      ansible.builtin.assert:
+        that:
+          - router_c2_postflight_derived_public.stdout.split()[:2] == (router_c2_postflight_public_bytes.content | b64decode).split()[:2]
+          - router_c2_postflight_derived_public.stdout.split()[0] == 'ssh-ed25519'
+          - (router_c2_postflight_public_bytes.content | b64decode).split()[0] == 'ssh-ed25519'
+        fail_msg: "Private/public key mismatch or wrong key type. No changes made."
+
+    - name: Read key fingerprint only
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_public_key }}", -E, sha256]
+      register: router_c2_postflight_pub_fingerprint
+      check_mode: false
+      changed_when: false
+
+    - name: Read pinned Pi SSH server fingerprint again
+      ansible.builtin.command:
+        argv: [ssh-keygen, -lf, "{{ router_c2_trust_file }}", -E, sha256]
+      register: router_c2_postflight_pi_fingerprint
+      check_mode: false
+      changed_when: false
+
+    - name: Require ED25519 key and correct Pi trust pin
+      ansible.builtin.assert:
+        that:
+          - "'(ED25519)' in router_c2_postflight_pub_fingerprint.stdout"
+          - router_c2_postflight_pi_fingerprint.stdout.split()[1] == router_c2_expected_pi_fingerprint
+          - "'(ED25519)' in router_c2_postflight_pi_fingerprint.stdout"
+
+    - name: Confirm Prometheus remains ready
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        method: GET
+        status_code: 200
+        timeout: 5
+      register: router_c2_postflight_prometheus
+      check_mode: false
+      changed_when: false
+
+    - name: Read listeners to ensure no tunnel has started
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: router_c2_postflight_listeners
+      check_mode: false
+      changed_when: false
+
+    - name: Require no unexpected tunnel port
+      ansible.builtin.assert:
+        that:
+          - "':19100' not in router_c2_postflight_listeners.stdout"
+
+    - name: Report redacted identity reconciliation
+      ansible.builtin.debug:
+        msg:
+          monitor_account_exists_and_nologin: true
+          password_locked: true
+          private_key_owner_and_mode_verified: true
+          private_key_readable_by_service_user: true
+          ed25519_private_and_public_keys_match: true
+          client_public_key_fingerprint: "{{ router_c2_postflight_pub_fingerprint.stdout }}"
+          client_private_key_mtime_epoch: "{{ router_c2_postflight_private.stat.mtime | int }}"
+          client_public_key_mtime_epoch: "{{ router_c2_postflight_public.stat.mtime | int }}"
+          pi_host_fingerprint_reverified: "{{ router_c2_expected_pi_fingerprint }}"
+          prometheus_ready_http_status: "{{ router_c2_postflight_prometheus.status }}"
+          router_and_network_changes: "NONE; read-only audit on monitor-01"
+          ssh_tunnel: "NONE"
