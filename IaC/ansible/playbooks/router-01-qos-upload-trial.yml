@@ -1,0 +1,122 @@
+---
+# Experimental upload-only CAKE on physical PPPoE WAN Ethernet.
+# NOT persistent; rollback timer restores the original eth1 fq_codel qdisc.
+- name: Start guarded router upload QoS trial
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_upload_trial_approved: false
+    qos_trial_dir: /var/lib/router-qos-upload-trial
+    qos_wan_device: eth1
+  tasks:
+    - name: Require explicit approval and known router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_upload_trial_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Check for previous trial
+      ansible.builtin.stat:
+        path: "{{ qos_trial_dir }}"
+      register: old_trial
+    - name: Refuse overwriting another trial
+      ansible.builtin.assert:
+        that: [not old_trial.stat.exists]
+        fail_msg: Prior QoS trial exists; inspect before proceeding.
+    - name: Check queue on physical WAN
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, "{{ qos_wan_device }}"]
+      register: original_qdisc
+      changed_when: false
+    - name: Require original eth1 fq_codel root qdisc
+      ansible.builtin.assert:
+        that:
+          - "'qdisc fq_codel' in original_qdisc.stdout"
+          - "'root' in original_qdisc.stdout"
+          - "'limit 10240p' in original_qdisc.stdout"
+          - "'quantum 1514' in original_qdisc.stdout"
+        fail_msg: Unexpected WAN qdisc; review before trial.
+    - name: Confirm WAN and router dependencies
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-pppoe, nftables, dnsmasq, unbound]
+      register: services
+      changed_when: false
+      failed_when: services.rc != 0 or services.stdout_lines | select('ne', 'active') | list | length != 0
+    - name: Require default PPP route
+      ansible.builtin.command: [ip, -4, route, show, default]
+      register: route
+      changed_when: false
+      failed_when: route.rc != 0 or 'default dev ppp0' not in route.stdout
+    - name: Check CAKE module available
+      ansible.builtin.command: [modinfo, -F, filename, sch_cake]
+      changed_when: false
+    - name: Create root-owned trial recovery directory
+      ansible.builtin.file:
+        path: "{{ qos_trial_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Preserve observed qdisc configuration
+      ansible.builtin.copy:
+        dest: "{{ qos_trial_dir }}/original-qdisc.txt"
+        content: "{{ original_qdisc.stdout }}\n"
+        mode: '0600'
+    - name: Install narrow restore script
+      ansible.builtin.copy:
+        dest: "{{ qos_trial_dir }}/restore.sh"
+        mode: '0700'
+        content: |
+          #!/bin/sh
+          set -eu
+          /usr/sbin/tc qdisc replace dev eth1 root fq_codel limit 10240 flows 1024 quantum 1514 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64
+          /usr/bin/touch /var/lib/router-qos-upload-trial/rolled-back
+    - name: Check there is no existing rollback unit
+      ansible.builtin.command:
+        argv: [systemctl, list-units, --all, --plain, --no-legend, router-qos-upload-rollback.service]
+      register: rollback_prior
+      changed_when: false
+    - name: Require rollback service name available
+      ansible.builtin.assert:
+        that:
+          - rollback_prior.stdout | trim == ''
+    - name: Arm automatic rollback for ten minutes
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=router-qos-upload-rollback
+          - --on-active=10min
+          - /bin/sh
+          - "{{ qos_trial_dir }}/restore.sh"
+      changed_when: true
+    - name: Apply upload-only CAKE and validate
+      block:
+        - name: Set CAKE on physical WAN
+          ansible.builtin.command:
+            argv: [tc, qdisc, replace, dev, eth1, root, cake, bandwidth, 13mbit, pppoe-ptm, besteffort, flows]
+          changed_when: true
+        - name: Confirm CAKE active at WAN egress
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: new_qdisc
+          changed_when: false
+          failed_when: new_qdisc.rc != 0 or 'qdisc cake' not in new_qdisc.stdout or 'bandwidth 13Mbit' not in new_qdisc.stdout
+      rescue:
+        - name: Restore WAN original qdisc immediately
+          ansible.builtin.command:
+            argv: [/bin/sh, "{{ qos_trial_dir }}/restore.sh"]
+          changed_when: true
+        - name: Abort failed trial
+          ansible.builtin.fail:
+            msg: CAKE trial did not validate; immediate restore attempted. Check timer and qdisc.
+    - name: Verify recovery timer is armed
+      ansible.builtin.command: [systemctl, is-active, router-qos-upload-rollback.timer]
+      register: timer
+      changed_when: false
+      failed_when: timer.stdout != 'active'
+    - name: Show temporary trial instructions
+      ansible.builtin.debug:
+        msg: Temporary upload CAKE active for at most 10 minutes; verify connectivity and latency, then choose rollback or explicit acceptance.
