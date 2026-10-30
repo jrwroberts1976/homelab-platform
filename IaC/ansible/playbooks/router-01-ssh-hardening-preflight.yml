@@ -1,0 +1,88 @@
+---
+# Validation only: use a temporary candidate sshd_config. No SSH reload or config deployment.
+- name: Validate router SSH hardening candidate without applying it
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_ssh_hardening_preflight_approved: false
+    router_ssh_hardening_directives: |
+      PermitRootLogin no
+      PasswordAuthentication no
+      PubkeyAuthentication yes
+      X11Forwarding no
+  tasks:
+    - name: Require explicit preflight approval and live-router identity
+      ansible.builtin.assert:
+        that:
+          - router_ssh_hardening_preflight_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Read original sshd configuration
+      ansible.builtin.slurp:
+        src: /etc/ssh/sshd_config
+      register: sshd_original
+    - name: Ensure existing monitoring Match block is present
+      ansible.builtin.assert:
+        that:
+          - "'Match User router-metrics' in (sshd_original.content | b64decode)"
+          - "'PermitOpen 127.0.0.1:9100' in (sshd_original.content | b64decode)"
+        fail_msg: Existing router-metrics access controls have changed; review before continuing.
+    - name: Create isolated candidate directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: router-ssh-candidate-
+      register: ssh_candidate_dir
+    - name: Validate isolated SSH candidate
+      block:
+        - name: Build candidate (directives before original global and Match configuration)
+          ansible.builtin.copy:
+            dest: "{{ ssh_candidate_dir.path }}/sshd_config"
+            content: "{{ router_ssh_hardening_directives }}\n{{ sshd_original.content | b64decode }}"
+            mode: '0600'
+        - name: Validate SSH candidate syntax
+          ansible.builtin.command:
+            argv: [sshd, -t, -f, "{{ ssh_candidate_dir.path }}/sshd_config"]
+          changed_when: false
+        - name: Evaluate candidate for administrative identity
+          ansible.builtin.command:
+            argv:
+              - sshd
+              - -T
+              - -f
+              - "{{ ssh_candidate_dir.path }}/sshd_config"
+              - -C
+              - user=james,host=router-01,addr=192.168.2.48
+          register: admin_effective
+          changed_when: false
+        - name: Evaluate candidate for monitoring identity
+          ansible.builtin.command:
+            argv:
+              - sshd
+              - -T
+              - -f
+              - "{{ ssh_candidate_dir.path }}/sshd_config"
+              - -C
+              - user=router-metrics,host=router-01,addr=192.168.2.52
+          register: metrics_effective
+          changed_when: false
+        - name: Require intended admin and monitoring effective settings
+          ansible.builtin.assert:
+            that:
+              - "'permitrootlogin no' in admin_effective.stdout_lines"
+              - "'passwordauthentication no' in admin_effective.stdout_lines"
+              - "'pubkeyauthentication yes' in admin_effective.stdout_lines"
+              - "'x11forwarding no' in admin_effective.stdout_lines"
+              - "'pubkeyauthentication yes' in metrics_effective.stdout_lines"
+              - "'passwordauthentication no' in metrics_effective.stdout_lines"
+              - "'allowtcpforwarding local' in metrics_effective.stdout_lines"
+              - "'permitopen 127.0.0.1:9100' in metrics_effective.stdout_lines"
+              - "'x11forwarding no' in metrics_effective.stdout_lines"
+            success_msg: Candidate SSH settings validated for admin and router-metrics; live SSH untouched.
+      always:
+        - name: Delete isolated candidate directory
+          ansible.builtin.file:
+            path: "{{ ssh_candidate_dir.path }}"
+            state: absent
