@@ -112,6 +112,7 @@ monitoring_grafana_dashboard_files:
   - "homelab-security-events.json"
   - "homelab-node-detail.json"
   - "homelab-network-device-detail.json"
+  - "homelab-router-dhcp.json"
 
 monitoring_grafana_production_dashboard_files:
   - "homelab-operations-overview.json"
@@ -132,6 +133,7 @@ monitoring_grafana_dashboard_uids:
   - "homelab-security"
   - "homelab-node-detail"
   - "homelab-network-device-detail"
+  - "homelab-router-dhcp"
   - "homelab-patching"
 
 # Greenbone vulnerability evidence exported into the node-exporter textfile collector.
