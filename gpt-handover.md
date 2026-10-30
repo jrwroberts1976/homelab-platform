@@ -1,5 +1,30 @@
 # GPT Handover — Homelab Platform
 
+### Router interface counter deltas — 30-second sample, 30 October 2026
+
+- eth0 LAN: RX +20,208 packets, TX +44,570 packets; RX drops stayed 227, TX drops stayed 12; errors unchanged at 0. RX bytes +1,491,556 (~0.40 Mbps), TX bytes +64,416,157 (~17.18 Mbps).
+- eth1 WAN USB: RX +44,571 packets, TX +20,146; RX drops stayed 1, TX drops stayed 0; errors unchanged at 0. RX bytes +64,173,097 (~17.11 Mbps), TX bytes +1,688,801 (~0.45 Mbps).
+- ppp0 PPPoE: RX +44,566 packets, TX +20,144; drops and errors stayed 0. RX bytes +63,775,367 (~17.01 Mbps), TX bytes +1,084,405 (~0.29 Mbps).
+- These rates reflect observed traffic over an approximately 30-second interval, not connection capacity. No new drop/error increments were observed; continued time-series monitoring is still needed.
+
+### Router initial performance/security baseline — 30 October 2026, 10:15 GMT
+
+- Read-only Ansible observation of router-01 (uptime 22h31m): load average 0.10/0.03/0.01; temperature 40.894°C; Raspberry Pi `vcgencmd get_throttled=0x0`; RAM 3.7 GiB total, 285 MiB used, 3.4 GiB available; swap 0 used; root filesystem 939 GB total, 4.6 GB used, 896 GB available.
+- Network cumulative counters: eth0 LAN RX 19,687,357 packets / 226 drops / 0 errors; TX 41,682,942 packets / 12 drops / 0 errors. eth1 WAN adapter RX 41,629,006 packets / 1 drop / 0 errors; TX 19,297,860 packets / 0 drops / 0 errors. ppp0 RX 41,615,470 packets / 0 drops / 0 errors; TX 19,292,457 packets / 0 drops / 0 errors. These are *cumulative*, not drop-rate measurements.
+- PPPoE `ppp0` configured with MTU 1492, current default route via ppp0. Public IP deliberately omitted from operational handover. nftables input and forward default drop, LAN->WAN forwarding and PPPoE NAT present; MSS clamp to 1452 has matched 69,073 outbound and 11,495 inbound TCP SYN packets.
+- Initial observations show no evident thermal throttling or resource pressure. Outstanding: measure interface counter deltas over an interval, inspect router service/Alloy health and PPPoE stability, check IPv6 policy/external reachability and firewall rule persistence. No firewall, PPPoE or runtime router changes were made by this sampling.
+- The legacy DHCP forwarder was stopped/disabled with the approved rollback playbook, preserving files; dnsmasq, nftables, Unbound and Alloy remained active. The direct Loki stream was proven earlier, and journal events from 09:43 appeared in Loki; a new event strictly *after* the forwarder stop is still needed to finish the post-cutover proof.
+
+## 30 October 2026 — Direct DHCP observability deployed and verified
+
+- Router `router-01` (192.168.2.1): Debian 13.7 ARM64, Alloy v1.21.3 installed and running/enabled via approval-gated Ansible role `router_dhcp_alloy` (PR #255; check-mode correction PR #256). dnsmasq remained active throughout.
+- Alloy reads systemd journal entries matching `_SYSTEMD_UNIT=dnsmasq.service SYSLOG_IDENTIFIER=dnsmasq-dhcp`, sends to Loki on monitor-01 (192.168.2.52:3100) with `host=router-01`, `service=dnsmasq` and `source=journal` labels. Query `{host="router-01",service="dnsmasq"} |= "DHCP"` returned genuine DISCOVER, OFFER, REQUEST and ACK messages; recent Alloy journal showed no matching warnings/errors.
+- Grafana dashboard `Homelab — Router DHCP Activity` (UID `homelab-router-dhcp`) added by PR #257, validated as JSON/Ansible, and deployed via the isolated `monitor-01-router-dhcp-dashboard.yml` playbook without restarting the monitoring stack. User confirmed dashboard is accessible and shows data at `https://grafana.home.jrwroberts.co.uk/d/homelab-router-dhcp`.
+- Privacy: DHCP logs include local IP addresses, MAC addresses and device names; keep Grafana/Loki access restricted and review retention.
+- **Legacy forwarder remains running pending controlled retirement.** Its existing gated rollback playbook `router-01-dhcp-log-forwarder-rollback.yml` can stop/disable the `homelab-router-dhcp-forwarder.service` with `router_dhcp_forwarder_rollback_approved=true`; leave `router_dhcp_forwarder_remove_files_approved=false` to retain files for reversibility. Confirm sustained direct ingestion and service state before retirement.
+- Next: verify forwarder status, Alloy/Loki recent-ingestion health and baseline router resource/network/security counters; record readings, then authorise forwarder disable separately. No forwarder stop was performed in this documentation change.
+
+
 ## 30 October 2026 — Router inventory reconciliation (source-only proposal)
 
 - GitHub branch consolidation completed: only main is retained as an active permanent remote branch; archived toolset, Pi migration and Grafana backup commits are preserved by matching archive tags. Multiple focused recovery PRs #243–#252 merged selected safe DNS, DHCP forwarder, monitoring and read-only diagnostic source into main. Historical Kea DHCP, obsolete 192.168.3.1 assumptions and SSH installation playbooks were intentionally not bulk-merged.
