@@ -1,5 +1,15 @@
 # GPT Handover — Homelab Platform
 
+## 30 October 2026 — Router inventory reconciliation (source-only proposal)
+
+- GitHub branch consolidation completed: only main is retained as an active permanent remote branch; archived toolset, Pi migration and Grafana backup commits are preserved by matching archive tags. Multiple focused recovery PRs #243–#252 merged selected safe DNS, DHCP forwarder, monitoring and read-only diagnostic source into main. Historical Kea DHCP, obsolete 192.168.3.1 assumptions and SSH installation playbooks were intentionally not bulk-merged.
+- Proposed canonical inventory change on review branch: define router-01 at 192.168.2.1 as a distinct router_hosts group; retire obsolete docker-01 memberships from birdnet_hosts, komodo_periphery_hosts, zabbix_agents, recovery_mirrors and generic alloy_hosts (through birdnet_hosts removal). Retain empty birdnet_hosts for legacy group compatibility. Do not automatically add the live gateway to generic package, monitoring or restart playbooks.
+- No changes to live router/DHCP/DNS/firewall/PPPoE, monitoring services or SSH configuration are authorised by the inventory PR. Confirm consumers of the retired groups and run local inventory/syntax checks before merge; explicitly approve production monitoring enrolment separately.
+- Verified router Node Exporter TCP listener is 127.0.0.1:9100; SSH bound to port 22 on IPv4 and IPv6; DNS on 127.0.0.1 and 192.168.2.1 port 53. Listener bindings alone do not prove firewall exposure.
+- DHCPACK forwarding from router-01 to monitor-01:5514 was verified, but Loki/Grafana ingestion and device dashboards need end-to-end validation. Candidate monitoring work must preserve existing services and use staged IaC review and rollback.
+- Next: validate canonical inventory target and stale references, then design a read-only metrics/log ingestion preflight and capture approved router performance/security baselines.
+
+
 ## 29 October 2026 — GitHub PR/branch reconciliation after admin-01 recovery
 
 Final Proxmox vote verification has now been merged by PR #238: both PVE nodes `Quorate: Yes`, `Total votes: 3` of 3 expected, Qdevice vote 1, both QDevice clients `Connected` to admin-01 `.48`; no additional runtime changes. GitHub audit of `homelab-platform` found **zero open PRs** and **53 branch refs including main**. Of 52 other refs, 42 have merged PR history (mostly squash merged), 6 have only intentionally **closed unmerged** PRs (#196, #188, #207, #210, #208, #190), and 4 have no PR history. Three no-PR branches are ancestors of main (zero ahead), and `backup/router-device-grafana-wip-20261011` is a distinct old unreviewed WIP, not authorised for bulk merge.
