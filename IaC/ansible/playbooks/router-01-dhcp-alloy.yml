@@ -1,0 +1,7 @@
+---
+- name: Stage approved DHCP-only Alloy collection on router-01
+  hosts: router_hosts
+  become: true
+  gather_facts: true
+  roles:
+    - router_dhcp_alloy
