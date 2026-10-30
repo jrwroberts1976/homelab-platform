@@ -148,8 +148,9 @@
             owner: root
             group: root
             mode: '0644'
-          when: wan_scrape_installed is defined
-          failed_when: false
+          when:
+            - wan_scrape_installed is defined
+            - wan_scrape_installed is changed
 
         - name: Restore original alerts if backup exists
           ansible.builtin.copy:
@@ -159,15 +160,19 @@
             owner: root
             group: root
             mode: '0644'
-          when: wan_alerts_installed is defined
-          failed_when: false
+          when:
+            - wan_alerts_installed is defined
+            - wan_alerts_installed is changed
 
-        - name: Attempt Prometheus reload of original configs
+        - name: Reload original Prometheus configuration after rollback
           ansible.builtin.uri:
             url: http://127.0.0.1:9090/-/reload
             method: POST
             status_code: 200
-          failed_when: false
+            timeout: 15
+          when: >-
+            (wan_scrape_installed is defined and wan_scrape_installed is changed)
+            or (wan_alerts_installed is defined and wan_alerts_installed is changed)
 
         - name: Abort and retain backup directory for inspection
           ansible.builtin.fail:
