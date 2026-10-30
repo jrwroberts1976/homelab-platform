@@ -166,11 +166,5 @@
             state: absent
           changed_when: false
 
-        - name: Remove temporary backup after successful verification or rollback attempt
-          ansible.builtin.file:
-            path: "{{ router_alert_backup.path }}"
-            state: absent
-          changed_when: false
-          when:
-            - router_alert_backup is defined
-            - router_alert_backup.path is defined
+        # Keep the backup on any failed deployment/rollback for manual recovery.
+        # A separate cleanup can be performed after successful verification.
