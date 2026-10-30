@@ -16,14 +16,15 @@
           - inventory_hostname == 'router-01'
           - ansible_facts.hostname == 'raspberrypi'
           - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
-    - name: Check for existing test directory
+    - name: Inspect existing test directory
       ansible.builtin.stat:
         path: "{{ test_dir }}"
       register: prior_test
-    - name: Refuse to overwrite previous test
+    - name: Refuse to overwrite prior test automatically
       ansible.builtin.assert:
         that:
           - not prior_test.stat.exists
+        fail_msg: 'Prior test directory remains. Verify and remove it separately before retrying.'
     - name: Make private test directory
       ansible.builtin.file:
         path: "{{ test_dir }}"
@@ -56,6 +57,7 @@
           - systemd-run
           - --unit=router-ssh-file-restore-test
           - --on-active=15s
+          - /bin/sh
           - /run/router-ssh-rollback-test/restore.sh
       changed_when: true
     - name: Overwrite only harmless test file
