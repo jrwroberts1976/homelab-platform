@@ -1,5 +1,15 @@
 # GPT Handover — Homelab Platform
 
+## 30 October 2026 — Direct DHCP observability deployed and verified
+
+- Router `router-01` (192.168.2.1): Debian 13.7 ARM64, Alloy v1.21.3 installed and running/enabled via approval-gated Ansible role `router_dhcp_alloy` (PR #255; check-mode correction PR #256). dnsmasq remained active throughout.
+- Alloy reads systemd journal entries matching `_SYSTEMD_UNIT=dnsmasq.service SYSLOG_IDENTIFIER=dnsmasq-dhcp`, sends to Loki on monitor-01 (192.168.2.52:3100) with `host=router-01`, `service=dnsmasq` and `source=journal` labels. Query `{host="router-01",service="dnsmasq"} |= "DHCP"` returned genuine DISCOVER, OFFER, REQUEST and ACK messages; recent Alloy journal showed no matching warnings/errors.
+- Grafana dashboard `Homelab — Router DHCP Activity` (UID `homelab-router-dhcp`) added by PR #257, validated as JSON/Ansible, and deployed via the isolated `monitor-01-router-dhcp-dashboard.yml` playbook without restarting the monitoring stack. User confirmed dashboard is accessible and shows data at `https://grafana.home.jrwroberts.co.uk/d/homelab-router-dhcp`.
+- Privacy: DHCP logs include local IP addresses, MAC addresses and device names; keep Grafana/Loki access restricted and review retention.
+- **Legacy forwarder remains running pending controlled retirement.** Its existing gated rollback playbook `router-01-dhcp-log-forwarder-rollback.yml` can stop/disable the `homelab-router-dhcp-forwarder.service` with `router_dhcp_forwarder_rollback_approved=true`; leave `router_dhcp_forwarder_remove_files_approved=false` to retain files for reversibility. Confirm sustained direct ingestion and service state before retirement.
+- Next: verify forwarder status, Alloy/Loki recent-ingestion health and baseline router resource/network/security counters; record readings, then authorise forwarder disable separately. No forwarder stop was performed in this documentation change.
+
+
 ## 30 October 2026 — Router inventory reconciliation (source-only proposal)
 
 - GitHub branch consolidation completed: only main is retained as an active permanent remote branch; archived toolset, Pi migration and Grafana backup commits are preserved by matching archive tags. Multiple focused recovery PRs #243–#252 merged selected safe DNS, DHCP forwarder, monitoring and read-only diagnostic source into main. Historical Kea DHCP, obsolete 192.168.3.1 assumptions and SSH installation playbooks were intentionally not bulk-merged.
