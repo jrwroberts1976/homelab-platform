@@ -75,6 +75,7 @@
           #!/bin/sh
           set -eu
           /usr/sbin/tc qdisc replace dev eth1 root fq_codel limit 10240 flows 1024 quantum 1514 target 5ms interval 100ms memory_limit 32Mb ecn drop_batch 64
+          /usr/sbin/tc qdisc show dev eth1 | /bin/grep -q 'qdisc fq_codel.*root'
           /usr/bin/touch /var/lib/router-qos-upload-trial/rolled-back
     - name: Check there is no existing rollback unit
       ansible.builtin.command:
@@ -114,6 +115,12 @@
         - name: Abort failed trial
           ansible.builtin.fail:
             msg: CAKE trial did not validate; immediate restore attempted. Check timer and qdisc.
+    - name: Confirm post-change WAN PPPoE route
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: post_route
+      changed_when: false
+      failed_when: post_route.rc != 0 or 'default dev ppp0' not in post_route.stdout
     - name: Verify recovery timer is armed
       ansible.builtin.command:
         argv: [systemctl, is-active, router-qos-upload-rollback.timer]
