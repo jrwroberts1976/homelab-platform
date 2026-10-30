@@ -1,0 +1,48 @@
+---
+- name: Provision only the reviewed router performance dashboard
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    router_performance_dashboard_deploy_approved: false
+    router_performance_dashboard_root: /opt/monitoring
+  tasks:
+    - name: Require explicit deployment approval and monitor identity
+      ansible.builtin.assert:
+        that:
+          - router_performance_dashboard_deploy_approved | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+        fail_msg: 'STOP: approval or monitor-01 identity invalid.'
+
+    - name: Check existing dashboard provisioning directory
+      ansible.builtin.stat:
+        path: "{{ router_performance_dashboard_root }}/grafana/provisioning/dashboards/homelab"
+      register: router_performance_dashboard_directory
+
+    - name: Require existing dashboard provisioning directory
+      ansible.builtin.assert:
+        that:
+          - router_performance_dashboard_directory.stat.isdir | default(false)
+
+    - name: Validate dashboard JSON locally
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - json.tool
+          - "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/homelab-router-performance.json"
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+
+    - name: Copy only the new Grafana dashboard
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/homelab-router-performance.json"
+        dest: "{{ router_performance_dashboard_root }}/grafana/provisioning/dashboards/homelab/homelab-router-performance.json"
+        owner: root
+        group: root
+        mode: '0644'
