@@ -1,0 +1,54 @@
+---
+- name: Install only the reviewed router DHCP dashboard into existing Grafana provisioning
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    router_dhcp_dashboard_deploy_approved: false
+    router_dhcp_dashboard_root: /opt/monitoring
+  tasks:
+    - name: Require explicit approval and expected monitor identity
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_dashboard_deploy_approved | bool
+          - inventory_hostname == "monitor-01"
+          - ansible_facts.hostname == "monitor-01"
+          - ansible_facts.distribution == "Debian"
+          - ansible_facts.default_ipv4.address == "192.168.2.52"
+        fail_msg: "STOP: dashboard deployment approval or monitor-01 identity invalid."
+
+    - name: Verify existing Grafana dashboard provisioning directory
+      ansible.builtin.stat:
+        path: "{{ router_dhcp_dashboard_root }}/grafana/provisioning/dashboards/homelab"
+      register: router_dhcp_dashboard_directory
+
+    - name: Refuse to create unknown Grafana directory
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_dashboard_directory.stat.isdir | default(false)
+        fail_msg: "STOP: existing Grafana dashboard provisioning directory not found."
+
+    - name: Validate source dashboard JSON on Ansible controller
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - json.tool
+          - "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/homelab-router-dhcp.json"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      check_mode: false
+
+    - name: Install only the router DHCP dashboard JSON
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/homelab-router-dhcp.json"
+        dest: "{{ router_dhcp_dashboard_root }}/grafana/provisioning/dashboards/homelab/homelab-router-dhcp.json"
+        owner: root
+        group: root
+        mode: "0644"
+      register: router_dhcp_dashboard_copy
+
+    - name: Show dashboard file deployment result
+      ansible.builtin.debug:
+        msg: "Dashboard file changed={{ router_dhcp_dashboard_copy is changed }}; Grafana container and other monitoring services were not restarted."
