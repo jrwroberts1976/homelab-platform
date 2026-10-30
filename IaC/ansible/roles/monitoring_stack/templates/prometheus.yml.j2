@@ -108,3 +108,23 @@ scrape_configs:
         target_label: instance
       - target_label: __address__
         replacement: blackbox:9115
+
+  - job_name: blackbox-wan-icmp
+    metrics_path: /probe
+    params:
+      module:
+        - icmp
+    static_configs:
+      - targets: ["1.1.1.1"]
+        labels:
+          target_name: cloudflare
+      - targets: ["9.9.9.9"]
+        labels:
+          target_name: quad9
+    relabel_configs:
+      - source_labels: [__address__]
+        target_label: __param_target
+      - source_labels: [__param_target]
+        target_label: instance
+      - target_label: __address__
+        replacement: blackbox:9115
