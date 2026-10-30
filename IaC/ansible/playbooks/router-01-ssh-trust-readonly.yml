@@ -1,0 +1,150 @@
+---
+# Read-only C2 SSH trust and forwarding discovery.
+# Use BOTH canonical and isolated inventory sources, and --limit router-01,monitor-01.
+# No ssh-keyscan, no accepting host keys, no key creation or SSH configuration changes.
+- name: Read genuine SSH host fingerprint and forwarding policy on verified Pi
+  hosts: router_postcutover_baseline
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_ssh_trust_audit_approved: false
+  pre_tasks:
+    - name: Identify controller for router fingerprint inspection
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      register: router_c2_trust_controller
+      check_mode: false
+      changed_when: false
+
+    - name: Require opt-in, original admin controller and exact Pi inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_ssh_trust_audit_approved | bool
+          - router_c2_trust_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+      delegate_to: localhost
+      become: false
+
+    - name: Confirm physical onboard Pi Ethernet MAC
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      check_mode: false
+      changed_when: false
+      register: router_c2_trust_pi_mac
+
+    - name: Refuse wrong physical Pi
+      ansible.builtin.assert:
+        that:
+          - router_c2_trust_pi_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+  tasks:
+    - name: Read SSH ED25519 server public-key fingerprint directly on Pi
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -lf
+          - /etc/ssh/ssh_host_ed25519_key.pub
+          - -E
+          - sha256
+      check_mode: false
+      changed_when: false
+      register: router_c2_pi_ssh_host_fingerprint
+
+    - name: Read effective SSH daemon policy on Pi without editing it
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T]
+      check_mode: false
+      changed_when: false
+      register: router_c2_pi_ssh_effective
+
+    - name: Show real Pi fingerprint and relevant forwarding policies
+      ansible.builtin.debug:
+        msg:
+          pi_ed25519_fingerprint_from_local_host_file: "{{ router_c2_pi_ssh_host_fingerprint.stdout }}"
+          effective_sshd_forwarding_policy: "{{ router_c2_pi_ssh_effective.stdout_lines | select('match', '^(allowtcpforwarding|disableforwarding|permitopen|gatewayports|pubkeyauthentication|passwordauthentication) ') | list }}"
+          changes: "READ ONLY: host key file and effective SSH settings inspected, no trust changes"
+
+- name: Read current SSH trust and public-key metadata on verified monitor host
+  hosts: monitoring_hosts
+  gather_facts: false
+  become: true
+  vars:
+    router_c2_ssh_trust_audit_approved: false
+  pre_tasks:
+    - name: Identify controller for monitoring-host trust inspection
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: router_c2_monitor_trust_controller
+
+    - name: Require opt-in, original admin controller and exact monitoring inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_ssh_trust_audit_approved | bool
+          - router_c2_monitor_trust_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify actual monitoring host name
+      ansible.builtin.command:
+        argv: [hostname]
+      check_mode: false
+      changed_when: false
+      register: router_c2_monitor_trust_hostname
+
+    - name: Verify actual monitoring address
+      ansible.builtin.command:
+        argv: [ip, -4, -br, addr]
+      check_mode: false
+      changed_when: false
+      register: router_c2_monitor_trust_ip
+
+    - name: Refuse wrong monitoring server
+      ansible.builtin.assert:
+        that:
+          - router_c2_monitor_trust_hostname.stdout | trim == 'monitor-01'
+          - "'192.168.2.52' in router_c2_monitor_trust_ip.stdout"
+
+  tasks:
+    - name: Read known_hosts metadata without writing keys
+      ansible.builtin.stat:
+        path: /home/james/.ssh/known_hosts
+      register: router_c2_known_hosts_metadata
+
+    - name: Check whether router address is already known and pinned
+      ansible.builtin.command:
+        argv:
+          - ssh-keygen
+          - -F
+          - 192.168.2.1
+          - -f
+          - /home/james/.ssh/known_hosts
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      register: router_c2_known_host_lookup
+      when: router_c2_known_hosts_metadata.stat.exists | bool
+
+    - name: Inspect monitor user's SSH public key availability without reading private keys
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /home/james/.ssh/id_ed25519.pub
+        - /home/james/.ssh/id_rsa.pub
+      register: router_c2_monitor_public_keys
+
+    - name: Display bounded SSH trust metadata without public or private key contents
+      ansible.builtin.debug:
+        msg:
+          known_hosts_file_exists: "{{ router_c2_known_hosts_metadata.stat.exists | bool }}"
+          pi_ip_known_hosts_entry_exists: "{{ router_c2_known_host_lookup.rc | default(1) == 0 }}"
+          monitor_ssh_public_key_files_present: "{{ router_c2_monitor_public_keys.results | selectattr('stat.exists', 'equalto', true) | map(attribute='item') | list }}"
+          changes: "READ ONLY: no key generation, no known_hosts additions, no tunnel or sshd changes"
