@@ -1,0 +1,70 @@
+---
+- name: Finalize verified router SSH hardening and disarm rollback
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    ssh_finalize_approved: false
+  tasks:
+    - name: Require explicit confirmation of fresh admin and monitoring checks
+      ansible.builtin.assert:
+        that:
+          - ssh_finalize_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Confirm recovery transaction still exists
+      ansible.builtin.stat:
+        path: /var/lib/router-ssh-hardening/restore.sh
+      register: recovery
+    - name: Refuse to finalize missing recovery transaction
+      ansible.builtin.assert:
+        that: [recovery.stat.exists]
+    - name: Confirm rollback has not already executed
+      ansible.builtin.stat:
+        path: /var/lib/router-ssh-hardening/rolled-back
+      register: rolled_back
+    - name: Require hardening still applied
+      ansible.builtin.assert:
+        that: [not rolled_back.stat.exists]
+    - name: Confirm live SSH syntax
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+    - name: Read current effective admin policy
+      ansible.builtin.command:
+        argv: [sshd, -T, -C, 'user=james,host=router-01,addr=192.168.2.48']
+      register: admin
+      changed_when: false
+    - name: Read current effective metrics policy
+      ansible.builtin.command:
+        argv: [sshd, -T, -C, 'user=router-metrics,host=router-01,addr=192.168.2.52']
+      register: metrics
+      changed_when: false
+    - name: Require expected SSH restrictions
+      ansible.builtin.assert:
+        that:
+          - "'permitrootlogin no' in admin.stdout_lines"
+          - "'passwordauthentication no' in admin.stdout_lines"
+          - "'pubkeyauthentication yes' in admin.stdout_lines"
+          - "'x11forwarding no' in admin.stdout_lines"
+          - "'passwordauthentication no' in metrics.stdout_lines"
+          - "'allowtcpforwarding local' in metrics.stdout_lines"
+          - "'permitopen 127.0.0.1:9100' in metrics.stdout_lines"
+    - name: Verify rollback timer still active before disarming
+      ansible.builtin.command: systemctl is-active router-ssh-hardening-rollback.timer
+      register: timer
+      changed_when: false
+      failed_when: timer.stdout != 'active'
+    - name: Disarm recovery timer after independently verified fresh SSH tests
+      ansible.builtin.systemd_service:
+        name: router-ssh-hardening-rollback.timer
+        state: stopped
+    - name: Confirm rollback timer is no longer active
+      ansible.builtin.command: systemctl is-active router-ssh-hardening-rollback.timer
+      register: stopped_timer
+      failed_when: stopped_timer.stdout == 'active'
+      changed_when: false
+    - name: Report SSH hardening finalized
+      ansible.builtin.debug:
+        msg: Timed SSH rollback disarmed. Preserve recovery directory for audit until separate cleanup is reviewed.
