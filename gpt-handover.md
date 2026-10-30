@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### Router initial performance/security baseline — 30 October 2026, 10:15 GMT
+
+- Read-only Ansible observation of router-01 (uptime 22h31m): load average 0.10/0.03/0.01; temperature 40.894°C; Raspberry Pi `vcgencmd get_throttled=0x0`; RAM 3.7 GiB total, 285 MiB used, 3.4 GiB available; swap 0 used; root filesystem 939 GB total, 4.6 GB used, 896 GB available.
+- Network cumulative counters: eth0 LAN RX 19,687,357 packets / 226 drops / 0 errors; TX 41,682,942 packets / 12 drops / 0 errors. eth1 WAN adapter RX 41,629,006 packets / 1 drop / 0 errors; TX 19,297,860 packets / 0 drops / 0 errors. ppp0 RX 41,615,470 packets / 0 drops / 0 errors; TX 19,292,457 packets / 0 drops / 0 errors. These are *cumulative*, not drop-rate measurements.
+- PPPoE `ppp0` configured with MTU 1492, current default route via ppp0. Public IP deliberately omitted from operational handover. nftables input and forward default drop, LAN->WAN forwarding and PPPoE NAT present; MSS clamp to 1452 has matched 69,073 outbound and 11,495 inbound TCP SYN packets.
+- Initial observations show no evident thermal throttling or resource pressure. Outstanding: measure interface counter deltas over an interval, inspect router service/Alloy health and PPPoE stability, check IPv6 policy/external reachability and firewall rule persistence. No firewall, PPPoE or runtime router changes were made by this sampling.
+- The legacy DHCP forwarder was stopped/disabled with the approved rollback playbook, preserving files; dnsmasq, nftables, Unbound and Alloy remained active. The direct Loki stream was proven earlier, and journal events from 09:43 appeared in Loki; a new event strictly *after* the forwarder stop is still needed to finish the post-cutover proof.
+
 ## 30 October 2026 — Direct DHCP observability deployed and verified
 
 - Router `router-01` (192.168.2.1): Debian 13.7 ARM64, Alloy v1.21.3 installed and running/enabled via approval-gated Ansible role `router_dhcp_alloy` (PR #255; check-mode correction PR #256). dnsmasq remained active throughout.
