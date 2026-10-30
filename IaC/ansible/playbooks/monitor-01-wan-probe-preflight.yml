@@ -1,0 +1,77 @@
+---
+# Read-only validation except temporary file creation and removal on monitor-01.
+- name: Validate external WAN probe configuration before deployment
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+  vars:
+    wan_probe_preflight_approved: false
+  tasks:
+    - name: Require consent and correct monitor
+      ansible.builtin.assert:
+        that:
+          - wan_probe_preflight_approved | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Create candidate configuration directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .wan-probe-validation
+      register: wan_probe_tempdir
+      changed_when: false
+
+    - name: Validate candidate configuration with existing Prometheus container
+      block:
+        - name: Render candidate Prometheus configuration
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/prometheus.yml.j2
+            dest: "{{ wan_probe_tempdir.path }}/prometheus.yml"
+            mode: '0600'
+
+        - name: Render candidate alert rules
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/alerts.yml.j2
+            dest: "{{ wan_probe_tempdir.path }}/alerts.yml"
+            mode: '0600'
+
+        - name: Validate rendered alert rules with promtool
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ (wan_probe_tempdir.path ~ '/alerts.yml') | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check rules /dev/stdin
+          args:
+            executable: /bin/bash
+          changed_when: false
+
+        - name: Validate rendered Prometheus configuration with promtool
+          ansible.builtin.shell: |
+            set -o pipefail
+            docker run --rm --network none \
+              -v {{ wan_probe_tempdir.path | quote }}:/candidate:ro \
+              {{ monitoring_prometheus_image | quote }} \
+              promtool check config --syntax-only /candidate/prometheus.yml
+          args:
+            executable: /bin/bash
+          changed_when: false
+
+        - name: Test both external probes from existing blackbox exporter
+          ansible.builtin.uri:
+            url: "http://127.0.0.1:9115/probe?module=icmp&target={{ item }}"
+            return_content: true
+            timeout: 10
+          loop:
+            - 1.1.1.1
+            - 9.9.9.9
+          register: wan_probe_external
+          changed_when: false
+          failed_when: "'probe_success 1' not in wan_probe_external.content"
+      always:
+        - name: Remove candidate configuration directory
+          ansible.builtin.file:
+            path: "{{ wan_probe_tempdir.path }}"
+            state: absent
+          changed_when: false
