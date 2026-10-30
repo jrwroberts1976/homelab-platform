@@ -311,11 +311,11 @@ groups:
           description: "More than 100 interface packet drops occurred over 10 minutes, sustained for 5 minutes."
 
       - alert: RouterPPPoELinkDown
-        expr: node_network_up{job="router-node-exporter",device="ppp0"} == 0
+        expr: absent(node_network_receive_bytes_total{job="router-node-exporter",device="ppp0"}) and on() (up{job="router-node-exporter",target_name="router-01"} == 1)
         for: 2m
         labels:
           severity: critical
           service: router-network
         annotations:
-          summary: "Router PPPoE interface down"
-          description: "Node exporter reports ppp0 down for more than 2 minutes. Investigate WAN connectivity."
+          summary: "Router PPPoE interface missing"
+          description: "Router exporter is reachable but ppp0 traffic counters are absent for more than 2 minutes. Check whether PPPoE exists and whether the WAN route remains present. This does not independently prove external Internet reachability."
