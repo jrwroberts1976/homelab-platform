@@ -25,7 +25,6 @@ monitoring_alloy_heartbeat_hosts:
   - dns-01
   - dns-02
   - cloud-01
-  - docker-01
   - admin-01
 monitoring_alloy_heartbeat_lookback_seconds: 1800
 monitoring_alloy_heartbeat_stale_seconds: 600
@@ -55,8 +54,6 @@ monitoring_icmp_targets:
     label: Proxmox-2
   - address: 192.168.2.195
     label: media-01
-  - address: 192.168.2.220
-    label: docker-01
 
 monitoring_pve_https_targets:
   - address: https://192.168.2.70:8006/
