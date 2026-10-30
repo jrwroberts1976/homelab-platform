@@ -319,3 +319,35 @@ groups:
         annotations:
           summary: "Router PPPoE interface missing"
           description: "Router exporter is reachable but ppp0 traffic counters are absent for more than 2 minutes. Check whether PPPoE exists and whether the WAN route remains present. This does not independently prove external Internet reachability."
+
+  - name: homelab-wan-connectivity
+    rules:
+      - alert: WANExternalConnectivityDown
+        expr: (sum(probe_success{job="blackbox-wan-icmp"} == 0) == 2) and (count(probe_success{job="blackbox-wan-icmp"}) == 2) and (sum(up{job="blackbox-wan-icmp"} == 1) == 2)
+        for: 3m
+        labels:
+          severity: critical
+          service: wan-connectivity
+        annotations:
+          summary: "External connectivity unavailable from monitor-01"
+          description: "Both independent ICMP probes have failed for 3 minutes while both Blackbox scrapes are working. Check WAN path and upstream connectivity."
+
+      - alert: WANExternalProbeDegraded
+        expr: (probe_success{job="blackbox-wan-icmp"} == 0) and on(instance) (up{job="blackbox-wan-icmp"} == 1) unless on() ((sum(probe_success{job="blackbox-wan-icmp"} == 0) == 2) and (count(probe_success{job="blackbox-wan-icmp"}) == 2))
+        for: 5m
+        labels:
+          severity: warning
+          service: wan-connectivity
+        annotations:
+          summary: "External probe failure: {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "One external ICMP endpoint has failed for 5 minutes while its Blackbox scrape is healthy. This alone does not demonstrate a WAN outage."
+
+      - alert: WANProbeCollectionFailed
+        expr: up{job="blackbox-wan-icmp"} == 0
+        for: 3m
+        labels:
+          severity: warning
+          service: wan-monitoring
+        annotations:
+          summary: "WAN probe collection failed: {{ "{{" }} $labels.target_name {{ "}}" }}"
+          description: "Prometheus cannot scrape a WAN Blackbox probe. Check Blackbox exporter rather than assuming Internet connectivity is lost."
