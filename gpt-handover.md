@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### Router interface counter deltas — 30-second sample, 30 October 2026
+
+- eth0 LAN: RX +20,208 packets, TX +44,570 packets; RX drops stayed 227, TX drops stayed 12; errors unchanged at 0. RX bytes +1,491,556 (~0.40 Mbps), TX bytes +64,416,157 (~17.18 Mbps).
+- eth1 WAN USB: RX +44,571 packets, TX +20,146; RX drops stayed 1, TX drops stayed 0; errors unchanged at 0. RX bytes +64,173,097 (~17.11 Mbps), TX bytes +1,688,801 (~0.45 Mbps).
+- ppp0 PPPoE: RX +44,566 packets, TX +20,144; drops and errors stayed 0. RX bytes +63,775,367 (~17.01 Mbps), TX bytes +1,084,405 (~0.29 Mbps).
+- These rates reflect observed traffic over an approximately 30-second interval, not connection capacity. No new drop/error increments were observed; continued time-series monitoring is still needed.
+
 ### Router initial performance/security baseline — 30 October 2026, 10:15 GMT
 
 - Read-only Ansible observation of router-01 (uptime 22h31m): load average 0.10/0.03/0.01; temperature 40.894°C; Raspberry Pi `vcgencmd get_throttled=0x0`; RAM 3.7 GiB total, 285 MiB used, 3.4 GiB available; swap 0 used; root filesystem 939 GB total, 4.6 GB used, 896 GB available.
