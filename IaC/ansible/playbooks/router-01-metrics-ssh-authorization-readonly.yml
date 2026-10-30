@@ -1,0 +1,101 @@
+---
+# C2b2 read-only feasibility audit. No SSH/user/network changes.
+- name: Inspect Pi SSH policy before restricted monitoring authorization
+  hosts: router_postcutover_baseline
+  become: true
+  gather_facts: false
+  vars:
+    router_c2_auth_audit_approved: false
+  tasks:
+    - name: Identify controlling machine
+      ansible.builtin.command:
+        argv: [hostname]
+      delegate_to: localhost
+      become: false
+      check_mode: false
+      changed_when: false
+      register: c2b2_controller
+
+    - name: Require explicit opt-in and exact router inventory
+      ansible.builtin.assert:
+        that:
+          - router_c2_auth_audit_approved | bool
+          - c2b2_controller.stdout | trim == 'admin-01'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+      delegate_to: localhost
+      become: false
+
+    - name: Verify physical Pi Ethernet identity
+      ansible.builtin.command:
+        argv: [cat, /sys/class/net/eth0/address]
+      register: c2b2_mac
+      check_mode: false
+      changed_when: false
+
+    - name: Require verified Raspberry Pi
+      ansible.builtin.assert:
+        that:
+          - c2b2_mac.stdout | trim | lower == 'd8:3a:dd:5a:51:44'
+
+    - name: Check proposed service account availability
+      ansible.builtin.command:
+        argv: [getent, passwd, router-metrics]
+      register: c2b2_account
+      check_mode: false
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Validate sshd configuration without reload
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -t]
+      check_mode: false
+      changed_when: false
+
+    - name: Read general effective SSH policy
+      ansible.builtin.command:
+        argv: [/usr/sbin/sshd, -T]
+      register: c2b2_sshd
+      check_mode: false
+      changed_when: false
+
+    - name: Inspect Include and Match order of SSH main config
+      ansible.builtin.command:
+        argv: [grep, -nEi, '^[[:space:]]*(Include|Match)[[:space:]]', /etc/ssh/sshd_config]
+      register: c2b2_include_match
+      check_mode: false
+      changed_when: false
+      failed_when: false
+
+    - name: List SSH daemon config fragments without modifying files
+      ansible.builtin.find:
+        paths: /etc/ssh/sshd_config.d
+        patterns: '*.conf'
+        recurse: false
+      register: c2b2_fragments
+
+    - name: Check exporter remains bound only to Pi loopback
+      ansible.builtin.command:
+        argv: [ss, -ltn]
+      register: c2b2_listeners
+      check_mode: false
+      changed_when: false
+
+    - name: Require Node Exporter isolation before any further planning
+      ansible.builtin.assert:
+        that:
+          - "'127.0.0.1:9100' in c2b2_listeners.stdout"
+          - "'0.0.0.0:9100' not in c2b2_listeners.stdout"
+          - "'[::]:9100' not in c2b2_listeners.stdout"
+          - "'192.168.2.1:9100' not in c2b2_listeners.stdout"
+
+    - name: Report SSH authorization readiness without any changes
+      ansible.builtin.debug:
+        msg:
+          proposed_account_exists: "{{ c2b2_account.rc == 0 }}"
+          include_and_match_order: "{{ c2b2_include_match.stdout_lines }}"
+          sshd_fragment_paths: "{{ c2b2_fragments.files | map(attribute='path') | list }}"
+          effective_sshd_policy: "{{ c2b2_sshd.stdout_lines | select('match', '^(allowtcpforwarding|permitopen|permitlisten|passwordauthentication|kbdinteractiveauthentication|authenticationmethods|pubkeyauthentication|disableforwarding|permittty|allowagentforwarding|x11forwarding|authorizedkeysfile) ') | list }}"
+          local_metrics_isolation: "VERIFIED"
+          modifications: "READ ONLY; no users, SSH config, keys, firewall or tunnel changed"
