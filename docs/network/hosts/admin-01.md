@@ -125,12 +125,12 @@ admin-01 is a managed Raspberry Pi 3 running Debian GNU/Linux 13 (trixie), servi
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-30T19:21:59+00:00`
-- Pending updates: **29**
+- Last assessed: `2026-10-30T20:26:30+00:00`
+- Pending updates: **31**
 - Security updates pending: **4**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-25T17:05:29+00:00`
+- Last APT transaction activity: `2026-10-30T19:55:13+00:00`
 - Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
