@@ -1,0 +1,51 @@
+---
+# Read-only QoS preflight; no tc modifications, modules loaded, or speed tests.
+- name: Audit router QoS readiness and active network path
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_preflight_approved: false
+  tasks:
+    - name: Require approval and exact live router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_preflight_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect traffic control and PPPoE routing without modifications
+      ansible.builtin.shell: |
+        set -eu
+        echo '=== INTERFACE AND ROUTING STATE ==='
+        ip -br link
+        ip -4 route show default
+        ip -d link show dev ppp0
+        ip -d link show dev eth1
+        echo '=== QUEUE DISCIPLINES ==='
+        tc -s qdisc show
+        echo '=== INGRESS FILTERS ==='
+        tc filter show dev ppp0 ingress
+        tc filter show dev eth1 ingress
+        echo '=== EGRESS FILTERS ==='
+        tc filter show dev ppp0 egress
+        tc filter show dev eth1 egress
+        echo '=== IFB DEVICES ==='
+        ip -br link show type ifb
+        echo '=== MODULE AVAILABILITY ==='
+        modinfo -F filename sch_cake
+        modinfo -F filename ifb
+        echo '=== PPPoE SERVICE ==='
+        systemctl is-active router-pppoe
+        echo '=== FIREWALL SERVICE ==='
+        systemctl is-active nftables
+        echo '=== RUNTIME TEMPERATURE AND LOAD ==='
+        uptime
+        vcgencmd measure_temp || true
+      args:
+        executable: /bin/bash
+      register: qos_audit
+      changed_when: false
+    - name: Display read-only QoS preflight evidence
+      ansible.builtin.debug:
+        var: qos_audit.stdout_lines
