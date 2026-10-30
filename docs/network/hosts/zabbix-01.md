@@ -112,7 +112,7 @@ zabbix-01 is CT105, an Ansible-managed Proxmox LXC running the Zabbix monitoring
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-30T07:50:34+00:00`
+- Last assessed: `2026-10-30T08:50:54+00:00`
 - Pending updates: **7**
 - Security updates pending: **0**
 - Reboot required: **No**
