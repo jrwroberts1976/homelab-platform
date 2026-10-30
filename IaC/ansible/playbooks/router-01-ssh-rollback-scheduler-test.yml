@@ -1,0 +1,83 @@
+---
+# Safe test: schedule restoration of a non-SSH temporary file.
+- name: Prove router systemd timed file restoration safely
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_ssh_timer_test_approved: false
+    test_dir: /run/router-ssh-rollback-test
+  tasks:
+    - name: Require identity and explicit approval
+      ansible.builtin.assert:
+        that:
+          - router_ssh_timer_test_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect existing test directory
+      ansible.builtin.stat:
+        path: "{{ test_dir }}"
+      register: prior_test
+    - name: Refuse to overwrite prior test automatically
+      ansible.builtin.assert:
+        that:
+          - not prior_test.stat.exists
+        fail_msg: 'Prior test directory remains. Verify and remove it separately before retrying.'
+    - name: Make private test directory
+      ansible.builtin.file:
+        path: "{{ test_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Create original test file
+      ansible.builtin.copy:
+        content: "original\n"
+        dest: "{{ test_dir }}/value"
+        mode: '0600'
+    - name: Create read-only recovery copy
+      ansible.builtin.copy:
+        src: "{{ test_dir }}/value"
+        dest: "{{ test_dir }}/saved"
+        remote_src: true
+        mode: '0600'
+    - name: Write test-only recovery script
+      ansible.builtin.copy:
+        dest: "{{ test_dir }}/restore.sh"
+        mode: '0700'
+        content: |
+          #!/bin/sh
+          set -eu
+          cp /run/router-ssh-rollback-test/saved /run/router-ssh-rollback-test/value
+    - name: Schedule test-only restore in 15 seconds
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=router-ssh-file-restore-test
+          - --on-active=15s
+          - /bin/sh
+          - /run/router-ssh-rollback-test/restore.sh
+      changed_when: true
+    - name: Overwrite only harmless test file
+      ansible.builtin.copy:
+        content: "modified\n"
+        dest: "{{ test_dir }}/value"
+        mode: '0600'
+    - name: Wait until scheduled restoration has executed
+      ansible.builtin.command:
+        argv: [cat, "{{ test_dir }}/value"]
+      register: restored
+      changed_when: false
+      retries: 12
+      delay: 3
+      until: restored.stdout == 'original'
+    - name: Require restoration succeeded
+      ansible.builtin.assert:
+        that:
+          - restored.stdout == 'original'
+    - name: Delete test directory only after successful restoration
+      ansible.builtin.file:
+        path: "{{ test_dir }}"
+        state: absent

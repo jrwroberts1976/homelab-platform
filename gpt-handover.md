@@ -1,5 +1,15 @@
 # GPT Handover — Homelab Platform
 
+### Router SSH hardening finalised — 30 October 2026
+
+- Draft PR #265 staged and validated router-01 SSH hardening through Ansible. Temporary-file systemd rollback proof succeeded after correcting execution on the `/run` noexec filesystem via `/bin/sh`; initial failure and stale unit were diagnosed and cleared.
+- Temporary sshd candidate preflight passed 11 tasks with admin and router-metrics effective policy checks; production deployment passed 15 tasks, with a 10-minute rollback armed before changing SSH.
+- Installed `/etc/ssh/sshd_config.d/00-router-hardening.conf`: `PermitRootLogin no`, `PasswordAuthentication no`, `PubkeyAuthentication yes`, `X11Forwarding no`. Existing router-metrics `Match User` policy retains `AllowTcpForwarding local` and `PermitOpen 127.0.0.1:9100`.
+- Fresh public-key administrative SSH returned `ADMIN_SSH_OK`; Prometheus query `up{job="router-node-exporter"}=1` confirmed monitoring remained functional. Direct curl to host localhost:19101 was not a valid scrape test; tunnel target is inside the Prometheus environment. Finalization playbook passed 14 tasks with zero failures and stopped the rollback timer.
+- Recovery transaction directory `/var/lib/router-ssh-hardening` intentionally remains for audit; review and remove separately rather than during deployment. The changes are live and verified; PR #265 pending repository merge and eventual branch cleanup.
+- No PPPoE, DHCP, DNS, nftables, or other networking changes were made by SSH hardening.
+
+
 ### Router interface counter deltas — 30-second sample, 30 October 2026
 
 - eth0 LAN: RX +20,208 packets, TX +44,570 packets; RX drops stayed 227, TX drops stayed 12; errors unchanged at 0. RX bytes +1,491,556 (~0.40 Mbps), TX bytes +64,416,157 (~17.18 Mbps).

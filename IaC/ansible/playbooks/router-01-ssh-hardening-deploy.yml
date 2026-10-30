@@ -1,0 +1,94 @@
+---
+- name: Stage SSH hardening on router with timed recovery
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    ssh_deploy_approved: false
+    ssh_dir: /var/lib/router-ssh-hardening
+    ssh_conf: /etc/ssh/sshd_config.d/00-router-hardening.conf
+  tasks:
+    - name: Check identity and approval
+      ansible.builtin.assert:
+        that:
+          - ssh_deploy_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Ensure no previous hardening transaction
+      ansible.builtin.stat:
+        path: "{{ ssh_dir }}"
+      register: prior
+    - name: Refuse existing transaction
+      ansible.builtin.assert:
+        that: [not prior.stat.exists]
+    - name: Require absent hardening drop-in
+      ansible.builtin.stat:
+        path: "{{ ssh_conf }}"
+      register: existing_conf
+    - name: Prevent replacement of existing policy
+      ansible.builtin.assert:
+        that: [not existing_conf.stat.exists]
+    - name: Check current SSH configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+    - name: Create protected recovery folder
+      ansible.builtin.file:
+        path: "{{ ssh_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Prepare rollback script
+      ansible.builtin.copy:
+        dest: "{{ ssh_dir }}/restore.sh"
+        mode: '0700'
+        content: |
+          #!/bin/sh
+          set -eu
+          rm -f /etc/ssh/sshd_config.d/00-router-hardening.conf
+          /usr/sbin/sshd -t
+          /usr/bin/systemctl reload ssh
+          touch /var/lib/router-ssh-hardening/rolled-back
+    - name: Arm ten-minute rollback before changing SSH
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=router-ssh-hardening-rollback
+          - --on-active=10min
+          - /bin/sh
+          - "{{ ssh_dir }}/restore.sh"
+    - name: Deploy hardened config and validate
+      block:
+        - name: Install SSH global policy
+          ansible.builtin.copy:
+            dest: "{{ ssh_conf }}"
+            mode: '0644'
+            content: |
+              PermitRootLogin no
+              PasswordAuthentication no
+              PubkeyAuthentication yes
+              X11Forwarding no
+        - name: Check SSH syntax
+          ansible.builtin.command: /usr/sbin/sshd -t
+          changed_when: false
+        - name: Reload SSH daemon
+          ansible.builtin.systemd_service:
+            name: ssh
+            state: reloaded
+      rescue:
+        - name: Attempt immediate recovery
+          ansible.builtin.command:
+            argv: [/bin/sh, "{{ ssh_dir }}/restore.sh"]
+        - name: Stop after failed deployment
+          ansible.builtin.fail:
+            msg: SSH deployment failed; recovery attempted, timed fallback remains scheduled.
+    - name: Confirm rollback timer remains active
+      ansible.builtin.command: systemctl is-active router-ssh-hardening-rollback.timer
+      register: timer
+      changed_when: false
+      failed_when: timer.stdout != 'active'
+    - name: Notify pending verification
+      ansible.builtin.debug:
+        msg: SSH policy staged only; fresh SSH and monitoring checks must pass before timer is stopped.
