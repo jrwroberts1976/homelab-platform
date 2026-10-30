@@ -1,0 +1,83 @@
+---
+# Candidate-only validation. No live Prometheus configuration writes or reloads.
+- name: Validate WAN scrape and alert candidates on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+  vars:
+    wan_probe_preflight_approved: false
+  tasks:
+    - name: Require explicit approval and expected monitor identity
+      ansible.builtin.assert:
+        that:
+          - wan_probe_preflight_approved | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.distribution == 'Debian'
+
+    - name: Verify existing Prometheus container is running
+      ansible.builtin.command:
+        argv: [docker, inspect, monitoring-prometheus-1]
+      register: wan_probe_container
+      changed_when: false
+      failed_when: not (wan_probe_container.stdout | from_json)[0].State.Running
+
+    - name: Create temporary candidate directory
+      ansible.builtin.tempfile:
+        state: directory
+        suffix: .wan-probe-check
+      register: wan_probe_tmp
+      changed_when: false
+
+    - name: Validate both rendered candidate files
+      block:
+        - name: Render candidate Prometheus scrape configuration
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/prometheus.yml.j2
+            dest: "{{ wan_probe_tmp.path }}/prometheus.yml"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Render candidate Prometheus alert rules
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/alerts.yml.j2
+            dest: "{{ wan_probe_tmp.path }}/alerts.yml"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Validate candidate scrape configuration using the running Prometheus image
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ (wan_probe_tmp.path + '/prometheus.yml') | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check config /dev/stdin
+          args:
+            executable: /bin/bash
+          register: wan_probe_config_validation
+          changed_when: false
+
+        - name: Validate candidate alert expressions using the running Prometheus image
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ (wan_probe_tmp.path + '/alerts.yml') | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check rules /dev/stdin
+          args:
+            executable: /bin/bash
+          register: wan_probe_rules_validation
+          changed_when: false
+
+        - name: Print validation results
+          ansible.builtin.debug:
+            msg:
+              config: "{{ wan_probe_config_validation.stdout_lines }}"
+              rules: "{{ wan_probe_rules_validation.stdout_lines }}"
+      always:
+        - name: Remove temporary candidate directory
+          ansible.builtin.file:
+            path: "{{ wan_probe_tmp.path }}"
+            state: absent
+          changed_when: false
