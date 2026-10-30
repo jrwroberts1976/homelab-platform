@@ -1,0 +1,176 @@
+---
+- name: Deploy validated Prometheus router alerts without restarting the monitoring stack
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+  vars:
+    router_alert_deploy_approved: false
+    router_alert_live_rules: /opt/monitoring/prometheus/alerts.yml
+  tasks:
+    - name: Require approval and exact monitor identity
+      ansible.builtin.assert:
+        that:
+          - router_alert_deploy_approved | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Verify existing alert rules file exists
+      ansible.builtin.stat:
+        path: "{{ router_alert_live_rules }}"
+      register: router_alert_live_stat
+
+    - name: Require existing live rules
+      ansible.builtin.assert:
+        that:
+          - router_alert_live_stat.stat.isreg | default(false)
+
+    - name: Verify Prometheus currently ready
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+        timeout: 10
+      changed_when: false
+
+    - name: Create temporary candidate rules file
+      ansible.builtin.tempfile:
+        state: file
+        suffix: .router-alert-candidate.yml
+      register: router_alert_candidate
+      changed_when: false
+
+    - name: Validate candidate, deploy and verify with automatic rollback on failure
+      block:
+        - name: Render candidate from reviewed source
+          ansible.builtin.template:
+            src: ../roles/monitoring_stack/templates/alerts.yml.j2
+            dest: "{{ router_alert_candidate.path }}"
+            mode: '0600'
+            owner: root
+            group: root
+
+        - name: Validate candidate inside Prometheus image
+          ansible.builtin.shell: |
+            set -o pipefail
+            cat {{ router_alert_candidate.path | quote }} |
+              docker exec -i monitoring-prometheus-1 promtool check rules /dev/stdin
+          args:
+            executable: /bin/bash
+          changed_when: false
+
+        - name: Read candidate and deployed checksums
+          ansible.builtin.stat:
+            path: "{{ router_alert_candidate.path }}"
+            checksum_algorithm: sha256
+          register: router_alert_candidate_stat
+
+        - name: Report dry-run preview without changing live rules
+          ansible.builtin.debug:
+            msg: "Candidate SHA256={{ router_alert_candidate_stat.stat.checksum }}; live SHA256={{ router_alert_live_stat.stat.checksum }}; check mode={{ ansible_check_mode }}"
+
+        - name: Create isolated backup of live alert rules
+          ansible.builtin.tempfile:
+            state: file
+            suffix: .router-alert-backup.yml
+          register: router_alert_backup
+          when: not ansible_check_mode
+          changed_when: false
+
+        - name: Back up live alert rules
+          ansible.builtin.copy:
+            src: "{{ router_alert_live_rules }}"
+            dest: "{{ router_alert_backup.path }}"
+            remote_src: true
+            mode: '0600'
+          when: not ansible_check_mode
+
+        - name: Install only validated alert rules
+          ansible.builtin.copy:
+            src: "{{ router_alert_candidate.path }}"
+            dest: "{{ router_alert_live_rules }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          register: router_alert_install
+          when: not ansible_check_mode
+
+        - name: Reload Prometheus rules without container restart
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+            timeout: 10
+          when:
+            - not ansible_check_mode
+            - router_alert_install is changed
+
+        - name: Verify Prometheus exposes router alerts after reload
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/api/v1/rules
+            return_content: true
+            timeout: 15
+          register: router_alert_rules_api
+          changed_when: false
+          when: not ansible_check_mode
+
+        - name: Verify all seven router alert names are loaded
+          ansible.builtin.assert:
+            that:
+              - "router_alert_expected | difference(router_alert_loaded) | length == 0"
+          vars:
+            router_alert_expected:
+              - RouterMetricsUnavailable
+              - RouterTemperatureHigh
+              - RouterMemoryPressure
+              - RouterCPUHigh
+              - RouterNetworkErrors
+              - RouterPacketDrops
+              - RouterPPPoELinkDown
+            router_alert_loaded: "{{ router_alert_rules_api.json.data.groups | map(attribute='rules') | flatten | selectattr('type', 'equalto', 'alerting') | map(attribute='name') | list }}"
+          when: not ansible_check_mode
+      rescue:
+        - name: Restore backup if live rules were replaced
+          ansible.builtin.copy:
+            src: "{{ router_alert_backup.path }}"
+            dest: "{{ router_alert_live_rules }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0644'
+          when:
+            - router_alert_backup is defined
+            - router_alert_backup.path is defined
+            - router_alert_install is defined
+            - router_alert_install is changed
+
+        - name: Reload prior rules after rollback
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/reload
+            method: POST
+            status_code: 200
+          when:
+            - router_alert_install is defined
+            - router_alert_install is changed
+
+        - name: Stop because validation or deployment failed
+          ansible.builtin.fail:
+            msg: "Router alert deployment failed; restore attempted. Inspect Prometheus health and alert rules."
+      always:
+        - name: Remove temporary candidate
+          ansible.builtin.file:
+            path: "{{ router_alert_candidate.path }}"
+            state: absent
+          changed_when: false
+
+        - name: Remove temporary backup after successful verification or rollback attempt
+          ansible.builtin.file:
+            path: "{{ router_alert_backup.path }}"
+            state: absent
+          changed_when: false
+          when:
+            - router_alert_backup is defined
+            - router_alert_backup.path is defined
