@@ -10,8 +10,6 @@ greenbone_scanning_accepted_risks:
   # TCP Timestamps Information Disclosure
   - host: "192.168.2.195"  # media-01
     oid: "1.3.6.1.4.1.25623.1.0.80091"
-  - host: "192.168.2.220"  # docker-01
-    oid: "1.3.6.1.4.1.25623.1.0.80091"
   - host: "192.168.2.48"  # admin-01
     oid: "1.3.6.1.4.1.25623.1.0.80091"
   - host: "192.168.2.50"  # dns-02
@@ -42,8 +40,6 @@ greenbone_scanning_accepted_risks:
   # ICMP Timestamp Reply Information Disclosure
   - host: "192.168.2.195"  # media-01
     oid: "1.3.6.1.4.1.25623.1.0.103190"
-  - host: "192.168.2.220"  # docker-01
-    oid: "1.3.6.1.4.1.25623.1.0.103190"
   - host: "192.168.2.48"  # admin-01
     oid: "1.3.6.1.4.1.25623.1.0.103190"
   - host: "192.168.2.50"  # dns-02
@@ -73,5 +69,3 @@ greenbone_scanning_accepted_risks:
   # The csrf cookie is intentionally client-readable so its value can be
   # supplied in the X-CSRF-Token request header. This is not a session cookie.
   # Reviewed against BirdNET-Go 20261010.
-  - host: "192.168.2.220"  # docker-01 / BirdNET-Go
-    oid: "1.3.6.1.4.1.25623.1.0.105925"
