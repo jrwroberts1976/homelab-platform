@@ -37,7 +37,8 @@ class ExecutorTests(unittest.TestCase):
     def make(self, fail_at=0, armed=True, identity=None):
         runner = FakeRunner(fail_at)
         ident = identity or mod.NamespaceIdentity("qos-p5", 42, 1, 42)
-        return mod.IsolatedExecutor(runner, ident, watchdog_armed=armed,\n                                    watchdog_evidence=evidence(), watchdog_validator=attestation.validate), runner
+        return mod.IsolatedExecutor(runner, ident, watchdog_armed=armed,
+                                    watchdog_evidence=evidence(), watchdog_validator=attestation.validate), runner
 
     def test_unarmed_refuses_without_calls(self):
         x, r = self.make(armed=False)
