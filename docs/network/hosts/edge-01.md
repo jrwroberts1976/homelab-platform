@@ -125,7 +125,7 @@ edge-01 is CT103, a managed Debian 13 LXC on Proxmox-2. OpenSSH 10.0p2 is expose
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-31T10:19:50+00:00`
+- Last assessed: `2026-10-31T11:22:50+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
