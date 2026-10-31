@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 4 independent sensor watchdog runtime proof PASS
+
+- User ran approval-gated `router-01-qos-download-sensor-independent-watchdog-proof.yml` on `sensor-01`, using feature branch `df63f481`. Ansible recap: **ok=17 changed=6 unreachable=0 failed=0 skipped=0**. `Assert expected watchdog evidence` passed (`INSTALLER_KILLED`, `WATCHDOG_ROLLBACK_PASS`); watchdog service/timer inactive; disposable namespace absent; callback script absent; staged script and evidence directory removed. User provided task output, not detailed independent tc dumps.
+- This proves the isolated sensor namespace IFB/CAKE watchdog failure path under the tested conditions. It does **not** prove PPPoE reconnection, live router-01 production download persistence, reboot recovery or production rollback. Working 13 Mbps upload CAKE remains protected, download persistence not enabled. Next: focused production-specific persistence design review with gate/rollback and no blind cutover.
+
+
 ### 31 October 2026 — second runtime watchdog proof failed at host identity check
 
 - Sensor-01 proof run at 09:57 failed in ~9 ms, rc=1; Bash ERR trap pinpointed line 12 `[[ $(readlink /proc/self/ns/net) == $(readlink /proc/1/ns/net) ]]`. Cleanup also returned rc=1 on same check. No evidence that IFB/CAKE setup ran. Earlier diagnostic showed host route via 192.168.2.1, eth0 192.168.2.55/24; latest post-failure state not yet independently checked.
