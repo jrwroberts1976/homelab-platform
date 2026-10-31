@@ -1,0 +1,43 @@
+---
+# Read-only readiness for timed download IFB rollback; does not arm timer.
+- name: Verify prerequisites for a timed download QoS rollback
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require exact known router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Check script syntax on Ansible controller
+      ansible.builtin.command:
+        argv: [/bin/sh, '-n', "{{ playbook_dir }}/../files/router-qos-download-restore.sh"]
+      delegate_to: localhost
+      become: false
+      changed_when: false
+    - name: Verify absent trial and rollback units
+      ansible.builtin.shell: |
+        set -eu
+        test ! -e /var/lib/router-qos-download-trial
+        test ! -e /etc/systemd/system/router-qos-download-rollback.service
+        test ! -e /etc/systemd/system/router-qos-download-rollback.timer
+        test ! -e /run/systemd/transient/router-qos-download-rollback.service
+        test ! -e /run/systemd/transient/router-qos-download-rollback.timer
+        ! /usr/sbin/ip link show dev ifb-wan0 >/dev/null 2>&1
+        test -z "$(/usr/sbin/tc filter show dev ppp0 ingress)"
+        test -z "$(/usr/sbin/tc qdisc show dev ppp0 | grep 'qdisc clsact' || true)"
+        systemctl is-active router-qos-upload.service
+        systemctl is-active router-pppoe.service
+        /usr/sbin/tc qdisc show dev eth1 | grep -q 'cake .*bandwidth 13Mbit .*ptm overhead 30'
+        command -v systemd-run
+        command -v systemctl
+        command -v tc
+        command -v ip
+        echo TIMED_ROLLBACK_READINESS_OK
+      changed_when: false
+      register: readiness
+    - name: Show readiness
+      ansible.builtin.debug:
+        var: readiness.stdout_lines
