@@ -29,10 +29,12 @@ class NamespaceIdentity:
             raise Refused("namespace ownership mismatch")
 
 class IsolatedExecutor:
-    def __init__(self, runner, identity, *, watchdog_armed=False):
+    def __init__(self, runner, identity, *, watchdog_armed=False, watchdog_evidence=None, watchdog_validator=None):
         self.runner = runner
         self.identity = identity
         self.watchdog_armed = watchdog_armed
+        self.watchdog_evidence = watchdog_evidence
+        self.watchdog_validator = watchdog_validator
         self.installed = False
         self.pending = False
 
@@ -42,8 +44,15 @@ class IsolatedExecutor:
 
     def install(self):
         self.identity.verify()
-        if not self.watchdog_armed:
-            raise Refused("independent watchdog not armed")
+        if not self.watchdog_armed or self.watchdog_evidence is None or self.watchdog_validator is None:
+            raise Refused("independent watchdog evidence not supplied")
+        try:
+            self.watchdog_validator(self.watchdog_evidence)
+        except Exception as error:
+            raise Refused("independent watchdog evidence invalid") from error
+        if (self.watchdog_evidence.namespace != self.identity.name or
+                self.watchdog_evidence.namespace_inode != self.identity.inode):
+            raise Refused("watchdog bound to different namespace")
         if self.installed or self.pending:
             raise Refused("already installed or partial install")
         # Precondition results must be verified by the future live wrapper:
