@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — sensor-01 independent timer marker proof PASS
+
+- Operator pulled ebeacd8f; syntax validation of `router-01-qos-download-sensor-timer-marker-proof.yml` passed. Execution on sensor-01: **11 OK, 2 changed, 0 failed**, marker created after transient systemd timer fired, then removed; final unit listing empty. No production interface or router changes.
+- Timer scheduling is proved. Real independent CAKE/IFB cleanup **not yet proved**. Next stage requires a separate network namespace keeper, ownership-checked cleanup process, timeout and SIGKILL simulation, with safe failure teardown. Do not modify router-01.
+
+
 ### 31 October 2026 — sensor-01 timer-marker proof staged, not executed
 
 - Added `IaC/ansible/playbooks/router-01-qos-download-sensor-timer-marker-proof.yml` on the QoS feature branch. It verifies a separate 5-second transient systemd timer can create a marker under /run, waits for the marker, and cleans reserved test resources. Guarded for sensor-01 identity and collision checks. This is not a real QoS rollback or full watchdog-failure proof.
