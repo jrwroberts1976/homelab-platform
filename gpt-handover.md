@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — offline durable PPP ownership journal staged
+
+- After operator verified the prior in-memory model twice (7/7 both runs), added `IaC/ansible/scripts/router-qos-download-durable-journal.py` and `test-router-qos-download-durable-journal.py` (9 unittest cases). Uses caller-provided existing test directory; JSON intent file, `flock`, tempfile+file fsync, atomic `os.replace`, directory fsync; pending intents refuse new sessions and finish/recovery require explicit external-verification argument. Rejects corrupt state, malformed sessions and symlinks in covered paths. **Tests not yet run by operator.**
+- Safety limitations: offline fixture only, no real external verification binding, no PPP hooks, no systemd/network changes, no production authorization. The caller must hold the lock for its *entire* mutation/validation critical section in an eventual implementation; current `begin`/`finish` methods lock individual journal operations only. This is NOT yet a complete crash-safe live reconciler. Retired SIGKILL test remains suspended. Router upload 13 Mbit retained; persistent download OFF.
+
+
 ### 31 October 2026 — non-disruptive Phase 5 PPP ownership recovery model staged
 
 - Following operator read-only sensor audit (3 OK, 0 changed, 0 failures), added `IaC/ansible/scripts/router-qos-download-ownership-journal-model.py` and seven offline unittest cases `test-router-qos-download-ownership-journal-model.py` to exercise nominal reconnect, stale down refusal, partial install/teardown fail-closed, refusal of unverified recovery, verified recovery acknowledgement, and refusal of spurious recovery. **Not yet tested by operator.** No ip/tc/systemd commands, no signal termination, no changes to sensor/router.
