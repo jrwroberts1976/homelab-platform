@@ -1,0 +1,42 @@
+---
+# Phase 3 discovery only: no installed units, scripts or interfaces are changed.
+- name: Inspect PPPoE lifecycle hooks for download QoS design
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require canonical router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect PPP event hook layout and service dependencies
+      ansible.builtin.shell: |
+        echo '=== PPP VERSION / EXECUTABLE ==='
+        command -v pppd || true
+        echo '=== PPP HOOK DIRECTORIES ==='
+        for d in /etc/ppp/ip-up.d /etc/ppp/ip-down.d /etc/ppp/ipv6-up.d /etc/ppp/ipv6-down.d; do
+          if test -d "$d"; then
+            ls -ld "$d"
+            find "$d" -mindepth 1 -maxdepth 1 -printf '%f\n'
+          fi
+        done
+        echo '=== PPP UNIT STRUCTURE ==='
+        systemctl show router-pppoe.service -p Type -p ExecStart -p Restart -p After -p Wants -p Requires --no-pager
+        echo '=== ROUTER SERVICE STATES ==='
+        systemctl is-active router-pppoe router-qos-upload nftables dnsmasq unbound ssh
+        echo '=== LIVE PPP IDENTITY ==='
+        cat /sys/class/net/ppp0/ifindex
+        ip -4 route show default
+        echo '=== CURRENT INGRESS AND UPLOAD QDISC ==='
+        tc qdisc show dev ppp0
+        tc filter show dev ppp0 ingress
+        tc qdisc show dev eth1
+        echo '=== TRIAL EVIDENCE DIRECTORY ==='
+        test -e /var/lib/router-qos-download-trial/rolled-back && echo rolled-back || echo not-confirmed
+      changed_when: false
+      register: discovery
+    - name: Display read-only discovery
+      ansible.builtin.debug:
+        var: discovery.stdout_lines
