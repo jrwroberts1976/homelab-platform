@@ -1,0 +1,92 @@
+---
+- name: Python-only disposable IFB crash test
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  vars:
+    qos_python_watchdog_approved: false
+  tasks:
+    - name: Gate on explicit approval and sensor network identity
+      ansible.builtin.assert:
+        that:
+          - qos_python_watchdog_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+    - name: Refuse collisions
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -euo pipefail
+          test ! -e /run/qos-proof31
+          test ! -e /run/qos-proof31-test.sh
+          test ! -e /run/qos-proof31-python-installer.py
+          test ! -e /run/qos-sensor-independent-proof.sh
+          ! ip netns list | grep -Eq '^qos-proof31( |$)'
+          test -z "$(systemctl list-units --all --plain --no-legend 'qos-proof31-rollback*' | grep -v '^$' || true)"
+      changed_when: false
+    - name: Run isolated proof and cleanup
+      block:
+        - name: Stage watchdog proof shell
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/router-qos-sensor-independent-proof.sh"
+            dest: /run/qos-sensor-independent-proof.sh
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Stage Python installer
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../scripts/router-qos-download-sensor-python-kill-installer.py"
+            dest: /run/qos-proof31-python-installer.py
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Check shell syntax
+          ansible.builtin.command:
+            argv: [bash, -n, /run/qos-sensor-independent-proof.sh]
+          changed_when: false
+        - name: Run actual Python crash test
+          ansible.builtin.command:
+            argv: [bash, /run/qos-sensor-independent-proof.sh, run-python-partial]
+          register: proof
+          changed_when: true
+        - name: Assert rollback
+          ansible.builtin.assert:
+            that:
+              - "'PYTHON_INSTALLER_KILLED' in proof.stdout"
+              - "'PYTHON_WATCHDOG_ROLLBACK_PASS' in proof.stdout"
+      always:
+        - name: Check staged proof executable
+          ansible.builtin.stat:
+            path: /run/qos-sensor-independent-proof.sh
+          register: source_stat
+        - name: Guarded cleanup
+          ansible.builtin.command:
+            argv: [bash, /run/qos-sensor-independent-proof.sh, cleanup]
+          when: source_stat.stat.exists
+          changed_when: true
+        - name: Require namespace absent
+          ansible.builtin.shell:
+            executable: /bin/bash
+            cmd: "! ip netns list | grep -Eq '^qos-proof31( |$)'"
+          changed_when: false
+        - name: Require timer inactive
+          ansible.builtin.command:
+            argv: [systemctl, is-active, qos-proof31-rollback.timer]
+          register: timer
+          failed_when: timer.stdout in ['active', 'activating', 'deactivating']
+          changed_when: false
+        - name: Delete staged Python after cleanup
+          ansible.builtin.file:
+            path: /run/qos-proof31-python-installer.py
+            state: absent
+        - name: Delete staged shell after cleanup
+          ansible.builtin.file:
+            path: /run/qos-sensor-independent-proof.sh
+            state: absent
+        - name: Delete evidence after cleanup
+          ansible.builtin.file:
+            path: /run/qos-proof31
+            state: absent
