@@ -189,19 +189,19 @@ Use this precedence when documents disagree:
 | `PROXMOX` | `192.168.2.70` | `jameshouse-pve` node 1 / NTP | ACTIVE |
 | `Proxmox-2` | `192.168.2.71` | `jameshouse-pve` node 2 / NTP; former discovery source retained for rollback evidence | ACTIVE |
 | `media-01` | `192.168.2.195` | Raspberry Pi 5 Kodi endpoint / primary Proxmox NFS backup target | ACTIVE |
-| `docker-01` | `192.168.2.220` | Raspberry Pi 4 BirdNET-Go Docker host | ACTIVE |
-| ASUS RT-AC86U | `192.168.2.1` | Router / DHCP / AiMesh controller / OpenVPN endpoint | ACTIVE |
+| `router-01` | `192.168.2.1` | Raspberry Pi 4 PPPoE gateway / nftables NAT / dnsmasq / Unbound / CAKE QoS | ACTIVE |
 | ASUS AiMesh node | `192.168.2.181` | Wireless mesh node | ACTIVE |
 | ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
 | HP ProCurve 2510G-24 | `192.168.2.16` | Core switch / active SPAN source | ACTIVE |
 
-The normal Ansible-managed Linux baseline is **15 hosts**. `home-01` is active but HAOS and intentionally outside that 15-host Linux/Ansible baseline.
+The canonical active Ansible-managed Linux baseline is **15 hosts**. Router-01 replaces retired docker-01; the ASUS device is no longer the gateway. `home-01` is active but HAOS and intentionally outside that 15-host Linux/Ansible baseline.
 
 ## Retired identities
 
 These names are historical only and must not be used as active deployment, monitoring or recovery targets:
 
-- `TestServer` -> hardware now `docker-01`; <!-- historical -->
+- `TestServer` -> hardware now `router-01`; <!-- historical -->
+- `docker-01` -> repurposed as active `router-01`; <!-- historical -->
 - `DietPi` -> hardware now `admin-01`; <!-- historical -->
 - `ids-01` -> decommissioned; <!-- historical -->
 - former `k3s-node-01` identity -> hardware now `media-01`; <!-- historical -->
