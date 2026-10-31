@@ -140,8 +140,7 @@
             msg: "Trial activation failed; immediate rollback attempted. Check tc, recovery marker and rollback timer; do not retry blindly."
     - name: Describe trial window
       ansible.builtin.debug:
-        msg: "Temporary 43Mbit download CAKE via ppp0 ingress active; rollback timer armed for ten minutes. Run connectivity/speed tests immediately. DO NOT disable timer without explicit finalisation review."
-)" -eq 5
+        msg: "Temporary 43Mbit download CAKE via ppp0 ingress active; rollback timer armed for ten minutes. Run connectivity/speed tests immediately. DO NOT disable timer without explicit finalisation review.")" -eq 5
       changed_when: false
     - name: Create root-only trial directory
       ansible.builtin.file:
