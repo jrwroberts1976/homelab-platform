@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Python PPP decision gate + real sensor rollback scenario staged
+
+- Operator reported previous partial-install watchdog proof `sensor-01 ok=17 changed=5 failed=0`. New strict test fixture `IaC/ansible/scripts/router-qos-download-sensor-event-gate.py` invokes the existing Python PPP event-replay `step()` and insists on exact synthetic session A and `PLAN_INSTALL` operations. The existing independent watchdog Bash proof supports new `run-event-partial` mode: after timer is armed, verify Python decision, then run the same real isolated IFB+43Mbit CAKE partial SIGKILL test and watchdog cleanup. New default-disabled Ansible playbook `IaC/ansible/playbooks/router-01-qos-download-sensor-event-watchdog-proof.yml` stages Python modules under /run, checks ownership collision, and cleans staged files after the isolated recovery proof.
+- **Not executed yet.** This is real tc/watchdog + Python *decision gating*, NOT live operation of the Python isolated executor, durable PPP ownership reconciliation or actual PPP reconnect hooks. The Python fixture uses synthetic PPP ifindex 101. Must run Bash and Ansible syntax checks then approved sensor-01 test. Production router remains unchanged, upload CAKE 13Mbit retained; download persistence still off.
+
+
 ### 31 October 2026 — real isolated partial-install watchdog proof staged (operator execution pending)
 
 - Fixed source script `IaC/ansible/files/router-qos-sensor-independent-proof.sh`: literal escaped line breaks after comments had inadvertently commented out the sensor eth0 address and default-route checks; both guards now execute. Added `run-partial` scenario: real disposable namespace `qos-proof31` on sensor-01; after IFB + 43Mbit CAKE but **before** clsact/filter, intentionally SIGKILL installer; independently scheduled systemd watchdog should clear IFB and verify ingress remains empty. Existing `run` scenario remains supported.
