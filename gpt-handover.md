@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — CAKE upload QoS survives controlled router reboot
+
+- Router rebooted and reports `uptime -s` = `2026-10-31 06:12:01`. Initial Ansible SSH `Connection refused` was transient during reboot; interactive SSH to `192.168.2.1` subsequently succeeded.
+- Post-boot read-only Ansible verification: `router-qos-upload.service` = `enabled` and `active`; `eth1` root qdisc = `cake ... bandwidth 13Mbit ... ptm overhead 30`; IPv4 default route `default dev ppp0 scope link`; `router-pppoe`, `nftables`, `dnsmasq`, `unbound`, and `ssh` all active. The router's LAN and WAN interfaces and PPPoE link were up.
+- **Boot persistence confirmed** for 13 Mbps upload CAKE. USB NIC hot-reset and independent PPPoE reconnection resilience not yet tested. Continue to preserve recovery files and avoid unplanned link resets. Review/merge PR #266 and document separate disable/restore flow before considering upload QoS fully operationally closed.
+
+
 ### 31 October 2026 — Post-activation upload QoS verification
 
 - Read-only audit: `router-qos-upload.service` reported `enabled` and `active`; `tc qdisc show dev eth1` showed `cake ... bandwidth 13Mbit ... ptm overhead 30`; default IPv4 route `default dev ppp0 scope link`; `router-pppoe`, `nftables`, `dnsmasq`, `unbound` and `ssh` all `active`.
