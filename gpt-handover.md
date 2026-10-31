@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — router QoS Grafana dashboard staged
+
+- Operator verified live 43 Mbps download CAKE `ifbqosdl0`, ingress pref 49132 processing packets, existing 13 Mbps upload CAKE `eth1`, PPP ip-up hook installed, 1.1.1.1 ping 0% loss ~10.9ms.
+- User requested QoS dashboard. Added read-only `IaC/ansible/files/router-qos-prometheus-collector.py` parsing `tc -s qdisc` upload/download CAKE, gauges for configured rate and queue delays, cumulative sent/dropped/overlimits/backlog metrics. Added Grafana dashboard JSON `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/production/homelab-router-qos.json`, guarded dashboard-only deploy playbook and read-only router + monitor collector preflight. **No deployment or tests yet.**
+- Next: run `playbooks/router-01-qos-dashboard-preflight.yml` to establish router node-exporter textfile collector location and Prometheus scrape before enabling exporter. Dashboard provision may occur independently but panels remain empty until textfile ingestion wired. Do not alter network shaping, PPP, router firewall, or generic monitoring stack in this change. Grafana datasource UID `prometheus` per existing dashboards.
+
+
 ### 31 October 2026 — simplified persistent basic download QoS staged
 
 - Operator confirmed real 43 Mbps IFB/CAKE trial activation on router-01 and scheduled rollback execution at 18:39:26 (journal: PASS basic download QoS removed). ppp0 ingress restored to noqueue, eth1 upload CAKE 13Mbit remains active.
