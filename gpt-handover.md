@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Real isolated CAKE/IFB proof PASS; SIGKILL test staged
+
+- Operator pulled commit 0dcb9085 and ran `router-01-qos-download-netns-proof.yml` on admin-01: **5 OK, 1 changed, 0 failed**. Approval, shell syntax, real kernel CAKE 43Mbit / IFB ingress redirect and cleanup assertions passed within a fresh unconnected network namespace. This proves kernel operation and normal teardown, not PPP reconnect or crash recovery. No production router changes.
+- Staged **not yet run** `IaC/ansible/playbooks/router-01-qos-download-netns-crash-proof.yml` plus `files/router-qos-download-netns-crash-proof.sh`. The new controller-only test kills a child process with SIGKILL after creating real IFB and again after attaching real ingress redirect; a surviving parent independently cleans and verifies namespace resources. Explicit approval and admin-01 hostname checks; script refuses host namespace or nonempty namespace.
+- Limits: parent remains alive, so this is **not** an independent watchdog/systemd rollback, parent crash recovery, power failure, simultaneous events, or PPP reconnect test. Download persistence remains disabled; eth1 13Mbps upload CAKE preserved.
+- Next: syntax-check and execute new test with approval; inspect evidence, then implement a genuinely external timed watchdog and ownership/serialization tests before any live deployment.
+
+
 ### 31 October 2026 — Controller network-namespace compatibility proof staged (not executed)
 
 - Operator verified on admin-01 that sudo unshare --net works, creates loopback-only namespace with no routes, and ifb/sch_cake/cls_matchall/act_mirred modules are available. Host default route remains via 192.168.2.1 on eth0.
