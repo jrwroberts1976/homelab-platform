@@ -1687,3 +1687,9 @@ Outstanding:
 - A disposable dummy ingress and IFB were used to exercise 43Mbit CAKE, clsact and a mirred redirect. The test removed those interfaces and verified production `ppp0` ingress and `eth1` upload CAKE were unchanged.
 - Proof marker: `/var/lib/router-qos-download-real-actuator-proof/passed`.
 - Still outstanding: serialized event-driven reconcile operations, interruption recovery, PPP lifecycle integration and persistence tests. Do not activate the candidate service yet.
+
+### 31 October 2026 — Locked decision guard staged
+
+- Added `IaC/ansible/files/router-qos-download-reconcile-guard.py`, which takes JSON snapshots, acquires a local flock, validates PPP interface identity values, and calls the existing pure reconciliation planner. It **does not execute network changes**.
+- Added controller-only `playbooks/router-01-qos-download-reconcile-guard-proof.yml` covering first activation, duplicate events and invalid identity. **Not yet run by user**.
+- This is not yet a production reconciler. Actual `tc` application, process-crash recovery, event hook integration and independent rollback remain separate gates. No live router changes.
