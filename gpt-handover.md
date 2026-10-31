@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 read-only PPP reconciler planner staged
+
+- Added `IaC/ansible/scripts/router-qos-download-ppp-reconciler-plan.py`: validates ppp0 interface, ifindex and session token from a JSON fixture and outputs safe up/down decisions, refusing foreign/partial resources, stale events and reconnect before verified old-session teardown. Script has no network/systemd operations and explicitly reports `network_modified=false` and `production_activation_enabled=false`.
+- Added `IaC/ansible/scripts/test-router-qos-download-ppp-reconciler-plan.py` with offline tests. **Tests are not yet executed by user; this is a planner, not an installed PPP hook, mutating reconciler or persistent QoS service.** Next: offline tests, then independently verified ownership/rollback for real isolated-network implementation. Router-01 remains unchanged.
+
+
 ### 31 October 2026 — Phase 5 PPP lifecycle contract staged, no deployment
 
 - Created disabled/default-off `IaC/ansible/vars/router-qos-download-phase5-contract.yml` defining future PPP up/down hook paths, expected interface identities, rate, and safety gates. This is configuration contract only; no hooks or live reconciler installed.
