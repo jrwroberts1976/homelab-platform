@@ -60,12 +60,17 @@
           register: cleanup
           changed_when: cleanup.rc == 0
           failed_when: cleanup.rc != 0
+        - name: Require completed cleanup before deleting recovery artefacts
+          ansible.builtin.assert:
+            that:
+              - cleanup is not skipped
+              - cleanup.rc == 0
         - name: Verify independent watchdog no longer running
           ansible.builtin.command:
             argv: [systemctl, is-active, qos-proof31-rollback.service]
           register: watchdog_status
           changed_when: false
-          failed_when: watchdog_status.stdout in ['active', 'activating']
+          failed_when: watchdog_status.stdout in ['active', 'activating', 'deactivating']
         - name: Verify no self-copied watchdog script remains
           ansible.builtin.stat:
             path: /run/qos-proof31-test.sh
@@ -74,6 +79,12 @@
           ansible.builtin.assert:
             that:
               - not retained_watchdog.stat.exists
+        - name: Verify timer is not scheduled
+          ansible.builtin.command:
+            argv: [systemctl, is-active, qos-proof31-rollback.timer]
+          register: watchdog_timer_status
+          changed_when: false
+          failed_when: watchdog_timer_status.stdout in ['active', 'activating', 'deactivating']
         - name: Remove temporary source script
           ansible.builtin.file:
             path: "{{ proof_script }}"
