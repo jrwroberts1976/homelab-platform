@@ -9,7 +9,10 @@ BASE=/run/qos-proof31
 SELF=/run/qos-proof31-test.sh
 verify_host() {
   [[ $(hostname) == sensor-01 ]]
-  # Ansible execution context may have a different netns from PID 1.\n  # Fail closed unless the host identity and expected production eth0 route agree.\n  [[ $(ip -4 -o addr show dev eth0 scope global) == *"192.168.2.55/24"* ]]\n  [[ $(ip -4 route show default) == *"default via 192.168.2.1 dev eth0"* ]]
+  # Ansible execution context may have a different netns from PID 1.
+  # Fail closed unless the host identity and expected production eth0 route agree.
+  [[ $(ip -4 -o addr show dev eth0 scope global) == *"192.168.2.55/24"* ]]
+  [[ $(ip -4 route show default) == *"default via 192.168.2.1 dev eth0"* ]]
 }
 exists_ns() { ip netns list | grep -Eq "^$NS( |$)"; }
 inside() { ip netns exec "$NS" "$@"; }
@@ -86,8 +89,9 @@ case "${1:-}" in
     [[ ! -e "$SELF" ]]
     echo RECOVERY_PASS
     ;;
-  run)
+  run|run-partial)
     verify_host
+    mode="$1"
     [[ ! -e "$BASE" && ! -e "$SELF" ]] || { echo 'Reserved evidence exists'; exit 1; }
     ! exists_ns
     [[ -z $(systemctl list-units --all --plain --no-legend "$UNIT*" | grep -v '^$' || true) ]]
@@ -117,20 +121,26 @@ case "${1:-}" in
       ip link add qi31 type ifb
       ip link set qi31 up
       tc qdisc add dev qi31 root cake bandwidth 43mbit besteffort flows
+      if [[ "$1" == run-partial ]]; then
+        tc qdisc show dev qi31 | grep -q cake
+        kill -KILL "$BASHPID"
+      fi
       tc qdisc add dev qd31 clsact
       tc filter add dev qd31 ingress pref 49131 matchall action mirred egress redirect dev qi31
       tc filter show dev qd31 ingress | grep -q 49131
       kill -KILL "$BASHPID"
-    ' 2>/dev/null
+    ' bash "$mode" 2>/dev/null
     result=$?
     set -e
     [[ $result == 137 ]]
     echo INSTALLER_KILLED
+    if [[ "$mode" == run-partial ]]; then echo PARTIAL_INSTALLER_KILLED; fi
     for i in {1..35}; do [[ -f "$BASE/rolled-back" ]] && break; sleep 1; done
     [[ -f "$BASE/rolled-back" ]]
     ! inside ip link show dev qi31 >/dev/null 2>&1
     [[ -z $(inside tc filter show dev qd31 ingress) ]]
     echo WATCHDOG_ROLLBACK_PASS
+    if [[ "$mode" == run-partial ]]; then echo PARTIAL_WATCHDOG_ROLLBACK_PASS; fi
     ;;
-  *) echo 'Use run, watchdog, cleanup' >&2; exit 2 ;;
+  *) echo 'Use run, run-partial, watchdog, cleanup' >&2; exit 2 ;;
 esac
