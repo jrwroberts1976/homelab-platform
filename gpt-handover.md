@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 source-level production-readiness NO-GO
+
+- Operator reported locked-kernel audit 7/7 and durable journal 9/9 PASS. Reviewed actual source of journal, collector, adapter, evaluator, locked audit, event planner, test-only executor, and retired read-only sensor playbook. Added audit: `docs/architecture/ROUTER-01-PHASE5-PRODUCTION-READINESS-AUDIT.md`.
+- **NO-GO**: journal recovery `externally_verified=True` is caller-asserted; PPP events, test-only executor, journal, watchdog and verification do not share a production transaction lock; sensor fixture is not production PPP evidence; live reboot/crash/reconciliation and independent rollback not demonstrated. Existing green tests are useful but do not resolve these architectural gaps.
+- Next: design trusted postcondition-driven completion and coherent transaction ownership offline; DO NOT enable 43 Mbps persistent download CAKE or run live SIGKILL. Preserve router 13 Mbps upload and existing services. No deployment performed.
+
+
 ### 31 October 2026 — read-only collector under journal lock staged
 
 - Operator confirmed freshness audit 7/7 and durable journal 9/9 passing. Staged `IaC/ansible/scripts/router-qos-download-locked-kernel-audit.py` plus seven offline tests. This invokes the fixed sensor read-only collector under the journal's flock, checks pending session ownership before/after, limits observation duration to two seconds, and passes the collected output through the fail-closed adapter. **Not yet operator-validated.**
