@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Phase 4: sensor-01 isolated independent-watchdog design
 
 Status: **design and read-only preflight only**. No runtime activation.
