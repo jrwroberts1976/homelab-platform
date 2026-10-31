@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — sensor-01 Phase 4 watchdog preflight staged (read-only)
+
+- User chose sensor-01 for temporary isolated QoS testing; it remains an active sensor pending a separate, verified security scanning migration to router-01. admin-01 remains a jump box. No IDS or production routing changes authorised.
+- Operator read-only sensor-01 readiness: 2.5GiB available memory, 64GB free disk, ip/tc/unshare/nsenter/systemd-run/flock present; IFB/CAKE/matchall/mirred modules available; unshare --net successful with only loopback and no routes; eth0 default gateway 192.168.2.1. Existing failed units: homelab-suricata-rule-update and sensor-capture-nic; Zeek service reported inactive. Preserve all sensor workloads unchanged.
+- Added read-only Ansible `IaC/ansible/playbooks/router-01-qos-download-sensor-watchdog-preflight.yml` and Phase 4 design `docs/architecture/router-01-qos-download-sensor-watchdog-phase4.md`. **Neither has been executed by operator**. Preflight checks identity, required tools/modules, production route and possible reserved unit collision. It creates no units, interfaces or namespaces.
+- Future real watchdog proof requires distinct transient systemd watchdog, namespace lifetime preserved independently of installer and supervisor, strict ownership/ifindex, deadlines, race and failure injection, and independently verified rollback. Still not implemented, tested or activated. Keep router-01 13Mbit upload CAKE preserved and download persistence disabled.
+
+
 ### 31 October 2026 — admin-01 ICMP timestamp hardening recovered; jump-box boundary
 
 - Operator verified admin-01 eth0=192.168.2.48/24, stock nftables.service inactive, empty nft ruleset and QNetd active; ICMP hardening owned table initially absent. Historical service failure dated 29 Oct; precise historical cause unproven.
