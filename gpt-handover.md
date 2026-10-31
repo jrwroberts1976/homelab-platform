@@ -1693,3 +1693,9 @@ Outstanding:
 - Added `IaC/ansible/files/router-qos-download-reconcile-guard.py`, which takes JSON snapshots, acquires a local flock, validates PPP interface identity values, and calls the existing pure reconciliation planner. It **does not execute network changes**.
 - Added controller-only `playbooks/router-01-qos-download-reconcile-guard-proof.yml` covering first activation, duplicate events and invalid identity. **Not yet run by user**.
 - This is not yet a production reconciler. Actual `tc` application, process-crash recovery, event hook integration and independent rollback remain separate gates. No live router changes.
+
+### 31 October 2026 — Locked reconciliation guard tests passed
+
+- User ran `router-01-qos-download-reconcile-guard-proof.yml` on `admin-01`: **8 OK, 3 changed, 0 failed**. Shell/Python guard syntax and the decision results for clean up, duplicate up and invalid ifindex all passed; fixture removed.
+- The guard test invoked cases sequentially using the same file-lock path, so it does not yet prove concurrent lock contention. No real `tc` commands or production router modifications.
+- Next: prove concurrent-event serialization, then integrate a failure-safe actuator using isolated interfaces before any live PPP hook installation.
