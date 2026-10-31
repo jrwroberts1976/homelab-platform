@@ -1680,3 +1680,10 @@ Outstanding:
 - Legacy docker-01 entries remain in BirdNET, Komodo and monitoring groups.
 - Router inventory reconciliation is required before any deployment.
 - No monitoring roles, scans or services deployed by this integration.
+
+### 31 October 2026 — Isolated real CAKE test verified
+
+- The `router-01-qos-download-real-actuator-proof.yml` run reported 24 OK, 13 changed and zero failed tasks.
+- A disposable dummy ingress and IFB were used to exercise 43Mbit CAKE, clsact and a mirred redirect. The test removed those interfaces and verified production `ppp0` ingress and `eth1` upload CAKE were unchanged.
+- Proof marker: `/var/lib/router-qos-download-real-actuator-proof/passed`.
+- Still outstanding: serialized event-driven reconcile operations, interruption recovery, PPP lifecycle integration and persistence tests. Do not activate the candidate service yet.
