@@ -1,0 +1,116 @@
+---
+# Test cleanup of partial activation: clsact exists but redirect was never added.
+# No filters or qdiscs on production ppp0 or eth1 are changed.
+- name: Prove recovery from partially installed download QoS
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_partial_rollback_proof_approved: false
+    proof_dir: /var/lib/router-qos-download-partial-proof
+  tasks:
+    - name: Require exact router and explicit test approval
+      ansible.builtin.assert:
+        that:
+          - router_qos_partial_rollback_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Require unused disposable device names and directory
+      ansible.builtin.shell: |
+        ! ip link show dev qos-part0 >/dev/null 2>&1
+        ! ip link show dev qos-pifb1 >/dev/null 2>&1
+        test ! -e /var/lib/router-qos-download-partial-proof
+      changed_when: false
+    - name: Snapshot active upload CAKE
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload_before
+      changed_when: false
+    - name: Snapshot production PPP ingress
+      ansible.builtin.command:
+        argv: [tc, filter, show, dev, ppp0, ingress]
+      register: ppp_before
+      changed_when: false
+    - name: Create and clean up isolated partial state
+      block:
+        - name: Create root-only proof directory
+          ansible.builtin.file:
+            path: "{{ proof_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Write namespaced copy of exact reviewed recovery script
+          ansible.builtin.copy:
+            dest: "{{ proof_dir }}/restore.sh"
+            owner: root
+            group: root
+            mode: '0700'
+            content: "{{ lookup('file', playbook_dir + '/../files/router-qos-download-restore.sh') | replace('ppp0', 'qos-part0') | replace('ifb-wan0', 'qos-pifb1') | replace('/var/lib/router-qos-download-trial', '/var/lib/router-qos-download-partial-proof') }}"
+        - name: Validate recovery script syntax
+          ansible.builtin.command:
+            argv: [/bin/sh, '-n', /var/lib/router-qos-download-partial-proof/restore.sh]
+          changed_when: false
+        - name: Create disposable dummy
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-part0, type, dummy]
+          changed_when: true
+        - name: Create disposable IFB
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-pifb1, type, ifb]
+          changed_when: true
+        - name: Add clsact without installing any redirect
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, qos-part0, clsact]
+          changed_when: true
+        - name: Create ownership marker
+          ansible.builtin.file:
+            path: "{{ proof_dir }}/armed"
+            state: touch
+            owner: root
+            group: root
+            mode: '0600'
+        - name: Run same recovery logic against disposable interfaces
+          ansible.builtin.command:
+            argv: [/bin/sh, /var/lib/router-qos-download-partial-proof/restore.sh]
+          changed_when: true
+        - name: Check recovery marker
+          ansible.builtin.stat:
+            path: "{{ proof_dir }}/rolled-back"
+          register: rollback_marker
+        - name: Assert rollback completed
+          ansible.builtin.assert:
+            that:
+              - rollback_marker.stat.exists
+      always:
+        - name: Clean disposable dummy if needed
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-part0]
+          register: clean_dummy
+          changed_when: clean_dummy.rc == 0
+          failed_when: false
+        - name: Clean disposable IFB if needed
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-pifb1]
+          register: clean_ifb
+          changed_when: clean_ifb.rc == 0
+          failed_when: false
+        - name: Assert disposable links gone
+          ansible.builtin.shell: |
+            ! ip link show dev qos-part0 >/dev/null 2>&1
+            ! ip link show dev qos-pifb1 >/dev/null 2>&1
+          changed_when: false
+        - name: Assert upload CAKE untouched
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: upload_after
+          changed_when: false
+          failed_when: upload_after.stdout != upload_before.stdout
+        - name: Assert production PPP ingress untouched
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, ppp0, ingress]
+          register: ppp_after
+          changed_when: false
+          failed_when: ppp_after.stdout != ppp_before.stdout
