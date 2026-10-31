@@ -1,5 +1,10 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — syntax repair following operator validation
+
+- Operator ran new executor tests at `cc4951af`: test script failed to parse due to a literal `\\n` embedded on line 40, so the claimed nine executor tests were **not run**. Separate watchdog attestation suite passed **7/7**, and executor module itself compiled. Corrected test script in commit `404d61ad`; operator must pull and rerun, no success claim until output received. No production changes.
+
+
 ### 31 October 2026 — validator-backed executor admission staged, offline-only
 
 - Updated `IaC/ansible/scripts/router-qos-download-isolated-executor.py` to require both the existing watchdog gate and a supplied validator plus watchdog evidence before running commands, rejecting absent/invalid or namespace-mismatched evidence. Extended offline executor tests to import the actual watchdog-attestation validator and cover missing/expired/mismatched evidence (nine tests expected).
