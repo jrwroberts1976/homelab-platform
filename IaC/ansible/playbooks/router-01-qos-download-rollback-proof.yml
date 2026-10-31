@@ -1,0 +1,132 @@
+---
+# Destructive only to disposable qos-proof0/qos-pifb0 interfaces.
+# The real PPPoE ingress and eth1 upload shaper are never changed.
+- name: Prove download rollback on disposable IFB and dummy ingress
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_rollback_proof_approved: false
+    proof_dir: /var/lib/router-qos-download-proof
+  tasks:
+    - name: Require identity and explicit isolated-test approval
+      ansible.builtin.assert:
+        that:
+          - router_qos_rollback_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Refuse any pre-existing disposable test artifacts
+      ansible.builtin.shell: |
+        ! ip link show dev qos-proof0 >/dev/null 2>&1
+        ! ip link show dev qos-pifb0 >/dev/null 2>&1
+        test ! -e /var/lib/router-qos-download-proof
+      changed_when: false
+    - name: Record existing production qdisc and ingress
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload_before
+      changed_when: false
+    - name: Record existing PPPoE ingress
+      ansible.builtin.command:
+        argv: [tc, filter, show, dev, ppp0, ingress]
+      register: ppp_before
+      changed_when: false
+    - name: Run isolated rollback proof
+      block:
+        - name: Create proof working directory
+          ansible.builtin.file:
+            path: "{{ proof_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Copy exact recovery logic with ONLY disposable interface/path substitutions
+          ansible.builtin.copy:
+            dest: "{{ proof_dir }}/restore.sh"
+            owner: root
+            group: root
+            mode: '0700'
+            content: "{{ lookup('file', playbook_dir + '/../files/router-qos-download-restore.sh') | replace('ppp0', 'qos-proof0') | replace('ifb-wan0', 'qos-pifb0') | replace('/var/lib/router-qos-download-trial', '/var/lib/router-qos-download-proof') }}"
+        - name: Validate proof script syntax
+          ansible.builtin.command:
+            argv: [/bin/sh, '-n', /var/lib/router-qos-download-proof/restore.sh]
+          changed_when: false
+        - name: Create dummy ingress source
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-proof0, type, dummy]
+          changed_when: true
+        - name: Create isolated IFB device
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-pifb0, type, ifb]
+          changed_when: true
+        - name: Bring up test dummy
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, qos-proof0, up]
+          changed_when: true
+        - name: Bring up test IFB
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, qos-pifb0, up]
+          changed_when: true
+        - name: Attach trial CAKE to test IFB
+          ansible.builtin.command:
+            argv: [tc, qdisc, replace, dev, qos-pifb0, root, cake, bandwidth, 43mbit, besteffort, flows]
+          changed_when: true
+        - name: Add test ingress qdisc
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, qos-proof0, clsact]
+          changed_when: true
+        - name: Install owned ingress redirect
+          ansible.builtin.command:
+            argv: [tc, filter, add, dev, qos-proof0, ingress, pref, '49131', matchall, action, mirred, egress, redirect, dev, qos-pifb0]
+          changed_when: true
+        - name: Create ownership marker
+          ansible.builtin.file:
+            path: "{{ proof_dir }}/armed"
+            state: touch
+            owner: root
+            group: root
+            mode: '0600'
+        - name: Execute isolated recovery
+          ansible.builtin.command:
+            argv: [/bin/sh, /var/lib/router-qos-download-proof/restore.sh]
+          changed_when: true
+        - name: Confirm rollback marker exists
+          ansible.builtin.stat:
+            path: "{{ proof_dir }}/rolled-back"
+          register: marker
+        - name: Assert proof completion
+          ansible.builtin.assert:
+            that:
+              - marker.stat.exists
+      always:
+        - name: Clean up dummy interface if still present
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-proof0]
+          register: clean_dummy
+          changed_when: clean_dummy.rc == 0
+          failed_when: false
+        - name: Clean up IFB if still present
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-pifb0]
+          register: clean_ifb
+          changed_when: clean_ifb.rc == 0
+          failed_when: false
+        - name: Verify both test links absent
+          ansible.builtin.shell: |
+            ! ip link show dev qos-proof0 >/dev/null 2>&1
+            ! ip link show dev qos-pifb0 >/dev/null 2>&1
+          changed_when: false
+        - name: Verify upload CAKE unchanged
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: upload_after
+          changed_when: false
+          failed_when: upload_after.stdout != upload_before.stdout
+        - name: Verify real PPPoE ingress untouched
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, ppp0, ingress]
+          register: ppp_after
+          changed_when: false
+          failed_when: ppp_after.stdout != ppp_before.stdout
