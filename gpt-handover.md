@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — real isolated partial-install watchdog proof staged (operator execution pending)
+
+- Fixed source script `IaC/ansible/files/router-qos-sensor-independent-proof.sh`: literal escaped line breaks after comments had inadvertently commented out the sensor eth0 address and default-route checks; both guards now execute. Added `run-partial` scenario: real disposable namespace `qos-proof31` on sensor-01; after IFB + 43Mbit CAKE but **before** clsact/filter, intentionally SIGKILL installer; independently scheduled systemd watchdog should clear IFB and verify ingress remains empty. Existing `run` scenario remains supported.
+- Added approval-gated `IaC/ansible/playbooks/router-01-qos-download-sensor-partial-watchdog-proof.yml`, default approval false, same guarded cleanup and resource collision preflight. **Not yet syntax-checked or executed by operator.** This is a direct standalone shell proof, NOT integration of the Python offline executor/PPP handler with live watchdog. No router change; production download disabled. Operator should syntax-check Ansible/Bash then run explicitly with authorization, or use check-only if not approved.
+
+
 ### 31 October 2026 — syntax repair following operator validation
 
 - Operator ran new executor tests at `cc4951af`: test script failed to parse due to a literal `\\n` embedded on line 40, so the claimed nine executor tests were **not run**. Separate watchdog attestation suite passed **7/7**, and executor module itself compiled. Corrected test script in commit `404d61ad`; operator must pull and rerun, no success claim until output received. No production changes.
