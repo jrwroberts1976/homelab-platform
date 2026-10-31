@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 download CAKE — Phase 2 staged candidate (31 October 2026)
 
 ## Scope and tested evidence
