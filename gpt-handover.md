@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Download QoS transient timer proof succeeded
+
+- Re-run of `router-01-qos-download-timer-proof.yml`: **13 OK, 2 changed, 0 failed**. Bounded Ansible polling detected the systemd-run marker, the marker was removed, and the eth1 upload CAKE qdisc was verified unchanged. Previous fixed 16s wait was too short; journal had already demonstrated the timer executed after ~17s.
+- IFB and mirred compatibility, isolated cleanup proof and marker-only timer test now passed independently. **No production ppp0 ingress filter or download CAKE has been activated.** Next: controlled combined trial with rollback armed before ingress redirection, explicit approval and live speed/latency tests.
+
+
 ### 31 October 2026 — Download QoS isolated rollback proof passed
 
 - User ran `router-01-qos-download-rollback-proof.yml` on router-01: **24 tasks OK, 12 changed, zero failures**, testing a namespaced copy of the candidate rollback script against disposable dummy/IFB interfaces.
