@@ -45,7 +45,7 @@
         ip -4 route show default | grep -q '^default dev ppp0'
         test "$(systemctl is-active router-qos-upload.service)" = active
         test "$(systemctl is-enabled router-qos-upload.service)" = enabled
-        test "$(systemctl is-active router-pppoe nftables dnsmasq unbound ssh | grep -c '^active
+        test "$(systemctl is-active router-pppoe nftables dnsmasq unbound ssh | grep -c '^active$')" -eq 5
       changed_when: false
     - name: Create root-only trial directory
       ansible.builtin.file:
