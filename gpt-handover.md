@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 isolated executor boundary staged; NOT executed
+
+- Added `IaC/ansible/scripts/router-qos-download-isolated-executor.py` with a strictly pinned `qos-p5` namespace command backend, namespace inode ownership check, independent-watchdog-armed gate, ordered real `ip`/`tc` command vectors, and fail-closed pending-state on partial installation. Added six offline tests using an injected fake runner, covering identity/wrong namespace, order, duplicate install, partial failures and teardown.
+- **These files are not wired to real PPP event callbacks, cannot run standalone and have NOT been executed or validated by operator.** The current executor is a test-only skeleton; actual precondition inspection, durable state, lock, watchdog wiring, independent cleanup and crash recovery are NOT complete. Do not import it into production or deploy any PPP hooks. `router-01` 13Mbit upload remains protected; 43Mbit download persistence remains OFF.
+
+
 ### 31 October 2026 — PPP event-to-QoS operation adapter staged (simulation only)
 
 - Added `IaC/ansible/scripts/router-qos-download-event-integration.py`, importing the existing PPP event decision model and routing proposed operations through a recording-only backend. Added six offline integration tests in `test-router-qos-download-event-integration.py`: install order, idempotency, stale event rejection, teardown before reconnect, partial resource refusal, and injected operation failure.
