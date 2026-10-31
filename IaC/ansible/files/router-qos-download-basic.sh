@@ -57,6 +57,13 @@ case "${1:-}" in
     has_wan || { echo "SKIP: PPP interface absent"; exit 0; }
     upload_ok || { echo "REFUSE: upload CAKE changed"; exit 2; }
     if owned; then echo "PASS: already active"; exit 0; fi
+    # After a PPP reconnect the old ppp0 disappears, but its IFB may remain.
+    # Reclaim only our recognizable CAKE IFB when the new ppp0 has clean ingress.
+    if has_ifb && clean_wan; then
+      tc qdisc show dev "$IFB" | grep -q 'cake.*43Mbit' ||
+        { echo "REFUSE: unknown IFB"; exit 2; }
+      ip link del "$IFB"
+    fi
     if has_ifb || ! clean_wan; then
       echo "REFUSE: unexpected or partial download QoS state"; exit 2
     fi
