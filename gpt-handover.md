@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — watchdog test YAML corruption identified and repaired
+
+- User pulled `d3380109`; Ansible syntax check failed at YAML line 102 (`|| true)"`). Inspected GitHub file and confirmed unintended duplicated task blocks and broken quoting in preflight `grep` lines. This was a repository staging error, **not** a sensor runtime result.
+- Reconstructed `IaC/ansible/playbooks/router-01-qos-download-sensor-independent-watchdog-proof.yml` cleanly, preserving sensor-only approval guard, orphan-source preflight, staged script diagnostic, cleanup and post-cleanup verification. **Not yet syntax checked by user; do not execute until it passes.** Previously recorded runtime test remained failed at startup; no active namespace/timer found in last sensor inspection.
+
+
 ### 31 October 2026 — first sensor watchdog runtime FAILED (startup), diagnostic patch staged
 
 - On sensor-01 at ~09:27, Ansible `Execute watchdog proof` failed rc=1 in 0.007s, with no stdout/stderr. The `always` cleanup also failed rc=1 because no ownership directory was created. Verified subsequent read-only state: no named namespace, no `qos-proof31*` systemd units, /run clean except staged `/run/qos-sensor-independent-proof.sh`, and eth0 remains 192.168.2.55/24 via 192.168.2.1. IFB/CAKE not reached; router-01 unaffected.
