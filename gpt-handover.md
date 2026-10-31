@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 isolated PPP lifecycle test PASS
+
+- Operator executed `router-01-qos-download-phase5-namespace-lifecycle-proof.yml` on sensor-01 after syntax checks. Ansible recap: **ok=9 changed=3 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The playbook's assertions passed, and its namespace-absence cleanup verification passed. Detailed per-task stdout markers were not provided; do not claim independent packet/latency measurements.
+- Covers disposable dummy-interface IFB/CAKE installation, simulated interface loss/reconnect and owned-resource teardown under test-script conditions. It does **not** verify real PPP hooks, stale-event callback semantics, concurrency, independent watchdog integration into the Phase 5 reconciler, crash/reboot recovery, or live production persistence. No router-01 modification; 13Mbit upload baseline protected.
+- Next: integrate an offline-tested real event-driven mutator with stronger identity/ownership state and fault injection before any deployment approval.
+
+
 ### 31 October 2026 — Phase 5 real isolated PPP lifecycle fixture staged (NOT RUN)
 
 - Added `IaC/ansible/files/router-qos-phase5-namespace-lifecycle-proof.sh` and approval-gated `IaC/ansible/playbooks/router-01-qos-download-phase5-namespace-lifecycle-proof.yml`, targeting **sensor-01 only**. Disposable named namespace, dummy PPP stand-in, two IFBs, real 43Mbit CAKE and ingress redirect; verifies install, simulated lost interface/reconnect and owned-only teardown. Script traps namespace cleanup, Ansible verifies absence before removing staged script.
