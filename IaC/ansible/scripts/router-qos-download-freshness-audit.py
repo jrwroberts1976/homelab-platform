@@ -33,6 +33,11 @@ def inspect(journal_dir, expected_owned, expected_target, evidence, *,
             not 0 <= now_monotonic_ns - observed_monotonic_ns <= maximum_age_ns):
         return result
     try:
+        journal_module.validate_session(expected_owned)
+        journal_module.validate_session(expected_target)
+        session = expected_target if expected_target is not None else expected_owned
+        if session is None or session["generation"] != event_generation:
+            return result
         j = journal_module.Journal(journal_dir)
         with j.locked():
             state = j.read()
