@@ -1,0 +1,27 @@
+---
+- name: Disable persistent basic download CAKE without touching upload shaping
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require intended router and explicit approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - router_qos_basic_disable_approved | default(false) | bool
+          - not ansible_check_mode
+    - name: Disable PPP reconnect hook first
+      ansible.builtin.file:
+        path: /etc/ppp/ip-up.d/router-qos-download
+        state: absent
+    - name: Remove only owned download shaping
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-qos-download-basic, remove]
+      changed_when: true
+    - name: Confirm upload remains active
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload
+      changed_when: false
+      failed_when: "'cake' not in upload.stdout or '13Mbit' not in upload.stdout"
