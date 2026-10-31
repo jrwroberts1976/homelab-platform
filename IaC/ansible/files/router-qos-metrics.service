@@ -1,0 +1,8 @@
+[Unit]
+Description=Collect router CAKE QoS metrics for Prometheus textfile
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/router-qos-prometheus-collector.py --output-dir /var/lib/prometheus/node-exporter
