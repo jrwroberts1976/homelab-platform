@@ -53,7 +53,13 @@
             argv: [/bin/bash, "{{ proof_script }}", cleanup]
           register: cleanup
           changed_when: cleanup.rc == 0
-          failed_when: false
+          failed_when: cleanup.rc != 0
+        - name: Verify independent watchdog no longer running
+          ansible.builtin.command:
+            argv: [systemctl, is-active, qos-proof31-rollback.service]
+          register: watchdog_status
+          changed_when: false
+          failed_when: watchdog_status.stdout in ['active', 'activating']
         - name: Remove temporary source script
           ansible.builtin.file:
             path: "{{ proof_script }}"
