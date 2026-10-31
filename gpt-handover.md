@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 real isolated PPP lifecycle fixture staged (NOT RUN)
+
+- Added `IaC/ansible/files/router-qos-phase5-namespace-lifecycle-proof.sh` and approval-gated `IaC/ansible/playbooks/router-01-qos-download-phase5-namespace-lifecycle-proof.yml`, targeting **sensor-01 only**. Disposable named namespace, dummy PPP stand-in, two IFBs, real 43Mbit CAKE and ingress redirect; verifies install, simulated lost interface/reconnect and owned-only teardown. Script traps namespace cleanup, Ansible verifies absence before removing staged script.
+- **This is a network namespace fixture, NOT the live production PPP reconciler.** The stale-event assertion is currently a no-op structural check, not a real event callback; crash injection and independent watchdog integration still require separate development. Not syntax-checked or executed by operator. No router-01 deployment/activation. Continue with syntax checks first and inspect safety before execution; production 13Mbit upload CAKE remains untouched.
+
+
 ### 31 October 2026 — Phase 5 read-only PPP reconciler planner staged
 
 - Added `IaC/ansible/scripts/router-qos-download-ppp-reconciler-plan.py`: validates ppp0 interface, ifindex and session token from a JSON fixture and outputs safe up/down decisions, refusing foreign/partial resources, stale events and reconnect before verified old-session teardown. Script has no network/systemd operations and explicitly reports `network_modified=false` and `production_activation_enabled=false`.
