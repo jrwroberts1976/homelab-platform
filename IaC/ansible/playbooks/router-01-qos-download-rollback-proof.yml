@@ -88,6 +88,11 @@
             owner: root
             group: root
             mode: '0600'
+        - name: Record disposable ingress identity for recovery
+          ansible.builtin.shell: |
+            cat /sys/class/net/qos-proof0/ifindex > /var/lib/router-qos-download-proof/ppp-ifindex
+            chmod 0600 /var/lib/router-qos-download-proof/ppp-ifindex
+          changed_when: true
         - name: Execute isolated recovery
           ansible.builtin.command:
             argv: [/bin/sh, /var/lib/router-qos-download-proof/restore.sh]
