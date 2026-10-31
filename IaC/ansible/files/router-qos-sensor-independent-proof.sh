@@ -89,7 +89,7 @@ case "${1:-}" in
     [[ ! -e "$SELF" ]]
     echo RECOVERY_PASS
     ;;
-  run|run-partial|run-event-partial)
+  run|run-partial|run-event-partial|run-python-partial)
     verify_host
     mode="$1"
     if [[ "$mode" == run-event-partial ]]; then
@@ -117,6 +117,21 @@ case "${1:-}" in
     systemctl is-active --quiet "$UNIT.timer"
     deadline=$(systemctl show "$UNIT.timer" -p NextElapseUSecMonotonic --value)
     [[ -n "$deadline" && "$deadline" != 0 && "$deadline" != n/a ]] || { echo "Timer deadline missing" >&2; exit 1; }
+    if [[ "$mode" == run-python-partial ]]; then
+      [[ -f /run/qos-proof31-python-installer.py && ! -L /run/qos-proof31-python-installer.py ]] || exit 1
+      set +e
+      flock -x -w 20 "$BASE/ops.lock" python3 -B /run/qos-proof31-python-installer.py --partial-kill
+      result=$?
+      set -e
+      [[ "$result" == 137 ]]
+      echo PYTHON_INSTALLER_KILLED
+      for i in {1..35}; do [[ -f "$BASE/rolled-back" ]] && break; sleep 1; done
+      [[ -f "$BASE/rolled-back" ]]
+      ! inside ip link show dev qi31 >/dev/null 2>&1
+      [[ -z $(inside tc filter show dev qd31 ingress) ]]
+      echo PYTHON_WATCHDOG_ROLLBACK_PASS
+      exit 0
+    fi
     # The disposable installer process performs real tc operations, then dies.
     if [[ "$mode" == run-event-partial ]]; then
       decision=$(python3 /run/qos-proof31-event-gate.py --sensor-fixture)
@@ -151,5 +166,5 @@ case "${1:-}" in
     echo WATCHDOG_ROLLBACK_PASS
     if [[ "$mode" == run-partial || "$mode" == run-event-partial ]]; then echo PARTIAL_WATCHDOG_ROLLBACK_PASS; fi
     ;;
-  *) echo 'Use run, run-partial, run-event-partial, watchdog, cleanup' >&2; exit 2 ;;
+  *) echo 'Use run, run-partial, run-event-partial, run-python-partial, watchdog, cleanup' >&2; exit 2 ;;
 esac
