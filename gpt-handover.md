@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Partial download QoS rollback proof passed
+
+- User executed `router-01-qos-download-partial-rollback-proof.yml`: **20 OK, 8 changed, 0 failed**. Test created disposable `clsact` without a matching ingress filter, used a namespaced copy of the recovery script, verified rollback marker and cleanup, and confirmed real `ppp0` ingress and `eth1` upload CAKE unchanged.
+- Still pending: guard/review live trial acceptance, validate timing and rollback during active PPPoE, and measure download-loaded latency. No production download shaping applied.
+
+
 ### 31 October 2026 — Download QoS transient timer proof succeeded
 
 - Re-run of `router-01-qos-download-timer-proof.yml`: **13 OK, 2 changed, 0 failed**. Bounded Ansible polling detected the systemd-run marker, the marker was removed, and the eth1 upload CAKE qdisc was verified unchanged. Previous fixed 16s wait was too short; journal had already demonstrated the timer executed after ~17s.
