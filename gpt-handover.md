@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Post-activation upload QoS verification
+
+- Read-only audit: `router-qos-upload.service` reported `enabled` and `active`; `tc qdisc show dev eth1` showed `cake ... bandwidth 13Mbit ... ptm overhead 30`; default IPv4 route `default dev ppp0 scope link`; `router-pppoe`, `nftables`, `dnsmasq`, `unbound` and `ssh` all `active`.
+- Upload shaping and startup enablement are confirmed; full reboot recovery has **not** been tested. Do not claim reboot-tested persistence yet. Preserve trial restore script. Finish guarded recovery checklist and boot test before final PR merge.
+
+
 ### 31 October 2026 — Router upload QoS persistence activated
 
 - User ran `router-01-qos-persistence-activate.yml` from admin-01: 17 tasks OK, 2 changed, zero failures. The guarded activation playbook verifies live CAKE on `eth1` at 13Mbit with PTM overhead 30 and PPPoE default route, starts the pre-staged `router-qos-upload.service` without changing the existing qdisc, and enables it for future boots.
