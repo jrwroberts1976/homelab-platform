@@ -14,14 +14,19 @@ if /usr/sbin/ip link show dev ppp0 >/dev/null 2>&1; then
       echo "Expected owned ingress filter missing; refuse qdisc removal" >&2
       exit 1
     fi
-    /usr/sbin/tc filter del dev ppp0 ingress pref 49131
-    # Trial preflight requires no existing clsact; still preserve qdisc if other filters exist.
-    if [ -z "$(/usr/sbin/tc filter show dev ppp0 ingress)" ]; then
-      /usr/sbin/tc qdisc del dev ppp0 clsact
-    else
-      echo "Other ingress filters remain; leave clsact in place" >&2
+    # Reject foreign filters BEFORE deleting the trial-owned one.
+    # A trial must never remove a shared clsact qdisc.
+    entries=$(/bin/grep -c '^filter ' "$DIR/filters-before-rollback.txt" || true)
+    if [ "$entries" -ne 1 ]; then
+      echo "Unexpected ingress filter entries ($entries); refuse cleanup" >&2
       exit 1
     fi
+    /usr/sbin/tc filter del dev ppp0 ingress pref 49131
+    if [ -n "$(/usr/sbin/tc filter show dev ppp0 ingress)" ]; then
+      echo "Ingress filters remain; preserve clsact" >&2
+      exit 1
+    fi
+    /usr/sbin/tc qdisc del dev ppp0 clsact
   fi
 fi
 if /usr/sbin/ip link show dev "$IFB" >/dev/null 2>&1; then
