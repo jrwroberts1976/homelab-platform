@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — non-disruptive Phase 5 PPP ownership recovery model staged
+
+- Following operator read-only sensor audit (3 OK, 0 changed, 0 failures), added `IaC/ansible/scripts/router-qos-download-ownership-journal-model.py` and seven offline unittest cases `test-router-qos-download-ownership-journal-model.py` to exercise nominal reconnect, stale down refusal, partial install/teardown fail-closed, refusal of unverified recovery, verified recovery acknowledgement, and refusal of spurious recovery. **Not yet tested by operator.** No ip/tc/systemd commands, no signal termination, no changes to sensor/router.
+- This models an **in-memory** intent journal, not crash-durable disk ownership or independent recovery proof. It is not wired into live PPP hooks or the isolated executor and must not be used for production authorization. The unsafe SIGKILL test remains retired; 13Mbit upload remains active and download persistence OFF.
+
+
 ### 31 October 2026 — SAFETY HOLD: retired Python SIGKILL live playbook
 
 - Following operator SSH-session loss and post-event audit, sensor watchdog completed and namespace was absent, but the SSH disconnect cause remains unproven. GitHub audit discovered `router-01-qos-download-sensor-python-watchdog-proof.yml` was severely corrupted (three repeated blocks plus incomplete YAML/shell). **Do not run the historical live version**, even from an earlier commit.
