@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — offline cleanup evidence verifier staged
+
+- Operator confirmed prior multiprocess journal tests passed 3/3 and durable journal tests 9/9. Added `IaC/ansible/scripts/router-qos-download-cleanup-evidence.py` and seven offline tests. The pure snapshot evaluator checks disposable sensor namespace inode match, source presence, IFB lookup expected missing-device result, empty ingress filter listing, and absence of ingress/clsact qdisc. Any ambiguous/failed evidence refuses a clean observation. **Tests not yet executed by operator.**
+- Critically the evaluator is **not connected to actual kernel inspection or the durable journal** and always reports `journal_recovery_authorized=false`. A snapshot may become stale after observation. No recovery authorization, no tc/ip invocation, and no network mutation; this is a non-disruptive fixture only. Production download still disabled; 13 Mbps upload preserved; live SIGKILL test suspended.
+
+
 ### 31 October 2026 — offline multiprocess ownership tests staged
 
 - Operator confirmed durable journal prototype passed all 9 tests on admin-01. Added `IaC/ansible/scripts/test-router-qos-download-journal-processes.py` with three new offline tests: pending intent persists after a normal child process exits; a second process blocks on the journal's `flock` while the first owns it; and reopened completed ownership refuses a stale caller. Tests use a temporary directory only, no signal injection, tc, ip, systemd, sensor or production router.
