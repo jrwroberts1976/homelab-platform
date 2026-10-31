@@ -1,0 +1,52 @@
+---
+# Opt-in isolated kernel test only. Never run against router-01.
+- name: Test integrated Python QoS journal lifecycle in disposable sensor namespace
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require healthy sensor identity and explicit test approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+          - router_qos_python_e2e_approved | default(false) | bool
+          - not ansible_check_mode
+    - name: Stage and execute isolated integrated test
+      block:
+        - name: Create temporary test-only script directory
+          ansible.builtin.tempfile:
+            state: directory
+            suffix: qos-python-e2e
+          register: qos_stage
+        - name: Stage exact Python lifecycle and disposable test scripts
+          ansible.builtin.copy:
+            src: "../scripts/{{ item }}"
+            dest: "{{ qos_stage.path }}/{{ item }}"
+            mode: '0600'
+          loop:
+            - router-qos-download-durable-journal.py
+            - router-qos-download-integrated-offline.py
+            - router-qos-download-python-disposable-e2e.py
+        - name: Execute isolated test with normal cleanup
+          ansible.builtin.command:
+            argv:
+              - python3
+              - "{{ qos_stage.path }}/router-qos-download-python-disposable-e2e.py"
+              - --approved
+          register: qos_result
+          changed_when: false
+        - name: Verify install teardown and namespace cleanup
+          ansible.builtin.assert:
+            that:
+              - "'PASS: integrated Python 43 Mbps IFB/CAKE install committed' in qos_result.stdout"
+              - "'PASS: integrated Python teardown committed' in qos_result.stdout"
+              - "'PASS: test namespace removed' in qos_result.stdout"
+      always:
+        - name: Remove staged scripts
+          ansible.builtin.file:
+            path: "{{ qos_stage.path }}"
+            state: absent
+          when: qos_stage.path is defined
