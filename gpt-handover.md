@@ -1,5 +1,10 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — cleanup retention guard follow-up
+
+- Updated new Python sensor proof playbook at `b3c36d53`: staged recovery files/evidence are only removed when guarded cleanup reports success and watchdog timer is not active. **Operator validation pending**; run Bash/Python/Ansible syntax checks first. Do not mistake this disposable test for persistent router QoS approval.
+
+
 ### 31 October 2026 — Python actual IFB installer proof staged; REVIEW REQUIRED
 
 - Operator reported Python decision + real isolated watchdog proof passed (`sensor-01 ok=22 changed=9 failed=0`). Added sensor-only Python real IFB/43Mbit CAKE installer (`IaC/ansible/scripts/router-qos-download-sensor-python-kill-installer.py`), new Bash harness mode `run-python-partial`, and separate default-disabled Ansible playbook `router-01-qos-download-sensor-python-watchdog-proof.yml`. This replaces Bash tc creation for *one disposable partial-install proof only*, with intentional SIGKILL and independent systemd watchdog cleanup.
