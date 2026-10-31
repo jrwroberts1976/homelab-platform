@@ -22,20 +22,40 @@
       changed_when: false
     - name: Check exact pre-trial device and filter state
       ansible.builtin.shell: |
-        set -eu
-        test "$(ip -4 route show default | head -n 1)" = "default dev ppp0 scope link"
-        modinfo -F filename ifb >/dev/null
-        modinfo -F filename act_mirred >/dev/null
-        modinfo -F filename cls_matchall >/dev/null
-        test -z "$(ip -br link show type ifb)"
-        test -z "$(tc filter show dev ppp0 ingress)"
-        test -z "$(tc qdisc show dev ppp0 | grep -E 'qdisc (clsact|ingress)' || true)"
-        test -z "$(tc filter show dev eth1 ingress)"
-        tc qdisc show dev eth1 | grep -q 'cake .*bandwidth 13Mbit .*ptm overhead 30'
-        test ! -e /var/lib/router-qos-download-trial
-        test "$(systemctl is-enabled router-qos-upload.service)" = enabled
-        test "$(systemctl is-active router-qos-upload.service)" = active
-        echo DOWNLOAD_TRIAL_READINESS_OK
+        # Report each condition clearly rather than stopping at an opaque test.
+        failures=0
+        check() {
+          label="$1"
+          shift
+          if "$@"; then
+            echo "PASS: $label"
+          else
+            echo "FAIL: $label"
+            failures=$((failures + 1))
+          fi
+        }
+        route="$(ip -4 route show default)"
+        check 'PPP default route via ppp0' sh -c 'printf "%s\n" "$1" | grep -q "^default dev ppp0"' sh "$route"
+        check 'IFB module available' modinfo -F filename ifb
+        check 'mirred module available' modinfo -F filename act_mirred
+        check 'matchall module available' modinfo -F filename cls_matchall
+        ifb_links="$(ip -br link show type ifb)"
+        check 'No pre-existing IFB interfaces' test -z "$ifb_links"
+        ppp_filters="$(tc filter show dev ppp0 ingress)"
+        check 'No ppp0 ingress filters' test -z "$ppp_filters"
+        ppp_qdiscs="$(tc qdisc show dev ppp0)"
+        check 'No existing ppp0 clsact/ingress qdisc' sh -c '! printf "%s\n" "$1" | grep -Eq "qdisc (clsact|ingress)"' sh "$ppp_qdiscs"
+        eth_filters="$(tc filter show dev eth1 ingress)"
+        check 'No eth1 ingress filters' test -z "$eth_filters"
+        wan_qdisc="$(tc qdisc show dev eth1)"
+        check 'Upload CAKE still 13Mbit PTM overhead 30' sh -c 'printf "%s\n" "$1" | grep -q "cake .*bandwidth 13Mbit .*ptm overhead 30"' sh "$wan_qdisc"
+        check 'No previous download trial directory' test ! -e /var/lib/router-qos-download-trial
+        enabled="$(systemctl is-enabled router-qos-upload.service || true)"
+        check 'Upload CAKE service enabled' test "$enabled" = enabled
+        active="$(systemctl is-active router-qos-upload.service || true)"
+        check 'Upload CAKE service active' test "$active" = active
+        echo "READINESS_FAILURES=$failures"
+        test "$failures" -eq 0
       args:
         executable: /bin/sh
       register: readiness
