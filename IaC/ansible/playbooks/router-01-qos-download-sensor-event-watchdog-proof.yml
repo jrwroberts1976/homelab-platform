@@ -11,7 +11,7 @@
     - name: Require approval and expected sensor host network
       ansible.builtin.assert:
         that:
-          - qos_sensor_partial_watchdog_proof_approved | bool
+          - qos_sensor_event_watchdog_proof_approved | bool
           - not ansible_check_mode
           - inventory_hostname == 'sensor-01'
           - ansible_facts.hostname == 'sensor-01'
