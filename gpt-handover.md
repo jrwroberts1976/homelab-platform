@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Controller network-namespace compatibility proof staged (not executed)
+
+- Operator verified on admin-01 that sudo unshare --net works, creates loopback-only namespace with no routes, and ifb/sch_cake/cls_matchall/act_mirred modules are available. Host default route remains via 192.168.2.1 on eth0.
+- Added controller-only approval-gated playbook `IaC/ansible/playbooks/router-01-qos-download-netns-proof.yml` and namespace-guarded `IaC/ansible/files/router-qos-download-netns-proof.sh`. Test creates disposable dummy ingress and IFB in an unconnected new network namespace; applies 43Mbit CAKE, redirect ingress filter, validates and cleans up. Hostname gate is admin-01; nothing deploys to router-01.
+- **Not yet syntax-checked or executed by operator.** This is a kernel compatibility/cleanup proof only, not the full serialized reconciler, independent watchdog, crash recovery, PPP reconnect handling or persistence. Never execute script outside unshare --net; it additionally refuses host namespace.
+- Next: operator pull and syntax check; explicitly approve isolated proof; capture evidence and then stage failure-injection/interrupted-install recovery tests. Maintain production upload CAKE at 13Mbit and download shaping disabled.
+
+
 ### 31 October 2026 — Offline actuator failure simulation passed
 
 - User ran `router-01-qos-download-actuator-fixture-proof.yml` on `admin-01`: **13 OK, 6 changed, 0 failed**. Controller-only test covered up, duplicate up, down and failures at rollback arming, IFB creation and ingress attachment. Every injected failure returned simulated state to no IFB, no attached filter and no armed rollback; the disposable fixture directory was cleaned.
