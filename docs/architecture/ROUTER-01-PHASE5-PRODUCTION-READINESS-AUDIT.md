@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 Phase 5 download QoS — production-readiness integration audit
 
 Date: 2026-10-31  
