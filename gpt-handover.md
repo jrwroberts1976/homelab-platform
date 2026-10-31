@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Router upload QoS persistence activated
+
+- User ran `router-01-qos-persistence-activate.yml` from admin-01: 17 tasks OK, 2 changed, zero failures. The guarded activation playbook verifies live CAKE on `eth1` at 13Mbit with PTM overhead 30 and PPPoE default route, starts the pre-staged `router-qos-upload.service` without changing the existing qdisc, and enables it for future boots.
+- Persistence is enabled, but not yet verified by a controlled reboot or WAN-interface recreation. Current router should remain online; next: read-only service/queue verification, prepare explicit disable/recovery and controlled reboot test, then review/merge PR #266. Preserve `/var/lib/router-qos-upload-trial` recovery evidence until reviewed.
+
+
 ### Router CAKE upload QoS trial and persistence staging — 30–31 October 2026
 
 - On router-01 (Pi4 WAN physical `eth1`, PPPoE logical `ppp0`), measured pretrial 47.37 Mbps down / 14.52 Mbps up with upload-loaded latency 156.23 ms. Trial installed CAKE on `eth1` at `13mbit pppoe-ptm besteffort flows`, verified as `ptm overhead 30` without changing PPPoE or NAT. Trial 45.53 Mbps down / 11.97 Mbps up, upload-loaded latency 10.17 ms, download-loaded latency 31.43 ms. A single test showed major improvement; monitor after persistence.
