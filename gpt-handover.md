@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — installer/watchdog race serialized (source-only)
+
+- Added an exclusive `flock` on reserved `/run/qos-proof31/ops.lock`: the isolated installer holds it while applying IFB/CAKE and the systemd watchdog waits for lock acquisition before removing resources. This is intended to avoid concurrent tc installation and rollback. Existing namespace inode ownership check remains.
+- This is **not yet executed or validated on sensor-01**. Review remaining interruption handling before runtime approval. If the parent/controller is interrupted, the independent timer can remove tc resources but the isolated namespace/evidence may remain for explicit verified cleanup. Router-01 remains untouched.
+
+
 ### 31 October 2026 — watchdog failure-path review: corrections staged, no execution
 
 - Static review found initial staged test killed an idle child rather than the process applying the IFB/CAKE rules, and did not pin namespace cleanup to its original inode. Corrected `router-qos-sensor-independent-proof.sh` so the actual disposable namespace installer applies tc then SIGKILLs itself; namespace inode is recorded and revalidated before destructive cleanup. Ansible preflight now refuses stale self-copy and checks it is gone at the end.
