@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 3 PPP lifecycle discovery passed
+
+- Read-only `router-01-qos-download-pppoe-hooks-discovery.yml` **4 OK, 0 changed, 0 failed**. pppd installed; `/etc/ppp/ip-up.d` and `ip-down.d` exist and contain `0000usepeerdns`. `router-pppoe.service` is Type=simple, Restart=always, ExecStart `/usr/sbin/pppd call homelab-wan nodetach`. PPP ifindex 5; upload CAKE remains 13Mbit, original ingress noqueue, trial rollback marker present.
+- Staged candidate hook file `IaC/ansible/files/router-qos-download-ppp-hook.sh` only. It is **not installed**, and is only a non-mutating placeholder; PPP argument/event signalling, serialized reconciler, and fail-safe startup must be implemented and tested before any deployment.
+- **No live router modifications in Phase 3 discovery.**
+
+
 ### 31 October 2026 — Phase 2 static validation passed; Phase 3 discovery staged
 
 - User ran controller-only phase-2 validator: **4 OK, 0 changed, 0 failed**. Candidate is not installed or enabled.
