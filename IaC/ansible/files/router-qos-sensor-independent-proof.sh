@@ -1,6 +1,8 @@
 #!/bin/bash
 # TEST-ONLY: sensor-01; all tc/ip changes confined to a new named network namespace.
-set -euo pipefail
+set -Eeuo pipefail
+# Only the failing command and line are reported; no verbose shell tracing.
+trap 'rc=$?; echo "QOS_PROOF_ERROR line=$LINENO rc=$rc command=$BASH_COMMAND" >&2' ERR
 NS=qos-proof31
 UNIT=qos-proof31-rollback
 BASE=/run/qos-proof31
@@ -39,6 +41,14 @@ watchdog() {
   flock -x -w 20 "$BASE/ops.lock" /bin/bash "$SELF" watchdog-locked
 }
 cleanup() {
+  # An early preflight failure may leave only the staged source script.
+  if [[ ! -e "$BASE" && ! -e "$SELF" ]] && ! exists_ns; then
+    if systemctl is-active --quiet "$UNIT.timer" || systemctl is-active --quiet "$UNIT.service"; then
+      echo "Unexpected active watchdog with no ownership evidence; refusing cleanup" >&2
+      return 1
+    fi
+    return 0
+  fi
   # Cancel future execution, then wait for any running callback to finish.
   if systemctl is-active --quiet "$UNIT.timer"; then
     systemctl stop "$UNIT.timer" || { echo "Failed to stop watchdog timer; preserving executable" >&2; return 1; }
