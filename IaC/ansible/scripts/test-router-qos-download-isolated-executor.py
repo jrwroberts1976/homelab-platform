@@ -11,6 +11,19 @@ mod = importlib.util.module_from_spec(spec)
 sys.modules[spec.name] = mod
 spec.loader.exec_module(mod)
 
+attestation_path = Path(__file__).with_name("router-qos-download-watchdog-attestation.py")
+attestation_spec = importlib.util.spec_from_file_location("qos_attestation_real", attestation_path)
+attestation = importlib.util.module_from_spec(attestation_spec)
+sys.modules[attestation_spec.name] = attestation
+attestation_spec.loader.exec_module(attestation)
+
+def evidence(inode=42, active=True):
+    return attestation.WatchdogEvidence(
+        namespace="qos-p5", namespace_inode=inode, owned_inode=inode,
+        unit="qos-p5-rollback.timer", timer_active=active,
+        callback_path="/run/qos-p5-rollback.sh", callback_exists=True,
+        deadline_monotonic_us=20_000_000, now_monotonic_us=10_000_000)
+
 class FakeRunner:
     def __init__(self, fail_at=0):
         self.calls = []
@@ -24,7 +37,7 @@ class ExecutorTests(unittest.TestCase):
     def make(self, fail_at=0, armed=True, identity=None):
         runner = FakeRunner(fail_at)
         ident = identity or mod.NamespaceIdentity("qos-p5", 42, 1, 42)
-        return mod.IsolatedExecutor(runner, ident, watchdog_armed=armed), runner
+        return mod.IsolatedExecutor(runner, ident, watchdog_armed=armed,\n                                    watchdog_evidence=evidence(), watchdog_validator=attestation.validate), runner
 
     def test_unarmed_refuses_without_calls(self):
         x, r = self.make(armed=False)
@@ -38,6 +51,34 @@ class ExecutorTests(unittest.TestCase):
             x, r = self.make(identity=ident)
             with self.assertRaises(mod.Refused): x.install()
             self.assertEqual(r.calls, [])
+
+    def test_missing_verified_evidence_refuses(self):
+        runner = FakeRunner()
+        ident = mod.NamespaceIdentity("qos-p5", 42, 1, 42)
+        x = mod.IsolatedExecutor(runner, ident, watchdog_armed=True)
+        with self.assertRaises(mod.Refused): x.install()
+        self.assertEqual(runner.calls, [])
+
+    def test_expired_timer_refuses(self):
+        runner = FakeRunner()
+        ident = mod.NamespaceIdentity("qos-p5", 42, 1, 42)
+        stale = attestation.WatchdogEvidence(
+            namespace="qos-p5", namespace_inode=42, owned_inode=42,
+            unit="qos-p5-rollback.timer", timer_active=True,
+            callback_path="/run/qos-p5-rollback.sh", callback_exists=True,
+            deadline_monotonic_us=1, now_monotonic_us=2)
+        x = mod.IsolatedExecutor(runner, ident, watchdog_armed=True,
+                                 watchdog_evidence=stale, watchdog_validator=attestation.validate)
+        with self.assertRaises(mod.Refused): x.install()
+        self.assertEqual(runner.calls, [])
+
+    def test_namespace_timer_mismatch_refuses(self):
+        runner = FakeRunner()
+        ident = mod.NamespaceIdentity("qos-p5", 42, 1, 42)
+        x = mod.IsolatedExecutor(runner, ident, watchdog_armed=True,
+                                 watchdog_evidence=evidence(43), watchdog_validator=attestation.validate)
+        with self.assertRaises(mod.Refused): x.install()
+        self.assertEqual(runner.calls, [])
 
     def test_install_order_namespace_only(self):
         x, r = self.make()
