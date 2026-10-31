@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 PPP lifecycle contract staged, no deployment
+
+- Created disabled/default-off `IaC/ansible/vars/router-qos-download-phase5-contract.yml` defining future PPP up/down hook paths, expected interface identities, rate, and safety gates. This is configuration contract only; no hooks or live reconciler installed.
+- Added pure-Python offline decision fixture `IaC/ansible/scripts/test-router-qos-download-ppp-contract.py` testing repeated up events, stale down events, foreign resources and reconnect requiring verified teardown. It does not execute `ip`, `tc` or systemd. **Not yet executed by user**. Next steps build real implementation in test namespace under independent watchdog and validate reconnect/partial-crash before any production approval. Router-01 download persistence remains disabled, upload 13Mbit untouched.
+
+
 ### 31 October 2026 — Phase 5 production candidate read-only review
 
 - Reviewed staged `IaC/ansible/files/router-qos-download-managed.sh`; no production activation. Confirmed unresolved PPP ifindex/reconnection state, volatile `/run` ownership after reboot, and post-mutation markers that allow unowned partial state on crash. Sensor independent watchdog PASS does not resolve these.
