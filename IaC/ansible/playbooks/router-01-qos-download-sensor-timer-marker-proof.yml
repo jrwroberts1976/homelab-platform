@@ -1,0 +1,69 @@
+---
+# Marker-only transient systemd timer proof. Does not modify network settings.
+- name: Verify timed independent systemd execution on sensor-01
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  vars:
+    proof_unit: homelab-qos-watchdog-marker-proof
+    proof_marker: /run/homelab-qos-watchdog-marker-proof.done
+  tasks:
+    - name: Require exact sensor identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - not ansible_check_mode
+    - name: Refuse existing test resources
+      ansible.builtin.shell: |
+        set -eu
+        test ! -e {{ proof_marker }}
+        test -z "$(systemctl list-units --all --plain --no-legend '{{ proof_unit }}*' | grep -v '^$' || true)"
+        test -z "$(systemctl list-unit-files --no-legend '{{ proof_unit }}*' | grep -v '^$' || true)"
+      changed_when: false
+    - name: Run marker-only transient timer proof
+      block:
+        - name: Arm separate timer
+          ansible.builtin.command:
+            argv:
+              - systemd-run
+              - --unit={{ proof_unit }}
+              - --on-active=5s
+              - --collect
+              - --
+              - /usr/bin/touch
+              - "{{ proof_marker }}"
+          register: timer_created
+          changed_when: true
+        - name: Await timer marker
+          ansible.builtin.wait_for:
+            path: "{{ proof_marker }}"
+            state: present
+            timeout: 30
+        - name: Assert marker exists
+          ansible.builtin.stat:
+            path: "{{ proof_marker }}"
+          register: marker_state
+        - name: Verify timer execution
+          ansible.builtin.assert:
+            that:
+              - marker_state.stat.exists
+      always:
+        - name: Stop only the reserved timer if still present
+          ansible.builtin.command:
+            argv: [systemctl, stop, "{{ proof_unit }}.timer"]
+          register: timer_stop
+          changed_when: timer_stop.rc == 0
+          failed_when: false
+        - name: Remove only reserved marker
+          ansible.builtin.file:
+            path: "{{ proof_marker }}"
+            state: absent
+        - name: Observe remaining transient test units
+          ansible.builtin.shell: |
+            systemctl list-units --all --plain --no-legend '{{ proof_unit }}*' || true
+          register: remaining_units
+          changed_when: false
+        - name: Report unexpected remaining test units
+          ansible.builtin.debug:
+            var: remaining_units.stdout_lines
