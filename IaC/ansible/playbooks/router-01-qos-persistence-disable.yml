@@ -1,0 +1,105 @@
+---
+# Emergency/manual rollback only. Never run during normal CAKE operation.
+- name: Explicitly disable persistent router upload CAKE and restore fq_codel
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_disable_approved: false
+  tasks:
+    - name: Require exact router identity and explicit rollback approval
+      ansible.builtin.assert:
+        that:
+          - router_qos_disable_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Confirm current WAN queue
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: before
+      changed_when: false
+    - name: Require exactly the expected CAKE deployment before rollback
+      ansible.builtin.assert:
+        that:
+          - "'qdisc cake' in before.stdout"
+          - "'bandwidth 13Mbit' in before.stdout"
+          - "'ptm overhead 30' in before.stdout"
+    - name: Verify trial restore script is present
+      ansible.builtin.stat:
+        path: /var/lib/router-qos-upload-trial/restore.sh
+      register: restore
+    - name: Require restore evidence
+      ansible.builtin.assert:
+        that:
+          - restore.stat.isreg | default(false)
+    - name: Check rollback script syntax
+      ansible.builtin.command:
+        argv: [/bin/sh, '-n', /var/lib/router-qos-upload-trial/restore.sh]
+      changed_when: false
+    - name: Require persistent service currently enabled and active
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-qos-upload.service]
+      register: enabled
+      changed_when: false
+      failed_when: enabled.stdout != 'enabled'
+    - name: Require persistent service currently running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload.service]
+      register: active
+      changed_when: false
+      failed_when: active.stdout != 'active'
+    - name: Check PPPoE default route before rollback
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: route
+      changed_when: false
+      failed_when: "'default dev ppp0' not in route.stdout"
+    - name: Stop and disable CAKE service before changing queue
+      ansible.builtin.systemd_service:
+        name: router-qos-upload.service
+        state: stopped
+        enabled: false
+    - name: Restore original WAN queue
+      block:
+        - name: Run previously validated recovery script
+          ansible.builtin.command:
+            argv: [/bin/sh, /var/lib/router-qos-upload-trial/restore.sh]
+          changed_when: true
+        - name: Confirm fq_codel active
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: restored
+          changed_when: false
+          failed_when: "'qdisc fq_codel' not in restored.stdout or 'root' not in restored.stdout"
+      rescue:
+        - name: Attempt re-enable and restart CAKE on failed restoration
+          ansible.builtin.systemd_service:
+            name: router-qos-upload.service
+            state: restarted
+            enabled: true
+        - name: Abort and request manual inspection
+          ansible.builtin.fail:
+            msg: WAN rollback failed; CAKE recovery attempted. Verify tc, service, PPPoE and connectivity manually.
+    - name: Verify persistent CAKE service disabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-qos-upload.service]
+      register: final_enabled
+      changed_when: false
+      failed_when: final_enabled.stdout != 'disabled'
+    - name: Verify persistent CAKE service inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload.service]
+      register: final_active
+      changed_when: false
+      failed_when: final_active.stdout != 'inactive'
+    - name: Verify PPPoE route retained
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: final_route
+      changed_when: false
+      failed_when: "'default dev ppp0' not in final_route.stdout"
+    - name: Report rollback completed
+      ansible.builtin.debug:
+        msg: Original fq_codel restored and persistent CAKE stopped/disabled. Keep recovery evidence for audit.

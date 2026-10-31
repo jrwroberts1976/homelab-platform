@@ -1,0 +1,95 @@
+---
+# Activate previously staged QoS without restarting the WAN or replacing a correct qdisc.
+- name: Activate verified persistent CAKE on router-01
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_persistence_activate_approved: false
+  tasks:
+    - name: Require explicit approval and exact router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_persistence_activate_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect live WAN queue
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: before
+      changed_when: false
+    - name: Refuse activation if active CAKE is not precisely the trial configuration
+      ansible.builtin.assert:
+        that:
+          - "'qdisc cake' in before.stdout"
+          - "'bandwidth 13Mbit' in before.stdout"
+          - "'ptm overhead 30' in before.stdout"
+    - name: Verify live internet route
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: route
+      changed_when: false
+      failed_when: "'default dev ppp0' not in route.stdout"
+    - name: Verify essential router services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, ssh, router-pppoe, nftables, dnsmasq, unbound]
+      register: services
+      changed_when: false
+      failed_when: services.rc != 0 or (services.stdout_lines | select('ne', 'active') | list | length) != 0
+    - name: Confirm persistence script syntax
+      ansible.builtin.command:
+        argv: [/bin/sh, '-n', /usr/local/sbin/router-qos-upload]
+      changed_when: false
+    - name: Confirm unit definition syntax
+      ansible.builtin.command:
+        argv: [systemd-analyze, verify, /etc/systemd/system/router-qos-upload.service]
+      changed_when: false
+    - name: Confirm prior rollback is not armed
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload-rollback.timer]
+      register: rollback
+      changed_when: false
+      failed_when: rollback.stdout != 'inactive'
+    - name: Start QoS service (must take the no-change path)
+      ansible.builtin.systemd_service:
+        name: router-qos-upload.service
+        state: started
+    - name: Confirm qdisc was not replaced by service activation
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: after
+      changed_when: false
+      failed_when: after.stdout != before.stdout
+    - name: Confirm QoS service active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload.service]
+      register: active
+      changed_when: false
+      failed_when: active.stdout != 'active'
+    - name: Enable validated service at boot
+      ansible.builtin.systemd_service:
+        name: router-qos-upload.service
+        enabled: true
+    - name: Confirm enabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-qos-upload.service]
+      register: enabled
+      changed_when: false
+      failed_when: enabled.stdout != 'enabled'
+    - name: Verify final route and CAKE
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: final_route
+      changed_when: false
+      failed_when: "'default dev ppp0' not in final_route.stdout"
+    - name: Final queue check
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: final_queue
+      changed_when: false
+      failed_when: final_queue.stdout != before.stdout
+    - name: Report activation
+      ansible.builtin.debug:
+        msg: Service started idempotently and enabled for next boot; reboot recovery still requires separate controlled test.

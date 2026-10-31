@@ -1,0 +1,72 @@
+---
+# Accept temporary CAKE trial only after independent throughput, latency and connectivity checks.
+- name: Accept verified router upload QoS trial
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_upload_finalize_approved: false
+  tasks:
+    - name: Require explicit approval and router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_upload_finalize_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Verify trial recovery script remains available
+      ansible.builtin.stat:
+        path: /var/lib/router-qos-upload-trial/restore.sh
+      register: recovery_script
+    - name: Verify rollback has not executed
+      ansible.builtin.stat:
+        path: /var/lib/router-qos-upload-trial/rolled-back
+      register: rollback_marker
+    - name: Require active trial recovery capability
+      ansible.builtin.assert:
+        that:
+          - recovery_script.stat.exists
+          - not rollback_marker.stat.exists
+    - name: Inspect WAN queue
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: wan_queue
+      changed_when: false
+    - name: Require expected CAKE bandwidth and overhead
+      ansible.builtin.assert:
+        that:
+          - "'qdisc cake' in wan_queue.stdout"
+          - "'bandwidth 13Mbit' in wan_queue.stdout"
+          - "'ptm' in wan_queue.stdout"
+    - name: Verify router services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-pppoe, nftables, dnsmasq, unbound, ssh]
+      register: services
+      changed_when: false
+      failed_when: services.rc != 0 or (services.stdout_lines | select('ne', 'active') | list | length) != 0
+    - name: Check default route
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: route
+      changed_when: false
+      failed_when: route.rc != 0 or 'default dev ppp0' not in route.stdout
+    - name: Require rollback timer still armed
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload-rollback.timer]
+      register: timer
+      changed_when: false
+      failed_when: timer.stdout != 'active'
+    - name: Stop timer only after independent test approval
+      ansible.builtin.systemd_service:
+        name: router-qos-upload-rollback.timer
+        state: stopped
+    - name: Verify rollback timer stopped
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload-rollback.timer]
+      register: timer_stopped
+      changed_when: false
+      failed_when: timer_stopped.stdout == 'active'
+    - name: Report temporary configuration accepted
+      ansible.builtin.debug:
+        msg: CAKE trial accepted and rollback disarmed. Queue is runtime-only; persistence and recovery-directory cleanup require separate review.

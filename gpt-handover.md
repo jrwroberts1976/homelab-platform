@@ -1,5 +1,38 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — CAKE explicit disable procedure staged (not executed)
+
+- PR #266 adds `IaC/ansible/playbooks/router-01-qos-persistence-disable.yml`, which requires explicit approval, target identity, expected active 13Mbit CAKE, enabled/active service and preserved restore script. It stops/disables `router-qos-upload.service` **before** running the stored `fq_codel` restore script, verifies WAN route and inactive/disabled service, and attempts CAKE recovery in an Ansible rescue block if restoring fails.
+- **Not yet syntax checked or run.** It must be reviewed and syntax validated before PR merge. Normal production state remains persistent CAKE at 13 Mbps; do not execute rollback merely to test it on the active household connection.
+
+
+### 31 October 2026 — CAKE upload QoS survives controlled router reboot
+
+- Router rebooted and reports `uptime -s` = `2026-10-31 06:12:01`. Initial Ansible SSH `Connection refused` was transient during reboot; interactive SSH to `192.168.2.1` subsequently succeeded.
+- Post-boot read-only Ansible verification: `router-qos-upload.service` = `enabled` and `active`; `eth1` root qdisc = `cake ... bandwidth 13Mbit ... ptm overhead 30`; IPv4 default route `default dev ppp0 scope link`; `router-pppoe`, `nftables`, `dnsmasq`, `unbound`, and `ssh` all active. The router's LAN and WAN interfaces and PPPoE link were up.
+- **Boot persistence confirmed** for 13 Mbps upload CAKE. USB NIC hot-reset and independent PPPoE reconnection resilience not yet tested. Continue to preserve recovery files and avoid unplanned link resets. Review/merge PR #266 and document separate disable/restore flow before considering upload QoS fully operationally closed.
+
+
+### 31 October 2026 — Post-activation upload QoS verification
+
+- Read-only audit: `router-qos-upload.service` reported `enabled` and `active`; `tc qdisc show dev eth1` showed `cake ... bandwidth 13Mbit ... ptm overhead 30`; default IPv4 route `default dev ppp0 scope link`; `router-pppoe`, `nftables`, `dnsmasq`, `unbound` and `ssh` all `active`.
+- Upload shaping and startup enablement are confirmed; full reboot recovery has **not** been tested. Do not claim reboot-tested persistence yet. Preserve trial restore script. Finish guarded recovery checklist and boot test before final PR merge.
+
+
+### 31 October 2026 — Router upload QoS persistence activated
+
+- User ran `router-01-qos-persistence-activate.yml` from admin-01: 17 tasks OK, 2 changed, zero failures. The guarded activation playbook verifies live CAKE on `eth1` at 13Mbit with PTM overhead 30 and PPPoE default route, starts the pre-staged `router-qos-upload.service` without changing the existing qdisc, and enables it for future boots.
+- Persistence is enabled, but not yet verified by a controlled reboot or WAN-interface recreation. Current router should remain online; next: read-only service/queue verification, prepare explicit disable/recovery and controlled reboot test, then review/merge PR #266. Preserve `/var/lib/router-qos-upload-trial` recovery evidence until reviewed.
+
+
+### Router CAKE upload QoS trial and persistence staging — 30–31 October 2026
+
+- On router-01 (Pi4 WAN physical `eth1`, PPPoE logical `ppp0`), measured pretrial 47.37 Mbps down / 14.52 Mbps up with upload-loaded latency 156.23 ms. Trial installed CAKE on `eth1` at `13mbit pppoe-ptm besteffort flows`, verified as `ptm overhead 30` without changing PPPoE or NAT. Trial 45.53 Mbps down / 11.97 Mbps up, upload-loaded latency 10.17 ms, download-loaded latency 31.43 ms. A single test showed major improvement; monitor after persistence.
+- Ten-minute automatic rollback was armed before modification; trial acceptance playbook verified CAKE and network health, then explicitly disarmed timer. Recovery script and initial qdisc remain in `/var/lib/router-qos-upload-trial`. Current CAKE is LIVE BUT RUNTIME-ONLY; do not assume boot persistence.
+- PR #266 branch `feature/router-qos-preflight-20261030`: trial/preflight/finalise playbooks validated; read-only persistence preflight passed (4 tasks, 0 changes). Persistence staging playbook installed script `/usr/local/sbin/router-qos-upload` and `/etc/systemd/system/router-qos-upload.service` with service disabled/inactive (13 tasks, 2 changed, 0 failed). Script syntax and service status audited; essential SSH, PPPoE, nftables, dnsmasq, Unbound healthy.
+- New `router-01-qos-persistence-harden.yml` stages a USB-interface wait and retry-on-failure service behaviour, without enabling or starting it. Pending: syntax-check and run hardening playbook; independently inspect script and unit; guarded idempotent activation; verify runtime and service state; controlled boot/interface-reset evidence; design explicit disable/recovery; merge PR #266. Avoid restarting WAN or reboot before recovery plan. Download IFB shaping at 43 Mbps is a separate phase.
+
+
 ### Router SSH hardening finalised — 30 October 2026
 
 - Draft PR #265 staged and validated router-01 SSH hardening through Ansible. Temporary-file systemd rollback proof succeeded after correcting execution on the `/run` noexec filesystem via `/bin/sh`; initial failure and stale unit were diagnosed and cleared.
