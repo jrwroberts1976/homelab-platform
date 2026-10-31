@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Download QoS isolated rollback proof passed
+
+- User ran `router-01-qos-download-rollback-proof.yml` on router-01: **24 tasks OK, 12 changed, zero failures**, testing a namespaced copy of the candidate rollback script against disposable dummy/IFB interfaces.
+- Test teardown and assertions passed, including preservation of live `eth1` upload CAKE and absence of changes to real `ppp0` ingress. This **does not** prove rollback during a PPPoE disconnect or systemd timed rollback. No live download CAKE activation has occurred.
+- Next safety gate: timed rollback service proof and final guarded pre-activation audit; do not apply the ingress filter until timer success and independent operational recovery are established.
+
+
 ### 31 October 2026 — Isolated download IFB compatibility test passed
 
 - On branch `feature/router-download-qos-preflight-20261031` / PR #267, user ran `router-01-qos-download-ifb-compatibility.yml` on router-01: recap **19 OK, 9 changed, 0 failed, 0 unreachable**. This exercised disposable `qos-test0` and `qos-ifb0` links, CAKE at 43 Mbit and `matchall`/`mirred` syntax, including cleanup in the always block and guards checking production interfaces were unchanged.
