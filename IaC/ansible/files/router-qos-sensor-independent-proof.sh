@@ -40,12 +40,18 @@ watchdog() {
 }
 cleanup() {
   # Cancel future execution, then wait for any running callback to finish.
-  systemctl stop "$UNIT.timer" 2>/dev/null || :
+  if systemctl is-active --quiet "$UNIT.timer"; then
+    systemctl stop "$UNIT.timer" || { echo "Failed to stop watchdog timer; preserving executable" >&2; return 1; }
+  fi
+  [[ $(systemctl is-active "$UNIT.timer" 2>/dev/null || :) != active ]] || return 1
   for i in {1..20}; do
-    [[ $(systemctl is-active "$UNIT.service" 2>/dev/null || :) != active ]] && break
+    case "$(systemctl is-active "$UNIT.service" 2>/dev/null || :)" in active|activating|deactivating) ;; *) break ;; esac
     sleep 1
   done
-  [[ $(systemctl is-active "$UNIT.service" 2>/dev/null || :) != active ]] || { echo "Watchdog still running" >&2; return 1; }
+  case "$(systemctl is-active "$UNIT.service" 2>/dev/null || :)" in
+    active|activating|deactivating) echo "Watchdog still running; preserving executable" >&2; return 1 ;;
+  esac
+  [[ -f "$BASE/owner" && $(cat "$BASE/owner") == qos-proof31 ]] || { echo "Missing ownership marker; preserving evidence" >&2; return 1; }
   if exists_ns; then
     verify_namespace_owner || { echo "Namespace owner mismatch; preserving resources" >&2; return 1; }
     watchdog
@@ -81,7 +87,7 @@ case "${1:-}" in
     touch "$BASE/ops.lock"
     cp "$0" "$SELF"
     chmod 0700 "$SELF"
-    trap 'cleanup' EXIT
+    trap 'status=$?; trap - EXIT; if ! cleanup; then echo "Cleanup failed; recovery evidence preserved" >&2; exit 1; fi; exit "$status"' EXIT
     ip netns add "$NS"
     stat -Lc %i "/run/netns/$NS" > "$BASE/ns-inode"
     verify_namespace_owner
@@ -91,7 +97,8 @@ case "${1:-}" in
     # Arm an independently scheduled systemd timer before tc/IFB changes.
     systemd-run --unit="$UNIT" --on-active=10s --collect -- /bin/bash "$SELF" watchdog
     systemctl is-active --quiet "$UNIT.timer"
-    [[ $(systemctl show "$UNIT.timer" -p NextElapseUSecMonotonic --value) != 0 ]] || { echo "Timer deadline missing" >&2; exit 1; }
+    deadline=$(systemctl show "$UNIT.timer" -p NextElapseUSecMonotonic --value)
+    [[ -n "$deadline" && "$deadline" != 0 && "$deadline" != n/a ]] || { echo "Timer deadline missing" >&2; exit 1; }
     # The disposable installer process performs real tc operations, then dies.
     # No host interfaces are ever named in these commands.
     set +e
