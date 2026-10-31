@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — offline multiprocess ownership tests staged
+
+- Operator confirmed durable journal prototype passed all 9 tests on admin-01. Added `IaC/ansible/scripts/test-router-qos-download-journal-processes.py` with three new offline tests: pending intent persists after a normal child process exits; a second process blocks on the journal's `flock` while the first owns it; and reopened completed ownership refuses a stale caller. Tests use a temporary directory only, no signal injection, tc, ip, systemd, sensor or production router.
+- **Not yet run by operator.** Multiprocess tests do not prove disk-power-loss recovery or safe complete-operation locking; external verification remains a caller-supplied Boolean. Retired live SIGKILL scenario stays suspended. Production 13 Mbps upload unchanged; persistent download disabled.
+
+
 ### 31 October 2026 — offline durable PPP ownership journal staged
 
 - After operator verified the prior in-memory model twice (7/7 both runs), added `IaC/ansible/scripts/router-qos-download-durable-journal.py` and `test-router-qos-download-durable-journal.py` (9 unittest cases). Uses caller-provided existing test directory; JSON intent file, `flock`, tempfile+file fsync, atomic `os.replace`, directory fsync; pending intents refuse new sessions and finish/recovery require explicit external-verification argument. Rejects corrupt state, malformed sessions and symlinks in covered paths. **Tests not yet run by operator.**
