@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Isolated interrupted-install SIGKILL proof passed
+
+- Operator pulled commit 55cb15a8 and syntax checked `router-01-qos-download-netns-crash-proof.yml`; syntax PASS.
+- Approved controller-only execution on admin-01: **5 OK, 1 changed, 0 failed**, with assertion success for child SIGKILL after IFB creation and after ingress redirect. The surviving parent performed independent cleanup of real disposable namespace network resources. This does **not** demonstrate cleanup after the parent dies, actual watchdog operation, PPP reconnect, resource ownership under contention, or full persistent reconciliation.
+- Live router-01 unchanged. Production eth1 13Mbit upload CAKE must remain preserved; production download IFB remains disabled following prior timed trial rollback.
+- Next safety design: an independent process/timer watchdog with bounded state ownership and durable cleanup evidence, then serialization and actual PPP lifecycle handling. Stage with review and never install on router-01 without explicit approval.
+
+
 ### 31 October 2026 — Real isolated CAKE/IFB proof PASS; SIGKILL test staged
 
 - Operator pulled commit 0dcb9085 and ran `router-01-qos-download-netns-proof.yml` on admin-01: **5 OK, 1 changed, 0 failed**. Approval, shell syntax, real kernel CAKE 43Mbit / IFB ingress redirect and cleanup assertions passed within a fresh unconnected network namespace. This proves kernel operation and normal teardown, not PPP reconnect or crash recovery. No production router changes.
