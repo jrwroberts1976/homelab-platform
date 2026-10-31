@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — admin-01 ICMP timestamp hardening recovered; jump-box boundary
+
+- Operator verified admin-01 eth0=192.168.2.48/24, stock nftables.service inactive, empty nft ruleset and QNetd active; ICMP hardening owned table initially absent. Historical service failure dated 29 Oct; precise historical cause unproven.
+- Operator started existing IaC-managed homelab-icmp-admin01.service at 08:35:19 GMT: active (exited), status 0, RULE_ADDED; inspect returned OWNED_TABLE_PRESENT=True; nft table inet homelab_icmp_timestamp includes input hook with drop of ICMP timestamp-request only, base policy accept. ssh and corosync-qnetd both active after change. Current protection verified; reboot persistence not independently tested.
+- User architectural requirement: admin-01 should remain a jump box / management controller (SSH, Git, Ansible); do not schedule persistent QoS watchdog test or general automation workloads here. QNetd is an existing Proxmox witness dependency and must not be removed without independent quorum-safe migration.
+- Remaining degraded-state issue: hourly homelab-network-host-docs-sync.timer runs script pointing at /home/james/projects/homelab-platform and refuses when interactive working copy is not on main. Observed failure at 08:22 due to feature/router-download-qos-preflight-20261031. Preserve main-only safety gate; design separate repo/worktree or migrate publishing to suitable automation host via reviewed IaC. No changes to docs-sync service or timer yet.
+
+
 ### 31 October 2026 — Isolated interrupted-install SIGKILL proof passed
 
 - Operator pulled commit 55cb15a8 and syntax checked `router-01-qos-download-netns-crash-proof.yml`; syntax PASS.
