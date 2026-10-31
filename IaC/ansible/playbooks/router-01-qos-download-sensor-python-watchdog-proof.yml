@@ -1,273 +1,35 @@
 ---
-- name: Python-only disposable IFB crash test
+# INTENTIONALLY RETIRED LIVE CRASH TEST.
+# This playbook is read-only; it does not execute Python, tc, ip mutations,
+# systemd-run, cleanup, or SIGKILL. The original unsafe test is retained in Git.
+- name: Audit retired Python watchdog test resources without mutation
   hosts: sensor-01
   become: true
   gather_facts: true
-  vars:
-    qos_python_watchdog_approved: false
   tasks:
-    - name: Gate on explicit approval and sensor network identity
+    - name: Verify intended sensor host and default route
       ansible.builtin.assert:
         that:
-          - qos_python_watchdog_approved | bool
-          - not ansible_check_mode
           - inventory_hostname == 'sensor-01'
           - ansible_facts.hostname == 'sensor-01'
           - ansible_facts.default_ipv4.interface == 'eth0'
           - ansible_facts.default_ipv4.gateway == '192.168.2.1'
-    - name: Refuse collisions
+    - name: Inspect reserved test state without touching it
       ansible.builtin.shell:
         executable: /bin/bash
         cmd: |
           set -euo pipefail
-          test ! -e /run/qos-proof31
-          test ! -e /run/qos-proof31-test.sh
-          test ! -e /run/qos-proof31-python-installer.py
-          test ! -e /run/qos-proof31-python-installer.pyc
-          test ! -e /run/qos-sensor-independent-proof.sh
-          ! ip netns list | grep -Eq '^qos-proof31( |$)'
-          test -z "$(systemctl list-units --all --plain --no-legend 'qos-proof31-rollback*' | grep -v '^
+          echo "=== Reserved namespace ==="
+          ip netns list
+          echo "=== Test timers and services ==="
+          systemctl list-units --all --no-pager --plain 'qos-proof31-rollback*' || true
+          echo "=== Test paths ==="
+          for path in /run/qos-proof31 /run/qos-proof31-test.sh /run/qos-sensor-independent-proof.sh /run/qos-proof31-python-installer.py; do
+            if test -e "$path" || test -L "$path"; then
+              printf 'PRESENT %s\n' "$path"
+            else
+              printf 'ABSENT %s\n' "$path"
+            fi
+          done
+          echo "READ_ONLY_AUDIT_COMPLETE"
       changed_when: false
-    - name: Run isolated proof and cleanup
-      block:
-        - name: Stage watchdog proof shell
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../files/router-qos-sensor-independent-proof.sh"
-            dest: /run/qos-sensor-independent-proof.sh
-            owner: root
-            group: root
-            mode: '0700'
-        - name: Stage Python installer
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../scripts/router-qos-download-sensor-python-kill-installer.py"
-            dest: /run/qos-proof31-python-installer.py
-            owner: root
-            group: root
-            mode: '0700'
-        - name: Check shell syntax
-          ansible.builtin.command:
-            argv: [bash, -n, /run/qos-sensor-independent-proof.sh]
-          changed_when: false
-        - name: Run actual Python crash test
-          ansible.builtin.command:
-            argv: [bash, /run/qos-sensor-independent-proof.sh, run-python-partial]
-          register: proof
-          changed_when: true
-        - name: Assert rollback
-          ansible.builtin.assert:
-            that:
-              - "'PYTHON_INSTALLER_KILLED' in proof.stdout"
-              - "'PYTHON_WATCHDOG_ROLLBACK_PASS' in proof.stdout"
-      always:
-        - name: Check staged proof executable
-          ansible.builtin.stat:
-            path: /run/qos-sensor-independent-proof.sh
-          register: source_stat
-        - name: Guarded cleanup
-          ansible.builtin.command:
-            argv: [bash, /run/qos-sensor-independent-proof.sh, cleanup]
-          when: source_stat.stat.exists
-          register: cleanup_status
-          changed_when: true
-        - name: Require namespace absent
-          ansible.builtin.shell:
-            executable: /bin/bash
-            cmd: "! ip netns list | grep -Eq '^qos-proof31( |$)'"
-          changed_when: false
-        - name: Require timer inactive
-          ansible.builtin.command:
-            argv: [systemctl, is-active, qos-proof31-rollback.timer]
-          register: timer
-          failed_when: timer.stdout in ['active', 'activating', 'deactivating']
-          changed_when: false
-        - name: Require watchdog service inactive
-          ansible.builtin.command:
-            argv: [systemctl, is-active, qos-proof31-rollback.service]
-          register: service
-          failed_when: service.stdout in ['active', 'activating', 'deactivating']
-          changed_when: false
-        - name: Require watchdog executable removed
-          ansible.builtin.stat:
-            path: /run/qos-proof31-test.sh
-          register: watchdog_exec
-        - name: Require evidence of verified cleanup
-          ansible.builtin.assert:
-            that:
-              - not watchdog_exec.stat.exists
-              - not source_stat.stat.islnk | default(false)
-        - name: Require guarded cleanup success
-          ansible.builtin.assert:
-            that:
-              - cleanup_status is defined
-              - cleanup_status is succeeded
-              - cleanup_status is not skipped
-        - name: Delete staged Python after cleanup
-          ansible.builtin.file:
-            path: /run/qos-proof31-python-installer.py
-            state: absent
-          when:
-            - cleanup_status is defined
-            - cleanup_status is succeeded
-            - cleanup_status is not skipped
-            - timer.stdout not in ['active', 'activating', 'deactivating']
-            - service.stdout not in ['active', 'activating', 'deactivating']
-            - not watchdog_exec.stat.exists
-        - name: Delete staged shell after cleanup
-          ansible.builtin.file:
-            path: /run/qos-sensor-independent-proof.sh
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
-        - name: Delete evidence after cleanup
-          ansible.builtin.file:
-            path: /run/qos-proof31
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
- || true)"
-          test -z "$(systemctl list-unit-files --no-legend 'qos-proof31-rollback*' | grep -v '^
-      changed_when: false
-    - name: Run isolated proof and cleanup
-      block:
-        - name: Stage watchdog proof shell
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../files/router-qos-sensor-independent-proof.sh"
-            dest: /run/qos-sensor-independent-proof.sh
-            owner: root
-            group: root
-            mode: '0700'
-        - name: Stage Python installer
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../scripts/router-qos-download-sensor-python-kill-installer.py"
-            dest: /run/qos-proof31-python-installer.py
-            owner: root
-            group: root
-            mode: '0700'
-        - name: Check shell syntax
-          ansible.builtin.command:
-            argv: [bash, -n, /run/qos-sensor-independent-proof.sh]
-          changed_when: false
-        - name: Run actual Python crash test
-          ansible.builtin.command:
-            argv: [bash, /run/qos-sensor-independent-proof.sh, run-python-partial]
-          register: proof
-          changed_when: true
-        - name: Assert rollback
-          ansible.builtin.assert:
-            that:
-              - "'PYTHON_INSTALLER_KILLED' in proof.stdout"
-              - "'PYTHON_WATCHDOG_ROLLBACK_PASS' in proof.stdout"
-      always:
-        - name: Check staged proof executable
-          ansible.builtin.stat:
-            path: /run/qos-sensor-independent-proof.sh
-          register: source_stat
-        - name: Guarded cleanup
-          ansible.builtin.command:
-            argv: [bash, /run/qos-sensor-independent-proof.sh, cleanup]
-          when: source_stat.stat.exists
-          register: cleanup_status
-          changed_when: true
-        - name: Require namespace absent
-          ansible.builtin.shell:
-            executable: /bin/bash
-            cmd: "! ip netns list | grep -Eq '^qos-proof31( |$)'"
-          changed_when: false
-        - name: Require timer inactive
-          ansible.builtin.command:
-            argv: [systemctl, is-active, qos-proof31-rollback.timer]
-          register: timer
-          failed_when: timer.stdout in ['active', 'activating', 'deactivating']
-          changed_when: false
-        - name: Require guarded cleanup success
-          ansible.builtin.assert:
-            that:
-              - cleanup_status is defined
-              - cleanup_status is succeeded
-        - name: Delete staged Python after cleanup
-          ansible.builtin.file:
-            path: /run/qos-proof31-python-installer.py
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
-        - name: Delete staged shell after cleanup
-          ansible.builtin.file:
-            path: /run/qos-sensor-independent-proof.sh
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
-        - name: Delete evidence after cleanup
-          ansible.builtin.file:
-            path: /run/qos-proof31
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
- || true)"
-      changed_when: false
-    - name: Run isolated proof and cleanup
-      block:
-        - name: Stage watchdog proof shell
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../files/router-qos-sensor-independent-proof.sh"
-            dest: /run/qos-sensor-independent-proof.sh
-            owner: root
-            group: root
-            mode: '0700'
-        - name: Stage Python installer
-          ansible.builtin.copy:
-            src: "{{ playbook_dir }}/../scripts/router-qos-download-sensor-python-kill-installer.py"
-            dest: /run/qos-proof31-python-installer.py
-            owner: root
-            group: root
-            mode: '0700'
-        - name: Check shell syntax
-          ansible.builtin.command:
-            argv: [bash, -n, /run/qos-sensor-independent-proof.sh]
-          changed_when: false
-        - name: Run actual Python crash test
-          ansible.builtin.command:
-            argv: [bash, /run/qos-sensor-independent-proof.sh, run-python-partial]
-          register: proof
-          changed_when: true
-        - name: Assert rollback
-          ansible.builtin.assert:
-            that:
-              - "'PYTHON_INSTALLER_KILLED' in proof.stdout"
-              - "'PYTHON_WATCHDOG_ROLLBACK_PASS' in proof.stdout"
-      always:
-        - name: Check staged proof executable
-          ansible.builtin.stat:
-            path: /run/qos-sensor-independent-proof.sh
-          register: source_stat
-        - name: Guarded cleanup
-          ansible.builtin.command:
-            argv: [bash, /run/qos-sensor-independent-proof.sh, cleanup]
-          when: source_stat.stat.exists
-          register: cleanup_status
-          changed_when: true
-        - name: Require namespace absent
-          ansible.builtin.shell:
-            executable: /bin/bash
-            cmd: "! ip netns list | grep -Eq '^qos-proof31( |$)'"
-          changed_when: false
-        - name: Require timer inactive
-          ansible.builtin.command:
-            argv: [systemctl, is-active, qos-proof31-rollback.timer]
-          register: timer
-          failed_when: timer.stdout in ['active', 'activating', 'deactivating']
-          changed_when: false
-        - name: Require guarded cleanup success
-          ansible.builtin.assert:
-            that:
-              - cleanup_status is defined
-              - cleanup_status is succeeded
-        - name: Delete staged Python after cleanup
-          ansible.builtin.file:
-            path: /run/qos-proof31-python-installer.py
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
-        - name: Delete staged shell after cleanup
-          ansible.builtin.file:
-            path: /run/qos-sensor-independent-proof.sh
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
-        - name: Delete evidence after cleanup
-          ansible.builtin.file:
-            path: /run/qos-proof31
-            state: absent
-          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
