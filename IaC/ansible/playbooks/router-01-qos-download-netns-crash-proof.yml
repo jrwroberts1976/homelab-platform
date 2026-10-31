@@ -1,0 +1,32 @@
+---
+# Controller-only, standalone disposable namespace: NO ROUTER TARGET.
+- name: Exercise real QoS interrupted-install cleanup in an isolated namespace
+  hosts: localhost
+  connection: local
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_crash_proof_approved: false
+    proof_script: "{{ playbook_dir }}/../files/router-qos-download-netns-crash-proof.sh"
+  tasks:
+    - name: Require explicit approval on admin controller
+      ansible.builtin.assert:
+        that:
+          - router_qos_crash_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'localhost'
+          - ansible_facts.hostname == 'admin-01'
+    - name: Validate shell syntax
+      ansible.builtin.command:
+        argv: [/bin/sh, -n, "{{ proof_script }}"]
+      changed_when: false
+    - name: Run interrupted install within new unconnected network namespace
+      ansible.builtin.command:
+        argv: [unshare, --net, --, /bin/sh, "{{ proof_script }}"]
+      register: result
+      changed_when: true
+    - name: Verify independent cleanup on both crash points
+      ansible.builtin.assert:
+        that:
+          - "'PASS: independent cleanup after SIGKILL at ifb' in result.stdout"
+          - "'PASS: independent cleanup after SIGKILL at redirect' in result.stdout"
