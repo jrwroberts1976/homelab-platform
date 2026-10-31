@@ -88,11 +88,14 @@
           ansible.builtin.file:
             path: /run/qos-proof31-python-installer.py
             state: absent
+          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
         - name: Delete staged shell after cleanup
           ansible.builtin.file:
             path: /run/qos-sensor-independent-proof.sh
             state: absent
+          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
         - name: Delete evidence after cleanup
           ansible.builtin.file:
             path: /run/qos-proof31
             state: absent
+          when: cleanup_status is defined and cleanup_status is succeeded and timer.stdout not in ['active', 'activating', 'deactivating']
