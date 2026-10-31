@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Python actual IFB installer proof staged; REVIEW REQUIRED
+
+- Operator reported Python decision + real isolated watchdog proof passed (`sensor-01 ok=22 changed=9 failed=0`). Added sensor-only Python real IFB/43Mbit CAKE installer (`IaC/ansible/scripts/router-qos-download-sensor-python-kill-installer.py`), new Bash harness mode `run-python-partial`, and separate default-disabled Ansible playbook `router-01-qos-download-sensor-python-watchdog-proof.yml`. This replaces Bash tc creation for *one disposable partial-install proof only*, with intentional SIGKILL and independent systemd watchdog cleanup.
+- **Not yet syntax-checked or executed. Do not run until cleanup review is complete.** In particular Ansible `always` cleanup handling must preserve evidence/executable after cleanup verification failure. This does not exercise production Python executor, real PPP reconnection or persistent state; router-01 untouched, upload 13Mbit retained, persistent download off.
+
+
 ### 31 October 2026 — approval-variable mismatch repaired
 
 - Operator ran Python gated sensor event watchdog proof; failed at initial approval assert because task used `qos_sensor_partial_watchdog_proof_approved` whereas new playbook vars/CLI use `qos_sensor_event_watchdog_proof_approved`. Recap `ok=1 changed=0 failed=1`; no network mutation. Corrected assertion at commit `c64e2e9d`. Operator must pull, syntax-check and rerun explicitly approved sensor test; runtime success unverified.
