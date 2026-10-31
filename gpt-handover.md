@@ -1,5 +1,10 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — approval-variable mismatch repaired
+
+- Operator ran Python gated sensor event watchdog proof; failed at initial approval assert because task used `qos_sensor_partial_watchdog_proof_approved` whereas new playbook vars/CLI use `qos_sensor_event_watchdog_proof_approved`. Recap `ok=1 changed=0 failed=1`; no network mutation. Corrected assertion at commit `c64e2e9d`. Operator must pull, syntax-check and rerun explicitly approved sensor test; runtime success unverified.
+
+
 ### 31 October 2026 — Python PPP decision gate + real sensor rollback scenario staged
 
 - Operator reported previous partial-install watchdog proof `sensor-01 ok=17 changed=5 failed=0`. New strict test fixture `IaC/ansible/scripts/router-qos-download-sensor-event-gate.py` invokes the existing Python PPP event-replay `step()` and insists on exact synthetic session A and `PLAN_INSTALL` operations. The existing independent watchdog Bash proof supports new `run-event-partial` mode: after timer is armed, verify Python decision, then run the same real isolated IFB+43Mbit CAKE partial SIGKILL test and watchdog cleanup. New default-disabled Ansible playbook `IaC/ansible/playbooks/router-01-qos-download-sensor-event-watchdog-proof.yml` stages Python modules under /run, checks ownership collision, and cleans staged files after the isolated recovery proof.
