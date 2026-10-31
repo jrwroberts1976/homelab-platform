@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Real sensor-01 independent watchdog proof staged, NOT RUN
+
+- Added isolated bash test `IaC/ansible/files/router-qos-sensor-independent-proof.sh` and approval-gated `IaC/ansible/playbooks/router-01-qos-download-sensor-independent-watchdog-proof.yml`. Creates named disconnected namespace, dummy ingress plus 43mbit CAKE IFB, arms transient systemd timer before shaping, kills disposable installer child and validates watchdog removes owned QoS resources. Test-only names and admin/production router excluded by sensor host gate. Cleanup attempts bounded teardown with evidence directory removed after namespace verification.
+- **Not yet validated or executed by user.** First pull, syntax-check Ansible and shell, review script/teardown. This does not establish PPP reconnection or production-ready persistent download shaping. Original sensor Zeek/Suricata state remains out of scope and router-01's 13 Mbit upload CAKE must not change.
+
+
 ### 31 October 2026 — sensor-01 independent timer marker proof PASS
 
 - Operator pulled ebeacd8f; syntax validation of `router-01-qos-download-sensor-timer-marker-proof.yml` passed. Execution on sensor-01: **11 OK, 2 changed, 0 failed**, marker created after transient systemd timer fired, then removed; final unit listing empty. No production interface or router changes.
