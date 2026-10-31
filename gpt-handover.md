@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — read-only sensor kernel snapshot collector staged
+
+- Operator confirmed prior cleanup-evidence fixture tests 7/7 and durable journal tests 9/9 passing. Added `IaC/ansible/scripts/router-qos-download-sensor-readonly-collector.py` with fixed `sensor-01`, `qos-proof31`, `qd31`, `qi31` inspection; requires recorded namespace inode and refuses mismatches, collects read-only `ip link show`, `tc filter show`, `tc qdisc show` output. If old disposable namespace/owner absent, reports INCONCLUSIVE, not CLEAN. Always reports `journal_recovery_authorized=false`. Added 3 basic offline mocked tests; **not yet executed by operator**.
+- This collector does NOT currently call `router-qos-download-cleanup-evidence.py`, does NOT hold a verified exclusive state lock or grant recovery; actual operator read-only run on sensor is pending. No production modifications; retired SIGKILL scenario stays suspended.
+
+
 ### 31 October 2026 — offline cleanup evidence verifier staged
 
 - Operator confirmed prior multiprocess journal tests passed 3/3 and durable journal tests 9/9. Added `IaC/ansible/scripts/router-qos-download-cleanup-evidence.py` and seven offline tests. The pure snapshot evaluator checks disposable sensor namespace inode match, source presence, IFB lookup expected missing-device result, empty ingress filter listing, and absence of ingress/clsact qdisc. Any ambiguous/failed evidence refuses a clean observation. **Tests not yet executed by operator.**
