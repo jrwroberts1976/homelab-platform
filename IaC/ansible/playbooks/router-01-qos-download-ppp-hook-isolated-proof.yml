@@ -1,0 +1,63 @@
+---
+# Controller-only simulation; never calls PPP, tc, ip link or systemctl.
+- name: Verify staged PPP hook event dispatch without router modifications
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    hook: "{{ playbook_dir }}/../files/router-qos-download-ppp-hook.sh"
+    proof_log: /tmp/router-qos-ppp-hook-proof.ansible
+  tasks:
+    - name: Validate hook syntax
+      ansible.builtin.command:
+        argv: [/bin/sh, '-n', "{{ hook }}"]
+      changed_when: false
+    - name: Check fixture path unused
+      ansible.builtin.stat:
+        path: "{{ proof_log }}"
+      register: existing
+    - name: Require new evidence fixture
+      ansible.builtin.assert:
+        that:
+          - not existing.stat.exists
+    - name: Exercise event fixture with always-cleanup
+      block:
+        - name: Simulate two connection-up events
+          ansible.builtin.command:
+            argv: [/bin/sh, "{{ hook }}", ppp0]
+          environment:
+            ROUTER_QOS_TEST_MODE: "1"
+            ROUTER_QOS_TEST_LOG: "{{ proof_log }}"
+            ROUTER_QOS_PPP_EVENT: up
+          loop: [first, repeated]
+          changed_when: true
+        - name: Simulate connection-down event
+          ansible.builtin.command:
+            argv: [/bin/sh, "{{ hook }}", ppp0]
+          environment:
+            ROUTER_QOS_TEST_MODE: "1"
+            ROUTER_QOS_TEST_LOG: "{{ proof_log }}"
+            ROUTER_QOS_PPP_EVENT: down
+          changed_when: true
+        - name: Simulate unrelated PPP interface
+          ansible.builtin.command:
+            argv: [/bin/sh, "{{ hook }}", ppp1]
+          environment:
+            ROUTER_QOS_TEST_MODE: "1"
+            ROUTER_QOS_TEST_LOG: "{{ proof_log }}"
+            ROUTER_QOS_PPP_EVENT: up
+          changed_when: false
+        - name: Inspect simulated event log
+          ansible.builtin.slurp:
+            src: "{{ proof_log }}"
+          register: proof
+        - name: Confirm ordered dispatch and no unrelated event
+          ansible.builtin.assert:
+            that:
+              - "(proof.content | b64decode).splitlines() == ['up ppp0', 'up ppp0', 'down ppp0']"
+      always:
+        - name: Remove temporary controller-only fixture
+          ansible.builtin.file:
+            path: "{{ proof_log }}"
+            state: absent

@@ -1,0 +1,56 @@
+---
+# Read-only decision test on controller; no network commands.
+- name: Validate serialized QoS reconciliation guard offline
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+  vars:
+    guard: "{{ playbook_dir }}/../files/router-qos-download-reconcile-guard.py"
+    fixture: /tmp/router-qos-download-guard-proof
+  tasks:
+    - name: Check guard syntax without bytecode writes
+      ansible.builtin.command:
+        argv: [python3, -B, -c, "import ast,sys; ast.parse(open(sys.argv[1]).read())", "{{ guard }}"]
+      changed_when: false
+    - name: Require fixture not already present
+      ansible.builtin.stat:
+        path: "{{ fixture }}"
+      register: before
+    - name: Refuse fixture collision
+      ansible.builtin.assert:
+        that:
+          - not before.stat.exists
+    - name: Exercise isolated guard
+      block:
+        - name: Create fixture
+          ansible.builtin.file:
+            path: "{{ fixture }}"
+            state: directory
+            mode: '0700'
+        - name: Write test snapshots
+          ansible.builtin.copy:
+            dest: "{{ fixture }}/{{ item.name }}.json"
+            mode: '0600'
+            content: "{{ item.payload | to_json }}"
+          loop:
+            - {name: clean, payload: {event: up, interface: ppp0, ifindex: 5, qdisc: none, filters: [], default_route_on_ppp: true, upload_cake_ok: true}}
+            - {name: duplicate, payload: {event: up, interface: ppp0, ifindex: 5, qdisc: owned_clsact, filters: [owned_redirect], owned: {ifindex: 5}, default_route_on_ppp: true, upload_cake_ok: true}}
+            - {name: malformed, payload: {event: up, interface: ppp0, ifindex: 5, owned: {ifindex: -1}}}
+        - name: Evaluate guarded snapshots using same lock
+          ansible.builtin.command:
+            argv: [python3, -B, "{{ guard }}", --lock, "{{ fixture }}/lock", --snapshot, "{{ fixture }}/{{ item }}.json"]
+          loop: [clean, duplicate, malformed]
+          register: results
+          changed_when: false
+        - name: Check guarded decisions
+          ansible.builtin.assert:
+            that:
+              - "(results.results[0].stdout | from_json).decision == 'attach'"
+              - "(results.results[1].stdout | from_json).decision == 'noop'"
+              - "(results.results[2].stdout | from_json).decision == 'refuse'"
+      always:
+        - name: Remove isolated fixture
+          ansible.builtin.file:
+            path: "{{ fixture }}"
+            state: absent

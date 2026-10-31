@@ -1,0 +1,53 @@
+---
+# Phase 4: READ-ONLY preflight for a future independently timed watchdog proof.
+# This playbook does not create namespaces, change qdiscs, or start units.
+- name: Inspect sensor-01 independent QoS watchdog test prerequisites
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require exact disposable test host identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+    - name: Inspect prerequisites without modifying network or systemd
+      ansible.builtin.shell: |
+        set -eu
+        echo '=== tools ==='
+        for x in ip tc unshare nsenter systemd-run flock timeout readlink modinfo; do
+          command -v "$x"
+        done
+        echo '=== modules (availability only) ==='
+        for m in ifb sch_cake cls_matchall act_mirred; do
+          modinfo "$m" >/dev/null
+          echo "$m available"
+        done
+        echo '=== management networking ==='
+        ip -br link
+        ip -4 route show default
+        echo '=== transient unit name collision ==='
+        if systemctl list-units --all --plain --no-legend 'homelab-qos-watchdog-proof*' | grep -q .; then
+          echo 'REFUSE: matching transient test units exist' >&2
+          exit 1
+        fi
+        if systemctl list-unit-files --no-legend 'homelab-qos-watchdog-proof*' | grep -q .; then
+          echo 'REFUSE: matching persistent test units exist' >&2
+          exit 1
+        fi
+        echo 'No reserved watchdog test units'
+        echo '=== sensor service status (information only) ==='
+        systemctl --failed --no-pager --full || true
+        echo '=== network namespace identity ==='
+        readlink /proc/1/ns/net
+        echo 'READY_FOR_DESIGN_REVIEW'
+      args:
+        executable: /bin/bash
+      register: inspection
+      changed_when: false
+    - name: Confirm read-only prerequisite report completed
+      ansible.builtin.assert:
+        that:
+          - "'READY_FOR_DESIGN_REVIEW' in inspection.stdout"

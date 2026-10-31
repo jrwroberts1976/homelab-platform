@@ -1,0 +1,18 @@
+[Unit]
+Description=Managed download CAKE on PPPoE ingress (43Mbit)
+Documentation=man:tc-cake(8)
+After=router-pppoe.service router-qos-upload.service
+Requires=router-pppoe.service
+ConditionPathExists=/sys/class/net/ppp0/ifindex
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStartPre=/usr/local/sbin/router-qos-download-managed check
+ExecStart=/usr/local/sbin/router-qos-download-managed start
+ExecStop=/usr/local/sbin/router-qos-download-managed stop
+TimeoutStartSec=30
+TimeoutStopSec=30
+
+[Install]
+# Intentionally no WantedBy yet: reconnect lifecycle is Phase 3.

@@ -1,0 +1,141 @@
+---
+# Real tc operations, disposable links only. Production ppp0/eth1 untouched.
+- name: Exercise CAKE attachment and rollback on isolated links
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_real_actuator_proof_approved: false
+    dummy: qos-act0
+    ifb: qos-aifb0
+    proof_dir: /var/lib/router-qos-download-real-actuator-proof
+  tasks:
+    - name: Require explicit approval and exact router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_real_actuator_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Refuse pre-existing proof resources
+      ansible.builtin.shell: |
+        set -eu
+        ! ip link show dev qos-act0 >/dev/null 2>&1
+        ! ip link show dev qos-aifb0 >/dev/null 2>&1
+        test ! -e /var/lib/router-qos-download-real-actuator-proof
+      changed_when: false
+    - name: Snapshot production qdisc and ingress
+      ansible.builtin.shell: |
+        tc qdisc show dev eth1
+        echo PPP_INGRESS_BEGIN
+        tc qdisc show dev ppp0
+        tc filter show dev ppp0 ingress
+      register: before
+      changed_when: false
+    - name: Test isolated real CAKE and rollback
+      block:
+        - name: Create audit directory
+          ansible.builtin.file:
+            path: "{{ proof_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Create disposable dummy
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, "{{ dummy }}", type, dummy]
+          changed_when: true
+        - name: Create disposable IFB
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, "{{ ifb }}", type, ifb]
+          changed_when: true
+        - name: Bring up dummy
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, "{{ dummy }}", up]
+          changed_when: true
+        - name: Bring up IFB
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, "{{ ifb }}", up]
+          changed_when: true
+        - name: Install real 43Mbps CAKE
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, "{{ ifb }}", root, cake, bandwidth, 43mbit, besteffort, flows]
+          changed_when: true
+        - name: Create real ingress qdisc
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, "{{ dummy }}", clsact]
+          changed_when: true
+        - name: Attach real ingress redirect
+          ansible.builtin.command:
+            argv: [tc, filter, add, dev, "{{ dummy }}", ingress, pref, '49131', matchall, action, mirred, egress, redirect, dev, "{{ ifb }}"]
+          changed_when: true
+        - name: Inspect actual queue
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, "{{ ifb }}"]
+          register: queue
+          changed_when: false
+        - name: Inspect actual filter
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, "{{ dummy }}", ingress]
+          register: filter
+          changed_when: false
+        - name: Assert real attachment succeeded
+          ansible.builtin.assert:
+            that:
+              - "'qdisc cake' in queue.stdout"
+              - "'bandwidth 43Mbit' in queue.stdout"
+              - "'pref 49131' in filter.stdout"
+              - "'mirred' in filter.stdout"
+              - "'qos-aifb0' in filter.stdout"
+        - name: Remove owned redirect
+          ansible.builtin.command:
+            argv: [tc, filter, del, dev, "{{ dummy }}", ingress, pref, '49131']
+          changed_when: true
+        - name: Remove owned clsact
+          ansible.builtin.command:
+            argv: [tc, qdisc, del, dev, "{{ dummy }}", clsact]
+          changed_when: true
+        - name: Remove owned IFB
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, "{{ ifb }}", type, ifb]
+          changed_when: true
+        - name: Verify no ingress remains
+          ansible.builtin.shell: |
+            test -z "$(tc filter show dev qos-act0 ingress)"
+            ! tc qdisc show dev qos-act0 | grep -q 'qdisc clsact'
+          changed_when: false
+        - name: Record successful proof
+          ansible.builtin.copy:
+            dest: "{{ proof_dir }}/passed"
+            content: "43Mbit CAKE and real tc ingress redirect on disposable dummy/IFB successfully removed.\n"
+            owner: root
+            group: root
+            mode: '0600'
+      always:
+        - name: Clean disposable dummy
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, "{{ dummy }}"]
+          register: clean_dummy
+          failed_when: false
+          changed_when: clean_dummy.rc == 0
+        - name: Clean disposable IFB if needed
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, "{{ ifb }}"]
+          register: clean_ifb
+          failed_when: false
+          changed_when: clean_ifb.rc == 0
+        - name: Verify test links removed
+          ansible.builtin.shell: |
+            ! ip link show dev qos-act0 >/dev/null 2>&1
+            ! ip link show dev qos-aifb0 >/dev/null 2>&1
+          changed_when: false
+        - name: Verify production state completely unchanged
+          ansible.builtin.shell: |
+            tc qdisc show dev eth1
+            echo PPP_INGRESS_BEGIN
+            tc qdisc show dev ppp0
+            tc filter show dev ppp0 ingress
+          register: after
+          changed_when: false
+          failed_when: after.stdout != before.stdout

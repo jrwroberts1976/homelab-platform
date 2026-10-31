@@ -1,0 +1,27 @@
+---
+# Controller-only two-process file locking test.
+- name: Verify independent PPP QoS reconciliation processes serialize
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Check test program syntax without writing bytecode
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -B
+          - -c
+          - "import ast,sys; ast.parse(open(sys.argv[1]).read())"
+          - "{{ playbook_dir }}/../files/router-qos-download-lock-contention-proof.py"
+      changed_when: false
+    - name: Prove actual interprocess lock contention
+      ansible.builtin.command:
+        argv: [python3, -B, "{{ playbook_dir }}/../files/router-qos-download-lock-contention-proof.py"]
+      register: proof
+      changed_when: false
+      failed_when: >-
+        proof.rc != 0 or 'PASS: second process blocked' not in proof.stdout
+    - name: Display proof result
+      ansible.builtin.debug:
+        var: proof.stdout_lines

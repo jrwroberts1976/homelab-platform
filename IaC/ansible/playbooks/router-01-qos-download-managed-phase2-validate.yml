@@ -1,0 +1,29 @@
+---
+# Controller-only static review: no production router changes.
+- name: Validate staged download QoS service files without deployment
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    candidate_sh: "{{ playbook_dir }}/../files/router-qos-download-managed.sh"
+    candidate_service: "{{ playbook_dir }}/../files/router-qos-download-managed.service"
+  tasks:
+    - name: Check shell syntax
+      ansible.builtin.command:
+        argv: [/bin/sh, '-n', "{{ candidate_sh }}"]
+      changed_when: false
+    - name: Read candidate service
+      ansible.builtin.slurp:
+        src: "{{ candidate_service }}"
+      register: service_file
+    - name: Verify service remains uninstallable and unapproved
+      ansible.builtin.assert:
+        that:
+          - "'ExecStart=/usr/local/sbin/router-qos-download-managed start' in (service_file.content | b64decode)"
+          - "'ExecStop=/usr/local/sbin/router-qos-download-managed stop' in (service_file.content | b64decode)"
+          - "'WantedBy=' not in (service_file.content | b64decode)"
+          - "'Alias=' not in (service_file.content | b64decode)"
+    - name: Report scope
+      ansible.builtin.debug:
+        msg: Candidate parsed, service intentionally not enabled or deployed. Phase 3 reconnect lifecycle and Phase 4 recovery tests remain mandatory.

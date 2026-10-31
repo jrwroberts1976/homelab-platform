@@ -1,0 +1,58 @@
+---
+# Explicit human-approved recovery for an interrupted sensor-only namespace proof.
+# Does not touch router-01 or sensor-01 host interfaces.
+- name: Recover owned disposable QoS namespace after interrupted test
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  vars:
+    qos_sensor_recovery_approved: false
+    recovery_source: /run/qos-proof31-recovery.sh
+  tasks:
+    - name: Require explicit approval and correct target
+      ansible.builtin.assert:
+        that:
+          - qos_sensor_recovery_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+    - name: Read-only verify recovery ownership evidence
+      ansible.builtin.shell: |
+        test -f /run/qos-proof31/owner
+        test -f /run/qos-proof31/ns-inode
+        test -f /run/qos-proof31/ops.lock
+        test "$(cat /run/qos-proof31/owner)" = qos-proof31
+        if ip netns list | grep -Eq '^qos-proof31( |$)'; then
+          test "$(stat -Lc %i /run/netns/qos-proof31)" = "$(cat /run/qos-proof31/ns-inode)"
+          test "$(stat -Lc %i /run/netns/qos-proof31)" != "$(stat -Lc %i /proc/1/ns/net)"
+        fi
+      changed_when: false
+    - name: Recover in guarded block
+      block:
+        - name: Stage disposable recovery program
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/router-qos-sensor-independent-proof.sh"
+            dest: "{{ recovery_source }}"
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Recover and verify isolated resources
+          ansible.builtin.command:
+            argv: [/bin/bash, "{{ recovery_source }}", recover]
+          register: recovery
+          changed_when: true
+        - name: Require explicit recovery success marker
+          ansible.builtin.assert:
+            that:
+              - "'RECOVERY_PASS' in recovery.stdout"
+        - name: Remove owned evidence only after recovery succeeds
+          ansible.builtin.file:
+            path: /run/qos-proof31
+            state: absent
+      always:
+        - name: Remove recovery program without deleting retained evidence
+          ansible.builtin.file:
+            path: "{{ recovery_source }}"
+            state: absent

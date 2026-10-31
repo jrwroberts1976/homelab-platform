@@ -1,5 +1,407 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — integrated Python lifecycle against real disposable sensor namespace staged
+
+- Operator confirmed prior real shell-based disposable IFB/CAKE test on sensor-01 passed (Ansible ok=4 changed=0 failed=0), and six integrated Python offline lifecycle tests passed. Added `IaC/ansible/scripts/router-qos-download-python-disposable-e2e.py` and explicitly opted-in `IaC/ansible/playbooks/router-01-qos-download-python-disposable-e2e.yml`. The playbook verifies exact sensor host/default gateway, copies three Python files into a temporary directory, and runs the real Linux IFB/43mbit CAKE install and teardown via the integrated Python journal lifecycle inside a fresh isolated `qos-p5` namespace, with ordinary finally cleanup and stage removal.
+- **Not yet executed; validate syntax first.** This is namespace-only mutation on sensor-01 and does **not** connect PPP hooks, production router, or independent watchdog. Test watchdog callback is namespace-identity check only; no SIGKILL and no approved production cutover. Existing router upload 13 Mbps and persistent download OFF. Review test results before proceeding to production-specific design.
+
+
+### 31 October 2026 — one sensor-only disposable IFB/CAKE functional test staged
+
+- User reported six integrated offline lifecycle tests PASS, requested next step. Added `IaC/ansible/scripts/router-qos-download-disposable-e2e.sh` and opt-in `IaC/ansible/playbooks/router-01-qos-download-disposable-e2e.yml` (sensor-01 only, explicit `router_qos_disposable_e2e_approved=true`). Creates fresh namespace `qos-p5-e2e` with dummy `qe2src` and IFB `qe2ifb`, checks 43mbit CAKE/ingress redirect, tears down and checks absence. Trap deletes namespace, refuses preexisting namespace, flock serializes test calls. No PPP, host-interface/route/nftables/systemd changes or SIGKILL. **Not executed by operator yet.**
+- This is actual isolated kernel mutation on sensor-01, not simulated; approve only with sensor healthy and accessible. It does NOT execute Python integrated lifecycle/journal/PPP handling and does not grant production deployment. Production router-01 upload 13 Mbps retained, download 43 Mbps disabled.
+
+
+### 31 October 2026 — accelerated integrated offline lifecycle staged
+
+- User requested faster delivery, avoiding more fragmented standalone preflights. Added `IaC/ansible/scripts/router-qos-download-integrated-offline.py` and `test-router-qos-download-integrated-offline.py`: one transaction holds journal flock across watchdog and precondition checks, durable pending intent, ordered 43 Mbps disposable-namespace IFB/CAKE operations, observed postcondition and clean commit; partial failure remains pending. Tests cover synthetic install/teardown, watchdog refusal, operation failure, stale session, failed postcondition and persistence. **Tests not yet run by operator**.
+- **TEST-ONLY, NO PRODUCTION OR LIVE NAMESPACE EXECUTION:** all runner/observer/watchdog collaborators are injected and fake; no executable CLI. These do not constitute trustworthy kernel verification, independent watchdog or permission to deploy router-01. No production changes and no SIGKILL tests. Next run six offline integration tests, then review precise live adapter and safe disposable namespace test before a single explicit activation decision. Existing 13 Mbps upload CAKE preserved and 43 Mbps download remains OFF.
+
+
+### 31 October 2026 — Phase 5 source-level production-readiness NO-GO
+
+- Operator reported locked-kernel audit 7/7 and durable journal 9/9 PASS. Reviewed actual source of journal, collector, adapter, evaluator, locked audit, event planner, test-only executor, and retired read-only sensor playbook. Added audit: `docs/architecture/ROUTER-01-PHASE5-PRODUCTION-READINESS-AUDIT.md`.
+- **NO-GO**: journal recovery `externally_verified=True` is caller-asserted; PPP events, test-only executor, journal, watchdog and verification do not share a production transaction lock; sensor fixture is not production PPP evidence; live reboot/crash/reconciliation and independent rollback not demonstrated. Existing green tests are useful but do not resolve these architectural gaps.
+- Next: design trusted postcondition-driven completion and coherent transaction ownership offline; DO NOT enable 43 Mbps persistent download CAKE or run live SIGKILL. Preserve router 13 Mbps upload and existing services. No deployment performed.
+
+
+### 31 October 2026 — read-only collector under journal lock staged
+
+- Operator confirmed freshness audit 7/7 and durable journal 9/9 passing. Staged `IaC/ansible/scripts/router-qos-download-locked-kernel-audit.py` plus seven offline tests. This invokes the fixed sensor read-only collector under the journal's flock, checks pending session ownership before/after, limits observation duration to two seconds, and passes the collected output through the fail-closed adapter. **Not yet operator-validated.**
+- Critical limits: test fixture is a **temporary-file journal**, not router production state; the lock does not serialize PPP/kernel changes by other actors. No recovery authorization (`false` always), no network mutation, no production deployment or live SIGKILL testing. Operator should run Python compile and 7 offline tests before any optional real read-only inspection. Router upload 13 Mbps retained, persistent download OFF.
+
+
+### 31 October 2026 — offline freshness and journal-lock audit staged
+
+- Operator verified 7/7 collector-adapter and 7/7 cleanup-evaluator offline tests. Added `IaC/ansible/scripts/router-qos-download-freshness-audit.py` plus seven offline tests. Audit holds the durable journal lock while comparing pending ownership/target, expected event generation and bounded monotonic observation age, then evaluates supplied collector output. Mismatched/stale/invalid state is refused. **Not yet run by operator.**
+- Always returns `journal_recovery_authorized=false`; audit does not mutate journal or host networking. Important: source evidence is still a caller-supplied fixture and is NOT collected while journal lock is held; the test is not proof of real kernel-observation freshness, post-reboot monotonic validity, or reliable production PPP owner. The SIGKILL live test stays retired, and router-01 upload 13 Mbps remains unchanged, persistent download OFF.
+
+
+### 31 October 2026 — offline sensor collector/evidence adapter staged
+
+- Operator confirmed read-only sensor probe: sensor-01 eth0 192.168.2.55/24, default via 192.168.2.1, disposable namespace and owner absent, watchdog units inactive. Added `IaC/ansible/scripts/router-qos-download-observation-adapter.py` and seven offline tests to map the read-only collector's captured output into `router-qos-download-cleanup-evidence.py`, with refusal for missing namespace, mismatched inode, present IFB, ingress filters/clsact, incomplete/failed results. **Tests not yet executed by operator.**
+- Adapter always returns `journal_recovery_authorized=false` and does not invoke host commands. The historical disposable namespace is absent, so actual observation remains INCONCLUSIVE; there is no trusted live kernel snapshot, no freshness lock, no production PPP integration. No router or sensor changes and SIGKILL test remains suspended.
+
+
+### 31 October 2026 — read-only sensor kernel snapshot collector staged
+
+- Operator confirmed prior cleanup-evidence fixture tests 7/7 and durable journal tests 9/9 passing. Added `IaC/ansible/scripts/router-qos-download-sensor-readonly-collector.py` with fixed `sensor-01`, `qos-proof31`, `qd31`, `qi31` inspection; requires recorded namespace inode and refuses mismatches, collects read-only `ip link show`, `tc filter show`, `tc qdisc show` output. If old disposable namespace/owner absent, reports INCONCLUSIVE, not CLEAN. Always reports `journal_recovery_authorized=false`. Added 3 basic offline mocked tests; **not yet executed by operator**.
+- This collector does NOT currently call `router-qos-download-cleanup-evidence.py`, does NOT hold a verified exclusive state lock or grant recovery; actual operator read-only run on sensor is pending. No production modifications; retired SIGKILL scenario stays suspended.
+
+
+### 31 October 2026 — offline cleanup evidence verifier staged
+
+- Operator confirmed prior multiprocess journal tests passed 3/3 and durable journal tests 9/9. Added `IaC/ansible/scripts/router-qos-download-cleanup-evidence.py` and seven offline tests. The pure snapshot evaluator checks disposable sensor namespace inode match, source presence, IFB lookup expected missing-device result, empty ingress filter listing, and absence of ingress/clsact qdisc. Any ambiguous/failed evidence refuses a clean observation. **Tests not yet executed by operator.**
+- Critically the evaluator is **not connected to actual kernel inspection or the durable journal** and always reports `journal_recovery_authorized=false`. A snapshot may become stale after observation. No recovery authorization, no tc/ip invocation, and no network mutation; this is a non-disruptive fixture only. Production download still disabled; 13 Mbps upload preserved; live SIGKILL test suspended.
+
+
+### 31 October 2026 — offline multiprocess ownership tests staged
+
+- Operator confirmed durable journal prototype passed all 9 tests on admin-01. Added `IaC/ansible/scripts/test-router-qos-download-journal-processes.py` with three new offline tests: pending intent persists after a normal child process exits; a second process blocks on the journal's `flock` while the first owns it; and reopened completed ownership refuses a stale caller. Tests use a temporary directory only, no signal injection, tc, ip, systemd, sensor or production router.
+- **Not yet run by operator.** Multiprocess tests do not prove disk-power-loss recovery or safe complete-operation locking; external verification remains a caller-supplied Boolean. Retired live SIGKILL scenario stays suspended. Production 13 Mbps upload unchanged; persistent download disabled.
+
+
+### 31 October 2026 — offline durable PPP ownership journal staged
+
+- After operator verified the prior in-memory model twice (7/7 both runs), added `IaC/ansible/scripts/router-qos-download-durable-journal.py` and `test-router-qos-download-durable-journal.py` (9 unittest cases). Uses caller-provided existing test directory; JSON intent file, `flock`, tempfile+file fsync, atomic `os.replace`, directory fsync; pending intents refuse new sessions and finish/recovery require explicit external-verification argument. Rejects corrupt state, malformed sessions and symlinks in covered paths. **Tests not yet run by operator.**
+- Safety limitations: offline fixture only, no real external verification binding, no PPP hooks, no systemd/network changes, no production authorization. The caller must hold the lock for its *entire* mutation/validation critical section in an eventual implementation; current `begin`/`finish` methods lock individual journal operations only. This is NOT yet a complete crash-safe live reconciler. Retired SIGKILL test remains suspended. Router upload 13 Mbit retained; persistent download OFF.
+
+
+### 31 October 2026 — non-disruptive Phase 5 PPP ownership recovery model staged
+
+- Following operator read-only sensor audit (3 OK, 0 changed, 0 failures), added `IaC/ansible/scripts/router-qos-download-ownership-journal-model.py` and seven offline unittest cases `test-router-qos-download-ownership-journal-model.py` to exercise nominal reconnect, stale down refusal, partial install/teardown fail-closed, refusal of unverified recovery, verified recovery acknowledgement, and refusal of spurious recovery. **Not yet tested by operator.** No ip/tc/systemd commands, no signal termination, no changes to sensor/router.
+- This models an **in-memory** intent journal, not crash-durable disk ownership or independent recovery proof. It is not wired into live PPP hooks or the isolated executor and must not be used for production authorization. The unsafe SIGKILL test remains retired; 13Mbit upload remains active and download persistence OFF.
+
+
+### 31 October 2026 — SAFETY HOLD: retired Python SIGKILL live playbook
+
+- Following operator SSH-session loss and post-event audit, sensor watchdog completed and namespace was absent, but the SSH disconnect cause remains unproven. GitHub audit discovered `router-01-qos-download-sensor-python-watchdog-proof.yml` was severely corrupted (three repeated blocks plus incomplete YAML/shell). **Do not run the historical live version**, even from an earlier commit.
+- Replaced that playbook at commit `2571249c` with a single **read-only sensor resource audit**: asserts sensor identity and inspects namespace, test units and recovery paths; it performs no test setup, no cleanup, no `tc`/network changes and no SIGKILL. The historical separate shell harness still contains disruptive test modes, which remain suspended. No router modifications. Production upload shaping 13 Mbps retained; persistent download disabled. Next: operator pull and Ansible syntax-check, then optional read-only audit; design non-disruptive tests before any future live exercise.
+
+
+### 31 October 2026 — Python sensor watchdog test runtime cleanup review
+
+- Operator validated Bash/Python/Ansible syntax at `8b5a814e`; live Python installer proof **not executed**. Reviewed Python installer and new proof Ansible; updated playbook at `32952f6c` to refuse reserved unit-file collisions, check watchdog service and executable absence after cleanup, require a cleanup action actually ran (not skipped), and prevent cleanup artifact deletion unless both timer/service inactive and executable removed. These are additional fail-closed guards, not evidence of a live success.
+- Python installer uses scoped namespace `qos-proof31`, ownership marker, timer active check, IFB/clsact collision checks, actual CAKE on `qi31` then SIGKILL; independent Bash systemd watchdog is responsible for cleanup. Do NOT deploy on router or install hooks. Next: operator pull, syntax-check updated playbook, then explicitly approval-gated sensor test after review. Production 13Mbit upload retained, download disabled.
+
+
+### 31 October 2026 — cleanup retention guard follow-up
+
+- Updated new Python sensor proof playbook at `b3c36d53`: staged recovery files/evidence are only removed when guarded cleanup reports success and watchdog timer is not active. **Operator validation pending**; run Bash/Python/Ansible syntax checks first. Do not mistake this disposable test for persistent router QoS approval.
+
+
+### 31 October 2026 — Python actual IFB installer proof staged; REVIEW REQUIRED
+
+- Operator reported Python decision + real isolated watchdog proof passed (`sensor-01 ok=22 changed=9 failed=0`). Added sensor-only Python real IFB/43Mbit CAKE installer (`IaC/ansible/scripts/router-qos-download-sensor-python-kill-installer.py`), new Bash harness mode `run-python-partial`, and separate default-disabled Ansible playbook `router-01-qos-download-sensor-python-watchdog-proof.yml`. This replaces Bash tc creation for *one disposable partial-install proof only*, with intentional SIGKILL and independent systemd watchdog cleanup.
+- **Not yet syntax-checked or executed. Do not run until cleanup review is complete.** In particular Ansible `always` cleanup handling must preserve evidence/executable after cleanup verification failure. This does not exercise production Python executor, real PPP reconnection or persistent state; router-01 untouched, upload 13Mbit retained, persistent download off.
+
+
+### 31 October 2026 — approval-variable mismatch repaired
+
+- Operator ran Python gated sensor event watchdog proof; failed at initial approval assert because task used `qos_sensor_partial_watchdog_proof_approved` whereas new playbook vars/CLI use `qos_sensor_event_watchdog_proof_approved`. Recap `ok=1 changed=0 failed=1`; no network mutation. Corrected assertion at commit `c64e2e9d`. Operator must pull, syntax-check and rerun explicitly approved sensor test; runtime success unverified.
+
+
+### 31 October 2026 — Python PPP decision gate + real sensor rollback scenario staged
+
+- Operator reported previous partial-install watchdog proof `sensor-01 ok=17 changed=5 failed=0`. New strict test fixture `IaC/ansible/scripts/router-qos-download-sensor-event-gate.py` invokes the existing Python PPP event-replay `step()` and insists on exact synthetic session A and `PLAN_INSTALL` operations. The existing independent watchdog Bash proof supports new `run-event-partial` mode: after timer is armed, verify Python decision, then run the same real isolated IFB+43Mbit CAKE partial SIGKILL test and watchdog cleanup. New default-disabled Ansible playbook `IaC/ansible/playbooks/router-01-qos-download-sensor-event-watchdog-proof.yml` stages Python modules under /run, checks ownership collision, and cleans staged files after the isolated recovery proof.
+- **Not executed yet.** This is real tc/watchdog + Python *decision gating*, NOT live operation of the Python isolated executor, durable PPP ownership reconciliation or actual PPP reconnect hooks. The Python fixture uses synthetic PPP ifindex 101. Must run Bash and Ansible syntax checks then approved sensor-01 test. Production router remains unchanged, upload CAKE 13Mbit retained; download persistence still off.
+
+
+### 31 October 2026 — real isolated partial-install watchdog proof staged (operator execution pending)
+
+- Fixed source script `IaC/ansible/files/router-qos-sensor-independent-proof.sh`: literal escaped line breaks after comments had inadvertently commented out the sensor eth0 address and default-route checks; both guards now execute. Added `run-partial` scenario: real disposable namespace `qos-proof31` on sensor-01; after IFB + 43Mbit CAKE but **before** clsact/filter, intentionally SIGKILL installer; independently scheduled systemd watchdog should clear IFB and verify ingress remains empty. Existing `run` scenario remains supported.
+- Added approval-gated `IaC/ansible/playbooks/router-01-qos-download-sensor-partial-watchdog-proof.yml`, default approval false, same guarded cleanup and resource collision preflight. **Not yet syntax-checked or executed by operator.** This is a direct standalone shell proof, NOT integration of the Python offline executor/PPP handler with live watchdog. No router change; production download disabled. Operator should syntax-check Ansible/Bash then run explicitly with authorization, or use check-only if not approved.
+
+
+### 31 October 2026 — syntax repair following operator validation
+
+- Operator ran new executor tests at `cc4951af`: test script failed to parse due to a literal `\\n` embedded on line 40, so the claimed nine executor tests were **not run**. Separate watchdog attestation suite passed **7/7**, and executor module itself compiled. Corrected test script in commit `404d61ad`; operator must pull and rerun, no success claim until output received. No production changes.
+
+
+### 31 October 2026 — validator-backed executor admission staged, offline-only
+
+- Updated `IaC/ansible/scripts/router-qos-download-isolated-executor.py` to require both the existing watchdog gate and a supplied validator plus watchdog evidence before running commands, rejecting absent/invalid or namespace-mismatched evidence. Extended offline executor tests to import the actual watchdog-attestation validator and cover missing/expired/mismatched evidence (nine tests expected).
+- **Not yet validated by operator.** The evidence is still created in mocked tests; there is no trustworthy live snapshot-to-executor binding, independent watchdog activation or crash recovery here. No sensor or router changes. Never treat the synthetic validator tests as proof of runtime rollback or enable PPP hooks yet.
+
+
+### 31 October 2026 — Phase 5 live watchdog reader staged (read-only, not authorized)
+
+- Added `IaC/ansible/scripts/router-qos-download-live-watchdog-probe.py` to collect sensor-01 host identity, named namespace inode, owner marker inode, exact systemd timer status, callback presence and monotonic timing without modifying networking. It **always** reports `verified_for_mutation=false`, so its output cannot be used to approve executor calls. Systemd timer property may be nonnumeric: intentionally fail closed for unknown formats.
+- Added four offline mocked tests in `test-router-qos-download-live-watchdog-probe.py`: missing/inactive timer, wrong host, missing namespace, and command allowlist. **Not yet executed by operator.** The live probe is not wired to the executor; a real timed rollback integration plus durable ownership and failure injection remains outstanding. No production hooks or QoS change.
+
+
+### 31 October 2026 — Phase 5 watchdog admission contract staged; NOT live
+
+- Reviewed `router-qos-download-isolated-executor.py` and existing `router-qos-sensor-independent-proof.sh`. The executor currently accepts an arbitrary `watchdog_armed=True` Boolean, not verified timer evidence. The earlier sensor proof script contains literal escaped `\\n` sequences in host-check comments; it has passed a limited previous test but must not be assumed a verified reusable production watchdog.
+- Added pure-Python test-only `IaC/ansible/scripts/router-qos-download-watchdog-attestation.py` plus seven offline tests, requiring matching namespace inode, exact transient unit name, active timer, existing callback, and future deadline in supplied evidence. **These are simulated evidence objects and are not connected to live executor or host inspection.** Not yet executed by user. No production hook, daemon, PPP restart, IFB, or router change. Next step test offline validator, then design a real probe/independent rollback integration and fault injection before any router deployment.
+
+
+### 31 October 2026 — Phase 5 isolated executor boundary staged; NOT executed
+
+- Added `IaC/ansible/scripts/router-qos-download-isolated-executor.py` with a strictly pinned `qos-p5` namespace command backend, namespace inode ownership check, independent-watchdog-armed gate, ordered real `ip`/`tc` command vectors, and fail-closed pending-state on partial installation. Added six offline tests using an injected fake runner, covering identity/wrong namespace, order, duplicate install, partial failures and teardown.
+- **These files are not wired to real PPP event callbacks, cannot run standalone and have NOT been executed or validated by operator.** The current executor is a test-only skeleton; actual precondition inspection, durable state, lock, watchdog wiring, independent cleanup and crash recovery are NOT complete. Do not import it into production or deploy any PPP hooks. `router-01` 13Mbit upload remains protected; 43Mbit download persistence remains OFF.
+
+
+### 31 October 2026 — PPP event-to-QoS operation adapter staged (simulation only)
+
+- Added `IaC/ansible/scripts/router-qos-download-event-integration.py`, importing the existing PPP event decision model and routing proposed operations through a recording-only backend. Added six offline integration tests in `test-router-qos-download-event-integration.py`: install order, idempotency, stale event rejection, teardown before reconnect, partial resource refusal, and injected operation failure.
+- **Not yet tested by operator. Not a live mutator.** The backend records operations only; no `ip`, `tc`, PPP hooks, files, units or router calls occur. On injected failure, in-memory ownership is not committed, but previously recorded operations are not compensated; actual rollback is a **remaining design requirement**. Next validate tests, then build an isolated executor plus durable ownership and independent rollback. Production upload 13Mbit protected; download persistence disabled.
+
+
+### 31 October 2026 — Phase 5 offline PPP event replay staged
+
+- Added `IaC/ansible/scripts/router-qos-download-ppp-event-replay.py` plus six offline unit tests in `test-router-qos-download-ppp-event-replay.py`. Exercises in-memory up/down reconnect decisions, duplicate events, stale disconnect refusal, foreign/partial resource refusal, and injected pre-commit failures.
+- **Not yet executed by operator.** This is strictly an event **simulation** with no `ip`, `tc`, hooks, files or router changes. It does not yet wire the decision planner to the previously passing real isolated IFB/CAKE fixture or demonstrate durable crash recovery. Next: verify tests, then build integration with an explicit host-independent ownership layer and test failure boundaries before any live deployment. Keep router-01 upload CAKE 13Mbit, download QoS off.
+
+
+### 31 October 2026 — Phase 5 isolated PPP lifecycle test PASS
+
+- Operator executed `router-01-qos-download-phase5-namespace-lifecycle-proof.yml` on sensor-01 after syntax checks. Ansible recap: **ok=9 changed=3 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The playbook's assertions passed, and its namespace-absence cleanup verification passed. Detailed per-task stdout markers were not provided; do not claim independent packet/latency measurements.
+- Covers disposable dummy-interface IFB/CAKE installation, simulated interface loss/reconnect and owned-resource teardown under test-script conditions. It does **not** verify real PPP hooks, stale-event callback semantics, concurrency, independent watchdog integration into the Phase 5 reconciler, crash/reboot recovery, or live production persistence. No router-01 modification; 13Mbit upload baseline protected.
+- Next: integrate an offline-tested real event-driven mutator with stronger identity/ownership state and fault injection before any deployment approval.
+
+
+### 31 October 2026 — Phase 5 real isolated PPP lifecycle fixture staged (NOT RUN)
+
+- Added `IaC/ansible/files/router-qos-phase5-namespace-lifecycle-proof.sh` and approval-gated `IaC/ansible/playbooks/router-01-qos-download-phase5-namespace-lifecycle-proof.yml`, targeting **sensor-01 only**. Disposable named namespace, dummy PPP stand-in, two IFBs, real 43Mbit CAKE and ingress redirect; verifies install, simulated lost interface/reconnect and owned-only teardown. Script traps namespace cleanup, Ansible verifies absence before removing staged script.
+- **This is a network namespace fixture, NOT the live production PPP reconciler.** The stale-event assertion is currently a no-op structural check, not a real event callback; crash injection and independent watchdog integration still require separate development. Not syntax-checked or executed by operator. No router-01 deployment/activation. Continue with syntax checks first and inspect safety before execution; production 13Mbit upload CAKE remains untouched.
+
+
+### 31 October 2026 — Phase 5 read-only PPP reconciler planner staged
+
+- Added `IaC/ansible/scripts/router-qos-download-ppp-reconciler-plan.py`: validates ppp0 interface, ifindex and session token from a JSON fixture and outputs safe up/down decisions, refusing foreign/partial resources, stale events and reconnect before verified old-session teardown. Script has no network/systemd operations and explicitly reports `network_modified=false` and `production_activation_enabled=false`.
+- Added `IaC/ansible/scripts/test-router-qos-download-ppp-reconciler-plan.py` with offline tests. **Tests are not yet executed by user; this is a planner, not an installed PPP hook, mutating reconciler or persistent QoS service.** Next: offline tests, then independently verified ownership/rollback for real isolated-network implementation. Router-01 remains unchanged.
+
+
+### 31 October 2026 — Phase 5 PPP lifecycle contract staged, no deployment
+
+- Created disabled/default-off `IaC/ansible/vars/router-qos-download-phase5-contract.yml` defining future PPP up/down hook paths, expected interface identities, rate, and safety gates. This is configuration contract only; no hooks or live reconciler installed.
+- Added pure-Python offline decision fixture `IaC/ansible/scripts/test-router-qos-download-ppp-contract.py` testing repeated up events, stale down events, foreign resources and reconnect requiring verified teardown. It does not execute `ip`, `tc` or systemd. **Not yet executed by user**. Next steps build real implementation in test namespace under independent watchdog and validate reconnect/partial-crash before any production approval. Router-01 download persistence remains disabled, upload 13Mbit untouched.
+
+
+### 31 October 2026 — Phase 5 production candidate read-only review
+
+- Reviewed staged `IaC/ansible/files/router-qos-download-managed.sh`; no production activation. Confirmed unresolved PPP ifindex/reconnection state, volatile `/run` ownership after reboot, and post-mutation markers that allow unowned partial state on crash. Sensor independent watchdog PASS does not resolve these.
+- Added design `docs/architecture/router-01-qos-download-phase5-readiness.md` with production safety gates and staged sequence. Next step read-only production baseline, then offline lifecycle/partial-failure fixtures. Preserve eth1 13Mbit upload CAKE and keep download persistence disabled.
+
+
+### 31 October 2026 — Phase 4 independent sensor watchdog runtime proof PASS
+
+- User ran approval-gated `router-01-qos-download-sensor-independent-watchdog-proof.yml` on `sensor-01`, using feature branch `df63f481`. Ansible recap: **ok=17 changed=6 unreachable=0 failed=0 skipped=0**. `Assert expected watchdog evidence` passed (`INSTALLER_KILLED`, `WATCHDOG_ROLLBACK_PASS`); watchdog service/timer inactive; disposable namespace absent; callback script absent; staged script and evidence directory removed. User provided task output, not detailed independent tc dumps.
+- This proves the isolated sensor namespace IFB/CAKE watchdog failure path under the tested conditions. It does **not** prove PPPoE reconnection, live router-01 production download persistence, reboot recovery or production rollback. Working 13 Mbps upload CAKE remains protected, download persistence not enabled. Next: focused production-specific persistence design review with gate/rollback and no blind cutover.
+
+
+### 31 October 2026 — second runtime watchdog proof failed at host identity check
+
+- Sensor-01 proof run at 09:57 failed in ~9 ms, rc=1; Bash ERR trap pinpointed line 12 `[[ $(readlink /proc/self/ns/net) == $(readlink /proc/1/ns/net) ]]`. Cleanup also returned rc=1 on same check. No evidence that IFB/CAKE setup ran. Earlier diagnostic showed host route via 192.168.2.1, eth0 192.168.2.55/24; latest post-failure state not yet independently checked.
+- Replaced fragile PID1 namespace comparison in `verify_host` with explicit sensor-01 eth0 address/default-route assertions. Source-only patch, **not syntax-checked or run**. Treat only as an attempted correction; preserve approval gate. Do not repeat runtime until clean resource state and new syntax validations are confirmed.
+
+
+### 31 October 2026 — watchdog test YAML corruption identified and repaired
+
+- User pulled `d3380109`; Ansible syntax check failed at YAML line 102 (`|| true)"`). Inspected GitHub file and confirmed unintended duplicated task blocks and broken quoting in preflight `grep` lines. This was a repository staging error, **not** a sensor runtime result.
+- Reconstructed `IaC/ansible/playbooks/router-01-qos-download-sensor-independent-watchdog-proof.yml` cleanly, preserving sensor-only approval guard, orphan-source preflight, staged script diagnostic, cleanup and post-cleanup verification. **Not yet syntax checked by user; do not execute until it passes.** Previously recorded runtime test remained failed at startup; no active namespace/timer found in last sensor inspection.
+
+
+### 31 October 2026 — first sensor watchdog runtime FAILED (startup), diagnostic patch staged
+
+- On sensor-01 at ~09:27, Ansible `Execute watchdog proof` failed rc=1 in 0.007s, with no stdout/stderr. The `always` cleanup also failed rc=1 because no ownership directory was created. Verified subsequent read-only state: no named namespace, no `qos-proof31*` systemd units, /run clean except staged `/run/qos-sensor-independent-proof.sh`, and eth0 remains 192.168.2.55/24 via 192.168.2.1. IFB/CAKE not reached; router-01 unaffected.
+- Sensor script sha256 matched controller checkout (`9101941408c2d0c00dc7a7a110a8a1331f24115367b62fb60e682cdc8bde72c5`). Individual Bash startup guards passed when separately tested; an Ansible `/bin/sh` diagnostic mistakenly used Bash `[[ ... ]]` and failed (`[[: not found`), so that failed diagnostic does **not** identify the original script issue.
+- Staged source-only corrections: Bash ERR trap reports line and failing command; cleanup becomes no-op when no owned resources exist and watchdog is inactive; Ansible clean-resource preflight permits only root-owned 0700 regular orphan source file, which it removes before re-staging. **Not yet validated or rerun.** Do not interpret the original failure as a rollback proof.
+
+
+### 31 October 2026 — independent watchdog final cleanup review
+
+- Static review identified unsafe cleanup continuation if timer stop failed or callback still activating/deactivating, and loss of original failure status in EXIT trap. Hardened shell cleanup to require timer stop and non-running service before deleting self-copied callback, preserve error exit status and fail closed on ownership evidence. Ansible test now gates deletion on cleanup success and tests both timer and service stopped.
+- **Not run yet**. Earlier read-only sensor-01 baseline clean: no `qos-proof31` namespace, unit or files; eth0 at 192.168.2.55 via 192.168.2.1; IFB/CAKE modules available. Run new syntax validation before approval-gated runtime proof. On parent SIGKILL, the watchdog can roll back qdisc but namespace/evidence may remain for explicit recovery playbook. Never interpret this as production persistence approval.
+
+
+### 31 October 2026 — interrupted watchdog proof recovery staged (NOT RUN)
+
+- Source-only improvement: temporary watchdog executable is removed by cleanup only after stopping the timer and checking callback no longer active. Added `recover` entrypoint requiring owner marker and pinned namespace inode, and explicit Ansible recovery playbook `router-01-qos-download-sensor-recovery.yml` with default-deny approval, sensor-only target, and ownership preflight. Evidence is retained if recovery fails.
+- **NOT tested or runtime-approved.** Ansible recovery must not be run routinely. Remaining review: SIGKILL parent may leave namespace and evidence, callback may fail on tc-module/lock errors; recovery requires deliberate operator action. Production router-01 is untouched.
+
+
+### 31 October 2026 — installer/watchdog race serialized (source-only)
+
+- Added an exclusive `flock` on reserved `/run/qos-proof31/ops.lock`: the isolated installer holds it while applying IFB/CAKE and the systemd watchdog waits for lock acquisition before removing resources. This is intended to avoid concurrent tc installation and rollback. Existing namespace inode ownership check remains.
+- This is **not yet executed or validated on sensor-01**. Review remaining interruption handling before runtime approval. If the parent/controller is interrupted, the independent timer can remove tc resources but the isolated namespace/evidence may remain for explicit verified cleanup. Router-01 remains untouched.
+
+
+### 31 October 2026 — watchdog failure-path review: corrections staged, no execution
+
+- Static review found initial staged test killed an idle child rather than the process applying the IFB/CAKE rules, and did not pin namespace cleanup to its original inode. Corrected `router-qos-sensor-independent-proof.sh` so the actual disposable namespace installer applies tc then SIGKILLs itself; namespace inode is recorded and revalidated before destructive cleanup. Ansible preflight now refuses stale self-copy and checks it is gone at the end.
+- **Source-only changes, not yet syntax-checked or executed**. Further scrutiny is still required for timer expiry during partial install, test interruption, cleanup error masking and leftover namespace handling. Do not run the approval-gated test until these are resolved and reviewed; preserve router-01 production network and sensor-01 eth0.
+
+
+### 31 October 2026 — Independent watchdog proof safety corrections staged (not run)
+
+- Updated sensor-01 test shell and Ansible harness after static review: compare namespace inode identity using `stat` rather than `readlink` on a bind-mounted namespace; require active transient timer and nonzero next deadline before attaching IFB; stop timer and wait for watchdog service to cease before removing temporary script; fail rather than silently suppress cleanup errors, and keep recovery files if cleanup fails.
+- These changes are **source only, not syntax-checked or executed**. Further review is required before any approval-gated runtime test. Test remains strictly disposable on sensor-01; router-01 production QoS unchanged.
+
+
+### 31 October 2026 — Real sensor-01 independent watchdog proof staged, NOT RUN
+
+- Added isolated bash test `IaC/ansible/files/router-qos-sensor-independent-proof.sh` and approval-gated `IaC/ansible/playbooks/router-01-qos-download-sensor-independent-watchdog-proof.yml`. Creates named disconnected namespace, dummy ingress plus 43mbit CAKE IFB, arms transient systemd timer before shaping, kills disposable installer child and validates watchdog removes owned QoS resources. Test-only names and admin/production router excluded by sensor host gate. Cleanup attempts bounded teardown with evidence directory removed after namespace verification.
+- **Not yet validated or executed by user.** First pull, syntax-check Ansible and shell, review script/teardown. This does not establish PPP reconnection or production-ready persistent download shaping. Original sensor Zeek/Suricata state remains out of scope and router-01's 13 Mbit upload CAKE must not change.
+
+
+### 31 October 2026 — sensor-01 independent timer marker proof PASS
+
+- Operator pulled ebeacd8f; syntax validation of `router-01-qos-download-sensor-timer-marker-proof.yml` passed. Execution on sensor-01: **11 OK, 2 changed, 0 failed**, marker created after transient systemd timer fired, then removed; final unit listing empty. No production interface or router changes.
+- Timer scheduling is proved. Real independent CAKE/IFB cleanup **not yet proved**. Next stage requires a separate network namespace keeper, ownership-checked cleanup process, timeout and SIGKILL simulation, with safe failure teardown. Do not modify router-01.
+
+
+### 31 October 2026 — sensor-01 timer-marker proof staged, not executed
+
+- Added `IaC/ansible/playbooks/router-01-qos-download-sensor-timer-marker-proof.yml` on the QoS feature branch. It verifies a separate 5-second transient systemd timer can create a marker under /run, waits for the marker, and cleans reserved test resources. Guarded for sensor-01 identity and collision checks. This is not a real QoS rollback or full watchdog-failure proof.
+- **Not syntax-checked or run yet**; operator should pull and syntax-check before running. The test does not attach interfaces or modify network config. No changes to router-01 or admin-01 services.
+
+
+### 31 October 2026 — sensor-01 transient independent systemd execution verified
+
+- Operator ran a temporary systemd-run unit on sensor-01 through Ansible with --collect --wait and /bin/true. Systemd reported success, main exit status 0/SUCCESS, 30 ms runtime and 1.7 MB peak memory. No persistent unit or network modifications were requested.
+- This establishes transient service execution only, **not** independent timed watchdog rollback, network namespace survival, IFB cleanup, nor recovery after installer/supervisor termination.
+- Continue with a separately owned timed watchdog proof on sensor-01 using disposable resources. admin-01 remains a jump box; existing sensor services are left unchanged pending later rebuild.
+
+
+### 31 October 2026 — sensor-01 Phase 4 watchdog preflight staged (read-only)
+
+- User chose sensor-01 for temporary isolated QoS testing; it remains an active sensor pending a separate, verified security scanning migration to router-01. admin-01 remains a jump box. No IDS or production routing changes authorised.
+- Operator read-only sensor-01 readiness: 2.5GiB available memory, 64GB free disk, ip/tc/unshare/nsenter/systemd-run/flock present; IFB/CAKE/matchall/mirred modules available; unshare --net successful with only loopback and no routes; eth0 default gateway 192.168.2.1. Existing failed units: homelab-suricata-rule-update and sensor-capture-nic; Zeek service reported inactive. Preserve all sensor workloads unchanged.
+- Added read-only Ansible `IaC/ansible/playbooks/router-01-qos-download-sensor-watchdog-preflight.yml` and Phase 4 design `docs/architecture/router-01-qos-download-sensor-watchdog-phase4.md`. **Neither has been executed by operator**. Preflight checks identity, required tools/modules, production route and possible reserved unit collision. It creates no units, interfaces or namespaces.
+- Future real watchdog proof requires distinct transient systemd watchdog, namespace lifetime preserved independently of installer and supervisor, strict ownership/ifindex, deadlines, race and failure injection, and independently verified rollback. Still not implemented, tested or activated. Keep router-01 13Mbit upload CAKE preserved and download persistence disabled.
+
+
+### 31 October 2026 — admin-01 ICMP timestamp hardening recovered; jump-box boundary
+
+- Operator verified admin-01 eth0=192.168.2.48/24, stock nftables.service inactive, empty nft ruleset and QNetd active; ICMP hardening owned table initially absent. Historical service failure dated 29 Oct; precise historical cause unproven.
+- Operator started existing IaC-managed homelab-icmp-admin01.service at 08:35:19 GMT: active (exited), status 0, RULE_ADDED; inspect returned OWNED_TABLE_PRESENT=True; nft table inet homelab_icmp_timestamp includes input hook with drop of ICMP timestamp-request only, base policy accept. ssh and corosync-qnetd both active after change. Current protection verified; reboot persistence not independently tested.
+- User architectural requirement: admin-01 should remain a jump box / management controller (SSH, Git, Ansible); do not schedule persistent QoS watchdog test or general automation workloads here. QNetd is an existing Proxmox witness dependency and must not be removed without independent quorum-safe migration.
+- Remaining degraded-state issue: hourly homelab-network-host-docs-sync.timer runs script pointing at /home/james/projects/homelab-platform and refuses when interactive working copy is not on main. Observed failure at 08:22 due to feature/router-download-qos-preflight-20261031. Preserve main-only safety gate; design separate repo/worktree or migrate publishing to suitable automation host via reviewed IaC. No changes to docs-sync service or timer yet.
+
+
+### 31 October 2026 — Isolated interrupted-install SIGKILL proof passed
+
+- Operator pulled commit 55cb15a8 and syntax checked `router-01-qos-download-netns-crash-proof.yml`; syntax PASS.
+- Approved controller-only execution on admin-01: **5 OK, 1 changed, 0 failed**, with assertion success for child SIGKILL after IFB creation and after ingress redirect. The surviving parent performed independent cleanup of real disposable namespace network resources. This does **not** demonstrate cleanup after the parent dies, actual watchdog operation, PPP reconnect, resource ownership under contention, or full persistent reconciliation.
+- Live router-01 unchanged. Production eth1 13Mbit upload CAKE must remain preserved; production download IFB remains disabled following prior timed trial rollback.
+- Next safety design: an independent process/timer watchdog with bounded state ownership and durable cleanup evidence, then serialization and actual PPP lifecycle handling. Stage with review and never install on router-01 without explicit approval.
+
+
+### 31 October 2026 — Real isolated CAKE/IFB proof PASS; SIGKILL test staged
+
+- Operator pulled commit 0dcb9085 and ran `router-01-qos-download-netns-proof.yml` on admin-01: **5 OK, 1 changed, 0 failed**. Approval, shell syntax, real kernel CAKE 43Mbit / IFB ingress redirect and cleanup assertions passed within a fresh unconnected network namespace. This proves kernel operation and normal teardown, not PPP reconnect or crash recovery. No production router changes.
+- Staged **not yet run** `IaC/ansible/playbooks/router-01-qos-download-netns-crash-proof.yml` plus `files/router-qos-download-netns-crash-proof.sh`. The new controller-only test kills a child process with SIGKILL after creating real IFB and again after attaching real ingress redirect; a surviving parent independently cleans and verifies namespace resources. Explicit approval and admin-01 hostname checks; script refuses host namespace or nonempty namespace.
+- Limits: parent remains alive, so this is **not** an independent watchdog/systemd rollback, parent crash recovery, power failure, simultaneous events, or PPP reconnect test. Download persistence remains disabled; eth1 13Mbps upload CAKE preserved.
+- Next: syntax-check and execute new test with approval; inspect evidence, then implement a genuinely external timed watchdog and ownership/serialization tests before any live deployment.
+
+
+### 31 October 2026 — Controller network-namespace compatibility proof staged (not executed)
+
+- Operator verified on admin-01 that sudo unshare --net works, creates loopback-only namespace with no routes, and ifb/sch_cake/cls_matchall/act_mirred modules are available. Host default route remains via 192.168.2.1 on eth0.
+- Added controller-only approval-gated playbook `IaC/ansible/playbooks/router-01-qos-download-netns-proof.yml` and namespace-guarded `IaC/ansible/files/router-qos-download-netns-proof.sh`. Test creates disposable dummy ingress and IFB in an unconnected new network namespace; applies 43Mbit CAKE, redirect ingress filter, validates and cleans up. Hostname gate is admin-01; nothing deploys to router-01.
+- **Not yet syntax-checked or executed by operator.** This is a kernel compatibility/cleanup proof only, not the full serialized reconciler, independent watchdog, crash recovery, PPP reconnect handling or persistence. Never execute script outside unshare --net; it additionally refuses host namespace.
+- Next: operator pull and syntax check; explicitly approve isolated proof; capture evidence and then stage failure-injection/interrupted-install recovery tests. Maintain production upload CAKE at 13Mbit and download shaping disabled.
+
+
+### 31 October 2026 — Offline actuator failure simulation passed
+
+- User ran `router-01-qos-download-actuator-fixture-proof.yml` on `admin-01`: **13 OK, 6 changed, 0 failed**. Controller-only test covered up, duplicate up, down and failures at rollback arming, IFB creation and ingress attachment. Every injected failure returned simulated state to no IFB, no attached filter and no armed rollback; the disposable fixture directory was cleaned.
+- **Limit:** offline JSON simulation does not demonstrate real `tc`, systemd, concurrent-process crash recovery or actual PPP reconnect.
+- Next: add isolated real-network actuator and interrupted-install cleanup proofs against disposable interfaces, then only after review consider PPP lifecycle integration. No live router QoS changes.
+
+
+### 31 October 2026 — Locked offline actuator simulator staged
+
+- Added `IaC/ansible/files/router-qos-download-reconcile-fixture.py` and controller-only `playbooks/router-01-qos-download-actuator-fixture-proof.yml`; simulates first up, duplicate up, down, and failures at rollback-arm, IFB-create, and ingress-attach stages.
+- **Not yet executed by user.** This is an offline JSON-state simulator with an exclusive file lock, not a live router actuator; it cannot validate actual tc/PPP or process-crash recovery. No production network changes.
+- After validation, build and test real reconciler against disposable interfaces with independent watchdog rollback; do not deploy service/hook yet.
+
+
+### 31 October 2026 — Phase 3 reconciliation planner tests passed
+
+- User ran `router-01-qos-download-reconcile-planner-proof.yml`: **4 OK, 0 changed, 0 failed**; all 12 deterministic planner scenarios passed, including duplicate up, down, reconnect, missing PPP, foreign filters, partial failure and stale ownership.
+- This confirms decision-making only; no live `tc` operations, hook installation, locks, or PPP manipulation.
+- Next: implement and independently test serialized actuator, fail-safe rollback and event-driven service integration before any production deployment.
+
+
+### 31 October 2026 — Phase 3 reconciliation decision planner staged
+
+- Added pure Python `IaC/ansible/files/router-qos-download-reconcile-plan.py` and controller-only `playbooks/router-01-qos-download-reconcile-planner-proof.yml`, with 12 deterministic cases: first up, duplicate up, down, changed PPP ifindex, disappeared PPP, foreign filters, inconsistent state, partial activation, route not ready, missing interface, unrelated PPP and no state.
+- **Not yet tested by user**. Planner returns decisions and planned steps only; it does **not** run tc/ip, acquire locks, install hooks, or change live network.
+- Next: validate these tests, then implement side-effectful reconciler behind an isolated network-namespace/dummy test harness, strengthen ownership and abort/rollback, and add strict serialization. Remain GitHub-only; no production activation.
+
+
+### 31 October 2026 — Phase 3 PPP event adapter isolated proof passed
+
+- User ran `router-01-qos-download-ppp-hook-isolated-proof.yml` on controller: **9 OK, 3 changed, 0 failed**. Two simulated up events, one down event, and an unrelated PPP interface were handled as expected.
+- This proves **event filtering/logging only**, not CAKE reconciliation, reconnect recovery or persistence. No router network changes.
+- Next: build a separately testable serialized, ownership-aware reconciler and failure-injection tests. Stage code first; do not enable PPP event hooks or the managed service on the live router until approved deployment/rollback are verified.
+
+
+### 31 October 2026 — Phase 3 PPP lifecycle discovery passed
+
+- Read-only `router-01-qos-download-pppoe-hooks-discovery.yml` **4 OK, 0 changed, 0 failed**. pppd installed; `/etc/ppp/ip-up.d` and `ip-down.d` exist and contain `0000usepeerdns`. `router-pppoe.service` is Type=simple, Restart=always, ExecStart `/usr/sbin/pppd call homelab-wan nodetach`. PPP ifindex 5; upload CAKE remains 13Mbit, original ingress noqueue, trial rollback marker present.
+- Staged candidate hook file `IaC/ansible/files/router-qos-download-ppp-hook.sh` only. It is **not installed**, and is only a non-mutating placeholder; PPP argument/event signalling, serialized reconciler, and fail-safe startup must be implemented and tested before any deployment.
+- **No live router modifications in Phase 3 discovery.**
+
+
+### 31 October 2026 — Phase 2 static validation passed; Phase 3 discovery staged
+
+- User ran controller-only phase-2 validator: **4 OK, 0 changed, 0 failed**. Candidate is not installed or enabled.
+- Added `docs/architecture/router-01-qos-download-pppoe-lifecycle-phase3.md` and read-only `IaC/ansible/playbooks/router-01-qos-download-pppoe-hooks-discovery.yml`.
+- Phase 3 design requires real PPP event hook discovery, event-driven and serialized reconciliation, independent rollback, and isolated dummy interface testing. Existing phase-2 script is not production-ready; **do not deploy it yet**.
+
+
+### 31 October 2026 — Phase 2 download QoS persistent candidate staged (no deployment)
+
+- Created inactive candidate files `IaC/ansible/files/router-qos-download-managed.sh` and `router-qos-download-managed.service` plus `docs/architecture/router-01-qos-download-persistent-phase2.md`.
+- Controller-only validator: `IaC/ansible/playbooks/router-01-qos-download-managed-phase2-validate.yml`. **Not yet run by user**.
+- Candidate is **not production-ready**: reconnect orchestration, partial-start failure cleanup and safety tests remain. No `WantedBy`, no deployment playbook or activation. Router left in successful rollback state with upload CAKE at 13Mbit only.
+- Trial results and 07:35:20 GMT successful automated rollback were previously recorded; retain all evidence.
+
+
+### 31 October 2026 — Timed download QoS live-trial rollback verified
+
+- Temporary 43Mbit download CAKE on `ifb-wan0` with `ppp0` ingress redirect (pref 49131) activated via approval-gated Ansible: **24 OK, 10 changed, 0 failed**. Existing `eth1` 13Mbit upload CAKE preserved.
+- Client Ookla trial measurements: 41.57/12.07 Mbps, idle 10.12ms, download-loaded 10.10ms, upload-loaded 10.32ms; two later JSON runs 41.59/12.03 and 41.67/12.00 Mbps with download-loaded ~10ms. Both JSON exports were collected **after** shaping activation, not a pretrial baseline.
+- Systemd timer triggered the rollback service at **2026-10-31 07:35:20 GMT**; user checked at 07:36:41 and confirmed `rolled-back` marker, no IFB, no `ppp0` clsact or ingress filter, original `ppp0` noqueue and unchanged 13Mbit upload CAKE. Journal: service started and deactivated successfully. **Production restored.**
+- Next proposed work: review/design persistent download CAKE lifecycle, including PPPoE reconnect and reboot, safety gates, rollback and audits. Do not re-run trial or make live changes blindly. Retain /var/lib/router-qos-download-trial as evidence.
+
+
+### 31 October 2026 — Download QoS replacement-interface proof passed
+
+- User ran `router-01-qos-download-replacement-rollback-proof.yml`: **27 OK, 11 changed, 0 failed**. Disposable ingress device was deleted/recreated under the same name with a new ifindex; tested rollback preserved replacement `clsact`, removed trial IFB, recorded successful rollback, and verified live `ppp0` ingress and `eth1` 13Mbit upload CAKE untouched.
+- Recent identity-aware repeat proofs also passed: normal **25 OK/13 changed/0 failed**, partial activation **21 OK/9 changed/0 failed**. All were disposable-interface tests; live 43Mbit download CAKE remains **not activated**.
+- Remaining review: validate active-trial recovery on PPP replacement, re-check timer race/acceptance and connection recovery before approving live shaping. No automatic cutover authorised.
+
+
+### 31 October 2026 — Partial download QoS rollback proof passed
+
+- User executed `router-01-qos-download-partial-rollback-proof.yml`: **20 OK, 8 changed, 0 failed**. Test created disposable `clsact` without a matching ingress filter, used a namespaced copy of the recovery script, verified rollback marker and cleanup, and confirmed real `ppp0` ingress and `eth1` upload CAKE unchanged.
+- Still pending: guard/review live trial acceptance, validate timing and rollback during active PPPoE, and measure download-loaded latency. No production download shaping applied.
+
+
+### 31 October 2026 — Download QoS transient timer proof succeeded
+
+- Re-run of `router-01-qos-download-timer-proof.yml`: **13 OK, 2 changed, 0 failed**. Bounded Ansible polling detected the systemd-run marker, the marker was removed, and the eth1 upload CAKE qdisc was verified unchanged. Previous fixed 16s wait was too short; journal had already demonstrated the timer executed after ~17s.
+- IFB and mirred compatibility, isolated cleanup proof and marker-only timer test now passed independently. **No production ppp0 ingress filter or download CAKE has been activated.** Next: controlled combined trial with rollback armed before ingress redirection, explicit approval and live speed/latency tests.
+
+
+### 31 October 2026 — Download QoS isolated rollback proof passed
+
+- User ran `router-01-qos-download-rollback-proof.yml` on router-01: **24 tasks OK, 12 changed, zero failures**, testing a namespaced copy of the candidate rollback script against disposable dummy/IFB interfaces.
+- Test teardown and assertions passed, including preservation of live `eth1` upload CAKE and absence of changes to real `ppp0` ingress. This **does not** prove rollback during a PPPoE disconnect or systemd timed rollback. No live download CAKE activation has occurred.
+- Next safety gate: timed rollback service proof and final guarded pre-activation audit; do not apply the ingress filter until timer success and independent operational recovery are established.
+
+
+### 31 October 2026 — Isolated download IFB compatibility test passed
+
+- On branch `feature/router-download-qos-preflight-20261031` / PR #267, user ran `router-01-qos-download-ifb-compatibility.yml` on router-01: recap **19 OK, 9 changed, 0 failed, 0 unreachable**. This exercised disposable `qos-test0` and `qos-ifb0` links, CAKE at 43 Mbit and `matchall`/`mirred` syntax, including cleanup in the always block and guards checking production interfaces were unchanged.
+- This is NOT evidence of live download traffic shaping. No production `ppp0` ingress QoS activated. Existing upload `eth1` CAKE 13 Mbit retained. Before a live trial, verify the ownership-safe rollback and timed systemd cleanup, specifically PPPoE reconnect and any non-owned ingress filters; require explicit approval.
+
+
 ### 31 October 2026 — CAKE explicit disable procedure staged (not executed)
 
 - PR #266 adds `IaC/ansible/playbooks/router-01-qos-persistence-disable.yml`, which requires explicit approval, target identity, expected active 13Mbit CAKE, enabled/active service and preserved restore script. It stops/disables `router-qos-upload.service` **before** running the stored `fq_codel` restore script, verifies WAN route and inactive/disabled service, and attempts CAKE recovery in an Ansible rescue block if restoring fails.
@@ -1583,3 +1985,34 @@ Outstanding:
 - Legacy docker-01 entries remain in BirdNET, Komodo and monitoring groups.
 - Router inventory reconciliation is required before any deployment.
 - No monitoring roles, scans or services deployed by this integration.
+
+### 31 October 2026 — Isolated real CAKE test verified
+
+- The `router-01-qos-download-real-actuator-proof.yml` run reported 24 OK, 13 changed and zero failed tasks.
+- A disposable dummy ingress and IFB were used to exercise 43Mbit CAKE, clsact and a mirred redirect. The test removed those interfaces and verified production `ppp0` ingress and `eth1` upload CAKE were unchanged.
+- Proof marker: `/var/lib/router-qos-download-real-actuator-proof/passed`.
+- Still outstanding: serialized event-driven reconcile operations, interruption recovery, PPP lifecycle integration and persistence tests. Do not activate the candidate service yet.
+
+### 31 October 2026 — Locked decision guard staged
+
+- Added `IaC/ansible/files/router-qos-download-reconcile-guard.py`, which takes JSON snapshots, acquires a local flock, validates PPP interface identity values, and calls the existing pure reconciliation planner. It **does not execute network changes**.
+- Added controller-only `playbooks/router-01-qos-download-reconcile-guard-proof.yml` covering first activation, duplicate events and invalid identity. **Not yet run by user**.
+- This is not yet a production reconciler. Actual `tc` application, process-crash recovery, event hook integration and independent rollback remain separate gates. No live router changes.
+
+### 31 October 2026 — Locked reconciliation guard tests passed
+
+- User ran `router-01-qos-download-reconcile-guard-proof.yml` on `admin-01`: **8 OK, 3 changed, 0 failed**. Shell/Python guard syntax and the decision results for clean up, duplicate up and invalid ifindex all passed; fixture removed.
+- The guard test invoked cases sequentially using the same file-lock path, so it does not yet prove concurrent lock contention. No real `tc` commands or production router modifications.
+- Next: prove concurrent-event serialization, then integrate a failure-safe actuator using isolated interfaces before any live PPP hook installation.
+
+### 31 October 2026 — Concurrent QoS lock proof staged
+
+- Added `IaC/ansible/files/router-qos-download-lock-contention-proof.py` and controller-only `playbooks/router-01-qos-download-lock-contention-proof.yml` to test two separate processes acquiring the same exclusive flock in order.
+- **Not yet executed by user.** The test uses only disposable local files; it does not contact the router or execute networking commands.
+- After this proof passes, integrate serialization into a real actuator and verify crash recovery using disposable network interfaces before enabling PPP hooks.
+
+### 31 October 2026 — Concurrent lock contention proof passed
+
+- User executed `router-01-qos-download-lock-contention-proof.yml` on `admin-01`: **3 OK, 0 changed, 0 failed**. Second independent process blocked on exclusive `flock` for 0.351 seconds, then acquired it after release; disposable fixture files removed.
+- Proves separate-process locking in isolation, not yet a live network actuator or end-to-end PPP reconnection.
+- Next: safely integrate locked execution and ownership-aware rollback with dummy/IFB tests; keep production PPP hooks disabled.

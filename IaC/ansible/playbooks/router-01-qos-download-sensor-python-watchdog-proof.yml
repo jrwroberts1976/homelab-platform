@@ -1,0 +1,35 @@
+---
+# INTENTIONALLY RETIRED LIVE CRASH TEST.
+# This playbook is read-only; it does not execute Python, tc, ip mutations,
+# systemd-run, cleanup, or SIGKILL. The original unsafe test is retained in Git.
+- name: Audit retired Python watchdog test resources without mutation
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify intended sensor host and default route
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+    - name: Inspect reserved test state without touching it
+      ansible.builtin.shell:
+        executable: /bin/bash
+        cmd: |
+          set -euo pipefail
+          echo "=== Reserved namespace ==="
+          ip netns list
+          echo "=== Test timers and services ==="
+          systemctl list-units --all --no-pager --plain 'qos-proof31-rollback*' || true
+          echo "=== Test paths ==="
+          for path in /run/qos-proof31 /run/qos-proof31-test.sh /run/qos-sensor-independent-proof.sh /run/qos-proof31-python-installer.py; do
+            if test -e "$path" || test -L "$path"; then
+              printf 'PRESENT %s\n' "$path"
+            else
+              printf 'ABSENT %s\n' "$path"
+            fi
+          done
+          echo "READ_ONLY_AUDIT_COMPLETE"
+      changed_when: false

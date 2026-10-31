@@ -1,0 +1,33 @@
+---
+# Real kernel tc/IFB compatibility test inside an unconnected fresh network namespace.
+# This does NOT test real PPP reconnect, process crash or independent rollback.
+- name: Prove isolated CAKE IFB install and cleanup on admin-01
+  hosts: localhost
+  connection: local
+  gather_facts: true
+  become: true
+  vars:
+    router_qos_namespace_proof_approved: false
+    proof_script: "{{ playbook_dir }}/../files/router-qos-download-netns-proof.sh"
+  tasks:
+    - name: Require opt-in on known controller, never router
+      ansible.builtin.assert:
+        that:
+          - router_qos_namespace_proof_approved | bool
+          - not ansible_check_mode
+          - ansible_facts.hostname == 'admin-01'
+          - inventory_hostname == 'localhost'
+    - name: Validate shell script syntax
+      ansible.builtin.command:
+        argv: [/bin/sh, -n, "{{ proof_script }}"]
+      changed_when: false
+    - name: Exercise disposable unconnected network namespace
+      ansible.builtin.command:
+        argv: [unshare, --net, --, /bin/sh, "{{ proof_script }}"]
+      register: proof
+      changed_when: true
+    - name: Verify real attach and cleanup passed
+      ansible.builtin.assert:
+        that:
+          - "'PASS: real IFB/CAKE and ingress redirection installed inside isolated namespace' in proof.stdout"
+          - "'PASS: real tc/IFB cleanup complete' in proof.stdout"

@@ -1,0 +1,72 @@
+---
+# Controller-only deterministic tests; no router contact, network commands or root.
+- name: Verify PPP download QoS reconciliation decisions in isolation
+  hosts: localhost
+  connection: local
+  become: false
+  gather_facts: false
+  vars:
+    planner: "{{ playbook_dir }}/../files/router-qos-download-reconcile-plan.py"
+    cases:
+      - name: initial up
+        data: {event: up, interface: ppp0, ifindex: 5, qdisc: none, filters: [], default_route_on_ppp: true, upload_cake_ok: true}
+        expected: attach
+      - name: duplicate up
+        data: {event: up, interface: ppp0, ifindex: 5, qdisc: owned_clsact, filters: [owned_redirect], owned: {ifindex: 5}, default_route_on_ppp: true, upload_cake_ok: true}
+        expected: noop
+      - name: disconnect
+        data: {event: down, interface: ppp0, ifindex: 5, qdisc: owned_clsact, filters: [owned_redirect], owned: {ifindex: 5}}
+        expected: detach
+      - name: interface replacement
+        data: {event: up, interface: ppp0, ifindex: 8, qdisc: none, filters: [], owned: {ifindex: 5}, default_route_on_ppp: true, upload_cake_ok: true}
+        expected: reconnect
+      - name: old interface disappeared
+        data: {event: down, interface: ppp0, ifindex: null, owned: {ifindex: 5}}
+        expected: cleanup_stale
+      - name: foreign ingress
+        data: {event: up, interface: ppp0, ifindex: 5, qdisc: foreign_clsact, filters: [foreign_filter], default_route_on_ppp: true, upload_cake_ok: true}
+        expected: refuse
+      - name: inconsistent owned filter
+        data: {event: up, interface: ppp0, ifindex: 5, qdisc: owned_clsact, filters: [foreign_filter], owned: {ifindex: 5}, default_route_on_ppp: true, upload_cake_ok: true}
+        expected: refuse
+      - name: partial failure state
+        data: {event: up, interface: ppp0, ifindex: 5, qdisc: owned_clsact, filters: [], owned: {ifindex: 5}, default_route_on_ppp: true, upload_cake_ok: true}
+        expected: refuse
+      - name: missing route
+        data: {event: up, interface: ppp0, ifindex: 5, qdisc: none, filters: [], default_route_on_ppp: false, upload_cake_ok: true}
+        expected: defer
+      - name: unavailable PPP
+        data: {event: up, interface: ppp0, ifindex: null}
+        expected: defer
+      - name: unrelated interface
+        data: {event: up, interface: ppp1, ifindex: 9}
+        expected: ignore
+      - name: down without owned state
+        data: {event: down, interface: ppp0, ifindex: 5}
+        expected: noop
+  tasks:
+    - name: Check planner Python syntax
+      ansible.builtin.command:
+        argv: [python3, -m, py_compile, "{{ planner }}"]
+      changed_when: false
+    - name: Evaluate deterministic scenarios
+      ansible.builtin.command:
+        argv: [python3, "{{ planner }}"]
+        stdin: "{{ item.data | to_json }}"
+      loop: "{{ cases }}"
+      loop_control:
+        label: "{{ item.name }}"
+      register: evaluations
+      changed_when: false
+    - name: Assert all decisions match safety policy
+      ansible.builtin.assert:
+        that:
+          - "(item.stdout | from_json).decision == cases[index].expected"
+        fail_msg: "Failed decision test {{ cases[index].name }}"
+      loop: "{{ evaluations.results }}"
+      loop_control:
+        index_var: index
+        label: "{{ cases[index].name }}"
+    - name: Confirm isolated proof scope
+      ansible.builtin.debug:
+        msg: "12 controller-only planner scenarios passed; no network operations, hook installation or live reconciliation occurred."

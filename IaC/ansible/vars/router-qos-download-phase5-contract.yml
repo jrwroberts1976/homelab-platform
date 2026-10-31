@@ -1,0 +1,31 @@
+---
+# Design-only contract. No remote hosts, no deployment, no handlers.
+# This file captures the intended PPP event interface for the future reconciler.
+router_qos_download:
+  enabled: false
+  activate: false
+  device: ppp0
+  upload_device: eth1
+  download_rate_mbit: 43
+  upload_rate_mbit: 13
+  ingress_filter_pref: 49131
+  ifb_device: ifb-wan0
+  state_dir: /run/router-qos-download-managed
+  trial_state_dir: /var/lib/router-qos-download-trial
+  ppp:
+    up_hook: /etc/ppp/ip-up.d/95-router-qos-download
+    down_hook: /etc/ppp/ip-down.d/05-router-qos-download
+    # The PPP hook supplies the interface name (IFNAME or positional $1)
+    # and a connection token; never trust a name alone as interface identity.
+  requirements:
+    - Refuse unknown or foreign IFBs, filters and clsact qdiscs
+    - Match PPP ifindex and event generation before teardown
+    - Arm independent rollback before attaching ingress filter
+    - Reconcile under exclusive lock
+    - Recover partial mutations without relying only on post-action markers
+    - Do not affect upload qdisc, PPP daemon, default route or firewall
+  acceptance:
+    - Offline replay PPP up, down, reconnect and repeated events
+    - Offline inject crash at each mutation boundary
+    - Validate watchdog removal and ownership refusals
+    - Separate approval for any router trial
