@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Isolated download IFB compatibility test passed
+
+- On branch `feature/router-download-qos-preflight-20261031` / PR #267, user ran `router-01-qos-download-ifb-compatibility.yml` on router-01: recap **19 OK, 9 changed, 0 failed, 0 unreachable**. This exercised disposable `qos-test0` and `qos-ifb0` links, CAKE at 43 Mbit and `matchall`/`mirred` syntax, including cleanup in the always block and guards checking production interfaces were unchanged.
+- This is NOT evidence of live download traffic shaping. No production `ppp0` ingress QoS activated. Existing upload `eth1` CAKE 13 Mbit retained. Before a live trial, verify the ownership-safe rollback and timed systemd cleanup, specifically PPPoE reconnect and any non-owned ingress filters; require explicit approval.
+
+
 ### 31 October 2026 — CAKE explicit disable procedure staged (not executed)
 
 - PR #266 adds `IaC/ansible/playbooks/router-01-qos-persistence-disable.yml`, which requires explicit approval, target identity, expected active 13Mbit CAKE, enabled/active service and preserved restore script. It stops/disables `router-qos-upload.service` **before** running the stored `fq_codel` restore script, verifies WAN route and inactive/disabled service, and attempts CAKE recovery in an Ansible rescue block if restoring fails.
