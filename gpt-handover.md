@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 offline PPP event replay staged
+
+- Added `IaC/ansible/scripts/router-qos-download-ppp-event-replay.py` plus six offline unit tests in `test-router-qos-download-ppp-event-replay.py`. Exercises in-memory up/down reconnect decisions, duplicate events, stale disconnect refusal, foreign/partial resource refusal, and injected pre-commit failures.
+- **Not yet executed by operator.** This is strictly an event **simulation** with no `ip`, `tc`, hooks, files or router changes. It does not yet wire the decision planner to the previously passing real isolated IFB/CAKE fixture or demonstrate durable crash recovery. Next: verify tests, then build integration with an explicit host-independent ownership layer and test failure boundaries before any live deployment. Keep router-01 upload CAKE 13Mbit, download QoS off.
+
+
 ### 31 October 2026 — Phase 5 isolated PPP lifecycle test PASS
 
 - Operator executed `router-01-qos-download-phase5-namespace-lifecycle-proof.yml` on sensor-01 after syntax checks. Ansible recap: **ok=9 changed=3 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The playbook's assertions passed, and its namespace-absence cleanup verification passed. Detailed per-task stdout markers were not provided; do not claim independent packet/latency measurements.
