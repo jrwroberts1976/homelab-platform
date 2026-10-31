@@ -20,7 +20,8 @@
         argv: [python3, -B, "{{ playbook_dir }}/../files/router-qos-download-lock-contention-proof.py"]
       register: proof
       changed_when: false
-      failed_when: proof.rc != 0 or 'PASS: second process blocked' not in proof.stdout
+      failed_when: >-
+        proof.rc != 0 or 'PASS: second process blocked' not in proof.stdout
     - name: Display proof result
       ansible.builtin.debug:
         var: proof.stdout_lines
