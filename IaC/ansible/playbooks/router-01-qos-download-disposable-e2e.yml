@@ -1,0 +1,29 @@
+---
+# Explicitly opt-in disposable namespace functional test; sensor-01 ONLY.
+# Does not run in check mode; no SIGKILL or live interface operations.
+- name: Verify isolated 43 Mbps download CAKE installation and teardown
+  hosts: sensor-01
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Guard exact sensor and normal default gateway
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+          - router_qos_disposable_e2e_approved | default(false) | bool
+        fail_msg: "REFUSE: requires exact sensor-01 and explicit opt-in"
+
+    - name: Run disposable namespace test and cleanup
+      ansible.builtin.script: ../scripts/router-qos-download-disposable-e2e.sh
+      when: not ansible_check_mode
+      register: disposable_e2e
+      changed_when: false
+
+    - name: Confirm successful isolated test
+      ansible.builtin.assert:
+        that:
+          - "'PASS: disposable namespace IFB/CAKE install and teardown' in disposable_e2e.stdout"
+      when: not ansible_check_mode
