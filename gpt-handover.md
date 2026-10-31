@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Locked offline actuator simulator staged
+
+- Added `IaC/ansible/files/router-qos-download-reconcile-fixture.py` and controller-only `playbooks/router-01-qos-download-actuator-fixture-proof.yml`; simulates first up, duplicate up, down, and failures at rollback-arm, IFB-create, and ingress-attach stages.
+- **Not yet executed by user.** This is an offline JSON-state simulator with an exclusive file lock, not a live router actuator; it cannot validate actual tc/PPP or process-crash recovery. No production network changes.
+- After validation, build and test real reconciler against disposable interfaces with independent watchdog rollback; do not deploy service/hook yet.
+
+
 ### 31 October 2026 — Phase 3 reconciliation planner tests passed
 
 - User ran `router-01-qos-download-reconcile-planner-proof.yml`: **4 OK, 0 changed, 0 failed**; all 12 deterministic planner scenarios passed, including duplicate up, down, reconnect, missing PPP, foreign filters, partial failure and stale ownership.
