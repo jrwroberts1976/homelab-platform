@@ -21,6 +21,7 @@
       ansible.builtin.shell: |
         test ! -e /run/qos-sensor-independent-proof.sh
         test ! -e /run/qos-proof31
+        test ! -e /run/qos-proof31-test.sh
         ! ip netns list | grep -Eq '^qos-proof31( |$)'
         test -z "$(systemctl list-units --all --plain --no-legend 'qos-proof31-rollback*' | grep -v '^$' || true)"
       changed_when: false
@@ -48,9 +49,14 @@
               - "'INSTALLER_KILLED' in proof_output.stdout"
               - "'WATCHDOG_ROLLBACK_PASS' in proof_output.stdout"
       always:
+        - name: Check temporary proof script exists before cleanup
+          ansible.builtin.stat:
+            path: "{{ proof_script }}"
+          register: staged_proof
         - name: Attempt exact reserved resource cleanup
           ansible.builtin.command:
             argv: [/bin/bash, "{{ proof_script }}", cleanup]
+          when: staged_proof.stat.exists
           register: cleanup
           changed_when: cleanup.rc == 0
           failed_when: cleanup.rc != 0
@@ -60,6 +66,14 @@
           register: watchdog_status
           changed_when: false
           failed_when: watchdog_status.stdout in ['active', 'activating']
+        - name: Verify no self-copied watchdog script remains
+          ansible.builtin.stat:
+            path: /run/qos-proof31-test.sh
+          register: retained_watchdog
+        - name: Require self-copied watchdog script removed
+          ansible.builtin.assert:
+            that:
+              - not retained_watchdog.stat.exists
         - name: Remove temporary source script
           ansible.builtin.file:
             path: "{{ proof_script }}"
