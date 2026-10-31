@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 download QoS — Phase 5 production readiness review
 
 Status: DESIGN REVIEW ONLY. No router-01 changes approved or made.
