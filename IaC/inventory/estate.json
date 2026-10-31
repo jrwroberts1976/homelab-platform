@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "validated_at": "2026-09-17",
+  "validated_at": "2026-10-31",
   "purpose": "Canonical machine-readable identity and addressing inventory for current homelab documentation checks.",
   "authority": {
     "identity_and_addressing": "IaC/inventory/estate.json",
@@ -145,22 +145,13 @@
       "managed_by_ansible": true
     },
     {
-      "name": "docker-01",
-      "document_label": "docker-01",
-      "address": "192.168.2.220",
-      "state": "active",
-      "kind": "physical",
-      "role": "Raspberry Pi 4 BirdNET-Go Docker host",
-      "managed_by_ansible": true
-    },
-    {
-      "name": "asus-router",
-      "document_label": "ASUS RT-AC86U",
+      "name": "router-01",
+      "document_label": "router-01",
       "address": "192.168.2.1",
       "state": "active",
-      "kind": "network",
-      "role": "Router, DHCP, AiMesh controller and OpenVPN remote-access endpoint",
-      "managed_by_ansible": false
+      "kind": "physical",
+      "role": "Raspberry Pi 4 live PPPoE router, nftables NAT, dnsmasq DHCP, Unbound DNS and CAKE QoS; Ansible-managed",
+      "managed_by_ansible": true
     },
     {
       "name": "asus-aimesh-181",
@@ -199,7 +190,7 @@
     },
     {
       "token": "TestServer",
-      "replacement": "docker-01",
+      "replacement": "router-01",
       "reason": "Retired identity for the Raspberry Pi 4 now operating as docker-01."
     },
     {
@@ -216,6 +207,16 @@
       "token": "192.168.2.242",
       "replacement": "dns-02 at 192.168.2.50",
       "reason": "Former dns-02 address; retired."
+    },
+    {
+      "token": "docker-01",
+      "replacement": "router-01",
+      "reason": "Pi 4 repurposed as live router on 192.168.2.1; previous Docker/BirdNET workload retired."
+    },
+    {
+      "token": "asus-router",
+      "replacement": "router-01",
+      "reason": "ASUS no longer the routing gateway; AiMesh/access-point assets tracked separately."
     }
   ]
 }
