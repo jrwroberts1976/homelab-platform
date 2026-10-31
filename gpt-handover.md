@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — CAKE explicit disable procedure staged (not executed)
+
+- PR #266 adds `IaC/ansible/playbooks/router-01-qos-persistence-disable.yml`, which requires explicit approval, target identity, expected active 13Mbit CAKE, enabled/active service and preserved restore script. It stops/disables `router-qos-upload.service` **before** running the stored `fq_codel` restore script, verifies WAN route and inactive/disabled service, and attempts CAKE recovery in an Ansible rescue block if restoring fails.
+- **Not yet syntax checked or run.** It must be reviewed and syntax validated before PR merge. Normal production state remains persistent CAKE at 13 Mbps; do not execute rollback merely to test it on the active household connection.
+
+
 ### 31 October 2026 — CAKE upload QoS survives controlled router reboot
 
 - Router rebooted and reports `uptime -s` = `2026-10-31 06:12:01`. Initial Ansible SSH `Connection refused` was transient during reboot; interactive SSH to `192.168.2.1` subsequently succeeded.
