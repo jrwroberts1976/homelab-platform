@@ -66,7 +66,7 @@ class ExecutorTests(unittest.TestCase):
         x.teardown()
         self.assertFalse(x.installed)
         self.assertEqual(len(r.calls), 8)
-        self.assertEqual(r.calls[-1][-4:], ["del", "dev", "qp5ifb"])
+        self.assertEqual(r.calls[-1][-4:], ["link", "del", "dev", "qp5ifb"])
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)
