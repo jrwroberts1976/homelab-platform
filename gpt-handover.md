@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### Router CAKE upload QoS trial and persistence staging — 30–31 October 2026
+
+- On router-01 (Pi4 WAN physical `eth1`, PPPoE logical `ppp0`), measured pretrial 47.37 Mbps down / 14.52 Mbps up with upload-loaded latency 156.23 ms. Trial installed CAKE on `eth1` at `13mbit pppoe-ptm besteffort flows`, verified as `ptm overhead 30` without changing PPPoE or NAT. Trial 45.53 Mbps down / 11.97 Mbps up, upload-loaded latency 10.17 ms, download-loaded latency 31.43 ms. A single test showed major improvement; monitor after persistence.
+- Ten-minute automatic rollback was armed before modification; trial acceptance playbook verified CAKE and network health, then explicitly disarmed timer. Recovery script and initial qdisc remain in `/var/lib/router-qos-upload-trial`. Current CAKE is LIVE BUT RUNTIME-ONLY; do not assume boot persistence.
+- PR #266 branch `feature/router-qos-preflight-20261030`: trial/preflight/finalise playbooks validated; read-only persistence preflight passed (4 tasks, 0 changes). Persistence staging playbook installed script `/usr/local/sbin/router-qos-upload` and `/etc/systemd/system/router-qos-upload.service` with service disabled/inactive (13 tasks, 2 changed, 0 failed). Script syntax and service status audited; essential SSH, PPPoE, nftables, dnsmasq, Unbound healthy.
+- New `router-01-qos-persistence-harden.yml` stages a USB-interface wait and retry-on-failure service behaviour, without enabling or starting it. Pending: syntax-check and run hardening playbook; independently inspect script and unit; guarded idempotent activation; verify runtime and service state; controlled boot/interface-reset evidence; design explicit disable/recovery; merge PR #266. Avoid restarting WAN or reboot before recovery plan. Download IFB shaping at 43 Mbps is a separate phase.
+
+
 ### Router SSH hardening finalised — 30 October 2026
 
 - Draft PR #265 staged and validated router-01 SSH hardening through Ansible. Temporary-file systemd rollback proof succeeded after correcting execution on the `/run` noexec filesystem via `/bin/sh`; initial failure and stale unit were diagnosed and cleared.
