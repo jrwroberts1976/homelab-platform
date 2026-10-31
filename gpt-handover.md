@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — accelerated integrated offline lifecycle staged
+
+- User requested faster delivery, avoiding more fragmented standalone preflights. Added `IaC/ansible/scripts/router-qos-download-integrated-offline.py` and `test-router-qos-download-integrated-offline.py`: one transaction holds journal flock across watchdog and precondition checks, durable pending intent, ordered 43 Mbps disposable-namespace IFB/CAKE operations, observed postcondition and clean commit; partial failure remains pending. Tests cover synthetic install/teardown, watchdog refusal, operation failure, stale session, failed postcondition and persistence. **Tests not yet run by operator**.
+- **TEST-ONLY, NO PRODUCTION OR LIVE NAMESPACE EXECUTION:** all runner/observer/watchdog collaborators are injected and fake; no executable CLI. These do not constitute trustworthy kernel verification, independent watchdog or permission to deploy router-01. No production changes and no SIGKILL tests. Next run six offline integration tests, then review precise live adapter and safe disposable namespace test before a single explicit activation decision. Existing 13 Mbps upload CAKE preserved and 43 Mbps download remains OFF.
+
+
 ### 31 October 2026 — Phase 5 source-level production-readiness NO-GO
 
 - Operator reported locked-kernel audit 7/7 and durable journal 9/9 PASS. Reviewed actual source of journal, collector, adapter, evaluator, locked audit, event planner, test-only executor, and retired read-only sensor playbook. Added audit: `docs/architecture/ROUTER-01-PHASE5-PRODUCTION-READINESS-AUDIT.md`.
