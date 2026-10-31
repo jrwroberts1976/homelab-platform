@@ -29,6 +29,13 @@
         that:
           - textdir.stat.isdir | default(false)
           - not (textdir.stat.islnk | default(false))
+    - name: Ensure local collector directory exists
+      ansible.builtin.file:
+        path: /usr/local/libexec
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
     - name: Install read-only collector
       ansible.builtin.copy:
         src: ../files/router-qos-prometheus-collector.py
