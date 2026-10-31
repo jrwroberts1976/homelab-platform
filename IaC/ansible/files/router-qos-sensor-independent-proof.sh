@@ -18,7 +18,7 @@ verify_namespace_owner() {
   [[ $(stat -Lc %i "/run/netns/$NS") == "$(cat "$BASE/ns-inode")" ]] || return 1
   [[ $(stat -Lc %i "/run/netns/$NS") != "$(stat -Lc %i /proc/1/ns/net)" ]] || return 1
 }
-watchdog() {
+watchdog_locked() {
   verify_host
   [[ -d "$BASE" && -f "$BASE/owner" ]] || exit 1
   [[ $(cat "$BASE/owner") == qos-proof31 ]] || exit 1
@@ -32,6 +32,11 @@ watchdog() {
     ! inside tc qdisc show dev qd31 | grep -q 'qdisc clsact'
   fi
   touch "$BASE/rolled-back"
+}
+watchdog() {
+  verify_host
+  [[ -f "$BASE/ops.lock" ]] || { echo "Missing operations lock" >&2; return 1; }
+  flock -x -w 20 "$BASE/ops.lock" /bin/bash "$SELF" watchdog-locked
 }
 cleanup() {
   # Cancel future execution, then wait for any running callback to finish.
@@ -51,6 +56,7 @@ cleanup() {
 }
 case "${1:-}" in
   watchdog) watchdog ;;
+  watchdog-locked) watchdog_locked ;;
   cleanup) verify_host; cleanup ;;
   run)
     verify_host
@@ -60,6 +66,7 @@ case "${1:-}" in
     [[ -z $(systemctl list-unit-files --no-legend "$UNIT*" | grep -v '^$' || true) ]]
     mkdir -m 0700 "$BASE"
     echo qos-proof31 > "$BASE/owner"
+    touch "$BASE/ops.lock"
     cp "$0" "$SELF"
     chmod 0700 "$SELF"
     trap 'cleanup && rm -f "$SELF"' EXIT
@@ -76,7 +83,8 @@ case "${1:-}" in
     # The disposable installer process performs real tc operations, then dies.
     # No host interfaces are ever named in these commands.
     set +e
-    inside /bin/bash -euc '
+    # Serialize installer and recovery callback to avoid teardown during tc changes.
+    flock -x -w 20 "$BASE/ops.lock" ip netns exec "$NS" /bin/bash -euc '
       ip link add qi31 type ifb
       ip link set qi31 up
       tc qdisc add dev qi31 root cake bandwidth 43mbit besteffort flows
