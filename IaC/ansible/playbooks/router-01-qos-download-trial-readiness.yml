@@ -1,0 +1,45 @@
+---
+# Read-only checks before any IFB or ingress shaping changes.
+- name: Confirm router download CAKE trial can be prepared safely
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require exact router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Validate repository rollback shell script syntax on controller
+      ansible.builtin.command:
+        argv:
+          - /bin/sh
+          - '-n'
+          - "{{ playbook_dir }}/../files/router-qos-download-restore.sh"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+    - name: Check exact pre-trial device and filter state
+      ansible.builtin.shell: |
+        set -eu
+        test "$(ip -4 route show default | head -n 1)" = "default dev ppp0 scope link"
+        modinfo -F filename ifb >/dev/null
+        modinfo -F filename act_mirred >/dev/null
+        modinfo -F filename cls_matchall >/dev/null
+        test -z "$(ip -br link show type ifb)"
+        test -z "$(tc filter show dev ppp0 ingress)"
+        test -z "$(tc qdisc show dev ppp0 | grep -E 'qdisc (clsact|ingress)' || true)"
+        test -z "$(tc filter show dev eth1 ingress)"
+        tc qdisc show dev eth1 | grep -q 'cake .*bandwidth 13Mbit .*ptm overhead 30'
+        test ! -e /var/lib/router-qos-download-trial
+        test "$(systemctl is-enabled router-qos-upload.service)" = enabled
+        test "$(systemctl is-active router-qos-upload.service)" = active
+        echo DOWNLOAD_TRIAL_READINESS_OK
+      args:
+        executable: /bin/sh
+      register: readiness
+      changed_when: false
+    - name: Display readiness result
+      ansible.builtin.debug:
+        var: readiness.stdout_lines
