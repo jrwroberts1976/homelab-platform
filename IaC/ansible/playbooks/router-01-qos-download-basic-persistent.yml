@@ -1,0 +1,50 @@
+---
+# Simple persistent download CAKE via pppd ip-up.d; no systemd restart or PPP bounce.
+- name: Enable basic persistent 43 Mbps download CAKE
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Guard router identity and explicit approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - router_qos_basic_persistent_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Install basic QoS controller
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-basic.sh
+        dest: /usr/local/sbin/router-qos-download-basic
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Apply idempotent QoS to the existing PPP connection
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-qos-download-basic, ensure]
+      register: ensure_result
+      changed_when: "'PASS: 43 Mbps download CAKE active' in ensure_result.stdout"
+
+    - name: Install PPP reconnect hook only after successful activation
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-ip-up
+        dest: /etc/ppp/ip-up.d/router-qos-download
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Inspect shaping and show activation output
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-qos-download-basic, status]
+      register: status_result
+      changed_when: false
+
+    - name: Display state
+      ansible.builtin.debug:
+        msg:
+          - "{{ ensure_result.stdout }}"
+          - "{{ status_result.stdout_lines }}"
+          - "Persistence uses /etc/ppp/ip-up.d/router-qos-download; no reboot or PPP reconnect executed."
