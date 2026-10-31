@@ -16,9 +16,8 @@ if /usr/sbin/ip link show dev ppp0 >/dev/null 2>&1; then
     fi
     # Reject foreign filters BEFORE deleting the trial-owned one.
     # A trial must never remove a shared clsact qdisc.
-    entries=$(/bin/grep -c '^filter ' "$DIR/filters-before-rollback.txt" || true)
-    if [ "$entries" -ne 1 ]; then
-      echo "Unexpected ingress filter entries ($entries); refuse cleanup" >&2
+    if /bin/grep '^filter ' "$DIR/filters-before-rollback.txt" | /bin/grep -qv 'pref 49131'; then
+      echo "Foreign ingress filter found; refuse cleanup" >&2
       exit 1
     fi
     /usr/sbin/tc filter del dev ppp0 ingress pref 49131
