@@ -1705,3 +1705,9 @@ Outstanding:
 - Added `IaC/ansible/files/router-qos-download-lock-contention-proof.py` and controller-only `playbooks/router-01-qos-download-lock-contention-proof.yml` to test two separate processes acquiring the same exclusive flock in order.
 - **Not yet executed by user.** The test uses only disposable local files; it does not contact the router or execute networking commands.
 - After this proof passes, integrate serialization into a real actuator and verify crash recovery using disposable network interfaces before enabling PPP hooks.
+
+### 31 October 2026 — Concurrent lock contention proof passed
+
+- User executed `router-01-qos-download-lock-contention-proof.yml` on `admin-01`: **3 OK, 0 changed, 0 failed**. Second independent process blocked on exclusive `flock` for 0.351 seconds, then acquired it after release; disposable fixture files removed.
+- Proves separate-process locking in isolation, not yet a live network actuator or end-to-end PPP reconnection.
+- Next: safely integrate locked execution and ownership-aware rollback with dummy/IFB tests; keep production PPP hooks disabled.
