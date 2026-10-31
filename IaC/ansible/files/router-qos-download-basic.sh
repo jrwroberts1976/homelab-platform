@@ -53,7 +53,7 @@ case "${1:-}" in
       { echo "REFUSE: preflight state"; exit 2; }
     echo "PASS: ready for download QoS"
     ;;
-  ensure)
+  ensure|apply)
     has_wan || { echo "SKIP: PPP interface absent"; exit 0; }
     upload_ok || { echo "REFUSE: upload CAKE changed"; exit 2; }
     if owned; then echo "PASS: already active"; exit 0; fi
@@ -70,11 +70,6 @@ case "${1:-}" in
     owned || { echo "REFUSE: verification failed"; exit 2; }
     trap - ERR
     echo "PASS: 43 Mbps download CAKE active"
-    ;;
-  apply)
-    # Backwards-compatible entrypoint for the already successful temporary trial.
-    "$0" preflight
-    "$0" ensure
     ;;
   remove)
     remove_owned
