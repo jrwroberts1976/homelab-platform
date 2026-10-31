@@ -1699,3 +1699,9 @@ Outstanding:
 - User ran `router-01-qos-download-reconcile-guard-proof.yml` on `admin-01`: **8 OK, 3 changed, 0 failed**. Shell/Python guard syntax and the decision results for clean up, duplicate up and invalid ifindex all passed; fixture removed.
 - The guard test invoked cases sequentially using the same file-lock path, so it does not yet prove concurrent lock contention. No real `tc` commands or production router modifications.
 - Next: prove concurrent-event serialization, then integrate a failure-safe actuator using isolated interfaces before any live PPP hook installation.
+
+### 31 October 2026 — Concurrent QoS lock proof staged
+
+- Added `IaC/ansible/files/router-qos-download-lock-contention-proof.py` and controller-only `playbooks/router-01-qos-download-lock-contention-proof.yml` to test two separate processes acquiring the same exclusive flock in order.
+- **Not yet executed by user.** The test uses only disposable local files; it does not contact the router or execute networking commands.
+- After this proof passes, integrate serialization into a real actuator and verify crash recovery using disposable network interfaces before enabling PPP hooks.
