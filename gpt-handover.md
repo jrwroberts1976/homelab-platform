@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 3 PPP event adapter isolated proof passed
+
+- User ran `router-01-qos-download-ppp-hook-isolated-proof.yml` on controller: **9 OK, 3 changed, 0 failed**. Two simulated up events, one down event, and an unrelated PPP interface were handled as expected.
+- This proves **event filtering/logging only**, not CAKE reconciliation, reconnect recovery or persistence. No router network changes.
+- Next: build a separately testable serialized, ownership-aware reconciler and failure-injection tests. Stage code first; do not enable PPP event hooks or the managed service on the live router until approved deployment/rollback are verified.
+
+
 ### 31 October 2026 — Phase 3 PPP lifecycle discovery passed
 
 - Read-only `router-01-qos-download-pppoe-hooks-discovery.yml` **4 OK, 0 changed, 0 failed**. pppd installed; `/etc/ppp/ip-up.d` and `ip-down.d` exist and contain `0000usepeerdns`. `router-pppoe.service` is Type=simple, Restart=always, ExecStart `/usr/sbin/pppd call homelab-wan nodetach`. PPP ifindex 5; upload CAKE remains 13Mbit, original ingress noqueue, trial rollback marker present.
