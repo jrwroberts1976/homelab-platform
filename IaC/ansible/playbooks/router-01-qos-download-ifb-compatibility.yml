@@ -1,0 +1,108 @@
+---
+# Isolated tc/IFB compatibility test. Never attach filters to ppp0 or eth1.
+- name: Validate download CAKE and mirred syntax on disposable test interfaces
+  hosts: router-01
+  gather_facts: true
+  become: true
+  vars:
+    router_qos_ifb_compatibility_approved: false
+    test_source: qos-test0
+    test_ifb: qos-ifb0
+  tasks:
+    - name: Require approval and router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_ifb_compatibility_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Ensure temporary test interfaces do not exist
+      ansible.builtin.shell: |
+        ! ip link show dev qos-test0 >/dev/null 2>&1
+        ! ip link show dev qos-ifb0 >/dev/null 2>&1
+      changed_when: false
+    - name: Check production WAN upload queue
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload_before
+      changed_when: false
+      failed_when: "'qdisc cake' not in upload_before.stdout or 'bandwidth 13Mbit' not in upload_before.stdout"
+    - name: Check production PPP ingress has no filters
+      ansible.builtin.command:
+        argv: [tc, filter, show, dev, ppp0, ingress]
+      register: ppp_before
+      changed_when: false
+      failed_when: ppp_before.stdout | trim != ''
+    - name: Create isolated test interfaces and verify filter operations
+      block:
+        - name: Create dummy ingress source
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-test0, type, dummy]
+          changed_when: true
+        - name: Create disposable IFB
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-ifb0, type, ifb]
+          changed_when: true
+        - name: Bring up dummy interface
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, qos-test0, up]
+          changed_when: true
+        - name: Bring up IFB interface
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, qos-ifb0, up]
+          changed_when: true
+        - name: Apply candidate download CAKE to disposable IFB
+          ansible.builtin.command:
+            argv: [tc, qdisc, replace, dev, qos-ifb0, root, cake, bandwidth, 43mbit, besteffort, flows]
+          changed_when: true
+        - name: Add dummy ingress clsact
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, qos-test0, clsact]
+          changed_when: true
+        - name: Attach disposable mirred filter with trial priority
+          ansible.builtin.command:
+            argv: [tc, filter, add, dev, qos-test0, ingress, pref, '49131', matchall, action, mirred, egress, redirect, dev, qos-ifb0]
+          changed_when: true
+        - name: Verify test IFB CAKE
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, qos-ifb0]
+          register: test_qdisc
+          changed_when: false
+          failed_when: "'qdisc cake' not in test_qdisc.stdout or 'bandwidth 43Mbit' not in test_qdisc.stdout"
+        - name: Verify test mirred filter
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, qos-test0, ingress]
+          register: test_filter
+          changed_when: false
+          failed_when: "'49131' not in test_filter.stdout"
+      always:
+        - name: Remove disposable dummy interface
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-test0]
+          register: cleanup_dummy
+          changed_when: cleanup_dummy.rc == 0
+          failed_when: false
+        - name: Remove disposable IFB interface
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-ifb0]
+          register: cleanup_ifb
+          changed_when: cleanup_ifb.rc == 0
+          failed_when: false
+        - name: Verify disposable links are gone
+          ansible.builtin.shell: |
+            ! ip link show dev qos-test0 >/dev/null 2>&1
+            ! ip link show dev qos-ifb0 >/dev/null 2>&1
+          changed_when: false
+        - name: Confirm production upload queue unchanged
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: upload_after
+          changed_when: false
+          failed_when: upload_after.stdout != upload_before.stdout
+        - name: Confirm production PPP ingress still empty
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, ppp0, ingress]
+          register: ppp_after
+          changed_when: false
+          failed_when: ppp_after.stdout != ppp_before.stdout
