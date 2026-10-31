@@ -89,9 +89,13 @@ case "${1:-}" in
     [[ ! -e "$SELF" ]]
     echo RECOVERY_PASS
     ;;
-  run|run-partial)
+  run|run-partial|run-event-partial)
     verify_host
     mode="$1"
+    if [[ "$mode" == run-event-partial ]]; then
+      [[ -f /run/qos-proof31-event-gate.py && -f /run/router-qos-download-ppp-event-replay.py ]] || exit 1
+      [[ ! -L /run/qos-proof31-event-gate.py && ! -L /run/router-qos-download-ppp-event-replay.py ]] || exit 1
+    fi
     [[ ! -e "$BASE" && ! -e "$SELF" ]] || { echo 'Reserved evidence exists'; exit 1; }
     ! exists_ns
     [[ -z $(systemctl list-units --all --plain --no-legend "$UNIT*" | grep -v '^$' || true) ]]
@@ -114,6 +118,11 @@ case "${1:-}" in
     deadline=$(systemctl show "$UNIT.timer" -p NextElapseUSecMonotonic --value)
     [[ -n "$deadline" && "$deadline" != 0 && "$deadline" != n/a ]] || { echo "Timer deadline missing" >&2; exit 1; }
     # The disposable installer process performs real tc operations, then dies.
+    if [[ "$mode" == run-event-partial ]]; then
+      decision=$(python3 /run/qos-proof31-event-gate.py --sensor-fixture)
+      [[ "$decision" == PLAN_INSTALL ]] || exit 1
+      echo PYTHON_PPP_PLAN_INSTALL_PASS
+    fi
     # No host interfaces are ever named in these commands.
     set +e
     # Serialize installer and recovery callback to avoid teardown during tc changes.
@@ -121,7 +130,7 @@ case "${1:-}" in
       ip link add qi31 type ifb
       ip link set qi31 up
       tc qdisc add dev qi31 root cake bandwidth 43mbit besteffort flows
-      if [[ "$1" == run-partial ]]; then
+      if [[ "$1" == run-partial || "$1" == run-event-partial ]]; then
         tc qdisc show dev qi31 | grep -q cake
         kill -KILL "$BASHPID"
       fi
@@ -134,13 +143,13 @@ case "${1:-}" in
     set -e
     [[ $result == 137 ]]
     echo INSTALLER_KILLED
-    if [[ "$mode" == run-partial ]]; then echo PARTIAL_INSTALLER_KILLED; fi
+    if [[ "$mode" == run-partial || "$mode" == run-event-partial ]]; then echo PARTIAL_INSTALLER_KILLED; fi
     for i in {1..35}; do [[ -f "$BASE/rolled-back" ]] && break; sleep 1; done
     [[ -f "$BASE/rolled-back" ]]
     ! inside ip link show dev qi31 >/dev/null 2>&1
     [[ -z $(inside tc filter show dev qd31 ingress) ]]
     echo WATCHDOG_ROLLBACK_PASS
-    if [[ "$mode" == run-partial ]]; then echo PARTIAL_WATCHDOG_ROLLBACK_PASS; fi
+    if [[ "$mode" == run-partial || "$mode" == run-event-partial ]]; then echo PARTIAL_WATCHDOG_ROLLBACK_PASS; fi
     ;;
-  *) echo 'Use run, run-partial, watchdog, cleanup' >&2; exit 2 ;;
+  *) echo 'Use run, run-partial, run-event-partial, watchdog, cleanup' >&2; exit 2 ;;
 esac
