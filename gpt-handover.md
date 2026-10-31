@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — simplified persistent basic download QoS staged
+
+- Operator confirmed real 43 Mbps IFB/CAKE trial activation on router-01 and scheduled rollback execution at 18:39:26 (journal: PASS basic download QoS removed). ppp0 ingress restored to noqueue, eth1 upload CAKE 13Mbit remains active.
+- At user's request, staged minimal persistence through Ansible: `IaC/ansible/files/router-qos-download-basic.sh` updated with idempotent `ensure` and owned-orphan IFB handling for PPP reconnect; `IaC/ansible/files/router-qos-download-ip-up` is restricted to ppp0; `playbooks/router-01-qos-download-basic-persistent.yml` activates QoS and installs hook; `playbooks/router-01-qos-download-basic-disable.yml` removes hook first and cleans up shaping. Explicit approval vars required for either action.
+- **No persistent activation performed yet; pending operator syntax check/review.** There is no independent watchdog in this basic persistent mode and no reboot/PPP reconnection test yet; avoid forcing PPP restart remotely without out-of-band access. Existing 13 Mbps upload remains untouched. Advanced Phase 5 recovery deferred.
+
+
 ### 31 October 2026 — simplified basic 43 Mbps download QoS live trial staged
 
 - Operator's read-only router preflight PASS: default via ppp0; no existing IFBs, ppp0 has no ingress filters and noqueue root; required ifb/act_mirred/cls_matchall modules present; eth1 upload CAKE 13Mbit confirmed; router-pppoe/nftables/dnsmasq/unbound/ssh/upload service active. Previous disposable sensor IFB/43 Mbps CAKE test PASS.
