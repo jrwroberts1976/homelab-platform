@@ -47,13 +47,13 @@
           - /usr/bin/touch
           - "{{ proof_marker }}"
       changed_when: true
-    - name: Wait briefly for timer to fire
-      ansible.builtin.pause:
-        seconds: 16
-    - name: Verify marker proves timer execution
+    - name: Poll for timer marker with a bounded deadline
       ansible.builtin.stat:
         path: "{{ proof_marker }}"
       register: marker_after
+      until: marker_after.stat.exists
+      retries: 12
+      delay: 3
     - name: Assert timer executed
       ansible.builtin.assert:
         that:
