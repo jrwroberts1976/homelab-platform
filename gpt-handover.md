@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — watchdog failure-path review: corrections staged, no execution
+
+- Static review found initial staged test killed an idle child rather than the process applying the IFB/CAKE rules, and did not pin namespace cleanup to its original inode. Corrected `router-qos-sensor-independent-proof.sh` so the actual disposable namespace installer applies tc then SIGKILLs itself; namespace inode is recorded and revalidated before destructive cleanup. Ansible preflight now refuses stale self-copy and checks it is gone at the end.
+- **Source-only changes, not yet syntax-checked or executed**. Further scrutiny is still required for timer expiry during partial install, test interruption, cleanup error masking and leftover namespace handling. Do not run the approval-gated test until these are resolved and reviewed; preserve router-01 production network and sensor-01 eth0.
+
+
 ### 31 October 2026 — Independent watchdog proof safety corrections staged (not run)
 
 - Updated sensor-01 test shell and Ansible harness after static review: compare namespace inode identity using `stat` rather than `readlink` on a bind-mounted namespace; require active transient timer and nonzero next deadline before attaching IFB; stop timer and wait for watchdog service to cease before removing temporary script; fail rather than silently suppress cleanup errors, and keep recovery files if cleanup fails.
