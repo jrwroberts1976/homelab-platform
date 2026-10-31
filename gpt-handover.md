@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Independent watchdog proof safety corrections staged (not run)
+
+- Updated sensor-01 test shell and Ansible harness after static review: compare namespace inode identity using `stat` rather than `readlink` on a bind-mounted namespace; require active transient timer and nonzero next deadline before attaching IFB; stop timer and wait for watchdog service to cease before removing temporary script; fail rather than silently suppress cleanup errors, and keep recovery files if cleanup fails.
+- These changes are **source only, not syntax-checked or executed**. Further review is required before any approval-gated runtime test. Test remains strictly disposable on sensor-01; router-01 production QoS unchanged.
+
+
 ### 31 October 2026 — Real sensor-01 independent watchdog proof staged, NOT RUN
 
 - Added isolated bash test `IaC/ansible/files/router-qos-sensor-independent-proof.sh` and approval-gated `IaC/ansible/playbooks/router-01-qos-download-sensor-independent-watchdog-proof.yml`. Creates named disconnected namespace, dummy ingress plus 43mbit CAKE IFB, arms transient systemd timer before shaping, kills disposable installer child and validates watchdog removes owned QoS resources. Test-only names and admin/production router excluded by sensor host gate. Cleanup attempts bounded teardown with evidence directory removed after namespace verification.
