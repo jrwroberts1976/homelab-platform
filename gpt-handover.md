@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 live watchdog reader staged (read-only, not authorized)
+
+- Added `IaC/ansible/scripts/router-qos-download-live-watchdog-probe.py` to collect sensor-01 host identity, named namespace inode, owner marker inode, exact systemd timer status, callback presence and monotonic timing without modifying networking. It **always** reports `verified_for_mutation=false`, so its output cannot be used to approve executor calls. Systemd timer property may be nonnumeric: intentionally fail closed for unknown formats.
+- Added four offline mocked tests in `test-router-qos-download-live-watchdog-probe.py`: missing/inactive timer, wrong host, missing namespace, and command allowlist. **Not yet executed by operator.** The live probe is not wired to the executor; a real timed rollback integration plus durable ownership and failure injection remains outstanding. No production hooks or QoS change.
+
+
 ### 31 October 2026 — Phase 5 watchdog admission contract staged; NOT live
 
 - Reviewed `router-qos-download-isolated-executor.py` and existing `router-qos-sensor-independent-proof.sh`. The executor currently accepts an arbitrary `watchdog_armed=True` Boolean, not verified timer evidence. The earlier sensor proof script contains literal escaped `\\n` sequences in host-check comments; it has passed a limited previous test but must not be assumed a verified reusable production watchdog.
