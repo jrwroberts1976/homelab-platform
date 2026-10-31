@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 production candidate read-only review
+
+- Reviewed staged `IaC/ansible/files/router-qos-download-managed.sh`; no production activation. Confirmed unresolved PPP ifindex/reconnection state, volatile `/run` ownership after reboot, and post-mutation markers that allow unowned partial state on crash. Sensor independent watchdog PASS does not resolve these.
+- Added design `docs/architecture/router-01-qos-download-phase5-readiness.md` with production safety gates and staged sequence. Next step read-only production baseline, then offline lifecycle/partial-failure fixtures. Preserve eth1 13Mbit upload CAKE and keep download persistence disabled.
+
+
 ### 31 October 2026 — Phase 4 independent sensor watchdog runtime proof PASS
 
 - User ran approval-gated `router-01-qos-download-sensor-independent-watchdog-proof.yml` on `sensor-01`, using feature branch `df63f481`. Ansible recap: **ok=17 changed=6 unreachable=0 failed=0 skipped=0**. `Assert expected watchdog evidence` passed (`INSTALLER_KILLED`, `WATCHDOG_ROLLBACK_PASS`); watchdog service/timer inactive; disposable namespace absent; callback script absent; staged script and evidence directory removed. User provided task output, not detailed independent tc dumps.
