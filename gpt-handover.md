@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — one sensor-only disposable IFB/CAKE functional test staged
+
+- User reported six integrated offline lifecycle tests PASS, requested next step. Added `IaC/ansible/scripts/router-qos-download-disposable-e2e.sh` and opt-in `IaC/ansible/playbooks/router-01-qos-download-disposable-e2e.yml` (sensor-01 only, explicit `router_qos_disposable_e2e_approved=true`). Creates fresh namespace `qos-p5-e2e` with dummy `qe2src` and IFB `qe2ifb`, checks 43mbit CAKE/ingress redirect, tears down and checks absence. Trap deletes namespace, refuses preexisting namespace, flock serializes test calls. No PPP, host-interface/route/nftables/systemd changes or SIGKILL. **Not executed by operator yet.**
+- This is actual isolated kernel mutation on sensor-01, not simulated; approve only with sensor healthy and accessible. It does NOT execute Python integrated lifecycle/journal/PPP handling and does not grant production deployment. Production router-01 upload 13 Mbps retained, download 43 Mbps disabled.
+
+
 ### 31 October 2026 — accelerated integrated offline lifecycle staged
 
 - User requested faster delivery, avoiding more fragmented standalone preflights. Added `IaC/ansible/scripts/router-qos-download-integrated-offline.py` and `test-router-qos-download-integrated-offline.py`: one transaction holds journal flock across watchdog and precondition checks, durable pending intent, ordered 43 Mbps disposable-namespace IFB/CAKE operations, observed postcondition and clean commit; partial failure remains pending. Tests cover synthetic install/teardown, watchdog refusal, operation failure, stale session, failed postcondition and persistence. **Tests not yet run by operator**.
