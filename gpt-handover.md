@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — sensor-01 transient independent systemd execution verified
+
+- Operator ran a temporary systemd-run unit on sensor-01 through Ansible with --collect --wait and /bin/true. Systemd reported success, main exit status 0/SUCCESS, 30 ms runtime and 1.7 MB peak memory. No persistent unit or network modifications were requested.
+- This establishes transient service execution only, **not** independent timed watchdog rollback, network namespace survival, IFB cleanup, nor recovery after installer/supervisor termination.
+- Continue with a separately owned timed watchdog proof on sensor-01 using disposable resources. admin-01 remains a jump box; existing sensor services are left unchanged pending later rebuild.
+
+
 ### 31 October 2026 — sensor-01 Phase 4 watchdog preflight staged (read-only)
 
 - User chose sensor-01 for temporary isolated QoS testing; it remains an active sensor pending a separate, verified security scanning migration to router-01. admin-01 remains a jump box. No IDS or production routing changes authorised.
