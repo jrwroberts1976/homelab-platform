@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — read-only collector under journal lock staged
+
+- Operator confirmed freshness audit 7/7 and durable journal 9/9 passing. Staged `IaC/ansible/scripts/router-qos-download-locked-kernel-audit.py` plus seven offline tests. This invokes the fixed sensor read-only collector under the journal's flock, checks pending session ownership before/after, limits observation duration to two seconds, and passes the collected output through the fail-closed adapter. **Not yet operator-validated.**
+- Critical limits: test fixture is a **temporary-file journal**, not router production state; the lock does not serialize PPP/kernel changes by other actors. No recovery authorization (`false` always), no network mutation, no production deployment or live SIGKILL testing. Operator should run Python compile and 7 offline tests before any optional real read-only inspection. Router upload 13 Mbps retained, persistent download OFF.
+
+
 ### 31 October 2026 — offline freshness and journal-lock audit staged
 
 - Operator verified 7/7 collector-adapter and 7/7 cleanup-evaluator offline tests. Added `IaC/ansible/scripts/router-qos-download-freshness-audit.py` plus seven offline tests. Audit holds the durable journal lock while comparing pending ownership/target, expected event generation and bounded monotonic observation age, then evaluates supplied collector output. Mismatched/stale/invalid state is refused. **Not yet run by operator.**
