@@ -9,7 +9,7 @@ BASE=/run/qos-proof31
 SELF=/run/qos-proof31-test.sh
 verify_host() {
   [[ $(hostname) == sensor-01 ]]
-  [[ $(readlink /proc/self/ns/net) == $(readlink /proc/1/ns/net) ]]
+  # Ansible execution context may have a different netns from PID 1.\n  # Fail closed unless the host identity and expected production eth0 route agree.\n  [[ $(ip -4 -o addr show dev eth0 scope global) == *"192.168.2.55/24"* ]]\n  [[ $(ip -4 route show default) == *"default via 192.168.2.1 dev eth0"* ]]
 }
 exists_ns() { ip netns list | grep -Eq "^$NS( |$)"; }
 inside() { ip netns exec "$NS" "$@"; }
