@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router-01 download QoS — Phase 3 PPPoE lifecycle design
 
 Status: **design only — not deployed, enabled or approved for production**.
