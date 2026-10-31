@@ -1,0 +1,68 @@
+---
+# Approval-gated test only; no production interfaces and no persistent unit install.
+- name: Test independent watchdog against disposable sensor namespace
+  hosts: sensor-01
+  become: true
+  gather_facts: true
+  vars:
+    qos_sensor_watchdog_proof_approved: false
+    proof_script: /run/qos-sensor-independent-proof.sh
+  tasks:
+    - name: Require exact sensor host and explicit approval
+      ansible.builtin.assert:
+        that:
+          - qos_sensor_watchdog_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'sensor-01'
+          - ansible_facts.hostname == 'sensor-01'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - ansible_facts.default_ipv4.gateway == '192.168.2.1'
+    - name: Refuse existing reserved test script or namespace
+      ansible.builtin.shell: |
+        test ! -e /run/qos-sensor-independent-proof.sh
+        test ! -e /run/qos-proof31
+        ! ip netns list | grep -Eq '^qos-proof31( |$)'
+        test -z "$(systemctl list-units --all --plain --no-legend 'qos-proof31-rollback*' | grep -v '^$' || true)"
+      changed_when: false
+    - name: Stage and execute isolated proof
+      block:
+        - name: Stage temporary script
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/router-qos-sensor-independent-proof.sh"
+            dest: "{{ proof_script }}"
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Validate script syntax
+          ansible.builtin.command:
+            argv: [/bin/bash, -n, "{{ proof_script }}"]
+          changed_when: false
+        - name: Execute watchdog proof
+          ansible.builtin.command:
+            argv: [/bin/bash, "{{ proof_script }}", run]
+          register: proof_output
+          changed_when: true
+        - name: Assert test evidence
+          ansible.builtin.assert:
+            that:
+              - "'INSTALLER_KILLED' in proof_output.stdout"
+              - "'WATCHDOG_ROLLBACK_PASS' in proof_output.stdout"
+      always:
+        - name: Attempt exact reserved resource cleanup
+          ansible.builtin.command:
+            argv: [/bin/bash, "{{ proof_script }}", cleanup]
+          register: cleanup
+          changed_when: cleanup.rc == 0
+          failed_when: false
+        - name: Remove temporary source script
+          ansible.builtin.file:
+            path: "{{ proof_script }}"
+            state: absent
+        - name: Verify namespace is gone
+          ansible.builtin.shell: |
+            ! ip netns list | grep -Eq '^qos-proof31( |$)'
+          changed_when: false
+        - name: Remove test evidence directory only after namespace verification
+          ansible.builtin.file:
+            path: /run/qos-proof31
+            state: absent
