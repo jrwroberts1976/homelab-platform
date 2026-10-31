@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — interrupted watchdog proof recovery staged (NOT RUN)
+
+- Source-only improvement: temporary watchdog executable is removed by cleanup only after stopping the timer and checking callback no longer active. Added `recover` entrypoint requiring owner marker and pinned namespace inode, and explicit Ansible recovery playbook `router-01-qos-download-sensor-recovery.yml` with default-deny approval, sensor-only target, and ownership preflight. Evidence is retained if recovery fails.
+- **NOT tested or runtime-approved.** Ansible recovery must not be run routinely. Remaining review: SIGKILL parent may leave namespace and evidence, callback may fail on tc-module/lock errors; recovery requires deliberate operator action. Production router-01 is untouched.
+
+
 ### 31 October 2026 — installer/watchdog race serialized (source-only)
 
 - Added an exclusive `flock` on reserved `/run/qos-proof31/ops.lock`: the isolated installer holds it while applying IFB/CAKE and the systemd watchdog waits for lock acquisition before removing resources. This is intended to avoid concurrent tc installation and rollback. Existing namespace inode ownership check remains.
