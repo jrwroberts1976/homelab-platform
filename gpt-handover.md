@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — PPP event-to-QoS operation adapter staged (simulation only)
+
+- Added `IaC/ansible/scripts/router-qos-download-event-integration.py`, importing the existing PPP event decision model and routing proposed operations through a recording-only backend. Added six offline integration tests in `test-router-qos-download-event-integration.py`: install order, idempotency, stale event rejection, teardown before reconnect, partial resource refusal, and injected operation failure.
+- **Not yet tested by operator. Not a live mutator.** The backend records operations only; no `ip`, `tc`, PPP hooks, files, units or router calls occur. On injected failure, in-memory ownership is not committed, but previously recorded operations are not compensated; actual rollback is a **remaining design requirement**. Next validate tests, then build an isolated executor plus durable ownership and independent rollback. Production upload 13Mbit protected; download persistence disabled.
+
+
 ### 31 October 2026 — Phase 5 offline PPP event replay staged
 
 - Added `IaC/ansible/scripts/router-qos-download-ppp-event-replay.py` plus six offline unit tests in `test-router-qos-download-ppp-event-replay.py`. Exercises in-memory up/down reconnect decisions, duplicate events, stale disconnect refusal, foreign/partial resource refusal, and injected pre-commit failures.
