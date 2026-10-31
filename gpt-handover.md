@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — first sensor watchdog runtime FAILED (startup), diagnostic patch staged
+
+- On sensor-01 at ~09:27, Ansible `Execute watchdog proof` failed rc=1 in 0.007s, with no stdout/stderr. The `always` cleanup also failed rc=1 because no ownership directory was created. Verified subsequent read-only state: no named namespace, no `qos-proof31*` systemd units, /run clean except staged `/run/qos-sensor-independent-proof.sh`, and eth0 remains 192.168.2.55/24 via 192.168.2.1. IFB/CAKE not reached; router-01 unaffected.
+- Sensor script sha256 matched controller checkout (`9101941408c2d0c00dc7a7a110a8a1331f24115367b62fb60e682cdc8bde72c5`). Individual Bash startup guards passed when separately tested; an Ansible `/bin/sh` diagnostic mistakenly used Bash `[[ ... ]]` and failed (`[[: not found`), so that failed diagnostic does **not** identify the original script issue.
+- Staged source-only corrections: Bash ERR trap reports line and failing command; cleanup becomes no-op when no owned resources exist and watchdog is inactive; Ansible clean-resource preflight permits only root-owned 0700 regular orphan source file, which it removes before re-staging. **Not yet validated or rerun.** Do not interpret the original failure as a rollback proof.
+
+
 ### 31 October 2026 — independent watchdog final cleanup review
 
 - Static review identified unsafe cleanup continuation if timer stop failed or callback still activating/deactivating, and loss of original failure status in EXIT trap. Hardened shell cleanup to require timer stop and non-running service before deleting self-copied callback, preserve error exit status and fail closed on ownership evidence. Ansible test now gates deletion on cleanup success and tests both timer and service stopped.
