@@ -66,6 +66,7 @@
           ansible.builtin.command:
             argv: [bash, /run/qos-sensor-independent-proof.sh, cleanup]
           when: source_stat.stat.exists
+          register: cleanup_status
           changed_when: true
         - name: Require namespace absent
           ansible.builtin.shell:
@@ -78,6 +79,11 @@
           register: timer
           failed_when: timer.stdout in ['active', 'activating', 'deactivating']
           changed_when: false
+        - name: Require guarded cleanup success
+          ansible.builtin.assert:
+            that:
+              - cleanup_status is defined
+              - cleanup_status is succeeded
         - name: Delete staged Python after cleanup
           ansible.builtin.file:
             path: /run/qos-proof31-python-installer.py
