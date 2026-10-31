@@ -1,0 +1,143 @@
+---
+# Production WAN change: run ONLY after independent review and explicit approval.
+# A transient 10-minute systemd timer is armed BEFORE ppp0 ingress attachment.
+- name: Guarded temporary 43Mbit download CAKE trial
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_download_trial_approved: false
+    qos_download_dir: /var/lib/router-qos-download-trial
+  tasks:
+    - name: Require explicit authorisation and identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_download_trial_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Refuse existing trial directory
+      ansible.builtin.stat:
+        path: "{{ qos_download_dir }}"
+      register: previous_trial
+    - name: Require clean trial state
+      ansible.builtin.assert:
+        that:
+          - not previous_trial.stat.exists
+    - name: Check existing transient rollback timer name
+      ansible.builtin.command:
+        argv: [systemctl, list-units, --all, --plain, --no-legend, router-qos-download-rollback.timer]
+      register: previous_timer
+      changed_when: false
+    - name: Require rollback timer name unused
+      ansible.builtin.assert:
+        that:
+          - previous_timer.stdout | trim == ''
+    - name: Check original production ingress and upload qdisc
+      ansible.builtin.shell: |
+        set -eu
+        test -z "$(tc filter show dev ppp0 ingress)"
+        test -z "$(tc qdisc show dev ppp0 | grep -E 'qdisc (clsact|ingress)' || true)"
+        test -z "$(ip -br link show type ifb)"
+        test -z "$(tc filter show dev eth1 ingress)"
+        tc qdisc show dev eth1 | grep -q 'cake .*bandwidth 13Mbit .*ptm overhead 30'
+        ip -4 route show default | grep -q '^default dev ppp0'
+        test "$(systemctl is-active router-qos-upload.service)" = active
+        test "$(systemctl is-enabled router-qos-upload.service)" = enabled
+        systemctl is-active router-pppoe nftables dnsmasq unbound ssh | grep -q active
+      changed_when: false
+    - name: Create root-only trial directory
+      ansible.builtin.file:
+        path: "{{ qos_download_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Install exact reviewed recovery script
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-restore.sh
+        dest: "{{ qos_download_dir }}/restore.sh"
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Check recovery script syntax on router
+      ansible.builtin.command:
+        argv: [/bin/sh, '-n', "{{ qos_download_dir }}/restore.sh"]
+      changed_when: false
+    - name: Mark ownership for recovery
+      ansible.builtin.file:
+        path: "{{ qos_download_dir }}/armed"
+        state: touch
+        owner: root
+        group: root
+        mode: '0600'
+    - name: Configure isolated IFB and arm timed rollback before ingress redirection
+      block:
+        - name: Create IFB for download shaping
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, ifb-wan0, type, ifb]
+          changed_when: true
+        - name: Bring up IFB
+          ansible.builtin.command:
+            argv: [ip, link, set, dev, ifb-wan0, up]
+          changed_when: true
+        - name: Apply 43Mbit CAKE on IFB
+          ansible.builtin.command:
+            argv: [tc, qdisc, replace, dev, ifb-wan0, root, cake, bandwidth, 43mbit, besteffort, flows]
+          changed_when: true
+        - name: Arm 10-minute rollback
+          ansible.builtin.command:
+            argv: [systemd-run, --unit=router-qos-download-rollback, --on-active=10min, /bin/sh, "{{ qos_download_dir }}/restore.sh"]
+          changed_when: true
+        - name: Verify rollback timer active before WAN ingress change
+          ansible.builtin.command:
+            argv: [systemctl, is-active, router-qos-download-rollback.timer]
+          register: rollback_timer
+          changed_when: false
+          failed_when: rollback_timer.stdout != 'active'
+        - name: Install clsact on live ppp0
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, ppp0, clsact]
+          changed_when: true
+        - name: Redirect download ingress to CAKE IFB
+          ansible.builtin.command:
+            argv: [tc, filter, add, dev, ppp0, ingress, pref, '49131', matchall, action, mirred, egress, redirect, dev, ifb-wan0]
+          changed_when: true
+        - name: Confirm owned ingress filter
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, ppp0, ingress]
+          register: live_filter
+          changed_when: false
+          failed_when: "'49131' not in live_filter.stdout"
+        - name: Confirm CAKE on IFB
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, ifb-wan0]
+          register: live_ifb
+          changed_when: false
+          failed_when: "'qdisc cake' not in live_ifb.stdout or 'bandwidth 43Mbit' not in live_ifb.stdout"
+        - name: Verify upload shaping untouched
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: upload_after
+          changed_when: false
+          failed_when: "'bandwidth 13Mbit' not in upload_after.stdout or 'ptm overhead 30' not in upload_after.stdout"
+        - name: Confirm default PPPoE route
+          ansible.builtin.command:
+            argv: [ip, '-4', route, show, default]
+          register: route_after
+          changed_when: false
+          failed_when: "'default dev ppp0' not in route_after.stdout"
+      rescue:
+        - name: Attempt immediate IFB rollback after failed activation
+          ansible.builtin.command:
+            argv: [/bin/sh, "{{ qos_download_dir }}/restore.sh"]
+          register: rescue_rollback
+          changed_when: true
+          failed_when: false
+        - name: Fail closed if trial activation failed
+          ansible.builtin.fail:
+            msg: "Trial activation failed; immediate rollback attempted. Check tc, recovery marker and rollback timer; do not retry blindly."
+    - name: Describe trial window
+      ansible.builtin.debug:
+        msg: "Temporary 43Mbit download CAKE via ppp0 ingress active; rollback timer armed for ten minutes. Run connectivity/speed tests immediately. DO NOT disable timer without explicit finalisation review."
