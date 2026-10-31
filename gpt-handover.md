@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — validator-backed executor admission staged, offline-only
+
+- Updated `IaC/ansible/scripts/router-qos-download-isolated-executor.py` to require both the existing watchdog gate and a supplied validator plus watchdog evidence before running commands, rejecting absent/invalid or namespace-mismatched evidence. Extended offline executor tests to import the actual watchdog-attestation validator and cover missing/expired/mismatched evidence (nine tests expected).
+- **Not yet validated by operator.** The evidence is still created in mocked tests; there is no trustworthy live snapshot-to-executor binding, independent watchdog activation or crash recovery here. No sensor or router changes. Never treat the synthetic validator tests as proof of runtime rollback or enable PPP hooks yet.
+
+
 ### 31 October 2026 — Phase 5 live watchdog reader staged (read-only, not authorized)
 
 - Added `IaC/ansible/scripts/router-qos-download-live-watchdog-probe.py` to collect sensor-01 host identity, named namespace inode, owner marker inode, exact systemd timer status, callback presence and monotonic timing without modifying networking. It **always** reports `verified_for_mutation=false`, so its output cannot be used to approve executor calls. Systemd timer property may be nonnumeric: intentionally fail closed for unknown formats.
