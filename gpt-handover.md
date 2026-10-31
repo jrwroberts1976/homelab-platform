@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 2 static validation passed; Phase 3 discovery staged
+
+- User ran controller-only phase-2 validator: **4 OK, 0 changed, 0 failed**. Candidate is not installed or enabled.
+- Added `docs/architecture/router-01-qos-download-pppoe-lifecycle-phase3.md` and read-only `IaC/ansible/playbooks/router-01-qos-download-pppoe-hooks-discovery.yml`.
+- Phase 3 design requires real PPP event hook discovery, event-driven and serialized reconciliation, independent rollback, and isolated dummy interface testing. Existing phase-2 script is not production-ready; **do not deploy it yet**.
+
+
 ### 31 October 2026 — Phase 2 download QoS persistent candidate staged (no deployment)
 
 - Created inactive candidate files `IaC/ansible/files/router-qos-download-managed.sh` and `router-qos-download-managed.service` plus `docs/architecture/router-01-qos-download-persistent-phase2.md`.
