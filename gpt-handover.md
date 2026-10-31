@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Timed download QoS live-trial rollback verified
+
+- Temporary 43Mbit download CAKE on `ifb-wan0` with `ppp0` ingress redirect (pref 49131) activated via approval-gated Ansible: **24 OK, 10 changed, 0 failed**. Existing `eth1` 13Mbit upload CAKE preserved.
+- Client Ookla trial measurements: 41.57/12.07 Mbps, idle 10.12ms, download-loaded 10.10ms, upload-loaded 10.32ms; two later JSON runs 41.59/12.03 and 41.67/12.00 Mbps with download-loaded ~10ms. Both JSON exports were collected **after** shaping activation, not a pretrial baseline.
+- Systemd timer triggered the rollback service at **2026-10-31 07:35:20 GMT**; user checked at 07:36:41 and confirmed `rolled-back` marker, no IFB, no `ppp0` clsact or ingress filter, original `ppp0` noqueue and unchanged 13Mbit upload CAKE. Journal: service started and deactivated successfully. **Production restored.**
+- Next proposed work: review/design persistent download CAKE lifecycle, including PPPoE reconnect and reboot, safety gates, rollback and audits. Do not re-run trial or make live changes blindly. Retain /var/lib/router-qos-download-trial as evidence.
+
+
 ### 31 October 2026 — Download QoS replacement-interface proof passed
 
 - User ran `router-01-qos-download-replacement-rollback-proof.yml`: **27 OK, 11 changed, 0 failed**. Disposable ingress device was deleted/recreated under the same name with a new ifindex; tested rollback preserved replacement `clsact`, removed trial IFB, recorded successful rollback, and verified live `ppp0` ingress and `eth1` 13Mbit upload CAKE untouched.
