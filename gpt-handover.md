@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Python sensor watchdog test runtime cleanup review
+
+- Operator validated Bash/Python/Ansible syntax at `8b5a814e`; live Python installer proof **not executed**. Reviewed Python installer and new proof Ansible; updated playbook at `32952f6c` to refuse reserved unit-file collisions, check watchdog service and executable absence after cleanup, require a cleanup action actually ran (not skipped), and prevent cleanup artifact deletion unless both timer/service inactive and executable removed. These are additional fail-closed guards, not evidence of a live success.
+- Python installer uses scoped namespace `qos-proof31`, ownership marker, timer active check, IFB/clsact collision checks, actual CAKE on `qi31` then SIGKILL; independent Bash systemd watchdog is responsible for cleanup. Do NOT deploy on router or install hooks. Next: operator pull, syntax-check updated playbook, then explicitly approval-gated sensor test after review. Production 13Mbit upload retained, download disabled.
+
+
 ### 31 October 2026 — cleanup retention guard follow-up
 
 - Updated new Python sensor proof playbook at `b3c36d53`: staged recovery files/evidence are only removed when guarded cleanup reports success and watchdog timer is not active. **Operator validation pending**; run Bash/Python/Ansible syntax checks first. Do not mistake this disposable test for persistent router QoS approval.
