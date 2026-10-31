@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — simplified basic 43 Mbps download QoS live trial staged
+
+- Operator's read-only router preflight PASS: default via ppp0; no existing IFBs, ppp0 has no ingress filters and noqueue root; required ifb/act_mirred/cls_matchall modules present; eth1 upload CAKE 13Mbit confirmed; router-pppoe/nftables/dnsmasq/unbound/ssh/upload service active. Previous disposable sensor IFB/43 Mbps CAKE test PASS.
+- At user's request, stopped advanced Phase 5 work. Added `IaC/ansible/files/router-qos-download-basic.sh` and guarded `IaC/ansible/playbooks/router-01-qos-download-basic-trial.yml`. Opt-in trial only (`router_qos_basic_trial_approved=true`), verifies router identity, preflights clean ppp0 ingress and 13 Mbit eth1 upload, arms a 180-second systemd-run rollback BEFORE applying IFB `ifbqosdl0` / ppp0 ingress pref 49132 / 43 Mbps CAKE. Script includes remove/status. **Not yet tested or deployed; require operator syntax check and opt-in.**
+- No persistence/reconnect hook in this first trial; timed rollback intentionally removes download QoS. After live outcome assess simple PPP reconnect and boot persistence, without journals. No other router components should be changed. Do not execute retired disruptive SIGKILL tests.
+
+
 ### 31 October 2026 — integrated Python lifecycle against real disposable sensor namespace staged
 
 - Operator confirmed prior real shell-based disposable IFB/CAKE test on sensor-01 passed (Ansible ok=4 changed=0 failed=0), and six integrated Python offline lifecycle tests passed. Added `IaC/ansible/scripts/router-qos-download-python-disposable-e2e.py` and explicitly opted-in `IaC/ansible/playbooks/router-01-qos-download-python-disposable-e2e.yml`. The playbook verifies exact sensor host/default gateway, copies three Python files into a temporary directory, and runs the real Linux IFB/43mbit CAKE install and teardown via the integrated Python journal lifecycle inside a fresh isolated `qos-p5` namespace, with ordinary finally cleanup and stage removal.
