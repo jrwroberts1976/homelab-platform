@@ -53,11 +53,23 @@ cleanup() {
     ip netns del "$NS"
   fi
   [[ ! -e "$BASE" || -f "$BASE/rolled-back" ]] || { echo "No rollback evidence" >&2; return 1; }
+  # The executable is only removed once no scheduled/running callback needs it.
+  rm -f "$SELF"
 }
 case "${1:-}" in
   watchdog) watchdog ;;
   watchdog-locked) watchdog_locked ;;
   cleanup) verify_host; cleanup ;;
+  recover)
+    verify_host
+    [[ -d "$BASE" && -f "$BASE/owner" && -f "$BASE/ns-inode" && -f "$BASE/ops.lock" ]] || { echo "Missing ownership evidence; refuse recovery" >&2; exit 1; }
+    [[ $(cat "$BASE/owner") == qos-proof31 ]] || exit 1
+    if exists_ns; then verify_namespace_owner; fi
+    cleanup
+    ! exists_ns
+    [[ ! -e "$SELF" ]]
+    echo RECOVERY_PASS
+    ;;
   run)
     verify_host
     [[ ! -e "$BASE" && ! -e "$SELF" ]] || { echo 'Reserved evidence exists'; exit 1; }
@@ -69,7 +81,7 @@ case "${1:-}" in
     touch "$BASE/ops.lock"
     cp "$0" "$SELF"
     chmod 0700 "$SELF"
-    trap 'cleanup && rm -f "$SELF"' EXIT
+    trap 'cleanup' EXIT
     ip netns add "$NS"
     stat -Lc %i "/run/netns/$NS" > "$BASE/ns-inode"
     verify_namespace_owner
