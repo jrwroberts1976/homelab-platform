@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Gmail CI failures: estate validator repair staged
+
+- Gmail showed repeated failed GitHub Actions 'Estate and documentation guard' runs on feature branch and main. Inspected PR run 41247777789 job 124674690342 logs: validator rejected retired docker-01 as active Ansible host and six newly added QoS architecture Markdown files lacking the mandatory estate-authority marker.
+- Committed the marker in all six listed new architecture Markdown documents. Updated canonical IaC/inventory/estate.json from active docker-01 (.220) to router-01 (.1), retired old docker and ASUS router *gateway* identities while leaving ASUS AiMesh devices as assets. Reconciled 'Active estate' table in docs/architecture/CURRENT-STATE.md; replaced docker-01 with router-01, removed old ASUS gateway record. These are source/docs fixes ONLY and must be checked by CI before merging; no router changes.
+- Separate 31 October 22:01 UTC Alertmanager email: AlloyTelemetrySilent source_host=admin-01, target_name=monitor-01. Not yet diagnosed with live Loki/Prometheus; do not declare resolved or restart services without evidence.
+- CI validation status pending; earlier failed emails remain historical, not necessarily new failures. Continue checking latest branch run.
+
+
 ### 31 October 2026 — router-01 IPS readiness snapshot (read-only)
 
 - Hardware: Raspberry Pi 4 Model B Rev 1.5, Debian 13, kernel 6.18.50+rpt-rpi-v8 (aarch64), 4 CPU cores. At 22:19 GMT after 16h uptime: load 0.00/0.04/0.04, CPU 92.3% idle in one low-load sample.
