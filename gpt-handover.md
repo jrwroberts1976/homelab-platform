@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — QoS dashboard metrics exporter integration staged
+
+- Operator confirmed router node exporter service is active at 127.0.0.1:9100, `node_textfile_scrape_error 0`, existing override explicitly runs `/usr/bin/prometheus-node-exporter --web.listen-address=127.0.0.1:9100` (no textfile directory flag), and existing `/var/lib/prometheus/node-exporter` is empty. Prometheus target routes through existing monitor-01 restricted SSH tunnel/relay; Grafana QoS dashboard successfully deployed.
+- Added `router-qos-node-exporter-override.conf` enabling `--collector.textfile.directory=/var/lib/prometheus/node-exporter` while preserving 127.0.0.1 binding, `router-qos-metrics.service`/`.timer` and guarded `playbooks/router-01-qos-dashboard-metrics-deploy.yml`. Playbook validates exact existing exporter override, checks existing textfile dir, copies tc metrics collector, obtains first sample, stages timer, changes override with backup, restarts exporter (monitoring only), enables timer, checks exported metric. **Not yet executed or validated by operator.** No PPP, nftables, router route, tc QoS or shaping changes planned.
+- Next operator: pull branch, run Ansible syntax check and explicitly approved metrics deploy; then check `homelab_router_qos_collection_success` and configured rates on Prometheus and Grafana. Scope: dashboard only, 43 Mbps download + 13 Mbps upload untouched.
+
+
 ### 31 October 2026 — QoS dashboard transport preflight confirmed
 
 - Operator ran dashboard preflight: router-01 eth1 13Mbit CAKE and ifbqosdl0 43Mbit CAKE active; no node_exporter process detected on router; /var/lib/prometheus/node-exporter exists but not proven configured. monitor-01 Prometheus router-node-exporter UP=1 from local 127.0.0.1:19101; Grafana 13.2.1 healthy; dashboard provisioning dir exists.
