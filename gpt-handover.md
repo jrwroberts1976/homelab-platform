@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 2 download QoS persistent candidate staged (no deployment)
+
+- Created inactive candidate files `IaC/ansible/files/router-qos-download-managed.sh` and `router-qos-download-managed.service` plus `docs/architecture/router-01-qos-download-persistent-phase2.md`.
+- Controller-only validator: `IaC/ansible/playbooks/router-01-qos-download-managed-phase2-validate.yml`. **Not yet run by user**.
+- Candidate is **not production-ready**: reconnect orchestration, partial-start failure cleanup and safety tests remain. No `WantedBy`, no deployment playbook or activation. Router left in successful rollback state with upload CAKE at 13Mbit only.
+- Trial results and 07:35:20 GMT successful automated rollback were previously recorded; retain all evidence.
+
+
 ### 31 October 2026 — Timed download QoS live-trial rollback verified
 
 - Temporary 43Mbit download CAKE on `ifb-wan0` with `ppp0` ingress redirect (pref 49131) activated via approval-gated Ansible: **24 OK, 10 changed, 0 failed**. Existing `eth1` 13Mbit upload CAKE preserved.
