@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — offline freshness and journal-lock audit staged
+
+- Operator verified 7/7 collector-adapter and 7/7 cleanup-evaluator offline tests. Added `IaC/ansible/scripts/router-qos-download-freshness-audit.py` plus seven offline tests. Audit holds the durable journal lock while comparing pending ownership/target, expected event generation and bounded monotonic observation age, then evaluates supplied collector output. Mismatched/stale/invalid state is refused. **Not yet run by operator.**
+- Always returns `journal_recovery_authorized=false`; audit does not mutate journal or host networking. Important: source evidence is still a caller-supplied fixture and is NOT collected while journal lock is held; the test is not proof of real kernel-observation freshness, post-reboot monotonic validity, or reliable production PPP owner. The SIGKILL live test stays retired, and router-01 upload 13 Mbps remains unchanged, persistent download OFF.
+
+
 ### 31 October 2026 — offline sensor collector/evidence adapter staged
 
 - Operator confirmed read-only sensor probe: sensor-01 eth0 192.168.2.55/24, default via 192.168.2.1, disposable namespace and owner absent, watchdog units inactive. Added `IaC/ansible/scripts/router-qos-download-observation-adapter.py` and seven offline tests to map the read-only collector's captured output into `router-qos-download-cleanup-evidence.py`, with refusal for missing namespace, mismatched inode, present IFB, ingress filters/clsact, incomplete/failed results. **Tests not yet executed by operator.**
