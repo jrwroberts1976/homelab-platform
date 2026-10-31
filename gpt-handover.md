@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — sensor-01 timer-marker proof staged, not executed
+
+- Added `IaC/ansible/playbooks/router-01-qos-download-sensor-timer-marker-proof.yml` on the QoS feature branch. It verifies a separate 5-second transient systemd timer can create a marker under /run, waits for the marker, and cleans reserved test resources. Guarded for sensor-01 identity and collision checks. This is not a real QoS rollback or full watchdog-failure proof.
+- **Not syntax-checked or run yet**; operator should pull and syntax-check before running. The test does not attach interfaces or modify network config. No changes to router-01 or admin-01 services.
+
+
 ### 31 October 2026 — sensor-01 transient independent systemd execution verified
 
 - Operator ran a temporary systemd-run unit on sensor-01 through Ansible with --collect --wait and /bin/true. Systemd reported success, main exit status 0/SUCCESS, 30 ms runtime and 1.7 MB peak memory. No persistent unit or network modifications were requested.
