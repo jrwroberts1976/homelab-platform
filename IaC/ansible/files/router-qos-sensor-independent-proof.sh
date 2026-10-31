@@ -11,12 +11,19 @@ verify_host() {
 }
 exists_ns() { ip netns list | grep -Eq "^$NS( |$)"; }
 inside() { ip netns exec "$NS" "$@"; }
+verify_namespace_owner() {
+  [[ -f "$BASE/ns-inode" && -f "$BASE/owner" ]] || return 1
+  [[ $(cat "$BASE/owner") == qos-proof31 ]] || return 1
+  exists_ns || return 1
+  [[ $(stat -Lc %i "/run/netns/$NS") == "$(cat "$BASE/ns-inode")" ]] || return 1
+  [[ $(stat -Lc %i "/run/netns/$NS") != "$(stat -Lc %i /proc/1/ns/net)" ]] || return 1
+}
 watchdog() {
   verify_host
   [[ -d "$BASE" && -f "$BASE/owner" ]] || exit 1
   [[ $(cat "$BASE/owner") == qos-proof31 ]] || exit 1
   if exists_ns; then
-    [[ $(stat -Lc %i "/run/netns/$NS") != "$(stat -Lc %i /proc/1/ns/net)" ]] || exit 1
+    verify_namespace_owner || { echo "Namespace owner changed; refusing cleanup" >&2; exit 1; }
     inside tc filter del dev qd31 ingress pref 49131 2>/dev/null || :
     inside tc qdisc del dev qd31 clsact 2>/dev/null || :
     inside ip link del dev qi31 2>/dev/null || :
@@ -35,6 +42,7 @@ cleanup() {
   done
   [[ $(systemctl is-active "$UNIT.service" 2>/dev/null || :) != active ]] || { echo "Watchdog still running" >&2; return 1; }
   if exists_ns; then
+    verify_namespace_owner || { echo "Namespace owner mismatch; preserving resources" >&2; return 1; }
     watchdog
     inside ip link del dev qd31
     ip netns del "$NS"
@@ -56,6 +64,8 @@ case "${1:-}" in
     chmod 0700 "$SELF"
     trap 'cleanup && rm -f "$SELF"' EXIT
     ip netns add "$NS"
+    stat -Lc %i "/run/netns/$NS" > "$BASE/ns-inode"
+    verify_namespace_owner
     [[ $(inside ip -o link show | wc -l) -eq 1 ]]
     inside ip link add qd31 type dummy
     inside ip link set qd31 up
@@ -63,15 +73,18 @@ case "${1:-}" in
     systemd-run --unit="$UNIT" --on-active=10s --collect -- /bin/bash "$SELF" watchdog
     systemctl is-active --quiet "$UNIT.timer"
     [[ $(systemctl show "$UNIT.timer" -p NextElapseUSecMonotonic --value) != 0 ]] || { echo "Timer deadline missing" >&2; exit 1; }
-    inside ip link add qi31 type ifb
-    inside ip link set qi31 up
-    inside tc qdisc add dev qi31 root cake bandwidth 43mbit besteffort flows
-    inside tc qdisc add dev qd31 clsact
-    inside tc filter add dev qd31 ingress pref 49131 matchall action mirred egress redirect dev qi31
-    inside tc filter show dev qd31 ingress | grep -q 49131
-    # Disposable installer child terminates abruptly; timer remains independent.
+    # The disposable installer process performs real tc operations, then dies.
+    # No host interfaces are ever named in these commands.
     set +e
-    /bin/bash -c 'kill -KILL "$BASHPID"' 2>/dev/null
+    inside /bin/bash -euc '
+      ip link add qi31 type ifb
+      ip link set qi31 up
+      tc qdisc add dev qi31 root cake bandwidth 43mbit besteffort flows
+      tc qdisc add dev qd31 clsact
+      tc filter add dev qd31 ingress pref 49131 matchall action mirred egress redirect dev qi31
+      tc filter show dev qd31 ingress | grep -q 49131
+      kill -KILL "$BASHPID"
+    ' 2>/dev/null
     result=$?
     set -e
     [[ $result == 137 ]]
