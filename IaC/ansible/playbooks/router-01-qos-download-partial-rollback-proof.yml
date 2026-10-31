@@ -7,7 +7,7 @@
   gather_facts: true
   vars:
     router_qos_partial_rollback_proof_approved: false
-    proof_dir: /var/lib/router-qos-download-partial-proof
+    proof_dir: /var/lib/router-qos-download-partial-ifindex-proof
   tasks:
     - name: Require exact router and explicit test approval
       ansible.builtin.assert:
@@ -21,7 +21,7 @@
       ansible.builtin.shell: |
         ! ip link show dev qos-part0 >/dev/null 2>&1
         ! ip link show dev qos-pifb1 >/dev/null 2>&1
-        test ! -e /var/lib/router-qos-download-partial-proof
+        test ! -e /var/lib/router-qos-download-partial-ifindex-proof
       changed_when: false
     - name: Snapshot active upload CAKE
       ansible.builtin.command:
@@ -48,10 +48,10 @@
             owner: root
             group: root
             mode: '0700'
-            content: "{{ lookup('file', playbook_dir + '/../files/router-qos-download-restore.sh') | replace('ppp0', 'qos-part0') | replace('ifb-wan0', 'qos-pifb1') | replace('/var/lib/router-qos-download-trial', '/var/lib/router-qos-download-partial-proof') }}"
+            content: "{{ lookup('file', playbook_dir + '/../files/router-qos-download-restore.sh') | replace('ppp0', 'qos-part0') | replace('ifb-wan0', 'qos-pifb1') | replace('/var/lib/router-qos-download-trial', '/var/lib/router-qos-download-partial-ifindex-proof') }}"
         - name: Validate recovery script syntax
           ansible.builtin.command:
-            argv: [/bin/sh, '-n', /var/lib/router-qos-download-partial-proof/restore.sh]
+            argv: [/bin/sh, '-n', /var/lib/router-qos-download-partial-ifindex-proof/restore.sh]
           changed_when: false
         - name: Create disposable dummy
           ansible.builtin.command:
@@ -74,12 +74,12 @@
             mode: '0600'
         - name: Record disposable ingress identity for recovery
           ansible.builtin.shell: |
-            cat /sys/class/net/qos-part0/ifindex > /var/lib/router-qos-download-partial-proof/ppp-ifindex
-            chmod 0600 /var/lib/router-qos-download-partial-proof/ppp-ifindex
+            cat /sys/class/net/qos-part0/ifindex > /var/lib/router-qos-download-partial-ifindex-proof/ppp-ifindex
+            chmod 0600 /var/lib/router-qos-download-partial-ifindex-proof/ppp-ifindex
           changed_when: true
         - name: Run same recovery logic against disposable interfaces
           ansible.builtin.command:
-            argv: [/bin/sh, /var/lib/router-qos-download-partial-proof/restore.sh]
+            argv: [/bin/sh, /var/lib/router-qos-download-partial-ifindex-proof/restore.sh]
           changed_when: true
         - name: Check recovery marker
           ansible.builtin.stat:
