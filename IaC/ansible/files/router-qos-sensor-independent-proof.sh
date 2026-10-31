@@ -16,7 +16,7 @@ watchdog() {
   [[ -d "$BASE" && -f "$BASE/owner" ]] || exit 1
   [[ $(cat "$BASE/owner") == qos-proof31 ]] || exit 1
   if exists_ns; then
-    [[ $(readlink "/run/netns/$NS") != "$(readlink /proc/1/ns/net)" ]] || exit 1
+    [[ $(stat -Lc %i "/run/netns/$NS") != "$(stat -Lc %i /proc/1/ns/net)" ]] || exit 1
     inside tc filter del dev qd31 ingress pref 49131 2>/dev/null || :
     inside tc qdisc del dev qd31 clsact 2>/dev/null || :
     inside ip link del dev qi31 2>/dev/null || :
@@ -27,12 +27,19 @@ watchdog() {
   touch "$BASE/rolled-back"
 }
 cleanup() {
+  # Cancel future execution, then wait for any running callback to finish.
+  systemctl stop "$UNIT.timer" 2>/dev/null || :
+  for i in {1..20}; do
+    [[ $(systemctl is-active "$UNIT.service" 2>/dev/null || :) != active ]] && break
+    sleep 1
+  done
+  [[ $(systemctl is-active "$UNIT.service" 2>/dev/null || :) != active ]] || { echo "Watchdog still running" >&2; return 1; }
   if exists_ns; then
-    watchdog || :
-    inside ip link del dev qd31 2>/dev/null || :
+    watchdog
+    inside ip link del dev qd31
     ip netns del "$NS"
   fi
-  systemctl stop "$UNIT.timer" 2>/dev/null || :
+  [[ ! -e "$BASE" || -f "$BASE/rolled-back" ]] || { echo "No rollback evidence" >&2; return 1; }
 }
 case "${1:-}" in
   watchdog) watchdog ;;
@@ -47,7 +54,7 @@ case "${1:-}" in
     echo qos-proof31 > "$BASE/owner"
     cp "$0" "$SELF"
     chmod 0700 "$SELF"
-    trap 'cleanup || :; rm -f "$SELF"' EXIT
+    trap 'cleanup && rm -f "$SELF"' EXIT
     ip netns add "$NS"
     [[ $(inside ip -o link show | wc -l) -eq 1 ]]
     inside ip link add qd31 type dummy
@@ -55,6 +62,7 @@ case "${1:-}" in
     # Arm an independently scheduled systemd timer before tc/IFB changes.
     systemd-run --unit="$UNIT" --on-active=10s --collect -- /bin/bash "$SELF" watchdog
     systemctl is-active --quiet "$UNIT.timer"
+    [[ $(systemctl show "$UNIT.timer" -p NextElapseUSecMonotonic --value) != 0 ]] || { echo "Timer deadline missing" >&2; exit 1; }
     inside ip link add qi31 type ifb
     inside ip link set qi31 up
     inside tc qdisc add dev qi31 root cake bandwidth 43mbit besteffort flows
