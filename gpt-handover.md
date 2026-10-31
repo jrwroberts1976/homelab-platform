@@ -1,5 +1,16 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — router-01 IPS readiness snapshot (read-only)
+
+- Hardware: Raspberry Pi 4 Model B Rev 1.5, Debian 13, kernel 6.18.50+rpt-rpi-v8 (aarch64), 4 CPU cores. At 22:19 GMT after 16h uptime: load 0.00/0.04/0.04, CPU 92.3% idle in one low-load sample.
+- Memory: 3795.7 MiB total, 270 MiB used, about 3.4 GiB available, zero swap used. Temperature 45.277 C, throttled=0x0. Root disk 896G free.
+- Interfaces: eth1 WAN and ppp0 have no interface RX/TX errors or drops. eth0 LAN has cumulative 229 RX drops, 145 missed, and 12 TX drops over uptime. Measure deltas under load before diagnosing.
+- Existing shaping confirmed: CAKE upload eth1 13Mbit and download ifbqosdl0 43Mbit. Active services: router-pppoe, dnsmasq, unbound, nftables, prometheus-node-exporter.
+- NFQUEUE modules nfnetlink_queue and nft_queue are present in the running kernel's module tree; CONFIG_NETFILTER_NETLINK_QUEUE=m. Suricata and Zeek are not installed on router-01 per command lookup.
+- Assessment: ample idle headroom to trial limited, detection-only Suricata, but no evidence yet of sustained IPS throughput or acceptable loaded latency. Next planned work: read-only load/softirq/temperature and LAN-drop delta baseline; prepare Ansible-managed IDS pilot; only later consider nftables NFQUEUE with explicit approval, fail-open behavior and rollback. Avoid disturbing PPPoE and live QoS.
+- This is a recorded operator observation; no IPS deployment or router modification performed.
+
+
 ### 31 October 2026 — QoS dashboard metrics exporter integration staged
 
 - Operator confirmed router node exporter service is active at 127.0.0.1:9100, `node_textfile_scrape_error 0`, existing override explicitly runs `/usr/bin/prometheus-node-exporter --web.listen-address=127.0.0.1:9100` (no textfile directory flag), and existing `/var/lib/prometheus/node-exporter` is empty. Prometheus target routes through existing monitor-01 restricted SSH tunnel/relay; Grafana QoS dashboard successfully deployed.
