@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — second runtime watchdog proof failed at host identity check
+
+- Sensor-01 proof run at 09:57 failed in ~9 ms, rc=1; Bash ERR trap pinpointed line 12 `[[ $(readlink /proc/self/ns/net) == $(readlink /proc/1/ns/net) ]]`. Cleanup also returned rc=1 on same check. No evidence that IFB/CAKE setup ran. Earlier diagnostic showed host route via 192.168.2.1, eth0 192.168.2.55/24; latest post-failure state not yet independently checked.
+- Replaced fragile PID1 namespace comparison in `verify_host` with explicit sensor-01 eth0 address/default-route assertions. Source-only patch, **not syntax-checked or run**. Treat only as an attempted correction; preserve approval gate. Do not repeat runtime until clean resource state and new syntax validations are confirmed.
+
+
 ### 31 October 2026 — watchdog test YAML corruption identified and repaired
 
 - User pulled `d3380109`; Ansible syntax check failed at YAML line 102 (`|| true)"`). Inspected GitHub file and confirmed unintended duplicated task blocks and broken quoting in preflight `grep` lines. This was a repository staging error, **not** a sensor runtime result.
