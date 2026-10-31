@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Download QoS replacement-interface proof passed
+
+- User ran `router-01-qos-download-replacement-rollback-proof.yml`: **27 OK, 11 changed, 0 failed**. Disposable ingress device was deleted/recreated under the same name with a new ifindex; tested rollback preserved replacement `clsact`, removed trial IFB, recorded successful rollback, and verified live `ppp0` ingress and `eth1` 13Mbit upload CAKE untouched.
+- Recent identity-aware repeat proofs also passed: normal **25 OK/13 changed/0 failed**, partial activation **21 OK/9 changed/0 failed**. All were disposable-interface tests; live 43Mbit download CAKE remains **not activated**.
+- Remaining review: validate active-trial recovery on PPP replacement, re-check timer race/acceptance and connection recovery before approving live shaping. No automatic cutover authorised.
+
+
 ### 31 October 2026 — Partial download QoS rollback proof passed
 
 - User executed `router-01-qos-download-partial-rollback-proof.yml`: **20 OK, 8 changed, 0 failed**. Test created disposable `clsact` without a matching ingress filter, used a namespaced copy of the recovery script, verified rollback marker and cleanup, and confirmed real `ppp0` ingress and `eth1` upload CAKE unchanged.
