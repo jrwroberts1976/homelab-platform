@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 3 reconciliation decision planner staged
+
+- Added pure Python `IaC/ansible/files/router-qos-download-reconcile-plan.py` and controller-only `playbooks/router-01-qos-download-reconcile-planner-proof.yml`, with 12 deterministic cases: first up, duplicate up, down, changed PPP ifindex, disappeared PPP, foreign filters, inconsistent state, partial activation, route not ready, missing interface, unrelated PPP and no state.
+- **Not yet tested by user**. Planner returns decisions and planned steps only; it does **not** run tc/ip, acquire locks, install hooks, or change live network.
+- Next: validate these tests, then implement side-effectful reconciler behind an isolated network-namespace/dummy test harness, strengthen ownership and abort/rollback, and add strict serialization. Remain GitHub-only; no production activation.
+
+
 ### 31 October 2026 — Phase 3 PPP event adapter isolated proof passed
 
 - User ran `router-01-qos-download-ppp-hook-isolated-proof.yml` on controller: **9 OK, 3 changed, 0 failed**. Two simulated up events, one down event, and an unrelated PPP interface were handled as expected.
