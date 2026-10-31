@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — offline sensor collector/evidence adapter staged
+
+- Operator confirmed read-only sensor probe: sensor-01 eth0 192.168.2.55/24, default via 192.168.2.1, disposable namespace and owner absent, watchdog units inactive. Added `IaC/ansible/scripts/router-qos-download-observation-adapter.py` and seven offline tests to map the read-only collector's captured output into `router-qos-download-cleanup-evidence.py`, with refusal for missing namespace, mismatched inode, present IFB, ingress filters/clsact, incomplete/failed results. **Tests not yet executed by operator.**
+- Adapter always returns `journal_recovery_authorized=false` and does not invoke host commands. The historical disposable namespace is absent, so actual observation remains INCONCLUSIVE; there is no trusted live kernel snapshot, no freshness lock, no production PPP integration. No router or sensor changes and SIGKILL test remains suspended.
+
+
 ### 31 October 2026 — read-only sensor kernel snapshot collector staged
 
 - Operator confirmed prior cleanup-evidence fixture tests 7/7 and durable journal tests 9/9 passing. Added `IaC/ansible/scripts/router-qos-download-sensor-readonly-collector.py` with fixed `sensor-01`, `qos-proof31`, `qd31`, `qi31` inspection; requires recorded namespace inode and refuses mismatches, collects read-only `ip link show`, `tc filter show`, `tc qdisc show` output. If old disposable namespace/owner absent, reports INCONCLUSIVE, not CLEAN. Always reports `journal_recovery_authorized=false`. Added 3 basic offline mocked tests; **not yet executed by operator**.
