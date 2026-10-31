@@ -1,0 +1,42 @@
+---
+# Read-only preflight for download CAKE via IFB on PPPoE ingress.
+- name: Inspect router PPPoE download QoS prerequisites
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require known router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect IFB support and current qdisc/filter state
+      ansible.builtin.shell: |
+        set -eu
+        echo '=== ROUTING ==='
+        ip -4 route show default
+        echo '=== IFB MODULE AVAILABLE ==='
+        modinfo -F filename ifb
+        echo '=== MIRRED AND MATCHALL MODULES AVAILABLE ==='
+        modinfo -F filename act_mirred
+        modinfo -F filename cls_matchall
+        echo '=== IFB LINKS ==='
+        ip -br link show type ifb
+        echo '=== PPPoE ingress ==='
+        tc qdisc show dev ppp0
+        tc filter show dev ppp0 ingress
+        echo '=== PPPoE link details ==='
+        ip -d link show dev ppp0
+        echo '=== PHYSICAL WAN ==='
+        tc qdisc show dev eth1
+        tc filter show dev eth1 ingress
+        echo '=== SERVICE STATE ==='
+        systemctl is-active router-qos-upload router-pppoe nftables dnsmasq unbound ssh
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: preflight
+    - name: Show inspection
+      ansible.builtin.debug:
+        var: preflight.stdout_lines
