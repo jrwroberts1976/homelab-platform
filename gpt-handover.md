@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Phase 5 watchdog admission contract staged; NOT live
+
+- Reviewed `router-qos-download-isolated-executor.py` and existing `router-qos-sensor-independent-proof.sh`. The executor currently accepts an arbitrary `watchdog_armed=True` Boolean, not verified timer evidence. The earlier sensor proof script contains literal escaped `\\n` sequences in host-check comments; it has passed a limited previous test but must not be assumed a verified reusable production watchdog.
+- Added pure-Python test-only `IaC/ansible/scripts/router-qos-download-watchdog-attestation.py` plus seven offline tests, requiring matching namespace inode, exact transient unit name, active timer, existing callback, and future deadline in supplied evidence. **These are simulated evidence objects and are not connected to live executor or host inspection.** Not yet executed by user. No production hook, daemon, PPP restart, IFB, or router change. Next step test offline validator, then design a real probe/independent rollback integration and fault injection before any router deployment.
+
+
 ### 31 October 2026 — Phase 5 isolated executor boundary staged; NOT executed
 
 - Added `IaC/ansible/scripts/router-qos-download-isolated-executor.py` with a strictly pinned `qos-p5` namespace command backend, namespace inode ownership check, independent-watchdog-armed gate, ordered real `ip`/`tc` command vectors, and fail-closed pending-state on partial installation. Added six offline tests using an injected fake runner, covering identity/wrong namespace, order, duplicate install, partial failures and teardown.
