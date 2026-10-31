@@ -1,0 +1,47 @@
+---
+- name: Inspect QoS metrics collection support without router modifications
+  hosts: router-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Inspect node exporter process and potential textfile directory
+      ansible.builtin.shell: |
+        echo '=== NODE EXPORTER PROCESS ==='
+        ps -eww -o args= | grep '[n]ode_exporter' || true
+        echo '=== EXISTING TEXTFILE PATHS ==='
+        for p in /var/lib/node_exporter/textfile_collector /var/lib/prometheus/node-exporter /var/lib/node_exporter; do
+          if test -d "$p"; then ls -ld "$p"; fi
+        done
+        echo '=== ROUTER CAKE ==='
+        tc qdisc show dev eth1
+        tc qdisc show dev ifbqosdl0
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: info
+    - name: Print discovery
+      ansible.builtin.debug:
+        var: info.stdout_lines
+
+- name: Inspect Prometheus and Grafana health for QoS dashboard
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Inspect router scrape target and dashboard provisioning path
+      ansible.builtin.shell: |
+        echo '=== ROUTER METRICS SCRAPE ==='
+        curl -fsSG http://127.0.0.1:9090/api/v1/query --data-urlencode 'query=up{job="router-node-exporter"}'
+        echo
+        echo '=== GRAFANA HEALTH ==='
+        curl -fsS http://127.0.0.1:3000/api/health
+        echo
+        echo '=== DASHBOARD DIRECTORY ==='
+        ls -ld /opt/monitoring/grafana/provisioning/dashboards/production
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: info
+    - name: Print discovery
+      ansible.builtin.debug:
+        var: info.stdout_lines
