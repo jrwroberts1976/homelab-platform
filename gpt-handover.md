@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — independent watchdog final cleanup review
+
+- Static review identified unsafe cleanup continuation if timer stop failed or callback still activating/deactivating, and loss of original failure status in EXIT trap. Hardened shell cleanup to require timer stop and non-running service before deleting self-copied callback, preserve error exit status and fail closed on ownership evidence. Ansible test now gates deletion on cleanup success and tests both timer and service stopped.
+- **Not run yet**. Earlier read-only sensor-01 baseline clean: no `qos-proof31` namespace, unit or files; eth0 at 192.168.2.55 via 192.168.2.1; IFB/CAKE modules available. Run new syntax validation before approval-gated runtime proof. On parent SIGKILL, the watchdog can roll back qdisc but namespace/evidence may remain for explicit recovery playbook. Never interpret this as production persistence approval.
+
+
 ### 31 October 2026 — interrupted watchdog proof recovery staged (NOT RUN)
 
 - Source-only improvement: temporary watchdog executable is removed by cleanup only after stopping the timer and checking callback no longer active. Added `recover` entrypoint requiring owner marker and pinned namespace inode, and explicit Ansible recovery playbook `router-01-qos-download-sensor-recovery.yml` with default-deny approval, sensor-only target, and ownership preflight. Evidence is retained if recovery fails.
