@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — integrated Python lifecycle against real disposable sensor namespace staged
+
+- Operator confirmed prior real shell-based disposable IFB/CAKE test on sensor-01 passed (Ansible ok=4 changed=0 failed=0), and six integrated Python offline lifecycle tests passed. Added `IaC/ansible/scripts/router-qos-download-python-disposable-e2e.py` and explicitly opted-in `IaC/ansible/playbooks/router-01-qos-download-python-disposable-e2e.yml`. The playbook verifies exact sensor host/default gateway, copies three Python files into a temporary directory, and runs the real Linux IFB/43mbit CAKE install and teardown via the integrated Python journal lifecycle inside a fresh isolated `qos-p5` namespace, with ordinary finally cleanup and stage removal.
+- **Not yet executed; validate syntax first.** This is namespace-only mutation on sensor-01 and does **not** connect PPP hooks, production router, or independent watchdog. Test watchdog callback is namespace-identity check only; no SIGKILL and no approved production cutover. Existing router upload 13 Mbps and persistent download OFF. Review test results before proceeding to production-specific design.
+
+
 ### 31 October 2026 — one sensor-only disposable IFB/CAKE functional test staged
 
 - User reported six integrated offline lifecycle tests PASS, requested next step. Added `IaC/ansible/scripts/router-qos-download-disposable-e2e.sh` and opt-in `IaC/ansible/playbooks/router-01-qos-download-disposable-e2e.yml` (sensor-01 only, explicit `router_qos_disposable_e2e_approved=true`). Creates fresh namespace `qos-p5-e2e` with dummy `qe2src` and IFB `qe2ifb`, checks 43mbit CAKE/ingress redirect, tears down and checks absence. Trap deletes namespace, refuses preexisting namespace, flock serializes test calls. No PPP, host-interface/route/nftables/systemd changes or SIGKILL. **Not executed by operator yet.**
