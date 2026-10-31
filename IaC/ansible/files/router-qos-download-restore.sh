@@ -10,17 +10,16 @@ if /usr/sbin/ip link show dev ppp0 >/dev/null 2>&1; then
   if /usr/sbin/tc qdisc show dev ppp0 | /bin/grep -q 'qdisc clsact'; then
     # Explicitly reject unfamiliar extra ingress filters instead of deleting them.
     /usr/sbin/tc filter show dev ppp0 ingress > "$DIR/filters-before-rollback.txt"
-    if ! /bin/grep -q 'pref 49131' "$DIR/filters-before-rollback.txt"; then
-      echo "Expected owned ingress filter missing; refuse qdisc removal" >&2
-      exit 1
-    fi
-    # Reject foreign filters BEFORE deleting the trial-owned one.
+    # Also handle the partial-activation case: clsact added, redirect not yet attached.
+    # Reject foreign filters BEFORE deleting any trial-owned filter.
     # A trial must never remove a shared clsact qdisc.
     if /bin/grep '^filter ' "$DIR/filters-before-rollback.txt" | /bin/grep -qv 'pref 49131'; then
       echo "Foreign ingress filter found; refuse cleanup" >&2
       exit 1
     fi
-    /usr/sbin/tc filter del dev ppp0 ingress pref 49131
+    if /bin/grep -q 'pref 49131' "$DIR/filters-before-rollback.txt"; then
+      /usr/sbin/tc filter del dev ppp0 ingress pref 49131
+    fi
     if [ -n "$(/usr/sbin/tc filter show dev ppp0 ingress)" ]; then
       echo "Ingress filters remain; preserve clsact" >&2
       exit 1
