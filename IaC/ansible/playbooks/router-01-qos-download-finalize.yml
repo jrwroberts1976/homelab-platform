@@ -1,0 +1,80 @@
+---
+# Only accept runtime IFB trial after separate connectivity and latency measurements.
+- name: Accept verified 43Mbit download CAKE trial
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_download_finalize_approved: false
+    trial_dir: /var/lib/router-qos-download-trial
+  tasks:
+    - name: Require explicit authorisation and exact router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_download_finalize_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Inspect trial ownership marker
+      ansible.builtin.stat:
+        path: "{{ trial_dir }}/armed"
+      register: armed
+    - name: Inspect rollback marker
+      ansible.builtin.stat:
+        path: "{{ trial_dir }}/rolled-back"
+      register: rolled_back
+    - name: Require trial still active
+      ansible.builtin.assert:
+        that:
+          - armed.stat.exists
+          - not rolled_back.stat.exists
+    - name: Confirm live IFB CAKE
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, ifb-wan0]
+      register: ifb_qdisc
+      changed_when: false
+      failed_when: "'qdisc cake' not in ifb_qdisc.stdout or 'bandwidth 43Mbit' not in ifb_qdisc.stdout"
+    - name: Confirm ppp0 ingress filter
+      ansible.builtin.command:
+        argv: [tc, filter, show, dev, ppp0, ingress]
+      register: ingress
+      changed_when: false
+      failed_when: "'49131' not in ingress.stdout or 'mirred' not in ingress.stdout"
+    - name: Confirm upload CAKE unchanged
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload
+      changed_when: false
+      failed_when: "'bandwidth 13Mbit' not in upload.stdout or 'ptm overhead 30' not in upload.stdout"
+    - name: Verify essential services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-upload, router-pppoe, nftables, dnsmasq, unbound, ssh]
+      register: services
+      changed_when: false
+      failed_when: services.rc != 0 or (services.stdout_lines | select('ne', 'active') | list | length) != 0
+    - name: Require PPPoE default route
+      ansible.builtin.command:
+        argv: [ip, '-4', route, show, default]
+      register: route
+      changed_when: false
+      failed_when: "'default dev ppp0' not in route.stdout"
+    - name: Require automatic rollback timer still active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-download-rollback.timer]
+      register: timer
+      changed_when: false
+      failed_when: timer.stdout != 'active'
+    - name: Disarm automatic rollback after external successful measurements
+      ansible.builtin.systemd_service:
+        name: router-qos-download-rollback.timer
+        state: stopped
+    - name: Confirm timer stopped
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-qos-download-rollback.timer]
+      register: stopped
+      changed_when: false
+      failed_when: stopped.stdout == 'active'
+    - name: Record runtime-only acceptance
+      ansible.builtin.debug:
+        msg: Download CAKE trial accepted, runtime-only; IFB and ingress filter will be lost on reboot or PPPoE link recreation. Persistence requires separate IaC.
