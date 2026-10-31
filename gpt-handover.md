@@ -1,5 +1,12 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — Offline actuator failure simulation passed
+
+- User ran `router-01-qos-download-actuator-fixture-proof.yml` on `admin-01`: **13 OK, 6 changed, 0 failed**. Controller-only test covered up, duplicate up, down and failures at rollback arming, IFB creation and ingress attachment. Every injected failure returned simulated state to no IFB, no attached filter and no armed rollback; the disposable fixture directory was cleaned.
+- **Limit:** offline JSON simulation does not demonstrate real `tc`, systemd, concurrent-process crash recovery or actual PPP reconnect.
+- Next: add isolated real-network actuator and interrupted-install cleanup proofs against disposable interfaces, then only after review consider PPP lifecycle integration. No live router QoS changes.
+
+
 ### 31 October 2026 — Locked offline actuator simulator staged
 
 - Added `IaC/ansible/files/router-qos-download-reconcile-fixture.py` and controller-only `playbooks/router-01-qos-download-actuator-fixture-proof.yml`; simulates first up, duplicate up, down, and failures at rollback-arm, IFB-create, and ingress-attach stages.
