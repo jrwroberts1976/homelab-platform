@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Router download CAKE / IFB trial — 31 October 2026
 
 ## Verified baseline
