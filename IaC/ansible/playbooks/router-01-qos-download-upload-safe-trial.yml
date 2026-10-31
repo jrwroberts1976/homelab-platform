@@ -72,6 +72,12 @@
         owner: root
         group: root
         mode: '0600'
+    - name: Record original PPP interface index for reconnect-safe recovery
+      ansible.builtin.shell: |
+        set -eu
+        cat /sys/class/net/ppp0/ifindex > {{ qos_download_dir }}/ppp-ifindex
+        chmod 0600 {{ qos_download_dir }}/ppp-ifindex
+      changed_when: true
     - name: Arm rollback before any IFB or ingress changes
       block:
         - name: Arm 10-minute rollback
