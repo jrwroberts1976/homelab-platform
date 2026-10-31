@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — SAFETY HOLD: retired Python SIGKILL live playbook
+
+- Following operator SSH-session loss and post-event audit, sensor watchdog completed and namespace was absent, but the SSH disconnect cause remains unproven. GitHub audit discovered `router-01-qos-download-sensor-python-watchdog-proof.yml` was severely corrupted (three repeated blocks plus incomplete YAML/shell). **Do not run the historical live version**, even from an earlier commit.
+- Replaced that playbook at commit `2571249c` with a single **read-only sensor resource audit**: asserts sensor identity and inspects namespace, test units and recovery paths; it performs no test setup, no cleanup, no `tc`/network changes and no SIGKILL. The historical separate shell harness still contains disruptive test modes, which remain suspended. No router modifications. Production upload shaping 13 Mbps retained; persistent download disabled. Next: operator pull and Ansible syntax-check, then optional read-only audit; design non-disruptive tests before any future live exercise.
+
+
 ### 31 October 2026 — Python sensor watchdog test runtime cleanup review
 
 - Operator validated Bash/Python/Ansible syntax at `8b5a814e`; live Python installer proof **not executed**. Reviewed Python installer and new proof Ansible; updated playbook at `32952f6c` to refuse reserved unit-file collisions, check watchdog service and executable absence after cleanup, require a cleanup action actually ran (not skipped), and prevent cleanup artifact deletion unless both timer/service inactive and executable removed. These are additional fail-closed guards, not evidence of a live success.
