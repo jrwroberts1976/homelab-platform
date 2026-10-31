@@ -1,0 +1,60 @@
+---
+# Explicit single-shot test on live gateway. Rollback is scheduled BEFORE apply.
+# Does not touch eth1 CAKE, DHCP, firewall, routes, DNS, or PPP setup.
+- name: Trial basic 43 Mbps download shaping with timed rollback
+  hosts: router-01
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Require correct live gateway and explicit approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - router_qos_basic_trial_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Install simple QoS control utility
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-basic.sh
+        dest: /usr/local/sbin/router-qos-download-basic
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Confirm clean ingress and existing upload CAKE
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-qos-download-basic, preflight]
+      changed_when: false
+
+    - name: Arm automatic rollback before changing live QoS
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=router-qos-download-trial-rollback
+          - --on-active=180s
+          - --property=Type=oneshot
+          - /usr/local/sbin/router-qos-download-basic
+          - remove
+      register: rollback
+      changed_when: true
+
+    - name: Apply download shaping once rollback is scheduled
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-qos-download-basic, apply]
+      register: applied
+      changed_when: true
+
+    - name: Display current QoS state
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-qos-download-basic, status]
+      register: qos_status
+      changed_when: false
+
+    - name: Show successful trial and automatic rollback information
+      ansible.builtin.debug:
+        msg:
+          - "{{ applied.stdout }}"
+          - "{{ qos_status.stdout_lines }}"
+          - "Rollback is scheduled after 180 seconds; no persistence enabled yet."
