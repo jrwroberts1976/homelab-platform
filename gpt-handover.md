@@ -1,5 +1,11 @@
 # GPT Handover — Homelab Platform
 
+### 31 October 2026 — QoS dashboard transport preflight confirmed
+
+- Operator ran dashboard preflight: router-01 eth1 13Mbit CAKE and ifbqosdl0 43Mbit CAKE active; no node_exporter process detected on router; /var/lib/prometheus/node-exporter exists but not proven configured. monitor-01 Prometheus router-node-exporter UP=1 from local 127.0.0.1:19101; Grafana 13.2.1 healthy; dashboard provisioning dir exists.
+- Added read-only `IaC/ansible/playbooks/router-01-qos-dashboard-relay-discovery.yml` to inspect existing 19101 relay transport before installing metrics collection. Do not assume textfile collector is enabled or deploy duplicate exporter; no router network modifications. The JSON dashboard and guarded deployment remain staged but not yet deployed. Next user runs relay discovery and dashboard deployment syntax; then wire CAKE collector to discovered transport.
+
+
 ### 31 October 2026 — router QoS Grafana dashboard staged
 
 - Operator verified live 43 Mbps download CAKE `ifbqosdl0`, ingress pref 49132 processing packets, existing 13 Mbps upload CAKE `eth1`, PPP ip-up hook installed, 1.1.1.1 ping 0% loss ~10.9ms.
