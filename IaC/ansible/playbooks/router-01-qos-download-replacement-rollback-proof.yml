@@ -1,0 +1,148 @@
+---
+# Proof: an interface with the same name but a new ifindex must be preserved.
+- name: Prove download QoS rollback protects a replacement PPP-like interface
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_replacement_proof_approved: false
+    proof_dir: /var/lib/router-qos-download-replacement-proof
+  tasks:
+    - name: Require explicit approval and exact router
+      ansible.builtin.assert:
+        that:
+          - router_qos_replacement_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Require unused proof names and directory
+      ansible.builtin.shell: |
+        ! ip link show dev qos-repl0 >/dev/null 2>&1
+        ! ip link show dev qos-rifb0 >/dev/null 2>&1
+        test ! -e /var/lib/router-qos-download-replacement-proof
+      changed_when: false
+    - name: Record production upload queue
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload_before
+      changed_when: false
+    - name: Record production PPP ingress
+      ansible.builtin.command:
+        argv: [tc, filter, show, dev, ppp0, ingress]
+      register: ppp_before
+      changed_when: false
+    - name: Exercise replacement identity handling
+      block:
+        - name: Create proof dir
+          ansible.builtin.file:
+            path: "{{ proof_dir }}"
+            state: directory
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Create namespaced exact rollback logic
+          ansible.builtin.copy:
+            dest: "{{ proof_dir }}/restore.sh"
+            content: "{{ lookup('file', playbook_dir + '/../files/router-qos-download-restore.sh') | replace('ppp0', 'qos-repl0') | replace('ifb-wan0', 'qos-rifb0') | replace('/var/lib/router-qos-download-trial', '/var/lib/router-qos-download-replacement-proof') }}"
+            owner: root
+            group: root
+            mode: '0700'
+        - name: Validate recovery script syntax
+          ansible.builtin.command:
+            argv: [/bin/sh, '-n', /var/lib/router-qos-download-replacement-proof/restore.sh]
+          changed_when: false
+        - name: Create original dummy device
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-repl0, type, dummy]
+          changed_when: true
+        - name: Record original ifindex
+          ansible.builtin.shell: |
+            cat /sys/class/net/qos-repl0/ifindex > /var/lib/router-qos-download-replacement-proof/ppp-ifindex
+            chmod 0600 /var/lib/router-qos-download-replacement-proof/ppp-ifindex
+          changed_when: true
+        - name: Delete original device to simulate PPP disconnect
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-repl0]
+          changed_when: true
+        - name: Create replacement dummy under same name
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-repl0, type, dummy]
+          changed_when: true
+        - name: Observe replacement ifindex
+          ansible.builtin.command:
+            argv: [cat, /sys/class/net/qos-repl0/ifindex]
+          register: replacement_id
+          changed_when: false
+        - name: Observe original ifindex
+          ansible.builtin.command:
+            argv: [cat, /var/lib/router-qos-download-replacement-proof/ppp-ifindex]
+          register: original_id
+          changed_when: false
+        - name: Require actual identity change
+          ansible.builtin.assert:
+            that:
+              - replacement_id.stdout != original_id.stdout
+        - name: Attach replacement-owned clsact
+          ansible.builtin.command:
+            argv: [tc, qdisc, add, dev, qos-repl0, clsact]
+          changed_when: true
+        - name: Create trial-owned IFB
+          ansible.builtin.command:
+            argv: [ip, link, add, dev, qos-rifb0, type, ifb]
+          changed_when: true
+        - name: Mark trial ownership
+          ansible.builtin.file:
+            path: "{{ proof_dir }}/armed"
+            state: touch
+            owner: root
+            group: root
+            mode: '0600'
+        - name: Run recovery against replacement identity
+          ansible.builtin.command:
+            argv: [/bin/sh, /var/lib/router-qos-download-replacement-proof/restore.sh]
+          changed_when: true
+        - name: Confirm replacement clsact remains
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, qos-repl0]
+          register: replacement_queue
+          changed_when: false
+          failed_when: "'qdisc clsact' not in replacement_queue.stdout"
+        - name: Confirm rollback marker exists
+          ansible.builtin.stat:
+            path: "{{ proof_dir }}/rolled-back"
+          register: marker
+        - name: Assert trial rollback completed
+          ansible.builtin.assert:
+            that:
+              - marker.stat.exists
+      always:
+        - name: Clean disposable replacement dummy
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-repl0]
+          register: removed_dummy
+          failed_when: false
+          changed_when: removed_dummy.rc == 0
+        - name: Clean disposable IFB if left
+          ansible.builtin.command:
+            argv: [ip, link, del, dev, qos-rifb0]
+          register: removed_ifb
+          failed_when: false
+          changed_when: removed_ifb.rc == 0
+        - name: Assert no proof interfaces remain
+          ansible.builtin.shell: |
+            ! ip link show dev qos-repl0 >/dev/null 2>&1
+            ! ip link show dev qos-rifb0 >/dev/null 2>&1
+          changed_when: false
+        - name: Confirm upload CAKE untouched
+          ansible.builtin.command:
+            argv: [tc, qdisc, show, dev, eth1]
+          register: upload_after
+          changed_when: false
+          failed_when: upload_after.stdout != upload_before.stdout
+        - name: Confirm production PPP ingress untouched
+          ansible.builtin.command:
+            argv: [tc, filter, show, dev, ppp0, ingress]
+          register: ppp_after
+          changed_when: false
+          failed_when: ppp_after.stdout != ppp_before.stdout
