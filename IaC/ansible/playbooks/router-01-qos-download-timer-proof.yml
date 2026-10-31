@@ -1,0 +1,73 @@
+---
+# Prove transient systemd timer execution without touching live networking.
+- name: Prove download QoS timer scheduling safely
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_qos_download_timer_proof_approved: false
+    proof_marker: /run/router-qos-download-timer-proof.done
+  tasks:
+    - name: Require explicit approval and router identity
+      ansible.builtin.assert:
+        that:
+          - router_qos_download_timer_proof_approved | bool
+          - not ansible_check_mode
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+    - name: Ensure marker absent
+      ansible.builtin.stat:
+        path: "{{ proof_marker }}"
+      register: marker_before
+    - name: Refuse previous proof marker
+      ansible.builtin.assert:
+        that:
+          - not marker_before.stat.exists
+    - name: Inspect previously named timer
+      ansible.builtin.command:
+        argv: [systemctl, list-units, --all, --plain, --no-legend, router-qos-download-timer-proof.timer]
+      register: prior
+      changed_when: false
+    - name: Refuse existing timer name
+      ansible.builtin.assert:
+        that:
+          - prior.stdout | trim == ''
+    - name: Capture upload CAKE before timer proof
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload_before
+      changed_when: false
+    - name: Arm marker-only timer
+      ansible.builtin.command:
+        argv:
+          - systemd-run
+          - --unit=router-qos-download-timer-proof
+          - --on-active=10s
+          - /usr/bin/touch
+          - "{{ proof_marker }}"
+      changed_when: true
+    - name: Wait briefly for timer to fire
+      ansible.builtin.pause:
+        seconds: 16
+    - name: Verify marker proves timer execution
+      ansible.builtin.stat:
+        path: "{{ proof_marker }}"
+      register: marker_after
+    - name: Assert timer executed
+      ansible.builtin.assert:
+        that:
+          - marker_after.stat.exists
+    - name: Verify upload shaper unchanged
+      ansible.builtin.command:
+        argv: [tc, qdisc, show, dev, eth1]
+      register: upload_after
+      changed_when: false
+      failed_when: upload_after.stdout != upload_before.stdout
+    - name: Remove marker after proof
+      ansible.builtin.file:
+        path: "{{ proof_marker }}"
+        state: absent
+    - name: Report proof
+      ansible.builtin.debug:
+        msg: Transient systemd timer executed a harmless marker action. No WAN filters or IFB interfaces changed.
