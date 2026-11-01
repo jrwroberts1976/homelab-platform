@@ -1,0 +1,166 @@
+#!/usr/bin/env python3
+"""Offline behavioural tests for router-qos-download-basic.sh.
+
+All ip/tc/modprobe/flock/hostname calls are mocked. Runs against a disposable
+copy of the checked-in controller, and never contacts router-01.
+"""
+import json
+import os
+from pathlib import Path
+import subprocess
+import tempfile
+import unittest
+
+SOURCE = Path(__file__).with_name("router-qos-download-basic.sh")
+MOCK = r'''#!/usr/bin/python3 -S
+import json, os, pathlib, sys
+path = pathlib.Path(os.environ["QOS_TEST_STATE"])
+state = json.loads(path.read_text())
+cmd = pathlib.Path(sys.argv[0]).name
+args = sys.argv[1:]
+call = " ".join([cmd] + args)
+state["calls"].append(call)
+rc, out = 0, ""
+if cmd == "hostname":
+    out = "raspberrypi\n"
+elif cmd in ("flock", "modprobe"):
+    pass
+elif cmd == "ip":
+    if args[:3] == ["link", "show", "dev"]:
+        rc = 0 if state.get(args[3], False) else 1
+    elif args[:2] == ["link", "add"]:
+        state["ifbqosdl0"] = True
+    elif args[:2] == ["link", "del"]:
+        state["ifbqosdl0"] = False
+        state["cake_ifb"] = False
+    elif args[:3] == ["link", "set", "ifbqosdl0"]:
+        pass
+    elif args[:2] == ["-br", "link"]:
+        out = "ifbqosdl0 UP\n" if state.get("ifbqosdl0") else ""
+    else:
+        raise RuntimeError("unexpected ip args: " + repr(args))
+elif cmd == "tc":
+    if args[:2] == ["qdisc", "show"]:
+        dev = args[-1]
+        if dev == "eth1":
+            out = "qdisc cake 8001: root bandwidth 13Mbit\n" if state["upload"] else "qdisc fq_codel 0: root\n"
+        elif dev == "ppp0":
+            out = "qdisc clsact ffff: parent ffff:fff1\n" if state["clsact"] else "qdisc noqueue 0: root\n"
+        elif dev == "ifbqosdl0":
+            out = "qdisc cake 8009: root bandwidth 43Mbit\n" if state["cake_ifb"] else "qdisc noqueue 0: root\n"
+        else:
+            raise RuntimeError("unexpected dev: " + dev)
+    elif args[:3] == ["filter", "show", "dev"]:
+        if state["filter"] == "owned":
+            out = "filter protocol all pref 49132 matchall chain 0\n action order 1: mirred (Egress Redirect to device ifbqosdl0) stolen\n"
+        elif state["filter"] == "foreign":
+            out = "filter protocol all pref 99 matchall chain 0\n action order 1: mirred (Egress Redirect to device other0) stolen\n"
+    elif args[:2] == ["qdisc", "add"]:
+        if args[3] == "ifbqosdl0":
+            state["cake_ifb"] = True
+        elif args[3] == "ppp0":
+            state["clsact"] = True
+        else:
+            raise RuntimeError("unexpected qdisc add: " + repr(args))
+    elif args[:2] == ["filter", "add"]:
+        state["filter"] = "owned"
+    elif args[:2] == ["filter", "del"]:
+        state["filter"] = "none"
+    elif args[:2] == ["qdisc", "del"]:
+        state["clsact"] = False
+    else:
+        raise RuntimeError("unexpected tc args: " + repr(args))
+else:
+    raise RuntimeError("unexpected executable: " + cmd)
+if state.get("fail") == call:
+    rc = 1
+path.write_text(json.dumps(state))
+sys.stdout.write(out)
+sys.exit(rc)
+'''
+
+class ControllerTests(unittest.TestCase):
+    def setUp(self):
+        self.tmp = tempfile.TemporaryDirectory()
+        self.addCleanup(self.tmp.cleanup)
+        root = Path(self.tmp.name)
+        self.state = root / "state.json"
+        mockdir = root / "bin"
+        mockdir.mkdir()
+        stub = mockdir / "mock"
+        stub.write_text(MOCK)
+        stub.chmod(0o755)
+        for cmd in ("ip", "tc", "modprobe", "hostname", "flock"):
+            (mockdir / cmd).symlink_to(stub)
+        source = SOURCE.read_text()
+        identity = '[[ "$(hostname -s)" == "raspberrypi" && $EUID -eq 0 ]] || exit 2'
+        lock = 'exec 9>/run/lock/router-qos-download-basic.lock'
+        self.assertIn(identity, source)
+        self.assertIn(lock, source)
+        source = source.replace(identity, '[[ "$(hostname -s)" == "raspberrypi" ]] || exit 2')
+        source = source.replace(lock, f'exec 9>{root}/lock')
+        self.script = root / "controller.sh"
+        self.script.write_text(source)
+        self.script.chmod(0o755)
+        self.env = dict(os.environ, QOS_TEST_STATE=str(self.state), PATH=f'{mockdir}:{os.environ["PATH"]}')
+        self.initial = {"ppp0": True, "ifbqosdl0": False, "upload": True,
+                        "cake_ifb": False, "clsact": False, "filter": "none", "calls": []}
+        self.save(dict(self.initial))
+
+    def save(self, state):
+        self.state.write_text(json.dumps(state))
+
+    def load(self):
+        return json.loads(self.state.read_text())
+
+    def ensure(self):
+        return subprocess.run(["bash", str(self.script), "ensure"],
+                              text=True, capture_output=True, env=self.env, timeout=15)
+
+    def test_initial_activation(self):
+        result = self.ensure()
+        state = self.load()
+        self.assertEqual(result.returncode, 0, result.stderr + result.stdout)
+        self.assertEqual((state["cake_ifb"], state["clsact"], state["filter"]), (True, True, "owned"))
+
+    def test_duplicate_up_is_non_destructive(self):
+        self.assertEqual(self.ensure().returncode, 0)
+        state = self.load()
+        state["calls"] = []
+        self.save(state)
+        result = self.ensure()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(" add " in call or " del " in call for call in self.load()["calls"]))
+
+    def test_orphan_refused_without_deletion(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True))
+        self.assertNotEqual(self.ensure().returncode, 0)
+        state = self.load()
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertFalse(any("link del" in call for call in state["calls"]))
+
+    def test_foreign_filter_preserved(self):
+        self.save(dict(self.initial, filter="foreign", clsact=True))
+        self.assertNotEqual(self.ensure().returncode, 0)
+        state = self.load()
+        self.assertEqual(state["filter"], "foreign")
+        self.assertFalse(any(" del " in call for call in state["calls"]))
+
+    def test_filter_install_failure_rolls_back(self):
+        self.save(dict(self.initial, fail="tc filter add dev ppp0 ingress pref 49132 matchall action mirred egress redirect dev ifbqosdl0"))
+        self.assertNotEqual(self.ensure().returncode, 0)
+        state = self.load()
+        self.assertEqual((state["ifbqosdl0"], state["clsact"], state["filter"]), (False, False, "none"))
+
+    def test_qdisc_install_failure_rolls_back(self):
+        self.save(dict(self.initial, fail="tc qdisc add dev ppp0 clsact"))
+        self.assertNotEqual(self.ensure().returncode, 0)
+        self.assertFalse(self.load()["ifbqosdl0"])
+
+    def test_missing_upload_refuses(self):
+        self.save(dict(self.initial, upload=False))
+        self.assertNotEqual(self.ensure().returncode, 0)
+        self.assertFalse(any(" add " in c or " del " in c for c in self.load()["calls"]))
+
+if __name__ == "__main__":
+    unittest.main(verbosity=2)
