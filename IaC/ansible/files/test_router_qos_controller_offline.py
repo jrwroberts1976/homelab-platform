@@ -116,6 +116,8 @@ class ControllerTests(unittest.TestCase):
         source = source.replace('/usr/local/libexec/router-qos-download/stamp.py', str(stub))
         source = source.replace('/run/router-qos-download-basic.owner.json', str(root / 'owner.json'))
         source = source.replace('python3 "$STAMP_HELPER" stamp', 'qos-stamp stamp')
+        source = source.replace('python3 "$STAMP_HELPER" release-after-delete',
+                                'qos-stamp release-after-delete')
         self.script = root / "controller.sh"
         self.script.write_text(source)
         self.script.chmod(0o755)
