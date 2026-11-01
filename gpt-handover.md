@@ -1,7 +1,7 @@
 ### 1 November 2026 — Canonical estate inventory split (PR pending)
 
-- Prepared standalone documentation-only change from `main`: canonical `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md` now identify active `router-01` at `192.168.2.1` as the PPPoE gateway, retire old `docker-01` host identity and retired ASUS routing identity, retain ASUS AiMesh access point assets. Changes reflect operator-verified live router state; no devices touched.
-- A stale retirement explanation about `TestServer` was corrected to name `router-01`. Draft router PR #267 retains extensive unreviewed QoS experiments; do not merge wholesale. Validate estate PR in CI and via `python3 scripts/validate-estate.py` before merge.
+- Prepared standalone documentation-only change from `main`: canonical `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md` now identify active `router-01` at `192.168.2.1` as the PPPoE gateway, retire old `docker-01` host identity and retired ASUS routing identity, retain ASUS AiMesh access point assets. Changes reflect operator-verified live router state; no devices touched. <!-- historical -->
+- A stale retirement explanation about `TestServer` was corrected to name `router-01`. Draft router PR #267 retains extensive unreviewed QoS experiments; do not merge wholesale. Validate estate PR in CI and via `python3 scripts/validate-estate.py` before merge. <!-- historical -->
 
 ### 1 November 2026 — Observability reconciliation split from router draft
 
