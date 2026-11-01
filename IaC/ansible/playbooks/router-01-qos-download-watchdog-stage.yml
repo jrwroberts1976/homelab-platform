@@ -1,0 +1,51 @@
+---
+# Stage rollback source as inert data only. Never schedule or execute restore.
+- name: Stage router QoS rollback source for review
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify target identity and staging approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - router_qos_watchdog_stage_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Confirm saved legacy backups are present
+      ansible.builtin.stat:
+        path: "/var/lib/router-qos-download-cutover/{{ item }}"
+        follow: false
+      loop:
+        - legacy-controller
+        - legacy-ip-up-hook
+      register: rollback_sources
+
+    - name: Refuse absent or symlinked rollback sources
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+      loop: "{{ rollback_sources.results }}"
+
+    - name: Stage script as non-executable review material
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-rollback-watchdog.sh
+        dest: /var/lib/router-qos-download-cutover/rollback-watchdog.staged
+        owner: root
+        group: root
+        mode: '0400'
+
+    - name: Validate staged script syntax only
+      ansible.builtin.command:
+        argv:
+          - bash
+          - -n
+          - /var/lib/router-qos-download-cutover/rollback-watchdog.staged
+      changed_when: false
+
+    - name: Report no activation performed
+      ansible.builtin.debug:
+        msg: Rollback source staged as non-executable data; no timer or cutover armed.
