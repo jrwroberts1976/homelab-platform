@@ -182,6 +182,26 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(state["ifbqosdl0"])
         self.assertFalse(any("link del" in c for c in state["calls"]))
 
+    def test_manual_remove_refuses_unmarked_orphan(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True))
+        result = subprocess.run(["bash", str(self.script), "remove"],
+                                text=True, capture_output=True, env=self.env, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertFalse(any(" del " in c for c in state["calls"]))
+
+    def test_manual_remove_refuses_foreign_ingress(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True,
+                       clsact=True, filter="foreign"))
+        result = subprocess.run(["bash", str(self.script), "remove"],
+                                text=True, capture_output=True, env=self.env, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertEqual(state["filter"], "foreign")
+        self.assertFalse(any(" del " in c for c in state["calls"]))
+
     def test_missing_upload_refuses(self):
         self.save(dict(self.initial, upload=False))
         self.assertNotEqual(self.ensure().returncode, 0)
