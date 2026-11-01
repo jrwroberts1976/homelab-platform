@@ -1,0 +1,40 @@
+---
+- name: Preserve existing router download QoS configuration
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Install existing download QoS script
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-basic
+        dest: /usr/local/sbin/router-qos-download-basic
+        owner: root
+        group: root
+        mode: "0750"
+        backup: true
+
+    - name: Install existing PPPoE startup hook
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-ip-up
+        dest: /etc/ppp/ip-up.d/router-qos-download
+        owner: root
+        group: root
+        mode: "0755"
+        backup: true
+
+    - name: Check download QoS script syntax
+      ansible.builtin.command:
+        argv:
+          - /bin/bash
+          - -n
+          - /usr/local/sbin/router-qos-download-basic
+      changed_when: false
+
+    - name: Check PPPoE hook syntax
+      ansible.builtin.command:
+        argv:
+          - /bin/sh
+          - -n
+          - /etc/ppp/ip-up.d/router-qos-download
+      changed_when: false

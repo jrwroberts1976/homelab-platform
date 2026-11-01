@@ -1,0 +1,6 @@
+#!/bin/sh
+# pppd ip-up hook: only the expected router WAN, no routing changes.
+[ "$1" = "ppp0" ] || exit 0
+[ -x /usr/local/sbin/router-qos-download-basic ] || exit 0
+/usr/local/sbin/router-qos-download-basic ensure || logger -t router-qos-download "download QoS ensure refused or failed"
+exit 0
