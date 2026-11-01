@@ -1,3 +1,10 @@
+### 1 November 2026 — Router metrics stale Docker socket mount recovery (staged; not deployed)
+
+- After monitoring disappeared, router Node Exporter and SSH tunnel (monitor-01 localhost:19100 HTTP 200) remained healthy. Host Unix socket existed, but Docker relay container showed an empty bind-mounted /run/router-metrics-relay; container socat logged ENOENT. Manual Docker relay recreation restored socket visibility, reconciler HEALTHY, and user confirmed Grafana data returned.
+- Root issue: systemd RuntimeDirectory lifecycle may replace the host directory while the existing Docker container retains the old mount. Current reconcile script reported DEGRADED without repairing a running but unhealthy relay.
+- Branch `fix/router-metrics-stale-socket-20261101` stages RuntimeDirectoryPreserve=yes for host relay, automatic controlled Docker-relay-only recreation on unhealthy scrape, upstream 19100 preflight, five-minute cooldown and post-recreation health retries. Also adds approval-gated playbook `router-metrics-stale-socket-recovery-deploy.yml`. The change does not restart Prometheus, SSH tunnel, router or QoS.
+- **Not deployed or live-tested yet**. Next: sync branch to admin-01, bash -n and Ansible syntax check; run approved playbook on monitor-01, verify Prometheus up=1, then separately validate stale-mount recovery with a controlled test and merge only after other workstreams are ready.
+
 ### 1 November 2026 — Production router QoS monitoring isolated for review
 
 - Extracted nine observability-only files from experimental router PR #267 into independent `feature/router-qos-production-monitoring-20261101` from current `main`: Grafana dashboard, QoS tc read-only collector, node-exporter textfile override, collector systemd service/timer, and four preflight/deployment/discovery playbooks.
