@@ -1,3 +1,9 @@
+### 1 November 2026 — Original upload QoS reboot objective verified
+
+- Following the controlled reboot sequence, operator verified `tc qdisc show dev eth1`: CAKE **13Mbit**, `ptm overhead 30`; default route `ppp0`; `router-pppoe`, `router-qos-upload`, `dnsmasq`, `unbound`, and `nftables` all reported **active**.
+- **Upload QoS reboot persistence is verified.** Inbound/download QoS changes and parallel-IFB redesign are **deferred** at operator direction, not part of this completed objective. Do not merge speculative unfinished download migration code from PR #271 into main.
+- Remaining housekeeping: inspect main/PR diff, preserve only relevant completed production work, update canonical CURRENT-STATE.md on main as appropriate, clean up safely merged/superseded branches without blind merge.
+
 ### 1 November 2026 — Parallel IFB helper tests passed
 
 - Operator reran `test_router_qos_parallel_ifb_helpers.py` after correction of Python escaped-newline syntax: **6 tests OK in 0.012s**.
