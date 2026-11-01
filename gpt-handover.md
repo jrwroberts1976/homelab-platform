@@ -1,3 +1,8 @@
+### 1 November 2026 — QoS rollback script and inert staging playbook committed
+
+- PR #271 adds `IaC/ansible/files/router-qos-download-rollback-watchdog.sh` and `playbooks/router-01-qos-download-watchdog-stage.yml`. Staging playbook copies script non-executable (`0400`) under `/var/lib/router-qos-download-cutover/rollback-watchdog.staged` and syntax checks it. **Staging playbook not yet executed or syntax checked by operator**.
+- This script restores legacy controller and PPP-hook **files only**, not kernel IFB/tc state. It is **not** a watchdog until a separate timed/armed/verified mechanism exists. No cutover, restore, timer, PPP interruption or reboot authorised. Previous legacy backups passed 14-task backup playbook with no failures.
+
 ### 1 November 2026 — Legacy QoS rollback backups verified on router-01
 
 - Operator executed approval-gated `IaC/ansible/playbooks/router-01-qos-download-backup-only.yml`: **14 OK, 3 changed, 0 failed, 0 unreachable**. Playbook's SHA256 assertions for the stored legacy controller and PPP reconnect hook passed, as did its before/after live controller, hook and QoS configuration comparison.
