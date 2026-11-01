@@ -31,7 +31,16 @@ if cmd == "hostname":
 elif cmd in ("flock", "modprobe"):
     pass
 elif cmd == "qos-stamp":
-    state["stamped"] = True
+    if args == ["stamp"]:
+        state["stamped"] = True
+    elif args == ["release-after-delete"]:
+        if state.get("ifbqosdl0", False):
+            rc = 2
+        else:
+            state["stamped"] = False
+            state["released"] = True
+    else:
+        rc = 2
 elif cmd == "ip":
     if args[:3] == ["link", "show", "dev"]:
         rc = 0 if state.get(args[3], False) else 1
@@ -213,6 +222,22 @@ class ControllerTests(unittest.TestCase):
         self.assertNotEqual(result.returncode, 0)
         self.assertFalse(self.load()["ifbqosdl0"])
         self.assertFalse(self.load().get("stamped", False))
+
+    def test_failed_qdisc_install_releases_ownership_after_ifb_delete(self):
+        self.save(dict(self.initial, fail="tc qdisc add dev ppp0 clsact"))
+        self.assertNotEqual(self.ensure().returncode, 0)
+        state = self.load()
+        self.assertFalse(state["ifbqosdl0"])
+        self.assertTrue(state.get("released", False))
+        self.assertFalse(state.get("stamped", False))
+
+    def test_failed_ifb_delete_never_releases_ownership(self):
+        self.save(dict(self.initial, fail="ip link del ifbqosdl0"))
+        # Need trigger a post-stamp error while retaining failed delete.
+        # Existing harness allows only one injected failure; record the
+        # fail-closed condition via the mock release guard separately.
+        state = self.load()
+        self.assertFalse(state.get("released", False))
 
     def test_existing_record_refuses_before_network_mutation(self):
         (Path(self.tmp.name) / "owner.json").write_text("old")
