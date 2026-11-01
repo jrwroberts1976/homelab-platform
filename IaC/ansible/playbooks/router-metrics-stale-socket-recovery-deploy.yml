@@ -1,0 +1,63 @@
+---
+- name: Deploy router metrics stale socket recovery without restarting monitoring
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit monitoring-only deployment approval
+      ansible.builtin.assert:
+        that:
+          - router_metrics_socket_fix_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Check currently healthy router metrics upstream
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19100/metrics
+        status_code: 200
+      changed_when: false
+
+    - name: Install corrected reconciliation logic
+      ansible.builtin.copy:
+        src: ../roles/router_metrics_relay/files/router-metrics-relay-reconcile.sh
+        dest: /usr/local/sbin/router-metrics-relay-reconcile
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Update host relay runtime directory preservation
+      ansible.builtin.template:
+        src: ../roles/router_metrics_relay/templates/router-metrics-relay.service.j2
+        dest: /etc/systemd/system/router-metrics-relay.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Update reconciliation runtime directory and cooldown
+      ansible.builtin.template:
+        src: ../roles/router_metrics_relay/templates/router-metrics-relay-reconcile.service.j2
+        dest: /etc/systemd/system/router-metrics-relay-reconcile.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd definitions only
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Check reconciliation while metrics are healthy
+      ansible.builtin.command:
+        argv: [systemctl, start, router-metrics-relay-reconcile.service]
+      changed_when: false
+
+    - name: Verify last reconciliation was healthy
+      ansible.builtin.command:
+        argv: [journalctl, -u, router-metrics-relay-reconcile.service, -n, '12', --no-pager]
+      register: reconcile_log
+      changed_when: false
+
+    - name: Assert healthy reconciliation
+      ansible.builtin.assert:
+        that:
+          - "'RELAY_RECONCILIATION=HEALTHY' in reconcile_log.stdout"
