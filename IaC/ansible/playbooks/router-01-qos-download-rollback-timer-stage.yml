@@ -1,0 +1,95 @@
+---
+# Stage systemd units and scripts only; do not enable/start timer or create marker.
+- name: Stage dormant download QoS rollback timer
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    cutover_root: /usr/local/libexec/router-qos-download-cutover
+  tasks:
+    - name: Require exact router identity and staging approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - router_qos_timer_stage_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Refuse any active cutover marker
+      ansible.builtin.stat:
+        path: /run/router-qos-download-cutover.pending
+        follow: false
+      register: cutover_marker
+
+    - name: Assert cutover is not armed
+      ansible.builtin.assert:
+        that:
+          - not cutover_marker.stat.exists
+
+    - name: Create private helper directory
+      ansible.builtin.file:
+        path: "{{ cutover_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Stage restore and expiry scripts without executing them
+      ansible.builtin.copy:
+        src: "../files/{{ item.src }}"
+        dest: "{{ cutover_root }}/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0700'
+      loop:
+        - { src: router-qos-download-rollback-watchdog.sh, dest: rollback-watchdog.sh }
+        - { src: router-qos-download-rollback-expiry.sh, dest: rollback-expiry.sh }
+
+    - name: Validate staged script syntax
+      ansible.builtin.command:
+        argv: [bash, -n, "{{ cutover_root }}/{{ item }}"]
+      loop:
+        - rollback-watchdog.sh
+        - rollback-expiry.sh
+      changed_when: false
+
+    - name: Install dormant service and timer definitions
+      ansible.builtin.copy:
+        src: "../files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - router-qos-download-rollback-expiry.service
+        - router-qos-download-rollback-expiry.timer
+      register: units
+
+    - name: Reload systemd only when definitions changed
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+      when: units.changed
+
+    - name: Ensure timer is stopped and disabled
+      ansible.builtin.systemd_service:
+        name: router-qos-download-rollback-expiry.timer
+        state: stopped
+        enabled: false
+
+    - name: Verify timer remains inactive and disabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-qos-download-rollback-expiry.timer]
+      register: timer_enabled
+      failed_when: timer_enabled.rc not in [0, 1]
+      changed_when: false
+
+    - name: Confirm non-activation
+      ansible.builtin.assert:
+        that:
+          - timer_enabled.stdout == 'disabled'
+        fail_msg: Timer was not disabled; investigate immediately.
+
+    - name: State staging outcome
+      ansible.builtin.debug:
+        msg: "Rollback timer installed but disabled/inactive. No marker, cutover, PPP restart, or QoS mutation performed."
