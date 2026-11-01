@@ -254,6 +254,18 @@ class ControllerTests(unittest.TestCase):
         self.assertEqual(state["filter"], "foreign")
         self.assertFalse(any(" del " in c for c in state["calls"]))
 
+    def test_manual_remove_refuses_even_matching_live_legacy_fingerprint(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True,
+                       clsact=True, filter="owned"))
+        result = subprocess.run(["bash", str(self.script), "remove"],
+                                text=True, capture_output=True, env=self.env, timeout=15)
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertTrue(state["clsact"])
+        self.assertEqual(state["filter"], "owned")
+        self.assertFalse(any(" del " in c for c in state["calls"]))
+
     def test_stamp_failure_rolls_back_new_ifb(self):
         self.save(dict(self.initial, fail="qos-stamp stamp"))
         result = self.ensure()
