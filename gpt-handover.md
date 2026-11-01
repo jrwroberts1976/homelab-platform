@@ -1,3 +1,8 @@
+### 1 November 2026 — Inert QoS rollback script staging verified
+
+- Operator ran `router-01-qos-download-watchdog-stage.yml` on `router-01`: **7 OK, 1 changed, 0 failed, 0 unreachable**. Staging script at `/var/lib/router-qos-download-cutover/rollback-watchdog.staged` is mode `0400`; Ansible syntax/validation tasks passed. It was **not executed or armed**.
+- Legacy backup-only stage previously passed: 14 OK, 3 changed, zero failures. Candidate checksums and production legacy QoS audit previously passed. **HOLD production cutover** until independent timed rollback and safe legacy IFB transaction exist; no PPP restart or reboot initiated.
+
 ### 1 November 2026 — QoS rollback script and inert staging playbook committed
 
 - PR #271 adds `IaC/ansible/files/router-qos-download-rollback-watchdog.sh` and `playbooks/router-01-qos-download-watchdog-stage.yml`. Staging playbook copies script non-executable (`0400`) under `/var/lib/router-qos-download-cutover/rollback-watchdog.staged` and syntax checks it. **Staging playbook not yet executed or syntax checked by operator**.
