@@ -1,3 +1,9 @@
+### 1 November 2026 — Create-only kernel recovery actor added (NOT deployed)
+
+- PR #271 now has `IaC/ansible/files/router-qos-download-kernel-recover-missing.sh` with **explicit separate approval marker**, root/router guard, exclusive flock, clean-ingress/absent-IFB/absent-owner preconditions, unchanged upload gate and only creation of a missing IFB, 43Mbit CAKE, clsact, ppp0 redirect. It **never deletes or adopts existing kernel objects**. On partial failure it fails closed and leaves partial state for inspection rather than risking foreign-resource deletion.
+- Added `test_router_qos_download_kernel_recover_missing.py` with 4 offline syntax/deny-before-mutation checks; **not yet run**. More substantial mocked command failure-injection, interrupt handling and real-kernel isolation are still required before any deployment. Recovery only addresses the fully absent-IFB/clean-ingress case and cannot recover arbitrary partial cutovers.
+- No router changes. Current unmarked IFB exists and must not be touched. **Do not create recovery approval marker or arm timer; do not cut over.**
+
 ### 1 November 2026 — Kernel recovery policy regression verified
 
 - Operator ran `python3 IaC/ansible/files/test_router_qos_download_kernel_recovery_policy.py`: **9 tests in 0.003s, OK**. The tested module remains pure decision logic, **not a kernel repair actuator**.
