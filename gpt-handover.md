@@ -1,3 +1,8 @@
+### 1 November 2026 — Kernel recovery decision policy added (offline, not an actuator)
+
+- PR #271 now has pure `router_qos_download_kernel_recovery_policy.py` with nine regression tests in `test_router_qos_download_kernel_recovery_policy.py`, covering missing IFB, legacy unmarked IFB refusal, foreign filters, dangling redirect, stale ownership, PPP/upload changes, and preserving verified working QoS. **Tests not yet operator-run.**
+- The policy can only return decisions; it has **no kernel repair/recreation entrypoint**. Existing `router-qos-download-kernel-recovery-gate.sh` remains verify-only; timer restores files only. No live router changes or approved cutover. Next critical deliverable is a scoped kernel recovery actor with independently proven interruption and rollback behavior, not more generic tests.
+
 ### 1 November 2026 — Kernel recovery prerequisite gate committed
 
 - PR #271 adds `IaC/ansible/files/router-qos-download-kernel-recovery-gate.sh`: root/router-identity-checked, lock-protected, **verify-only** gate for a **missing** IFB with clean ppp0 ingress, unchanged eth1 upload CAKE and absent owner record. It cannot remove/adopt/recreate any interface and explicitly refuses modes other than `verify`.
