@@ -53,7 +53,7 @@ def observe(run: Callable, read_text: Callable, other_users_verified: bool | Non
         "qdisc": "cake-43mbit-besteffort-flows" if exact_cake else "unknown",
         "ppp_present": ppp_present,
         "ppp_ingress": "clean" if ppp_present and not filters.strip() and
-                       not re.search(r"\\b(clsact|ingress)\\b", root) else "unknown",
+                       not re.search(r"\b(clsact|ingress)\b", root) else "unknown",
         "upload": "cake-13mbit" if "qdisc cake " in upload and "bandwidth 13Mbit" in upload else "unknown",
         "other_ifb_users": other_users_verified if type(other_users_verified) is bool else None,
     }
