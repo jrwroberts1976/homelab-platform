@@ -1,3 +1,9 @@
+### 1 November 2026 — Suricata rules preparation stage queued
+
+- Operator confirmed `suricata -T -c /etc/suricata/suricata.yaml` returns **1** due to missing `/var/lib/suricata/rules/suricata.rules`. Packaged Suricata 7 service defaults to `--af-packet` and `eth0`; service is disabled/inactive; RAM 3.4GiB available.
+- Added separate approval-gated `IaC/ansible/playbooks/router-01-suricata-rules-prepare.yml`, which runs `suricata-update --no-reload`, validates nonempty rules and `suricata -T`, verifies inactive service and core router services before/after. **Not executed** as of this update. No capture interface, NFQUEUE, service-start or QoS edits.
+- Follow-up after rules pass: configure safe passive capture on `ppp0` under separate approval, no automatic activation until review.
+
 ### 1 November 2026 — router-01 Suricata package staging verified
 
 - Operator ran `router-01-suricata-preflight.yml`: 6 OK, 0 changed, 0 failed; Debian 13 arm64, APT candidate Suricata 1:7.0.10-1+deb13u4, all five router services healthy.
