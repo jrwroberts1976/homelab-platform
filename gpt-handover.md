@@ -1,3 +1,9 @@
+### 1 November 2026 — Kernel rollback safety gate: disable standalone IFB removal
+
+- Review identified that candidate `router-qos-download-basic.sh remove` previously accepted a CAKE/ingress configuration fingerprint without verifying a kernel ownership token. This is insufficient to prove ownership of legacy `ifbqosdl0`.
+- PR #271 now makes `remove` **always refuse** until a separate operator-approved and kernel-identity-verified cutover transaction exists. Added offline test that a matching live legacy configuration still cannot be removed. **New test not yet run on admin-01.**
+- No production controller replacement or live IFB mutation occurred. The timed rollback only restores files, not kernel state. Preserve the existing healthy 13Mbit upload / 43Mbit download QoS; hold live cutover.
+
 ### 1 November 2026 — QoS rollback expiry offline test results verified
 
 - Operator ran `IaC/ansible/files/test_router_qos_download_rollback_expiry.py`: **6 tests passed**, including marker-present restore dispatch, cancelled/missing marker no-op, symlink/directory refusal and timer configuration checks.
