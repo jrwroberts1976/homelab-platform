@@ -31,6 +31,8 @@ class RecoveryInjectionTests(unittest.TestCase):
             'exec 9>/run/lock/router-qos-download-basic.lock':
                 f'exec 9>{self.root / "lock"}',
             '/run/router-qos-download-basic.owner.json': str(self.root / "owner"),
+            'JOURNAL=/run/router-qos-download-kernel-recovery.progress':
+                f'JOURNAL={self.root / "journal"}',
         }
         for old, new in swaps.items():
             self.assertIn(old, source)
@@ -85,11 +87,23 @@ flock() { :; }
         for stage in STAGES:
             with self.subTest(stage=stage):
                 self.calls.unlink(missing_ok=True)
+                (self.root / "journal").unlink(missing_ok=True)
                 result = self.run_actor(FAIL_AT=stage)
                 self.assertNotEqual(result.returncode, 0, result.stdout)
                 calls = self.recorded()
                 self.assertEqual(calls, STAGES[:STAGES.index(stage) + 1])
                 self.assertFalse(any(" del " in item or " replace " in item for item in calls))
+                self.assertTrue((self.root / "journal").exists())
+
+    def test_interrupted_recovery_journal_blocks_second_attempt(self):
+        result = self.run_actor(FAIL_AT="tc qdisc add ifb")
+        self.assertNotEqual(result.returncode, 0)
+        self.assertTrue((self.root / "journal").exists())
+        before = self.recorded()
+        retry = self.run_actor()
+        self.assertNotEqual(retry.returncode, 0)
+        self.assertIn("existing recovery progress journal", retry.stderr)
+        self.assertEqual(self.recorded(), before)
 
     def test_existing_ifb_refuses_before_kernel_commands(self):
         result = self.run_actor(IFB_EXISTS="1")
