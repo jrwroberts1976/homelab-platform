@@ -1,0 +1,82 @@
+---
+- name: Stage Suricata packages on router-01 with capture disabled
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Require explicit package staging approval and verified host identity
+      ansible.builtin.assert:
+        that:
+          - router_suricata_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'aarch64'
+        fail_msg: 'Refusing to stage Suricata on an unapproved or unexpected host.'
+
+    - name: Require healthy production router services before staging
+      ansible.builtin.command:
+        argv: [systemctl, is-active, '{{ item }}']
+      loop:
+        - router-pppoe.service
+        - dnsmasq.service
+        - unbound.service
+        - nftables.service
+        - router-qos-upload.service
+      changed_when: false
+
+    - name: Require live PPP interface
+      ansible.builtin.command:
+        argv: [ip, link, show, dev, ppp0]
+      changed_when: false
+
+    - name: Install only Suricata packages without starting services
+      ansible.builtin.apt:
+        name:
+          - suricata
+          - suricata-update
+        state: present
+        policy_rc_d: 101
+
+    - name: Keep Suricata stopped and disabled
+      ansible.builtin.systemd_service:
+        name: suricata.service
+        state: stopped
+        enabled: false
+
+    - name: Verify Suricata version
+      ansible.builtin.command:
+        argv: [suricata, -V]
+      register: router_suricata_version
+      changed_when: false
+
+    - name: Verify Suricata service is inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, suricata.service]
+      register: router_suricata_active
+      failed_when: router_suricata_active.stdout | trim != 'inactive'
+      changed_when: false
+
+    - name: Verify Suricata is disabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, suricata.service]
+      register: router_suricata_enabled
+      changed_when: false
+      failed_when: router_suricata_enabled.stdout | trim != 'disabled'
+
+    - name: Verify production router services remain healthy
+      ansible.builtin.command:
+        argv: [systemctl, is-active, '{{ item }}']
+      loop:
+        - router-pppoe.service
+        - dnsmasq.service
+        - unbound.service
+        - nftables.service
+        - router-qos-upload.service
+      changed_when: false
+
+    - name: Report staged but not activated
+      ansible.builtin.debug:
+        msg: 'ROUTER_SURICATA_STAGE=PASS; capture remains disabled; {{ router_suricata_version.stdout }}'
