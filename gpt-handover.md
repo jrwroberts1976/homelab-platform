@@ -1,3 +1,8 @@
+### 1 November 2026 — Offline kernel recovery fault-injection harness committed
+
+- PR #271 adds `IaC/ansible/files/test_router_qos_download_kernel_recover_faults.py`: isolated shell command mocks test each of six create-only recovery steps failing, existing IFB/owner/clsact refusal, and mocked success. Tests record exact command progression and check no subsequent modifying steps on failure.
+- **Operator has not yet run these tests.** Mock outcomes are not proof of kernel recovery on real Linux or safety under interruptions; create-only actor still leaves ambiguous partial states on failure and is not deployed. No live cutover/PPP restart allowed.
+
 ### 1 November 2026 — Kernel create-only recovery actor tests verified
 
 - Operator ran `python3 IaC/ansible/files/test_router_qos_download_kernel_recover_missing.py`: **4 tests OK** in 0.025s. These are initial offline syntax/approval/negative safeguards, not full fault injection.
