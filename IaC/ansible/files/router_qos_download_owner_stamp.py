@@ -11,10 +11,10 @@ import secrets
 from router_qos_download_owner_record import write_new, load
 
 
-def stamp_new_ifb(owner_path, boot_id, get_ifindex, get_alias, set_alias):
+def stamp_new_ifb(owner_path, boot_id, get_ifindex, get_alias, set_alias, ifb_name="ifbqosdl0"):
     # Caller must have created IFB in this same critical section.
     # A pre-existing record may indicate an interrupted install: fail closed.
-    owner_path = Path(owner_path)
+    if ifb_name not in ("ifbqosdl0", "ifbqosdl1"):\n        raise ValueError("unapproved IFB name")\n    owner_path = Path(owner_path)
     if owner_path.exists() or owner_path.is_symlink():
         raise FileExistsError("existing or ambiguous ownership record")
     index = get_ifindex()
@@ -27,7 +27,7 @@ def stamp_new_ifb(owner_path, boot_id, get_ifindex, get_alias, set_alias):
     set_alias(alias)
     if get_ifindex() != index or get_alias() != alias:
         raise RuntimeError("kernel identity changed while stamping")
-    record = dict(boot_id=boot_id, ifb_name="ifbqosdl0",
+    record = dict(boot_id=boot_id, ifb_name=ifb_name,
                   ifb_ifindex=index, token=token)
     write_new(owner_path, record)
     if load(owner_path) != record:
