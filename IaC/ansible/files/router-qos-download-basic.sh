@@ -25,27 +25,18 @@ clean_wan() {
   [[ -z "$(filters)" ]] && ! tc qdisc show dev "$WAN" | grep -Eq 'clsact|ingress'
 }
 remove_owned() {
-  if has_wan && tc qdisc show dev "$WAN" | grep -q 'clsact'; then
-    local listing
-    listing="$(filters)"
-    if [[ -n "$listing" ]]; then
-      [[ "$listing" == *"pref 49132"* && "$listing" == *"Redirect to device ifbqosdl0"* ]] ||
-        { echo "REFUSE: foreign ingress filter"; return 2; }
-      # Require exactly one owned filter (displayed twice in tc summary).
-      [[ "$(grep -c 'action order' <<< "$listing")" == 1 ]] ||
-        { echo "REFUSE: multiple ingress filters"; return 2; }
-      tc filter del dev "$WAN" ingress pref "$PREF"
-      [[ -z "$(filters)" ]] || { echo "REFUSE: remaining filters"; return 2; }
-    fi
-    tc qdisc del dev "$WAN" clsact
-  elif has_wan && [[ -n "$(filters)" ]]; then
-    echo "REFUSE: unexpected ingress state"; return 2
-  fi
-  if has_ifb; then
-    tc qdisc show dev "$IFB" | grep -q 'cake.*43Mbit' ||
-      { echo "REFUSE: foreign IFB"; return 2; }
-    ip link del "$IFB"
-  fi
+  # Manual removal must never infer ownership from IFB name or CAKE rate.
+  # Reuse the complete active-path fingerprint and refuse partial/orphaned
+  # state. A future recovery actuator must use authenticated ownership data.
+  owned || { echo "REFUSE: complete live QoS ownership not verified"; return 2; }
+  local listing
+  listing="$(filters)"
+  [[ "$(grep -c 'action order' <<< "$listing")" == 1 ]] ||
+    { echo "REFUSE: multiple ingress filters"; return 2; }
+  tc filter del dev "$WAN" ingress pref "$PREF"
+  [[ -z "$(filters)" ]] || { echo "REFUSE: remaining filters"; return 2; }
+  tc qdisc del dev "$WAN" clsact
+  ip link del "$IFB"
 }
 case "${1:-}" in
   preflight)
