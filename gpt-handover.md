@@ -1,3 +1,10 @@
+### 1 November 2026 — Live recovery proof and deploy verification correction
+
+- Approval-gated recovery deployment on monitor-01 installed three managed files and reloaded systemd, but failed the final journal-based assertion; this did not imply a failed deployment.
+- Subsequent operator read-only diagnostics showed upstream HTTP 200, Docker relay running, reconciler systemd Result=success, automatic `RELAY_RECONCILIATION=RECOVERED` at 19:35:45, and Prometheus `up{job="router-node-exporter"}=1`.
+- Corrected deployment playbook to inspect direct reconciliation stdout (HEALTHY or RECOVERED) and require live Prometheus up=1 instead of searching an arbitrary journal tail. This correction is committed on monitoring branch but **not yet validated/deployed**.
+- A controlled future reboot/restart regression proof remains pending; do not claim reboot persistence proven. No QoS or router configuration changes were made.
+
 ### 1 November 2026 — Router metrics stale Docker socket mount recovery (staged; not deployed)
 
 - After monitoring disappeared, router Node Exporter and SSH tunnel (monitor-01 localhost:19100 HTTP 200) remained healthy. Host Unix socket existed, but Docker relay container showed an empty bind-mounted /run/router-metrics-relay; container socat logged ENOENT. Manual Docker relay recreation restored socket visibility, reconciler HEALTHY, and user confirmed Grafana data returned.
