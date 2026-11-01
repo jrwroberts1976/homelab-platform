@@ -1,3 +1,10 @@
+### 1 November 2026 — admin-01 Alloy heartbeat repair VERIFIED
+
+- Operator applied scoped Ansible repair successfully (ok=11, changed=3, failed=0). Only heartbeat timer restarted and existing oneshot service emitted marker; Alloy/router untouched.
+- Loki confirmed two `HOMELAB_ALLOY_HEARTBEAT host=admin-01` records at 06:49:10 and 06:54:21 GMT, demonstrating a naturally recurring timer activation.
+- Prometheus: `homelab_loki_heartbeat_present{source_host="admin-01"}=1`, `homelab_loki_heartbeat_query_success=1`, age=301.154 seconds at sample time. Root cause resolved; Alertmanager resolution message not independently checked.
+- Follow up: stale `docker-01` in monitoring heartbeat collector `HOSTS` list, and safe split of large draft router PR #267 before merging to main.
+
 # GPT Handover — Homelab Platform
 
 ### 1 November 2026 — admin-01 Alloy heartbeat timer repair staged (NOT DEPLOYED)
