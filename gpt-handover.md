@@ -1,3 +1,11 @@
+### 1 November 2026 — Issue #276 inbound/download CAKE QoS: PPPoE reconnect and reboot PASS
+
+- Existing working `router-01` download QoS script (`/usr/local/sbin/router-qos-download-basic`) and PPPoE `ip-up.d` hook were captured byte-for-byte into `IaC/ansible/files/router-qos-download-basic` and `router-qos-download-ip-up`. Minimal Ansible deployment `playbooks/router-01-qos-download-persist.yml` committed to `main` as `9c0480c6`; syntax validation and live idempotency test passed (ok=4, changed=0, failed=0). No replacement IFB or new QoS framework.
+- Controlled `systemctl restart router-pppoe.service` at 21:27 UTC temporarily removed `ppp0` and default route as expected. On reconnection at 21:27:44, `router-pppoe` active, `ppp0` and default route restored, upload CAKE 13Mbit on `eth1`, download CAKE 43Mbit on `ifbqosdl0`, `ppp0` ingress filter pref 49132 redirecting to IFB; fresh redirect counters 8,656 packets / 10,017,752 bytes. **PPPoE reconnect persistence PASS**.
+- Controlled Ansible `reboot` completed successfully (`rebooted=true`, `elapsed=29`). Post-reboot read-only check: `router-pppoe` active, `default dev ppp0 scope link`, CAKE 13Mbit on `eth1`, CAKE 43Mbit on `ifbqosdl0`, ingress pref 49132 redirect with fresh counter 2,467 packets / 1,870,175 bytes. **Router reboot persistence PASS**.
+- No router architecture redesign, interruption beyond approved tests, or production configuration change to shaping rates. Do not revisit experimental Phase 5 download QoS unless new evidence establishes a fault. Issue #276 can be closed as completed. Other router stories remain #273 (web filtering/usage), #274 (Suricata inline IPS), #275 (WireGuard).
+
+---
 ## Router outstanding work — agreed plan (1 November 2026)
 
 **KISS / scope control:** Work sequentially, using the existing Raspberry Pi router and services. Start with a read-only state audit; make the smallest necessary change using Ansible/IaC; test it; update `gpt-handover.md` and `docs/architecture/CURRENT-STATE.md` when operational state changes; merge completed work into `main`. Avoid unnecessary branches, redesigns, speculative frameworks, and risky cutovers. The estimates below are *hands-on effort*, not guaranteed completion dates. Do not start the next item until the current one is validated.
