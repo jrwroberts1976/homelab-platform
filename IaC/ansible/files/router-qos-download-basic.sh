@@ -25,18 +25,11 @@ clean_wan() {
   [[ -z "$(filters)" ]] && ! tc qdisc show dev "$WAN" | grep -Eq 'clsact|ingress'
 }
 remove_owned() {
-  # Manual removal must never infer ownership from IFB name or CAKE rate.
-  # Reuse the complete active-path fingerprint and refuse partial/orphaned
-  # state. A future recovery actuator must use authenticated ownership data.
-  owned || { echo "REFUSE: complete live QoS ownership not verified"; return 2; }
-  local listing
-  listing="$(filters)"
-  [[ "$(grep -c 'action order' <<< "$listing")" == 1 ]] ||
-    { echo "REFUSE: multiple ingress filters"; return 2; }
-  tc filter del dev "$WAN" ingress pref "$PREF"
-  [[ -z "$(filters)" ]] || { echo "REFUSE: remaining filters"; return 2; }
-  tc qdisc del dev "$WAN" clsact
-  ip link del "$IFB"
+  # No standalone destructive teardown until the owner record and kernel
+  # interface token are verified by an approved cutover transaction.
+  # A matching CAKE rate and ingress redirect are not proof of ownership.
+  echo "REFUSE: standalone removal disabled; use verified cutover transaction" >&2
+  return 2
 }
 case "${1:-}" in
   preflight)
