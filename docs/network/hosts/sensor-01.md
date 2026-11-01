@@ -126,7 +126,7 @@ sensor-01 is VM201 on Proxmox, managed by Ansible as a Suricata and Zeek passive
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-01T04:08:19+00:00`
+- Last assessed: `2026-11-01T05:10:58+00:00`
 - Pending updates: **31**
 - Security updates pending: **18**
 - Reboot required: **No**
