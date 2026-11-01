@@ -44,14 +44,6 @@
           - "import ast,pathlib; d=pathlib.Path('/usr/local/libexec/router-qos-download'); [ast.parse(p.read_text()) for p in d.glob('*.py')]"
       changed_when: false
 
-    - name: Install basic QoS controller
-      ansible.builtin.copy:
-        src: ../files/router-qos-download-basic.sh
-        dest: /usr/local/sbin/router-qos-download-basic
-        owner: root
-        group: root
-        mode: '0750'
-
     - name: Require second explicit approval for live activation
       ansible.builtin.assert:
         that:
@@ -60,6 +52,14 @@
           Files staged, but live activation is intentionally blocked.
           Existing IFB is legacy/unmarked; do not activate until a
           separately approved adoption-free transition plan exists.
+
+    - name: Install basic QoS controller
+      ansible.builtin.copy:
+        src: ../files/router-qos-download-basic.sh
+        dest: /usr/local/sbin/router-qos-download-basic
+        owner: root
+        group: root
+        mode: '0750'
 
     - name: Apply idempotent QoS to the existing PPP connection
       ansible.builtin.command:
