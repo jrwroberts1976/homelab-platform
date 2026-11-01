@@ -1,3 +1,9 @@
+### 1 November 2026 — Dormant router QoS rollback timer staged successfully
+
+- Operator executed `router-01-qos-download-rollback-timer-stage.yml` following successful Ansible syntax check: **13 OK, 3 changed, 0 failed, 0 unreachable** on `router-01`.
+- Private cutover helper scripts and systemd expiry service/timer definitions now installed; script syntax verified. A pre-existing cutover marker was absent; timer verified disabled and staging reports it stopped/inactive. **No expiry action executed, no timer armed, no controller/hook replacement and no network/QoS mutation.**
+- Remaining blockers: independently test timer expiry and cancellation semantics; prepare an operator-approved legacy unmarked IFB transition with kernel-state recovery (file-only rollback insufficient); verify complete reconnection/reboot resilience before calling QoS finished. Do not activate or create the cutover marker casually.
+
 ### 1 November 2026 — Timed rollback units staged in IaC, not deployed
 
 - PR #271 adds ten-minute `router-qos-download-rollback-expiry.timer`, one-shot service and conditional expiry script plus `router-01-qos-download-rollback-timer-stage.yml`. The timer requires explicit separate arming; staging playbook leaves it stopped/disabled and refuses an existing cutover marker.
