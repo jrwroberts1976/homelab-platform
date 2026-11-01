@@ -1,3 +1,9 @@
+### 1 November 2026 — Production router QoS monitoring isolated for review
+
+- Extracted nine observability-only files from experimental router PR #267 into independent `feature/router-qos-production-monitoring-20261101` from current `main`: Grafana dashboard, QoS tc read-only collector, node-exporter textfile override, collector systemd service/timer, and four preflight/deployment/discovery playbooks.
+- Intended to capture already-running upload 13 Mbps (`eth1`) and download 43 Mbps (`ifbqosdl0`) CAKE metrics and dashboard in IaC. No live changes performed by Git branch creation. Deployment playbook can restart **node-exporter** when an override changes; it does not change CAKE/PPPoE. Do not redeploy blindly; compare live installed files to source first.
+- Router Phase 5 download-shaping experiments remain isolated in draft PR #267. Validate Python/JSON, Ansible syntax, CI and configuration against installed state before merging this production monitoring PR.
+
 ### 1 November 2026 — Canonical estate inventory split (PR pending)
 
 - Prepared standalone documentation-only change from `main`: canonical `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md` now identify active `router-01` at `192.168.2.1` as the PPPoE gateway, retire old `docker-01` host identity and retired ASUS routing identity, retain ASUS AiMesh access point assets. Changes reflect operator-verified live router state; no devices touched. <!-- historical -->

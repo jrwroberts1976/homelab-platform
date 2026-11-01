@@ -1,0 +1,48 @@
+---
+- name: Provision standalone Router QoS Grafana dashboard
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars:
+    dashboard_dest: /opt/monitoring/grafana/provisioning/dashboards/production/homelab-router-qos.json
+  tasks:
+    - name: Require monitor-01 identity and explicit approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - router_qos_dashboard_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Verify expected production dashboards directory
+      ansible.builtin.stat:
+        path: /opt/monitoring/grafana/provisioning/dashboards/production
+      register: dashboard_directory
+
+    - name: Refuse unexpected provisioning path
+      ansible.builtin.assert:
+        that:
+          - dashboard_directory.stat.isdir | default(false)
+
+    - name: Confirm Grafana healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+    - name: Install QoS Grafana dashboard
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/dashboards/production/homelab-router-qos.json
+        dest: "{{ dashboard_dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+        validate: 'python3 -m json.tool %s'
+
+    - name: Confirm Grafana healthy after provisioning
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
