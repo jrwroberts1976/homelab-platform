@@ -1,3 +1,8 @@
+### 1 November 2026 — Controller regression suite verified
+
+- Operator reports `python3 IaC/ansible/files/test_router_qos_controller_offline.py` result **20 tests in 51.728 seconds, OK**. This includes latest fail-closed manual removal regression.
+- Offline controller test gate passed; **no production cutover**. Continue with guarded kernel IFB transition and independently verified recovery before any PPP restart/reboot or branch merge.
+
 ### 1 November 2026 — Kernel rollback safety gate: disable standalone IFB removal
 
 - Review identified that candidate `router-qos-download-basic.sh remove` previously accepted a CAKE/ingress configuration fingerprint without verifying a kernel ownership token. This is insufficient to prove ownership of legacy `ifbqosdl0`.
