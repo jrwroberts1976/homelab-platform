@@ -64,10 +64,34 @@ def release_after_delete():
         os.close(fd)
 
 
+def verify_reattach():
+    """Check stored identity and CAKE on an existing IFB; never mutate it."""
+    from router_qos_download_ownership import decide
+    from router_qos_download_observe import observe
+    from router_qos_download_observe import _run, _read
+    # No delete is authorised; caller will attach only to a clean PPP ingress.
+    # Explicitly refuse unverified concurrent IFB users rather than assuming
+    # that clean PPP ingress means the IFB has no other users.
+    actual = observe(_run, _read)
+    record = load(OWNER)
+    from router_qos_download_ownership import BOOT_RE, TOKEN_RE
+    if (record["boot_id"] != actual["boot_id"]
+            or record["ifb_ifindex"] != actual["ifb_ifindex"]
+            or record["ifb_name"] != actual["ifb_name"]
+            or record["token"] != actual["kernel_alias_token"]
+            or actual["qdisc"] != "cake-43mbit-besteffort-flows"
+            or actual["ppp_ingress"] != "clean"
+            or actual["upload"] != "cake-13mbit"):
+        raise RuntimeError("REFUSE: stored and kernel identity or QoS mismatch")
+    print("PASS: owned IFB identity verified for non-destructive reattach")
+
+
 def main():
-    if len(sys.argv) != 2 or sys.argv[1] not in ("stamp", "release-after-delete") or __import__("os").geteuid() != 0:
+    if len(sys.argv) != 2 or sys.argv[1] not in ("stamp", "release-after-delete", "verify-reattach") or __import__("os").geteuid() != 0:
         raise SystemExit("REFUSE: root-only stamp/release operation")
-    if sys.argv[1] == "release-after-delete":
+    if sys.argv[1] == "verify-reattach":
+        verify_reattach()
+    elif sys.argv[1] == "release-after-delete":
         release_after_delete()
         print("PASS: removed IFB ownership record released")
     else:
