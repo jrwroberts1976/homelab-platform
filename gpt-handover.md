@@ -1,3 +1,8 @@
+### 1 November 2026 — Kernel recovery prerequisite gate committed
+
+- PR #271 adds `IaC/ansible/files/router-qos-download-kernel-recovery-gate.sh`: root/router-identity-checked, lock-protected, **verify-only** gate for a **missing** IFB with clean ppp0 ingress, unchanged eth1 upload CAKE and absent owner record. It cannot remove/adopt/recreate any interface and explicitly refuses modes other than `verify`.
+- **NOT deployed/tested yet.** It intentionally does not provide a kernel rollback. The current live IFB exists, so this prerequisite gate would refuse it; do not execute against production. Next implement and offline-test a cutover-specific recovery actor that can recreate baseline QoS without deleting unverified state, including interruption handling.
+
 ### 1 November 2026 — Read-only interface filter consumer scan
 
 - Operator enumerated ingress and egress filters on eth0, eth1, ifbqosdl0, lo, ppp0, wlan0. Only ppp0 ingress displayed a matchall pref 49132 / handle 0x1 mirred egress redirect to ifbqosdl0; other inspected default chains printed no filters. Ansible shell reported changed due to command module semantics; only read-only tc show commands ran.
