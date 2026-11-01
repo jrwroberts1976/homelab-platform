@@ -69,9 +69,12 @@ echo "$now" > "$COOLDOWN_FILE"
 echo "Recreating only $SERVICE to refresh Docker mount/network attachment"
 docker compose -p "$PROJECT" -f "$COMPOSE"     up -d --no-deps --force-recreate "$SERVICE"
 
-if healthy; then
-    echo "RELAY_RECONCILIATION=RECOVERED"
-else
-    echo "RELAY_RECONCILIATION=DEGRADED_AFTER_RECREATE" >&2
-    exit 1
-fi
+for attempt in 1 2 3 4 5; do
+    if healthy; then
+        echo "RELAY_RECONCILIATION=RECOVERED"
+        exit 0
+    fi
+    sleep 2
+done
+echo "RELAY_RECONCILIATION=DEGRADED_AFTER_RECREATE" >&2
+exit 1
