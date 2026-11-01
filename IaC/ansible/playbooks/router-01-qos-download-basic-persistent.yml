@@ -33,6 +33,7 @@
         - { src: router_qos_download_ownership.py, dest: router_qos_download_ownership.py }
         - { src: router_qos_download_owner_record.py, dest: router_qos_download_owner_record.py }
         - { src: router_qos_download_owner_stamp.py, dest: router_qos_download_owner_stamp.py }
+        - { src: router_qos_download_observe.py, dest: router_qos_download_observe.py }
         - { src: router_qos_download_stamp_cli.py, dest: stamp.py }
 
     - name: Syntax-check installed Python helper modules
