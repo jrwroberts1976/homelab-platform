@@ -1,3 +1,8 @@
+### 1 November 2026 — Interrupted kernel recovery regression tests passed
+
+- Operator ran updated `test_router_qos_download_kernel_recover_faults.py`: **6 tests OK in 0.388s**, including exclusive journal preventing a second run following simulated failure. The execution was offline/mocked; no live kernel recovery or cutover occurred.
+- Kernel restoration of partially failed migration remains unimplemented; file-only timer still stopped/disabled. Preserve the existing 13Mbit upload/43Mbit download live QoS and require independently verified recovery before cutover.
+
 ### 1 November 2026 — Fail-closed recovery progress journal (committed; untested)
 
 - Create-only kernel recovery actor now creates an exclusive root-only `/run/router-qos-download-kernel-recovery.progress` journal **before kernel mutation** and records stages. An existing journal blocks reentry; interrupted/partial runs cannot silently retry or claim a clean environment. Journal remains on success for explicit reconciliation; no unattended removal.
