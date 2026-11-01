@@ -20,6 +20,11 @@ cmd = pathlib.Path(sys.argv[0]).name
 args = sys.argv[1:]
 call = " ".join([cmd] + args)
 state["calls"].append(call)
+# A rejected kernel operation must not first mutate the mock kernel state.
+# Earlier tests accidentally mutated then returned failure.
+if state.get("fail") == call:
+    path.write_text(json.dumps(state))
+    sys.exit(1)
 rc, out = 0, ""
 if cmd == "hostname":
     out = "raspberrypi\n"
@@ -72,8 +77,6 @@ elif cmd == "tc":
         raise RuntimeError("unexpected tc args: " + repr(args))
 else:
     raise RuntimeError("unexpected executable: " + cmd)
-if state.get("fail") == call:
-    rc = 1
 path.write_text(json.dumps(state))
 sys.stdout.write(out)
 sys.exit(rc)
