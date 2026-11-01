@@ -1,3 +1,10 @@
+### 1 November 2026 — Router Suricata ARM64 passive IDS staging (source only)
+
+- On router-01, operator verified four ARM64 CPU cores, 3.5 GiB available memory, tcpdump available and both inbound/outbound TCP and UDP visibility on ppp0 with a 30-packet sample (zero drops in sample). Router services router-pppoe, dnsmasq, unbound, nftables, router-qos-upload active; CAKE eth1 13Mbit and ifbqosdl0 43Mbit unchanged.
+- Existing sensor-01 IaC is not directly applicable: AMD64 kernel and sensor-capture-nic.service dependencies. Router pilot must remain separate from network_sensor/network_sensor_config, with no Zeek or NFQUEUE.
+- Branch `feature/router-suricata-passive-stage-20261101` adds read-only `router-01-suricata-preflight.yml` and explicit approval-gated `router-01-suricata-stage.yml`. The latter installs only Debian Suricata and suricata-update packages using policy_rc_d=101, keeps Suricata stopped/disabled and verifies critical router services. This does not enable packet capture or IPS.
+- **Source only: not syntax-tested or deployed.** Next: controller syntax-check and read-only preflight; separately review package effects before explicit approval for package staging. Later work: limited passive ppp0 configuration, resource/performance envelope, logging, rollback and monitoring. Do not change QoS/PPPoE or deploy the sensor-01 role to router-01.
+
 ### 1 November 2026 — Issue #276 inbound/download CAKE QoS: PPPoE reconnect and reboot PASS
 
 - Existing working `router-01` download QoS script (`/usr/local/sbin/router-qos-download-basic`) and PPPoE `ip-up.d` hook were captured byte-for-byte into `IaC/ansible/files/router-qos-download-basic` and `router-qos-download-ip-up`. Minimal Ansible deployment `playbooks/router-01-qos-download-persist.yml` committed to `main` as `9c0480c6`; syntax validation and live idempotency test passed (ok=4, changed=0, failed=0). No replacement IFB or new QoS framework.
