@@ -14,7 +14,9 @@ from router_qos_download_owner_record import write_new, load
 def stamp_new_ifb(owner_path, boot_id, get_ifindex, get_alias, set_alias, ifb_name="ifbqosdl0"):
     # Caller must have created IFB in this same critical section.
     # A pre-existing record may indicate an interrupted install: fail closed.
-    if ifb_name not in ("ifbqosdl0", "ifbqosdl1"):\n        raise ValueError("unapproved IFB name")\n    owner_path = Path(owner_path)
+    if ifb_name not in ("ifbqosdl0", "ifbqosdl1"):
+        raise ValueError("unapproved IFB name")
+    owner_path = Path(owner_path)
     if owner_path.exists() or owner_path.is_symlink():
         raise FileExistsError("existing or ambiguous ownership record")
     index = get_ifindex()
