@@ -1,0 +1,103 @@
+---
+# Non-disruptive stage only: never change the live controller, PPP hook or tc.
+- name: Stage router download QoS candidate without activation
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    qos_stage_root: /usr/local/libexec/router-qos-download-candidate
+    qos_stage_sources:
+      - router-qos-download-basic.sh
+      - router_qos_download_ownership.py
+      - router_qos_download_owner_record.py
+      - router_qos_download_owner_stamp.py
+      - router_qos_download_observe.py
+      - router_qos_download_stamp_cli.py
+  tasks:
+    - name: Assert exact router identity and explicit staging approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - router_qos_stage_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Record live QoS and hook hashes before staging
+      ansible.builtin.shell: |
+        set -eu
+        tc qdisc show dev eth1
+        tc qdisc show dev ifbqosdl0
+        tc qdisc show dev ppp0
+        tc filter show dev ppp0 ingress
+        sha256sum /usr/local/sbin/router-qos-download-basic /etc/ppp/ip-up.d/router-qos-download
+      args:
+        executable: /bin/bash
+      register: qos_before
+      changed_when: false
+
+    - name: Assert currently active shaping before stage
+      ansible.builtin.assert:
+        that:
+          - "'bandwidth 13Mbit' in qos_before.stdout"
+          - "'bandwidth 43Mbit' in qos_before.stdout"
+          - "'Redirect to device ifbqosdl0' in qos_before.stdout"
+
+    - name: Create isolated candidate directory
+      ansible.builtin.file:
+        path: "{{ qos_stage_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Stage candidate files without touching live paths
+      ansible.builtin.copy:
+        src: "../files/{{ item }}"
+        dest: "{{ qos_stage_root }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0640'
+      loop: "{{ qos_stage_sources }}"
+
+    - name: Validate candidate Bash syntax without execution
+      ansible.builtin.command:
+        argv: [bash, -n, "{{ qos_stage_root }}/router-qos-download-basic.sh"]
+      changed_when: false
+
+    - name: Parse Python candidates without importing or writing pycache
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -B
+          - -c
+          - "import ast,pathlib,sys; [ast.parse(pathlib.Path(p).read_text()) for p in sys.argv[1:]]"
+          - "{{ qos_stage_root }}/router_qos_download_ownership.py"
+          - "{{ qos_stage_root }}/router_qos_download_owner_record.py"
+          - "{{ qos_stage_root }}/router_qos_download_owner_stamp.py"
+          - "{{ qos_stage_root }}/router_qos_download_observe.py"
+          - "{{ qos_stage_root }}/router_qos_download_stamp_cli.py"
+      changed_when: false
+
+    - name: Record live QoS and hook hashes after staging
+      ansible.builtin.shell: |
+        set -eu
+        tc qdisc show dev eth1
+        tc qdisc show dev ifbqosdl0
+        tc qdisc show dev ppp0
+        tc filter show dev ppp0 ingress
+        sha256sum /usr/local/sbin/router-qos-download-basic /etc/ppp/ip-up.d/router-qos-download
+      args:
+        executable: /bin/bash
+      register: qos_after
+      changed_when: false
+
+    - name: Refuse unexpected live QoS or hook changes
+      ansible.builtin.assert:
+        that:
+          - qos_before.stdout == qos_after.stdout
+        fail_msg: Active QoS/controller/hook changed during staging; investigate before proceeding.
+
+    - name: Confirm isolated staging result
+      ansible.builtin.debug:
+        msg: "Candidate staged and syntax-checked; no live controller, hook, IFB, PPP or qdisc modifications were requested."
