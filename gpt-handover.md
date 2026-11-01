@@ -1,3 +1,9 @@
+### 1 November 2026 — Live activation fail-closed before legacy IFB transaction
+
+- PR #271 updated `router-01-qos-download-basic-persistent.yml` so **even with both activation approvals**, the playbook now refuses to replace the live QoS controller while `ifbqosdl0` exists or any PPP `clsact`/ingress filter is present. This addresses silent acceptance of the unmarked legacy IFB, which would later fail reconnect ownership checks.
+- This is **not** a migration implementation. The currently working legacy IFB (known ifindex 24) deliberately blocks that playbook. No live router commands executed. New playbook syntax check is pending on admin-01.
+- Next required engineering: an independently rollback-capable, approval-gated cutover transaction that records before/after exact kernel identity, rejects foreign users, performs only scoped changes, and verifies both immediate QoS and PPP reconnect/reboot. The existing file-only timer is insufficient.
+
 ### 1 November 2026 — Controller regression suite verified
 
 - Operator reports `python3 IaC/ansible/files/test_router_qos_controller_offline.py` result **20 tests in 51.728 seconds, OK**. This includes latest fail-closed manual removal regression.
