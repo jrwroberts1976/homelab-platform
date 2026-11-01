@@ -55,7 +55,7 @@ tc() {
   case "$*" in
     "qdisc show dev eth1") echo "qdisc cake root bandwidth 13Mbit ptm overhead 30";;
     "filter show dev ppp0 ingress")
-      if [[ "${AFTER_FILTER:-0}" == 1 ]]; then
+      if [[ -f "$CALLS" ]] && grep -qx "tc filter add" "$CALLS"; then
         echo "Redirect to device ifbqosdl0"
       fi;;
     "qdisc show dev ppp0")
@@ -108,7 +108,7 @@ flock() { :; }
         self.assertEqual(self.recorded(), [])
 
     def test_successful_mocked_create_only_path(self):
-        result = self.run_actor(AFTER_FILTER="1")
+        result = self.run_actor()
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
         self.assertEqual(self.recorded(), STAGES)
 
