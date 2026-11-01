@@ -30,6 +30,8 @@ if cmd == "hostname":
     out = "raspberrypi\n"
 elif cmd in ("flock", "modprobe"):
     pass
+elif cmd == "qos-stamp":
+    state["stamped"] = True
 elif cmd == "ip":
     if args[:3] == ["link", "show", "dev"]:
         rc = 0 if state.get(args[3], False) else 1
@@ -93,7 +95,7 @@ class ControllerTests(unittest.TestCase):
         stub = mockdir / "mock"
         stub.write_text(MOCK)
         stub.chmod(0o755)
-        for cmd in ("ip", "tc", "modprobe", "hostname", "flock"):
+        for cmd in ("ip", "tc", "modprobe", "hostname", "flock", "qos-stamp"):
             (mockdir / cmd).symlink_to(stub)
         source = SOURCE.read_text()
         identity = '[[ "$(hostname -s)" == "raspberrypi" && $EUID -eq 0 ]] || exit 2'
@@ -102,6 +104,9 @@ class ControllerTests(unittest.TestCase):
         self.assertIn(lock, source)
         source = source.replace(identity, '[[ "$(hostname -s)" == "raspberrypi" ]] || exit 2')
         source = source.replace(lock, f'exec 9>{root}/lock')
+        source = source.replace('/usr/local/libexec/router-qos-download/stamp.py', str(stub))
+        source = source.replace('/run/router-qos-download-basic.owner.json', str(root / 'owner.json'))
+        source = source.replace('python3 "$STAMP_HELPER" stamp', 'qos-stamp stamp')
         self.script = root / "controller.sh"
         self.script.write_text(source)
         self.script.chmod(0o755)
@@ -201,6 +206,23 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(state["ifbqosdl0"])
         self.assertEqual(state["filter"], "foreign")
         self.assertFalse(any(" del " in c for c in state["calls"]))
+
+    def test_stamp_failure_rolls_back_new_ifb(self):
+        self.save(dict(self.initial, fail="qos-stamp stamp"))
+        result = self.ensure()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(self.load()["ifbqosdl0"])
+        self.assertFalse(self.load().get("stamped", False))
+
+    def test_existing_record_refuses_before_network_mutation(self):
+        (Path(self.tmp.name) / "owner.json").write_text("old")
+        result = self.ensure()
+        self.assertNotEqual(result.returncode, 0)
+        self.assertFalse(any(" add " in c or " del " in c for c in self.load()["calls"]))
+
+    def test_successful_install_stamps(self):
+        self.assertEqual(self.ensure().returncode, 0)
+        self.assertTrue(self.load().get("stamped", False))
 
     def test_missing_upload_refuses(self):
         self.save(dict(self.initial, upload=False))
