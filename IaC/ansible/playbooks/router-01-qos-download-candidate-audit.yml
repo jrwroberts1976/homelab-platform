@@ -1,0 +1,94 @@
+---
+# Read-only, fail-closed audit of staged candidate and live legacy download QoS.
+# This playbook never calls ip/tc mutations, pppd restart or controller ensure.
+- name: Inspect staged router QoS candidate and legacy IFB transition readiness
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    qos_stage_root: /usr/local/libexec/router-qos-download-candidate
+    qos_candidate_files:
+      - router-qos-download-basic.sh
+      - router_qos_download_ownership.py
+      - router_qos_download_owner_record.py
+      - router_qos_download_owner_stamp.py
+      - router_qos_download_observe.py
+      - router_qos_download_stamp_cli.py
+  tasks:
+    - name: Verify router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+
+    - name: Compare each staged file against exact local IaC source
+      ansible.builtin.stat:
+        path: "{{ qos_stage_root }}/{{ item }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop: "{{ qos_candidate_files }}"
+      register: candidate_remote
+      changed_when: false
+
+    - name: Calculate local IaC SHA256 for each candidate
+      ansible.builtin.stat:
+        path: "../files/{{ item }}"
+        checksum_algorithm: sha256
+      loop: "{{ qos_candidate_files }}"
+      register: candidate_local
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Refuse missing, symlinked or mismatched staged files
+      ansible.builtin.assert:
+        that:
+          - item.0.stat.exists | default(false)
+          - item.0.stat.isreg | default(false)
+          - not (item.0.stat.islnk | default(false))
+          - item.0.stat.checksum == item.1.stat.checksum
+        fail_msg: "Candidate differs from repository: {{ item.0.item }}"
+      loop: "{{ candidate_remote.results | zip(candidate_local.results) | list }}"
+
+    - name: Read live router configuration and legacy IFB identity without mutations
+      ansible.builtin.shell: |
+        set -eu
+        echo '=== LIVE CONTROLLER AND HOOK HASHES ==='
+        sha256sum /usr/local/sbin/router-qos-download-basic /etc/ppp/ip-up.d/router-qos-download
+        echo '=== UPLOAD ==='
+        tc qdisc show dev eth1
+        echo '=== DOWNLOAD ==='
+        tc qdisc show dev ifbqosdl0
+        echo '=== PPP FILTER ==='
+        tc filter show dev ppp0 ingress
+        echo '=== IFB ALIAS/INDEX ==='
+        ip -j -d link show dev ifbqosdl0
+        echo '=== OWNERSHIP RECORD ==='
+        if test -e /run/router-qos-download-basic.owner.json || test -L /run/router-qos-download-basic.owner.json; then
+          echo PRESENT
+        else
+          echo ABSENT
+        fi
+        echo '=== CRITICAL SERVICES ==='
+        systemctl is-active router-pppoe nftables dnsmasq unbound
+      args:
+        executable: /bin/bash
+      register: live_audit
+      changed_when: false
+
+    - name: Require expected active QoS and no prior ownership record
+      ansible.builtin.assert:
+        that:
+          - "'bandwidth 13Mbit' in live_audit.stdout"
+          - "'bandwidth 43Mbit' in live_audit.stdout"
+          - "'Redirect to device ifbqosdl0' in live_audit.stdout"
+          - "'=== OWNERSHIP RECORD ===\nABSENT' in live_audit.stdout"
+        fail_msg: "Live baseline differs; stop before designing the legacy cutover."
+
+    - name: Report read-only audit results
+      ansible.builtin.debug:
+        msg:
+          - "All {{ qos_candidate_files | length }} staged candidates match local repository SHA256."
+          - "{{ live_audit.stdout_lines }}"
+          - "No live cutover approved. Existing IFB is legacy/unmarked and must not be adopted or deleted automatically."
