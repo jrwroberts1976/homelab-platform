@@ -1,3 +1,8 @@
+### 1 November 2026 — Kernel create-only recovery actor tests verified
+
+- Operator ran `python3 IaC/ansible/files/test_router_qos_download_kernel_recover_missing.py`: **4 tests OK** in 0.025s. These are initial offline syntax/approval/negative safeguards, not full fault injection.
+- No production router changes. Next prove behavior after interrupted IFB creation, CAKE installation or PPP filter installation, with no deletion of ambiguous state. Cutover remains blocked.
+
 ### 1 November 2026 — Create-only kernel recovery actor added (NOT deployed)
 
 - PR #271 now has `IaC/ansible/files/router-qos-download-kernel-recover-missing.sh` with **explicit separate approval marker**, root/router guard, exclusive flock, clean-ingress/absent-IFB/absent-owner preconditions, unchanged upload gate and only creation of a missing IFB, 43Mbit CAKE, clsact, ppp0 redirect. It **never deletes or adopts existing kernel objects**. On partial failure it fails closed and leaves partial state for inspection rather than risking foreign-resource deletion.
