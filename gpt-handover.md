@@ -1,3 +1,27 @@
+## Router outstanding work — agreed plan (1 November 2026)
+
+**KISS / scope control:** Work sequentially, using the existing Raspberry Pi router and services. Start with a read-only state audit; make the smallest necessary change using Ansible/IaC; test it; update `gpt-handover.md` and `docs/architecture/CURRENT-STATE.md` when operational state changes; merge completed work into `main`. Avoid unnecessary branches, redesigns, speculative frameworks, and risky cutovers. The estimates below are *hands-on effort*, not guaranteed completion dates. Do not start the next item until the current one is validated.
+
+| User priority | Outstanding project | Estimated effort | Acceptance goal |
+| --- | --- | --- | --- |
+| 1 | Content filtering (E2Guardian or the simplest suitable approach) | 3–5 h | Category/web policy works without breaking ordinary browsing; note HTTPS limitations |
+| 2 | Suricata **inline IPS** via NFQUEUE/nftables | 6–10 h | Inspect and block on routed traffic after detection-mode proof, performance checks, fail-safe/bypass and rollback; reuse Zeek on sensor-01 for passive visibility |
+| 3 | WireGuard VPN server | 2–4 h | Secure remote connection and permitted LAN access; reconnect and firewall rules tested |
+| 4 | Inbound/download QoS | 2–4 h, potentially longer if existing hook is defective | Existing 43 Mbit/s download shaping survives PPPoE reconnect and router reboot; preserve working legacy IFB wherever possible; no parallel IFB unless truly necessary |
+| 5 | Fix Pi-hole integration | 1–3 h | DNS filtering and resolver paths work reliably for LAN clients |
+
+**Indicative total:** 14–26 hours of hands-on work (~20 hours midpoint). Estimate may increase for Suricata performance, TLS content filtering limitations, real-world testing or unexpected existing configuration faults.
+
+**Dependency exception:** Although Pi-hole is numbered fifth by the user, fix broken DNS/Pi-hole *first* if it prevents content filtering or normal internet access. Suggested sessions: Day 1 Pi-hole diagnosis/content filtering; Day 2 finish filtering and WireGuard; Day 3 Suricata detection and benchmark; Day 4 gated inline IPS; Day 5 inbound QoS persistence. This is an order of work, **not a deadline**.
+
+**Already verified / do not repeat:** 13 Mbit/s upload CAKE on eth1 with PTM overhead 30 survived router reboot; PPPoE default route ppp0 and router-pppoe, router-qos-upload, dnsmasq, unbound and nftables were all active afterward. Download 43 Mbit/s CAKE was working before reboot; post-reboot persistence remains an **unverified separate task**, not a blocker to the upload-only objective.
+
+**GitHub status and deferred work:** Experimental inbound QoS PRs #267 and #271 and WAN monitoring PR #262 were closed without merging; their branch heads were archived as Git tags. Five remote branch deletions were requested but their successful completion is not confirmed in this conversation; verify before saying there is only one remote branch. Preserve archive tags and do **not** merge unfinished QoS experiments into main.
+
+**Next actionable item:** read-only check of DNS/Pi-hole and current content filtering, then implement the smallest viable content filtering step (or repair Pi-hole first if DNS is broken).
+
+---
+
 ### 1 November 2026 — Router metrics Docker relay controlled recovery PASS
 
 - Operator ran `IaC/ansible/playbooks/router-metrics-recovery-test.yml` on monitor-01 with explicit `recovery_test_approved=true`. Preflight verified upstream and Prometheus healthy and 300-second cooldown expired.
