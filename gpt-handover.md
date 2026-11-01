@@ -1,3 +1,9 @@
+### 1 November 2026 — Updated read-only legacy IFB kernel preflight passed
+
+- Operator executed revised preflight syntax check and live read-only inspection: **6 OK, 0 changed, 0 failed**.
+- Current IFB `ifbqosdl0` ifindex **27** (ephemeral), unmarked; download CAKE JSON bandwidth **5,375,000 bytes/s (=43Mbit/s)**, handle 800a:, ingress has one matchall redirect pref **49132**, handle 1, to ifbqosdl0; upload CAKE JSON bandwidth **1,625,000 bytes/s (=13Mbit/s)**, PTM overhead **30**, handle 8001:.
+- JSON tc filter output contains a summary entry and detailed entry for same pref, **not evidence of two separate filters**. No kernel state changed. No ownership verified, no kernel-state rollback implemented, **HOLD cutover**.
+
 ### 1 November 2026 — Live kernel QoS identity drift observed, no cutover
 
 - Read-only legacy kernel preflight failed at **hardcoded IFB ifindex=24**; zero changes. Operator subsequently observed `ifbqosdl0` **ifindex=27**, no alias shown, 43Mbit CAKE with packet counters increasing; PPP ingress pref 49132 redirects to `ifbqosdl0`; eth1 upload CAKE remains 13Mbit PTM overhead 30. Router last boot: 2026-10-31 06:12:01.
