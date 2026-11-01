@@ -1,3 +1,8 @@
+### 1 November 2026 — Kernel recovery policy regression verified
+
+- Operator ran `python3 IaC/ansible/files/test_router_qos_download_kernel_recovery_policy.py`: **9 tests in 0.003s, OK**. The tested module remains pure decision logic, **not a kernel repair actuator**.
+- No live router modifications. Continue on PR #271; cutover blocked until kernel recovery implementation and its interruption handling are tested.
+
 ### 1 November 2026 — Kernel recovery decision policy added (offline, not an actuator)
 
 - PR #271 now has pure `router_qos_download_kernel_recovery_policy.py` with nine regression tests in `test_router_qos_download_kernel_recovery_policy.py`, covering missing IFB, legacy unmarked IFB refusal, foreign filters, dangling redirect, stale ownership, PPP/upload changes, and preserving verified working QoS. **Tests not yet operator-run.**
