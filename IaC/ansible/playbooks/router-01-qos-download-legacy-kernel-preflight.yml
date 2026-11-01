@@ -41,7 +41,7 @@
         that:
           - legacy_ifb_link | length == 1
           - legacy_ifb_link[0].ifname == 'ifbqosdl0'
-          - legacy_ifb_link[0].ifindex == 24
+          - legacy_ifb_link[0].ifindex | int > 0
           - legacy_ifb_link[0].ifalias | default('') == ''
           - legacy_ppp_link | length == 1
           - legacy_ppp_link[0].ifname == 'ppp0'
@@ -53,7 +53,7 @@
     - name: Display evidence only
       ansible.builtin.debug:
         msg:
-          - "Legacy IFB ifindex: {{ legacy_ifb_link[0].ifindex }}"
+          - "Observed legacy IFB ifindex (ephemeral, NOT ownership proof): {{ legacy_ifb_link[0].ifindex }}"
           - "Download qdiscs: {{ legacy_ifb_qdisc }}"
           - "Ingress filters: {{ legacy_ingress_filter }}"
           - "Upload qdiscs: {{ legacy_upload_qdisc }}"
