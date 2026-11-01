@@ -31,6 +31,75 @@
           - before_scrape.json.data.result | default([]) | length == 1
           - before_scrape.json.data.result[0].value[1] == '1'
 
+    - name: Read recovery cooldown timestamp
+      ansible.builtin.command:
+        argv: [cat, /run/router-metrics-reconcile/last-recreate]
+      register: last_recreate
+      failed_when: false
+      changed_when: false
+
+    - name: Read current timestamp
+      ansible.builtin.command:
+        argv: [date, +%s]
+      register: current_epoch
+      changed_when: false
+
+    - name: Require expired cooldown before intentional interruption
+      ansible.builtin.assert:
+        that:
+          - >-
+            last_recreate.rc != 0
+            or (
+              last_recreate.stdout is match('^[0-9]+
+      block:
+        - name: Stop only Docker metrics relay
+          ansible.builtin.command:
+            argv: [docker, stop, router-metrics-relay]
+          changed_when: true
+
+        - name: Invoke relay reconciliation immediately
+          ansible.builtin.command:
+            argv: [timeout, '60', /usr/local/sbin/router-metrics-relay-reconcile]
+          register: recovery_output
+          changed_when: "'RELAY_RECONCILIATION=RECOVERED' in recovery_output.stdout"
+
+        - name: Show direct reconciliation result
+          ansible.builtin.debug:
+            var: recovery_output.stdout
+
+        - name: Require recovered or concurrently healthy relay
+          ansible.builtin.assert:
+            that:
+              - >-
+                'RELAY_RECONCILIATION=RECOVERED' in recovery_output.stdout
+                or 'RELAY_RECONCILIATION=HEALTHY' in recovery_output.stdout
+
+      always:
+        - name: Attempt Docker-only restoration if test did not recover
+          ansible.builtin.command:
+            argv: [timeout, '60', docker, compose, -p, router-metrics-relay, -f, /opt/homelab-router-metrics-relay/docker-compose.yml, up, -d, --no-deps, router-metrics-relay]
+          changed_when: false
+
+        - name: Check final router scrape in Prometheus
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22router-node-exporter%22%7D
+            return_content: true
+          register: router_query
+          until: >-
+            router_query.json.data.result | default([]) | length == 1
+            and router_query.json.data.result[0].value[1] == '1'
+          retries: 10
+          delay: 5
+          changed_when: false
+
+        - name: Report final recovery health
+          ansible.builtin.debug:
+            msg: "DOCKER_RELAY_RECOVERY_TEST_FINAL_SCRAPE=PASS"
+)
+              and (current_epoch.stdout | int - last_recreate.stdout | int) >= 300
+            )
+        fail_msg: "Recovery cooldown still active (300 seconds). No relay container has been stopped."
+
     - name: Recover relay even if the test fails
       block:
         - name: Stop only Docker metrics relay
