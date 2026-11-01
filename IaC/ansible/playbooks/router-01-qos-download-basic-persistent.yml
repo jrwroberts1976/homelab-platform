@@ -14,6 +14,36 @@
           - router_qos_basic_persistent_approved | default(false) | bool
           - not ansible_check_mode
 
+    - name: Create private QoS helper directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/router-qos-download
+        state: directory
+        owner: root
+        group: root
+        mode: '0750'
+
+    - name: Install ownership helper dependencies before controller
+      ansible.builtin.copy:
+        src: "../files/{{ item.src }}"
+        dest: "/usr/local/libexec/router-qos-download/{{ item.dest }}"
+        owner: root
+        group: root
+        mode: '0640'
+      loop:
+        - { src: router_qos_download_ownership.py, dest: router_qos_download_ownership.py }
+        - { src: router_qos_download_owner_record.py, dest: router_qos_download_owner_record.py }
+        - { src: router_qos_download_owner_stamp.py, dest: router_qos_download_owner_stamp.py }
+        - { src: router_qos_download_stamp_cli.py, dest: stamp.py }
+
+    - name: Syntax-check installed Python helper modules
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -B
+          - -c
+          - "import ast,pathlib; d=pathlib.Path('/usr/local/libexec/router-qos-download'); [ast.parse(p.read_text()) for p in d.glob('*.py')]"
+      changed_when: false
+
     - name: Install basic QoS controller
       ansible.builtin.copy:
         src: ../files/router-qos-download-basic.sh
@@ -21,6 +51,15 @@
         owner: root
         group: root
         mode: '0750'
+
+    - name: Require second explicit approval for live activation
+      ansible.builtin.assert:
+        that:
+          - router_qos_basic_activate_approved | default(false) | bool
+        fail_msg: >-
+          Files staged, but live activation is intentionally blocked.
+          Existing IFB is legacy/unmarked; do not activate until a
+          separately approved adoption-free transition plan exists.
 
     - name: Apply idempotent QoS to the existing PPP connection
       ansible.builtin.command:
