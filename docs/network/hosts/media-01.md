@@ -100,12 +100,12 @@ media-01 is a managed Raspberry Pi 5 running Debian GNU/Linux 13 (trixie), servi
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-10-31T23:43:17+00:00`
+- Last assessed: `2026-11-01T00:47:21+00:00`
 - Pending updates: **46**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-31T06:45:11+00:00`
+- Last APT transaction activity: `2026-11-01T00:02:59+00:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
