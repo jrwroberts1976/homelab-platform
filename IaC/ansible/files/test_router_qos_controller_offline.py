@@ -33,6 +33,9 @@ elif cmd in ("flock", "modprobe"):
 elif cmd == "qos-stamp":
     if args == ["stamp"]:
         state["stamped"] = True
+    elif args == ["verify-reattach"]:
+        if not state.get("verified_owner", False):
+            rc = 2
     elif args == ["release-after-delete"]:
         if state.get("ifbqosdl0", False):
             rc = 2
@@ -118,6 +121,8 @@ class ControllerTests(unittest.TestCase):
         source = source.replace('python3 "$STAMP_HELPER" stamp', 'qos-stamp stamp')
         source = source.replace('python3 "$STAMP_HELPER" release-after-delete',
                                 'qos-stamp release-after-delete')
+        source = source.replace('python3 "$STAMP_HELPER" verify-reattach',
+                                'qos-stamp verify-reattach')
         self.script = root / "controller.sh"
         self.script.write_text(source)
         self.script.chmod(0o755)
@@ -157,6 +162,37 @@ class ControllerTests(unittest.TestCase):
         state = self.load()
         self.assertTrue(state["ifbqosdl0"])
         self.assertFalse(any("link del" in call for call in state["calls"]))
+
+    def test_verified_orphan_reattaches_without_deletion(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True, verified_owner=True))
+        result = self.ensure()
+        self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        state = self.load()
+        self.assertEqual(state["filter"], "owned")
+        self.assertTrue(state["clsact"])
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertFalse(any("link del" in c for c in state["calls"]))
+
+    def test_unverified_orphan_remains_untouched(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True))
+        result = self.ensure()
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertFalse(state["clsact"])
+        self.assertEqual(state["filter"], "none")
+        self.assertFalse(any(" add " in c or " del " in c for c in state["calls"]))
+
+    def test_reconnect_filter_failure_preserves_ifb_and_cleans_clsact(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True,
+                       verified_owner=True,
+                       fail="tc filter add dev ppp0 ingress pref 49132 matchall action mirred egress redirect dev ifbqosdl0"))
+        result = self.ensure()
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertFalse(state["clsact"])
+        self.assertEqual(state["filter"], "none")
+        self.assertFalse(any("link del" in c for c in state["calls"]))
 
     def test_foreign_filter_preserved(self):
         self.save(dict(self.initial, filter="foreign", clsact=True))
