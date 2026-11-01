@@ -1,3 +1,8 @@
+### 1 November 2026 — Parallel IFB helper syntax failure fixed
+
+- Operator's first run of `test_router_qos_parallel_ifb_helpers.py` failed at import with `SyntaxError: unexpected character after line continuation character`: literal backslash-n sequences had been committed in `router_qos_download_owner_stamp.py` and `router_qos_download_observe.py`.
+- Both source files corrected in PR #271; **re-run and compile validation still pending**. No live deployment, cutover or router changes. Do not count the six parallel-helper tests as passing until operator verifies them.
+
 ### 1 November 2026 — Parallel IFB ownership helper refactor (not deployed)
 
 - PR #271 now permits only the explicit names `ifbqosdl0` (legacy/default) and `ifbqosdl1` (parallel candidate) in pure owner-record validation, owner stamping, read-only observer and ownership decision. Stamping/observation default remains `ifbqosdl0` for existing call sites; no live controller, hook, interface, timer or Ansible activation changed.
