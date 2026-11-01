@@ -42,7 +42,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-25T16:00:11+00:00`
+- Assessed: `2026-11-01T16:01:00+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f8:17:2d:65:b8:98`
 - Identity confidence: **low**
@@ -52,22 +52,24 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 ### Assessment summary
 
-Online host 192.168.2.74 is identified only by the hostname garden-room.jameshouse and DHCP hostname wlan0. No vendor, service, port, DNS, or OS evidence is available, so the device identity remains unresolved.
+Device identity is unresolved. The host is reported as wlan0, but no vendor, OS, service, DNS, or Nmap fingerprint evidence is available. A conflicting DHCP record also reports wlan0 at 192.168.2.74 while the current host IP is 192.168.2.104.
 
 ### Confirmed facts
 
-- The host is online at 192.168.2.74.
-- The inventory hostname is garden-room.jameshouse.
-- The router reports DHCP hostname wlan0 for this host.
+- The current host IP is 192.168.2.104.
 - The MAC address is f8:17:2d:65:b8:98.
-- Nmap completed only partially and reported no TCP or UDP ports or OS matches.
-- No authoritative OS, inventory OS, vendor, or kernel data is available.
-- No matching actionable Greenbone findings were reported for the current IP; this does not prove the host is vulnerability-free.
-- No sampled Loki entries or recent high-risk DNS policy matches were reported.
+- The inventory and Nmap hostname is wlan0.
+- The device is currently marked online.
+- Authoritative OS evidence is unavailable.
+- Nmap OS and port evidence is unavailable; the scan status is partial with os_evidence_missing.
+- No actionable Greenbone findings match the current IP.
+- No sampled Loki warning or error entries were reported.
+- A router DHCP record reports hostname wlan0 at 192.168.2.74.
 
 ### Inferences
 
-- The DHCP hostname wlan0 may reflect a wireless interface name, but it does not establish the device type or operating system.
+- The hostname wlan0 may represent a wireless-interface-style host name, but it does not establish the device type or operating system.
+- The differing IP addresses may reflect stale, historical, or conflicting DHCP/ inventory data and require review.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

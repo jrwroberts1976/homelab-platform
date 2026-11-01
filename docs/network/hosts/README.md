@@ -81,6 +81,7 @@ Validated on 5 October 2026, all **15 Ansible-managed Debian/Linux hosts** are e
 | 192.168.2.118 | `192.168.2.118` | `c8:91:43:bf:16:ed` | [Open](192-168-2-118.md) |
 | garden-room.jameshouse | `192.168.2.74` | `f8:17:2d:65:b8:98` | [Open](garden-room-jameshouse.md) |
 | 192.168.2.184 | `192.168.2.184` | `1c:30:08:9a:62:74` | [Open](192-168-2-184.md) |
+| iPhone | `192.168.2.135` | `be:ba:54:d7:ec:6f` | [Open](iphone-d7ec6f.md) |
 
 ## What to maintain
 
