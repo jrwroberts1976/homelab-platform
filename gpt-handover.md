@@ -1,3 +1,8 @@
+### 1 November 2026 — Parallel IFB helper tests passed
+
+- Operator reran `test_router_qos_parallel_ifb_helpers.py` after correction of Python escaped-newline syntax: **6 tests OK in 0.012s**.
+- Helpers accept explicitly approved candidate `ifbqosdl1` as well as legacy `ifbqosdl0`; no candidate controller or kernel redirect rollback has yet been implemented. No production changes. Continue on PR #271 without re-running completed test suites unless source changes.
+
 ### 1 November 2026 — Parallel IFB helper syntax failure fixed
 
 - Operator's first run of `test_router_qos_parallel_ifb_helpers.py` failed at import with `SyntaxError: unexpected character after line continuation character`: literal backslash-n sequences had been committed in `router_qos_download_owner_stamp.py` and `router_qos_download_observe.py`.
