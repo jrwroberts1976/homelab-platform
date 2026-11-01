@@ -1,0 +1,11 @@
+[Unit]
+Description=Ten-minute watchdog for explicitly armed download QoS cutover
+
+[Timer]
+OnActiveSec=10min
+AccuracySec=1s
+Unit=router-qos-download-rollback-expiry.service
+Persistent=false
+
+[Install]
+WantedBy=timers.target
