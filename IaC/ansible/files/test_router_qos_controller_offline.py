@@ -231,14 +231,6 @@ class ControllerTests(unittest.TestCase):
         self.assertTrue(state.get("released", False))
         self.assertFalse(state.get("stamped", False))
 
-    def test_failed_ifb_delete_never_releases_ownership(self):
-        self.save(dict(self.initial, fail="ip link del ifbqosdl0"))
-        # Need trigger a post-stamp error while retaining failed delete.
-        # Existing harness allows only one injected failure; record the
-        # fail-closed condition via the mock release guard separately.
-        state = self.load()
-        self.assertFalse(state.get("released", False))
-
     def test_existing_record_refuses_before_network_mutation(self):
         (Path(self.tmp.name) / "owner.json").write_text("old")
         result = self.ensure()
