@@ -1,3 +1,11 @@
+### 1 November 2026 — Router QoS candidate staged; legacy cutover not approved
+
+- PR #271 (`fix/router-qos-production-20261101`) contains download QoS controller, ownership stamping, read-only identity checks and reconnect reattachment; operator verified 19 controller offline tests pass and Ansible persistent/stage playbook syntax is valid. End-to-end live reconnect and reboot resilience have **not** been proven.
+- Operator ran approval-gated `router-01-qos-download-stage-candidate.yml` on `router-01`: 11 tasks OK, 2 changed, 0 failed. Six candidate files were copied only to `/usr/local/libexec/router-qos-download-candidate/`; Bash/Python syntax checks and before/after live shaping/hook comparison passed.
+- Verified active WAN shaping remained `eth1` CAKE 13Mbit with PTM overhead 30; `ifbqosdl0` CAKE 43Mbit and `ppp0` ingress pref 49132 redirect intact; router-pppoe, nftables, dnsmasq and unbound active. Existing `ifbqosdl0` is legacy **unmarked**, with no `/run/router-qos-download-basic.owner.json`; do not adopt it as owned based on qdisc settings.
+- New read-only `router-01-qos-download-candidate-audit.yml` compares staged SHA256s with IaC source and inspects legacy state. **Not yet executed or syntax checked**. There has been **no live controller replacement, PPP bounce or IFB change**.
+- HOLD activation: build and test an operator-approved, guarded legacy transition and rollback, confirm staged checksums and read-only audit, then controlled PPP reconnect and reboot verification. Update this handover and `docs/architecture/CURRENT-STATE.md` after verified runtime changes; no blanket merge of draft PR #267. GitHub branch consolidation remains pending.
+
 ### 1 November 2026 — Production router QoS monitoring isolated for review
 
 - Extracted nine observability-only files from experimental router PR #267 into independent `feature/router-qos-production-monitoring-20261101` from current `main`: Grafana dashboard, QoS tc read-only collector, node-exporter textfile override, collector systemd service/timer, and four preflight/deployment/discovery playbooks.
