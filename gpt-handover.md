@@ -1,3 +1,9 @@
+### 1 November 2026 — QoS rollback expiry offline test results verified
+
+- Operator ran `IaC/ansible/files/test_router_qos_download_rollback_expiry.py`: **6 tests passed**, including marker-present restore dispatch, cancelled/missing marker no-op, symlink/directory refusal and timer configuration checks.
+- `router-01-qos-download-rollback-timer-stage.yml` previously completed **13 OK, 3 changed, 0 failed**. Rollback timer remains staged, stopped and disabled; no cutover marker was created.
+- Existing live router QoS is unchanged. The tested expiry mechanism only invokes restoration of legacy *files*; it cannot restore a changed kernel ingress/IFB state. **HOLD cutover** until guarded kernel rollback and ownership migration are proven.
+
 ### 1 November 2026 — Timed expiry/cancellation offline tests committed (not yet run)
 
 - PR #271 adds `IaC/ansible/files/test_router_qos_download_rollback_expiry.py` (six offline tests): missing/cancelled marker no-op, present marker restore dispatch, symlink/directory refusal, timer configuration check. Uses temporary files and a fake restore command; **not operator-tested yet**.
