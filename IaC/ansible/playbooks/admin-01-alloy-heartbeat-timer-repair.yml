@@ -1,0 +1,60 @@
+---
+- name: Repair admin-01 Alloy journal heartbeat scheduling only
+  hosts: admin-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'admin-01'
+          - alloy_heartbeat_timer_repair_approved | default(false) | bool
+          - not ansible_check_mode
+    - name: Confirm existing timer content
+      ansible.builtin.slurp:
+        src: /etc/systemd/system/homelab-alloy-heartbeat.timer
+      register: timer_before
+    - name: Refuse unexpected timer configuration
+      ansible.builtin.assert:
+        that:
+          - "'OnUnitActiveSec=5min' in (timer_before.content | b64decode)"
+          - "'OnUnitInactiveSec' not in (timer_before.content | b64decode)"
+          - "'Unit=homelab-alloy-heartbeat.service' in (timer_before.content | b64decode)"
+    - name: Verify Alloy is running
+      ansible.builtin.command: systemctl is-active alloy.service
+      changed_when: false
+      register: alloy_running
+      failed_when: alloy_running.stdout | trim != 'active'
+    - name: Install corrected timer using existing role template
+      ansible.builtin.template:
+        src: ../roles/alloy/templates/homelab-alloy-heartbeat.timer.j2
+        dest: /etc/systemd/system/homelab-alloy-heartbeat.timer
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+    - name: Restart only heartbeat timer to recalculate its next trigger
+      ansible.builtin.systemd_service:
+        name: homelab-alloy-heartbeat.timer
+        state: restarted
+        enabled: true
+    - name: Emit a heartbeat with existing oneshot service
+      ansible.builtin.systemd_service:
+        name: homelab-alloy-heartbeat.service
+        state: started
+    - name: Verify heartbeat appears in journal
+      ansible.builtin.shell: |
+        journalctl -t homelab-observability-heartbeat --since '2 minutes ago' --no-pager -o cat | grep -F 'HOMELAB_ALLOY_HEARTBEAT host=admin-01'
+      args:
+        executable: /bin/bash
+      changed_when: false
+    - name: Show timer next trigger
+      ansible.builtin.command: systemctl list-timers --all homelab-alloy-heartbeat.timer --no-pager
+      changed_when: false
+      register: timer_after
+    - name: Print next trigger
+      ansible.builtin.debug:
+        var: timer_after.stdout_lines
