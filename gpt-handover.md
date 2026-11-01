@@ -1,3 +1,9 @@
+### 1 November 2026 — Timed rollback units staged in IaC, not deployed
+
+- PR #271 adds ten-minute `router-qos-download-rollback-expiry.timer`, one-shot service and conditional expiry script plus `router-01-qos-download-rollback-timer-stage.yml`. The timer requires explicit separate arming; staging playbook leaves it stopped/disabled and refuses an existing cutover marker.
+- File-only rollback action runs only when `/run/router-qos-download-cutover.pending` exists and restores checksum-verified legacy controller and PPP hook. It **does not restore kernel IFB/tc**, does not protect against every power-loss scenario and has not been live-tested or armed.
+- Playbook and timer syntax have **not yet been operator-validated or deployed**. No live cutover authorised. Before production: test expiry logic, failure/confirmation semantics, marker safety, kernel rollback and transition of unmarked legacy IFB.
+
 ### 1 November 2026 — Real-shell offline QoS rollback test harness committed
 
 - PR #271 adds `IaC/ansible/files/test_router_qos_download_rollback_watchdog.py`: eight disposable-filesystem tests of the actual file-only rollback shell script, including valid restore, backup corruption, symlink, missing copy and repeat execution. Tests substitute only temporary paths, identity guard and local non-root ownership operation; they never invoke router-01, PPP, tc or ip mutations.
