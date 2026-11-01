@@ -157,6 +157,28 @@ class ControllerTests(unittest.TestCase):
         self.assertNotEqual(self.ensure().returncode, 0)
         self.assertFalse(self.load()["ifbqosdl0"])
 
+    def test_missing_ppp_does_not_modify_network(self):
+        self.save(dict(self.initial, ppp0=False))
+        result = self.ensure()
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertFalse(any(" add " in c or " del " in c for c in self.load()["calls"]))
+
+    def test_partial_ingress_state_refused(self):
+        self.save(dict(self.initial, clsact=True, filter="none"))
+        result = self.ensure()
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertTrue(state["clsact"])
+        self.assertFalse(any(" add " in c or " del " in c for c in state["calls"]))
+
+    def test_unmarked_cake_ifb_never_deleted(self):
+        self.save(dict(self.initial, ifbqosdl0=True, cake_ifb=True))
+        result = self.ensure()
+        self.assertNotEqual(result.returncode, 0)
+        state = self.load()
+        self.assertTrue(state["ifbqosdl0"])
+        self.assertFalse(any("link del" in c for c in state["calls"]))
+
     def test_missing_upload_refuses(self):
         self.save(dict(self.initial, upload=False))
         self.assertNotEqual(self.ensure().returncode, 0)
