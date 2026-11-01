@@ -1,3 +1,9 @@
+### 1 November 2026 — Legacy QoS rollback backups verified on router-01
+
+- Operator executed approval-gated `IaC/ansible/playbooks/router-01-qos-download-backup-only.yml`: **14 OK, 3 changed, 0 failed, 0 unreachable**. Playbook's SHA256 assertions for the stored legacy controller and PPP reconnect hook passed, as did its before/after live controller, hook and QoS configuration comparison.
+- Root-only rollback backups: `/var/lib/router-qos-download-cutover/legacy-controller` and `/var/lib/router-qos-download-cutover/legacy-ip-up-hook`. These are stored copies **not** yet a tested automatic rollback transaction.
+- Production remains on legacy unmarked `ifbqosdl0` (43Mbit); upload `eth1` CAKE 13Mbit. Do not run activation playbook or delete/adopt IFB until guarded cutover, watchdog, safe recovery and live checks are validated. PR #271 unmerged.
+
 ### 1 November 2026 — QoS candidate checksum and legacy IFB audit PASSED
 
 - Operator executed `router-01-qos-download-candidate-audit.yml` after syntax check: 8 tasks OK, **0 changed, 0 failed**, on `router-01`.
