@@ -80,10 +80,18 @@ case "${1:-}" in
       fi
       return "$original_rc"
     }
+    # Refuse to mutate network state if the approved stamp helper is absent.
+    STAMP_HELPER=/usr/local/libexec/router-qos-download/stamp.py
+    [[ -f "$STAMP_HELPER" && ! -L "$STAMP_HELPER" ]] ||
+      { echo "REFUSE: ownership stamp helper missing"; exit 2; }
+    [[ ! -e /run/router-qos-download-basic.owner.json &&
+       ! -L /run/router-qos-download-basic.owner.json ]] ||
+      { echo "REFUSE: existing ownership record requires reconciliation"; exit 2; }
     modprobe ifb
     trap 'install_rollback' ERR
     ip link add "$IFB" type ifb
     made_ifb=1
+    python3 "$STAMP_HELPER" stamp
     ip link set "$IFB" up
     tc qdisc add dev "$IFB" root cake bandwidth 43mbit besteffort flows
     tc qdisc add dev "$WAN" clsact
