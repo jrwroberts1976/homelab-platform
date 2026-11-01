@@ -1,3 +1,10 @@
+### 1 November 2026 — Router metrics Docker relay controlled recovery PASS
+
+- Operator ran `IaC/ansible/playbooks/router-metrics-recovery-test.yml` on monitor-01 with explicit `recovery_test_approved=true`. Preflight verified upstream and Prometheus healthy and 300-second cooldown expired.
+- Test stopped only Docker container `router-metrics-relay`; the installed reconciler recreated it and explicitly returned `RELAY_RECONCILIATION=RECOVERED`. Final Prometheus router scrape passed. Ansible recap: ok=14, changed=2, failed=0, unreachable=0.
+- Validates recovery of a stopped relay plus earlier observed real stale bind-mount recovery. Does **not** establish a full monitor-01 reboot or router reboot resilience test. Router, SSH tunnel, Prometheus and QoS were not intentionally restarted.
+- Monitoring fix branch remains separate and unmerged pending branch review; leave other active workstreams untouched.
+
 ### 1 November 2026 — Live recovery proof and deploy verification correction
 
 - Approval-gated recovery deployment on monitor-01 installed three managed files and reloaded systemd, but failed the final journal-based assertion; this did not imply a failed deployment.
