@@ -1,3 +1,10 @@
+### 1 November 2026 — QoS candidate checksum and legacy IFB audit PASSED
+
+- Operator executed `router-01-qos-download-candidate-audit.yml` after syntax check: 8 tasks OK, **0 changed, 0 failed**, on `router-01`.
+- All six staged candidates matched their IaC SHA256 exactly. Active controller SHA256 `16f7db14bf5962360e7c684e374c7d676240f78ea1351effc66472031f0486a7`; PPP ip-up hook SHA256 `25b96d3504f226a789cc959772a995e51e2867ecc797c3e218c3b6d89b75df8b`.
+- Live upload CAKE remained 13Mbit with `ptm overhead 30`; download CAKE remained 43Mbit on `ifbqosdl0`, ifindex **24**, with `ppp0` ingress redirect pref 49132. IFB has no ownership alias; ownership record ABSENT. PPPoE, nftables, dnsmasq and Unbound active.
+- **HOLD CUTOVER:** Legacy IFB cannot be safely adopted as a newly created owned IFB. A separately verified and rollback-protected transition remains necessary. No router network changes, controller replacement, PPP restart or reboot performed. PR #271 remains unmerged; branch consolidation pending.
+
 ### 1 November 2026 — Router QoS candidate staged; legacy cutover not approved
 
 - PR #271 (`fix/router-qos-production-20261101`) contains download QoS controller, ownership stamping, read-only identity checks and reconnect reattachment; operator verified 19 controller offline tests pass and Ansible persistent/stage playbook syntax is valid. End-to-end live reconnect and reboot resilience have **not** been proven.
