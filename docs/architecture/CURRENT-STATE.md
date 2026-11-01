@@ -194,7 +194,7 @@ Use this precedence when documents disagree:
 | ASUS AiMesh node | `192.168.2.218` | Wireless mesh node | ACTIVE |
 | HP ProCurve 2510G-24 | `192.168.2.16` | Core switch / active SPAN source | ACTIVE |
 
-The canonical active Ansible-managed Linux baseline is **15 hosts**. Router-01 replaces retired docker-01; the ASUS device is no longer the gateway. `home-01` is active but HAOS and intentionally outside that 15-host Linux/Ansible baseline.
+The canonical active Ansible-managed Linux baseline is **15 hosts**. Router-01 replaces the retired `docker-01` identity; the ASUS device is no longer the gateway. <!-- historical --> `home-01` is active but HAOS and intentionally outside that 15-host Linux/Ansible baseline.
 
 ## Retired identities
 
