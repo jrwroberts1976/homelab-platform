@@ -1,3 +1,8 @@
+### 1 November 2026 — Safer parallel IFB migration design adopted (design only)
+
+- PR #271 adds `docs/architecture/ROUTER-QOS-PARALLEL-IFB-CUTOVER.md`: avoid destructively replacing existing unmarked but healthy `ifbqosdl0` by creating a separately named, kernel-token-owned candidate IFB, then changing just the verified ppp0 redirect under an independently recoverable transaction. Preserve the original IFB until after confirmed success and separately approved retirement.
+- New architecture is **NOT implemented or deployed**. Existing controller and owner-stamp code hardcode ifbqosdl0 and must be adjusted for a parallel candidate. Existing rollback timer restores files only and cannot restore the kernel redirect. Real kernel namespace tests and rollback supervisor remain required. Keep production traffic unchanged.
+
 ### 1 November 2026 — Interrupted kernel recovery regression tests passed
 
 - Operator ran updated `test_router_qos_download_kernel_recover_faults.py`: **6 tests OK in 0.388s**, including exclusive journal preventing a second run following simulated failure. The execution was offline/mocked; no live kernel recovery or cutover occurred.
