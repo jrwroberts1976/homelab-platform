@@ -1,3 +1,9 @@
+### 1 November 2026 — router-01 Suricata package staging verified
+
+- Operator ran `router-01-suricata-preflight.yml`: 6 OK, 0 changed, 0 failed; Debian 13 arm64, APT candidate Suricata 1:7.0.10-1+deb13u4, all five router services healthy.
+- Operator ran approval-gated `router-01-suricata-stage.yml` with `router_suricata_stage_approved=true`: 11 OK, 2 changed, 0 failures, Suricata version 7.0.10 RELEASE, installed but **stopped and disabled**, all five router services still healthy.
+- Capture, NFQUEUE and IPS remain OFF. Next: nonmutating installed-config/rule source inspection, then a distinct gated configuration and limited passive trial. No assertion yet on traffic-processing performance or full-line-rate packet loss.
+
 ### 1 November 2026 — Router Suricata ARM64 passive IDS staging (source only)
 
 - On router-01, operator verified four ARM64 CPU cores, 3.5 GiB available memory, tcpdump available and both inbound/outbound TCP and UDP visibility on ppp0 with a 30-packet sample (zero drops in sample). Router services router-pppoe, dnsmasq, unbound, nftables, router-qos-upload active; CAKE eth1 13Mbit and ifbqosdl0 43Mbit unchanged.
