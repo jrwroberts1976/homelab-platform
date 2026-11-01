@@ -1,0 +1,60 @@
+---
+# Read-only evidence collection and strict gate for legacy IFB migration.
+# This playbook NEVER calls tc/ip with add, del or replace.
+- name: Preflight legacy download QoS kernel state without mutation
+  hosts: router-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Assert router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - not ansible_check_mode
+
+    - name: Collect read-only interface and qdisc observations
+      ansible.builtin.command:
+        argv: "{{ item }}"
+      loop:
+        - [ip, -j, link, show, dev, ifbqosdl0]
+        - [ip, -j, link, show, dev, ppp0]
+        - [tc, -j, qdisc, show, dev, ifbqosdl0]
+        - [tc, -j, qdisc, show, dev, ppp0]
+        - [tc, -j, filter, show, dev, ppp0, ingress]
+        - [tc, -j, qdisc, show, dev, eth1]
+      register: qos_observations
+      changed_when: false
+
+    - name: Decode machine-readable observations
+      ansible.builtin.set_fact:
+        legacy_ifb_link: "{{ qos_observations.results[0].stdout | from_json }}"
+        legacy_ppp_link: "{{ qos_observations.results[1].stdout | from_json }}"
+        legacy_ifb_qdisc: "{{ qos_observations.results[2].stdout | from_json }}"
+        legacy_ppp_qdisc: "{{ qos_observations.results[3].stdout | from_json }}"
+        legacy_ingress_filter: "{{ qos_observations.results[4].stdout | from_json }}"
+        legacy_upload_qdisc: "{{ qos_observations.results[5].stdout | from_json }}"
+
+    - name: Require exact expected legacy interface identity
+      ansible.builtin.assert:
+        that:
+          - legacy_ifb_link | length == 1
+          - legacy_ifb_link[0].ifname == 'ifbqosdl0'
+          - legacy_ifb_link[0].ifindex == 24
+          - legacy_ifb_link[0].ifalias | default('') == ''
+          - legacy_ppp_link | length == 1
+          - legacy_ppp_link[0].ifname == 'ppp0'
+          - legacy_ifb_qdisc | selectattr('kind', 'equalto', 'cake') | list | length == 1
+          - legacy_ppp_qdisc | selectattr('kind', 'equalto', 'clsact') | list | length == 1
+          - legacy_upload_qdisc | selectattr('kind', 'equalto', 'cake') | list | length == 1
+        fail_msg: "HOLD: kernel state differs from audited legacy baseline. Do not cut over."
+
+    - name: Display evidence only
+      ansible.builtin.debug:
+        msg:
+          - "Legacy IFB ifindex: {{ legacy_ifb_link[0].ifindex }}"
+          - "Download qdiscs: {{ legacy_ifb_qdisc }}"
+          - "Ingress filters: {{ legacy_ingress_filter }}"
+          - "Upload qdiscs: {{ legacy_upload_qdisc }}"
+          - "READ-ONLY: no kernel state changed; no cutover approved."
