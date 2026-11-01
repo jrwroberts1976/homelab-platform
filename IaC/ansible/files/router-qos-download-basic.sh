@@ -76,7 +76,14 @@ case "${1:-}" in
       fi
       if (( made_ifb )); then
         # Keep the IFB if it has become associated with unexpected ingress.
-        if clean_wan; then ip link del "$IFB" || true; fi
+        if clean_wan; then
+          if ip link del "$IFB"; then
+            # Release only our stamp, and only after independently proving
+            # that the IFB is gone. Never erase metadata for a live IFB.
+            python3 "$STAMP_HELPER" release-after-delete ||
+              echo "WARN: ownership record retained; manual review required" >&2
+          fi
+        fi
       fi
       return "$original_rc"
     }
