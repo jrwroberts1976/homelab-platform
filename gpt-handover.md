@@ -1,3 +1,8 @@
+### 1 November 2026 — Timed expiry/cancellation offline tests committed (not yet run)
+
+- PR #271 adds `IaC/ansible/files/test_router_qos_download_rollback_expiry.py` (six offline tests): missing/cancelled marker no-op, present marker restore dispatch, symlink/directory refusal, timer configuration check. Uses temporary files and a fake restore command; **not operator-tested yet**.
+- Dormant service/timer stage had 13 tasks OK, 3 changed, no failures; timer remains stopped/disabled. Expiry test does not establish safe live cutover: marker is not yet transaction-authenticated, timed arm/confirm workflow is missing, and file-only restoration cannot repair kernel IFB/tc state. **Do not arm timer or replace live controller yet.**
+
 ### 1 November 2026 — Dormant router QoS rollback timer staged successfully
 
 - Operator executed `router-01-qos-download-rollback-timer-stage.yml` following successful Ansible syntax check: **13 OK, 3 changed, 0 failed, 0 unreachable** on `router-01`.
