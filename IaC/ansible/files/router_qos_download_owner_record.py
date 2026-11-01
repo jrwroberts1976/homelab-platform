@@ -18,7 +18,7 @@ def validate_record(record):
         raise ValueError("invalid ownership schema")
     if not isinstance(record["boot_id"], str) or not BOOT_RE.fullmatch(record["boot_id"]):
         raise ValueError("invalid boot id")
-    if record["ifb_name"] != "ifbqosdl0":
+    if record["ifb_name"] not in ("ifbqosdl0", "ifbqosdl1"):
         raise ValueError("unexpected interface")
     if type(record["ifb_ifindex"]) is not int or record["ifb_ifindex"] <= 0:
         raise ValueError("invalid ifindex")
