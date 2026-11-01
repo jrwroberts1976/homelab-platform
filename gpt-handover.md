@@ -1,3 +1,9 @@
+### 1 November 2026 — Observability reconciliation split from router draft
+
+- `admin-01` Alloy heartbeat failure fixed live via approval-gated Ansible: timer changed to `OnUnitInactiveSec=5min`; Loki received markers at 06:49:10 and 06:54:21 GMT; Prometheus `present=1`, `query_success=1`. Commit timer-template fix separately on `fix/observability-heartbeat-reconcile-20261101` so it need not wait for broad router draft PR #267.
+- Deployed `monitor-01` Loki heartbeat collector still has retired `docker-01` in `HOSTS`; `main` monitoring role defaults already exclude it. A narrow approval-gated playbook `monitor-01-loki-heartbeat-reconcile.yml` will rerender only this collector from existing role template, run a syntax check, verify stale identity removed, and invoke existing collector. Not deployed yet.
+- Broad router PR #267 remains draft and unmerged (102 changed files, 235 commits at review). No router changes undertaken by this work. Review production router changes separately before merge.
+
 # GPT Handover — Homelab Platform
 
 ### 31 October 2026 — CAKE explicit disable procedure staged (not executed)
