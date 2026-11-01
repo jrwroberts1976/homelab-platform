@@ -1,3 +1,8 @@
+### 1 November 2026 — Parallel IFB ownership helper refactor (not deployed)
+
+- PR #271 now permits only the explicit names `ifbqosdl0` (legacy/default) and `ifbqosdl1` (parallel candidate) in pure owner-record validation, owner stamping, read-only observer and ownership decision. Stamping/observation default remains `ifbqosdl0` for existing call sites; no live controller, hook, interface, timer or Ansible activation changed.
+- Added six offline parallel helper tests in `IaC/ansible/files/test_router_qos_parallel_ifb_helpers.py`; **not yet operator-run**. Passing helpers alone cannot effect parallel cutover. Existing stamp CLI and controller still target legacy IFB; independent rollback supervisor/redirect transaction not implemented. No live router change or cutover approval.
+
 ### 1 November 2026 — Safer parallel IFB migration design adopted (design only)
 
 - PR #271 adds `docs/architecture/ROUTER-QOS-PARALLEL-IFB-CUTOVER.md`: avoid destructively replacing existing unmarked but healthy `ifbqosdl0` by creating a separately named, kernel-token-owned candidate IFB, then changing just the verified ppp0 redirect under an independently recoverable transaction. Preserve the original IFB until after confirmed success and separately approved retirement.
