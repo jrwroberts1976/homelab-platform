@@ -1,0 +1,72 @@
+---
+- name: Deploy router metrics stale socket recovery without restarting monitoring
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit monitoring-only deployment approval
+      ansible.builtin.assert:
+        that:
+          - router_metrics_socket_fix_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Check currently healthy router metrics upstream
+      ansible.builtin.uri:
+        url: http://127.0.0.1:19100/metrics
+        status_code: 200
+      changed_when: false
+
+    - name: Install corrected reconciliation logic
+      ansible.builtin.copy:
+        src: ../roles/router_metrics_relay/files/router-metrics-relay-reconcile.sh
+        dest: /usr/local/sbin/router-metrics-relay-reconcile
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Update host relay runtime directory preservation
+      ansible.builtin.template:
+        src: ../roles/router_metrics_relay/templates/router-metrics-relay.service.j2
+        dest: /etc/systemd/system/router-metrics-relay.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Update reconciliation runtime directory and cooldown
+      ansible.builtin.template:
+        src: ../roles/router_metrics_relay/templates/router-metrics-relay-reconcile.service.j2
+        dest: /etc/systemd/system/router-metrics-relay-reconcile.service
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Reload systemd definitions only
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Check reconciliation result directly
+      ansible.builtin.command:
+        argv: [/usr/local/sbin/router-metrics-relay-reconcile]
+      register: reconciliation
+      changed_when: "'RELAY_RECONCILIATION=RECOVERED' in reconciliation.stdout"
+
+    - name: Require healthy or recovered relay
+      ansible.builtin.assert:
+        that:
+          - >-
+            'RELAY_RECONCILIATION=HEALTHY' in reconciliation.stdout
+            or 'RELAY_RECONCILIATION=RECOVERED' in reconciliation.stdout
+
+    - name: Verify Prometheus router scrape
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/api/v1/query?query=up%7Bjob%3D%22router-node-exporter%22%7D
+        return_content: true
+      register: router_query
+      until: >-
+        router_query.json.data.result | default([]) | length == 1
+        and router_query.json.data.result[0].value[1] == '1'
+      retries: 8
+      delay: 5
+      changed_when: false

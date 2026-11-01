@@ -9,6 +9,7 @@ User=router-metrics-relay
 Group=router-metrics-relay
 RuntimeDirectory=router-metrics-relay
 RuntimeDirectoryMode=0750
+RuntimeDirectoryPreserve=yes
 UMask=0007
 ExecStart=/usr/bin/socat UNIX-LISTEN:/run/router-metrics-relay/metrics.sock,fork,mode=0660 TCP:127.0.0.1:19100
 Restart=on-failure

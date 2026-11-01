@@ -5,6 +5,8 @@ Requires=docker.service
 
 [Service]
 Type=oneshot
+RuntimeDirectory=router-metrics-reconcile
+RuntimeDirectoryPreserve=yes
 ExecStart=/usr/local/sbin/router-metrics-relay-reconcile
 NoNewPrivileges=true
 ProtectSystem=strict

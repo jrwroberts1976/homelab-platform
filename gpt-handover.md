@@ -1,3 +1,24 @@
+### 1 November 2026 — Router metrics Docker relay controlled recovery PASS
+
+- Operator ran `IaC/ansible/playbooks/router-metrics-recovery-test.yml` on monitor-01 with explicit `recovery_test_approved=true`. Preflight verified upstream and Prometheus healthy and 300-second cooldown expired.
+- Test stopped only Docker container `router-metrics-relay`; the installed reconciler recreated it and explicitly returned `RELAY_RECONCILIATION=RECOVERED`. Final Prometheus router scrape passed. Ansible recap: ok=14, changed=2, failed=0, unreachable=0.
+- Validates recovery of a stopped relay plus earlier observed real stale bind-mount recovery. Does **not** establish a full monitor-01 reboot or router reboot resilience test. Router, SSH tunnel, Prometheus and QoS were not intentionally restarted.
+- Monitoring fix branch remains separate and unmerged pending branch review; leave other active workstreams untouched.
+
+### 1 November 2026 — Live recovery proof and deploy verification correction
+
+- Approval-gated recovery deployment on monitor-01 installed three managed files and reloaded systemd, but failed the final journal-based assertion; this did not imply a failed deployment.
+- Subsequent operator read-only diagnostics showed upstream HTTP 200, Docker relay running, reconciler systemd Result=success, automatic `RELAY_RECONCILIATION=RECOVERED` at 19:35:45, and Prometheus `up{job="router-node-exporter"}=1`.
+- Corrected deployment playbook to inspect direct reconciliation stdout (HEALTHY or RECOVERED) and require live Prometheus up=1 instead of searching an arbitrary journal tail. This correction is committed on monitoring branch but **not yet validated/deployed**.
+- A controlled future reboot/restart regression proof remains pending; do not claim reboot persistence proven. No QoS or router configuration changes were made.
+
+### 1 November 2026 — Router metrics stale Docker socket mount recovery (staged; not deployed)
+
+- After monitoring disappeared, router Node Exporter and SSH tunnel (monitor-01 localhost:19100 HTTP 200) remained healthy. Host Unix socket existed, but Docker relay container showed an empty bind-mounted /run/router-metrics-relay; container socat logged ENOENT. Manual Docker relay recreation restored socket visibility, reconciler HEALTHY, and user confirmed Grafana data returned.
+- Root issue: systemd RuntimeDirectory lifecycle may replace the host directory while the existing Docker container retains the old mount. Current reconcile script reported DEGRADED without repairing a running but unhealthy relay.
+- Branch `fix/router-metrics-stale-socket-20261101` stages RuntimeDirectoryPreserve=yes for host relay, automatic controlled Docker-relay-only recreation on unhealthy scrape, upstream 19100 preflight, five-minute cooldown and post-recreation health retries. Also adds approval-gated playbook `router-metrics-stale-socket-recovery-deploy.yml`. The change does not restart Prometheus, SSH tunnel, router or QoS.
+- **Not deployed or live-tested yet**. Next: sync branch to admin-01, bash -n and Ansible syntax check; run approved playbook on monitor-01, verify Prometheus up=1, then separately validate stale-mount recovery with a controlled test and merge only after other workstreams are ready.
+
 ### 1 November 2026 — Production router QoS monitoring isolated for review
 
 - Extracted nine observability-only files from experimental router PR #267 into independent `feature/router-qos-production-monitoring-20261101` from current `main`: Grafana dashboard, QoS tc read-only collector, node-exporter textfile override, collector systemd service/timer, and four preflight/deployment/discovery playbooks.
