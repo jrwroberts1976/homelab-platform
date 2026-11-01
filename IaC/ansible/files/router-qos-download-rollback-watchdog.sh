@@ -21,10 +21,13 @@ restore() {
   exec 9>"$LOCK"
   flock -x 9
   # Atomic replacement of the two files; not an atomic transaction across them.
-  local ctmp htmp
+  # EXIT traps run after restore() returns: local variables would be unset.
+  # Allocate global cleanup paths for the lifetime of this short-lived script.
+  ctmp=""
+  htmp=""
+  trap 'rm -f -- "${ctmp:-}" "${htmp:-}"' EXIT
   ctmp="$(mktemp /usr/local/sbin/.router-qos-rollback.XXXXXX)"
   htmp="$(mktemp /etc/ppp/ip-up.d/.router-qos-rollback.XXXXXX)"
-  trap 'rm -f "$ctmp" "$htmp"' EXIT
   cp "$ROOT/legacy-controller" "$ctmp"
   cp "$ROOT/legacy-ip-up-hook" "$htmp"
   chown root:root "$ctmp" "$htmp"
