@@ -1,5 +1,13 @@
 # GPT Handover — Homelab Platform
 
+### 1 November 2026 — admin-01 Alloy heartbeat timer repair staged (NOT DEPLOYED)
+
+- Read-only operator evidence: Alloy service active and Loki has current `{host="admin-01",job="systemd-journal"}` entries, but heartbeat Prometheus metric present=0, query_success=1, age series absent. Heartbeat collector on monitor-01 searches for explicit `HOMELAB_ALLOY_HEARTBEAT` in last 1800 seconds; this is real marker absence, not general journal forwarding failure.
+- On admin-01 `homelab-alloy-heartbeat.timer` is active/elapsed, `NextElapseUSecMonotonic=infinity`, last triggered 29 Oct 11:28:29 GMT; definition uses `OnBootSec=30s` and `OnUnitActiveSec=5min`. Existing oneshot logger service writes marker and checks Alloy active. No recent heartbeat journal entries.
+- Committed role template change `OnUnitActiveSec=5min` -> `OnUnitInactiveSec=5min` and a scoped approval-gated Ansible `playbooks/admin-01-alloy-heartbeat-timer-repair.yml` which checks old timer, Alloy active, installs template with backup, reloads systemd, restarts only heartbeat timer, starts existing heartbeat oneshot, verifies marker in journal, reports next trigger. Does not restart Alloy, touch router or change logging destinations.
+- Next user: pull branch, syntax-check and run approved repair playbook on admin-01, then observe new heartbeat in Loki and Prometheus present=1/age less than 600s; require natural recurring timer proof after five minutes before treating alert resolved. Old `docker-01` in monitor heartbeat collector HOSTS is separately stale and needs code reconciliation.
+
+
 ### 31 October 2026 — Gmail CI failures: estate validator repair staged
 
 - Gmail showed repeated failed GitHub Actions 'Estate and documentation guard' runs on feature branch and main. Inspected PR run 41247777789 job 124674690342 logs: validator rejected retired `docker-01` as active Ansible host and six newly added QoS architecture Markdown files lacking the mandatory estate-authority marker. <!-- historical -->
