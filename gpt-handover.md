@@ -1,3 +1,9 @@
+### 1 November 2026 — Fail-closed recovery progress journal (committed; untested)
+
+- Create-only kernel recovery actor now creates an exclusive root-only `/run/router-qos-download-kernel-recovery.progress` journal **before kernel mutation** and records stages. An existing journal blocks reentry; interrupted/partial runs cannot silently retry or claim a clean environment. Journal remains on success for explicit reconciliation; no unattended removal.
+- Mock failure-injection suite updated to isolate its journal in temp directory and add interrupted-run refusal test; **operator has not run revised suite**. Changes are committed only, **not deployed or run** on router-01. Journal is in `/run` (lost on reboot); it is not a durable across-reboot ownership proof or kernel restoration mechanism.
+- Remaining high-risk blocker: independently tested kernel rollback from partial states and controlled legacy IFB replacement. No cutover approval, no PPP reboot/reconnect.
+
 ### 1 November 2026 — Kernel recovery failure-injection harness verified
 
 - Operator ran `python3 IaC/ansible/files/test_router_qos_download_kernel_recover_faults.py`: **5 tests passed in 0.266s**. Harness includes six simulated kernel-operation failure stages, pre-existing IFB/owner/clsact guards and mocked success.
