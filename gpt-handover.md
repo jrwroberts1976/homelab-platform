@@ -1,3 +1,8 @@
+### 1 November 2026 — Kernel recovery failure-injection harness verified
+
+- Operator ran `python3 IaC/ansible/files/test_router_qos_download_kernel_recover_faults.py`: **5 tests passed in 0.266s**. Harness includes six simulated kernel-operation failure stages, pre-existing IFB/owner/clsact guards and mocked success.
+- These tests demonstrate fail-stop behavior in mocks, **not real-kernel recovery from interrupted partial changes**. The create-only actuator has not been deployed; current QoS remains live and unchanged. Next engineering gate: interrupted recovery and independently tested scoped kernel rollback before cutover.
+
 ### 1 November 2026 — Offline kernel recovery fault-injection harness committed
 
 - PR #271 adds `IaC/ansible/files/test_router_qos_download_kernel_recover_faults.py`: isolated shell command mocks test each of six create-only recovery steps failing, existing IFB/owner/clsact refusal, and mocked success. Tests record exact command progression and check no subsequent modifying steps on failure.
