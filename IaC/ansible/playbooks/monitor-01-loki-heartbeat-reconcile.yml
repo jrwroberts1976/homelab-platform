@@ -1,0 +1,69 @@
+---
+- name: Reconcile retired Loki heartbeat source only
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../roles/monitoring_stack/defaults/main.yml
+  tasks:
+    - name: Require operator approval and safe host scope
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - monitoring_heartbeat_reconcile_approved | default(false) | bool
+          - not ansible_check_mode
+          - "'docker-01' not in monitoring_alloy_heartbeat_hosts"
+          - "'admin-01' in monitoring_alloy_heartbeat_hosts"
+
+    - name: Verify deployed heartbeat collector exists
+      ansible.builtin.stat:
+        path: /usr/local/sbin/homelab-loki-heartbeat-metrics
+      register: existing_collector
+
+    - name: Refuse unexpected missing collector
+      ansible.builtin.assert:
+        that:
+          - existing_collector.stat.exists
+          - existing_collector.stat.isreg
+
+    - name: Reconcile only Loki heartbeat collector using monitoring role template
+      ansible.builtin.template:
+        src: ../roles/monitoring_stack/templates/loki-heartbeat-metrics.py.j2
+        dest: /usr/local/sbin/homelab-loki-heartbeat-metrics
+        owner: root
+        group: root
+        mode: '0755'
+        backup: true
+
+    - name: Validate collector Python syntax without generating bytecode
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - 'import ast, pathlib; ast.parse(pathlib.Path("/usr/local/sbin/homelab-loki-heartbeat-metrics").read_text())'
+      changed_when: false
+
+    - name: Verify retired identity absent from installed collector
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -F
+          - 'docker-01'
+          - /usr/local/sbin/homelab-loki-heartbeat-metrics
+      register: obsolete_identity
+      changed_when: false
+      failed_when: obsolete_identity.rc == 0 or obsolete_identity.rc > 1
+
+    - name: Run existing heartbeat metrics collector once
+      ansible.builtin.systemd_service:
+        name: homelab-loki-heartbeat-metrics.service
+        state: started
+
+    - name: Confirm current admin heartbeat metric emitted
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -F
+          - 'homelab_loki_heartbeat_present{source_host="admin-01"} 1'
+          - /var/lib/prometheus/node-exporter/homelab_loki_heartbeat.prom
+      changed_when: false
