@@ -1,3 +1,8 @@
+### 1 November 2026 — Canonical estate inventory split (PR pending)
+
+- Prepared standalone documentation-only change from `main`: canonical `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md` now identify active `router-01` at `192.168.2.1` as the PPPoE gateway, retire old `docker-01` host identity and retired ASUS routing identity, retain ASUS AiMesh access point assets. Changes reflect operator-verified live router state; no devices touched.
+- A stale retirement explanation about `TestServer` was corrected to name `router-01`. Draft router PR #267 retains extensive unreviewed QoS experiments; do not merge wholesale. Validate estate PR in CI and via `python3 scripts/validate-estate.py` before merge.
+
 ### 1 November 2026 — Observability reconciliation split from router draft
 
 - `admin-01` Alloy heartbeat failure fixed live via approval-gated Ansible: timer changed to `OnUnitInactiveSec=5min`; Loki received markers at 06:49:10 and 06:54:21 GMT; Prometheus `present=1`, `query_success=1`. Commit timer-template fix separately on `fix/observability-heartbeat-reconcile-20261101` so it need not wait for broad router draft PR #267.
