@@ -1,0 +1,131 @@
+---
+# Backup-only preparation. Never replaces any active program or changes network.
+- name: Prepare reversible download QoS controller cutover
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    backup_root: /var/lib/router-qos-download-cutover
+    expected_controller_sha: 16f7db14bf5962360e7c684e374c7d676240f78ea1351effc66472031f0486a7
+    expected_hook_sha: 25b96d3504f226a789cc959772a995e51e2867ecc797c3e218c3b6d89b75df8b
+  tasks:
+    - name: Require exact identity and explicit backup-only approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_facts.hostname == 'raspberrypi'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - router_qos_backup_only_approved | default(false) | bool
+          - not ansible_check_mode
+
+    - name: Verify active files and live QoS before backup
+      ansible.builtin.shell: |
+        set -eu
+        sha256sum /usr/local/sbin/router-qos-download-basic
+        sha256sum /etc/ppp/ip-up.d/router-qos-download
+        tc qdisc show dev eth1
+        tc qdisc show dev ifbqosdl0
+        tc filter show dev ppp0 ingress
+      args:
+        executable: /bin/bash
+      register: before
+      changed_when: false
+
+    - name: Refuse unexpected live baseline
+      ansible.builtin.assert:
+        that:
+          - expected_controller_sha in before.stdout
+          - expected_hook_sha in before.stdout
+          - "'bandwidth 13Mbit' in before.stdout"
+          - "'bandwidth 43Mbit' in before.stdout"
+          - "'Redirect to device ifbqosdl0' in before.stdout"
+
+    - name: Create root-only rollback evidence directory
+      ansible.builtin.file:
+        path: "{{ backup_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Stat saved copies before immutable backup
+      ansible.builtin.stat:
+        path: "{{ backup_root }}/{{ item.dest }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - { dest: legacy-controller, sha: "{{ expected_controller_sha }}" }
+        - { dest: legacy-ip-up-hook, sha: "{{ expected_hook_sha }}" }
+      register: prior
+      changed_when: false
+
+    - name: Refuse incorrect or symlinked existing backups
+      ansible.builtin.assert:
+        that:
+          - not (item.stat.exists | default(false)) or
+            (item.stat.isreg | default(false) and
+             not (item.stat.islnk | default(false)) and
+             item.stat.checksum == item.item.sha)
+      loop: "{{ prior.results }}"
+
+    - name: Copy current controller to immutable rollback source
+      ansible.builtin.copy:
+        src: /usr/local/sbin/router-qos-download-basic
+        remote_src: true
+        dest: "{{ backup_root }}/legacy-controller"
+        owner: root
+        group: root
+        mode: '0500'
+        force: false
+
+    - name: Copy current PPP hook to immutable rollback source
+      ansible.builtin.copy:
+        src: /etc/ppp/ip-up.d/router-qos-download
+        remote_src: true
+        dest: "{{ backup_root }}/legacy-ip-up-hook"
+        owner: root
+        group: root
+        mode: '0500'
+        force: false
+
+    - name: Validate exact backup checksums
+      ansible.builtin.stat:
+        path: "{{ backup_root }}/{{ item.dest }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - { dest: legacy-controller, sha: "{{ expected_controller_sha }}" }
+        - { dest: legacy-ip-up-hook, sha: "{{ expected_hook_sha }}" }
+      register: saved
+      changed_when: false
+
+    - name: Refuse incorrect backup payload or identity
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+          - item.stat.checksum == item.item.sha
+          - item.stat.pw_name == 'root'
+      loop: "{{ saved.results }}"
+
+    - name: Confirm production files and QoS remain unchanged
+      ansible.builtin.shell: |
+        set -eu
+        sha256sum /usr/local/sbin/router-qos-download-basic
+        sha256sum /etc/ppp/ip-up.d/router-qos-download
+        tc qdisc show dev eth1
+        tc qdisc show dev ifbqosdl0
+        tc filter show dev ppp0 ingress
+      args:
+        executable: /bin/bash
+      register: after
+      changed_when: false
+
+    - name: Verify no live network or entrypoint change
+      ansible.builtin.assert:
+        that:
+          - before.stdout == after.stdout
+
+    - name: Report non-disruptive rollback preparation
+      ansible.builtin.debug:
+        msg: "Legacy controller and hook saved with verified SHA256. Live QoS and entrypoints unchanged. No cutover armed."
