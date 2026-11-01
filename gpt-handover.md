@@ -1,3 +1,8 @@
+### 1 November 2026 — Activation guard syntax verified
+
+- Operator ran `ansible-playbook -i inventory/hosts.yml playbooks/router-01-qos-download-basic-persistent.yml --syntax-check` after fast-forward to `46757584`: **passed** (`playbook: playbooks/router-01-qos-download-basic-persistent.yml`).
+- Controller offline suite also reported **20 tests OK**. No activation playbook executed; existing unmarked legacy IFB remains in use. Next engineering task is guarded kernel IFB migration and scoped kernel rollback.
+
 ### 1 November 2026 — Live activation fail-closed before legacy IFB transaction
 
 - PR #271 updated `router-01-qos-download-basic-persistent.yml` so **even with both activation approvals**, the playbook now refuses to replace the live QoS controller while `ifbqosdl0` exists or any PPP `clsact`/ingress filter is present. This addresses silent acceptance of the unmarked legacy IFB, which would later fail reconnect ownership checks.
