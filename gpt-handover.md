@@ -1,3 +1,9 @@
+### 1 November 2026 — Live kernel QoS identity drift observed, no cutover
+
+- Read-only legacy kernel preflight failed at **hardcoded IFB ifindex=24**; zero changes. Operator subsequently observed `ifbqosdl0` **ifindex=27**, no alias shown, 43Mbit CAKE with packet counters increasing; PPP ingress pref 49132 redirects to `ifbqosdl0`; eth1 upload CAKE remains 13Mbit PTM overhead 30. Router last boot: 2026-10-31 06:12:01.
+- Repo preflight now regards ifindex as an **ephemeral observed value**, not permanent identity or ownership proof. The revised playbook **has not yet been syntax-checked/executed**. No network mutation, PPP restart or IFB deletion.
+- Guarded transaction and kernel rollback still missing; legacy unmarked IFB must not be adopted/deleted automatically. HOLD activation and timed cutover.
+
 ### 1 November 2026 — Read-only legacy kernel IFB preflight added (not executed)
 
 - PR #271 now contains `IaC/ansible/playbooks/router-01-qos-download-legacy-kernel-preflight.yml` to collect JSON `ip`/`tc` evidence for ppp0, ifbqosdl0 and eth1, check expected legacy IFB ifindex=24, absent alias, and expected CAKE/clsact presence. **Not yet syntax-checked or executed by operator**.
