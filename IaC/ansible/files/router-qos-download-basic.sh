@@ -66,14 +66,40 @@ case "${1:-}" in
     if has_ifb || ! clean_wan; then
       echo "REFUSE: unexpected or partial download QoS state"; exit 2
     fi
+    # Track only resources created by THIS attempt. Never invoke the general
+    # remove operation from an installation-failure trap.
+    made_ifb=0
+    made_clsact=0
+    made_filter=0
+    install_rollback() {
+      local original_rc=$?
+      trap - ERR
+      if (( made_filter )); then
+        tc filter del dev "$WAN" ingress pref "$PREF" || true
+      fi
+      if (( made_clsact )); then
+        # Refuse to remove a clsact that has acquired any unexpected filter.
+        if [[ -z "$(filters)" ]]; then
+          tc qdisc del dev "$WAN" clsact || true
+        fi
+      fi
+      if (( made_ifb )); then
+        # Keep the IFB if it has become associated with unexpected ingress.
+        if clean_wan; then ip link del "$IFB" || true; fi
+      fi
+      return "$original_rc"
+    }
     modprobe ifb
+    trap 'install_rollback' ERR
     ip link add "$IFB" type ifb
-    trap 'remove_owned || true' ERR
+    made_ifb=1
     ip link set "$IFB" up
     tc qdisc add dev "$IFB" root cake bandwidth 43mbit besteffort flows
     tc qdisc add dev "$WAN" clsact
+    made_clsact=1
     tc filter add dev "$WAN" ingress pref "$PREF" matchall action mirred egress redirect dev "$IFB"
-    owned || { echo "REFUSE: verification failed"; exit 2; }
+    made_filter=1
+    owned || { echo "REFUSE: verification failed"; false; }
     trap - ERR
     echo "PASS: 43 Mbps download CAKE active"
     ;;
