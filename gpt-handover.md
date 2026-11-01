@@ -1,3 +1,8 @@
+### 1 November 2026 — Read-only legacy kernel IFB preflight added (not executed)
+
+- PR #271 now contains `IaC/ansible/playbooks/router-01-qos-download-legacy-kernel-preflight.yml` to collect JSON `ip`/`tc` evidence for ppp0, ifbqosdl0 and eth1, check expected legacy IFB ifindex=24, absent alias, and expected CAKE/clsact presence. **Not yet syntax-checked or executed by operator**.
+- This is an evidence gate only; it does not prove sole ownership of the IFB or recovery safety, and cannot authorise a live transition. No live traffic changes. Next assess exact filter identities, qdisc rates, foreign IFB consumers and rollback mechanics before writing a mutating cutover.
+
 ### 1 November 2026 — Activation guard syntax verified
 
 - Operator ran `ansible-playbook -i inventory/hosts.yml playbooks/router-01-qos-download-basic-persistent.yml --syntax-check` after fast-forward to `46757584`: **passed** (`playbook: playbooks/router-01-qos-download-basic-persistent.yml`).
