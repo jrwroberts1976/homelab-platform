@@ -1,0 +1,9 @@
+[Unit]
+Description=Restore legacy download QoS entrypoints if cutover not confirmed
+ConditionPathExists=/run/router-qos-download-cutover.pending
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/local/libexec/router-qos-download-cutover/rollback-expiry.sh
+NoNewPrivileges=yes
