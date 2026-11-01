@@ -21,7 +21,9 @@ def observe(run: Callable, read_text: Callable, other_users_verified: bool | Non
     other_users_verified must originate from an independent ingress/redirect
     enumerator. Never guess False merely because ppp0 ingress looks clean.
     """
-    if ifb_name not in ("ifbqosdl0", "ifbqosdl1"):\n        raise ValueError("unapproved IFB name")\n    boot = read_text("/proc/sys/kernel/random/boot_id").strip()
+    if ifb_name not in ("ifbqosdl0", "ifbqosdl1"):
+        raise ValueError("unapproved IFB name")
+    boot = read_text("/proc/sys/kernel/random/boot_id").strip()
     ifindex_raw = read_text(f"/sys/class/net/{ifb_name}/ifindex").strip()
     ifindex = int(ifindex_raw) if ifindex_raw.isdecimal() and int(ifindex_raw) > 0 else None
     alias = run(["ip", "-j", "link", "show", "dev", ifb_name])
