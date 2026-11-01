@@ -1,3 +1,8 @@
+### 1 November 2026 — Read-only interface filter consumer scan
+
+- Operator enumerated ingress and egress filters on eth0, eth1, ifbqosdl0, lo, ppp0, wlan0. Only ppp0 ingress displayed a matchall pref 49132 / handle 0x1 mirred egress redirect to ifbqosdl0; other inspected default chains printed no filters. Ansible shell reported changed due to command module semantics; only read-only tc show commands ran.
+- This does not exhaust non-default tc chains or establish IFB ownership, and file-only rollback is insufficient. **No cutover authorised, no kernel state changed.**
+
 ### 1 November 2026 — Updated read-only legacy IFB kernel preflight passed
 
 - Operator executed revised preflight syntax check and live read-only inspection: **6 OK, 0 changed, 0 failed**.
