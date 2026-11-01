@@ -40,7 +40,7 @@ def decide(owner: Mapping[str, Any] | None, actual: Mapping[str, Any]) -> Decisi
         return Decision("preserve", "unexpected ownership record fields")
     if not isinstance(owner["boot_id"], str) or not BOOT_RE.fullmatch(owner["boot_id"]):
         return Decision("preserve", "invalid boot ID")
-    if owner["ifb_name"] != "ifbqosdl0" or not _positive_int(owner["ifb_ifindex"]):
+    if owner["ifb_name"] not in ("ifbqosdl0", "ifbqosdl1") or not _positive_int(owner["ifb_ifindex"]):
         return Decision("preserve", "invalid recorded IFB identity")
     if not isinstance(owner["token"], str) or not TOKEN_RE.fullmatch(owner["token"]):
         return Decision("preserve", "invalid install token")
