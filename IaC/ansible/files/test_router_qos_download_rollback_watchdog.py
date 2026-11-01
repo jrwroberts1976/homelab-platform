@@ -59,6 +59,7 @@ class WatchdogTests(unittest.TestCase):
     def test_restore_both_entrypoints(self):
         result = self.run_watchdog("restore")
         self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+        self.assertEqual(result.stderr, "", "EXIT trap must not reference out-of-scope paths")
         self.assertEqual(self.ctrl.read_bytes(), self.old_ctrl)
         self.assertEqual(self.hook.read_bytes(), self.old_hook)
         self.assertFalse(list(self.active.glob(".*.??????")))
