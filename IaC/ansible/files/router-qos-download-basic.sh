@@ -51,8 +51,35 @@ case "${1:-}" in
     # After a PPP reconnect the old ppp0 disappears, but its IFB may remain.
     # Refuse orphan cleanup until authoritative ownership recovery is implemented.
     if has_ifb && clean_wan; then
-      echo "REFUSE: orphan IFB ownership unverified; manual recovery required"
-      exit 2
+      # Reconnect: reuse only a recorded, kernel-verified IFB. Never delete it.
+      # A failed attach removes only the clsact/filter created by this attempt.
+      STAMP_HELPER=/usr/local/libexec/router-qos-download/stamp.py
+      [[ -f "$STAMP_HELPER" && ! -L "$STAMP_HELPER" ]] ||
+        { echo "REFUSE: ownership verifier missing"; exit 2; }
+      python3 "$STAMP_HELPER" verify-reattach ||
+        { echo "REFUSE: orphan IFB ownership unverified"; exit 2; }
+      reconnect_filter=0
+      reconnect_clsact=0
+      reconnect_rollback() {
+        local rc=$?
+        trap - ERR
+        if (( reconnect_filter )); then
+          tc filter del dev "$WAN" ingress pref "$PREF" || true
+        fi
+        if (( reconnect_clsact )) && [[ -z "$(filters)" ]]; then
+          tc qdisc del dev "$WAN" clsact || true
+        fi
+        return "$rc"
+      }
+      trap 'reconnect_rollback' ERR
+      tc qdisc add dev "$WAN" clsact
+      reconnect_clsact=1
+      tc filter add dev "$WAN" ingress pref "$PREF" matchall action mirred egress redirect dev "$IFB"
+      reconnect_filter=1
+      owned || { echo "REFUSE: reconnect verification failed"; false; }
+      trap - ERR
+      echo "PASS: verified IFB reattached after PPP reconnect"
+      exit 0
     fi
     if has_ifb || ! clean_wan; then
       echo "REFUSE: unexpected or partial download QoS state"; exit 2
