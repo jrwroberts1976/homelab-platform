@@ -1,0 +1,1 @@
+alert ip 192.168.2.0/24 any -> any any (msg:"Router-01 network-wide inspection verification"; threshold:type limit, track by_src, count 1, seconds 60; sid:9900010; rev:2;)

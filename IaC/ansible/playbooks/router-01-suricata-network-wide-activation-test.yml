@@ -1,0 +1,223 @@
+---
+- name: Controlled network-wide Suricata NFQUEUE inspection test
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit activation approval
+      ansible.builtin.assert:
+        that:
+          - router_suricata_network_activation_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Confirm production router services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - router-pppoe.service
+        - dnsmasq.service
+        - unbound.service
+        - nftables.service
+        - router-qos-upload.service
+      changed_when: false
+
+    - name: Confirm clean starting state
+      ansible.builtin.shell: |
+        set -eu
+        ! nft list table inet router_suricata_ips >/dev/null 2>&1
+        ! systemctl is-active --quiet router-suricata-nfq.service
+        ! systemctl is-active --quiet router-suricata-rollback.timer
+      changed_when: false
+
+    - name: Stage device-scoped queue rules
+      ansible.builtin.copy:
+        src: ../files/router-01/suricata-nfqueue-network-wide-test.nft
+        dest: /tmp/router-suricata-nfq-activation.nft
+        mode: '0600'
+
+    - name: Validate queue configuration without activation
+      ansible.builtin.command:
+        argv: [nft, -c, -f, /tmp/router-suricata-nfq-activation.nft]
+      changed_when: false
+
+    - name: Activate guarded inspection test
+      block:
+        - name: Arm automatic rollback
+          ansible.builtin.systemd_service:
+            name: router-suricata-rollback.timer
+            state: started
+
+        - name: Verify rollback deadline exists
+          ansible.builtin.shell: |
+            set -eu
+            systemctl is-active --quiet router-suricata-rollback.timer
+
+            unit_path=$(busctl call org.freedesktop.systemd1 \
+              /org/freedesktop/systemd1 \
+              org.freedesktop.systemd1.Manager GetUnit \
+              s router-suricata-rollback.timer | cut -d '"' -f2)
+
+            deadline=$(busctl get-property org.freedesktop.systemd1 \
+              "$unit_path" org.freedesktop.systemd1.Timer \
+              NextElapseUSecMonotonic | awk '$1 == "t" {print $2}')
+
+            now=$(python3 -c 'import time; print(time.clock_gettime_ns(time.CLOCK_MONOTONIC)//1000)')
+
+            test -n "$deadline"
+            test "$deadline" -gt "$((now + 60000000))"
+            echo "PASS: rollback deadline has over 60 seconds remaining"
+          changed_when: false
+
+        - name: Select network-wide alert-only signature
+          ansible.builtin.copy:
+            dest: /etc/systemd/system/router-suricata-nfq.service.d/alert-only.conf
+            owner: root
+            group: root
+            mode: '0644'
+            content: |
+              [Service]
+              ExecStart=
+              ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml -S /etc/suricata/router-nfq-network-wide-alert.rules -q 10 --set stream.midstream-policy=ignore --set exception-policy=ignore --set stream.drop-invalid=no
+
+        - name: Reload systemd for network-wide inspection
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+
+        - name: Start dedicated NFQUEUE inspector
+          ansible.builtin.systemd_service:
+            name: router-suricata-nfq.service
+            state: started
+
+        - name: Wait for queue 10 listener
+          ansible.builtin.shell: |
+            for i in $(seq 1 30); do
+              if [ -r /proc/net/netfilter/nfnetlink_queue ] &&
+                 awk '$1 == 10 { found=1 } END { exit !found }' \
+                   /proc/net/netfilter/nfnetlink_queue; then
+                echo "Queue 10 listener ready"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Queue 10 listener not ready" >&2
+            exit 1
+          changed_when: false
+
+        - name: Verify sufficient rollback time before queue activation
+          ansible.builtin.shell: |
+            set -eu
+            systemctl is-active --quiet router-suricata-rollback.timer
+
+            unit_path=$(busctl call org.freedesktop.systemd1 \
+              /org/freedesktop/systemd1 \
+              org.freedesktop.systemd1.Manager GetUnit \
+              s router-suricata-rollback.timer | cut -d '"' -f2)
+
+            deadline=$(busctl get-property org.freedesktop.systemd1 \
+              "$unit_path" org.freedesktop.systemd1.Timer \
+              NextElapseUSecMonotonic | awk '$1 == "t" {print $2}')
+
+            now=$(python3 -c 'import time; print(time.clock_gettime_ns(time.CLOCK_MONOTONIC)//1000)')
+
+            test -n "$deadline"
+            test "$deadline" -gt "$((now + 60000000))"
+            echo "PASS: rollback deadline has over 60 seconds remaining"
+          changed_when: false
+
+        - name: Confirm inspector and queue still ready
+          ansible.builtin.shell: |
+            set -eu
+            systemctl is-active --quiet router-suricata-nfq.service
+            test -r /proc/net/netfilter/nfnetlink_queue
+            awk '$1 == 10 { found=1 } END { exit !found }' /proc/net/netfilter/nfnetlink_queue
+            echo "PASS: Suricata running and queue 10 registered"
+          changed_when: false
+
+        - name: Install temporary scoped NFQUEUE rules
+          ansible.builtin.command:
+            argv: [nft, -f, /tmp/router-suricata-nfq-activation.nft]
+
+        - name: Verify internet connectivity through network-wide inspection
+          ansible.builtin.command:
+            argv:
+              - curl
+              - --noproxy
+              - "*"
+              - -4
+              - -fsS
+              - --output
+              - /dev/null
+              - --connect-timeout
+              - "5"
+              - --max-time
+              - "10"
+              - https://example.com/
+          delegate_to: media-01
+          become: false
+          changed_when: false
+
+        - name: Measure network-wide inspection performance
+          ansible.builtin.shell: |
+            set -eu
+
+            echo "=== SURICATA PROCESS ==="
+            pid=$(systemctl show router-suricata-nfq.service --value -p MainPID)
+            test "$pid" -gt 0
+            ps -p "$pid" -o pid,pcpu,pmem,rss,etime,args
+
+            echo "=== SYSTEM MEMORY ==="
+            free -m
+
+            echo "=== NFQUEUE STATISTICS ==="
+            cat /proc/net/netfilter/nfnetlink_queue
+
+            echo "=== NFQUEUE PACKET COUNTERS ==="
+            nft -a list table inet router_suricata_ips
+
+            echo "=== SURICATA SERVICE ==="
+            systemctl is-active router-suricata-nfq.service
+
+            echo "=== CAKE QOS ==="
+            tc -s qdisc show dev eth1
+            tc -s qdisc show dev ifbqosdl0
+          changed_when: false
+          register: network_inspection_metrics
+
+        - name: Display network-wide inspection metrics
+          ansible.builtin.debug:
+            var: network_inspection_metrics.stdout_lines
+
+        - name: Report active test rules and queue
+          ansible.builtin.shell: |
+            nft -a list table inet router_suricata_ips
+            cat /proc/net/netfilter/nfnetlink_queue
+            systemctl list-timers --all router-suricata-rollback.timer
+          changed_when: false
+          register: activation_evidence
+
+        - name: Display activation evidence
+          ansible.builtin.debug:
+            var: activation_evidence.stdout_lines
+
+      rescue:
+        - name: Immediately remove queue rules on activation error
+          ansible.builtin.command:
+            argv: [/usr/local/sbin/router-suricata-rollback]
+
+        - name: Verify NFQUEUE table was removed
+          ansible.builtin.command:
+            argv: [nft, list, table, inet, router_suricata_ips]
+          register: rollback_table_check
+          changed_when: false
+          failed_when: rollback_table_check.rc == 0
+
+        - name: Stop failed activation timer
+          ansible.builtin.systemd_service:
+            name: router-suricata-rollback.timer
+            state: stopped
+
+        - name: Report aborted activation
+          ansible.builtin.fail:
+            msg: "Activation aborted; dedicated NFQUEUE rollback executed."

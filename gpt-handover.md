@@ -1672,3 +1672,41 @@ Outstanding:
 - Legacy docker-01 entries remain in BirdNET, Komodo and monitoring groups.
 - Router inventory reconciliation is required before any deployment.
 - No monitoring roles, scans or services deployed by this integration.
+
+### Suricata network-wide observation milestone — 2026-11-02
+
+GitHub issue: #274
+Branch: feature/router-suricata-passive-stage-20261101
+
+- Suricata 7.0.10 operating through dedicated NFQUEUE 10.
+- Temporary network-wide inspection covers forwarded LAN IPv4
+  traffic in both directions.
+- Production firewall, PPPoE, DHCP, DNS and CAKE preserved.
+- Three-minute independent rollback proven.
+- Previous observation tests produced stream_error drops.
+- Experimental observation-only settings:
+  stream.midstream-policy=ignore
+  exception-policy=ignore
+  stream.drop-invalid=no
+- Latest test: 356,093 packets processed, 356,093 accepted,
+  zero dropped, zero NFQUEUE processing errors.
+- Successful automatic rollback at 10:14:39 GMT.
+- Original alert-only service configuration restored.
+- Rollback timer updated through Ansible with
+  RemainAfterElapse=no.
+- Timer verified inactive and disabled at boot.
+- IPS metrics collector and deployment playbook staged.
+
+Security limitations:
+- Experimental stream settings relax enforcement.
+- Observation-mode success does not establish production
+  blocking safety or detection effectiveness.
+- Permanent network-wide IPS remains disabled.
+
+Next:
+- Validate and commit staged IaC.
+- Verify Prometheus/Grafana IPS metrics.
+- Conduct sustained performance testing.
+- Define production detection and blocking policies.
+- Verify reboot and PPPoE reconnect behaviour before
+  enabling persistent IPS.

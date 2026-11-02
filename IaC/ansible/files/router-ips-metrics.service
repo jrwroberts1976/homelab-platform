@@ -1,0 +1,8 @@
+[Unit]
+Description=Collect router Suricata IPS metrics for Prometheus
+After=network.target
+
+[Service]
+Type=oneshot
+User=root
+ExecStart=/usr/bin/python3 /usr/local/libexec/router-ips-prometheus-collector.py --output-dir /var/lib/prometheus/node-exporter

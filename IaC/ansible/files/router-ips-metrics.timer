@@ -1,0 +1,11 @@
+[Unit]
+Description=Update router Suricata IPS metrics every 30 seconds
+
+[Timer]
+OnBootSec=30s
+OnUnitInactiveSec=30s
+AccuracySec=5s
+Unit=router-ips-metrics.service
+
+[Install]
+WantedBy=timers.target

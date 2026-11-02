@@ -1,0 +1,77 @@
+---
+- name: Deploy router Suricata IPS metrics
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require approval and correct router
+      ansible.builtin.assert:
+        that:
+          - router_ips_metrics_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - not ansible_check_mode
+
+    - name: Verify existing textfile directory
+      ansible.builtin.stat:
+        path: /var/lib/prometheus/node-exporter
+      register: textdir
+
+    - name: Require existing collector directory
+      ansible.builtin.assert:
+        that:
+          - textdir.stat.isdir | default(false)
+          - not (textdir.stat.islnk | default(false))
+
+    - name: Install IPS metrics collector
+      ansible.builtin.copy:
+        src: ../files/router-ips-prometheus-collector.py
+        dest: /usr/local/libexec/router-ips-prometheus-collector.py
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install IPS metrics systemd units
+      ansible.builtin.copy:
+        src: "../files/{{ item }}"
+        dest: "/etc/systemd/system/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - router-ips-metrics.service
+        - router-ips-metrics.timer
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Generate initial IPS metrics
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - /usr/local/libexec/router-ips-prometheus-collector.py
+          - --output-dir
+          - /var/lib/prometheus/node-exporter
+      changed_when: false
+
+    - name: Enable IPS collection timer
+      ansible.builtin.systemd_service:
+        name: router-ips-metrics.timer
+        enabled: true
+        state: started
+
+    - name: Verify metrics exposed by node exporter
+      ansible.builtin.shell: |
+        set -euo pipefail
+        curl -fsS --max-time 10 http://127.0.0.1:9100/metrics |
+          grep -E '^homelab_router_ips_(active|inspector_up|queue_registered|collection_success) '
+      args:
+        executable: /bin/bash
+      changed_when: false
+      register: ips_metrics
+
+    - name: Display IPS metrics
+      ansible.builtin.debug:
+        var: ips_metrics.stdout_lines

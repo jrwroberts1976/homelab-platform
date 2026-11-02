@@ -25,6 +25,7 @@
           [Timer]
           OnActiveSec=3min
           AccuracySec=1s
+          RemainAfterElapse=no
           Unit=router-suricata-rollback.service
 
           [Install]
