@@ -1,0 +1,81 @@
+---
+- name: Stage dedicated Suricata NFQUEUE service
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require approval and correct router
+      ansible.builtin.assert:
+        that:
+          - router_suricata_nfq_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Confirm default Suricata service is inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, suricata.service]
+      register: default_service
+      changed_when: false
+      failed_when: default_service.stdout | trim != 'inactive'
+
+    - name: Confirm existing NFQUEUE table is absent
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, router_suricata_ips]
+      register: queue_table
+      changed_when: false
+      failed_when: queue_table.rc == 0
+
+    - name: Validate Suricata configuration
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/suricata
+          - -T
+          - -c
+          - /etc/suricata/suricata.yaml
+      changed_when: false
+
+    - name: Install dedicated NFQUEUE service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/router-suricata-nfq.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Router-01 Suricata NFQUEUE IPS
+          After=network-online.target
+          Wants=network-online.target
+          Conflicts=suricata.service
+
+          [Service]
+          Type=simple
+          ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10
+          Restart=no
+          TimeoutStopSec=30
+          ProtectHome=true
+
+          [Install]
+          WantedBy=multi-user.target
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Verify service unit
+      ansible.builtin.command:
+        argv:
+          - systemd-analyze
+          - verify
+          - /etc/systemd/system/router-suricata-nfq.service
+      changed_when: false
+
+    - name: Ensure NFQUEUE service remains stopped and disabled
+      ansible.builtin.systemd_service:
+        name: router-suricata-nfq.service
+        state: stopped
+        enabled: false
+
+    - name: Report staged service
+      ansible.builtin.debug:
+        msg: "NFQUEUE service staged; queue 10; NOT activated"

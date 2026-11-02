@@ -29,12 +29,17 @@
               exit 0
           fi
 
+          # Remove packet interception before stopping Suricata.
+          # Firewall recovery must not depend on systemd succeeding.
           if /usr/sbin/nft list table inet "$TABLE" >/dev/null 2>&1; then
               /usr/sbin/nft delete table inet "$TABLE"
               echo "Removed dedicated Suricata NFQUEUE table"
           else
               echo "Suricata NFQUEUE table absent; no change"
           fi
+
+          # Stop only the dedicated NFQUEUE inspector.
+          /usr/bin/systemctl stop router-suricata-nfq.service || true
 
     - name: Install independent systemd rollback service
       ansible.builtin.copy:
