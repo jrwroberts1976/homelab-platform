@@ -1,0 +1,31 @@
+---
+- name: Stage controlled Suricata blocking test
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit staging approval
+      ansible.builtin.assert:
+        that:
+          - router_nfq_block_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+
+    - name: Install dedicated blocking test signature
+      ansible.builtin.copy:
+        src: ../files/router-01/suricata-nfq-block-test.rules
+        dest: /etc/suricata/router-nfq-block-test.rules
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate isolated blocking signature
+      ansible.builtin.command:
+        argv:
+          - suricata
+          - -T
+          - -c
+          - /etc/suricata/suricata.yaml
+          - -S
+          - /etc/suricata/router-nfq-block-test.rules
+      changed_when: false
