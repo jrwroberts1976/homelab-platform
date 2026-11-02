@@ -127,7 +127,7 @@ cloud-01 is the Proxmox QEMU VM200 production host running Debian 13, with corro
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-02T08:33:19+00:00`
+- Last assessed: `2026-11-02T09:35:37+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
