@@ -1,0 +1,57 @@
+---
+- name: Stage Suricata NFQUEUE rollback timer
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit timer staging approval
+      ansible.builtin.assert:
+        that:
+          - router_suricata_timer_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Install rollback timer
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/router-suricata-rollback.timer
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Automatic rollback of temporary Suricata NFQUEUE rules
+
+          [Timer]
+          OnActiveSec=3min
+          AccuracySec=1s
+          Unit=router-suricata-rollback.service
+
+          [Install]
+          WantedBy=timers.target
+
+    - name: Reload systemd definitions
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Confirm rollback timer is inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-suricata-rollback.timer]
+      register: timer_state
+      changed_when: false
+      failed_when: timer_state.stdout | trim != 'inactive'
+
+    - name: Confirm timer is not enabled at boot
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-suricata-rollback.timer]
+      register: timer_enabled
+      changed_when: false
+      failed_when: timer_enabled.stdout | trim != 'disabled'
+
+    - name: Validate timer configuration
+      ansible.builtin.command:
+        argv:
+          - systemd-analyze
+          - verify
+          - /etc/systemd/system/router-suricata-rollback.timer
+      changed_when: false
