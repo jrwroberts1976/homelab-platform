@@ -82,6 +82,7 @@ Validated on 5 October 2026, all **15 Ansible-managed Debian/Linux hosts** are e
 | garden-room.jameshouse | `192.168.2.74` | `f8:17:2d:65:b8:98` | [Open](garden-room-jameshouse.md) |
 | 192.168.2.184 | `192.168.2.184` | `1c:30:08:9a:62:74` | [Open](192-168-2-184.md) |
 | iPhone | `192.168.2.135` | `be:ba:54:d7:ec:6f` | [Open](iphone-d7ec6f.md) |
+| Samsung embedded network device | `192.168.2.147` | `5c:a3:9d:49:46:22` | [Open](samsung-embedded-network-device.md) |
 
 ## What to maintain
 
