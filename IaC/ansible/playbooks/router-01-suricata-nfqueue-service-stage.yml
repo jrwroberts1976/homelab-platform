@@ -50,7 +50,7 @@
 
           [Service]
           Type=simple
-          ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10
+          ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10 --set stream.midstream-policy=ignore --set exception-policy=ignore --set stream.drop-invalid=no
           Restart=no
           TimeoutStopSec=30
           ProtectHome=true

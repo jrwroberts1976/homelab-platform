@@ -41,22 +41,6 @@
           # Stop only the dedicated NFQUEUE inspector.
           /usr/bin/systemctl stop router-suricata-nfq.service || true
 
-          # Restore the safe alert-only configuration after interception
-          # has been removed. This also runs during independent timer rollback.
-          OVERRIDE=/etc/systemd/system/router-suricata-nfq.service.d/alert-only.conf
-          TMP="${OVERRIDE}.rollback-tmp"
-
-          printf '%s\n' \
-              '[Service]' \
-              'ExecStart=' \
-              'ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml -S /etc/suricata/router-nfq-alert-only.rules -q 10' \
-              > "$TMP"
-
-          chmod 0644 "$TMP"
-          mv -f "$TMP" "$OVERRIDE"
-          /usr/bin/systemctl daemon-reload
-          echo "Restored Suricata alert-only configuration"
-
     - name: Install independent systemd rollback service
       ansible.builtin.copy:
         dest: /etc/systemd/system/router-suricata-rollback.service

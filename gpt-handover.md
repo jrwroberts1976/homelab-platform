@@ -1746,3 +1746,24 @@ Next:
 - Confirm dashboard rendering through an authenticated session.
 - Perform controlled sustained throughput and latency tests.
 - Assess production IPS detection and blocking policies.
+
+## 2026-11-02 — Router-01 Suricata network-wide activation
+
+- Suricata 7.0.10 deployed on router-01.
+- Production ruleset validated: 53,304 alert signatures and 1 drop signature.
+- Network-wide NFQUEUE interception enabled for IPv4 LAN 192.168.2.0/24 over ppp0.
+- Suricata service and dedicated NFQUEUE queue service active and enabled at boot.
+- Dedicated nftables table: inet router_suricata_ips.
+- Production firewall, NAT and PPPoE MSS tables preserved.
+- Suricata uses the tested stream handling overrides:
+  stream.midstream-policy=ignore,
+  exception-policy=ignore,
+  stream.drop-invalid=no.
+- Guarded activation passed; household internet access verified.
+- Previous controlled run inspected 151,704 packets with zero Suricata drops.
+- Emergency rollback script tested successfully.
+- Current interception verified with 213,338 packets counted across both directions.
+- PPPoE, DHCP and DNS confirmed active.
+- Remaining validation: actual reboot recovery, nftables reload recovery,
+  sustained traffic performance and production IPS enforcement behaviour.
+- Temporary rollback timer inactive following successful permanent activation.
