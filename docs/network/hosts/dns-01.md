@@ -128,13 +128,13 @@ Managed Debian 13 LXC container CT101 on Proxmox-2, providing Pi-hole and Unboun
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-02T06:20:32+00:00`
-- Pending updates: **5**
-- Security updates pending: **2**
+- Last assessed: `2026-11-02T07:24:32+00:00`
+- Pending updates: **3**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-11-01T00:11:31+00:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-11-02T06:35:47+00:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->

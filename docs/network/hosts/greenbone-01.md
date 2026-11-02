@@ -127,13 +127,13 @@ Managed QEMU VM greenbone-01 on Proxmox-2, serving the Greenbone vulnerability s
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-02T06:09:19+00:00`
-- Pending updates: **13**
-- Security updates pending: **4**
+- Last assessed: `2026-11-02T07:11:05+00:00`
+- Pending updates: **9**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-10-25T06:14:44+00:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-11-02T06:17:23+00:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
