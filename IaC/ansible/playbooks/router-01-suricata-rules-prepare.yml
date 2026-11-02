@@ -1,0 +1,81 @@
+---
+- name: Prepare Suricata rules on router-01 without enabling capture
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Require explicit rules preparation approval and known target
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rules_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'aarch64'
+        fail_msg: 'Rules preparation refused: approval or router identity missing.'
+
+    - name: Require Suricata inactive before rules preparation
+      ansible.builtin.command:
+        argv: [systemctl, is-active, suricata.service]
+      register: router_suricata_inactive
+      changed_when: false
+      failed_when: router_suricata_inactive.stdout | trim != 'inactive'
+
+    - name: Require Suricata disabled before rules preparation
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, suricata.service]
+      register: router_suricata_disabled
+      changed_when: false
+      failed_when: router_suricata_disabled.stdout | trim != 'disabled'
+
+    - name: Verify critical routing services before updating rules
+      ansible.builtin.command:
+        argv: [systemctl, is-active, '{{ item }}']
+      loop:
+        - router-pppoe.service
+        - dnsmasq.service
+        - unbound.service
+        - nftables.service
+        - router-qos-upload.service
+      changed_when: false
+
+    - name: Download public ET Open rules without restarting Suricata
+      ansible.builtin.command:
+        argv: [suricata-update, --no-reload]
+      register: router_suricata_rule_update
+      changed_when: true
+
+    - name: Verify generated rules file is nonempty
+      ansible.builtin.stat:
+        path: /var/lib/suricata/rules/suricata.rules
+      register: router_suricata_rules_stat
+      failed_when: not router_suricata_rules_stat.stat.exists or router_suricata_rules_stat.stat.size | int == 0
+
+    - name: Validate Suricata rules and packaged configuration
+      ansible.builtin.command:
+        argv: [suricata, -T, -c, /etc/suricata/suricata.yaml]
+      changed_when: false
+
+    - name: Verify Suricata stays inactive after rules update
+      ansible.builtin.command:
+        argv: [systemctl, is-active, suricata.service]
+      register: router_suricata_after
+      changed_when: false
+      failed_when: router_suricata_after.stdout | trim != 'inactive'
+
+    - name: Verify routing services after rules update
+      ansible.builtin.command:
+        argv: [systemctl, is-active, '{{ item }}']
+      loop:
+        - router-pppoe.service
+        - dnsmasq.service
+        - unbound.service
+        - nftables.service
+        - router-qos-upload.service
+      changed_when: false
+
+    - name: Report rules prepared with packet capture still off
+      ansible.builtin.debug:
+        msg: 'ROUTER_SURICATA_RULES=PASS; capture still inactive; AF_PACKET interface remains unmodified'

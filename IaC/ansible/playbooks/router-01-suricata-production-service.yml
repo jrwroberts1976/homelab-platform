@@ -1,0 +1,54 @@
+---
+- name: Prepare production Suricata NFQUEUE service
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit approval and correct router
+      ansible.builtin.assert:
+        that:
+          - router_suricata_production_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Confirm Suricata is stopped
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-suricata-nfq.service]
+      register: suricata_state
+      changed_when: false
+      failed_when: suricata_state.stdout | trim != 'inactive'
+
+    - name: Remove test-only service override
+      ansible.builtin.file:
+        path: /etc/systemd/system/router-suricata-nfq.service.d/alert-only.conf
+        state: absent
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Validate production ruleset
+      ansible.builtin.command:
+        argv:
+          - suricata
+          - -T
+          - -c
+          - /etc/suricata/suricata.yaml
+      changed_when: false
+
+    - name: Confirm production service command
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-suricata-nfq.service
+          - -p
+          - ExecStart
+      register: production_command
+      changed_when: false
+      failed_when: "' -S ' in production_command.stdout"
+
+    - name: Display result
+      ansible.builtin.debug:
+        var: production_command.stdout

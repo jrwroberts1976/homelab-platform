@@ -1,0 +1,72 @@
+---
+- name: Stage independent Suricata NFQUEUE rollback
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit rollback staging approval
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rollback_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Install dedicated rollback script
+      ansible.builtin.copy:
+        dest: /usr/local/sbin/router-suricata-rollback
+        owner: root
+        group: root
+        mode: '0750'
+        content: |
+          #!/bin/sh
+          set -eu
+
+          TABLE=router_suricata_ips
+
+          if [ "${1:-}" = "--dry-run" ]; then
+              echo "DRY RUN: would remove inet $TABLE if present"
+              exit 0
+          fi
+
+          # Remove packet interception before stopping Suricata.
+          # Firewall recovery must not depend on systemd succeeding.
+          if /usr/sbin/nft list table inet "$TABLE" >/dev/null 2>&1; then
+              /usr/sbin/nft delete table inet "$TABLE"
+              echo "Removed dedicated Suricata NFQUEUE table"
+          else
+              echo "Suricata NFQUEUE table absent; no change"
+          fi
+
+          # Stop only the dedicated NFQUEUE inspector.
+          /usr/bin/systemctl stop router-suricata-nfq.service || true
+
+    - name: Install independent systemd rollback service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/router-suricata-rollback.service
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Unit]
+          Description=Remove temporary Suricata NFQUEUE rules
+
+          [Service]
+          Type=oneshot
+          ExecStart=/usr/local/sbin/router-suricata-rollback
+
+    - name: Load systemd service definition
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Verify rollback script without changing firewall
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/router-suricata-rollback
+          - --dry-run
+      register: rollback_dry_run
+      changed_when: false
+
+    - name: Report dry-run result
+      ansible.builtin.debug:
+        var: rollback_dry_run.stdout

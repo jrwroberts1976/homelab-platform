@@ -1,0 +1,57 @@
+---
+- name: Stage persistent Suricata interception without activation
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require approval and correct router
+      ansible.builtin.assert:
+        that:
+          - router_suricata_persistence_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Verify interception is inactive
+      ansible.builtin.command:
+        argv: [nft, list, table, inet, router_suricata_ips]
+      register: queue_table
+      failed_when: queue_table.rc == 0
+      changed_when: false
+
+    - name: Install dedicated NFQUEUE rules file
+      ansible.builtin.copy:
+        src: ../files/router-01/suricata-nfqueue-network-wide-test.nft
+        dest: /etc/suricata/router-suricata-queue.nft
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate NFQUEUE rules
+      ansible.builtin.command:
+        argv: [nft, -c, -f, /etc/suricata/router-suricata-queue.nft]
+      changed_when: false
+
+    - name: Install queue systemd unit
+      ansible.builtin.copy:
+        src: ../files/router-01/router-suricata-queue.service
+        dest: /etc/systemd/system/router-suricata-queue.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Verify service definition
+      ansible.builtin.command:
+        argv:
+          - systemd-analyze
+          - verify
+          - /etc/systemd/system/router-suricata-queue.service
+      changed_when: false
+
+    - name: Report staging complete
+      ansible.builtin.debug:
+        msg: "Suricata persistence staged; NOT activated"

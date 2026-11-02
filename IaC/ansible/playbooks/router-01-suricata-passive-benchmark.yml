@@ -1,0 +1,106 @@
+---
+- name: Benchmark Suricata passive capture with TPACKET_V3
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Confirm Suricata service is not running
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - suricata.service
+      register: suricata_state
+      changed_when: false
+      failed_when: suricata_state.stdout | trim != 'inactive'
+
+    - name: Confirm no existing Suricata process
+      ansible.builtin.shell: |
+        ps -eo comm= | grep -qx Suricata-Main
+      register: existing_process
+      changed_when: false
+      failed_when: existing_process.rc == 0
+
+    - name: Benchmark with an isolated configuration
+      block:
+        - name: Copy production configuration to temporary file
+          ansible.builtin.copy:
+            src: /etc/suricata/suricata.yaml
+            dest: /tmp/router-suricata-benchmark.yaml
+            remote_src: true
+            mode: '0600'
+
+        - name: Enable memory-mapped AF_PACKET capture
+          ansible.builtin.replace:
+            path: /tmp/router-suricata-benchmark.yaml
+            regexp: '^    #use-mmap: yes$'
+            replace: '    use-mmap: yes'
+
+        - name: Enable TPACKET_V3
+          ansible.builtin.replace:
+            path: /tmp/router-suricata-benchmark.yaml
+            regexp: '^    #tpacket-v3: yes$'
+            replace: '    tpacket-v3: yes'
+
+        - name: Validate temporary configuration
+          ansible.builtin.command:
+            argv:
+              - suricata
+              - -T
+              - -c
+              - /tmp/router-suricata-benchmark.yaml
+          changed_when: false
+
+        - name: Run time-limited benchmark and collect samples
+          ansible.builtin.shell: |
+            set -u
+
+            timeout --signal=INT --kill-after=15s 120s \
+              suricata -c /tmp/router-suricata-benchmark.yaml \
+              --af-packet=eth0 \
+              -l /var/log/suricata \
+              >/tmp/router-suricata-benchmark.log 2>&1 &
+
+            job=$!
+
+            echo "=== LIVE PROCESS SAMPLES ==="
+            for i in 1 2 3 4 5 6 7; do
+              sleep 15
+              ps -C Suricata-Main \
+                -o pid,%cpu,rss,etime,comm --no-headers || true
+            done
+
+            wait "$job"
+            rc=$?
+
+            echo "=== EXIT CODE ==="
+            echo "$rc"
+
+            echo "=== CAPTURE RESULT ==="
+            tail -12 /tmp/router-suricata-benchmark.log
+
+            echo "=== ROUTER HEALTH ==="
+            systemctl is-active router-pppoe.service
+            tc qdisc show dev eth1
+            tc qdisc show dev ifbqosdl0
+
+            if [ "$rc" -ne 0 ] && [ "$rc" -ne 124 ]; then
+              exit "$rc"
+            fi
+          args:
+            executable: /bin/bash
+          async: 180
+          poll: 15
+          register: benchmark_result
+          changed_when: false
+
+        - name: Report benchmark
+          ansible.builtin.debug:
+            var: benchmark_result.stdout_lines
+
+      always:
+        - name: Remove temporary configuration
+          ansible.builtin.file:
+            path: /tmp/router-suricata-benchmark.yaml
+            state: absent

@@ -1,0 +1,17 @@
+[Unit]
+Description=Suricata whole-network NFQUEUE interception
+Requires=nftables.service router-suricata-nfq.service
+PartOf=router-suricata-nfq.service
+Before=shutdown.target
+BindsTo=router-suricata-nfq.service
+After=nftables.service router-suricata-nfq.service
+
+[Service]
+Type=oneshot
+RemainAfterExit=yes
+ExecStart=/usr/sbin/nft -f /etc/suricata/router-suricata-queue.nft
+ExecStop=/usr/sbin/nft delete table inet router_suricata_ips
+TimeoutStartSec=15
+
+[Install]
+WantedBy=multi-user.target

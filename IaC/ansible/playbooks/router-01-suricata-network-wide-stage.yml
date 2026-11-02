@@ -1,0 +1,49 @@
+---
+- name: Stage network-wide Suricata inspection test
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit staging approval
+      ansible.builtin.assert:
+        that:
+          - router_suricata_network_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Stage network-wide NFQUEUE rules
+      ansible.builtin.copy:
+        src: ../files/router-01/suricata-nfqueue-network-wide-test.nft
+        dest: /tmp/router-suricata-nfqueue-network-wide.nft
+        owner: root
+        group: root
+        mode: '0600'
+
+    - name: Validate nftables rules without activating them
+      ansible.builtin.command:
+        argv:
+          - nft
+          - -c
+          - -f
+          - /tmp/router-suricata-nfqueue-network-wide.nft
+      changed_when: false
+
+    - name: Stage network-wide alert-only signature
+      ansible.builtin.copy:
+        src: ../files/router-01/suricata-nfq-network-wide-alert.rules
+        dest: /etc/suricata/router-nfq-network-wide-alert.rules
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate Suricata test signature
+      ansible.builtin.command:
+        argv:
+          - suricata
+          - -T
+          - -c
+          - /etc/suricata/suricata.yaml
+          - -S
+          - /etc/suricata/router-nfq-network-wide-alert.rules
+      changed_when: false

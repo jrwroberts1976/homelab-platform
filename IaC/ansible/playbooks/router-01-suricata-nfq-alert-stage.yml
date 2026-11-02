@@ -1,0 +1,69 @@
+---
+- name: Stage alert-only Suricata NFQUEUE test
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Require explicit approval
+      ansible.builtin.assert:
+        that:
+          - router_suricata_alert_stage_approved | default(false) | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Confirm NFQUEUE service is inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-suricata-nfq.service]
+      register: nfq_status
+      changed_when: false
+      failed_when: nfq_status.stdout | trim != 'inactive'
+
+    - name: Install isolated alert-only rule
+      ansible.builtin.copy:
+        src: ../files/router-01/suricata-nfq-alert-only.rules
+        dest: /etc/suricata/router-nfq-alert-only.rules
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Create NFQUEUE systemd override directory
+      ansible.builtin.file:
+        path: /etc/systemd/system/router-suricata-nfq.service.d
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Configure exclusive test rules for NFQUEUE service
+      ansible.builtin.copy:
+        dest: /etc/systemd/system/router-suricata-nfq.service.d/alert-only.conf
+        owner: root
+        group: root
+        mode: '0644'
+        content: |
+          [Service]
+          ExecStart=
+          ExecStart=/usr/bin/suricata -c /etc/suricata/suricata.yaml -S /etc/suricata/router-nfq-alert-only.rules -q 10
+
+    - name: Reload systemd
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Validate exclusive test rules
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/suricata
+          - -T
+          - -c
+          - /etc/suricata/suricata.yaml
+          - -S
+          - /etc/suricata/router-nfq-alert-only.rules
+      changed_when: false
+
+    - name: Verify NFQUEUE service remains disabled
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-suricata-nfq.service]
+      register: nfq_enabled
+      changed_when: false
+      failed_when: nfq_enabled.stdout | trim != 'disabled'

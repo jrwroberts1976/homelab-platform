@@ -1,3 +1,22 @@
+### 1 November 2026 — Suricata rules preparation stage queued
+
+- Operator confirmed `suricata -T -c /etc/suricata/suricata.yaml` returns **1** due to missing `/var/lib/suricata/rules/suricata.rules`. Packaged Suricata 7 service defaults to `--af-packet` and `eth0`; service is disabled/inactive; RAM 3.4GiB available.
+- Added separate approval-gated `IaC/ansible/playbooks/router-01-suricata-rules-prepare.yml`, which runs `suricata-update --no-reload`, validates nonempty rules and `suricata -T`, verifies inactive service and core router services before/after. **Not executed** as of this update. No capture interface, NFQUEUE, service-start or QoS edits.
+- Follow-up after rules pass: configure safe passive capture on `ppp0` under separate approval, no automatic activation until review.
+
+### 1 November 2026 — router-01 Suricata package staging verified
+
+- Operator ran `router-01-suricata-preflight.yml`: 6 OK, 0 changed, 0 failed; Debian 13 arm64, APT candidate Suricata 1:7.0.10-1+deb13u4, all five router services healthy.
+- Operator ran approval-gated `router-01-suricata-stage.yml` with `router_suricata_stage_approved=true`: 11 OK, 2 changed, 0 failures, Suricata version 7.0.10 RELEASE, installed but **stopped and disabled**, all five router services still healthy.
+- Capture, NFQUEUE and IPS remain OFF. Next: nonmutating installed-config/rule source inspection, then a distinct gated configuration and limited passive trial. No assertion yet on traffic-processing performance or full-line-rate packet loss.
+
+### 1 November 2026 — Router Suricata ARM64 passive IDS staging (source only)
+
+- On router-01, operator verified four ARM64 CPU cores, 3.5 GiB available memory, tcpdump available and both inbound/outbound TCP and UDP visibility on ppp0 with a 30-packet sample (zero drops in sample). Router services router-pppoe, dnsmasq, unbound, nftables, router-qos-upload active; CAKE eth1 13Mbit and ifbqosdl0 43Mbit unchanged.
+- Existing sensor-01 IaC is not directly applicable: AMD64 kernel and sensor-capture-nic.service dependencies. Router pilot must remain separate from network_sensor/network_sensor_config, with no Zeek or NFQUEUE.
+- Branch `feature/router-suricata-passive-stage-20261101` adds read-only `router-01-suricata-preflight.yml` and explicit approval-gated `router-01-suricata-stage.yml`. The latter installs only Debian Suricata and suricata-update packages using policy_rc_d=101, keeps Suricata stopped/disabled and verifies critical router services. This does not enable packet capture or IPS.
+- **Source only: not syntax-tested or deployed.** Next: controller syntax-check and read-only preflight; separately review package effects before explicit approval for package staging. Later work: limited passive ppp0 configuration, resource/performance envelope, logging, rollback and monitoring. Do not change QoS/PPPoE or deploy the sensor-01 role to router-01.
+
 ### 1 November 2026 — Issue #276 inbound/download CAKE QoS: PPPoE reconnect and reboot PASS
 
 - Existing working `router-01` download QoS script (`/usr/local/sbin/router-qos-download-basic`) and PPPoE `ip-up.d` hook were captured byte-for-byte into `IaC/ansible/files/router-qos-download-basic` and `router-qos-download-ip-up`. Minimal Ansible deployment `playbooks/router-01-qos-download-persist.yml` committed to `main` as `9c0480c6`; syntax validation and live idempotency test passed (ok=4, changed=0, failed=0). No replacement IFB or new QoS framework.
@@ -1653,3 +1672,98 @@ Outstanding:
 - Legacy docker-01 entries remain in BirdNET, Komodo and monitoring groups.
 - Router inventory reconciliation is required before any deployment.
 - No monitoring roles, scans or services deployed by this integration.
+
+### Suricata network-wide observation milestone — 2026-11-02
+
+GitHub issue: #274
+Branch: feature/router-suricata-passive-stage-20261101
+
+- Suricata 7.0.10 operating through dedicated NFQUEUE 10.
+- Temporary network-wide inspection covers forwarded LAN IPv4
+  traffic in both directions.
+- Production firewall, PPPoE, DHCP, DNS and CAKE preserved.
+- Three-minute independent rollback proven.
+- Previous observation tests produced stream_error drops.
+- Experimental observation-only settings:
+  stream.midstream-policy=ignore
+  exception-policy=ignore
+  stream.drop-invalid=no
+- Latest test: 356,093 packets processed, 356,093 accepted,
+  zero dropped, zero NFQUEUE processing errors.
+- Successful automatic rollback at 10:14:39 GMT.
+- Original alert-only service configuration restored.
+- Rollback timer updated through Ansible with
+  RemainAfterElapse=no.
+- Timer verified inactive and disabled at boot.
+- IPS metrics collector and deployment playbook staged.
+
+Security limitations:
+- Experimental stream settings relax enforcement.
+- Observation-mode success does not establish production
+  blocking safety or detection effectiveness.
+- Permanent network-wide IPS remains disabled.
+
+Next:
+- Validate and commit staged IaC.
+- Verify Prometheus/Grafana IPS metrics.
+- Conduct sustained performance testing.
+- Define production detection and blocking policies.
+- Verify reboot and PPPoE reconnect behaviour before
+  enabling persistent IPS.
+
+### Suricata IPS Grafana monitoring — 2026-11-02
+
+GitHub issue: #274
+Branch: feature/router-suricata-passive-stage-20261101
+
+- Existing Homelab Router QoS dashboard extended from
+  8 to 14 panels.
+- Original eight CAKE QoS panels preserved.
+- Four IPS status panels added:
+  interception, inspector, NFQUEUE, collector health.
+- Two NFQUEUE monitoring panels added:
+  queue depth and packet drop rate.
+- Dashboard deployed to monitor-01 through Ansible.
+- Deployment completed successfully: 7 tasks, 0 failures.
+- Grafana 13.2.1 running in Docker.
+- Production dashboard provisioning configured with
+  a 30-second refresh interval.
+- Dashboard file confirmed visible inside the container.
+- Grafana health API reports database OK.
+- Prometheus router-node-exporter target reports up=1.
+- IPS collector metrics verified in Prometheus.
+- Authenticated dashboard API verification remains pending
+  because unauthenticated requests returned HTTP 401.
+- Docker log retrieval produced a logging-stream error;
+  Grafana remained healthy.
+
+Security:
+- Permanent network-wide IPS remains disabled.
+- No router firewall, PPPoE, DHCP, DNS or QoS changes
+  were made during Grafana integration.
+
+Next:
+- Confirm dashboard rendering through an authenticated session.
+- Perform controlled sustained throughput and latency tests.
+- Assess production IPS detection and blocking policies.
+
+## 2026-11-02 — Router-01 Suricata network-wide activation
+
+- Suricata 7.0.10 deployed on router-01.
+- Production ruleset validated: 53,304 alert signatures and 1 drop signature.
+- Network-wide NFQUEUE interception enabled for IPv4 LAN 192.168.2.0/24 over ppp0.
+- Suricata service and dedicated NFQUEUE queue service active and enabled at boot.
+- Dedicated nftables table: inet router_suricata_ips.
+- Production firewall, NAT and PPPoE MSS tables preserved.
+- Suricata uses the tested stream handling overrides:
+  stream.midstream-policy=ignore,
+  exception-policy=ignore,
+  stream.drop-invalid=no.
+- Guarded activation passed; household internet access verified.
+- Previous controlled run inspected 151,704 packets with zero Suricata drops.
+- Emergency rollback script tested successfully.
+- Current interception verified with 213,338 packets counted across both directions.
+- PPPoE, DHCP and DNS confirmed active.
+- Remaining validation: actual reboot recovery, nftables reload recovery,
+  sustained traffic performance and production IPS enforcement behaviour.
+- Temporary rollback timer inactive following successful permanent activation.

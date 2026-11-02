@@ -1,0 +1,41 @@
+---
+- name: Read-only Suricata router preflight
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Verify expected production router identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture == 'aarch64'
+
+    - name: Read passive IDS package candidate
+      ansible.builtin.command:
+        argv: [apt-cache, policy, suricata]
+      register: suricata_candidate
+      changed_when: false
+
+    - name: Verify packet capture is supported
+      ansible.builtin.command:
+        argv: [ip, link, show, dev, ppp0]
+      changed_when: false
+
+    - name: Verify critical service baseline
+      ansible.builtin.command:
+        argv: [systemctl, is-active, '{{ item }}']
+      loop:
+        - router-pppoe.service
+        - dnsmasq.service
+        - unbound.service
+        - nftables.service
+        - router-qos-upload.service
+      changed_when: false
+
+    - name: Report package candidate
+      ansible.builtin.debug:
+        var: suricata_candidate.stdout_lines
