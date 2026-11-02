@@ -1,0 +1,1 @@
+alert ip 192.168.2.195 any -> any any (msg:"Router-01 NFQUEUE controlled inspection test"; sid:9900001; rev:1;)

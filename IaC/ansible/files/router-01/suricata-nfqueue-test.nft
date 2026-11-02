@@ -1,0 +1,13 @@
+table inet router_suricata_ips {
+    chain forward {
+        type filter hook forward priority 10; policy accept;
+
+        iifname "eth0" oifname "ppp0" \
+            ip saddr 192.168.2.195 \
+            counter queue num 10 bypass
+
+        iifname "ppp0" oifname "eth0" \
+            ip daddr 192.168.2.195 \
+            counter queue num 10 bypass
+    }
+}
