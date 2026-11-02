@@ -1710,3 +1710,39 @@ Next:
 - Define production detection and blocking policies.
 - Verify reboot and PPPoE reconnect behaviour before
   enabling persistent IPS.
+
+### Suricata IPS Grafana monitoring — 2026-11-02
+
+GitHub issue: #274
+Branch: feature/router-suricata-passive-stage-20261101
+
+- Existing Homelab Router QoS dashboard extended from
+  8 to 14 panels.
+- Original eight CAKE QoS panels preserved.
+- Four IPS status panels added:
+  interception, inspector, NFQUEUE, collector health.
+- Two NFQUEUE monitoring panels added:
+  queue depth and packet drop rate.
+- Dashboard deployed to monitor-01 through Ansible.
+- Deployment completed successfully: 7 tasks, 0 failures.
+- Grafana 13.2.1 running in Docker.
+- Production dashboard provisioning configured with
+  a 30-second refresh interval.
+- Dashboard file confirmed visible inside the container.
+- Grafana health API reports database OK.
+- Prometheus router-node-exporter target reports up=1.
+- IPS collector metrics verified in Prometheus.
+- Authenticated dashboard API verification remains pending
+  because unauthenticated requests returned HTTP 401.
+- Docker log retrieval produced a logging-stream error;
+  Grafana remained healthy.
+
+Security:
+- Permanent network-wide IPS remains disabled.
+- No router firewall, PPPoE, DHCP, DNS or QoS changes
+  were made during Grafana integration.
+
+Next:
+- Confirm dashboard rendering through an authenticated session.
+- Perform controlled sustained throughput and latency tests.
+- Assess production IPS detection and blocking policies.
