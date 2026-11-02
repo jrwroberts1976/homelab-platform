@@ -125,7 +125,7 @@ mail-relay-01 is CT102, an LXC container on PROXMOX running authoritative Debian
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-02T16:34:57+00:00`
+- Last assessed: `2026-11-02T17:38:34+00:00`
 - Pending updates: **5**
 - Security updates pending: **2**
 - Reboot required: **No**
