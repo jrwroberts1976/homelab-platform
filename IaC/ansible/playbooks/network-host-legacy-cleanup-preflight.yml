@@ -319,7 +319,7 @@
 
             other=set(found)-set(old)-set(generated)
             other_uid_sha=hashlib.sha256(
-                "\\n".join(sorted(other)).encode()).hexdigest()
+                "|".join(sorted(other)).encode()).hexdigest()
             print(json.dumps({
                 "grafana_api_other_uid_sha256":other_uid_sha,
                 "grafana_api_total_dashboards":len(found),
