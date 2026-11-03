@@ -108,6 +108,14 @@
       },sort_keys=True))
 
   tasks:
+    - name: Fail closed while single-dashboard provisioning canary remains unverified
+      ansible.builtin.fail:
+        msg: >-
+          The bulk retirement remains DRAFT ONLY. First execute and
+          verify network-host-legacy-dashboard-canary.yml, then update
+          this playbook for 51 remaining generated dashboards and
+          56 total retired dashboard UIDs. Do not run bulk cleanup now.
+
     - name: Require exact approval for irreversible 57-dashboard and 12-file retirement
       ansible.builtin.assert:
         that:
