@@ -24,6 +24,7 @@ providers:
       path: /etc/grafana/provisioning/dashboards/production
       foldersFromFilesStructure: false
 
+{% if monitoring_router_dhcp_device_pages_provider_enabled | default(false) | bool %}
   # Isolated new router-01 DHCP device pages; never resurrect old Network Hosts.
   - name: Router DHCP Devices
     orgId: 1
@@ -36,3 +37,4 @@ providers:
     options:
       path: /etc/grafana/provisioning/dashboards/router-dhcp-devices
       foldersFromFilesStructure: false
+{% endif %}
