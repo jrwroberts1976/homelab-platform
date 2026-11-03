@@ -39,15 +39,35 @@
       register: dhcp_test_before
       no_log: true
 
-    - name: Send precisely one test message through original configured SMTP path
+    - name: Send precisely one test using monitor-01 recipient settings (never printed)
       ansible.builtin.command:
         argv:
           - /usr/bin/python3
           - -B
-          - /usr/local/sbin/homelab-network-device-email-alert
-          - --test-email
-      environment:
-        NETWORK_DEVICE_ALERT_TO: "{{ lookup('ansible.builtin.env', 'NETWORK_DEVICE_ALERT_TO') }}"
+          - -c
+          - |
+            import os,subprocess
+            from pathlib import Path
+            config=Path('/etc/homelab-network-hosts/alerts.env')
+            if config.is_symlink() or not config.is_file():
+                raise SystemExit('Unsafe recipient configuration')
+            recipients=[]
+            for line in config.read_text().splitlines():
+                if line.strip().startswith('NETWORK_DEVICE_ALERT_TO='):
+                    value=line.split('=',1)[1].strip().strip('"').strip("'")
+                    if value:
+                        recipients.append(value)
+            if len(recipients)!=1:
+                raise SystemExit('Expected one configured email recipient')
+            env=dict(os.environ,NETWORK_DEVICE_ALERT_TO=recipients[0])
+            result=subprocess.run(
+                ['/usr/bin/python3','-B',
+                 '/usr/local/sbin/homelab-network-device-email-alert',
+                 '--test-email'],
+                capture_output=True,text=True,timeout=20,env=env)
+            if result.returncode or 'network_device_alert_test_sent' not in result.stdout:
+                raise SystemExit('SMTP test not acknowledged')
+            print('network_device_alert_test_sent')
       register: dhcp_test_sent
       changed_when: true
       no_log: true
