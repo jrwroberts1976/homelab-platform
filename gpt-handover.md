@@ -1870,7 +1870,7 @@ Next:
   inspects sole ownership, timer status, private JSON schema/counts,
   existing collector code and router reachability; makes NO production
   changes, backups or Nmap scans.
-- Collector canonical mapping corrected from retired `docker-01`
+- Collector canonical mapping corrected from retired `docker-01` <!-- historical -->
   (`192.168.2.220`) to actual `router-01` (`192.168.2.1`) **in Git only**.
 - NEXT: Fast-forward clean retirement worktree, run preflight syntax
   and read-only execution. Use output to create one approved Ansible
@@ -1891,7 +1891,7 @@ Next:
 - Installed monitor-01 collector still referenced retired ASUS snapshot:
   `installed_collector_uses_retired_asus_snapshot=true`.
   This must be fixed before deletion; canonical hostname defaults in
-  Git already replace retired docker-01 .220 with router-01 .1.
+  Git already replace retired docker-01 .220 with router-01 .1. <!-- historical -->
 - Staged `IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml`
   under existing #287 workstream. Explicit no-backup approval phrase and
   read-only preflight. When intentionally run, pauses six discovery
