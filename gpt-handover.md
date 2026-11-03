@@ -1988,3 +1988,24 @@ Operator verified two successful reset runs on monitor-01. The first found 36 ho
 ## 2026-11-03 — Grafana SQLite zero counts inconclusive
 
 Operator read-only legacy preflight passed (monitor-01 ok=14 changed=0 failed=0). Live: 4 retired scripts, 8 retired unit files, 5 obsolete dashboard JSON files, 52 generated host dashboard JSON files, old Network Hosts provider still registered with disableDeletion=true; Grafana and Prometheus HTTP 200. The queried SQLite volume returned zero matching entries INCLUDING both protected active dashboard UIDs, so it is NOT authoritative evidence of deletion. Do not delete anything yet. Fixed preflight trailing whitespace from git diff --check and added read-only Grafana API search plus protected dashboard GET verification (credential read locally, never echoed, only safe counts printed). Next fast-forward retirement branch, syntax-check and run improved read-only preflight; reconcile API and volume counts before narrowly approved IaC cleanup. DHCP rediscovery is already complete; do not repeat.
+
+## 3 November 2026 — Live Grafana API and provenance gate
+
+- The running Grafana API returned 73 dashboards: 52 old generated
+  host dashboards, 5 named retired dashboards, and **16 to preserve**,
+  including the independent Network Discovery and router DHCP dashboards.
+  API ownership is authoritative here; the old SQLite dashboard table
+  returned no rows including protected dashboards and must NOT be edited.
+- Grafana file provisioning has `disableDeletion: true`; simply
+  deleting JSON would leave stale live dashboard records. Follow
+  the official provider deletion lifecycle, scoped to the 57 old
+  dashboards, with protected dashboards verified after each stage.
+- Read-only `network-host-legacy-cleanup-preflight.yml` now checks
+  the Grafana API's `meta.provisioned`,
+  `meta.provisionedExternalId` and folder ID for every old UID
+  against its exact file and expected provider, without publishing
+  host identities or API credentials.
+- Next: rerun read-only preflight from latest feature branch and
+  require `grafana_api_provisioning_unverified=0` before any actual
+  retirement. No backups, deletion or whole-stack redeploy have
+  occurred in this Grafana cleanup. Keep #287 open.
