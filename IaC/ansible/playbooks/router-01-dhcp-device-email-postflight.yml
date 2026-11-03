@@ -1,0 +1,156 @@
+---
+# #291 independent read-only postflight of shared-MAC DHCP email integration.
+# Executes ONLY --preview (never SMTP). Do not run test-email here.
+- name: Independently verify future-only DHCP email integration before timer enable
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Verify monitoring host and LAN identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Verify existing 16 original and one canary Grafana dashboards
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages-audit
+          - --mode
+          - canary
+      register: dhcp_email_graph_protected
+      changed_when: false
+      no_log: true
+
+    - name: Check notification files and protected recipient/ledger permissions
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - /usr/local/sbin/homelab-network-device-email-alert
+        - /usr/local/sbin/homelab-network-device-email-alert-dhcp-candidate
+        - /usr/local/lib/homelab-router-dhcp-device-pages/dhcp_device_email_policy.py
+        - /etc/homelab-network-hosts/router-dhcp-alerts.enabled.json
+        - /etc/homelab-network-hosts/alerts.env
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+      register: dhcp_email_postflight_before
+      no_log: true
+
+    - name: Require safe, existing root-owned email files
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+        fail_msg: Protected email code or shared state is missing or unsafe.
+      loop: "{{ dhcp_email_postflight_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require deployed sole SMTP sender identical to reviewed candidate
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_postflight_before.results[0].stat.checksum == dhcp_email_postflight_before.results[1].stat.checksum
+          - dhcp_email_postflight_before.results[3].stat.mode == '0600'
+
+    - name: Validate marker, ledger count and shared notifier hook without printing MACs
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json,time,subprocess
+            from pathlib import Path
+            marker=Path('/etc/homelab-network-hosts/router-dhcp-alerts.enabled.json')
+            ledger=Path('/var/lib/homelab-network-hosts/alerted-macs.json')
+            status=json.loads(marker.read_text())
+            reg=json.loads(ledger.read_text())
+            started=status.get('activated_at_ns')
+            if (status.get('schema_version')!=1 or not isinstance(started,int)
+                or started<=0 or started>time.time_ns()+300_000_000_000):
+                raise SystemExit('DHCP alert activation timestamp invalid')
+            if not isinstance(reg.get('devices'),dict) or len(reg['devices'])<56:
+                raise SystemExit('Protected first-seen MAC history reduced')
+            unit=subprocess.run(
+                ['systemctl','cat','homelab-network-host-collector.service'],
+                capture_output=True,text=True,timeout=8)
+            if (unit.returncode
+                or 'ExecStartPost=' not in unit.stdout
+                or '/usr/local/sbin/homelab-network-device-email-alert' not in unit.stdout):
+                raise SystemExit('Existing sole SMTP notifier hook missing')
+            print(json.dumps({'shared_first_seen_registry_count':len(reg['devices']),
+                              'approved_activation_marker_valid':True,
+                              'original_collector_is_sole_smtp_sender':True,
+                              'no_smtp_send':True,'read_only':True},
+                             sort_keys=True))
+      register: dhcp_email_postflight_status
+      changed_when: false
+
+    - name: Run existing notifier in explicitly no-send preview mode
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/homelab-network-device-email-alert
+          - --preview
+      register: dhcp_email_postflight_preview
+      changed_when: false
+      no_log: true
+
+    - name: Require preview confirms no SMTP or registry writes
+      ansible.builtin.assert:
+        that:
+          - "'network_device_alert_preview' in dhcp_email_postflight_preview.stdout"
+          - "'\"email_sent\":false' in dhcp_email_postflight_preview.stdout"
+          - "'\"registry_changed\":false' in dhcp_email_postflight_preview.stdout"
+
+    - name: Hash shared first-seen registry and recipient again after no-send preview
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - /etc/homelab-network-hosts/alerts.env
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+      register: dhcp_email_postflight_after
+      no_log: true
+
+    - name: Ensure preview did not alter recipient or registered MAC history
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_postflight_before.results[4].stat.checksum == dhcp_email_postflight_after.results[0].stat.checksum
+          - dhcp_email_postflight_before.results[5].stat.checksum == dhcp_email_postflight_after.results[1].stat.checksum
+
+    - name: Confirm no automatic device-page timer has been enabled yet
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      register: dhcp_email_postflight_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Require page creation timer remains disabled until separate approval
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_postflight_timer.stdout | trim != 'active'
+
+    - name: Confirm Grafana and Prometheus ready
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        status_code: 200
+      loop:
+        - http://127.0.0.1:3000/api/health
+        - http://127.0.0.1:9090/-/ready
+      changed_when: false
+
+    - name: Print only anonymous postflight status
+      ansible.builtin.debug:
+        msg:
+          - "{{ dhcp_email_postflight_status.stdout }}"
+          - "Existing 16 dashboards and DHCP canary page protected."
+          - "No test email or new-device alert sent by this postflight."
