@@ -1775,3 +1775,30 @@ Next:
 - Remaining validation: actual reboot recovery, nftables reload recovery,
   sustained traffic performance and production IPS enforcement behaviour.
 - Temporary rollback timer inactive following successful permanent activation.
+
+## 2026-11-03 — KISS legacy network monitoring retirement (code staged, not deployed)
+
+- Workstream: #287 under Epic #286. Active feature worktree is
+  `~/projects/homelab-collector-retirement` on
+  `chore/retire-legacy-network-collectors-20261103`.
+- Read-only live preflight on monitor-01: four legacy timers
+  (`asus-network-inventory`, `homelab-network-device-inventory`,
+  `homelab-hp-switch-collector`, `homelab-network-host-dashboards`)
+  all reported disabled/inactive.
+- Separate `homelab-proxmox-guest-refresh.service` reported failed
+  (Result=exit-code, ExecMainStatus=1). Preserve and investigate as
+  independent guest-identity functionality; do not suppress this failure.
+- Source-only first patch on the retirement branch removes legacy exporter,
+  dashboard-generator and timer activation tasks from the core monitoring
+  Ansible role, and deregisters obsolete MAC/device dashboards. It does
+  NOT yet retire other dedicated legacy deployment playbooks, CI references,
+  provisioned files, or stale metrics; these are the next scoped edits.
+- No production service, router, QoS, firewall, DHCP, DNS or Grafana changes
+  were performed by this GitHub commit. Do NOT redeploy obsolete playbooks.
+- New remote branch was based on updated origin/main (five intervening
+  documentation commits since the local worktree's 187807ff); fast-forward
+  the clean worktree from this feature branch before edits/tests.
+- Next: finish all legacy reinstall paths and CI references, run Ansible
+  syntax/targeted tests, validate unaffected host discovery and observability,
+  perform separately approved live cleanup, reconcile CURRENT-STATE.md with
+  observed postflight, merge and close #287.
