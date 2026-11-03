@@ -1,4 +1,4 @@
-name: Validate network inventory dashboard
+name: Validate network discovery and legacy retirement
 
 on:
   push:
@@ -14,6 +14,7 @@ on:
       - fix/legacy-nmap-profile-timestamps
       - plan/move-network-discovery-to-monitor-01
       - feature/stage-network-discovery-on-monitor01
+      - chore/retire-legacy-network-collectors-20261103
   pull_request:
     paths:
       - "IaC/ansible/roles/monitoring_stack/**"
@@ -118,7 +119,7 @@ jobs:
           python3 IaC/ansible/roles/network_host_deep_profiler/test_worker_recovery.py
           python3 IaC/ansible/roles/network_host_dns_evidence/test_dns_evidence.py
 
-      - name: Verify Grafana dashboard and Ansible registration
+      - name: Verify active network monitoring and fail-closed retirement guards
         run: |
           python3 - <<'PY'
           import json
@@ -128,53 +129,73 @@ jobs:
           base = Path("IaC/ansible/roles/monitoring_stack")
           defaults = yaml.safe_load((base / "defaults/main.yml").read_text())
           tasks = yaml.safe_load((base / "tasks/main.yml").read_text())
-          for path, uid in [
-              ("homelab-all-network-devices.json", "homelab-all-network-devices"),
-              ("homelab-network-device-detail.json", "homelab-network-device-detail"),
-              ("homelab-network-host-tiles.json", "homelab-network-host-tiles"),
-              ("homelab-mac-device-detail.json", "homelab-mac-device-detail"),
-          ]:
-              dashboard = json.loads((base / "files/grafana/dashboards" / path).read_text())
-              assert dashboard["uid"] == uid, (path, dashboard["uid"])
-              ids = [panel["id"] for panel in dashboard["panels"]]
-              assert len(ids) == len(set(ids))
-              assert len(ids) >= (2 if uid == "homelab-mac-device-detail" else
-                                 3 if uid == "homelab-network-host-tiles" else 10)
-              assert all(0 <= p["gridPos"]["x"] and
-                         p["gridPos"]["x"] + p["gridPos"]["w"] <= 24
-                         for p in dashboard["panels"])
-              assert path in defaults["monitoring_grafana_dashboard_files"]
+          task_names = {task["name"] for task in tasks}
+          assert "Install network inventory publishing timer" not in task_names
+          assert "Enable network inventory publishing timer" not in task_names
+          assert "Install MAC-linked Grafana dashboard generator" not in task_names
+          assert "Generate a dedicated Grafana dashboard for each retained MAC" not in task_names
+
+          retired_files = (
+              "homelab-network-host-tiles.json",
+              "homelab-mac-device-detail.json",
+              "homelab-all-network-devices.json",
+              "homelab-network-hosts.json",
+              "homelab-network-device-detail.json",
+          )
+          retired_uids = tuple(name.removesuffix(".json") for name in retired_files)
+          assert all(name not in defaults["monitoring_grafana_dashboard_files"]
+                     for name in retired_files)
+          assert all(uid not in defaults["monitoring_grafana_dashboard_uids"]
+                     for uid in retired_uids)
+
+          # These are separate, still-supported network/host dashboards.
+          active_dashboards = (
+              ("homelab-router-dhcp.json", "homelab-router-dhcp"),
+              ("homelab-physical-network.json", "homelab-physical-network"),
+              ("homelab-node-detail.json", "homelab-node-detail"),
+          )
+          for filename, uid in active_dashboards:
+              assert filename in defaults["monitoring_grafana_dashboard_files"]
               assert uid in defaults["monitoring_grafana_dashboard_uids"]
+              data = json.loads((base / "files/grafana/dashboards" / filename).read_text())
+              assert data["uid"] == uid
+              assert data["panels"]
 
-          for name in ("homelab-network-host-tiles.json",
-                       "homelab-mac-device-detail.json",
-                       "homelab-network-hosts.json"):
-              native = (base / "files/grafana/dashboards" / name).read_text()
-              komodo = (Path("IaC/komodo/stacks/monitoring/grafana")
-                        / "provisioning/dashboards/homelab" / name).read_text()
-              assert json.loads(native) == json.loads(komodo), name
-          native_provider = (base / "templates/grafana-dashboard-provider.yml.j2").read_text()
-          komodo_provider = Path("IaC/komodo/stacks/monitoring/grafana/provisioning/dashboards/homelab.yml").read_text()
-          for provider in (native_provider, komodo_provider):
-              assert "homelab-generated-network-hosts" in provider
-              assert "/etc/grafana/provisioning/dashboards/network-hosts" in provider
+          provider = (base / "templates/grafana-dashboard-provider.yml.j2").read_text()
+          assert "name: Homelab" in provider
+          assert "name: Homelab Production" in provider
+          assert "homelab-generated-network-hosts" not in provider
+          assert "/etc/grafana/provisioning/dashboards/network-hosts" not in provider
 
-          overview = json.loads((base / "files/grafana/dashboards/homelab-network-host-tiles.json").read_text())
-          detail = json.loads((base / "files/grafana/dashboards/homelab-mac-device-detail.json").read_text())
-          assert overview["title"] == "Homelab — Network Hosts"
-          assert detail["title"] == "Homelab — Host Detail"
-          expected_top = ["Average CPU", "Average Memory Used",
-                          "Total Updates", "Security Updates"]
-          expected_charts = ["CPU Usage", "Memory Usage",
-                             "Network Throughput", "Filesystem Utilisation"]
-          full_template = json.loads(
-              (base / "files/host-profile-template.json").read_text())
-          assert full_template["uid"] == "homelab-mac-device-detail"
-          assert len(full_template["panels"]) >= 22
-          nmap_panel = next(p for p in full_template["panels"] if p["id"] == 22)
-          assert nmap_panel["type"] == "table"
-          assert 'nmap_name!=""' in nmap_panel["targets"][0]["expr"]
-          assert nmap_panel["transformations"][1]["options"]["renameByName"]["nmap_time_basis"] == "Time source"
+          retired_playbooks = (
+              "asus-network-inventory.yml",
+              "hp-switch-collector.yml",
+              "network-host-grafana.yml",
+              "network-host-monitor01-router-hostname-update.yml",
+              "zabbix-network-inventory-exporter.yml",
+          )
+          for name in retired_playbooks:
+              spec = yaml.safe_load((Path("IaC/ansible/playbooks") / name).read_text())
+              assert len(spec) == 1 and spec[0]["hosts"] == "localhost", name
+              assert len(spec[0]["tasks"]) == 1, name
+              assert "ansible.builtin.fail" in spec[0]["tasks"][0], name
+              assert "systemd_service" not in str(spec), name
+
+          host_template = Path(
+              "IaC/ansible/roles/network_host_collector/templates/"
+              "homelab-network-host-collector.py.j2").read_text()
+          assert "load_asus_hostnames" not in host_template
+          assert "ROUTER_HOSTNAME_SNAPSHOT" not in host_template
+          assert "homelab_network_host_info" in host_template
+          ai_template = Path(
+              "IaC/ansible/roles/network_host_ai_resolver/templates/"
+              "homelab-network-host-ai-resolver.py.j2").read_text()
+          assert "ROUTER_DB" not in ai_template
+          assert "router_identity()" not in ai_template
+          assert "recent_dns_activity" in ai_template
+
+          # Keep the independently developed OS-evidence, cutover and
+          # protected Proxmox guest-identity regression gates.
           evidence_source = Path(
               "IaC/ansible/roles/network_host_deep_profiler/files/"
               "os-fingerprint-evidence-exporter.py").read_text()
@@ -468,130 +489,5 @@ jobs:
           assert not any("homelab-network-host-deep-profiler.service" in str(t)
                          or "homelab-network-host-deep-profiler.timer" in str(t)
                          for play in focused_nmap for t in play["tasks"])
-          top = sorted(
-              (p for p in full_template["panels"] if p["gridPos"]["y"] == 0),
-              key=lambda p: p["gridPos"]["x"])
-          assert [p["title"] for p in top] == expected_top
-          assert all(name in [p["title"] for p in full_template["panels"]]
-                     for name in expected_charts)
-          assert len(overview["panels"]) == 7
-          assert [p["title"] for p in overview["panels"][:4]] == [
-              "Known devices", "Online", "Documented OS", "OS to investigate"
-          ]
-          assert any("Network hosts" in p["title"] for p in overview["panels"])
-          directory = next(p for p in overview["panels"]
-                           if p["title"].startswith("Network hosts"))
-          opening = next(v for v in directory["fieldConfig"]["overrides"]
-                         if v["matcher"]["options"] == "Open host")
-          link = next(prop["value"][0] for prop in opening["properties"]
-                      if prop["id"] == "links")
-          assert link["url"] == "/d/${__value.raw}"
-          directory_fields = next(
-              t["options"] for t in directory["transformations"]
-              if t["id"] == "organize"
-          )
-          assert directory_fields["renameByName"]["dashboard_uid"] == "Open host"
-          assert "dashboard_uid" not in directory_fields["excludeByName"]
-
-          for dashboard in (overview, detail):
-              host_picker = next(link for link in dashboard["links"]
-                                 if link["title"] == "Choose host dashboard")
-              assert host_picker["type"] == "dashboards"
-              assert host_picker["asDropdown"]
-              assert host_picker["tags"] == ["generated-network-host"]
-              assert dashboard["templating"]["list"][0]["name"] == "host"
-              assert "hostname" in dashboard["templating"]["list"][0]["query"]["query"]
-              assert any("profile_uid" == p["name"] and p["hide"] == 2
-                         for p in dashboard["templating"]["list"])
-              if dashboard["uid"] == "homelab-mac-device-detail":
-                  assert any("profile_uid" in link.get("url", "")
-                             for link in dashboard["links"])
-              assert not any(p["type"] in ("timeseries", "logs")
-                             for p in dashboard["panels"])
-              assert not any(p["title"] == "No telemetry" or
-                             "CPU" in p["title"] or
-                             "Memory" in p["title"]
-                             for p in dashboard["panels"])
-              assert "MAC" not in dashboard["title"]
-              for panel in dashboard["panels"]:
-                  if panel["type"] != "table":
-                      continue
-                  organize = next(t["options"] for t in panel["transformations"]
-                                  if t["id"] == "organize")
-                  for internal in ("mac", "device_key"):
-                      assert organize["excludeByName"].get(internal), (
-                          panel["title"], internal)
-                  if panel["id"] != 18:
-                      assert organize["excludeByName"].get("dashboard_uid"), (
-                          panel["title"], "dashboard_uid")
-          assert any("Network hosts" in p["title"]
-                     for p in overview["panels"])
-          assert len(detail["panels"]) < len(overview["panels"])
-          assert "tag=generated-network-host" in Path(
-              "IaC/ansible/playbooks/network-host-grafana.yml").read_text()
-          generator = (base / "files/network-host-dashboard-generator.py").read_text()
-          assert "collect_availability" in generator
-          assert "compact_panels" in generator
-          assert "present_over_time" in generator
-          assert '"title": "Choose host"' in generator
-          assert "selected.add(22)" in generator
-          assert "add_row((22,)" in generator
-          assert "nmap_name" in (base / "files/network-device-inventory-exporter.py").read_text()
-          inventory_service = (base / "files/homelab-network-device-inventory.service").read_text()
-          assert "ProtectSystem=strict" in inventory_service
-          assert "ReadWritePaths=/var/lib/prometheus/node-exporter" in inventory_service
-          assert "ExecStartPost=" not in inventory_service
-          host_service = (base / "files/homelab-network-host-dashboards.service").read_text()
-          host_timer = (base / "files/homelab-network-host-dashboards.timer").read_text()
-          assert "ProtectSystem=strict" in host_service
-          assert "ReadWritePaths=/opt/monitoring/grafana/provisioning/dashboards/network-hosts" in host_service
-          assert "OnUnitActiveSec=5min" in host_timer
-          focused = Path("IaC/ansible/playbooks/network-host-grafana.yml").read_text()
-          monitoring_tasks = (base / "tasks/main.yml").read_text()
-          for provisioner in (focused, monitoring_tasks):
-              assert "host-profile-template.json" in provisioner
-          exporter = (base / "files/network-device-inventory-exporter.py").read_text()
-          assert "homelab_network_device_card_info" in exporter
-          assert "device_key = \"mac:\"" in exporter
-
-          focused_playbook = yaml.safe_load(Path(
-              "IaC/ansible/playbooks/network-host-grafana.yml").read_text())
-          assert len(focused_playbook) == 1
-          rollout = focused_playbook[0]
-          assert rollout["hosts"] == "monitoring_hosts"
-          rollout_steps = [step["name"] for step in rollout["tasks"]]
-          for required in [
-              "Install only the two new native Grafana dashboards",
-              "Generate native Grafana dashboards for all retained MACs",
-              "Restart only Grafana if provisioned JSON or provider configuration changed",
-              "Install independent per-host Grafana generator service and timer",
-              "Enable independent per-host dashboard refresh",
-              "Confirm Grafana sees the rebuilt dashboard file inside its actual container",
-              "Verify Grafana API is serving the rebuilt seven-panel hostname directory",
-              "Verify Grafana API has indexed individual generated host dashboards",
-          ]:
-              assert required in rollout_steps, required
-          assert not any("Reconcile monitoring containers" in name
-                         or "Pull pinned monitoring images" in name
-                         for name in rollout_steps)
-
-          steps = [task["name"] for task in tasks]
-          for required in [
-              "Install canonical estate for network device OS identification",
-              "Install dated and minimised DNS device evidence",
-              "Install evidence-qualified network inventory exporter",
-              "Publish initial consolidated network inventory",
-              "Install MAC-linked Grafana dashboard generator",
-              "Generate a dedicated Grafana dashboard for each retained MAC",
-              "Install independent Grafana host dashboard generator service",
-              "Install independent Grafana host dashboard generator timer",
-              "Enable independent per-device Grafana regeneration timer",
-          ]:
-              assert required in steps, required
-
-          hints = json.loads(Path(
-              "IaC/monitoring/network-device-dns-hints.json").read_text())
-          assert hints["schema_version"] == 1
-          assert "192.168.2.183" in hints["devices"]
-          print("Dashboard JSON, Ansible YAML, deployment steps and evidence: PASS")
+          print("Active network observability, retirement guards, protected discovery: PASS")
           PY
