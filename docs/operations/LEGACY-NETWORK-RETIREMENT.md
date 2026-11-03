@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 # Legacy ASUS, HP ProCurve and MAC dashboard retirement — #287
 
 **Status: DHCP discovery and legacy Grafana retirement COMPLETED and independently verified; GitHub merge/issue closure pending.**
