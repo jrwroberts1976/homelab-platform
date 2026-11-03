@@ -1,0 +1,121 @@
+---
+# #291: install generator and disabled units only after explicit approval.
+# Does not add Grafana provider, enable timer, scan or modify router-01.
+- name: Stage inactive router-01 DHCP Grafana page generator
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Require explicit staging approval and exact discovery owner
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_device_pages_stage_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Staging requires explicit approval and the correct monitor-01 host.
+
+    - name: Verify trusted discovery and profile evidence exists
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/deep-profiles.json
+        - /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
+      register: router_device_stage_paths
+
+    - name: Refuse absent or unsafe input files
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+      loop: "{{ router_device_stage_paths.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Inspect existing timer before staging
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      register: router_device_stage_timer_before
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse replacement of an already active timer
+      ansible.builtin.assert:
+        that:
+          - router_device_stage_timer_before.stdout | trim != 'active'
+        fail_msg: Production timer is already active; do not restage blindly.
+
+    - name: Create dedicated router DHCP device dashboard source directory
+      ansible.builtin.file:
+        path: /opt/monitoring/grafana/provisioning/dashboards/router-dhcp-devices
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install source-verified DHCP dashboard generator
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/router_dhcp_device_pages/files/generate_router_dhcp_devices.py"
+        dest: /usr/local/sbin/router-dhcp-device-pages
+        owner: root
+        group: root
+        mode: '0750'
+        backup: false
+
+    - name: Validate installed Python script without writing bytecode
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ast
+            from pathlib import Path
+            ast.parse(Path('/usr/local/sbin/router-dhcp-device-pages').read_text())
+            print('router_dhcp_device_pages_script_syntax=PASS')
+      changed_when: false
+
+    - name: Install disabled dedicated page generator service
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_dhcp_device_pages/templates/router-dhcp-device-pages.service.j2"
+        dest: /etc/systemd/system/router-dhcp-device-pages.service
+        owner: root
+        group: root
+        mode: '0644'
+        backup: false
+
+    - name: Install disabled dedicated page generator timer
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/router_dhcp_device_pages/templates/router-dhcp-device-pages.timer.j2"
+        dest: /etc/systemd/system/router-dhcp-device-pages.timer
+        owner: root
+        group: root
+        mode: '0644'
+        backup: false
+
+    - name: Reload unit metadata only, without starting anything
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+
+    - name: Verify dedicated timer remains disabled or absent
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, router-dhcp-device-pages.timer]
+      register: router_device_stage_timer_after
+      failed_when: false
+      changed_when: false
+
+    - name: Fail if staging accidentally enabled automation
+      ansible.builtin.assert:
+        that:
+          - router_device_stage_timer_after.stdout | trim != 'enabled'
+        fail_msg: Unexpected active automation after staging.
+
+    - name: Report scoped staging result
+      ansible.builtin.debug:
+        msg: >-
+          Generator and disabled service/timer staged on monitor-01.
+          No Grafana provider edit, router change, scan or automatic run.
