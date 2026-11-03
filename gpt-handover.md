@@ -1802,3 +1802,34 @@ Next:
   syntax/targeted tests, validate unaffected host discovery and observability,
   perform separately approved live cleanup, reconcile CURRENT-STATE.md with
   observed postflight, merge and close #287.
+
+## 2026-11-03 — #287 source-only retirement follow-up (NOT deployed)
+
+- User verified clean retirement worktree fast-forward, no whitespace errors
+  and `playbooks/monitoring.yml --syntax-check` PASS for the first patch.
+- Remote feature branch now additionally removes obsolete ASUS hostname
+  fallback from independent `network_host_collector`, and removes the
+  obsolete read-only ASUS SQLite identity source from AI resolver while
+  keeping its existing `router` evidence field as an empty object for
+  schema compatibility.
+- `network-host-os-fingerprints.yml` now deploys the independent saved
+  Nmap evidence exporter only, not the retired MAC inventory/dashboard
+  generator; Grafana MAC dashboard provider removed from monitoring role.
+- Historical callers `asus-network-inventory.yml`,
+  `hp-switch-collector.yml`, `network-host-grafana.yml`,
+  `network-host-monitor01-router-hostname-update.yml` and
+  `zabbix-network-inventory-exporter.yml` now contain explicit
+  localhost-only fail-closed Ansible guards.
+- `.github/workflows/validate-network-device-dashboard.yml` changed
+  to verify active dashboards, disabled legacy deployers and independent
+  discovery/Proxmox guest identity tests; workflow validation on this
+  commit is pending.
+- Retired source files, older Komodo provisioning, production dashboard
+  data and network-device Prometheus textfiles remain for targeted,
+  reversible retirement. Not merged or ready to deploy.
+- `homelab-proxmox-guest-refresh.service` remains separately failed
+  on monitor-01 (exit 1); no action to reset/disable or erase this
+  protected guest-identity service was taken.
+- Next: synchronise remote branch to clean worktree, run syntax/CI tests,
+  inspect any regression failures, complete remaining legacy references
+  and live cleanup plan, then staged postflight/merge.
