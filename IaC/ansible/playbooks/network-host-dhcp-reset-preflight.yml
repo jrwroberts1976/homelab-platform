@@ -1,0 +1,145 @@
+---
+# Read-only preflight for #287: clean DHCP-era host rediscovery.
+# No backups, deletion, scan, systemd start/stop or state mutation here.
+- name: Prove old discovery owner is inactive
+  hosts: Proxmox-2
+  become: false
+  gather_facts: false
+  tasks:
+    - name: Inspect former source collector timer
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - homelab-network-host-collector.timer
+      register: dhcp_reset_old_owner
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse reset while original collector remains active
+      ansible.builtin.assert:
+        that:
+          - dhcp_reset_old_owner.stdout | trim == 'inactive'
+        fail_msg: Proxmox-2 discovery timer is not inactive; check ownership.
+
+- name: Read-only inventory of the active DHCP-era discovery owner
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    dhcp_reset_state: /var/lib/homelab-network-hosts
+    dhcp_reset_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-host-ai-resolver.timer
+      - homelab-network-dns-evidence.timer
+      - homelab-network-os-evidence.timer
+  tasks:
+    - name: Require exact monitoring discovery owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Reset preflight must run on verified monitor-01 only.
+
+    - name: Inspect timers without starting or disabling anything
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - is-active
+          - "{{ item }}"
+      loop: "{{ dhcp_reset_timers }}"
+      register: dhcp_reset_timer_states
+      changed_when: false
+      failed_when: false
+
+    - name: Require sole active host collector
+      ansible.builtin.assert:
+        that:
+          - dhcp_reset_timer_states.results[0].stdout | trim == 'active'
+        fail_msg: monitor-01 host collector is not active; refuse stale-owner reset.
+
+    - name: Print timer state summary
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.item }}={{ item.stdout | trim }}
+      loop: "{{ dhcp_reset_timer_states.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Inspect private discovery JSON schemas and counts only
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+
+            root = Path("/var/lib/homelab-network-hosts")
+            files = {
+                "inventory.json": None,
+                "deep-profiles.json": "profiles",
+                "enrichment.json": "hosts",
+                "dns-evidence.json": "devices",
+                "ai-identification.json": "devices",
+                "ai-identification-public.json": "devices",
+                "alerted-macs.json": "devices",
+            }
+            counts = {}
+            for filename, key in files.items():
+                path = root / filename
+                if path.is_symlink():
+                    raise SystemExit("Refusing symlink: " + filename)
+                if not path.exists():
+                    if filename in ("inventory.json", "alerted-macs.json"):
+                        raise SystemExit("Required state missing: " + filename)
+                    counts[filename] = "absent"
+                    continue
+                if not path.is_file():
+                    raise SystemExit("Not a regular file: " + filename)
+                value = json.loads(path.read_text(encoding="utf-8"))
+                if not isinstance(value, dict):
+                    raise SystemExit("Invalid object: " + filename)
+                if key is not None:
+                    value = value.get(key)
+                    if not isinstance(value, dict):
+                        raise SystemExit("Invalid schema: " + filename)
+                counts[filename] = len(value)
+
+            bin_path = Path("/usr/local/sbin/homelab-network-host-collector")
+            if not bin_path.is_file() or bin_path.is_symlink():
+                raise SystemExit("Collector executable missing or unsafe")
+            body = bin_path.read_text(encoding="utf-8")
+            print(json.dumps({
+                "record_counts_only": counts,
+                "installed_collector_uses_retired_asus_snapshot":
+                    "load_asus_hostnames" in body
+                    or "ROUTER_HOSTNAME_SNAPSHOT" in body,
+                "first_seen_registry_preserved": True,
+                "backup_requested": False,
+                "production_changed": False,
+            }, sort_keys=True))
+      register: dhcp_reset_inventory_evidence
+      changed_when: false
+
+    - name: Print non-identifying inventory and schema counts
+      ansible.builtin.debug:
+        var: dhcp_reset_inventory_evidence.stdout
+
+    - name: Require stable upstream router is reachable
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/ping
+          - -n
+          - -c
+          - '1'
+          - -W
+          - '2'
+          - 192.168.2.1
+      changed_when: false
