@@ -139,7 +139,7 @@ jobs:
               "homelab-network-host-tiles.json",
               "homelab-mac-device-detail.json",
               "homelab-all-network-devices.json",
-              "homelab-network-hosts.json",
+              "homelab-physical-network.json",
               "homelab-network-device-detail.json",
           )
           retired_uids = tuple(name.removesuffix(".json") for name in retired_files)
@@ -151,7 +151,7 @@ jobs:
           # These are separate, still-supported network/host dashboards.
           active_dashboards = (
               ("homelab-router-dhcp.json", "homelab-router-dhcp"),
-              ("homelab-physical-network.json", "homelab-physical-network"),
+              ("homelab-network-hosts.json", "homelab-network-hosts"),
               ("homelab-node-detail.json", "homelab-node-detail"),
           )
           for filename, uid in active_dashboards:
