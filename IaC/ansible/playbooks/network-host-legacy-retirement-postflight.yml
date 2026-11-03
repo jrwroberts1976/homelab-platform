@@ -1,0 +1,251 @@
+---
+# #287: independent, read-only postflight after approved legacy Grafana
+# dashboard and collector retirement. NO change, backup, restart, scan,
+# discovery reset, Grafana database modification or dashboard removal.
+- name: Verify post-retirement Grafana and legacy-collector state
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    legacy_retired_units:
+      - asus-network-inventory
+      - homelab-hp-switch-collector
+      - homelab-network-device-inventory
+      - homelab-network-host-dashboards
+    legacy_live_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-host-ai-resolver.timer
+      - homelab-network-dns-evidence.timer
+      - homelab-network-os-evidence.timer
+    legacy_expected_other_uid_sha256: "1ba5e96a3b2bc01aef7efe97d8ee8b11464baa8bb44572eae52b45d3f87abc13"
+    legacy_expected_other_dashboard_count: 16
+
+  tasks:
+    - name: Restrict verification to monitored discovery owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Confirm retired executables, eight units and all old JSON files are gone
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json,re
+            from pathlib import Path
+            names=(
+              "asus-network-inventory","homelab-hp-switch-collector",
+              "homelab-network-device-inventory","homelab-network-host-dashboards",
+            )
+            root=Path("/opt/monitoring/grafana/provisioning/dashboards")
+            named=(
+              "homelab-network-host-tiles",
+              "homelab-mac-device-detail",
+              "homelab-all-network-devices",
+              "homelab-network-device-detail",
+              "homelab-physical-network",
+            )
+            old_scripts=[Path("/usr/local/sbin")/x for x in names]
+            old_units=[Path("/etc/systemd/system")/(x+s)
+                       for x in names for s in (".timer",".service")]
+            old_named=[root/"homelab"/(x+".json") for x in named]
+            generated=root/"network-hosts"
+            if not generated.is_dir() or generated.is_symlink():
+                raise SystemExit("Unexpected legacy generator directory state")
+            old_generated=list(generated.iterdir())
+            if any(p.is_symlink() for p in old_generated):
+                raise SystemExit("Unsafe legacy directory symlink")
+            if old_generated:
+                raise SystemExit("Generated dashboard directory is not empty")
+            for p in old_scripts+old_units+old_named:
+                if p.exists() or p.is_symlink():
+                    raise SystemExit("Legacy script/unit/dashboard file remains")
+            retained={}
+            for uid in ("homelab-network-hosts","homelab-router-dhcp"):
+                p=root/"homelab"/(uid+".json")
+                if p.is_symlink() or not p.is_file():
+                    raise SystemExit("Protected discovery/router dashboard source missing")
+                if json.loads(p.read_text()).get("uid") != uid:
+                    raise SystemExit("Protected dashboard source UID changed")
+                retained[uid]=True
+            provider=root/"homelab.yml"
+            if provider.is_symlink() or not provider.is_file():
+                raise SystemExit("Grafana provider file missing or unsafe")
+            # These safe aggregate counts intentionally omit host identities.
+            print(json.dumps({
+                "old_collector_scripts_present":0,
+                "old_systemd_units_present":0,
+                "old_homelab_json_present":0,
+                "old_generated_json_present":0,
+                "protected_discovery_router_json_present":len(retained),
+                "read_only":True
+            },sort_keys=True))
+      register: legacy_postflight_files
+      changed_when: false
+
+    - name: Verify Grafana provider contains exactly two protected providers
+      ansible.builtin.slurp:
+        src: /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
+      register: legacy_postflight_provider_raw
+      no_log: true
+
+    - name: Validate provider identities and retained deletion protection
+      ansible.builtin.assert:
+        that:
+          - legacy_provider_state.apiVersion == 1
+          - legacy_provider_state.providers | length == 2
+          - legacy_provider_state.providers[0].name == 'Homelab'
+          - legacy_provider_state.providers[0].disableDeletion == true
+          - legacy_provider_state.providers[0].options.path == '/etc/grafana/provisioning/dashboards/homelab'
+          - legacy_provider_state.providers[1].name == 'Homelab Production'
+          - legacy_provider_state.providers[1].disableDeletion == true
+          - legacy_provider_state.providers[1].options.path == '/etc/grafana/provisioning/dashboards/production'
+        fail_msg: Grafana's permanent provider configuration differs from the approved two-provider state.
+      vars:
+        legacy_provider_state: "{{ legacy_postflight_provider_raw.content | b64decode | from_yaml }}"
+
+    - name: Verify retired systemd timers are not loaded as active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}.timer"]
+      loop: "{{ legacy_retired_units }}"
+      register: legacy_retired_timer_states
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse any retired timer running
+      ansible.builtin.assert:
+        that:
+          - "'active' not in (legacy_retired_timer_states.results | map(attribute='stdout') | list)"
+        fail_msg: A retired timer still runs.
+
+    - name: Verify six discovery timers remain active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ legacy_live_timers }}"
+      register: legacy_live_timer_states
+      changed_when: false
+      failed_when: false
+
+    - name: Require every independent discovery timer active
+      ansible.builtin.assert:
+        that:
+          - legacy_live_timer_states.results | map(attribute='stdout') | unique | list == ['active']
+        fail_msg: An independent discovery timer has stopped.
+
+    - name: Read non-identifying discovery data counts
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            root=Path("/var/lib/homelab-network-hosts")
+            inv=root/"inventory.json"
+            registry=root/"alerted-macs.json"
+            if any(p.is_symlink() or not p.is_file() for p in (inv,registry)):
+                raise SystemExit("Current discovery inventory or first-seen registry missing")
+            data=json.loads(inv.read_text())
+            alerts=json.loads(registry.read_text())
+            if not isinstance(data,dict) or not data:
+                raise SystemExit("Current discovered-host inventory empty")
+            if not isinstance(alerts.get("devices"),dict) or len(alerts["devices"]) < 56:
+                raise SystemExit("Protected first-seen MAC registry reduced")
+            print(json.dumps({
+              "current_inventory_records":len(data),
+              "protected_first_seen_registry_records":len(alerts["devices"]),
+              "discovery_retained":True,
+            },sort_keys=True))
+      register: legacy_discovery_counts
+      changed_when: false
+
+    - name: Check Grafana's live API retains the exact original 16 UID identities
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import base64,hashlib,json,urllib.request,urllib.error
+            from pathlib import Path
+            env=Path("/opt/monitoring/.env")
+            if env.is_symlink() or not env.is_file():
+                raise SystemExit("Grafana credential configuration missing")
+            settings={}
+            for line in env.read_text().splitlines():
+                if "=" in line and not line.lstrip().startswith("#"):
+                    k,v=line.split("=",1)
+                    settings[k.strip()]=v.strip()
+            password=settings.get("GF_SECURITY_ADMIN_PASSWORD","")
+            if ((password.startswith('"') and password.endswith('"')) or
+                (password.startswith("'") and password.endswith("'"))):
+                password=password[1:-1]
+            if not password:
+                raise SystemExit("Grafana credentials unavailable")
+            basic=base64.b64encode(("admin:"+password).encode()).decode()
+            del password
+            def fetch(path):
+                request=urllib.request.Request(
+                    "http://127.0.0.1:3000"+path,
+                    headers={"Authorization":"Basic "+basic,
+                             "Accept":"application/json"},method="GET")
+                try:
+                    with urllib.request.urlopen(request,timeout=12) as resp:
+                        return json.loads(resp.read(8000000))
+                except Exception:
+                    raise SystemExit("Live Grafana API verification unavailable") from None
+            found=fetch("/api/search?type=dash-db&limit=5000")
+            if not isinstance(found,list) or len(found)!=16:
+                raise SystemExit("Grafana dashboard total is not 16")
+            uids=[str(x.get("uid") or "") for x in found if isinstance(x,dict)]
+            if len(uids)!=16 or len(set(uids))!=16 or "" in uids:
+                raise SystemExit("Invalid or duplicate Grafana UID set")
+            digest=hashlib.sha256("|".join(sorted(uids)).encode()).hexdigest()
+            if digest!="1ba5e96a3b2bc01aef7efe97d8ee8b11464baa8bb44572eae52b45d3f87abc13":
+                raise SystemExit("Retained Grafana dashboards changed identity")
+            for uid in uids:
+                detail=fetch("/api/dashboards/uid/"+uid)
+                if detail.get("dashboard",{}).get("uid")!=uid:
+                    raise SystemExit("Live Grafana UID detail mismatch")
+            if not {"homelab-network-hosts","homelab-router-dhcp"}.issubset(set(uids)):
+                raise SystemExit("Protected network discovery/router dashboard missing")
+            print(json.dumps({
+                "live_dashboard_count":16,
+                "old_legacy_dashboard_count":0,
+                "protected_network_dashboard_count":2,
+                "retained_uid_sha256_verified":True,
+                "read_only":True
+            },sort_keys=True))
+      register: legacy_live_api_postflight
+      changed_when: false
+      no_log: true
+
+    - name: Check Grafana is healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+    - name: Check Prometheus is ready
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+      changed_when: false
+
+    - name: Confirm safe postflight totals
+      ansible.builtin.debug:
+        msg:
+          - "{{ legacy_postflight_files.stdout }}"
+          - "{{ legacy_discovery_counts.stdout }}"
+          - "{{ legacy_live_api_postflight.stdout }}"
+          - "All 6 independent discovery timers active."
+          - "Grafana and Prometheus healthy; no backups or changes made."
