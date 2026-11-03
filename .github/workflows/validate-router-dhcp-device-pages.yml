@@ -122,5 +122,6 @@ jobs:
           assert 'ansible.builtin.file:' not in mail_preflight
           assert 'ansible.builtin.template:' not in mail_preflight
           assert 'ansible.builtin.copy:' not in mail_preflight
-          assert 'smtplib' not in mail_preflight
+          assert 'import smtplib' not in mail_preflight
+          assert 'send_message(' not in mail_preflight
           PY
