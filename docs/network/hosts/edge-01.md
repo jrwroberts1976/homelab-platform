@@ -87,33 +87,33 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T17:01:31+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:8d:1b:c1`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-edge-01 is CT103, a managed Debian 13 LXC on Proxmox-2. OpenSSH 10.0p2 is exposed on TCP/22 and TCP/9100 is open. No actionable Greenbone findings match the current IP; three updates are available.
+edge-01 is a managed LXC container on Proxmox-2 at 192.168.2.56. Exact OS is not established. Greenbone reports one high-severity Debian security advisory, while current patch telemetry reports no available updates; review the finding and patch state together.
 
 ### Confirmed facts
 
-- Canonical identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
-- The Proxmox guest type is LXC and the Proxmox VMID is 103.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-20-pve.
-- The vendor is Proxmox Server Solutions GmbH.
-- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP/9100 is open; its Nmap service label was omitted.
-- No actionable Greenbone findings match 192.168.2.56.
-- Three updates are available, zero security updates are reported, and no reboot is required.
+- The documented estate identity is edge-01, a reserved edge LXC identified as CT103 on Proxmox-2.
+- The hostname is edge-01.jameshouse and the device is online at 192.168.2.56.
+- The recorded vendor is Proxmox Server Solutions GmbH.
+- The host is managed by Ansible.
+- Nmap reported no TCP or UDP ports and no OS matches in the supplied baseline.
+- Greenbone reports one matching high-severity Debian security advisory, DSA-6600-1, for package-related evidence.
+- Patch telemetry is fresh, reports zero security updates and zero total updates, and indicates unattended upgrades are enabled.
+- The sampled Loki data contains a systemd-networkd-wait-online error and multiple remote connection-reset messages.
 
 ### Inferences
 
-- The device is a managed Debian-based application or infrastructure container hosted by Proxmox rather than a standalone physical endpoint.
-- The recorded role indicates this is reserved edge infrastructure; cloudflared is not deployed according to the canonical estate record.
+- The device is likely a Linux-based container because it is documented as an LXC and exposes systemd journal evidence, but the exact distribution and version are unsupported.
+- The Proxmox vendor attribution likely describes the virtualized/container estate rather than a directly identified guest operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

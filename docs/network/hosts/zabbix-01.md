@@ -72,35 +72,32 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:05`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-zabbix-01 is CT105, an Ansible-managed Proxmox LXC running the Zabbix monitoring platform on Debian GNU/Linux 13. Zabbix services, PostgreSQL/TimescaleDB, Nginx, SSH, and a Prometheus-compatible metrics endpoint are present. No actionable Greenbone findings matched the current IP; seven updates are available, including security updates reported as zero.
+Managed Proxmox LXC container CT105 hosting the Zabbix monitoring platform. The estate record identifies PostgreSQL, TimescaleDB, Zabbix Server, Agent 2, Nginx and nightly backups. A high-severity Debian security advisory finding is present; patch telemetry reports no currently available updates, so both conditions merit review.
 
 ### Confirmed facts
 
-- The canonical estate identifies the device as zabbix-01, a Zabbix monitoring platform in CT105 on PROXMOX.
-- Proxmox identifies the guest as an LXC container named zabbix-01 with VMID 105.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), x86_64, with kernel 7.0.14-23-pve.
-- OpenSSH 10.0p2 on Debian is exposed on TCP port 22.
-- Nginx is exposed on TCP ports 80 and 443, with TLS on port 443.
-- TCP port 9100 is open; its Nmap service label was omitted.
-- The TLS certificate for port 443 is for zabbix.home.jrwroberts.co.uk.
-- Greenbone reports zero actionable findings matching this current IP.
-- Patch telemetry reports seven updates available, zero security updates available, and no reboot required.
+- The canonical estate identifies this host as zabbix-01, an LXC container named CT105 on Proxmox.
+- The canonical role is a Zabbix monitoring platform with PostgreSQL, TimescaleDB, Zabbix Server, Agent 2 and Nginx active.
+- The host is online at 192.168.2.59 and is managed by Ansible.
+- The host has one matching actionable Greenbone finding: Debian Security Advisory DSA-6600-1, severity High, score 8.8, associated with package remediation.
+- Patch telemetry is fresh, reports zero available updates, and indicates that a reboot is not required.
+- The bounded Loki sample includes systemd, apt, SSH authentication, and network-connectivity messages.
+- Nmap reported no TCP or UDP ports and no OS matches in the supplied baseline.
 
 ### Inferences
 
-- The device is a managed Linux server container dedicated to monitoring infrastructure.
-- The HTTPS service is likely associated with the Zabbix web interface based on the canonical role and certificate hostname.
-- Port 9100 is consistent with an exposed metrics endpoint, but the supplied evidence does not provide its service label.
+- The host is likely running a Debian-family Linux userspace inside an LXC container, based on the Debian advisory and systemd/apt evidence.
+- The exact operating system and version are not established by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

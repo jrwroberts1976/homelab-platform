@@ -87,35 +87,35 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T17:01:31+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:e9:49:60`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-cloud-01 is the Proxmox QEMU VM200 production host running Debian 13, with corroborated OpenSSH and web services. One Greenbone kernel-mitigation finding is present; patch telemetry reports no pending security updates and three total updates available, so both conditions merit review.
+cloud-01 is a managed Proxmox VM hosting production Nextcloud, PostgreSQL and Redis. Linux kernel/containerd evidence is present, but the exact OS is not established. Greenbone reports one medium-severity kernel-mitigation finding; patch telemetry currently reports no available updates.
 
 ### Confirmed facts
 
-- The canonical estate identifies this device as cloud-01, a VM managed by Ansible.
-- The device is identified as QEMU VM200 on PROXMOX.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, with kernel 6.12.111+deb13-cloud-amd64.
-- The vendor is reported as Proxmox Server Solutions GmbH.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is corroborated on TCP port 22.
-- Apache httpd 2.4.68 is corroborated on TCP port 8080.
-- Nginx is reported over TLS on open TCP port 443 by Nmap.
-- TCP port 9100 is open; its service label was omitted.
-- Greenbone reports one matching actionable medium-severity finding concerning Linux kernel mitigations for Processor MMIO Stale Data, with CVEs CVE-2022-21123, CVE-2022-21125, and CVE-2022-21166.
-- Patch telemetry reports zero security updates available, three updates available, unattended upgrades enabled, and no reboot required.
+- The documented device name is cloud-01.
+- The canonical estate record identifies this device as a VM on Proxmox, VM200.
+- Its documented role is Production Nextcloud, PostgreSQL and Redis.
+- The device is managed by Ansible.
+- The inventory and Nmap vendor are Proxmox Server Solutions GmbH.
+- The host is online at 192.168.2.53.
+- Sampled logs contain Linux kernel/module evidence including 6.12.115+deb13.1-cloud-amd64.
+- Sampled logs contain containerd and CRI plugin messages.
+- Greenbone reports one actionable medium-severity finding for missing Linux kernel mitigations for Processor MMIO Stale Data, with CVEs CVE-2022-21123, CVE-2022-21125 and CVE-2022-21166.
+- Patch telemetry reports zero available updates, zero security updates, and no reboot required.
 
 ### Inferences
 
-- This is a production application-services VM, consistent with the documented Nextcloud, PostgreSQL, and Redis role.
-- The host is likely currently online and managed, based on online inventory state and fresh patch telemetry.
+- The device is a Linux-based server virtual machine.
+- The exact Linux distribution and OS version cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

@@ -87,35 +87,34 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:26:25:d1`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-Managed QEMU VM greenbone-01 on Proxmox-2, serving the Greenbone vulnerability scanner role. Debian 13 is authoritative; SSH and HTTPS are exposed, with port 9100 also open. One matching medium-severity kernel mitigation finding is present, alongside nine available updates.
+greenbone-01 is a managed Proxmox VM serving as the Greenbone Community vulnerability scanner. Exact OS is not available. One matching medium-severity Linux kernel mitigation finding is present; patch telemetry currently reports no pending updates, so both conditions merit review.
 
 ### Confirmed facts
 
-- The canonical estate identity is greenbone-01, a VM managed by Ansible.
-- The VM is QEMU guest VM203 on Proxmox-2.
-- Its documented role is Greenbone Community vulnerability scanner.
-- The authoritative operating system is Debian GNU/Linux 13 (trixie), with x86_64 architecture and kernel 6.12.111+deb13-cloud-amd64.
-- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 443 is open and provides corroborated nginx 1.30.4 over TLS.
-- TCP port 9100 is open; its service label was omitted.
-- Greenbone reports one matching actionable medium-severity finding concerning Linux kernel mitigations for Processor MMIO Stale Data, referencing CVE-2022-21123, CVE-2022-21125, and CVE-2022-21166.
-- Patch telemetry reports nine updates available, zero security updates available, and no reboot required.
-- The host is online at 192.168.2.57.
+- Canonical estate identity is greenbone-01.
+- The canonical device kind is VM203 on Proxmox-2.
+- The documented role is Greenbone Community vulnerability scanner.
+- The device is managed by Ansible.
+- The hostname is greenbone-01.jameshouse and the IP address is 192.168.2.57.
+- Proxmox Server Solutions GmbH is reported as the inventory and Nmap vendor.
+- Greenbone reports one actionable matching finding: missing Linux Kernel mitigations for Processor MMIO Stale Data, with CVEs CVE-2022-21123, CVE-2022-21125, and CVE-2022-21166, severity Medium, score 5.5.
+- Patch telemetry reports zero available updates, zero security updates, no reboot required, and successful recent patch telemetry.
+- Recent DNS policy-match telemetry reports no matches.
 
 ### Inferences
 
-- The platform family is Debian Linux based on the authoritative Debian OS identity.
-- The host is likely providing the web and SSH interfaces used by its documented Greenbone scanner role, but the supplied evidence does not assign a function to port 9100.
+- The host is best classified as a virtualized infrastructure appliance/server.
+- The exact operating system or distribution cannot be established from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

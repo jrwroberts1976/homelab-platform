@@ -87,34 +87,33 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:3b:b9:e4`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **medium**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-sensor-01 is VM201 on Proxmox, managed by Ansible as a Suricata and Zeek passive network sensor. It runs authoritative Debian 13 and has 10 security updates pending. One Greenbone finding reports missing Linux kernel mitigations for Intel MMIO Stale Data vulnerabilities; both conditions merit review.
+sensor-01 is a Proxmox-hosted VM serving as the managed Suricata and Zeek passive network sensor. Exact OS is not established. Greenbone reports two actionable findings; patch telemetry currently shows no pending updates, so both conditions merit review.
 
 ### Confirmed facts
 
-- The device name is sensor-01 and its IP address is 192.168.2.55.
-- The device is a QEMU virtual machine, VMID 201, on PROXMOX.
-- The canonical role is Suricata and Zeek passive network sensor.
+- The device hostname is sensor-01.jameshouse and its telemetry hostname is sensor-01.
+- The canonical estate identifies it as VM201 on Proxmox and assigns it the role of Suricata and Zeek passive network sensor.
+- The device is online at 192.168.2.55.
+- The recorded vendor is Proxmox Server Solutions GmbH.
 - The device is managed by Ansible.
-- The authoritative operating system is Debian GNU/Linux 13 (trixie), on x86_64 with kernel 6.12.107+deb13-amd64.
-- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP port 9100 is open; its Nmap service label was omitted.
-- Greenbone reports one matching actionable finding involving CVE-2022-21123, CVE-2022-21125, and CVE-2022-21166.
-- Patch telemetry reports 10 security updates and 13 total updates available; unattended upgrades are enabled and no reboot is required.
+- Greenbone reports two matching actionable findings: a Debian security advisory and Linux kernel MMIO Stale Data mitigations findings.
+- Patch telemetry is fresh, reports zero available updates, and indicates that a reboot is not required.
+- No authoritative OS fact is available.
 
 ### Inferences
 
-- The host is a Linux-based managed infrastructure VM used for network monitoring and security telemetry.
-- The Proxmox vendor value identifies the virtualization platform or inventory context rather than necessarily the guest OS vendor.
+- The host is likely a Linux-based server VM because the matching security evidence references Debian and the Linux kernel.
+- The exact Linux distribution, release, kernel version, and firmware are unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

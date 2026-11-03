@@ -72,36 +72,34 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:01:04`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-komodo-01 is CT104, a Proxmox LXC container running Debian GNU/Linux 13 (trixie). It serves as the Komodo container-management control-plane host, with Docker, MongoDB and Komodo Core commissioned. OpenSSH 10.0p2 is exposed on TCP/22 and TCP/9100 is open. No actionable Greenbone findings match the current IP; nine updates are available, including zero security updates.
+komodo-01 is the documented Komodo container-management control-plane LXC (CT104) on Proxmox. Docker, MongoDB, and Komodo Core are commissioned. No exact OS is available; Nmap reported no OS matches or open ports. Patch telemetry is current with no available updates, while sampled logs include network-online timeout errors.
 
 ### Confirmed facts
 
-- The canonical device name is komodo-01.
-- The device is an LXC guest, CT104, hosted on PROXMOX.
-- The documented role is Komodo container-management control-plane host.
-- Authoritative Zabbix Agent 2 evidence identifies the OS as Debian GNU/Linux 13 (trixie) on x86_64.
-- Docker, MongoDB and Komodo Core are documented as commissioned.
-- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 with protocol 2.0.
-- TCP/9100 is open; its Nmap service label is omitted.
-- Greenbone reports zero actionable findings matching 192.168.2.58.
-- Patch telemetry reports nine updates available, zero security updates available, and no reboot required.
-- The bounded Loki sample contains network-connectivity wait-online error and timeout messages.
+- The hostname is komodo-01.jameshouse and the telemetry hostname is komodo-01.
+- The canonical estate kind is lxc, managed by Ansible, with role Komodo container-management control-plane host, CT104 on PROXMOX.
+- Docker, MongoDB, and Komodo Core are documented as commissioned.
+- The host is online at 192.168.2.58.
+- Authoritative OS status is unavailable and the inventory OS field is empty.
+- Nmap completed with no OS matches and no listed TCP or UDP ports.
+- Patch status is ok, with zero available updates and unattended upgrades enabled.
+- Greenbone reports zero actionable findings matching the current IP; this is not proof that the host is vulnerability-free.
+- Sampled logs include a systemd-networkd-wait-online error and a timeout waiting for network connectivity.
 
 ### Inferences
 
-- The host is a managed application/control-plane server rather than a general-purpose end-user device.
-- Its platform is a Debian-based Linux environment running inside Proxmox LXC.
-- The device identity is corroborated by canonical estate data, Proxmox inventory, hostname, and authoritative OS telemetry.
+- The device is a Linux-oriented container environment based on its documented LXC classification and container-management role.
+- The exact guest distribution, kernel, and firmware cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

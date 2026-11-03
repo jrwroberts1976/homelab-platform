@@ -72,36 +72,35 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T17:01:31+00:00`
+- Assessed: `2026-11-03T18:04:04+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `80:e8:2c:1c:55:d2`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Proxmox VE / Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-PROXMOX is a Hewlett Packard physical Proxmox VE cluster node and cluster anchor at 192.168.2.70. Authoritative Zabbix inventory identifies Proxmox VE / Debian GNU/Linux 13 (trixie). Open services include corroborated OpenSSH on TCP/22 and the Proxmox Virtual Environment REST API on TCP/3128; TCP/111 and TCP/9100 are also open. No matching actionable Greenbone findings were reported.
+PROXMOX is the documented Proxmox VE cluster node 1 and cluster anchor at 192.168.2.70. It is online and managed by Ansible; exact OS and service inventory are unavailable in the supplied evidence.
 
 ### Confirmed facts
 
-- Canonical estate name is PROXMOX.
-- The device is classified as physical and has the role Proxmox VE cluster node 1 and cluster anchor.
-- The device is managed by Ansible.
-- The hostname is proxmox.jameshouse and the telemetry hostname is proxmox.
+- The device name and documented estate label are PROXMOX.
+- The canonical role is Proxmox VE cluster node 1 and cluster anchor.
+- The device is classified as physical and managed by Ansible.
+- The inventory hostname is proxmox.jameshouse and telemetry hostname is proxmox.
 - The vendor is Hewlett Packard.
-- The IP address is 192.168.2.70.
-- The authoritative OS is Proxmox VE / Debian GNU/Linux 13 (trixie), on x86_64, with kernel 7.0.14-23-pve.
-- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP/3128 is open and provides the corroborated Proxmox Virtual Environment REST API 3.0.
-- TCP/111 is open.
-- TCP/9100 is open.
-- Greenbone reported zero matching actionable findings for the current IP in the supplied scan result.
+- The device is online at 192.168.2.70.
+- No authoritative OS fact is available.
+- Nmap reported no OS matches and no TCP or UDP ports in the supplied baseline.
+- Greenbone reported zero matching actionable findings for the current IP; this is not proof that the host is vulnerability-free.
+- No sampled Loki entries were available for the bounded 24-hour window.
 
 ### Inferences
 
-- The host is a physical virtualization infrastructure server running Proxmox VE, consistent with its canonical estate role.
+- The device is a physical Proxmox VE virtualization host.
+- The underlying operating system or distribution cannot be identified from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
