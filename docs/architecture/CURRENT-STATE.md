@@ -1,6 +1,14 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 — Router-01 DHCP per-device Grafana canary LIVE; email integration in Git only
+
+The approved DHCP device-page canary ran successfully on `monitor-01`: `monitor-01 ok=36 changed=3 failed=0` and `router-01 ok=8 changed=0 failed=0`. Grafana now has **17 dashboards**: the **original 16 UID-verified unchanged** and exactly one new MAC-stable `Router DHCP Devices` dashboard sourced from `router-01` dnsmasq DHCPACK via Alloy/Loki. The dedicated Grafana provider was added and Grafana-only restarted; **automatic device-page generator timer remains disabled**. No router, DHCP/NAT/QoS, monitoring discovery or OS scanning changes occurred.
+
+Independently verified source and alert readiness: router dnsmasq active with **26** valid leases, Alloy active, 157 validated router DHCPACK events in last 24 hours, 38 host inventory and 38 Nmap profile records, six discovery timers active, mail recipient configured and mail-relay-01 SMTP greeting working. The original first-seen notifier is connected to the network collector and retains **56** MAC entries; the new dashboard canary MAC is already in its registry. Read-only email preflight `monitor-01 ok=9 changed=0 failed=0` sent **no email**. End-to-end email delivery is not yet independently proven.
+
+**Not live yet:** The new DHCP email integration (a separately staged, default-off addition to the existing *sole* SMTP notifier), activation marker, test-email approval and five-minute DHCP device-page timer. All remain behind explicit Ansible approval gates in issue [#291](https://github.com/jrwroberts1976/homelab-platform/issues/291). The new code uses future-only MAC observation cutoffs and existing registry to prevent old-device alert floods. Do not claim every new DHCP lease produces an alert or that the new timer runs until its separate postflight passes. Preserve retired ASUS/HP collectors and #287 deletions.
+
 ## 3 November 2026 ~14:55 UTC — legacy network retirement independently verified LIVE
 
 **Operator-verified production postflight:** `monitor-01` ran `network-host-legacy-retirement-postflight.yml` read-only: **ok=14, changed=0, failed=0, rescued=0**. Confirmed **0** retired ASUS/HP/MAC collector executables, **0** retired service/timer unit files, **0** obsolete named dashboard JSON files, and **0** generated per-MAC dashboard JSON files. Grafana has exactly **16** live dashboards, with **0** legacy dashboards; retained 16-UID SHA-256 fingerprint matches the pre-retirement inventory. The two protected Grafana provisioning providers remain, both with `disableDeletion: true`. The Network Discovery and router DHCP dashboards are present.
