@@ -1956,3 +1956,7 @@ Next:
   `network-host-dhcp-discovery-reset.yml`, intentionally run the
   approval-gated no-backup reset, and review its new host counts/timers.
   Separate Grafana legacy cleanup remains outstanding.
+
+## 2026-11-03 — DHCP discovery reset verified
+
+Operator verified two successful reset runs on monitor-01. The first found 36 hosts; the second/latest found 38 hosts and 38 profile baselines. All six discovery timers were restored. The first-seen registry retains 56 entries. No backups were taken, as requested. The obsolete ASUS discovery snapshot is no longer used. Do not repeat the reset. Next complete live legacy collector and Grafana retirement, postflight, documentation and merge under #287.
