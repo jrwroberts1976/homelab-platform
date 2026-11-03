@@ -2108,3 +2108,11 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
   canary or the successful DHCP-era discovery reset. No full
   monitoring-stack redeploy, router change, Proxmox guest-refresh
   change or cleanup of historic Prometheus/Loki series.
+
+## 2026-11-03 ~14:55 UTC — Independent #287 production postflight PASSED; Git merge pending
+
+- User ran dedicated `network-host-legacy-retirement-postflight.yml` on `monitor-01`: **ok=14 changed=0 unreachable=0 failed=0 rescued=0 skipped=0**. Verified zero remaining old scripts, units, 5 named dashboard JSON and 52 generated dashboard JSON; Grafana API exactly **16** preserved dashboards, **0** legacy, original 16-UID fingerprint matched; two protected provisioning providers configured. Six discovery timers active; 38 current discovered hosts, 56 protected first-seen entries; Grafana and Prometheus HTTP health checks passed.
+- Live 56-dashboard removal plus prior one-dashboard canary completed, with the bulk cleanup recap **ok=54 changed=8 failed=0**. No backup requested or taken. Do not repeat any deletion, discovery reset or Grafana canary.
+- Before merge, GitHub compare showed feature branch ahead of `main` with 57 changed files, while `main` had only 3 newer automated patch-status commits touching 13 `docs/network/hosts/*.md` files; these do not overlap the retirement branch files. Preserve those automatic updates.
+- Next finish normal GitHub PR, require CI and mergeability checks, merge to `main`, verify resulting commit and close issue #287. Do not touch the unrelated failed Proxmox guest-refresh service, router DHCP/QoS, or Grafana/Prometheus historical time series.
+
