@@ -1,6 +1,12 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 ~17:00 UTC — DHCP first-seen email source now enabled on monitor-01
+
+The **router-01 DHCP-backed first-seen email candidate source is now LIVE**, inside the **existing sole network-discovery SMTP notifier** on `monitor-01` (not a second sender). The operator's first approved `router-01-dhcp-device-email-activate.yml` completed **ok=34 changed=2 failed=0**; it installed the reviewed notifier executable, created the **future-only** activation marker, passed checksums against the candidate, ran no-send previews before and after activation, and proved original email recipient and shared first-seen MAC ledger unchanged during the cutover. The latest observed protected registry count is **57**. SMTP was not exercised by this activation and actual inbox delivery is unproven. A second attempted execution was correctly blocked with `changed=0 failed=1` because the marker exists; do not rerun or delete marker.
+
+**Still disabled:** the new 5-minute router-01 DHCP per-device Grafana page generator timer. Existing Grafana **17 dashboards** (original 16 UID-protected plus the one approved DHCP canary), existing independent discovery timers, router DHCP/DNS/NAT/QoS and historic monitoring data remain unchanged. Next gates are independent read-only email postflight, separately approved one-test SMTP mail with inbox confirmation, then separately approved automatic page-timer activation. Issue [#291](https://github.com/jrwroberts1976/homelab-platform/issues/291) remains open.
+
 ## 3 November 2026 — Router-01 DHCP per-device Grafana canary LIVE; email integration in Git only
 
 The approved DHCP device-page canary ran successfully on `monitor-01`: `monitor-01 ok=36 changed=3 failed=0` and `router-01 ok=8 changed=0 failed=0`. Grafana now has **17 dashboards**: the **original 16 UID-verified unchanged** and exactly one new MAC-stable `Router DHCP Devices` dashboard sourced from `router-01` dnsmasq DHCPACK via Alloy/Loki. The dedicated Grafana provider was added and Grafana-only restarted; **automatic device-page generator timer remains disabled**. No router, DHCP/NAT/QoS, monitoring discovery or OS scanning changes occurred.
