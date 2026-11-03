@@ -294,7 +294,7 @@ jobs:
           cleanup_text = Path(
               "IaC/ansible/playbooks/network-host-legacy-live-retirement.yml"
           ).read_text()
-          assert "RETIRE_57_LEGACY_DASHBOARDS_NO_BACKUP" in cleanup_text
+          assert "RETIRE_56_LEGACY_DASHBOARDS_NO_BACKUP" in cleanup_text
           assert "legacy_live_retirement_approved" in cleanup_text
           assert "network-host-legacy-cleanup-preflight.yml" in cleanup_text
           assert "disableDeletion: )true$" in cleanup_text
@@ -309,6 +309,25 @@ jobs:
           assert "monitoring.yml" in cleanup_text
           assert "state: absent" in cleanup_text
           assert "grafana.db" not in cleanup_text
+
+          assert "if len(found)!=72 or len(generated)!=51 or old_named!=5:" in cleanup_text
+          assert "legacy_generated_paths.matched == 51" in cleanup_text
+          assert "grafana_api_total_dashboards == 72" in cleanup_text
+          assert "grafana_api_generated_provisioning_verified == 51" in cleanup_text
+          assert "grafana_api_provisioning_unverified == 0" in cleanup_text
+          assert "Protected Homelab dashboard source is absent" in cleanup_text
+          assert "Protected dashboard/source UID disagreement" in cleanup_text
+          assert "kept_homelab_files<2" in cleanup_text
+          assert "protected_homelab_file_sources_verified" in cleanup_text
+          assert "56 remaining obsolete Grafana dashboards removed" in cleanup_text
+          assert "DRAFT ONLY" not in cleanup_text
+          cleanup_spec = yaml.safe_load(cleanup_text)
+          cleanup_play = next(p for p in cleanup_spec
+                              if p.get("name") ==
+                              "Retire proven legacy collector and Grafana sources without full-stack cutover")
+          task_names = [t.get("name") for t in cleanup_play["tasks"]]
+          assert task_names[0].startswith("Require exact approval")
+          assert not any("ansible.builtin.fail" in t for t in cleanup_play["tasks"])
           assert "no_log: true" in preflight_text
           assert "        that: \n" not in preflight_text
 
