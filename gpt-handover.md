@@ -1984,3 +1984,7 @@ Operator verified two successful reset runs on monitor-01. The first found 36 ho
   syntax then read-only production inventory. Use evidence to prepare
   strict Ansible cleanup and verify Grafana database entries before
   deciding how to remove the 52 old dashboards safely.
+
+## 2026-11-03 — Grafana SQLite zero counts inconclusive
+
+Operator read-only legacy preflight passed (monitor-01 ok=14 changed=0 failed=0). Live: 4 retired scripts, 8 retired unit files, 5 obsolete dashboard JSON files, 52 generated host dashboard JSON files, old Network Hosts provider still registered with disableDeletion=true; Grafana and Prometheus HTTP 200. The queried SQLite volume returned zero matching entries INCLUDING both protected active dashboard UIDs, so it is NOT authoritative evidence of deletion. Do not delete anything yet. Fixed preflight trailing whitespace from git diff --check and added read-only Grafana API search plus protected dashboard GET verification (credential read locally, never echoed, only safe counts printed). Next fast-forward retirement branch, syntax-check and run improved read-only preflight; reconcile API and volume counts before narrowly approved IaC cleanup. DHCP rediscovery is already complete; do not repeat.
