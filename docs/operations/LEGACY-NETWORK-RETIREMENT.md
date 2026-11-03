@@ -1,6 +1,6 @@
 # Legacy ASUS, HP ProCurve and MAC dashboard retirement — #287
 
-**Status: DHCP discovery reset and Grafana legacy retirement playbooks PASSED LIVE; independent postflight and merge still pending.**
+**Status: DHCP discovery and legacy Grafana retirement COMPLETED and independently verified; GitHub merge/issue closure pending.**
 **Active owner: `monitor-01`; gateway: `router-01`.**
 
 ## Purpose and exclusions
@@ -279,3 +279,13 @@ After postflight, complete the GitHub source reconciliation,
 review/merge the feature branch, update handover, and close #287
 only when live and Git state agree. Existing unrelated Proxmox
 guest-refresh failure remains untouched.
+
+## 3 November 2026 — Independent final postflight PASSED
+
+- Operator executed `network-host-legacy-retirement-postflight.yml` after the no-backup live retirement: **monitor-01 ok=14, changed=0, failed=0**.
+- Verified **0** obsolete collector scripts, **0** old systemd units, **0** obsolete named Grafana JSON sources, and **0** generated per-MAC JSON sources.
+- Grafana's actual HTTP API reports **16** dashboards, **0** obsolete; original protected 16 UID fingerprint verified. Both permanent Grafana providers are in place, with `disableDeletion: true`. Network Discovery and router DHCP dashboards remain.
+- Independent discovery inventory contains **38** current host records and protected first-seen registry **56** entries; all **six** discovery timers active; Grafana and Prometheus healthy.
+- The live bulk playbook passed separately **ok=54 changed=8 failed=0**. It had removed the remaining 56 legacy dashboards after a successful one-dashboard canary, four scripts, and eight units. No backups were taken by deliberate operator choice.
+- No further live deletion is required. Do **not** repeat the DHCP reset, Grafana canary, or bulk cleanup. The final repository PR/merge and issue #287 status reconciliation are the remaining administrative steps; preserve the separate Proxmox guest-refresh failure as unrelated.
+
