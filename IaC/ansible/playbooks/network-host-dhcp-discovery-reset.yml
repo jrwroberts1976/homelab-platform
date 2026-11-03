@@ -39,6 +39,7 @@
       - /var/lib/homelab-network-hosts/ai-identification.json
       - /var/lib/homelab-network-hosts/ai-identification-public.json
     dhcp_reset_derived_metrics:
+      - /var/lib/prometheus/node-exporter/homelab_network_devices.prom
       - /var/lib/prometheus/node-exporter/homelab_network_hosts.prom
       - /var/lib/prometheus/node-exporter/homelab_network_host_enrichment.prom
       - /var/lib/prometheus/node-exporter/homelab_network_host_deep_profiles.prom
@@ -157,12 +158,12 @@
 
         - name: Verify new collector is syntactically valid
           ansible.builtin.command:
-            argv: [/usr/bin/python3, -B, -m, py_compile, /usr/local/sbin/homelab-network-host-collector]
+            argv: [/usr/bin/python3, -B, -c, "import ast,pathlib; ast.parse(pathlib.Path('/usr/local/sbin/homelab-network-host-collector').read_text())"]
           changed_when: false
 
         - name: Verify new AI resolver is syntactically valid
           ansible.builtin.command:
-            argv: [/usr/bin/python3, -B, -m, py_compile, /usr/local/sbin/homelab-network-host-ai-resolver]
+            argv: [/usr/bin/python3, -B, -c, "import ast,pathlib; ast.parse(pathlib.Path('/usr/local/sbin/homelab-network-host-ai-resolver').read_text())"]
           changed_when: false
 
         - name: Require corrected collector and router identity before deletion
@@ -271,7 +272,7 @@
                     "notification_sent":False
                 },sort_keys=True))
           register: dhcp_reset_registry_seed
-          changed_when: "'\"registry_preserved_and_added_baselines\": 0' not in dhcp_reset_registry_seed.stdout"
+          changed_when: (dhcp_reset_registry_seed.stdout | from_json).registry_preserved_and_added_baselines | int > 0
           no_log: true
 
         - name: Initialise new deep-profile baseline without deep scanning
