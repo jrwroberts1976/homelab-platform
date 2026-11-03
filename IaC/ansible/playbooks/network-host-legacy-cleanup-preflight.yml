@@ -284,12 +284,44 @@
                        re.fullmatch(r"net-host-[0-9a-f]{12}",uid)]
             folder=[uid for uid,entry in found.items()
                     if entry.get("folderUid")=="homelab-generated-network-hosts"]
+
+            # Confirm ownership against the *actual* provisioned source.
+            # Only aggregate flags; never print household MACs or paths.
+            provenance={"named":0,"generated":0,"unverified":0}
+            for uid in sorted(old+generated):
+                details=get_json("/api/dashboards/uid/"+uid)
+                meta=details.get("meta") or {}
+                dashboard=details.get("dashboard") or {}
+                expected=uid+".json"
+                expected_folder=(
+                    "homelab-generated-network-hosts" if uid in generated
+                    else found[uid].get("folderUid"))
+                matches=(
+                    dashboard.get("uid")==uid
+                    and meta.get("provisioned") is True
+                    and meta.get("provisionedExternalId")==expected
+                    and meta.get("folderUid")==expected_folder
+                    and found[uid].get("folderUid")==expected_folder
+                )
+                if matches:
+                    provenance["generated" if uid in generated else "named"]+=1
+                else:
+                    provenance["unverified"]+=1
+            if provenance["unverified"]:
+                raise SystemExit(
+                    "Unverified legacy Grafana dashboard provisioning ownership; "
+                    "do not delete files or dashboard records.")
+
             print(json.dumps({
                 "grafana_api_total_dashboards":len(found),
                 "grafana_api_retained_dashboard_count":len(preserved),
                 "grafana_api_retired_named_dashboard_count":len(old),
                 "grafana_api_generated_dashboard_count":len(generated),
                 "grafana_api_network_hosts_folder_count":len(folder),
+                "grafana_api_named_provisioning_verified":provenance["named"],
+                "grafana_api_generated_provisioning_verified":provenance["generated"],
+                "grafana_api_provisioning_unverified":provenance["unverified"],
+                "grafana_api_other_dashboards_to_preserve":len(found)-len(old)-len(generated),
                 "grafana_api_checked_live":True,
                 "read_only":True,
             },sort_keys=True))
