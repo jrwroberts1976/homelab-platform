@@ -1,0 +1,63 @@
+name: Validate router-01 DHCP device pages
+
+on:
+  push:
+    branches:
+      - feature/router01-dhcp-device-pages-20261103
+  pull_request:
+    paths:
+      - ".github/workflows/validate-router-dhcp-device-pages.yml"
+      - "IaC/ansible/playbooks/router-01-dhcp-device-pages-*.yml"
+      - "IaC/ansible/roles/router_dhcp_device_pages/**"
+      - "docs/operations/ROUTER-DHCP-DEVICE-PAGES.md"
+
+permissions:
+  contents: read
+
+jobs:
+  router-dhcp-pages:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+
+      - name: Install Ansible validator
+        run: python3 -m pip install "PyYAML==6.0.2" "ansible-core>=2.19,<2.20"
+
+      - name: Validate Python implementation and offline tests
+        run: |
+          python3 -m py_compile \
+            IaC/ansible/roles/router_dhcp_device_pages/files/generate_router_dhcp_devices.py
+          python3 -m unittest discover \
+            -s IaC/ansible/roles/router_dhcp_device_pages/tests -v
+
+      - name: Validate read-only router DHCP and Loki source preflight
+        run: |
+          cd IaC/ansible
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-pages-preflight.yml --syntax-check
+
+      - name: Prevent legacy collectors and unapproved deployment
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          p=Path("IaC/ansible/roles/router_dhcp_device_pages/files/generate_router_dhcp_devices.py").read_text()
+          pre=Path("IaC/ansible/playbooks/router-01-dhcp-device-pages-preflight.yml").read_text()
+          assert 'router-01' in p and 'DHCPACK' in p
+          assert 'homelab-network-hosts' in pre or 'homelab-network-host-collector.timer' in pre
+          assert 'MAC_RE' in p and 'merge_events' in p
+          assert 'os_matches' in p
+          assert 'no_deletions' in p
+          assert '127.0.0.1:3100' in p
+          assert '--apply' in p and 'max_new' in p
+          assert 'ansible.builtin.file:' not in pre
+          assert 'ansible.builtin.systemd_service:' not in pre
+          assert 'backup: true' not in pre
+          assert 'state: absent' not in pre
+          assert 'router_dhcp_device_pages_enable_timer: true' not in pre
+          PY
