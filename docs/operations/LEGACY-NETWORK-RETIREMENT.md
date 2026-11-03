@@ -179,3 +179,40 @@ unrelated Grafana dashboards, router metrics and the Proxmox guest refresher.
   require `grafana_api_provisioning_unverified=0` before any actual
   retirement. No backups, deletion or whole-stack redeploy have
   occurred in this Grafana cleanup. Keep #287 open.
+
+## 3 November 2026 — Single generated Grafana dashboard canary staged
+
+The live API attribution check passed: **52 generated** dashboards
+plus **5 named** retired dashboards, all 57 sourced from expected
+provider files/folders, with **0 mismatches**. There are 73 total
+Grafana dashboards; **16 must be retained**. Source file inventory
+is 4 obsolete executables, 8 old service/timer units, 5 retired
+Homelab JSON and 52 generated JSON files. The former SQLite
+dashboard table is empty and not representative of live Grafana.
+
+The Network Hosts **generated** provider is configured with
+`disableDeletion: false`, unlike the protected Homelab provider
+(`disableDeletion: true`). Grafana documents source-driven
+deletion, but upstream regression #109229 reported orphaned
+provisioned dashboards in versions 12.1–12.4, so verify live
+Grafana 13.2.4 with a *single* deletion rather than assume.
+
+Staged `IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml`
+as a distinct explicitly approval-gated, **no-backup** test.
+It imports the same read-only ownership preflight, checks that
+live generated source/API UIDs are exactly 52 and Grafana has
+73 dashboards, removes **one** verified generated JSON file
+without exposing any MAC-based UID, polls the active provider,
+then requires **exactly 72** remaining live dashboards, **51**
+generated, **5** named retired, and **all other 72 UIDs unchanged**.
+It does not edit Grafana provider settings, restart any containers
+or services, touch discovery data or delete any other dashboard.
+On failed deletion it stops; do not automatically repeat it.
+If successful, use the observed provider behaviour to plan
+the remaining 56 retirements and retain all 16 other dashboards.
+
+**Status: code-only canary prepared; not executed on production.**
+Before intentionally running: fast-forward clean worktree,
+verify `git diff --check` and playbook syntax. The canary requires
+`legacy_grafana_canary_approved=true` and exact phrase
+`RETIRE_ONE_LEGACY_GRAFANA_DASHBOARD_NO_BACKUP`.
