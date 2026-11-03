@@ -2116,3 +2116,40 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 - Before merge, GitHub compare showed feature branch ahead of `main` with 57 changed files, while `main` had only 3 newer automated patch-status commits touching 13 `docs/network/hosts/*.md` files; these do not overlap the retirement branch files. Preserve those automatic updates.
 - Next finish normal GitHub PR, require CI and mergeability checks, merge to `main`, verify resulting commit and close issue #287. Do not touch the unrelated failed Proxmox guest-refresh service, router DHCP/QoS, or Grafana/Prometheus historical time series.
 
+## 2026-11-03 — #291 New per-device Grafana pages, router-01 DHCP source (STAGED, NOT LIVE)
+
+- User explicitly requested restoration of **automatic per-device
+  Grafana pages**, with router-01 dnsmasq DHCP as the device creation
+  source, replacing the retired ASUS/HP inventory/dashboard pipeline
+  removed under fully closed #287.
+- Opened GitHub issue **#291** and isolated branch
+  `feature/router01-dhcp-device-pages-20261103`. Staged read-only
+  `router-01-dhcp-device-pages-preflight.yml` inspecting router
+  dnsmasq/default lease count, router telemetry (Alloy or forwarder)
+  and **positive validated router-01 DHCPACK events from Loki**,
+  monitor-01 independent inventory/Nmap evidence and six timers.
+  No production preflight has yet run; actual DHCPACK stream availability
+  is **unverified**.
+- Implemented tested Python `router_dhcp_device_pages` generator:
+  bounded 36-hour Loki query, pinned source labels and VLAN/LAN,
+  strict unicast MAC/IP parsing, MAC-derived stable Grafana UID,
+  durable MAC-keyed state, idempotent IP/hostname updates, Nmap
+  inferred OS score and open TCP services. Missing/mismatched Nmap
+  profile displayed pending, no extra scan. Source JSON written only
+  on `--apply`; check-only mode is default. No page auto-deletion,
+  no external data exfiltration, no email.
+- Added dedicated disabled-by-default systemd service/timer stage
+  (max 10 new pages/run), separate Grafana provider default-off
+  in IaC, authenticated Grafana UID audit using unchanged
+  protected 16-dashboard fingerprint, explicitly approval-gated
+  one-page canary (expects 17/16), separately approved timer enable
+  and independent read-only postflight. Original six discovery
+  timers unaffected. Do not deploy this via broad monitoring.yml.
+- CI uses Python offline tests and Ansible syntax checks; consult
+  latest Actions result before next operator step.
+- **NEXT**: operator run read-only router + monitor source preflight
+  from clean dedicated worktree; inspect sanitized router DHCPACK
+  counts and lease count. If source ready, intentionally stage disabled
+  generator then perform exactly one approved dashboard canary;
+  review results before enabling timer. Do not claim production
+  activation or update verified CURRENT-STATE.md until live proof.
