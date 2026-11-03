@@ -219,7 +219,7 @@
           - -B
           - -c
           - |
-            import base64,json,re,urllib.request,urllib.error
+            import base64,hashlib,json,re,urllib.request,urllib.error
             from pathlib import Path
 
             # Read the installed secret locally. It is never printed, sent to
@@ -266,12 +266,17 @@
             found={str(entry.get("uid") or ""):entry
                    for entry in search if isinstance(entry,dict)}
             preserved={"homelab-network-hosts","homelab-router-dhcp"}
+            protected_home_folder=None
             for uid in sorted(preserved):
                 if uid not in found:
                     raise SystemExit("Retained dashboard not found in Grafana API")
                 result=get_json("/api/dashboards/uid/"+uid)
                 if result.get("dashboard",{}).get("uid") != uid:
                     raise SystemExit("Protected dashboard identity mismatch")
+                if uid=="homelab-network-hosts":
+                    protected_home_folder=result.get("meta",{}).get("folderUid")
+                    if not protected_home_folder:
+                        raise SystemExit("Homelab folder identity missing")
             retired={
                 "homelab-network-host-tiles",
                 "homelab-mac-device-detail",
@@ -295,7 +300,7 @@
                 expected=uid+".json"
                 expected_folder=(
                     "homelab-generated-network-hosts" if uid in generated
-                    else found[uid].get("folderUid"))
+                    else protected_home_folder)
                 matches=(
                     dashboard.get("uid")==uid
                     and meta.get("provisioned") is True
@@ -312,7 +317,11 @@
                     "Unverified legacy Grafana dashboard provisioning ownership; "
                     "do not delete files or dashboard records.")
 
+            other=set(found)-set(old)-set(generated)
+            other_uid_sha=hashlib.sha256(
+                "\\n".join(sorted(other)).encode()).hexdigest()
             print(json.dumps({
+                "grafana_api_other_uid_sha256":other_uid_sha,
                 "grafana_api_total_dashboards":len(found),
                 "grafana_api_retained_dashboard_count":len(preserved),
                 "grafana_api_retired_named_dashboard_count":len(old),
