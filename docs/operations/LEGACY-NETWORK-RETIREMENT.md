@@ -1,6 +1,6 @@
 # Legacy ASUS, HP ProCurve and MAC dashboard retirement — #287
 
-**Status: DHCP discovery reset LIVE and verified; legacy collector/Grafana SOURCE retirement staged, live cleanup NOT performed.**
+**Status: DHCP discovery reset LIVE; one Grafana generated-dashboard deletion canary LIVE and verified; remaining collector/Grafana retirement staged.**
 **Active owner: `monitor-01`; gateway: `router-01`.**
 
 ## Purpose and exclusions
@@ -216,3 +216,37 @@ Before intentionally running: fast-forward clean worktree,
 verify `git diff --check` and playbook syntax. The canary requires
 `legacy_grafana_canary_approved=true` and exact phrase
 `RETIRE_ONE_LEGACY_GRAFANA_DASHBOARD_NO_BACKUP`.
+
+## 3 November 2026 — Grafana canary passed; 56-dashboard bulk retirement staged
+
+Operator ran the explicit no-backup `network-host-legacy-dashboard-canary.yml`:
+`GRAFANA_CANARY=PASS`, Ansible `monitor-01 ok=28 changed=1 failed=0`.
+The generated `Network Hosts` file provider automatically deleted
+the one selected dashboard after its source JSON was removed (three
+polling retries before success). **72 dashboards now exist:** 51
+remaining generated, 5 named retired, and the **same 16 protected
+dashboard UIDs**. Grafana and Prometheus remained healthy. No other
+files or systemd units were removed. **Never run the canary again.**
+
+`IaC/ansible/playbooks/network-host-legacy-live-retirement.yml`
+now targets the **56 remaining** obsolete dashboards and the previously
+verified four collector scripts and eight systemd unit files. Its
+approval phrase is `RETIRE_56_LEGACY_DASHBOARDS_NO_BACKUP` and is
+not included in scheduled playbooks or `monitoring.yml`. The playbook
+rechecks the live 72/51/5/16 Grafana state, the 16 retained dashboard
+UID fingerprint, exact provisioning attribution, collector inactivity
+and live provider structure, then checks source files for any protected
+Homelab-provisioned dashboards **before** temporarily switching its
+`disableDeletion` flag. It performs Grafana-only restarts (brief
+Grafana UI interruption), never a full monitoring stack restart,
+and waits for the 16/0/0 Grafana postflight before removing the
+obsolete binaries and units. A failed stage restores the protected
+provider deletion setting where possible and stops for diagnosis.
+
+Because this is a **no-backup** cleanup, do not assume dashboards can
+be recovered if the new guarded procedure fails after source deletion.
+Do not modify Grafana's SQLite database or delete unrelated
+dashboard files. The operator must approve the 56-target run separately
+after reviewing syntax, CI and source attribution. The unrelated
+Proxmox guest-refresh failure and all new DHCP-era discovery remain
+outside this scope.
