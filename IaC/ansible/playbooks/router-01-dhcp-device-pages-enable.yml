@@ -37,6 +37,27 @@
           - (device_pages_loki_counts.stdout | from_json).router_source_ready_for_canary == true
           - (device_pages_loki_counts.stdout | from_json).query_limit_reached == false
 
+    - name: Require separately approved shared-MAC email activation marker
+      ansible.builtin.stat:
+        path: /etc/homelab-network-hosts/router-dhcp-alerts.enabled.json
+        follow: false
+      register: router_dhcp_email_marker
+
+    - name: Prevent automatic page creation without first-seen email integration
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_email_marker.stat.isreg | default(false)
+          - not router_dhcp_email_marker.stat.islnk | default(false)
+        fail_msg: >-
+          The shared first-seen DHCP email path has not yet been explicitly
+          activated. Complete email integration and tests before starting
+          the five-minute device page timer.
+
+    - name: Require original network discovery email timer still active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-collector.timer]
+      changed_when: false
+
     - name: Enable and start only the scoped router DHCP page timer
       ansible.builtin.systemd_service:
         name: router-dhcp-device-pages.timer
