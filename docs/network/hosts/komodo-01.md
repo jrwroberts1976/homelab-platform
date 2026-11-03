@@ -113,7 +113,7 @@ komodo-01 is CT104, a Proxmox LXC container running Debian GNU/Linux 13 (trixie)
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-03T09:27:13+00:00`
+- Last assessed: `2026-11-03T10:27:43+00:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
