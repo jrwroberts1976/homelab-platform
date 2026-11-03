@@ -79,7 +79,6 @@
     - "{{ monitoring_root }}/grafana/provisioning/datasources"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab"
-    - "{{ monitoring_root }}/grafana/provisioning/dashboards/network-hosts"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/production"
 
 - name: Ensure monitor node-exporter textfile directory exists
@@ -113,87 +112,6 @@
     owner: root
     group: root
     mode: "0600"
-
-- name: Install evidence-qualified network inventory exporter
-  ansible.builtin.copy:
-    src: network-device-inventory-exporter.py
-    dest: /usr/local/sbin/homelab-network-device-inventory
-    owner: root
-    group: root
-    mode: "0750"
-
-- name: Validate network inventory exporter Python syntax
-  ansible.builtin.command:
-    argv:
-      - python3
-      - -m
-      - py_compile
-      - /usr/local/sbin/homelab-network-device-inventory
-  changed_when: false
-
-- name: Install Grafana MAC-linked host dashboard template
-  ansible.builtin.copy:
-    src: host-profile-template.json
-    dest: /etc/homelab/network-host-template.json
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Install MAC-linked Grafana dashboard generator
-  ansible.builtin.copy:
-    src: network-host-dashboard-generator.py
-    dest: /usr/local/sbin/homelab-network-host-dashboards
-    owner: root
-    group: root
-    mode: "0750"
-
-- name: Validate MAC-linked dashboard generator syntax
-  ansible.builtin.command:
-    argv:
-      - python3
-      - -m
-      - py_compile
-      - /usr/local/sbin/homelab-network-host-dashboards
-  changed_when: false
-
-- name: Install independent Grafana host dashboard generator service
-  ansible.builtin.copy:
-    src: homelab-network-host-dashboards.service
-    dest: /etc/systemd/system/homelab-network-host-dashboards.service
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Install independent Grafana host dashboard generator timer
-  ansible.builtin.copy:
-    src: homelab-network-host-dashboards.timer
-    dest: /etc/systemd/system/homelab-network-host-dashboards.timer
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Install network inventory publishing service
-  ansible.builtin.copy:
-    src: homelab-network-device-inventory.service
-    dest: /etc/systemd/system/homelab-network-device-inventory.service
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Install network inventory publishing timer
-  ansible.builtin.copy:
-    src: homelab-network-device-inventory.timer
-    dest: /etc/systemd/system/homelab-network-device-inventory.timer
-    owner: root
-    group: root
-    mode: "0644"
-
-- name: Enable network inventory publishing timer
-  ansible.builtin.systemd_service:
-    daemon_reload: true
-    name: homelab-network-device-inventory.timer
-    enabled: true
-    state: started
 
 - name: Install Loki heartbeat freshness collector
   ansible.builtin.template:
@@ -549,25 +467,6 @@
   retries: 30
   delay: 2
 
-- name: Publish initial consolidated network inventory
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/python3
-      - /usr/local/sbin/homelab-network-device-inventory
-  register: monitoring_network_inventory_first_run
-  changed_when: false
-  failed_when: monitoring_network_inventory_first_run.rc != 0
-
-- name: Confirm consolidated inventory metric file is populated
-  ansible.builtin.command:
-    argv:
-      - grep
-      - -m
-      - "1"
-      - "homelab_network_device_inventory_info"
-      - /var/lib/prometheus/node-exporter/homelab_network_devices.prom
-  changed_when: false
-
 - name: Reload Prometheus configuration
   ansible.builtin.uri:
     url: http://127.0.0.1:9090/-/reload
@@ -616,53 +515,6 @@
     - monitoring_grafana_health.json.database == "ok"
   retries: 30
   delay: 2
-
-- name: Wait for Prometheus to scrape MAC-linked device metrics
-  ansible.builtin.uri:
-    url: 'http://127.0.0.1:9090/api/v1/query?query=homelab_network_device_card_info%7Btarget_name%3D%22monitor-01%22%7D'
-    status_code: 200
-    return_content: true
-  register: monitoring_mac_device_metric
-  until:
-    - monitoring_mac_device_metric.status == 200
-    - monitoring_mac_device_metric.json.status == "success"
-    - monitoring_mac_device_metric.json.data.result | length >= 10
-  retries: 20
-  delay: 5
-  changed_when: false
-
-- name: Generate a dedicated Grafana dashboard for each retained MAC
-  ansible.builtin.command:
-    argv:
-      - /usr/bin/python3
-      - /usr/local/sbin/homelab-network-host-dashboards
-  register: monitoring_mac_dashboards_generated
-  changed_when: "'changed=0' not in monitoring_mac_dashboards_generated.stdout"
-
-- name: Enable independent per-device Grafana regeneration timer
-  ansible.builtin.systemd_service:
-    daemon_reload: true
-    name: homelab-network-host-dashboards.timer
-    enabled: true
-    state: started
-
-- name: Verify independent generator timer is active
-  ansible.builtin.command:
-    argv:
-      - systemctl
-      - is-active
-      - homelab-network-host-dashboards.timer
-  register: monitoring_per_host_timer_active
-  changed_when: false
-  failed_when: monitoring_per_host_timer_active.stdout.strip() != 'active'
-
-- name: Inspect generated MAC-backed Grafana dashboard files
-  ansible.builtin.find:
-    paths: "{{ monitoring_root }}/grafana/provisioning/dashboards/network-hosts"
-    patterns: 'net-host-*.json'
-    file_type: file
-  register: monitoring_mac_dashboard_files
-  failed_when: monitoring_mac_dashboard_files.matched < 10
 
 - name: Verify provisioned Grafana dashboards
   ansible.builtin.uri:

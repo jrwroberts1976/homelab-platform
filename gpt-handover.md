@@ -1775,3 +1775,344 @@ Next:
 - Remaining validation: actual reboot recovery, nftables reload recovery,
   sustained traffic performance and production IPS enforcement behaviour.
 - Temporary rollback timer inactive following successful permanent activation.
+
+## 2026-11-03 — KISS legacy network monitoring retirement (code staged, not deployed)
+
+- Workstream: #287 under Epic #286. Active feature worktree is
+  `~/projects/homelab-collector-retirement` on
+  `chore/retire-legacy-network-collectors-20261103`.
+- Read-only live preflight on monitor-01: four legacy timers
+  (`asus-network-inventory`, `homelab-network-device-inventory`,
+  `homelab-hp-switch-collector`, `homelab-network-host-dashboards`)
+  all reported disabled/inactive.
+- Separate `homelab-proxmox-guest-refresh.service` reported failed
+  (Result=exit-code, ExecMainStatus=1). Preserve and investigate as
+  independent guest-identity functionality; do not suppress this failure.
+- Source-only first patch on the retirement branch removes legacy exporter,
+  dashboard-generator and timer activation tasks from the core monitoring
+  Ansible role, and deregisters obsolete MAC/device dashboards. It does
+  NOT yet retire other dedicated legacy deployment playbooks, CI references,
+  provisioned files, or stale metrics; these are the next scoped edits.
+- No production service, router, QoS, firewall, DHCP, DNS or Grafana changes
+  were performed by this GitHub commit. Do NOT redeploy obsolete playbooks.
+- New remote branch was based on updated origin/main (five intervening
+  documentation commits since the local worktree's 187807ff); fast-forward
+  the clean worktree from this feature branch before edits/tests.
+- Next: finish all legacy reinstall paths and CI references, run Ansible
+  syntax/targeted tests, validate unaffected host discovery and observability,
+  perform separately approved live cleanup, reconcile CURRENT-STATE.md with
+  observed postflight, merge and close #287.
+
+## 2026-11-03 — #287 source-only retirement follow-up (NOT deployed)
+
+- User verified clean retirement worktree fast-forward, no whitespace errors
+  and `playbooks/monitoring.yml --syntax-check` PASS for the first patch.
+- Remote feature branch now additionally removes obsolete ASUS hostname
+  fallback from independent `network_host_collector`, and removes the
+  obsolete read-only ASUS SQLite identity source from AI resolver while
+  keeping its existing `router` evidence field as an empty object for
+  schema compatibility.
+- `network-host-os-fingerprints.yml` now deploys the independent saved
+  Nmap evidence exporter only, not the retired MAC inventory/dashboard
+  generator; Grafana MAC dashboard provider removed from monitoring role.
+- Historical callers `asus-network-inventory.yml`,
+  `hp-switch-collector.yml`, `network-host-grafana.yml`,
+  `network-host-monitor01-router-hostname-update.yml` and
+  `zabbix-network-inventory-exporter.yml` now contain explicit
+  localhost-only fail-closed Ansible guards.
+- `.github/workflows/validate-network-device-dashboard.yml` changed
+  to verify active dashboards, disabled legacy deployers and independent
+  discovery/Proxmox guest identity tests; workflow validation on this
+  commit is pending.
+- Retired source files, older Komodo provisioning, production dashboard
+  data and network-device Prometheus textfiles remain for targeted,
+  reversible retirement. Not merged or ready to deploy.
+- `homelab-proxmox-guest-refresh.service` remains separately failed
+  on monitor-01 (exit 1); no action to reset/disable or erase this
+  protected guest-identity service was taken.
+- Next: synchronise remote branch to clean worktree, run syntax/CI tests,
+  inspect any regression failures, complete remaining legacy references
+  and live cleanup plan, then staged postflight/merge.
+
+## 2026-11-03 — #287 obsolete source removal staged in Git (NOT live)
+
+- Added the fail-closed HP-specific Zabbix SNMP playbook guard, removed
+  obsolete ASUS/HP collector roles, old monitoring exporter and MAC
+  dashboard-generator source/tests, retired systemd unit source,
+  stale per-device / HP-only dashboards and redundant Komodo copies.
+- Kept the independent network discovery dashboard, including the Komodo
+  copy, and removed only the legacy generated Network Hosts file provider.
+- Updated CI to test for absent retired files, retained host discovery,
+  OS fingerprint evidence, and protected Proxmox guest-identity logic.
+- Added `docs/operations/LEGACY-NETWORK-RETIREMENT.md` with a guarded live
+  cleanup/backup/postflight plan; this code change does not delete or
+  modify deployed collector metrics, provisioned Grafana database entries,
+  unit files, router state, DHCP/DNS, QoS or Zabbix services.
+- Independent `homelab-proxmox-guest-refresh.service` remains a separate
+  failed unit (exit status 1) until investigated; do not suppress it.
+- Next gate: remote GitHub Actions and local Ansible syntax/test validation,
+  then a separately approved live archive/removal playbook and final docs.
+
+## 2026-11-03 — Discovery reset owner verified; read-only preflight prepared
+
+- Operator's Ansible inspection established `monitor-01` as sole active
+  network discovery owner. Its collector, enricher, deep-profiler and AI
+  resolver timers are all enabled/active; `inventory.json`,
+  `deep-profiles.json`, `enrichment.json` and collector executable exist.
+- `Proxmox-2` has disabled/inactive collector, enricher and deep-profiler
+  timers; the AI resolver timer was not found. Its historical state files
+  remain, but are not the active Grafana discovery source.
+- Operator explicitly requested a clean DHCP-era discovery baseline and
+  no backups. Preserve DHCP leases/reservations, canonical estate,
+  Pi-hole history, Proxmox identity snapshots, first-seen alert registry,
+  other security history and router metrics. Deletion is irreversible.
+- New `IaC/ansible/playbooks/network-host-dhcp-reset-preflight.yml`
+  inspects sole ownership, timer status, private JSON schema/counts,
+  existing collector code and router reachability; makes NO production
+  changes, backups or Nmap scans.
+- Collector canonical mapping corrected from retired `docker-01` <!-- historical -->
+  (`192.168.2.220`) to actual `router-01` (`192.168.2.1`) **in Git only**.
+- NEXT: Fast-forward clean retirement worktree, run preflight syntax
+  and read-only execution. Use output to create one approved Ansible
+  reset with temporary timer pause, direct fresh collector invocation
+  (not the notifier post-hook), safe profiler baseline and postflight.
+  Do not execute any removal before the preflight review.
+
+## 2026-11-03 — #287 no-backup DHCP-era discovery reset staged (not executed)
+
+- Operator ran `network-host-dhcp-reset-preflight.yml` from updated
+  retirement worktree. **All tasks PASS, changed=0, failed=0**.
+  `Proxmox-2` collector inactive; sole active discovery owner
+  `monitor-01`; all six collector/AI/DNS/OS-evidence timers active.
+  Router-01 reachable.
+- Before reset monitor-01 held **84 inventory IP entries**, 57 deep-profile
+  MACs, 54 enriched hosts, 35 DNS-evidence devices, 57 AI identities
+  (public/private), and **56 protected first-seen registry entries**.
+- Installed monitor-01 collector still referenced retired ASUS snapshot:
+  `installed_collector_uses_retired_asus_snapshot=true`.
+  This must be fixed before deletion; canonical hostname defaults in
+  Git already replace retired docker-01 .220 with router-01 .1. <!-- historical -->
+- Staged `IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml`
+  under existing #287 workstream. Explicit no-backup approval phrase and
+  read-only preflight. When intentionally run, pauses six discovery
+  timers, waits for idle workers, installs corrected collector and AI
+  resolver, removes exactly six regenerated JSON caches and five
+  discovery Prometheus textfile metrics (including old
+  `homelab_network_devices.prom`), runs ONE direct fresh LAN discovery
+  without notifier post-hook, preserves/extends first-seen registry
+  with baseline MAC entries, seeds deep-profiles without expensive
+  scanning and restores timers after verified postflight.
+- No live backup, no router/Proxmox identity/Pi-hole/dhcp/credential
+  modification. Old Prometheus/Loki historical time series and 52
+  provisioned legacy Grafana host pages persist until later cleanup.
+  The separate Proxmox guest-refresh failure must not be reset or
+  hidden. Failed partial reset deliberately leaves discovery timers
+  paused pending manual diagnosis; no backup exists by explicit
+  operator choice.
+- The new reset playbook has **not run on production**; GitHub CI and
+  local syntax-check must pass before approved execution. When it
+  runs, capture operator output and update CURRENT-STATE.md from
+  observed facts; no premature issue closure.
+
+## 2026-11-03 12:44 UTC — Aborted DHCP baseline reset (NO deletion)
+
+- Operator ran the approval-gated reset once; pre-deletion collector
+  verification failed on the exact `INTERFACE = "eth0"` assertion.
+  Six discovery timers were paused then successfully restarted in
+  the rescue path. No discovery JSON or metrics were deleted; no fresh
+  scan ran. **Two installed Python executables changed on monitor-01**:
+  host collector and AI resolver. Thus current live collector may have
+  inherited legacy `vmbr0` rather than `eth0`; do not assume it works.
+- Root cause in IaC: play imports historical Proxmox-2 collector defaults
+  with `network_host_collector_interface: vmbr0`, while task-level
+  rendering did not explicitly force monitor-01 `eth0`. This is separate
+  from the brittle exact-quote assertion.
+- Fixed in Git on `chore/retire-legacy-network-collectors-20261103`:
+  reset now renders with task-level `eth0`/`192.168.2.0/24`
+  overrides, verifies actual parsed Python values/host mapping,
+  and has CI regression checks.
+- Added `IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml`:
+  safe targeted repair **without any deletion, backup, scan or timer
+  start/stop**, checking retained inventory and first-seen registry.
+- **NEXT**: fast-forward remote branch in clean admin-01 worktree;
+  syntax-check and run collector-only repair with --ask-become-pass;
+  confirm correct installed interface and six timers active before
+  reconsidering the explicit no-backup discovery reset. No earlier
+  consent to the reset should be interpreted as proof it completed.
+
+## 2026-11-03 ~13:06 UTC — Collector-only repair verified LIVE
+
+- Operator synchronised local retirement worktree to remote `d940898c`,
+  `git diff --check` and collector repair syntax check passed.
+- `network-host-dhcp-collector-repair.yml` on `monitor-01`:
+  **ok=10, changed=1, failed=0**. Collector Python AST confirms
+  `eth0`, subnet `192.168.2.0/24` and canonical router identity.
+- Old inventory **84** entries and protected first-seen notification
+  registry **56** entries remain; `data_deleted=false`. All six
+  discovery timers checked active.
+- The successful repair did **not** scan, delete state, take backups,
+  or change systemd services. Previous reset attempt remains aborted.
+- Next: fast-forward worktree after this handover update, syntax-check
+  `network-host-dhcp-discovery-reset.yml`, intentionally run the
+  approval-gated no-backup reset, and review its new host counts/timers.
+  Separate Grafana legacy cleanup remains outstanding.
+
+## 2026-11-03 — DHCP discovery reset verified
+
+Operator verified two successful reset runs on monitor-01. The first found 36 hosts; the second/latest found 38 hosts and 38 profile baselines. All six discovery timers were restored. The first-seen registry retains 56 entries. No backups were taken, as requested. The obsolete ASUS discovery snapshot is no longer used. Do not repeat the reset. Next complete live legacy collector and Grafana retirement, postflight, documentation and merge under #287.
+
+## 2026-11-03 — Post-reset legacy collector/Grafana inventory
+
+- Operator read-only check on `monitor-01` after the two successful
+  DHCP rediscovery runs: **all four** retired collector executables remain
+  present, **52** legacy generated per-MAC Grafana dashboard JSON files
+  remain, and `/opt/monitoring/grafana/provisioning/dashboards/homelab.yml`
+  still refers to the old Network Hosts provider.
+- Grafana and Prometheus returned local HTTP 200. Independent
+  `homelab-network-hosts.json` discovery dashboard must be preserved.
+- Existing Grafana file provider config has `disableDeletion: true`;
+  removing source JSON alone may not remove provisioned dashboards
+  from Grafana's database. Full monitoring-role re-deploy is NOT approved,
+  as the current live router traffic dashboard may not be fully
+  reconciled with the active `main` IaC.
+- Git-only `IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml`
+  prepared to count exact legacy scripts/unit files/dashboard JSON
+  candidates, confirm protected dashboards, and read Grafana SQLite
+  dashboard/provider counts **read-only** if its Docker volume is present.
+  No production deletion, backup, service restart, router edit or scan.
+- Next on `admin-01`: fast-forward retirement branch, run preflight
+  syntax then read-only production inventory. Use evidence to prepare
+  strict Ansible cleanup and verify Grafana database entries before
+  deciding how to remove the 52 old dashboards safely.
+
+## 2026-11-03 — Grafana SQLite zero counts inconclusive
+
+Operator read-only legacy preflight passed (monitor-01 ok=14 changed=0 failed=0). Live: 4 retired scripts, 8 retired unit files, 5 obsolete dashboard JSON files, 52 generated host dashboard JSON files, old Network Hosts provider still registered with disableDeletion=true; Grafana and Prometheus HTTP 200. The queried SQLite volume returned zero matching entries INCLUDING both protected active dashboard UIDs, so it is NOT authoritative evidence of deletion. Do not delete anything yet. Fixed preflight trailing whitespace from git diff --check and added read-only Grafana API search plus protected dashboard GET verification (credential read locally, never echoed, only safe counts printed). Next fast-forward retirement branch, syntax-check and run improved read-only preflight; reconcile API and volume counts before narrowly approved IaC cleanup. DHCP rediscovery is already complete; do not repeat.
+
+## 3 November 2026 — Live Grafana API and provenance gate
+
+- The running Grafana API returned 73 dashboards: 52 old generated
+  host dashboards, 5 named retired dashboards, and **16 to preserve**,
+  including the independent Network Discovery and router DHCP dashboards.
+  API ownership is authoritative here; the old SQLite dashboard table
+  returned no rows including protected dashboards and must NOT be edited.
+- Grafana file provisioning has `disableDeletion: true`; simply
+  deleting JSON would leave stale live dashboard records. Follow
+  the official provider deletion lifecycle, scoped to the 57 old
+  dashboards, with protected dashboards verified after each stage.
+- Read-only `network-host-legacy-cleanup-preflight.yml` now checks
+  the Grafana API's `meta.provisioned`,
+  `meta.provisionedExternalId` and folder ID for every old UID
+  against its exact file and expected provider, without publishing
+  host identities or API credentials.
+- Next: rerun read-only preflight from latest feature branch and
+  require `grafana_api_provisioning_unverified=0` before any actual
+  retirement. No backups, deletion or whole-stack redeploy have
+  occurred in this Grafana cleanup. Keep #287 open.
+
+## 2026-11-03 — Grafana one-dashboard canary prepared
+
+Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 named), 16 protected/remaining, zero source mismatches. Prepared `IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml`: approval-gated, no-backup test that removes exactly one generated JSON from the Network Hosts provider (`disableDeletion: false`), polls Grafana and verifies all other 72 dashboard UIDs unchanged. This is Git-only; do not run the 56-dashboard bulk removal until the canary passes. No provider config, service or discovery changes are in scope. After sync run syntax-check, then explicit canary approval. If it fails or a dashboard remains in the API, stop and investigate; do not repeat the operation.
+
+## 2026-11-03 — Grafana canary is mandatory before any bulk retirement
+
+- Latest operator read-only preflight **PASSED**: 73 total Grafana
+  dashboards; **52/52** generated and **5/5** named retired dashboards
+  have verified live Grafana file-provisioning ownership; **0**
+  unattributed; **16** nonlegacy dashboards to protect. Four old scripts,
+  eight old systemd files, 52 generated JSON, 5 named JSON remain.
+  `monitor-01 ok=16 changed=0 failed=0`.
+- Generated `Network Hosts` provider historically has
+  `disableDeletion: false` whereas the retained `Homelab` provider
+  has `disableDeletion: true`. Grafana 13.2.4 uses resource-backed
+  storage; old SQLite dashboard table is not authoritative.
+- **Canary next:** `playbooks/network-host-legacy-dashboard-canary.yml`
+  is approval gated, deletes exactly ONE generated dashboard JSON with
+  no backup, allows the existing provider to auto-delete the Grafana
+  dashboard, and verifies exactly 72 dashboards plus retention of
+  every other UID. It does NOT touch collector binaries, units,
+  network discovery, router, Grafana providers or services.
+- A broader `network-host-legacy-live-retirement.yml` exists as a
+  draft but is **intentionally fail-closed with an unconditional
+  Ansible fail task** until the canary outcome has been verified and
+  its expected counts updated from 52 to 51 generated dashboards.
+  **Never execute it now**, and never rerun the successful DHCP
+  discovery reset.
+- Next operator: fast-forward the clean retirement worktree,
+  `git diff --check`, syntax-check the canary, then intentionally
+  approve ONE dashboard test. Review its final summary and
+  complete postflight, update issue #287 and handover, then design
+  remaining 56 dashboard removals.
+
+## 2026-11-03 ~14:36 UTC — Single-dashboard Grafana canary PASS, bulk 56 staged
+
+- Operator intentionally executed `network-host-legacy-dashboard-canary.yml`
+  with no backup on `monitor-01`; `GRAFANA_CANARY=PASS`,
+  `monitor-01 ok=28 changed=1 failed=0`. One legacy generated
+  `net-host-*.json` was removed; Grafana's existing
+  `Network Hosts` provider auto-removed the corresponding dashboard
+  after three polling retries.
+- Live result: **72 total** Grafana dashboards, **51** generated legacy
+  dashboards, **5** named retired dashboards, **16** nonlegacy dashboards
+  all preserved by exact UID, Grafana and Prometheus HTTP 200.
+  No systemd change, provider change, restart, script removal, backup,
+  router change or network discovery reset.
+- Git-only `network-host-legacy-live-retirement.yml` changed from
+  blocked 57/52 pre-canary draft to scoped **56/51** post-canary
+  cleanup with `legacy_live_retirement_approved=true` and exact
+  phrase `RETIRE_56_LEGACY_DASHBOARDS_NO_BACKUP`. Added strict
+  checks that every protected Homelab-provisioned dashboard still
+  has an intact matching JSON file **before** temporarily enabling
+  deletion for the five retired Homelab dashboards. It preserves the
+  nonlegacy 16 by UID fingerprint, performs only Grafana container
+  restarts for provider reconciliation, and removes obsolete scripts
+  and eight systemd files only after Grafana postflight.
+- Official Grafana file provisioning uses `disableDeletion` to
+  control automatic deletion after source removal. The generated
+  provider's behaviour was proved live; the temporary Homelab
+  deletion change has **not** yet been tested live. The script
+  refuses drift and stops if any protected source is missing.
+- GitHub CI enforces 72/51/5/16 starting state, no backup,
+  approval gate, retained-source safeguards and syntax check.
+- **NEXT**: operator fast-forward clean retirement worktree, run
+  `git diff --check` and bulk syntax-check. After explicit
+  approval, run 56-target retirement and inspect full postflight;
+  verify 16 Grafana dashboards retained, four collector scripts
+  and eight unit files absent, discovery timers active, Prometheus
+  healthy. Do not repeat the canary or DHCP discovery reset.
+  Keep #287 open until proven live cleanup, PR/merge and final docs.
+
+## 2026-11-03 — Approved legacy Grafana and old collector retirement PASSED; independent postflight next
+
+- Operator ran `network-host-legacy-live-retirement.yml` after
+  the passed single-dashboard canary, with **monitor-01 ok=54,
+  changed=8, unreachable=0, failed=0, skipped=0, rescued=0**.
+- This was the explicit, no-backup cleanup for the **remaining 56**
+  Grafana dashboards (51 generated, 5 named) and **4** old collector
+  scripts / **8** obsolete systemd files. Successful task sequence
+  implies the Grafana API and 16-UID fingerprint gates passed,
+  but user provided the final Ansible recap only.
+- Added independent **read-only** postflight
+  `IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml`:
+  verify old files/units absent, generated directory empty,
+  two protected Grafana providers with `disableDeletion: true`,
+  Grafana live UID set EXACTLY the 16 nonlegacy UIDs with fingerprint
+  `1ba5e96a3b2bc01aef7efe97d8ee8b11464baa8bb44572eae52b45d3f87abc13`,
+  preserved Network Discovery/router JSON and first-seen registry,
+  six active discovery timers, Grafana + Prometheus HTTP health.
+  No backup, deletion, restart or state mutation.
+- **Next operator:** fast-forward the same clean feature branch on
+  admin-01; `git diff --check`; syntax check and execute independent
+  postflight with `--ask-become-pass`. Inspect output before PR/merge
+  and closing GitHub #287. Do NOT rerun bulk retirement, its
+  canary or the successful DHCP-era discovery reset. No full
+  monitoring-stack redeploy, router change, Proxmox guest-refresh
+  change or cleanup of historic Prometheus/Loki series.
+
+## 2026-11-03 ~14:55 UTC — Independent #287 production postflight PASSED; Git merge pending
+
+- User ran dedicated `network-host-legacy-retirement-postflight.yml` on `monitor-01`: **ok=14 changed=0 unreachable=0 failed=0 rescued=0 skipped=0**. Verified zero remaining old scripts, units, 5 named dashboard JSON and 52 generated dashboard JSON; Grafana API exactly **16** preserved dashboards, **0** legacy, original 16-UID fingerprint matched; two protected provisioning providers configured. Six discovery timers active; 38 current discovered hosts, 56 protected first-seen entries; Grafana and Prometheus HTTP health checks passed.
+- Live 56-dashboard removal plus prior one-dashboard canary completed, with the bulk cleanup recap **ok=54 changed=8 failed=0**. No backup requested or taken. Do not repeat any deletion, discovery reset or Grafana canary.
+- Before merge, GitHub compare showed feature branch ahead of `main` with 57 changed files, while `main` had only 3 newer automated patch-status commits touching 13 `docs/network/hosts/*.md` files; these do not overlap the retirement branch files. Preserve those automatic updates.
+- Next finish normal GitHub PR, require CI and mergeability checks, merge to `main`, verify resulting commit and close issue #287. Do not touch the unrelated failed Proxmox guest-refresh service, router DHCP/QoS, or Grafana/Prometheus historical time series.
+

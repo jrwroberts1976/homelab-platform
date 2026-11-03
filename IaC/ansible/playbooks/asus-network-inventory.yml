@@ -1,8 +1,14 @@
 ---
-- name: Deploy ASUS Network Inventory
-  hosts: monitor-01
-  become: true
-  gather_facts: true
-
-  roles:
-    - role: asus_network_inventory
+# Retired by #287. This deliberately fails before any target-side action.
+# Retained as a fail-closed compatibility guard for historical playbook names.
+- name: Refuse retired legacy network inventory deployment (asus-network-inventory.yml)
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  tasks:
+    - name: Block legacy inventory and MAC-dashboard reactivation
+      ansible.builtin.fail:
+        msg: >-
+          RETIRED (#287): asus-network-inventory.yml must not reinstall the obsolete
+          ASUS/HP inventory or MAC-generated Grafana dashboard pipeline.
+          Use the supported router-01/Pi-hole/monitor-01 workflows.

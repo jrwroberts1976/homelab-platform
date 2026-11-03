@@ -1,0 +1,393 @@
+---
+# #287: operator-approved, NO-BACKUP reset of regenerable discovery data.
+# This playbook requires explicit approval; never include it in monitoring.yml.
+# It retains first-seen alert history, protected Proxmox identities and all
+# canonical/router/Pi-hole/security evidence. It does not touch router-01.
+- import_playbook: network-host-dhcp-reset-preflight.yml
+
+- name: Establish fresh router-01 DHCP-era discovered-host baseline
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars_files:
+    - "{{ playbook_dir }}/../roles/network_host_collector/defaults/main.yml"
+    - "{{ playbook_dir }}/../roles/network_host_ai_resolver/defaults/main.yml"
+  vars:
+    network_host_collector_expected_hostname: monitor-01
+    network_host_collector_expected_ipv4: 192.168.2.52
+    network_host_collector_interface: eth0
+    dhcp_reset_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+      - homelab-network-host-ai-resolver.timer
+      - homelab-network-dns-evidence.timer
+      - homelab-network-os-evidence.timer
+    dhcp_reset_legacy_timers:
+      - asus-network-inventory.timer
+      - homelab-hp-switch-collector.timer
+      - homelab-network-device-inventory.timer
+      - homelab-network-host-dashboards.timer
+    dhcp_reset_workers:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+      - homelab-network-host-ai-resolver.service
+      - homelab-network-dns-evidence.service
+      - homelab-network-os-evidence.service
+    dhcp_reset_derived_json:
+      - /var/lib/homelab-network-hosts/inventory.json
+      - /var/lib/homelab-network-hosts/deep-profiles.json
+      - /var/lib/homelab-network-hosts/enrichment.json
+      - /var/lib/homelab-network-hosts/dns-evidence.json
+      - /var/lib/homelab-network-hosts/ai-identification.json
+      - /var/lib/homelab-network-hosts/ai-identification-public.json
+    dhcp_reset_derived_metrics:
+      - /var/lib/prometheus/node-exporter/homelab_network_devices.prom
+      - /var/lib/prometheus/node-exporter/homelab_network_hosts.prom
+      - /var/lib/prometheus/node-exporter/homelab_network_host_enrichment.prom
+      - /var/lib/prometheus/node-exporter/homelab_network_host_deep_profiles.prom
+      - /var/lib/prometheus/node-exporter/homelab_network_os_fingerprints.prom
+
+  tasks:
+    - name: Demand intentional no-backup production reset approval
+      ansible.builtin.assert:
+        that:
+          - dhcp_discovery_reset_approved | default(false) | bool
+          - (dhcp_discovery_reset_phrase | default('')) == 'RESET_DISCOVERED_HOSTS_NO_BACKUP'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: >-
+          Refusing irreversible discovery reset without exact operator
+          confirmation on verified monitor-01. This NEVER changes DHCP.
+
+    - name: Require existing active timers match last verified discovery state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ dhcp_reset_timers }}"
+      register: dhcp_reset_active_timers
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse drift in current timer state
+      ansible.builtin.assert:
+        that:
+          - dhcp_reset_active_timers.results | map(attribute='stdout') | unique | list == ['active']
+        fail_msg: >-
+          Timer states changed since preflight. Do not guess what to restart.
+
+    - name: Reconfirm retired timers cannot recreate old ASUS and HP state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ dhcp_reset_legacy_timers }}"
+      register: dhcp_reset_legacy_timer_states
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse while any retired timer is active
+      ansible.builtin.assert:
+        that:
+          - dhcp_reset_legacy_timer_states.results | map(attribute='stdout') | unique | list == ['inactive']
+        fail_msg: Old collector or generator has restarted; abort.
+
+    - name: Guard against symlinks in exactly targeted discovery and metric files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop: "{{ dhcp_reset_derived_json + dhcp_reset_derived_metrics }}"
+      register: dhcp_reset_target_stats
+      no_log: true
+
+    - name: Refuse unsafe paths and non-regular files
+      ansible.builtin.assert:
+        that:
+          - not item.stat.islnk | default(false)
+          - not item.stat.exists | default(false) or item.stat.isreg | default(false)
+        fail_msg: >-
+          Unexpected file type in discovery reset target. Nothing was deleted.
+      loop: "{{ dhcp_reset_target_stats.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Confirm protected first-seen notification history exists as regular file
+      ansible.builtin.stat:
+        path: /var/lib/homelab-network-hosts/alerted-macs.json
+        follow: false
+      register: dhcp_reset_registry_file
+
+    - name: Refuse missing or unsafe notification registry
+      ansible.builtin.assert:
+        that:
+          - dhcp_reset_registry_file.stat.isreg | default(false)
+          - not dhcp_reset_registry_file.stat.islnk | default(false)
+        fail_msg: >-
+          Cannot protect first-seen notification registry. Reset refused.
+
+    - name: Initially record that no destructive operation has occurred
+      ansible.builtin.set_fact:
+        dhcp_reset_destructive_started: false
+
+    - name: Pause producers, clear regenerable state, scan and resume
+      block:
+        - name: Pause exactly the six discovery consumer and producer timers
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: stopped
+          loop: "{{ dhcp_reset_timers }}"
+
+        - name: Wait for previous one-shot workers to finish
+          ansible.builtin.command:
+            argv: [systemctl, is-active, "{{ item }}"]
+          loop: "{{ dhcp_reset_workers }}"
+          register: dhcp_reset_idle_worker
+          until: dhcp_reset_idle_worker.stdout | trim == 'inactive'
+          retries: 15
+          delay: 4
+          changed_when: false
+          failed_when: false
+
+        - name: Refuse to delete data while a worker is running or failed
+          ansible.builtin.assert:
+            that:
+              - dhcp_reset_idle_worker.results | map(attribute='stdout') | unique | list == ['inactive']
+            fail_msg: >-
+              One or more discovery workers did not become inactive.
+              No discovery data was deleted.
+
+        - name: Install corrected Ansible-managed collector before reset
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../roles/network_host_collector/templates/homelab-network-host-collector.py.j2"
+            dest: /usr/local/sbin/homelab-network-host-collector
+            owner: root
+            group: root
+            mode: '0755'
+            backup: false
+          # Task vars override the historical Proxmox-2 defaults in vars_files.
+          # Without this, the rendered collector may scan stale vmbr0.
+          vars:
+            network_host_collector_interface: eth0
+            network_host_collector_subnet: 192.168.2.0/24
+
+        - name: Remove retired ASUS database fallback from installed AI resolver
+          ansible.builtin.template:
+            src: "{{ playbook_dir }}/../roles/network_host_ai_resolver/templates/homelab-network-host-ai-resolver.py.j2"
+            dest: /usr/local/sbin/homelab-network-host-ai-resolver
+            owner: root
+            group: root
+            mode: '0755'
+            backup: false
+
+        - name: Verify new collector is syntactically valid
+          ansible.builtin.command:
+            argv: [/usr/bin/python3, -B, -c, "import ast,pathlib; ast.parse(pathlib.Path('/usr/local/sbin/homelab-network-host-collector').read_text())"]
+          changed_when: false
+
+        - name: Verify new AI resolver is syntactically valid
+          ansible.builtin.command:
+            argv: [/usr/bin/python3, -B, -c, "import ast,pathlib; ast.parse(pathlib.Path('/usr/local/sbin/homelab-network-host-ai-resolver').read_text())"]
+          changed_when: false
+
+        - name: Require corrected collector and router identity before deletion
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - |
+                import ast
+                from pathlib import Path
+
+                p=Path("/usr/local/sbin/homelab-network-host-collector").read_text()
+                a=Path("/usr/local/sbin/homelab-network-host-ai-resolver").read_text()
+
+                # Compare rendered assignment values, not literal formatting.
+                values={}
+                for node in ast.parse(p).body:
+                    if isinstance(node,ast.Assign):
+                        for target in node.targets:
+                            if isinstance(target,ast.Name) and target.id in (
+                                "INTERFACE","SUBNET","CANONICAL_HOSTNAMES"):
+                                values[target.id]=ast.literal_eval(node.value)
+                if values.get("INTERFACE") != "eth0":
+                    raise SystemExit("Wrong collector interface: expected eth0")
+                if values.get("SUBNET") != "192.168.2.0/24":
+                    raise SystemExit("Wrong collector subnet: expected 192.168.2.0/24")
+                names=values.get("CANONICAL_HOSTNAMES",{})
+                if (not isinstance(names,dict)
+                    or names.get("192.168.2.1") != "router-01.jameshouse"
+                    or "192.168.2.220" in names):
+                    raise SystemExit("Retired or incorrect canonical router mapping")
+                if "load_asus_hostnames" in p or "ROUTER_HOSTNAME_SNAPSHOT" in p:
+                    raise SystemExit("Retired ASUS collector code remains")
+                if "ROUTER_DB" in a or "router_identity()" in a:
+                    raise SystemExit("Retired ASUS AI resolver lookup remains")
+                print("corrected_collectors=PASS; interface=eth0; subnet=192.168.2.0/24")
+          changed_when: false
+
+        - name: Mark irreversible reset boundary
+          ansible.builtin.set_fact:
+            dhcp_reset_destructive_started: true
+
+        - name: Remove only the six regenerable discovery JSON files without backups
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ dhcp_reset_derived_json }}"
+
+        - name: Remove only four regenerable stale discovery textfile metrics
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ dhcp_reset_derived_metrics }}"
+
+        - name: Run exactly one fresh scan directly without first-seen email hook
+          ansible.builtin.command:
+            argv: [/usr/local/sbin/homelab-network-host-collector]
+          register: dhcp_reset_fresh_scan
+          no_log: true
+
+        - name: Preserve existing notification entries and baseline newly seen MACs
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - |
+                import ipaddress,json,os,re,tempfile,time
+                from pathlib import Path
+
+                root=Path("/var/lib/homelab-network-hosts")
+                inventory=json.loads((root/"inventory.json").read_text())
+                regpath=root/"alerted-macs.json"
+                registry=json.loads(regpath.read_text())
+                if not isinstance(inventory,dict) or not isinstance(registry,dict):
+                    raise SystemExit("Invalid inventory or registry schema")
+                known=registry.get("devices")
+                if registry.get("version") != 1 or not isinstance(known,dict):
+                    raise SystemExit("Invalid protected first-seen schema")
+                if not (2 <= len(inventory) <= 254):
+                    raise SystemExit("Unexpected fresh scan count")
+                if "192.168.2.1" not in inventory or "192.168.2.52" not in inventory:
+                    raise SystemExit("Fresh scan missing router or monitor")
+                now=int(time.time())
+                new={}
+                pattern=re.compile(r"^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$")
+                subnet=ipaddress.ip_network("192.168.2.0/24")
+                for ip,host in inventory.items():
+                    if ipaddress.ip_address(ip) not in subnet or not isinstance(host,dict):
+                        raise SystemExit("Unexpected host in fresh scan")
+                    if not host.get("online") or int(host.get("first_seen",0)) <= 0:
+                        raise SystemExit("Stale or offline discovered host")
+                    mac=str(host.get("mac") or "").strip().lower()
+                    if not pattern.fullmatch(mac) or mac in known:
+                        continue
+                    new[mac]={
+                        "status":"baseline",
+                        "recorded_at":now,
+                        "ip":ip,
+                        "hostname":str(host.get("hostname") or ""),
+                        "vendor":str(host.get("vendor") or ""),
+                        "first_seen":int(host["first_seen"]),
+                    }
+                if new:
+                    registry["devices"].update(new)
+                    fd,tmp=tempfile.mkstemp(prefix=".alert-registry-",dir=str(root))
+                    try:
+                        with os.fdopen(fd,"w") as stream:
+                            json.dump(registry,stream,indent=2,sort_keys=True)
+                            stream.write("\n")
+                            stream.flush()
+                            os.fsync(stream.fileno())
+                        os.chmod(tmp,0o600)
+                        os.replace(tmp,regpath)
+                    finally:
+                        if os.path.exists(tmp):
+                            os.unlink(tmp)
+                print(json.dumps({
+                    "fresh_hosts":len(inventory),
+                    "registry_preserved_and_added_baselines":len(new),
+                    "total_first_seen_entries":len(registry["devices"]),
+                    "notification_sent":False
+                },sort_keys=True))
+          register: dhcp_reset_registry_seed
+          changed_when: (dhcp_reset_registry_seed.stdout | from_json).registry_preserved_and_added_baselines | int > 0
+          no_log: true
+
+        - name: Initialise new deep-profile baseline without deep scanning
+          ansible.builtin.command:
+            argv: [/usr/local/sbin/homelab-network-host-deep-profiler]
+          register: dhcp_reset_profiler_seed
+          no_log: true
+
+        - name: Confirm new baseline is present and no old discovered hosts remain
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - |
+                import json
+                from pathlib import Path
+                root=Path("/var/lib/homelab-network-hosts")
+                inv=json.loads((root/"inventory.json").read_text())
+                prof=json.loads((root/"deep-profiles.json").read_text())
+                reg=json.loads((root/"alerted-macs.json").read_text())
+                assert inv and "192.168.2.1" in inv and "192.168.2.52" in inv
+                assert isinstance(prof.get("profiles"),dict)
+                assert prof.get("schema_version") == 1
+                assert all(x.get("status") == "baseline" for x in prof["profiles"].values())
+                assert all(not (root/f).exists() for f in (
+                    "enrichment.json","dns-evidence.json",
+                    "ai-identification.json","ai-identification-public.json"))
+                assert isinstance(reg.get("devices"),dict)
+                for host in inv.values():
+                    mac=str(host.get("mac") or "").strip().lower()
+                    if mac:
+                        assert mac in reg["devices"]
+                print(json.dumps({
+                    "fresh_hosts":len(inv),
+                    "new_profile_baselines":len(prof["profiles"]),
+                    "first_seen_registry_entries":len(reg["devices"]),
+                    "stale_derived_caches":0
+                },sort_keys=True))
+          register: dhcp_reset_final_verify
+          changed_when: false
+
+        - name: Resume the same six previously active timers
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: started
+          loop: "{{ dhcp_reset_timers }}"
+
+        - name: Verify all discovery timers resumed
+          ansible.builtin.command:
+            argv: [systemctl, is-active, "{{ item }}"]
+          loop: "{{ dhcp_reset_timers }}"
+          register: dhcp_reset_resumed
+          changed_when: false
+
+        - name: Confirm completion without exposing host identity
+          ansible.builtin.debug:
+            msg:
+              - "Fresh DHCP-era scan complete; no backups were taken."
+              - "{{ dhcp_reset_final_verify.stdout }}"
+              - "Protected Proxmox guest refresh, Pi-hole, router and first-seen history untouched."
+      rescue:
+        - name: Restore original timers only if no deletion has begun
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: started
+          loop: "{{ dhcp_reset_timers }}"
+          when: not dhcp_reset_destructive_started | default(false) | bool
+
+        - name: Fail closed rather than resume consumers on partial reset
+          ansible.builtin.fail:
+            msg: >-
+              DHCP discovery reset failed. If deletion began, discovery
+              timers remain paused deliberately to avoid stale state or
+              mass notifications. No backup exists by operator choice.
+              Inspect monitor-01 services and state before recovery;
+              do not restart old ASUS/HP collectors.

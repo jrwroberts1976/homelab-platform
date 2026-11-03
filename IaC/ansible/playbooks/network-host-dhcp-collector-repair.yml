@@ -1,0 +1,132 @@
+---
+# #287: repair ONLY the installed monitor-01 host collector after a
+# pre-deletion DHCP reset assertion failed. No state wipe, backups or scans.
+- name: Repair DHCP-era collector interface without resetting discovered hosts
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars_files:
+    - "{{ playbook_dir }}/../roles/network_host_collector/defaults/main.yml"
+  tasks:
+    - name: Require verified monitor-01 discovery owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Refusing collector repair on unexpected host.
+
+    - name: Require existing regular collector and inventory files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /usr/local/sbin/homelab-network-host-collector
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+      register: dhcp_repair_existing
+      no_log: true
+
+    - name: Refuse missing or non-regular protected state
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+        fail_msg: Refusing repair when collector or protected state missing.
+      loop: "{{ dhcp_repair_existing.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Install corrected host collector only, without any backup
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/network_host_collector/templates/homelab-network-host-collector.py.j2"
+        dest: /usr/local/sbin/homelab-network-host-collector
+        owner: root
+        group: root
+        mode: '0755'
+        backup: false
+      vars:
+        # Task vars take priority over legacy Proxmox-2 vars_files.
+        network_host_collector_interface: eth0
+        network_host_collector_subnet: 192.168.2.0/24
+      diff: false
+
+    - name: Verify rendered interface and canonical router using Python AST
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ast
+            from pathlib import Path
+            path=Path("/usr/local/sbin/homelab-network-host-collector")
+            code=path.read_text()
+            tree=ast.parse(code)
+            values={}
+            for node in tree.body:
+                if isinstance(node,ast.Assign):
+                    for target in node.targets:
+                        if isinstance(target,ast.Name) and target.id in (
+                            "INTERFACE","SUBNET","CANONICAL_HOSTNAMES"):
+                            values[target.id]=ast.literal_eval(node.value)
+            assert values.get("INTERFACE") == "eth0", "wrong interface"
+            assert values.get("SUBNET") == "192.168.2.0/24", "wrong subnet"
+            names=values.get("CANONICAL_HOSTNAMES",{})
+            assert isinstance(names,dict), "wrong hostname schema"
+            assert names.get("192.168.2.1") == "router-01.jameshouse"
+            assert "192.168.2.220" not in names
+            assert "load_asus_hostnames" not in code
+            assert "ROUTER_HOSTNAME_SNAPSHOT" not in code
+            print("collector_config=PASS interface=eth0 subnet=192.168.2.0/24")
+      register: dhcp_repair_verified
+      changed_when: false
+
+    - name: Verify the original discovered-host inventory has not been deleted
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            root=Path("/var/lib/homelab-network-hosts")
+            inv=json.loads((root/"inventory.json").read_text())
+            alert=json.loads((root/"alerted-macs.json").read_text())
+            assert isinstance(inv,dict) and inv
+            assert isinstance(alert,dict) and isinstance(alert.get("devices"),dict)
+            print(json.dumps({"inventory_count":len(inv),
+                              "protected_alert_registry_count":len(alert["devices"]),
+                              "data_deleted":False},sort_keys=True))
+      register: dhcp_repair_state
+      changed_when: false
+
+    - name: Inspect six discovery timer states after collector-only repair
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-host-ai-resolver.timer
+        - homelab-network-dns-evidence.timer
+        - homelab-network-os-evidence.timer
+      register: dhcp_repair_timers
+      changed_when: false
+      failed_when: false
+
+    - name: Require all six discovery timers are active
+      ansible.builtin.assert:
+        that:
+          - dhcp_repair_timers.results | map(attribute='stdout') | unique | list == ['active']
+        fail_msg: Collector repaired but one or more discovery timers are not active.
+
+    - name: Print only safe repair status and counts
+      ansible.builtin.debug:
+        msg:
+          - "{{ dhcp_repair_verified.stdout }}"
+          - "{{ dhcp_repair_state.stdout }}"
+          - "No scan, no data reset, no backup, no systemd change."

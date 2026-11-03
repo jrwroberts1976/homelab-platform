@@ -1,0 +1,362 @@
+---
+# #287: read-only production audit before retired collector/Grafana cleanup.
+# Does NOT create backups, delete, restart, scan, or change any service.
+- name: Inventory legacy monitoring retirement targets and retained Grafana assets
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Require verified monitoring owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Wrong target for legacy Grafana cleanup preflight.
+
+    - name: Confirm four legacy timer units are not active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}.timer"]
+      loop:
+        - asus-network-inventory
+        - homelab-hp-switch-collector
+        - homelab-network-device-inventory
+        - homelab-network-host-dashboards
+      register: legacy_timer_states
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse a live retirement while any legacy timer is active
+      ansible.builtin.assert:
+        that:
+          - legacy_timer_states.results | map(attribute='stdout') | unique | list == ['inactive']
+        fail_msg: A retired inventory/dashboard timer is active; no deletion allowed.
+
+    - name: Verify the independent discovery collector is still scheduled
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-collector.timer]
+      register: current_discovery_timer
+      changed_when: false
+
+    - name: Require independent collector still active
+      ansible.builtin.assert:
+        that:
+          - current_discovery_timer.stdout | trim == 'active'
+
+    - name: Safely inspect legacy files and live Grafana JSON without exposing identities
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json,re
+            from pathlib import Path
+
+            root=Path("/opt/monitoring/grafana/provisioning/dashboards")
+            legacy_scripts=(
+                "asus-network-inventory",
+                "homelab-hp-switch-collector",
+                "homelab-network-device-inventory",
+                "homelab-network-host-dashboards",
+            )
+            old_json=(
+                "homelab-network-host-tiles",
+                "homelab-mac-device-detail",
+                "homelab-all-network-devices",
+                "homelab-network-device-detail",
+                "homelab-physical-network",
+            )
+            kept_json=(
+                "homelab-network-hosts",
+                "homelab-router-dhcp",
+            )
+            def regular_or_missing(path):
+                if path.is_symlink():
+                    raise RuntimeError("Refusing symlink "+str(path))
+                if path.exists() and not path.is_file():
+                    raise RuntimeError("Refusing non-file "+str(path))
+                return path.exists()
+
+            script_count=sum(regular_or_missing(Path("/usr/local/sbin")/name)
+                             for name in legacy_scripts)
+            systemd_units=[]
+            for name in legacy_scripts:
+                for suffix in (".timer",".service"):
+                    path=Path("/etc/systemd/system")/(name+suffix)
+                    if regular_or_missing(path):
+                        systemd_units.append(name+suffix)
+            old_files=[]
+            for uid in old_json:
+                path=root/"homelab"/(uid+".json")
+                if regular_or_missing(path):
+                    dash=json.loads(path.read_text())
+                    if dash.get("uid") != uid:
+                        raise RuntimeError("Unexpected retired dashboard UID")
+                    old_files.append(uid)
+            for uid in kept_json:
+                path=root/"homelab"/(uid+".json")
+                if not regular_or_missing(path):
+                    raise RuntimeError("Missing protected dashboard "+uid)
+                if json.loads(path.read_text()).get("uid") != uid:
+                    raise RuntimeError("Unexpected protected dashboard UID")
+            generated=root/"network-hosts"
+            genfiles=[]
+            if generated.exists():
+                if not generated.is_dir() or generated.is_symlink():
+                    raise RuntimeError("Unsafe generated dashboard directory")
+                for path in generated.iterdir():
+                    if path.name.startswith("."):
+                        continue
+                    if path.is_symlink() or not path.is_file():
+                        raise RuntimeError("Unsafe generated dashboard member")
+                    if not re.fullmatch(r"net-host-[0-9a-f]{12}\.json",path.name):
+                        raise RuntimeError("Unexpected generated dashboard member")
+                    if json.loads(path.read_text()).get("uid") != path.stem:
+                        raise RuntimeError("Generated dashboard UID mismatch")
+                    genfiles.append(path)
+            provider=root/"homelab.yml"
+            if not regular_or_missing(provider):
+                raise RuntimeError("Active Grafana provider missing")
+            text=provider.read_text()
+            if "name: Homelab" not in text or "name: Homelab Production" not in text:
+                raise RuntimeError("Protected provider not present")
+            if "disableDeletion: true" not in text:
+                raise RuntimeError("Grafana deletion policy changed")
+            print(json.dumps({
+                "legacy_scripts_present":script_count,
+                "legacy_unit_files_present":len(systemd_units),
+                "retired_homelab_dashboard_json_present":len(old_files),
+                "generated_mac_dashboard_json_present":len(genfiles),
+                "retained_network_discovery_and_router_dhcp":len(kept_json),
+                "old_network_hosts_provider_present":"name: Network Hosts" in text,
+                "provider_disableDeletion_true":True,
+                "state_changed":False,
+                "backup_taken":False
+            },sort_keys=True))
+      register: legacy_cleanup_file_inventory
+      changed_when: false
+
+    - name: Print inventory counts only
+      ansible.builtin.debug:
+        var: legacy_cleanup_file_inventory.stdout
+
+    - name: Read Grafana database presence through Docker volume metadata
+      ansible.builtin.command:
+        argv: [docker, volume, inspect, monitoring_grafana-data]
+      register: grafana_volume_info
+      changed_when: false
+      failed_when: false
+
+    - name: Read-only count of legacy provisioned Grafana database dashboards
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json,sqlite3,re
+            from pathlib import Path
+            import sys
+            volume=json.loads(sys.argv[1])
+            if not isinstance(volume,list) or len(volume)!=1:
+                raise SystemExit("Unexpected Grafana Docker volume metadata")
+            mount=Path(volume[0]["Mountpoint"])
+            db=mount/"grafana.db"
+            if db.is_symlink() or not db.is_file():
+                raise SystemExit("Grafana SQLite database unavailable")
+            con=sqlite3.connect(db.as_uri()+"?mode=ro",uri=True)
+            try:
+                rows=con.execute("SELECT uid FROM dashboard").fetchall()
+                uids=[str(item[0]) for item in rows]
+                generated=[uid for uid in uids
+                           if re.fullmatch(r"net-host-[0-9a-f]{12}",uid)]
+                retired={
+                    "homelab-network-host-tiles",
+                    "homelab-mac-device-detail",
+                    "homelab-all-network-devices",
+                    "homelab-network-device-detail",
+                    "homelab-physical-network",
+                }
+                preserved={"homelab-network-hosts","homelab-router-dhcp"}
+                tables={r[0] for r in con.execute(
+                    "SELECT name FROM sqlite_master WHERE type='table'")}
+                providers={}
+                if "dashboard_provisioning" in tables:
+                    names=con.execute(
+                        "SELECT name,COUNT(*) FROM dashboard_provisioning GROUP BY name"
+                    ).fetchall()
+                    providers={str(n):int(c) for n,c in names
+                               if str(n) in ("Network Hosts","Homelab","Homelab Production")}
+                print(json.dumps({
+                    "grafana_sqlite_dashboard_rows":len(uids),
+                    "legacy_generated_dashboards_in_db":len(generated),
+                    "retired_named_dashboards_in_db":sum(u in retired for u in uids),
+                    "independent_retained_dashboards_in_db":sum(u in preserved for u in uids),
+                    "provisioned_counts_by_provider":providers,
+                    "read_only":True
+                },sort_keys=True))
+            finally:
+                con.close()
+          - "{{ grafana_volume_info.stdout }}"
+      register: grafana_database_counts
+      when: grafana_volume_info.rc == 0
+      changed_when: false
+
+    - name: Report Grafana database inspection result or block
+      ansible.builtin.debug:
+        msg: >-
+          {{ grafana_database_counts.stdout
+          if grafana_volume_info.rc == 0
+          else 'Grafana Docker volume name not confirmed; do not delete DB entries.' }}
+
+    - name: Cross-check dashboards directly against running Grafana HTTP API
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import base64,hashlib,json,re,urllib.request,urllib.error
+            from pathlib import Path
+
+            # Read the installed secret locally. It is never printed, sent to
+            # Ansible logs, written to disk, or passed on the command line.
+            config=Path("/opt/monitoring/.env")
+            if config.is_symlink() or not config.is_file():
+                raise SystemExit("Grafana env file absent or unsafe")
+            settings={}
+            for line in config.read_text(encoding="utf-8").splitlines():
+                if not line or line.lstrip().startswith("#") or "=" not in line:
+                    continue
+                key,value=line.split("=",1)
+                settings[key.strip()]=value.strip()
+            password=settings.get("GF_SECURITY_ADMIN_PASSWORD","")
+            if (password.startswith('"') and password.endswith('"')) or (
+                password.startswith("'") and password.endswith("'")):
+                password=password[1:-1]
+            if not password:
+                raise SystemExit("Grafana admin credential unavailable")
+            auth=base64.b64encode(("admin:"+password).encode()).decode()
+            # Never let the secret appear in a traceback or result.
+            del password
+
+            def get_json(path):
+                req=urllib.request.Request(
+                    "http://127.0.0.1:3000"+path,
+                    headers={"Authorization":"Basic "+auth,
+                             "Accept":"application/json"},
+                    method="GET")
+                try:
+                    with urllib.request.urlopen(req,timeout=12) as response:
+                        return json.loads(response.read(8_000_000))
+                except urllib.error.HTTPError as exc:
+                    raise SystemExit(
+                        "Grafana API returned HTTP "+str(exc.code)+
+                        "; do not remove dashboards") from None
+                except Exception:
+                    raise SystemExit(
+                        "Grafana API query failed; do not remove dashboards") from None
+
+            search=get_json("/api/search?type=dash-db&limit=5000")
+            if not isinstance(search,list) or not (0 < len(search) < 5000):
+                raise SystemExit("Untrustworthy Grafana search result")
+            found={str(entry.get("uid") or ""):entry
+                   for entry in search if isinstance(entry,dict)}
+            preserved={"homelab-network-hosts","homelab-router-dhcp"}
+            protected_home_folder=None
+            for uid in sorted(preserved):
+                if uid not in found:
+                    raise SystemExit("Retained dashboard not found in Grafana API")
+                result=get_json("/api/dashboards/uid/"+uid)
+                if result.get("dashboard",{}).get("uid") != uid:
+                    raise SystemExit("Protected dashboard identity mismatch")
+                if uid=="homelab-network-hosts":
+                    protected_home_folder=result.get("meta",{}).get("folderUid")
+                    if not protected_home_folder:
+                        raise SystemExit("Homelab folder identity missing")
+            retired={
+                "homelab-network-host-tiles",
+                "homelab-mac-device-detail",
+                "homelab-all-network-devices",
+                "homelab-network-device-detail",
+                "homelab-physical-network",
+            }
+            old=[uid for uid in found if uid in retired]
+            generated=[uid for uid in found if
+                       re.fullmatch(r"net-host-[0-9a-f]{12}",uid)]
+            folder=[uid for uid,entry in found.items()
+                    if entry.get("folderUid")=="homelab-generated-network-hosts"]
+
+            # Confirm ownership against the *actual* provisioned source.
+            # Only aggregate flags; never print household MACs or paths.
+            provenance={"named":0,"generated":0,"unverified":0}
+            for uid in sorted(old+generated):
+                details=get_json("/api/dashboards/uid/"+uid)
+                meta=details.get("meta") or {}
+                dashboard=details.get("dashboard") or {}
+                expected=uid+".json"
+                expected_folder=(
+                    "homelab-generated-network-hosts" if uid in generated
+                    else protected_home_folder)
+                matches=(
+                    dashboard.get("uid")==uid
+                    and meta.get("provisioned") is True
+                    and meta.get("provisionedExternalId")==expected
+                    and meta.get("folderUid")==expected_folder
+                    and found[uid].get("folderUid")==expected_folder
+                )
+                if matches:
+                    provenance["generated" if uid in generated else "named"]+=1
+                else:
+                    provenance["unverified"]+=1
+            if provenance["unverified"]:
+                raise SystemExit(
+                    "Unverified legacy Grafana dashboard provisioning ownership; "
+                    "do not delete files or dashboard records.")
+
+            other=set(found)-set(old)-set(generated)
+            other_uid_sha=hashlib.sha256(
+                "|".join(sorted(other)).encode()).hexdigest()
+            print(json.dumps({
+                "grafana_api_other_uid_sha256":other_uid_sha,
+                "grafana_api_total_dashboards":len(found),
+                "grafana_api_retained_dashboard_count":len(preserved),
+                "grafana_api_retired_named_dashboard_count":len(old),
+                "grafana_api_generated_dashboard_count":len(generated),
+                "grafana_api_network_hosts_folder_count":len(folder),
+                "grafana_api_named_provisioning_verified":provenance["named"],
+                "grafana_api_generated_provisioning_verified":provenance["generated"],
+                "grafana_api_provisioning_unverified":provenance["unverified"],
+                "grafana_api_other_dashboards_to_preserve":len(found)-len(old)-len(generated),
+                "grafana_api_checked_live":True,
+                "read_only":True,
+            },sort_keys=True))
+      register: grafana_live_api_counts
+      changed_when: false
+      no_log: true
+
+    - name: Print non-identifying live Grafana API counts
+      ansible.builtin.debug:
+        var: grafana_live_api_counts.stdout
+
+    - name: Verify Grafana responds locally
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      register: grafana_cleanup_health
+      changed_when: false
+
+    - name: Verify Prometheus responds locally
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+      changed_when: false
+
+    - name: Confirm read-only cleanup preflight complete
+      ansible.builtin.debug:
+        msg: >-
+          Read-only scope collected. Do NOT redeploy monitoring.yml or
+          delete Grafana assets until provider/SQLite ownership is reviewed.

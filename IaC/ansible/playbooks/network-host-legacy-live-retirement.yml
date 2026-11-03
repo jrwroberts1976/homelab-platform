@@ -1,0 +1,480 @@
+---
+# #287: guarded, no-backup retirement after one-generated-dashboard canary passed.
+# Not included in monitoring.yml, any scheduled action or other production role.
+# Grafana 13+ uses resource storage; NEVER write SQLite directly.
+- import_playbook: network-host-legacy-cleanup-preflight.yml
+
+- name: Retire proven legacy collector and Grafana sources without full-stack cutover
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+
+  vars:
+    legacy_provider_path: /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
+    legacy_homelab_dir: /opt/monitoring/grafana/provisioning/dashboards/homelab
+    legacy_generated_dir: /opt/monitoring/grafana/provisioning/dashboards/network-hosts
+    legacy_retired_dashboards:
+      - homelab-network-host-tiles
+      - homelab-mac-device-detail
+      - homelab-all-network-devices
+      - homelab-network-device-detail
+      - homelab-physical-network
+    legacy_retired_units:
+      - asus-network-inventory
+      - homelab-hp-switch-collector
+      - homelab-network-device-inventory
+      - homelab-network-host-dashboards
+    legacy_service_files: >-
+      {{
+        legacy_retired_units | product(['.timer','.service']) | list
+        | map('join') | map('regex_replace','^','/etc/systemd/system/')
+        | list
+      }}
+    legacy_executables: >-
+      {{ legacy_retired_units | map('regex_replace','^','/usr/local/sbin/') | list }}
+    legacy_after_provider_text: >-
+      {{
+        lookup('ansible.builtin.file',
+               playbook_dir + '/../roles/monitoring_stack/templates/grafana-dashboard-provider.yml.j2')
+      }}
+
+    # Never reveals dashboard names, MACs, hostnames, or credentials.
+    legacy_grafana_audit_python: |
+      import base64,hashlib,json,re,sys,urllib.request,urllib.error
+      from pathlib import Path
+
+      stage,expected_hash=sys.argv[1:3]
+      env=Path("/opt/monitoring/.env")
+      if env.is_symlink() or not env.is_file():
+          raise SystemExit("Unsafe Grafana authentication source")
+      settings={}
+      for line in env.read_text(encoding="utf-8").splitlines():
+          if "=" in line and not line.lstrip().startswith("#"):
+              k,v=line.split("=",1)
+              settings[k.strip()]=v.strip()
+      password=settings.get("GF_SECURITY_ADMIN_PASSWORD","")
+      if ((password.startswith('"') and password.endswith('"')) or
+          (password.startswith("'") and password.endswith("'"))):
+          password=password[1:-1]
+      if not password:
+          raise SystemExit("Missing Grafana credential")
+      basic=base64.b64encode(("admin:"+password).encode()).decode()
+      del password
+      req=urllib.request.Request(
+          "http://127.0.0.1:3000/api/search?type=dash-db&limit=5000",
+          headers={"Authorization":"Basic "+basic,"Accept":"application/json"},
+          method="GET")
+      try:
+          with urllib.request.urlopen(req,timeout=12) as response:
+              dashboards=json.loads(response.read(8000000))
+      except Exception:
+          raise SystemExit("Live Grafana API unavailable") from None
+      if not isinstance(dashboards,list) or not 0 < len(dashboards) < 5000:
+          raise SystemExit("Invalid Grafana search response")
+      found={str(d.get("uid") or "") for d in dashboards
+             if isinstance(d,dict)}
+      if len(found)!=len(dashboards) or "" in found:
+          raise SystemExit("Duplicate or absent Grafana dashboard UIDs")
+      named={
+          "homelab-network-host-tiles","homelab-mac-device-detail",
+          "homelab-all-network-devices","homelab-network-device-detail",
+          "homelab-physical-network"
+      }
+      generated={uid for uid in found
+                 if re.fullmatch(r"net-host-[0-9a-f]{12}",uid)}
+      other=found-generated-named
+      fingerprint=hashlib.sha256("|".join(sorted(other)).encode()).hexdigest()
+      if fingerprint!=expected_hash or len(other)!=16:
+          raise SystemExit("Protected Grafana dashboard UID inventory changed")
+      if not {"homelab-network-hosts","homelab-router-dhcp"}.issubset(other):
+          raise SystemExit("Protected network/router dashboard missing")
+      old_named=len(found.intersection(named))
+      # Protect file-backed nonlegacy dashboards before temporarily
+      # enabling deletion in the Homelab provider. A missing protected
+      # source might otherwise vanish on Grafana restart.
+      def dashboard_detail(uid):
+          endpoint="http://127.0.0.1:3000/api/dashboards/uid/"+uid
+          request=urllib.request.Request(
+              endpoint,
+              headers={"Authorization":"Basic "+basic,
+                       "Accept":"application/json"},
+              method="GET")
+          try:
+              with urllib.request.urlopen(request,timeout=12) as res:
+                  return json.loads(res.read(3000000))
+          except Exception:
+              raise SystemExit("Protected dashboard metadata unavailable") from None
+      base_dir=Path("/opt/monitoring/grafana/provisioning/dashboards/homelab")
+      folder_uid=dashboard_detail("homelab-network-hosts").get("meta",{}).get("folderUid")
+      if not folder_uid:
+          raise SystemExit("Protected Homelab folder missing")
+      kept_homelab_files=0
+      for uid in sorted(other):
+          detail=dashboard_detail(uid)
+          meta=detail.get("meta") or {}
+          if detail.get("dashboard",{}).get("uid")!=uid:
+              raise SystemExit("Protected dashboard metadata mismatch")
+          if meta.get("folderUid")==folder_uid and meta.get("provisioned") is True:
+              filename=str(meta.get("provisionedExternalId") or "")
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+\.json",filename):
+                  raise SystemExit("Unsafe protected dashboard filename")
+              src=base_dir/filename
+              if src.is_symlink() or not src.is_file():
+                  raise SystemExit("Protected Homelab dashboard source is absent")
+              try:
+                  src_uid=str(json.loads(src.read_text()).get("uid") or "")
+              except Exception:
+                  raise SystemExit("Protected Homelab dashboard source invalid") from None
+              if src_uid!=uid:
+                  raise SystemExit("Protected dashboard/source UID disagreement")
+              kept_homelab_files+=1
+      if kept_homelab_files<2:
+          raise SystemExit("Insufficient protected Homelab file proof")
+
+      if stage=="before":
+          if len(found)!=72 or len(generated)!=51 or old_named!=5:
+              raise SystemExit("Legacy Grafana targets drifted before deletion")
+      elif stage=="after":
+          if len(found)!=16 or len(generated)!=0 or old_named!=0:
+              raise SystemExit("Grafana has not retired exactly the 56 remaining targets")
+      else:
+          raise SystemExit("Invalid verification stage")
+      print(json.dumps({
+          "stage":stage,
+          "total":len(found),
+          "generated_legacy":len(generated),
+          "named_legacy":old_named,
+          "retained":len(other),
+          "protected_homelab_file_sources_verified":kept_homelab_files,
+          "retained_fingerprint_match":True
+      },sort_keys=True))
+
+  tasks:
+    - name: Require exact approval for irreversible 56-dashboard and 12-file retirement
+      ansible.builtin.assert:
+        that:
+          - legacy_live_retirement_approved | default(false) | bool
+          - (legacy_live_retirement_phrase | default('')) == 'RETIRE_56_LEGACY_DASHBOARDS_NO_BACKUP'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: >-
+          Refusing irreversible legacy Grafana/collector cleanup:
+          explicit scoped approval and verified monitor-01 required.
+
+    - name: Require authoritative API and file inventory from imported preflight
+      ansible.builtin.assert:
+        that:
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_total_dashboards == 72
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_generated_provisioning_verified == 51
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_named_provisioning_verified == 5
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_provisioning_unverified == 0
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_other_dashboards_to_preserve == 16
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_retained_dashboard_count == 2
+          - (legacy_cleanup_file_inventory.stdout | from_json).legacy_scripts_present == 4
+          - (legacy_cleanup_file_inventory.stdout | from_json).legacy_unit_files_present == 8
+          - (legacy_cleanup_file_inventory.stdout | from_json).retired_homelab_dashboard_json_present == 5
+          - (legacy_cleanup_file_inventory.stdout | from_json).generated_mac_dashboard_json_present == 51
+        fail_msg: Target count or Grafana provisioning attribution drifted; refuse cleanup.
+
+    - name: Record fingerprint of all 16 protected/nonlegacy dashboard UIDs
+      ansible.builtin.set_fact:
+        legacy_retained_uid_hash: >-
+          {{ (grafana_live_api_counts.stdout | from_json).grafana_api_other_uid_sha256 }}
+      no_log: true
+
+    - name: Require valid protected fingerprint
+      ansible.builtin.assert:
+        that:
+          - legacy_retained_uid_hash is match('^[0-9a-f]{64}$')
+
+    - name: Check all retired timers are disabled, not merely inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ item }}.timer"]
+      loop: "{{ legacy_retired_units }}"
+      register: legacy_disabled_timers
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse if any retired timer is still enabled
+      ansible.builtin.assert:
+        that:
+          - legacy_disabled_timers.results | map(attribute='stdout') | unique | list == ['disabled']
+
+    - name: Verify all four obsolete one-shot services are currently inactive
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}.service"]
+      loop: "{{ legacy_retired_units }}"
+      register: legacy_inactive_services
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse cleanup while retired services are running
+      ansible.builtin.assert:
+        that:
+          - legacy_inactive_services.results | map(attribute='stdout') | unique | list == ['inactive']
+
+    - name: Read live Grafana provider file for exact owner validation
+      ansible.builtin.slurp:
+        src: "{{ legacy_provider_path }}"
+      register: legacy_provider_raw
+      no_log: true
+
+    - name: Decode live provider in memory only, without any file backup
+      ansible.builtin.set_fact:
+        legacy_provider_before_text: "{{ legacy_provider_raw.content | b64decode }}"
+        legacy_provider_yml: "{{ legacy_provider_raw.content | b64decode | from_yaml }}"
+      no_log: true
+
+    - name: Fail closed unless only known 3 providers exist and match Git
+      ansible.builtin.assert:
+        that:
+          - legacy_provider_yml.apiVersion == 1
+          - legacy_provider_yml.providers | length == 3
+          - legacy_provider_yml.providers[0].name == 'Homelab'
+          - legacy_provider_yml.providers[0].disableDeletion == true
+          - legacy_provider_yml.providers[0].options.path == '/etc/grafana/provisioning/dashboards/homelab'
+          - legacy_provider_yml.providers[1].name == 'Homelab Production'
+          - legacy_provider_yml.providers[1].disableDeletion == true
+          - legacy_provider_yml.providers[1].options.path == '/etc/grafana/provisioning/dashboards/production'
+          - legacy_provider_yml.providers[2].name == 'Network Hosts'
+          - legacy_provider_yml.providers[2].disableDeletion == false
+          - legacy_provider_yml.providers[2].folderUid == 'homelab-generated-network-hosts'
+          - legacy_provider_yml.providers[2].options.path == '/etc/grafana/provisioning/dashboards/network-hosts'
+          - legacy_provider_before_text.startswith(legacy_after_provider_text)
+        fail_msg: >-
+          The live provider has different content/settings from the Git
+          retirement plan. Refuse to overwrite custom Grafana configuration.
+
+    - name: Require exactly 51 safe generated dashboard JSON file matches
+      ansible.builtin.find:
+        paths: "{{ legacy_generated_dir }}"
+        file_type: file
+        use_regex: true
+        patterns: '^net-host-[0-9a-f]{12}\.json$'
+        recurse: false
+        follow: false
+      register: legacy_generated_paths
+      no_log: true
+
+    - name: Refuse drift in generated MAC dashboard file count
+      ansible.builtin.assert:
+        that:
+          - legacy_generated_paths.matched == 51
+        fail_msg: Generated dashboard file count differs from verified owner count.
+
+    - name: Cross-check current live UID set before changing Grafana
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "{{ legacy_grafana_audit_python }}"
+          - before
+          - "{{ legacy_retained_uid_hash }}"
+      register: legacy_before_api_proof
+      changed_when: false
+      no_log: true
+
+    - name: Start tracked retirement phase
+      ansible.builtin.set_fact:
+        legacy_retirement_files_deleted: false
+        legacy_retirement_provider_changed: false
+
+    - name: Reconcile retired Grafana dashboards, then remove inactive binaries
+      block:
+        - name: Temporarily allow deletion of vanished Homelab source JSON only
+          ansible.builtin.replace:
+            path: "{{ legacy_provider_path }}"
+            regexp: '(?m)(^  - name: Homelab\n    orgId: 1\n    folder: Homelab\n    type: file\n    disableDeletion: )true$'
+            replace: '\g<1>false'
+            backup: false
+          register: legacy_grafana_allow_delete
+
+        - name: Refuse if narrowly scoped Homelab flag did not change
+          ansible.builtin.assert:
+            that:
+              - legacy_grafana_allow_delete.changed
+            fail_msg: Cannot enable Grafana's per-file deletion lifecycle.
+
+        - name: Record that the transient provider has changed
+          ansible.builtin.set_fact:
+            legacy_retirement_provider_changed: true
+
+        - name: Restart Grafana only, to adopt temporary per-file deletion policy
+          ansible.builtin.command:
+            argv: [docker, compose, --project-directory, /opt/monitoring, restart, grafana]
+          changed_when: true
+
+        - name: Wait until Grafana HTTP health returns
+          ansible.builtin.uri:
+            url: http://127.0.0.1:3000/api/health
+            status_code: 200
+          register: legacy_grafana_ready
+          retries: 18
+          delay: 5
+          until: legacy_grafana_ready.status | default(0) == 200
+          changed_when: false
+
+        - name: Ensure all 72 dashboard identities remain before deleting sources
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - "{{ legacy_grafana_audit_python }}"
+              - before
+              - "{{ legacy_retained_uid_hash }}"
+          changed_when: false
+          no_log: true
+
+        - name: Mark intentional no-backup Grafana source deletion boundary
+          ansible.builtin.set_fact:
+            legacy_retirement_files_deleted: true
+
+        - name: Remove five proven obsolete Homelab dashboard JSON sources
+          ansible.builtin.file:
+            path: "{{ legacy_homelab_dir }}/{{ item }}.json"
+            state: absent
+          loop: "{{ legacy_retired_dashboards }}"
+
+        - name: Remove 51 source-verified legacy MAC dashboard JSON files
+          ansible.builtin.file:
+            path: "{{ item.path }}"
+            state: absent
+          loop: "{{ legacy_generated_paths.files }}"
+          no_log: true
+
+        - name: Require Grafana to remove all 56 remaining provisioned legacy dashboards
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - "{{ legacy_grafana_audit_python }}"
+              - after
+              - "{{ legacy_retained_uid_hash }}"
+          register: legacy_grafana_after_poll
+          changed_when: false
+          retries: 18
+          delay: 10
+          until: legacy_grafana_after_poll.rc == 0
+          no_log: true
+
+        - name: Replace temporary provider with canonical two-provider Git source
+          ansible.builtin.copy:
+            dest: "{{ legacy_provider_path }}"
+            content: "{{ legacy_after_provider_text }}"
+            owner: root
+            group: root
+            mode: '0644'
+            backup: false
+
+        - name: Restart Grafana only, to remove empty Network Hosts provider
+          ansible.builtin.command:
+            argv: [docker, compose, --project-directory, /opt/monitoring, restart, grafana]
+          changed_when: true
+
+        - name: Wait for Grafana to recover with permanent provider configuration
+          ansible.builtin.uri:
+            url: http://127.0.0.1:3000/api/health
+            status_code: 200
+          register: legacy_final_grafana_ready
+          retries: 18
+          delay: 5
+          until: legacy_final_grafana_ready.status | default(0) == 200
+          changed_when: false
+
+        - name: Check all 16 protected dashboard UIDs still exist after restart
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - -B
+              - -c
+              - "{{ legacy_grafana_audit_python }}"
+              - after
+              - "{{ legacy_retained_uid_hash }}"
+          register: legacy_grafana_final_16
+          changed_when: false
+          no_log: true
+
+        - name: Remove four obsolete collector scripts
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ legacy_executables }}"
+
+        - name: Remove only the eight obsolete unit files
+          ansible.builtin.file:
+            path: "{{ item }}"
+            state: absent
+          loop: "{{ legacy_service_files }}"
+
+        - name: Refresh systemd after removing only retired unit files
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+
+        - name: Verify every retired timer is absent or inactive
+          ansible.builtin.command:
+            argv: [systemctl, is-active, "{{ item }}.timer"]
+          loop: "{{ legacy_retired_units }}"
+          register: legacy_unit_postflight
+          changed_when: false
+          failed_when: false
+
+        - name: Refuse active retired collectors after unit deletion
+          ansible.builtin.assert:
+            that:
+              - "'active' not in (legacy_unit_postflight.results | map(attribute='stdout') | list)"
+
+        - name: Require current network discovery timer remains active
+          ansible.builtin.command:
+            argv: [systemctl, is-active, homelab-network-host-collector.timer]
+          changed_when: false
+
+        - name: Verify Prometheus remains ready
+          ansible.builtin.uri:
+            url: http://127.0.0.1:9090/-/ready
+            status_code: 200
+          changed_when: false
+
+        - name: Print aggregate completed Grafana cleanup status
+          ansible.builtin.debug:
+            msg:
+              - "Legacy Grafana source retirement complete without backups."
+              - "56 remaining obsolete Grafana dashboards removed after one-canary deletion; 16 preserved by UID fingerprint."
+              - "Four obsolete scripts and eight unit files removed via Ansible."
+              - "Discovery inventory, DHCP, Pi-hole, router, monitoring metrics and Proxmox guest refresher unchanged."
+      rescue:
+        - name: Re-enable Homelab deletion protection if transient policy was applied
+          ansible.builtin.replace:
+            path: "{{ legacy_provider_path }}"
+            regexp: '(?m)(^  - name: Homelab\n    orgId: 1\n    folder: Homelab\n    type: file\n    disableDeletion: )false$'
+            replace: '\g<1>true'
+            backup: false
+          when: legacy_retirement_provider_changed | default(false) | bool
+          register: legacy_grafana_restore_protection
+          ignore_errors: true
+
+        - name: Restart Grafana only after restoring protected policy
+          ansible.builtin.command:
+            argv: [docker, compose, --project-directory, /opt/monitoring, restart, grafana]
+          changed_when: true
+          when:
+            - legacy_retirement_provider_changed | default(false) | bool
+            - legacy_grafana_restore_protection is defined
+            - legacy_grafana_restore_protection.changed | default(false) | bool
+          ignore_errors: true
+
+        - name: Fail closed and require operator diagnosis
+          ansible.builtin.fail:
+            msg: >-
+              Legacy retirement did not complete. Do not replay the
+              no-backup discovery reset or run monitoring.yml. If the
+              dashboard JSON files were removed, examine Grafana's live
+              provider/API state before any retry. The protected
+              Homelab deletion policy was restored where possible.
+              The independent 16 dashboard identities must be checked
+              before continuing.

@@ -1,6 +1,35 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 ~14:55 UTC — legacy network retirement independently verified LIVE
+
+**Operator-verified production postflight:** `monitor-01` ran `network-host-legacy-retirement-postflight.yml` read-only: **ok=14, changed=0, failed=0, rescued=0**. Confirmed **0** retired ASUS/HP/MAC collector executables, **0** retired service/timer unit files, **0** obsolete named dashboard JSON files, and **0** generated per-MAC dashboard JSON files. Grafana has exactly **16** live dashboards, with **0** legacy dashboards; retained 16-UID SHA-256 fingerprint matches the pre-retirement inventory. The two protected Grafana provisioning providers remain, both with `disableDeletion: true`. The Network Discovery and router DHCP dashboards are present.
+
+**Retained monitoring:** all **six** independent discovery timers active; current discovered inventory **38** records; protected first-seen registry **56** records; Grafana and Prometheus health checks passed. The no-backup live retirement playbook previously ended **ok=54, changed=8, failed=0**. Do not rerun the destructive discovery reset, one-dashboard canary, or bulk retirement. This evidence verifies application-level and file-level cleanup; source branch still requires normal GitHub merge and issue #287 closure. The unrelated Proxmox guest refresh failure was not part of this work.
+
+
+## 3 November 2026 — Legacy collector/Grafana retirement playbook completed
+
+**Operator-reported live execution:** `network-host-legacy-live-retirement.yml` finished on `monitor-01` with **ok=54, changed=8, failed=0, unreachable=0, rescued=0, skipped=0**, following the verified successful one-dashboard canary. The guarded Ansible run targeted the remaining **56** obsolete Grafana dashboards (51 generated and 5 named), four retired collector executables and eight retired unit files. It required the same **16 retained Grafana dashboard UIDs**, restored two-provider Grafana configuration, inactive legacy timers and working discovery/Prometheus as postconditions; the user supplied the summary only, not detailed final task output. The live state still requires independent read-only postflight before #287 closure.
+
+**Next:** Run `IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml` as read-only validation of the dashboard API UID fingerprint, exact file/unit absence, six active discovery timers, intact protected discovery and notification registry, Grafana/Prometheus health. Do not rerun destructive bulk retirement, single-dashboard canary or DHCP discovery reset; all three have already run. Do not modify the unrelated Proxmox guest-refresh failure.
+
+## 3 November 2026 ~14:36 UTC — Grafana legacy generated-dashboard canary LIVE
+
+**Operator-verified:** The approved no-backup `network-host-legacy-dashboard-canary.yml` removed exactly one of 52 legacy `net-host-*.json` file-provisioned Grafana dashboards from `monitor-01`. After the existing `Network Hosts` provider (`disableDeletion: false`) processed the removal, Grafana returned **72 total dashboards: 51 generated legacy, 5 named legacy, and all 16 other dashboard UIDs preserved exactly**; Grafana and Prometheus remained healthy. Ansible recap: `monitor-01 ok=28 changed=1 failed=0`. No Grafana restart, provider change, backups, network discovery reset or collector/unit removal occurred.
+
+- Remaining #287 live retirement scope: **56 legacy dashboards**, **4 obsolete collector scripts**, and **8 obsolete systemd units**. The five named legacy dashboards belong to `Homelab` provider with `disableDeletion: true`; their deletion behaviour remains untested. The corresponding Git-only bulk cleanup is staged separately and must be validated and approved before use.
+- Do not rerun the one-dashboard canary or the successful DHCP-era discovery reset. Preserve the other **16 dashboards** including Network Discovery and router DHCP, router metrics, security evidence and protected Proxmox guest identities.
+
+## 3 November 2026 ~13:13 UTC — monitor-01 DHCP-era discovery baseline RESET LIVE (operator-verified)
+
+**Live state:** `monitor-01` is the sole active discovery owner; `Proxmox-2` discovery timers remain disabled/inactive. The operator executed the approval-gated `network-host-dhcp-discovery-reset.yml` twice, both successful without backups. The second/latest execution returned **38 fresh discovered hosts, 38 new profile baseline records, 56 preserved first-seen alert registry entries, and zero stale derived JSON caches**. The first execution returned 36 hosts; the second replaced it, not a second distinct set of devices. The former working inventory had 84 retained IP records. No expensive deep scans and no first-seen notifier hook were run during the direct rediscovery.
+
+- Fixed deployed collector uses **`eth0`**, scans **`192.168.2.0/24`**, removes its ASUS snapshot dependency, and includes the canonical `router-01` `192.168.2.1` hostname. A separate collector-only repair was verified before the destructive reset.
+- All **six** independent discovery, enrichment, deep-profiler, AI, DNS-evidence and OS-evidence timers were restarted and checked active after both resets. Existing `alerted-macs.json` registry count remained 56. `router-01` DHCP leases/reservations, Pi-hole historical queries, canonical estate, and protected Proxmox guest identity snapshots were deliberately excluded from deletion.
+- **Do not re-run the destructive no-backup reset.** Future 5-minute discovery runs can legitimately change the live inventory count. Historical Prometheus/Loki time-series are not erased by regenerating textfile metrics.
+- **Open #287:** legacy deployed collectors/units, five obsolete provisioned Grafana JSON files and 52 generated per-host dashboard JSON files were observed before cleanup, and may still exist; no evidence yet of approved live retirement of those files or Grafana DB entries. The unrelated `homelab-proxmox-guest-refresh.service` failure remains a separate concern. Finish read-only inventory, guarded IaC cleanup and postflight before merge and close.
+
 ## 3 November 2026 — router-01 application traffic monitoring LIVE (operator-verified)
 
 **Status: dashboard accepted by operator; source branch still awaiting Git commit/push/merge.** Canonical user-facing Grafana: **https://grafana.home.jrwroberts.co.uk/**. The backend health/provisioning endpoint remains internal at `monitor-01` (`192.168.2.52:3000`); this is not the preferred browser URL.

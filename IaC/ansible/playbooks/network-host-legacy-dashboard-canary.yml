@@ -1,0 +1,243 @@
+---
+# #287: single-dashboard, no-backup Grafana provisioning deletion canary.
+# Exactly ONE net-host-*.json file; no collector/unit/provider changes.
+# Do not execute without intentional, scoped approval.
+- import_playbook: network-host-legacy-cleanup-preflight.yml
+
+- name: Canary removal of one retired generated Grafana dashboard
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    grafana_canary_root: /opt/monitoring/grafana/provisioning/dashboards
+    grafana_canary_inspect: |
+      import base64,json,re,sys,urllib.request,urllib.error
+      from pathlib import Path
+
+      mode=sys.argv[1]
+      root=Path("/opt/monitoring/grafana/provisioning/dashboards")
+      env=Path("/opt/monitoring/.env")
+      provider=root/"homelab.yml"
+      generated=root/"network-hosts"
+      if (env.is_symlink() or provider.is_symlink() or generated.is_symlink()
+          or not env.is_file() or not provider.is_file()
+          or not generated.is_dir()):
+          raise SystemExit("Unsafe Grafana deployment paths")
+      conf=provider.read_text(encoding="utf-8")
+      match=re.search(
+          r"(?ms)^  - name: Network Hosts\n(?P<block>.*?)(?=^  - name:|\Z)",
+          conf)
+      if not match or "disableDeletion: false" not in match.group("block"):
+          raise SystemExit("Network Hosts provider cannot auto-delete")
+      if ("folderUid: homelab-generated-network-hosts"
+          not in match.group("block")):
+          raise SystemExit("Generated dashboard provider folder mismatch")
+      names=sorted(generated.glob("net-host-*.json"))
+      expected_files=52 if mode=="before" else 51
+      if len(names)!=expected_files:
+          raise SystemExit("Generated dashboard file count changed")
+      for path in names:
+          if (path.is_symlink() or not path.is_file() or
+              not re.fullmatch(r"net-host-[0-9a-f]{12}\.json",path.name) or
+              json.loads(path.read_text(encoding="utf-8")).get("uid")
+              !=path.stem):
+              raise SystemExit("Unsafe or mismatched generated file")
+
+      settings={}
+      for line in env.read_text(encoding="utf-8").splitlines():
+          if not line or line.lstrip().startswith("#") or "=" not in line:
+              continue
+          key,value=line.split("=",1)
+          settings[key.strip()]=value.strip()
+      password=settings.get("GF_SECURITY_ADMIN_PASSWORD","")
+      if (password.startswith('"') and password.endswith('"')) or (
+          password.startswith("'") and password.endswith("'")):
+          password=password[1:-1]
+      if not password:
+          raise SystemExit("Grafana admin authentication unavailable")
+      auth=base64.b64encode(("admin:"+password).encode()).decode()
+      del password
+      def request(path,missing_ok=False):
+          req=urllib.request.Request(
+              "http://127.0.0.1:3000"+path,
+              headers={"Authorization":"Basic "+auth,
+                       "Accept":"application/json"},
+              method="GET")
+          try:
+              with urllib.request.urlopen(req,timeout=12) as resp:
+                  return json.loads(resp.read(8_000_000))
+          except urllib.error.HTTPError as exc:
+              if missing_ok and exc.code==404:
+                  return None
+              raise SystemExit("Grafana API HTTP "+str(exc.code)) from None
+          except Exception:
+              raise SystemExit("Grafana API read failed") from None
+
+      matches=request("/api/search?type=dash-db&limit=5000")
+      if not isinstance(matches,list) or not (0<len(matches)<5000):
+          raise SystemExit("Unexpected Grafana dashboard search result")
+      found={str(x.get("uid") or ""):x for x in matches
+             if isinstance(x,dict)}
+      live_generated={uid for uid in found
+                      if re.fullmatch(r"net-host-[0-9a-f]{12}",uid)}
+      retained={"homelab-network-hosts","homelab-router-dhcp"}
+      retired={
+          "homelab-network-host-tiles","homelab-mac-device-detail",
+          "homelab-all-network-devices","homelab-network-device-detail",
+          "homelab-physical-network"}
+      if not retained.issubset(found):
+          raise SystemExit("Protected dashboard missing")
+      if not retired.issubset(found):
+          raise SystemExit("Retired named dashboard unexpected")
+      if len(live_generated) not in (51,52):
+          raise SystemExit("Generated dashboard API count changed")
+      if mode=="before":
+          if len(live_generated)!=52:
+              raise SystemExit("Expected 52 live generated dashboards")
+          if {p.stem for p in names} != live_generated:
+              raise SystemExit("Live Grafana/source file disagreement")
+          path=names[0]
+          uid=path.stem
+          details=request("/api/dashboards/uid/"+uid)
+          meta=details.get("meta",{})
+          if not (details.get("dashboard",{}).get("uid")==uid
+                  and meta.get("provisioned") is True
+                  and meta.get("provisionedExternalId")==path.name
+                  and meta.get("folderUid")=="homelab-generated-network-hosts"):
+              raise SystemExit("Canary is not owned by the expected provider")
+          print(json.dumps({
+              "selected_uid":uid,
+              "selected_path":str(path),
+              "original_uids":sorted(found),
+              "original_count":len(found),
+              "old_generated":52,
+              "protected":2,
+              "read_only":True
+          },sort_keys=True))
+      elif mode=="after":
+          uid=sys.argv[2]
+          if not re.fullmatch(r"net-host-[0-9a-f]{12}",uid):
+              raise SystemExit("Canary uid invalid")
+          record=request("/api/dashboards/uid/"+uid,missing_ok=True)
+          print(json.dumps({
+              "selected_uid":uid,
+              "still_present":uid in found or record is not None,
+              "now_uids":sorted(found),
+              "now_count":len(found),
+              "old_generated":len(live_generated),
+              "old_named":len(retired.intersection(found)),
+              "protected":len(retained.intersection(found)),
+              "read_only":True
+          },sort_keys=True))
+      else:
+          raise SystemExit("Unknown inspection mode")
+  tasks:
+    - name: Require explicit one-dashboard test approval on monitor-01
+      ansible.builtin.assert:
+        that:
+          - legacy_grafana_canary_approved | default(false) | bool
+          - (legacy_grafana_canary_phrase | default('')) == 'RETIRE_ONE_LEGACY_GRAFANA_DASHBOARD_NO_BACKUP'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Explicit approved no-backup Grafana canary required.
+
+    - name: Verify live provider, JSON files and exact selected Grafana UID
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "{{ grafana_canary_inspect }}"
+          - before
+      register: grafana_canary_before
+      changed_when: false
+      no_log: true
+
+    - name: Store verified canary identity and all existing dashboard UIDs privately
+      ansible.builtin.set_fact:
+        grafana_canary_plan: "{{ grafana_canary_before.stdout | from_json }}"
+      no_log: true
+
+    - name: Refuse changes to expected global dashboard inventory
+      ansible.builtin.assert:
+        that:
+          - grafana_canary_plan.original_count | int == 73
+          - grafana_canary_plan.old_generated | int == 52
+          - grafana_canary_plan.protected | int == 2
+        fail_msg: Grafana inventory differs from fully checked baseline.
+
+    - name: Remove exactly one provisioned generated dashboard source
+      ansible.builtin.file:
+        path: "{{ grafana_canary_plan.selected_path }}"
+        state: absent
+      register: grafana_canary_removed
+      no_log: true
+
+    - name: Require one source was actually removed
+      ansible.builtin.assert:
+        that:
+          - grafana_canary_removed.changed
+        fail_msg: Expected single Grafana canary source was not removed.
+
+    - name: Wait for active Grafana file provider to retire the one dashboard
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - "{{ grafana_canary_inspect }}"
+          - after
+          - "{{ grafana_canary_plan.selected_uid }}"
+      register: grafana_canary_after
+      changed_when: false
+      failed_when: false
+      until: >-
+        grafana_canary_after.rc == 0
+        and not (
+          grafana_canary_after.stdout
+          | default('{"still_present": true}', true)
+          | from_json
+        ).still_present
+      retries: 14
+      delay: 8
+      no_log: true
+
+    - name: Enforce exact one-dashboard delta and all other 72 UIDs preserved
+      ansible.builtin.assert:
+        that:
+          - grafana_canary_after.rc == 0
+          - not (grafana_canary_after.stdout | from_json).still_present
+          - (grafana_canary_after.stdout | from_json).now_count | int == 72
+          - (grafana_canary_after.stdout | from_json).old_generated | int == 51
+          - (grafana_canary_after.stdout | from_json).old_named | int == 5
+          - (grafana_canary_after.stdout | from_json).protected | int == 2
+          - >-
+            ((grafana_canary_after.stdout | from_json).now_uids | sort)
+            == ((grafana_canary_plan.original_uids
+                 | difference([grafana_canary_plan.selected_uid])) | sort)
+        fail_msg: Grafana canary did not retire exactly one dashboard.
+      no_log: true
+
+    - name: Require Grafana remains healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+    - name: Require Prometheus remains healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+      changed_when: false
+
+    - name: Report scoped Grafana deletion canary result without host identities
+      ansible.builtin.debug:
+        msg:
+          - "GRAFANA_CANARY=PASS; exactly 1 generated legacy dashboard retired"
+          - "Generated legacy dashboards remaining: 51"
+          - "Named legacy dashboards remaining: 5"
+          - "Other dashboards preserved: 16"
+          - "No backups, service changes, provider changes or discovery reset"
