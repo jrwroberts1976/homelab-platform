@@ -11,8 +11,9 @@
   any_errors_fatal: true
   vars:
     device_pages_provider_path: /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
+    monitoring_router_dhcp_device_pages_provider_enabled: true
     device_pages_provisioning_template: >-
-      {{ lookup('ansible.builtin.file',
+      {{ lookup('ansible.builtin.template',
          playbook_dir + '/../roles/monitoring_stack/templates/grafana-dashboard-provider.yml.j2') }}
   tasks:
     - name: Require exact approval for new one-page canary
