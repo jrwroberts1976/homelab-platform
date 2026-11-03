@@ -49,6 +49,7 @@ on:
       - "IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml"
       - "IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml"
       - "IaC/ansible/playbooks/network-host-legacy-live-retirement.yml"
+      - "IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml"
       - "IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml"
 
 jobs:
@@ -93,6 +94,8 @@ jobs:
             playbooks/network-host-legacy-cleanup-preflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-legacy-live-retirement.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-legacy-retirement-postflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-legacy-dashboard-canary.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
@@ -309,6 +312,21 @@ jobs:
           assert "monitoring.yml" in cleanup_text
           assert "state: absent" in cleanup_text
           assert "grafana.db" not in cleanup_text
+
+          postflight_text = Path(
+              "IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml"
+          ).read_text()
+          assert "retained_uid_sha256_verified" in postflight_text
+          assert "old_generated_json_present" in postflight_text
+          assert "old_collector_scripts_present" in postflight_text
+          assert "old_systemd_units_present" in postflight_text
+          assert "legacy_live_timers" in postflight_text
+          assert "homelab-network-hosts" in postflight_text
+          assert "homelab-router-dhcp" in postflight_text
+          assert "grafana.db" not in postflight_text
+          assert "ansible.builtin.file:" not in postflight_text
+          assert "ansible.builtin.systemd_service:" not in postflight_text
+          assert "state: absent" not in postflight_text
 
           assert "if len(found)!=72 or len(generated)!=51 or old_named!=5:" in cleanup_text
           assert "legacy_generated_paths.matched == 51" in cleanup_text
