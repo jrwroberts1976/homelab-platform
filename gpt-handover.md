@@ -2009,3 +2009,7 @@ Operator read-only legacy preflight passed (monitor-01 ok=14 changed=0 failed=0)
   require `grafana_api_provisioning_unverified=0` before any actual
   retirement. No backups, deletion or whole-stack redeploy have
   occurred in this Grafana cleanup. Keep #287 open.
+
+## 2026-11-03 — Grafana one-dashboard canary prepared
+
+Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 named), 16 protected/remaining, zero source mismatches. Prepared `IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml`: approval-gated, no-backup test that removes exactly one generated JSON from the Network Hosts provider (`disableDeletion: false`), polls Grafana and verifies all other 72 dashboard UIDs unchanged. This is Git-only; do not run the 56-dashboard bulk removal until the canary passes. No provider config, service or discovery changes are in scope. After sync run syntax-check, then explicit canary approval. If it fails or a dashboard remains in the API, stop and investigate; do not repeat the operation.
