@@ -56,6 +56,40 @@ Before approving the dedicated live cleanup:
    Prometheus, Zabbix, Loki, Grafana, router metrics, DHCP and QoS;
    no legacy timers re-enabled and no unrelated units modified.
 
+
+### Staged operator-approved reset playbook
+
+The read-only ownership/schema check is
+`IaC/ansible/playbooks/network-host-dhcp-reset-preflight.yml`.
+The implementation is
+`IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml` and must
+be run **only** after local syntax validation, review of the intended
+destructive scope, and explicit operator approval flags. It includes the
+read-only preflight as its first play. This is deliberately not part of
+`monitoring.yml` or any scheduled automation.
+
+The reset updates the installed monitor-01 host collector and AI resolver,
+then deletes only these six regenerable JSON caches on monitor-01:
+`inventory.json`, `deep-profiles.json`, `enrichment.json`,
+`dns-evidence.json`, `ai-identification.json`, and
+`ai-identification-public.json`. It also removes five obsolete
+discovery textfile metrics; after one fresh 192.168.2.0/24 scan, it
+seeds fresh per-MAC deep-profile **baseline** records, without launching
+expensive deep scans, and restores timers.
+
+It retains `alerted-macs.json` and adds only baseline entries for new
+MACs from the one-time scan, preventing a first-seen email storm.
+It never touches `proxmox-guests.json` or guest-refresh service,
+Pi-hole/Unbound/dnsmasq, DHCP lease data or canonical estate records.
+This is not a purge of pre-existing Prometheus/Loki historical series
+or the old Grafana per-host pages; those follow a separate guarded
+retirement step.
+
+**Failure mode:** Once irreversible deletion starts, a failure leaves
+the six discovery timers paused deliberately until the operator diagnoses
+and safely resumes them. There is no live backup or automatic restoration,
+at the operator's explicit request.
+
 ## Rollback boundary
 
 Git commit history retains the retired IaC source and allows a new deployment
