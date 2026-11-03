@@ -3,7 +3,6 @@
 import hashlib
 import json
 import os
-import sqlite3
 import subprocess
 import tempfile
 import time
@@ -19,7 +18,6 @@ PROFILES = Path("{{ network_host_ai_resolver_profiles }}")
 DNS = Path("{{ network_host_ai_resolver_dns }}")
 ENRICHMENT = Path("{{ network_host_ai_resolver_enrichment }}")
 ESTATE = Path("{{ network_host_ai_resolver_estate }}")
-ROUTER_DB = Path("{{ network_host_ai_resolver_router_db }}")
 OPTIONAL_ZEEK = Path("{{ network_host_ai_resolver_optional_zeek }}")
 GREENBONE = Path("{{ network_host_ai_resolver_greenbone }}")
 GREENBONE_FRESHNESS_SECONDS = {{ network_host_ai_resolver_greenbone_freshness_seconds | int }}
@@ -136,42 +134,6 @@ def current_inventory_by_mac(inventory):
             current[mac] = candidate
 
     return current
-
-
-def router_identity():
-    result = {}
-    if not ROUTER_DB.exists():
-        return result
-
-    uri = "file:" + str(ROUTER_DB) + "?mode=ro&immutable=1"
-    con = sqlite3.connect(uri, uri=True, timeout=2)
-    con.row_factory = sqlite3.Row
-    try:
-        rows = con.execute(
-            """
-            SELECT ip, mac, hostname, dhcp_hostname, online, last_seen
-            FROM assets
-            """
-        ).fetchall()
-    finally:
-        con.close()
-
-    for row in rows:
-        mac = str(row["mac"] or "").strip().lower()
-        if not mac:
-            continue
-        candidate = {
-            "ip": str(row["ip"] or ""),
-            "hostname": str(row["hostname"] or ""),
-            "dhcp_hostname": str(row["dhcp_hostname"] or ""),
-            "online": bool(row["online"]),
-            "last_seen": int(row["last_seen"] or 0),
-        }
-        old = result.get(mac)
-        if old is None or candidate["last_seen"] >= old["last_seen"]:
-            result[mac] = candidate
-
-    return result
 
 
 def bounded_dns(record):
@@ -963,7 +925,6 @@ def main():
     zeek = load_json(OPTIONAL_ZEEK, {})
     greenbone = load_json(GREENBONE, {})
     estate = canonical_estate_by_ip(load_json(ESTATE, {}))
-    routers = router_identity()
     current = current_inventory_by_mac(inventory)
 
     state = load_json(
@@ -1029,7 +990,7 @@ def main():
                 "online": bool(inv.get("online", False)),
             },
             "canonical_estate": estate.get(ip, {}),
-            "router": routers.get(mac, {}),
+            "router": {},  # Retired ASUS DB; preserve evidence schema.
             "nmap_profile": nmap_profile,
             "dns": bounded_dns(dns_devices.get(mac, {})),
             "enrichment": bounded_enrichment(
