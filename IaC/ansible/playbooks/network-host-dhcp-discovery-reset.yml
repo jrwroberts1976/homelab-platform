@@ -165,6 +165,11 @@
             group: root
             mode: '0755'
             backup: false
+          # Task vars override the historical Proxmox-2 defaults in vars_files.
+          # Without this, the rendered collector may scan stale vmbr0.
+          vars:
+            network_host_collector_interface: eth0
+            network_host_collector_subnet: 192.168.2.0/24
 
         - name: Remove retired ASUS database fallback from installed AI resolver
           ansible.builtin.template:
@@ -192,17 +197,34 @@
               - -B
               - -c
               - |
+                import ast
                 from pathlib import Path
+
                 p=Path("/usr/local/sbin/homelab-network-host-collector").read_text()
                 a=Path("/usr/local/sbin/homelab-network-host-ai-resolver").read_text()
-                assert "load_asus_hostnames" not in p
-                assert "ROUTER_HOSTNAME_SNAPSHOT" not in p
-                assert "192.168.2.1" in p and "router-01.jameshouse" in p
-                assert "192.168.2.220" not in p
-                assert "INTERFACE = \"eth0\"" in p
-                assert "ROUTER_DB" not in a
-                assert "router_identity()" not in a
-                print("corrected_collectors=PASS")
+
+                # Compare rendered assignment values, not literal formatting.
+                values={}
+                for node in ast.parse(p).body:
+                    if isinstance(node,ast.Assign):
+                        for target in node.targets:
+                            if isinstance(target,ast.Name) and target.id in (
+                                "INTERFACE","SUBNET","CANONICAL_HOSTNAMES"):
+                                values[target.id]=ast.literal_eval(node.value)
+                if values.get("INTERFACE") != "eth0":
+                    raise SystemExit("Wrong collector interface: expected eth0")
+                if values.get("SUBNET") != "192.168.2.0/24":
+                    raise SystemExit("Wrong collector subnet: expected 192.168.2.0/24")
+                names=values.get("CANONICAL_HOSTNAMES",{})
+                if (not isinstance(names,dict)
+                    or names.get("192.168.2.1") != "router-01.jameshouse"
+                    or "192.168.2.220" in names):
+                    raise SystemExit("Retired or incorrect canonical router mapping")
+                if "load_asus_hostnames" in p or "ROUTER_HOSTNAME_SNAPSHOT" in p:
+                    raise SystemExit("Retired ASUS collector code remains")
+                if "ROUTER_DB" in a or "router_identity()" in a:
+                    raise SystemExit("Retired ASUS AI resolver lookup remains")
+                print("corrected_collectors=PASS; interface=eth0; subnet=192.168.2.0/24")
           changed_when: false
 
         - name: Mark irreversible reset boundary
