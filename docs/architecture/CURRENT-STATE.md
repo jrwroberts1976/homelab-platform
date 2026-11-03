@@ -1,6 +1,12 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 — Legacy collector/Grafana retirement playbook completed
+
+**Operator-reported live execution:** `network-host-legacy-live-retirement.yml` finished on `monitor-01` with **ok=54, changed=8, failed=0, unreachable=0, rescued=0, skipped=0**, following the verified successful one-dashboard canary. The guarded Ansible run targeted the remaining **56** obsolete Grafana dashboards (51 generated and 5 named), four retired collector executables and eight retired unit files. It required the same **16 retained Grafana dashboard UIDs**, restored two-provider Grafana configuration, inactive legacy timers and working discovery/Prometheus as postconditions; the user supplied the summary only, not detailed final task output. The live state still requires independent read-only postflight before #287 closure.
+
+**Next:** Run `IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml` as read-only validation of the dashboard API UID fingerprint, exact file/unit absence, six active discovery timers, intact protected discovery and notification registry, Grafana/Prometheus health. Do not rerun destructive bulk retirement, single-dashboard canary or DHCP discovery reset; all three have already run. Do not modify the unrelated Proxmox guest-refresh failure.
+
 ## 3 November 2026 ~14:36 UTC — Grafana legacy generated-dashboard canary LIVE
 
 **Operator-verified:** The approved no-backup `network-host-legacy-dashboard-canary.yml` removed exactly one of 52 legacy `net-host-*.json` file-provisioned Grafana dashboards from `monitor-01`. After the existing `Network Hosts` provider (`disableDeletion: false`) processed the removal, Grafana returned **72 total dashboards: 51 generated legacy, 5 named legacy, and all 16 other dashboard UIDs preserved exactly**; Grafana and Prometheus remained healthy. Ansible recap: `monitor-01 ok=28 changed=1 failed=0`. No Grafana restart, provider change, backups, network discovery reset or collector/unit removal occurred.
