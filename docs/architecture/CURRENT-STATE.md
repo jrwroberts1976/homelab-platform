@@ -1,6 +1,13 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 ~14:55 UTC — legacy network retirement independently verified LIVE
+
+**Operator-verified production postflight:** `monitor-01` ran `network-host-legacy-retirement-postflight.yml` read-only: **ok=14, changed=0, failed=0, rescued=0**. Confirmed **0** retired ASUS/HP/MAC collector executables, **0** retired service/timer unit files, **0** obsolete named dashboard JSON files, and **0** generated per-MAC dashboard JSON files. Grafana has exactly **16** live dashboards, with **0** legacy dashboards; retained 16-UID SHA-256 fingerprint matches the pre-retirement inventory. The two protected Grafana provisioning providers remain, both with `disableDeletion: true`. The Network Discovery and router DHCP dashboards are present.
+
+**Retained monitoring:** all **six** independent discovery timers active; current discovered inventory **38** records; protected first-seen registry **56** records; Grafana and Prometheus health checks passed. The no-backup live retirement playbook previously ended **ok=54, changed=8, failed=0**. Do not rerun the destructive discovery reset, one-dashboard canary, or bulk retirement. This evidence verifies application-level and file-level cleanup; source branch still requires normal GitHub merge and issue #287 closure. The unrelated Proxmox guest refresh failure was not part of this work.
+
+
 ## 3 November 2026 — Legacy collector/Grafana retirement playbook completed
 
 **Operator-reported live execution:** `network-host-legacy-live-retirement.yml` finished on `monitor-01` with **ok=54, changed=8, failed=0, unreachable=0, rescued=0, skipped=0**, following the verified successful one-dashboard canary. The guarded Ansible run targeted the remaining **56** obsolete Grafana dashboards (51 generated and 5 named), four retired collector executables and eight retired unit files. It required the same **16 retained Grafana dashboard UIDs**, restored two-provider Grafana configuration, inactive legacy timers and working discovery/Prometheus as postconditions; the user supplied the summary only, not detailed final task output. The live state still requires independent read-only postflight before #287 closure.
