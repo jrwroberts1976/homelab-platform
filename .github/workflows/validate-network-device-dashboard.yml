@@ -47,6 +47,7 @@ on:
       - "IaC/ansible/playbooks/network-host-dhcp-reset-preflight.yml"
       - "IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml"
       - "IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml"
+      - "IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml"
 
 jobs:
   validate-dashboard:
@@ -86,6 +87,8 @@ jobs:
             playbooks/network-host-dhcp-discovery-reset.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-dhcp-collector-repair.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-legacy-cleanup-preflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
@@ -260,6 +263,18 @@ jobs:
           assert "ansible.builtin.systemd_service" not in repair_text
           assert "homelab-network-host-collector.service" not in repair_text
           assert "run_nmap" not in repair_text
+
+          preflight_text = Path(
+              "IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml"
+          ).read_text()
+          assert "grafana.db" in preflight_text
+          assert "mode=ro" in preflight_text
+          assert "net-host-" in preflight_text
+          assert "homelab-network-hosts" in preflight_text
+          assert "homelab-router-dhcp" in preflight_text
+          assert "ansible.builtin.file:" not in preflight_text
+          assert "ansible.builtin.systemd_service:" not in preflight_text
+          assert "disableDeletion: true" in preflight_text
 
           # Keep the independently developed OS-evidence, cutover and
           # protected Proxmox guest-identity regression gates.
