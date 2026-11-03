@@ -30,8 +30,11 @@ class DHCPEmailPolicyTests(unittest.TestCase):
             "profile": {"tcp": {"os_matches": [{
                 "name": "Linux 6.x", "accuracy": "95"}]}}
         }}
-        self.inventory = {"192.168.2.101": {
-            "mac": MAC, "vendor": "Example vendor", "online": True}}
+        # The existing single SMTP notifier passes normalise_inventory(),
+        # keyed by MAC, with a current IP attached to each record.
+        self.inventory = {MAC: {
+            "mac": MAC, "ip": "192.168.2.101",
+            "vendor": "Example vendor", "online": True}}
         self.records = {"schema_version": 1, "devices": {
             MAC: {"ip": "192.168.2.101", "hostname": "test-laptop",
                   "first_seen_ns": TIME + 1_000_000_000,
@@ -56,6 +59,8 @@ class DHCPEmailPolicyTests(unittest.TestCase):
         device = results[0]
         self.assertEqual(device["mac"], MAC)
         self.assertEqual(device["source"], "router-01 DHCPACK")
+        self.assertEqual(device["vendor"], "Example vendor")
+        self.assertTrue(device["online"])
         self.assertIn("Nmap inferred", device["os_evidence"])
         self.assertIn("95%", device["os_evidence"])
         self.assertEqual(device["dashboard_url"],
@@ -74,6 +79,12 @@ class DHCPEmailPolicyTests(unittest.TestCase):
         self.records["devices"][MAC]["ip"] = "192.168.2.105"
         self.records["devices"][MAC]["last_seen_ns"] += 1_000_000_000
         self.assertEqual(self.run_policy({MAC: {"status": "alerted"}}), [])
+
+    def test_stale_inventory_ip_is_not_attributed_to_new_dhcp_address(self):
+        self.inventory[MAC]["ip"] = "192.168.2.112"
+        result = self.run_policy()[0]
+        self.assertEqual(result["vendor"], "")
+        self.assertFalse(result["online"])
 
     def test_missing_or_mismatched_nmap_does_not_claim_os(self):
         self.profiles[MAC]["profiled_ip"] = "192.168.2.102"
