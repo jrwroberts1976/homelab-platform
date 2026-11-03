@@ -275,6 +275,13 @@ jobs:
           assert "ansible.builtin.file:" not in preflight_text
           assert "ansible.builtin.systemd_service:" not in preflight_text
           assert "disableDeletion: true" in preflight_text
+          assert "grafana_sqlite_dashboard_rows" in preflight_text
+          assert "grafana_api_checked_live" in preflight_text
+          assert "/api/search?type=dash-db&limit=5000" in preflight_text
+          assert 'get_json("/api/dashboards/uid/"+uid)' in preflight_text
+          assert "grafana_api_retained_dashboard_count" in preflight_text
+          assert "no_log: true" in preflight_text
+          assert "        that: \n" not in preflight_text
 
           # Keep the independently developed OS-evidence, cutover and
           # protected Proxmox guest-identity regression gates.
