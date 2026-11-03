@@ -2153,3 +2153,10 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
   generator then perform exactly one approved dashboard canary;
   review results before enabling timer. Do not claim production
   activation or update verified CURRENT-STATE.md until live proof.
+
+## 2026-11-03 ~15:43 UTC — #291 router-01 DHCP source independently verified LIVE
+
+- Operator ran read-only `router-01-dhcp-device-pages-preflight.yml` from existing dedicated worktree `~/projects/homelab-dhcp-device-pages`. The `git worktree add -b` attempt reported branch exists: the worktree is already present; do not create another or delete it.
+- **PASS** Ansible recaps: `router-01 ok=8 changed=0 failed=0` and `monitor-01 ok=11 changed=0 failed=0`. Router dnsmasq active, 26 valid dnsmasq leases, Alloy active, old DHCP log forwarder inactive. Monitor: six existing discovery timers active, inventory 38 records, Nmap MAC profile state 38 records, router-01 DHCPACK Loki evidence **157 log lines / 157 valid DHCPACK events over 24 hours**, no query truncation, `router_source_ready_for_canary=true`. Existing protected 2-provider Grafana config and Grafana/Prometheus health validated.
+- As of this note, new device-page generator is **STAGED IN GIT ONLY**, NOT installed on production; Grafana remains 16 original dashboards, no DHCP device page or new timer enabled.
+- Branch `feature/router01-dhcp-device-pages-20261103` latest CI green at `111e6ae8f16032433702829c0ce974d81b2ced50`. Next: sync existing clean worktree, syntax-check and run ONLY approval-gated `router-01-dhcp-device-pages-stage.yml` with `router_dhcp_device_pages_stage_approved=true`. Stage creates isolated directory plus script, read-only audit and disabled systemd units. Inspect recap and timer disabled state before explicit one-page Grafana canary and separate timer activation. No router changes, no discovery reset, no legacy collector revival.
