@@ -63,6 +63,8 @@ jobs:
             playbooks/router-01-dhcp-device-email-activate.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/router-01-dhcp-device-email-test.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-email-postflight.yml --syntax-check
 
       - name: Prevent legacy collectors and unapproved deployment
         run: |
@@ -169,4 +171,16 @@ jobs:
           assert 'router-dhcp-alerts.enabled.json' in enable
           assert 'homelab-network-host-collector.timer' in enable
           assert 'smtplib' not in p
+
+          email_postflight = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-email-postflight.yml'
+          ).read_text()
+          assert 'activated_at_ns' in email_postflight
+          assert '--preview' in email_postflight
+          assert 'shared_first_seen_registry_count' in email_postflight
+          assert 'network_device_alert_test_sent' not in email_postflight
+          assert 'ansible.builtin.copy:' not in email_postflight
+          assert 'ansible.builtin.file:' not in email_postflight
+          assert 'ansible.builtin.systemd_service:' not in email_postflight
+          assert 'ansible.builtin.template:' not in email_postflight
           PY
