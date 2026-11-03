@@ -1913,3 +1913,29 @@ Next:
   local syntax-check must pass before approved execution. When it
   runs, capture operator output and update CURRENT-STATE.md from
   observed facts; no premature issue closure.
+
+## 2026-11-03 12:44 UTC — Aborted DHCP baseline reset (NO deletion)
+
+- Operator ran the approval-gated reset once; pre-deletion collector
+  verification failed on the exact `INTERFACE = "eth0"` assertion.
+  Six discovery timers were paused then successfully restarted in
+  the rescue path. No discovery JSON or metrics were deleted; no fresh
+  scan ran. **Two installed Python executables changed on monitor-01**:
+  host collector and AI resolver. Thus current live collector may have
+  inherited legacy `vmbr0` rather than `eth0`; do not assume it works.
+- Root cause in IaC: play imports historical Proxmox-2 collector defaults
+  with `network_host_collector_interface: vmbr0`, while task-level
+  rendering did not explicitly force monitor-01 `eth0`. This is separate
+  from the brittle exact-quote assertion.
+- Fixed in Git on `chore/retire-legacy-network-collectors-20261103`:
+  reset now renders with task-level `eth0`/`192.168.2.0/24`
+  overrides, verifies actual parsed Python values/host mapping,
+  and has CI regression checks.
+- Added `IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml`:
+  safe targeted repair **without any deletion, backup, scan or timer
+  start/stop**, checking retained inventory and first-seen registry.
+- **NEXT**: fast-forward remote branch in clean admin-01 worktree;
+  syntax-check and run collector-only repair with --ask-become-pass;
+  confirm correct installed interface and six timers active before
+  reconsidering the explicit no-backup discovery reset. No earlier
+  consent to the reset should be interpreted as proof it completed.
