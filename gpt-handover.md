@@ -2081,3 +2081,30 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
   and eight unit files absent, discovery timers active, Prometheus
   healthy. Do not repeat the canary or DHCP discovery reset.
   Keep #287 open until proven live cleanup, PR/merge and final docs.
+
+## 2026-11-03 — Approved legacy Grafana and old collector retirement PASSED; independent postflight next
+
+- Operator ran `network-host-legacy-live-retirement.yml` after
+  the passed single-dashboard canary, with **monitor-01 ok=54,
+  changed=8, unreachable=0, failed=0, skipped=0, rescued=0**.
+- This was the explicit, no-backup cleanup for the **remaining 56**
+  Grafana dashboards (51 generated, 5 named) and **4** old collector
+  scripts / **8** obsolete systemd files. Successful task sequence
+  implies the Grafana API and 16-UID fingerprint gates passed,
+  but user provided the final Ansible recap only.
+- Added independent **read-only** postflight
+  `IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml`:
+  verify old files/units absent, generated directory empty,
+  two protected Grafana providers with `disableDeletion: true`,
+  Grafana live UID set EXACTLY the 16 nonlegacy UIDs with fingerprint
+  `1ba5e96a3b2bc01aef7efe97d8ee8b11464baa8bb44572eae52b45d3f87abc13`,
+  preserved Network Discovery/router JSON and first-seen registry,
+  six active discovery timers, Grafana + Prometheus HTTP health.
+  No backup, deletion, restart or state mutation.
+- **Next operator:** fast-forward the same clean feature branch on
+  admin-01; `git diff --check`; syntax check and execute independent
+  postflight with `--ask-become-pass`. Inspect output before PR/merge
+  and closing GitHub #287. Do NOT rerun bulk retirement, its
+  canary or the successful DHCP-era discovery reset. No full
+  monitoring-stack redeploy, router change, Proxmox guest-refresh
+  change or cleanup of historic Prometheus/Loki series.
