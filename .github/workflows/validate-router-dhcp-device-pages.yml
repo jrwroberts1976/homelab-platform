@@ -8,6 +8,8 @@ on:
     paths:
       - ".github/workflows/validate-router-dhcp-device-pages.yml"
       - "IaC/ansible/playbooks/router-01-dhcp-device-pages-*.yml"
+      - "IaC/ansible/playbooks/router-01-dhcp-device-email-*.yml"
+      - "IaC/ansible/roles/network_host_collector/templates/homelab-network-device-email-alert.py.j2"
       - "IaC/ansible/roles/router_dhcp_device_pages/**"
       - "docs/operations/ROUTER-DHCP-DEVICE-PAGES.md"
 
@@ -35,6 +37,8 @@ jobs:
             IaC/ansible/roles/router_dhcp_device_pages/files/generate_router_dhcp_devices.py
           python3 -m py_compile \
             IaC/ansible/roles/router_dhcp_device_pages/files/audit_router_dhcp_pages.py
+          python3 -m py_compile \
+            IaC/ansible/roles/router_dhcp_device_pages/files/dhcp_device_email_policy.py
           python3 -m unittest discover \
             -s IaC/ansible/roles/router_dhcp_device_pages/tests -v
 
@@ -53,6 +57,12 @@ jobs:
             playbooks/router-01-dhcp-device-pages-postflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/router-01-dhcp-device-email-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-email-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-email-activate.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-email-test.yml --syntax-check
 
       - name: Prevent legacy collectors and unapproved deployment
         run: |
@@ -124,4 +134,39 @@ jobs:
           assert 'ansible.builtin.copy:' not in mail_preflight
           assert 'import smtplib' not in mail_preflight
           assert 'send_message(' not in mail_preflight
+
+          mailer_template = Path(
+            'IaC/ansible/roles/network_host_collector/templates/homelab-network-device-email-alert.py.j2'
+          ).read_text()
+          policy = Path(
+            'IaC/ansible/roles/router_dhcp_device_pages/files/dhcp_device_email_policy.py'
+          ).read_text()
+          mail_stage = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-email-stage.yml'
+          ).read_text()
+          mail_activate = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-email-activate.yml'
+          ).read_text()
+          mail_test = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-email-test.yml'
+          ).read_text()
+          assert 'DHCP_EMAIL_MARKER' in mailer_template
+          assert 'dhcp_device_email_policy import from_files' in mailer_template
+          assert "save_atomic(REGISTRY_FILE, registry)" in mailer_template
+          assert 'network_device_alert_preview' in mailer_template
+          assert 'Pending identification' in policy
+          assert 'first <= start' in policy
+          assert 'if mac in already_known:' in policy
+          assert 'router_dhcp_email_stage_approved' in mail_stage
+          assert 'homelab-network-device-email-alert-dhcp-candidate' in mail_stage
+          assert 'dhcp_email_ledger' in mail_stage
+          assert 'router_dhcp_email_activate_approved' in mail_activate
+          assert 'ENABLE_SHARED_MAC_DHCP_EMAIL_ALERTS' in mail_activate
+          assert 'activated_at_ns' in mail_activate
+          assert '--preview' in mail_activate
+          assert 'SEND_ONE_ROUTER_DHCP_ALERT_TEST_EMAIL' in mail_test
+          assert 'router_dhcp_email_test_approved' in mail_test
+          assert 'router-dhcp-alerts.enabled.json' in enable
+          assert 'homelab-network-host-collector.timer' in enable
+          assert 'smtplib' not in p
           PY
