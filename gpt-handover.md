@@ -2013,3 +2013,33 @@ Operator read-only legacy preflight passed (monitor-01 ok=14 changed=0 failed=0)
 ## 2026-11-03 — Grafana one-dashboard canary prepared
 
 Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 named), 16 protected/remaining, zero source mismatches. Prepared `IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml`: approval-gated, no-backup test that removes exactly one generated JSON from the Network Hosts provider (`disableDeletion: false`), polls Grafana and verifies all other 72 dashboard UIDs unchanged. This is Git-only; do not run the 56-dashboard bulk removal until the canary passes. No provider config, service or discovery changes are in scope. After sync run syntax-check, then explicit canary approval. If it fails or a dashboard remains in the API, stop and investigate; do not repeat the operation.
+
+## 2026-11-03 — Grafana canary is mandatory before any bulk retirement
+
+- Latest operator read-only preflight **PASSED**: 73 total Grafana
+  dashboards; **52/52** generated and **5/5** named retired dashboards
+  have verified live Grafana file-provisioning ownership; **0**
+  unattributed; **16** nonlegacy dashboards to protect. Four old scripts,
+  eight old systemd files, 52 generated JSON, 5 named JSON remain.
+  `monitor-01 ok=16 changed=0 failed=0`.
+- Generated `Network Hosts` provider historically has
+  `disableDeletion: false` whereas the retained `Homelab` provider
+  has `disableDeletion: true`. Grafana 13.2.4 uses resource-backed
+  storage; old SQLite dashboard table is not authoritative.
+- **Canary next:** `playbooks/network-host-legacy-dashboard-canary.yml`
+  is approval gated, deletes exactly ONE generated dashboard JSON with
+  no backup, allows the existing provider to auto-delete the Grafana
+  dashboard, and verifies exactly 72 dashboards plus retention of
+  every other UID. It does NOT touch collector binaries, units,
+  network discovery, router, Grafana providers or services.
+- A broader `network-host-legacy-live-retirement.yml` exists as a
+  draft but is **intentionally fail-closed with an unconditional
+  Ansible fail task** until the canary outcome has been verified and
+  its expected counts updated from 52 to 51 generated dashboards.
+  **Never execute it now**, and never rerun the successful DHCP
+  discovery reset.
+- Next operator: fast-forward the clean retirement worktree,
+  `git diff --check`, syntax-check the canary, then intentionally
+  approve ONE dashboard test. Review its final summary and
+  complete postflight, update issue #287 and handover, then design
+  remaining 56 dashboard removals.
