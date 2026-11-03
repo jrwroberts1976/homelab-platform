@@ -46,6 +46,7 @@ on:
       - "IaC/ansible/playbooks/network-host-dns-evidence-stage.yml"
       - "IaC/ansible/playbooks/network-host-dhcp-reset-preflight.yml"
       - "IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml"
+      - "IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml"
 
 jobs:
   validate-dashboard:
@@ -83,6 +84,8 @@ jobs:
             playbooks/network-host-dhcp-reset-preflight.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-dhcp-discovery-reset.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-dhcp-collector-repair.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
@@ -242,6 +245,21 @@ jobs:
           assert "ast.literal_eval" in reset_text
           assert 'values.get("INTERFACE") != "eth0"' in reset_text
           assert "Mark irreversible reset boundary" in reset_text
+
+          repair_text = Path(
+              "IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml"
+          ).read_text()
+          repair_spec = yaml.safe_load(repair_text)
+          repair_task = next(t for t in repair_spec[0]["tasks"]
+                             if t.get("name") ==
+                             "Install corrected host collector only, without any backup")
+          assert repair_task["vars"]["network_host_collector_interface"] == "eth0"
+          assert repair_task["vars"]["network_host_collector_subnet"] == "192.168.2.0/24"
+          assert repair_task["ansible.builtin.template"]["backup"] is False
+          assert "ansible.builtin.file" not in repair_text
+          assert "ansible.builtin.systemd_service" not in repair_text
+          assert "homelab-network-host-collector.service" not in repair_text
+          assert "run_nmap" not in repair_text
 
           # Keep the independently developed OS-evidence, cutover and
           # protected Proxmox guest-identity regression gates.
