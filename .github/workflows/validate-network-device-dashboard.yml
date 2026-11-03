@@ -48,6 +48,7 @@ on:
       - "IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml"
       - "IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml"
       - "IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml"
+      - "IaC/ansible/playbooks/network-host-legacy-live-retirement.yml"
       - "IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml"
 
 jobs:
@@ -90,6 +91,8 @@ jobs:
             playbooks/network-host-dhcp-collector-repair.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-legacy-cleanup-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-legacy-live-retirement.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-legacy-dashboard-canary.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
@@ -287,6 +290,25 @@ jobs:
           assert 'meta.get("provisionedExternalId")==expected' in preflight_text
           assert "grafana_api_other_dashboards_to_preserve" in preflight_text
           assert "grafana_api_provisioning_unverified" in preflight_text
+
+          cleanup_text = Path(
+              "IaC/ansible/playbooks/network-host-legacy-live-retirement.yml"
+          ).read_text()
+          assert "RETIRE_57_LEGACY_DASHBOARDS_NO_BACKUP" in cleanup_text
+          assert "legacy_live_retirement_approved" in cleanup_text
+          assert "network-host-legacy-cleanup-preflight.yml" in cleanup_text
+          assert "disableDeletion: )true$" in cleanup_text
+          assert "grafana_api_other_uid_sha256" in cleanup_text
+          assert "legacy_grafana_audit_python" in cleanup_text
+          assert "ansible.builtin.file:" in cleanup_text
+          assert "ansible.builtin.replace:" in cleanup_text
+          assert "backup: false" in cleanup_text
+          assert "homelab-network-host-collector.timer" in cleanup_text
+          assert "homelab-proxmox-guest-refresh" not in cleanup_text
+          assert "docker, compose, --project-directory, /opt/monitoring, restart, grafana" in cleanup_text
+          assert "monitoring.yml" in cleanup_text
+          assert "state: absent" in cleanup_text
+          assert "grafana.db" not in cleanup_text
           assert "no_log: true" in preflight_text
           assert "        that: \n" not in preflight_text
 
