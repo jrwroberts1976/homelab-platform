@@ -1852,3 +1852,28 @@ Next:
   failed unit (exit status 1) until investigated; do not suppress it.
 - Next gate: remote GitHub Actions and local Ansible syntax/test validation,
   then a separately approved live archive/removal playbook and final docs.
+
+## 2026-11-03 — Discovery reset owner verified; read-only preflight prepared
+
+- Operator's Ansible inspection established `monitor-01` as sole active
+  network discovery owner. Its collector, enricher, deep-profiler and AI
+  resolver timers are all enabled/active; `inventory.json`,
+  `deep-profiles.json`, `enrichment.json` and collector executable exist.
+- `Proxmox-2` has disabled/inactive collector, enricher and deep-profiler
+  timers; the AI resolver timer was not found. Its historical state files
+  remain, but are not the active Grafana discovery source.
+- Operator explicitly requested a clean DHCP-era discovery baseline and
+  no backups. Preserve DHCP leases/reservations, canonical estate,
+  Pi-hole history, Proxmox identity snapshots, first-seen alert registry,
+  other security history and router metrics. Deletion is irreversible.
+- New `IaC/ansible/playbooks/network-host-dhcp-reset-preflight.yml`
+  inspects sole ownership, timer status, private JSON schema/counts,
+  existing collector code and router reachability; makes NO production
+  changes, backups or Nmap scans.
+- Collector canonical mapping corrected from retired `docker-01`
+  (`192.168.2.220`) to actual `router-01` (`192.168.2.1`) **in Git only**.
+- NEXT: Fast-forward clean retirement worktree, run preflight syntax
+  and read-only execution. Use output to create one approved Ansible
+  reset with temporary timer pause, direct fresh collector invocation
+  (not the notifier post-hook), safe profiler baseline and postflight.
+  Do not execute any removal before the preflight review.
