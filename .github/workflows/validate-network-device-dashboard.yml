@@ -224,6 +224,25 @@ jobs:
           assert "network_host_collector_interface: eth0" in reset_text
           assert "homelab-proxmox-guest-refresh" not in reset_text
 
+          # Regression: play vars can be shadowed by the historical
+          # defaults vars_files. Require explicit task-level overrides
+          # on the installed collector template, not just string presence.
+          reset_spec = yaml.safe_load(reset_text)
+          reset_play = next(p for p in reset_spec
+                            if p.get("name") ==
+                            "Establish fresh router-01 DHCP-era discovered-host baseline")
+          reset_block = next(t["block"] for t in reset_play["tasks"]
+                             if t.get("name") ==
+                             "Pause producers, clear regenerable state, scan and resume")
+          install = next(t for t in reset_block
+                         if t.get("name") ==
+                         "Install corrected Ansible-managed collector before reset")
+          assert install["vars"]["network_host_collector_interface"] == "eth0"
+          assert install["vars"]["network_host_collector_subnet"] == "192.168.2.0/24"
+          assert "ast.literal_eval" in reset_text
+          assert 'values.get("INTERFACE") != "eth0"' in reset_text
+          assert "Mark irreversible reset boundary" in reset_text
+
           # Keep the independently developed OS-evidence, cutover and
           # protected Proxmox guest-identity regression gates.
           evidence_source = Path(
