@@ -33,6 +33,8 @@ jobs:
         run: |
           python3 -m py_compile \
             IaC/ansible/roles/router_dhcp_device_pages/files/generate_router_dhcp_devices.py
+          python3 -m py_compile \
+            IaC/ansible/roles/router_dhcp_device_pages/files/audit_router_dhcp_pages.py
           python3 -m unittest discover \
             -s IaC/ansible/roles/router_dhcp_device_pages/tests -v
 
@@ -41,6 +43,14 @@ jobs:
           cd IaC/ansible
           ansible-playbook -i inventory/hosts.yml \
             playbooks/router-01-dhcp-device-pages-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-pages-stage.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-pages-canary.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-pages-enable.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/router-01-dhcp-device-pages-postflight.yml --syntax-check
 
       - name: Prevent legacy collectors and unapproved deployment
         run: |
@@ -60,4 +70,40 @@ jobs:
           assert 'backup: true' not in pre
           assert 'state: absent' not in pre
           assert 'router_dhcp_device_pages_enable_timer: true' not in pre
+
+          provider = Path(
+            'IaC/ansible/roles/monitoring_stack/templates/grafana-dashboard-provider.yml.j2'
+          ).read_text()
+          canary = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-pages-canary.yml'
+          ).read_text()
+          stage = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-pages-stage.yml'
+          ).read_text()
+          enable = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-pages-enable.yml'
+          ).read_text()
+          postflight = Path(
+            'IaC/ansible/playbooks/router-01-dhcp-device-pages-postflight.yml'
+          ).read_text()
+          audit = Path(
+            'IaC/ansible/roles/router_dhcp_device_pages/files/audit_router_dhcp_pages.py'
+          ).read_text()
+          assert 'monitoring_router_dhcp_device_pages_provider_enabled | default(false)' in provider
+          assert 'folderUid: router-dhcp-devices' in provider
+          assert 'disableDeletion: true' in provider
+          assert 'CREATE_ONE_ROUTER_DHCP_DEVICE_PAGE' in canary
+          assert 'monitoring_router_dhcp_device_pages_provider_enabled: true' in canary
+          assert "lookup('ansible.builtin.template'" in canary
+          assert 'router_dhcp_device_pages_canary_approved' in canary
+          assert "'1'" in canary
+          assert 'router_dhcp_device_pages_stage_approved' in stage
+          assert 'router-dhcp-device-pages.timer' in stage
+          assert 'state: started' not in stage
+          assert 'ENABLE_ROUTER_DHCP_DEVICE_PAGES' in enable
+          assert 'enabled: true' in enable
+          assert 'retained_uid_sha256' not in audit or 'EXPECTED_16_HASH' in audit
+          assert 'protected_uid_fingerprint_verified' in audit
+          assert 'router_dhcp_state_postflight' in postflight
+          assert 'homelab-network-host-collector.timer' in postflight
           PY
