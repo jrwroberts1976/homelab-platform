@@ -278,7 +278,9 @@ def atomic_json(path, obj, *, apply):
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".router-dhcp-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as out:
-            os.fchmod(out.fileno(), 0o640)
+            # Existing Grafana container reads this bind-mounted directory as
+            # a non-root UID; match the provisioning role's 0644 JSON mode.
+            os.fchmod(out.fileno(), 0o644)
             out.write(payload)
             out.flush()
             os.fsync(out.fileno())
