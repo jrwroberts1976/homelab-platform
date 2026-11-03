@@ -1,5 +1,5 @@
 ---
-# #287: guarded, no-backup, exactly scoped legacy collector/Grafana retirement.
+# #287: guarded, no-backup retirement after one-generated-dashboard canary passed.
 # Not included in monitoring.yml, any scheduled action or other production role.
 # Grafana 13+ uses resource storage; NEVER write SQLite directly.
 - import_playbook: network-host-legacy-cleanup-preflight.yml
@@ -90,12 +90,54 @@
       if not {"homelab-network-hosts","homelab-router-dhcp"}.issubset(other):
           raise SystemExit("Protected network/router dashboard missing")
       old_named=len(found.intersection(named))
+      # Protect file-backed nonlegacy dashboards before temporarily
+      # enabling deletion in the Homelab provider. A missing protected
+      # source might otherwise vanish on Grafana restart.
+      def dashboard_detail(uid):
+          endpoint="http://127.0.0.1:3000/api/dashboards/uid/"+uid
+          request=urllib.request.Request(
+              endpoint,
+              headers={"Authorization":"Basic "+basic,
+                       "Accept":"application/json"},
+              method="GET")
+          try:
+              with urllib.request.urlopen(request,timeout=12) as res:
+                  return json.loads(res.read(3000000))
+          except Exception:
+              raise SystemExit("Protected dashboard metadata unavailable") from None
+      base_dir=Path("/opt/monitoring/grafana/provisioning/dashboards/homelab")
+      folder_uid=dashboard_detail("homelab-network-hosts").get("meta",{}).get("folderUid")
+      if not folder_uid:
+          raise SystemExit("Protected Homelab folder missing")
+      kept_homelab_files=0
+      for uid in sorted(other):
+          detail=dashboard_detail(uid)
+          meta=detail.get("meta") or {}
+          if detail.get("dashboard",{}).get("uid")!=uid:
+              raise SystemExit("Protected dashboard metadata mismatch")
+          if meta.get("folderUid")==folder_uid and meta.get("provisioned") is True:
+              filename=str(meta.get("provisionedExternalId") or "")
+              if not re.fullmatch(r"[A-Za-z0-9_.-]+\.json",filename):
+                  raise SystemExit("Unsafe protected dashboard filename")
+              src=base_dir/filename
+              if src.is_symlink() or not src.is_file():
+                  raise SystemExit("Protected Homelab dashboard source is absent")
+              try:
+                  src_uid=str(json.loads(src.read_text()).get("uid") or "")
+              except Exception:
+                  raise SystemExit("Protected Homelab dashboard source invalid") from None
+              if src_uid!=uid:
+                  raise SystemExit("Protected dashboard/source UID disagreement")
+              kept_homelab_files+=1
+      if kept_homelab_files<2:
+          raise SystemExit("Insufficient protected Homelab file proof")
+
       if stage=="before":
-          if len(found)!=73 or len(generated)!=52 or old_named!=5:
+          if len(found)!=72 or len(generated)!=51 or old_named!=5:
               raise SystemExit("Legacy Grafana targets drifted before deletion")
       elif stage=="after":
           if len(found)!=16 or len(generated)!=0 or old_named!=0:
-              raise SystemExit("Grafana has not retired exactly the 57 targets")
+              raise SystemExit("Grafana has not retired exactly the 56 remaining targets")
       else:
           raise SystemExit("Invalid verification stage")
       print(json.dumps({
@@ -104,23 +146,16 @@
           "generated_legacy":len(generated),
           "named_legacy":old_named,
           "retained":len(other),
+          "protected_homelab_file_sources_verified":kept_homelab_files,
           "retained_fingerprint_match":True
       },sort_keys=True))
 
   tasks:
-    - name: Fail closed while single-dashboard provisioning canary remains unverified
-      ansible.builtin.fail:
-        msg: >-
-          The bulk retirement remains DRAFT ONLY. First execute and
-          verify network-host-legacy-dashboard-canary.yml, then update
-          this playbook for 51 remaining generated dashboards and
-          56 total retired dashboard UIDs. Do not run bulk cleanup now.
-
-    - name: Require exact approval for irreversible 57-dashboard and 12-file retirement
+    - name: Require exact approval for irreversible 56-dashboard and 12-file retirement
       ansible.builtin.assert:
         that:
           - legacy_live_retirement_approved | default(false) | bool
-          - (legacy_live_retirement_phrase | default('')) == 'RETIRE_57_LEGACY_DASHBOARDS_NO_BACKUP'
+          - (legacy_live_retirement_phrase | default('')) == 'RETIRE_56_LEGACY_DASHBOARDS_NO_BACKUP'
           - inventory_hostname == 'monitor-01'
           - ansible_facts.hostname == 'monitor-01'
           - ansible_facts.default_ipv4.address == '192.168.2.52'
@@ -132,8 +167,8 @@
     - name: Require authoritative API and file inventory from imported preflight
       ansible.builtin.assert:
         that:
-          - (grafana_live_api_counts.stdout | from_json).grafana_api_total_dashboards == 73
-          - (grafana_live_api_counts.stdout | from_json).grafana_api_generated_provisioning_verified == 52
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_total_dashboards == 72
+          - (grafana_live_api_counts.stdout | from_json).grafana_api_generated_provisioning_verified == 51
           - (grafana_live_api_counts.stdout | from_json).grafana_api_named_provisioning_verified == 5
           - (grafana_live_api_counts.stdout | from_json).grafana_api_provisioning_unverified == 0
           - (grafana_live_api_counts.stdout | from_json).grafana_api_other_dashboards_to_preserve == 16
@@ -141,7 +176,7 @@
           - (legacy_cleanup_file_inventory.stdout | from_json).legacy_scripts_present == 4
           - (legacy_cleanup_file_inventory.stdout | from_json).legacy_unit_files_present == 8
           - (legacy_cleanup_file_inventory.stdout | from_json).retired_homelab_dashboard_json_present == 5
-          - (legacy_cleanup_file_inventory.stdout | from_json).generated_mac_dashboard_json_present == 52
+          - (legacy_cleanup_file_inventory.stdout | from_json).generated_mac_dashboard_json_present == 51
         fail_msg: Target count or Grafana provisioning attribution drifted; refuse cleanup.
 
     - name: Record fingerprint of all 16 protected/nonlegacy dashboard UIDs
@@ -213,7 +248,7 @@
           The live provider has different content/settings from the Git
           retirement plan. Refuse to overwrite custom Grafana configuration.
 
-    - name: Require exactly 52 safe generated dashboard JSON file matches
+    - name: Require exactly 51 safe generated dashboard JSON file matches
       ansible.builtin.find:
         paths: "{{ legacy_generated_dir }}"
         file_type: file
@@ -227,7 +262,7 @@
     - name: Refuse drift in generated MAC dashboard file count
       ansible.builtin.assert:
         that:
-          - legacy_generated_paths.matched == 52
+          - legacy_generated_paths.matched == 51
         fail_msg: Generated dashboard file count differs from verified owner count.
 
     - name: Cross-check current live UID set before changing Grafana
@@ -283,7 +318,7 @@
           until: legacy_grafana_ready.status | default(0) == 200
           changed_when: false
 
-        - name: Ensure all 73 dashboard identities remain before deleting sources
+        - name: Ensure all 72 dashboard identities remain before deleting sources
           ansible.builtin.command:
             argv:
               - /usr/bin/python3
@@ -305,14 +340,14 @@
             state: absent
           loop: "{{ legacy_retired_dashboards }}"
 
-        - name: Remove 52 source-verified legacy MAC dashboard JSON files
+        - name: Remove 51 source-verified legacy MAC dashboard JSON files
           ansible.builtin.file:
             path: "{{ item.path }}"
             state: absent
           loop: "{{ legacy_generated_paths.files }}"
           no_log: true
 
-        - name: Require Grafana to remove all 57 provisioned legacy dashboards
+        - name: Require Grafana to remove all 56 remaining provisioned legacy dashboards
           ansible.builtin.command:
             argv:
               - /usr/bin/python3
@@ -409,7 +444,7 @@
           ansible.builtin.debug:
             msg:
               - "Legacy Grafana source retirement complete without backups."
-              - "57 obsolete Grafana dashboards removed; 16 preserved by UID fingerprint."
+              - "56 remaining obsolete Grafana dashboards removed after one-canary deletion; 16 preserved by UID fingerprint."
               - "Four obsolete scripts and eight unit files removed via Ansible."
               - "Discovery inventory, DHCP, Pi-hole, router, monitoring metrics and Proxmox guest refresher unchanged."
       rescue:
