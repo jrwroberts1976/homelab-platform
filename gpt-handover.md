@@ -1960,3 +1960,27 @@ Next:
 ## 2026-11-03 — DHCP discovery reset verified
 
 Operator verified two successful reset runs on monitor-01. The first found 36 hosts; the second/latest found 38 hosts and 38 profile baselines. All six discovery timers were restored. The first-seen registry retains 56 entries. No backups were taken, as requested. The obsolete ASUS discovery snapshot is no longer used. Do not repeat the reset. Next complete live legacy collector and Grafana retirement, postflight, documentation and merge under #287.
+
+## 2026-11-03 — Post-reset legacy collector/Grafana inventory
+
+- Operator read-only check on `monitor-01` after the two successful
+  DHCP rediscovery runs: **all four** retired collector executables remain
+  present, **52** legacy generated per-MAC Grafana dashboard JSON files
+  remain, and `/opt/monitoring/grafana/provisioning/dashboards/homelab.yml`
+  still refers to the old Network Hosts provider.
+- Grafana and Prometheus returned local HTTP 200. Independent
+  `homelab-network-hosts.json` discovery dashboard must be preserved.
+- Existing Grafana file provider config has `disableDeletion: true`;
+  removing source JSON alone may not remove provisioned dashboards
+  from Grafana's database. Full monitoring-role re-deploy is NOT approved,
+  as the current live router traffic dashboard may not be fully
+  reconciled with the active `main` IaC.
+- Git-only `IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml`
+  prepared to count exact legacy scripts/unit files/dashboard JSON
+  candidates, confirm protected dashboards, and read Grafana SQLite
+  dashboard/provider counts **read-only** if its Docker volume is present.
+  No production deletion, backup, service restart, router edit or scan.
+- Next on `admin-01`: fast-forward retirement branch, run preflight
+  syntax then read-only production inventory. Use evidence to prepare
+  strict Ansible cleanup and verify Grafana database entries before
+  deciding how to remove the 52 old dashboards safely.
