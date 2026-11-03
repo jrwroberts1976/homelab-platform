@@ -76,7 +76,7 @@
       ansible.builtin.assert:
         that:
           - "'network_device_alert_test_sent' in dhcp_test_sent.stdout"
-      fail_msg: Notifier did not report an accepted test send; do not claim inbox delivery.
+        fail_msg: Notifier did not report an accepted test send; do not claim inbox delivery.
 
     - name: Hash protected first-seen registry and recipient after test
       ansible.builtin.stat:
