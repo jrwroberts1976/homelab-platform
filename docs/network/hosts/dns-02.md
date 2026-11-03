@@ -126,12 +126,12 @@ dns-02 is CT100 on PROXMOX, running Debian GNU/Linux 13 (trixie) and serving Pi-
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-03T07:10:22+00:00`
-- Pending updates: **3**
+- Last assessed: `2026-11-03T08:11:59+00:00`
+- Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-11-02T06:11:56+00:00`
+- Last APT transaction activity: `2026-11-03T07:48:09+00:00`
 - Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
