@@ -1,6 +1,13 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 ~14:36 UTC — Grafana legacy generated-dashboard canary LIVE
+
+**Operator-verified:** The approved no-backup `network-host-legacy-dashboard-canary.yml` removed exactly one of 52 legacy `net-host-*.json` file-provisioned Grafana dashboards from `monitor-01`. After the existing `Network Hosts` provider (`disableDeletion: false`) processed the removal, Grafana returned **72 total dashboards: 51 generated legacy, 5 named legacy, and all 16 other dashboard UIDs preserved exactly**; Grafana and Prometheus remained healthy. Ansible recap: `monitor-01 ok=28 changed=1 failed=0`. No Grafana restart, provider change, backups, network discovery reset or collector/unit removal occurred.
+
+- Remaining #287 live retirement scope: **56 legacy dashboards**, **4 obsolete collector scripts**, and **8 obsolete systemd units**. The five named legacy dashboards belong to `Homelab` provider with `disableDeletion: true`; their deletion behaviour remains untested. The corresponding Git-only bulk cleanup is staged separately and must be validated and approved before use.
+- Do not rerun the one-dashboard canary or the successful DHCP-era discovery reset. Preserve the other **16 dashboards** including Network Discovery and router DHCP, router metrics, security evidence and protected Proxmox guest identities.
+
 ## 3 November 2026 ~13:13 UTC — monitor-01 DHCP-era discovery baseline RESET LIVE (operator-verified)
 
 **Live state:** `monitor-01` is the sole active discovery owner; `Proxmox-2` discovery timers remain disabled/inactive. The operator executed the approval-gated `network-host-dhcp-discovery-reset.yml` twice, both successful without backups. The second/latest execution returned **38 fresh discovered hosts, 38 new profile baseline records, 56 preserved first-seen alert registry entries, and zero stale derived JSON caches**. The first execution returned 36 hosts; the second replaced it, not a second distinct set of devices. The former working inventory had 84 retained IP records. No expensive deep scans and no first-seen notifier hook were run during the direct rediscovery.
