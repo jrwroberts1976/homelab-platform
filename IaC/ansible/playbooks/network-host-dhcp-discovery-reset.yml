@@ -24,6 +24,11 @@
       - homelab-network-host-ai-resolver.timer
       - homelab-network-dns-evidence.timer
       - homelab-network-os-evidence.timer
+    dhcp_reset_legacy_timers:
+      - asus-network-inventory.timer
+      - homelab-hp-switch-collector.timer
+      - homelab-network-device-inventory.timer
+      - homelab-network-host-dashboards.timer
     dhcp_reset_workers:
       - homelab-network-host-collector.service
       - homelab-network-host-enricher.service
@@ -73,6 +78,20 @@
           - dhcp_reset_active_timers.results | map(attribute='stdout') | unique | list == ['active']
         fail_msg: >-
           Timer states changed since preflight. Do not guess what to restart.
+
+    - name: Reconfirm retired timers cannot recreate old ASUS and HP state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ dhcp_reset_legacy_timers }}"
+      register: dhcp_reset_legacy_timer_states
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse while any retired timer is active
+      ansible.builtin.assert:
+        that:
+          - dhcp_reset_legacy_timer_states.results | map(attribute='stdout') | unique | list == ['inactive']
+        fail_msg: Old collector or generator has restarted; abort.
 
     - name: Guard against symlinks in exactly targeted discovery and metric files
       ansible.builtin.stat:
