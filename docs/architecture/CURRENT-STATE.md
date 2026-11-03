@@ -1,6 +1,15 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 ~13:13 UTC — monitor-01 DHCP-era discovery baseline RESET LIVE (operator-verified)
+
+**Live state:** `monitor-01` is the sole active discovery owner; `Proxmox-2` discovery timers remain disabled/inactive. The operator executed the approval-gated `network-host-dhcp-discovery-reset.yml` twice, both successful without backups. The second/latest execution returned **38 fresh discovered hosts, 38 new profile baseline records, 56 preserved first-seen alert registry entries, and zero stale derived JSON caches**. The first execution returned 36 hosts; the second replaced it, not a second distinct set of devices. The former working inventory had 84 retained IP records. No expensive deep scans and no first-seen notifier hook were run during the direct rediscovery.
+
+- Fixed deployed collector uses **`eth0`**, scans **`192.168.2.0/24`**, removes its ASUS snapshot dependency, and includes the canonical `router-01` `192.168.2.1` hostname. A separate collector-only repair was verified before the destructive reset.
+- All **six** independent discovery, enrichment, deep-profiler, AI, DNS-evidence and OS-evidence timers were restarted and checked active after both resets. Existing `alerted-macs.json` registry count remained 56. `router-01` DHCP leases/reservations, Pi-hole historical queries, canonical estate, and protected Proxmox guest identity snapshots were deliberately excluded from deletion.
+- **Do not re-run the destructive no-backup reset.** Future 5-minute discovery runs can legitimately change the live inventory count. Historical Prometheus/Loki time-series are not erased by regenerating textfile metrics.
+- **Open #287:** legacy deployed collectors/units, five obsolete provisioned Grafana JSON files and 52 generated per-host dashboard JSON files were observed before cleanup, and may still exist; no evidence yet of approved live retirement of those files or Grafana DB entries. The unrelated `homelab-proxmox-guest-refresh.service` failure remains a separate concern. Finish read-only inventory, guarded IaC cleanup and postflight before merge and close.
+
 ## 3 November 2026 — router-01 application traffic monitoring LIVE (operator-verified)
 
 **Status: dashboard accepted by operator; source branch still awaiting Git commit/push/merge.** Canonical user-facing Grafana: **https://grafana.home.jrwroberts.co.uk/**. The backend health/provisioning endpoint remains internal at `monitor-01` (`192.168.2.52:3000`); this is not the preferred browser URL.
