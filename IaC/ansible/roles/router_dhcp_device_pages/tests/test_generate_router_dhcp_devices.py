@@ -121,6 +121,9 @@ class DHCPDevicePages(unittest.TestCase):
             first = pages.reconcile([event], {}, {"profiles": {}}, state,
                                     output_dir, state_file, apply=True)
             self.assertEqual(first["dashboard_writes"], 1)
+            self.assertEqual(state_file.stat().st_mode & 0o777, 0o600)
+            created_file = next(output_dir.glob("routerdhcp-*.json"))
+            self.assertEqual(created_file.stat().st_mode & 0o777, 0o644)
             original = pages.load_state(state_file)
             second = pages.reconcile([event], {}, {"profiles": {}}, original,
                                      output_dir, state_file, apply=True)
