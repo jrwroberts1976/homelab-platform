@@ -1,15 +1,13 @@
 ---
 # Focused, non-scanning rollout: publish EXISTING monitor-01 Nmap fingerprints
-# and display only MAC + scanned-IP-correlated evidence on per-host Grafana.
-- name: Publish saved deep Nmap OS fingerprints and integrate them into Grafana
+# without any legacy MAC-correlated inventory or Grafana dashboard generation.
+- name: Publish saved Nmap OS fingerprint evidence independently
   hosts: monitoring_hosts
   become: true
   gather_facts: true
   any_errors_fatal: true
   vars:
     publisher_src: "{{ playbook_dir }}/../roles/network_host_deep_profiler/files"
-    base: "{{ playbook_dir }}/../roles/monitoring_stack/files"
-    dashboards_live: /opt/monitoring/grafana/provisioning/dashboards
 
   tasks:
     - name: Verify canonical monitor-01 and current profiler ownership
@@ -58,19 +56,6 @@
         - homelab-network-os-evidence.service
         - homelab-network-os-evidence.timer
 
-    - name: Install Nmap-aware inventory correlation and dashboard generator
-      ansible.builtin.copy:
-        src: "{{ base }}/{{ item.src }}"
-        dest: "{{ item.dest }}"
-        owner: root
-        group: root
-        mode: "{{ item.mode }}"
-      loop:
-        - {src: network-device-inventory-exporter.py, dest: /usr/local/sbin/homelab-network-device-inventory, mode: '0750'}
-        - {src: network-host-dashboard-generator.py, dest: /usr/local/sbin/homelab-network-host-dashboards, mode: '0750'}
-        - {src: host-profile-template.json, dest: /etc/homelab/network-host-template.json, mode: '0644'}
-      register: nmap_dashboard_assets
-
     - name: Run initial export of already saved OS fingerprints
       ansible.builtin.systemd_service:
         daemon_reload: true
@@ -109,73 +94,10 @@
       changed_when: false
       when: saved_nmap_fingerprints | int > 0
 
-    - name: Publish inventory with MAC and scanned-IP-correlated Nmap evidence
-      ansible.builtin.command:
-        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-device-inventory]
-      register: nmap_inventory_published
-      changed_when: false
-
-    - name: Wait for new inventory correlation to be scraped
-      ansible.builtin.uri:
-        url: >-
-          http://127.0.0.1:9090/api/v1/query?query=homelab_network_device_inventory_last_run_seconds%7Btarget_name%3D%22monitor-01%22%7D
-        status_code: 200
-        return_content: true
-      register: nmap_inventory_scrape
-      until:
-        - nmap_inventory_scrape.json.data.result | length > 0
-        - nmap_inventory_scrape.json.data.result[0].value[1] | int >= ansible_date_time.epoch | int
-      retries: 20
-      delay: 5
-      changed_when: false
-
-    - name: Count fingerprint matches correlated with current device identities
-      ansible.builtin.uri:
-        url: >-
-          http://127.0.0.1:9090/api/v1/query?query=count%28homelab_network_device_card_info%7Btarget_name%3D%22monitor-01%22%2Cnmap_name%21%3D%22%22%7D%29%20or%20vector%280%29
-        status_code: 200
-        return_content: true
-      register: nmap_correlated_count
-      changed_when: false
-
-    - name: Regenerate existing per-host dashboards with optional Nmap panel
-      ansible.builtin.command:
-        argv: [/usr/bin/python3, /usr/local/sbin/homelab-network-host-dashboards]
-      register: nmap_dashboard_generation
-      changed_when: "'changed=0' not in nmap_dashboard_generation.stdout"
-
-    - name: Verify existing generated page count
-      ansible.builtin.find:
-        paths: "{{ dashboards_live }}/network-hosts"
-        patterns: 'net-host-*.json'
-        file_type: file
-      register: os_host_pages
-      failed_when: os_host_pages.matched < 10
-
-    - name: Restart only Grafana when generated dashboards or source template change
-      ansible.builtin.command:
-        argv: [docker, compose, --project-directory, /opt/monitoring, restart, grafana]
-      when: nmap_dashboard_assets.changed or nmap_dashboard_generation.changed
-
-    - name: Wait for Grafana readiness after selective restart
-      ansible.builtin.uri:
-        url: http://127.0.0.1:3000/api/health
-        status_code: 200
-        return_content: true
-      register: nmap_grafana_ready
-      until:
-        - nmap_grafana_ready.status == 200
-        - nmap_grafana_ready.json.database == 'ok'
-      retries: 20
-      delay: 3
-      changed_when: false
-
-    - name: Show saved fingerprint integration result
+    - name: Show independent saved fingerprint publication result
       ansible.builtin.debug:
         msg: >-
-          monitor-01 exported {{ saved_nmap_fingerprints }} saved Nmap OS
-          matches; {{ nmap_correlated_count.json.data.result[0].value[1] }}
-          matched current MAC/IP evidence in Prometheus;
-          {{ os_host_pages.matched }} per-host Grafana pages generated.
-          Zero matched profiles means the Nmap panel remains absent.
-          No scan was launched or enabled.
+          monitor-01 published {{ saved_nmap_fingerprints }} existing Nmap OS
+          evidence records through its independent Prometheus textfile series.
+          No Nmap scan, legacy inventory exporter, MAC dashboard generation,
+          or Grafana restart was performed.
