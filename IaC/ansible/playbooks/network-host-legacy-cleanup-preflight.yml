@@ -112,7 +112,7 @@
                         continue
                     if path.is_symlink() or not path.is_file():
                         raise RuntimeError("Unsafe generated dashboard member")
-                    if not re.fullmatch(r"net-host-[0-9a-f]{12}\\.json",path.name):
+                    if not re.fullmatch(r"net-host-[0-9a-f]{12}\.json",path.name):
                         raise RuntimeError("Unexpected generated dashboard member")
                     if json.loads(path.read_text()).get("uid") != path.stem:
                         raise RuntimeError("Generated dashboard UID mismatch")
