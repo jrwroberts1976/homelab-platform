@@ -158,3 +158,24 @@ and (when the Docker volume is found) counts legacy entries in Grafana SQLite
 in **read-only** mode. It never performs a backup or deletion. Use its result
 to design a separately approved, narrowly targeted IaC cleanup; preserve
 unrelated Grafana dashboards, router metrics and the Proxmox guest refresher.
+
+## 3 November 2026 — Live Grafana API and provenance gate
+
+- The running Grafana API returned 73 dashboards: 52 old generated
+  host dashboards, 5 named retired dashboards, and **16 to preserve**,
+  including the independent Network Discovery and router DHCP dashboards.
+  API ownership is authoritative here; the old SQLite dashboard table
+  returned no rows including protected dashboards and must NOT be edited.
+- Grafana file provisioning has `disableDeletion: true`; simply
+  deleting JSON would leave stale live dashboard records. Follow
+  the official provider deletion lifecycle, scoped to the 57 old
+  dashboards, with protected dashboards verified after each stage.
+- Read-only `network-host-legacy-cleanup-preflight.yml` now checks
+  the Grafana API's `meta.provisioned`,
+  `meta.provisionedExternalId` and folder ID for every old UID
+  against its exact file and expected provider, without publishing
+  host identities or API credentials.
+- Next: rerun read-only preflight from latest feature branch and
+  require `grafana_api_provisioning_unverified=0` before any actual
+  retirement. No backups, deletion or whole-stack redeploy have
+  occurred in this Grafana cleanup. Keep #287 open.
