@@ -280,6 +280,10 @@ jobs:
           assert "/api/search?type=dash-db&limit=5000" in preflight_text
           assert 'get_json("/api/dashboards/uid/"+uid)' in preflight_text
           assert "grafana_api_retained_dashboard_count" in preflight_text
+          assert 'meta.get("provisioned") is True' in preflight_text
+          assert 'meta.get("provisionedExternalId")==expected' in preflight_text
+          assert "grafana_api_other_dashboards_to_preserve" in preflight_text
+          assert "grafana_api_provisioning_unverified" in preflight_text
           assert "no_log: true" in preflight_text
           assert "        that: \n" not in preflight_text
 
