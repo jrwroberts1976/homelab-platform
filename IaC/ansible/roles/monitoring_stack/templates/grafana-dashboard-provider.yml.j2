@@ -23,3 +23,16 @@ providers:
     options:
       path: /etc/grafana/provisioning/dashboards/production
       foldersFromFilesStructure: false
+
+  # Isolated new router-01 DHCP device pages; never resurrect old Network Hosts.
+  - name: Router DHCP Devices
+    orgId: 1
+    folder: Router DHCP Devices
+    folderUid: router-dhcp-devices
+    type: file
+    disableDeletion: true
+    allowUiUpdates: false
+    updateIntervalSeconds: 30
+    options:
+      path: /etc/grafana/provisioning/dashboards/router-dhcp-devices
+      foldersFromFilesStructure: false
