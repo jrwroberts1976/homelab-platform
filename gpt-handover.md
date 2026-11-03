@@ -1833,3 +1833,22 @@ Next:
 - Next: synchronise remote branch to clean worktree, run syntax/CI tests,
   inspect any regression failures, complete remaining legacy references
   and live cleanup plan, then staged postflight/merge.
+
+## 2026-11-03 — #287 obsolete source removal staged in Git (NOT live)
+
+- Added the fail-closed HP-specific Zabbix SNMP playbook guard, removed
+  obsolete ASUS/HP collector roles, old monitoring exporter and MAC
+  dashboard-generator source/tests, retired systemd unit source,
+  stale per-device / HP-only dashboards and redundant Komodo copies.
+- Kept the independent network discovery dashboard, including the Komodo
+  copy, and removed only the legacy generated Network Hosts file provider.
+- Updated CI to test for absent retired files, retained host discovery,
+  OS fingerprint evidence, and protected Proxmox guest-identity logic.
+- Added `docs/operations/LEGACY-NETWORK-RETIREMENT.md` with a guarded live
+  cleanup/backup/postflight plan; this code change does not delete or
+  modify deployed collector metrics, provisioned Grafana database entries,
+  unit files, router state, DHCP/DNS, QoS or Zabbix services.
+- Independent `homelab-proxmox-guest-refresh.service` remains a separate
+  failed unit (exit status 1) until investigated; do not suppress it.
+- Next gate: remote GitHub Actions and local Ansible syntax/test validation,
+  then a separately approved live archive/removal playbook and final docs.

@@ -2,7 +2,7 @@
   "id": null,
   "uid": "homelab-network-hosts",
   "title": "Homelab — Network Discovery",
-  "description": "Existing network discovery overview: inventory totals, online/offline history, enrichment, deep profiling and lifecycle events. For hostname-selected CPU/memory/OS/ports, use Homelab — Network Hosts.",
+  "description": "Independent host discovery: inventory totals, online/offline state, enrichment, deep profiling and lifecycle events. Does not depend on the retired ASUS/HP/MAC dashboard pipeline.",
   "tags": [
     "homelab",
     "network",

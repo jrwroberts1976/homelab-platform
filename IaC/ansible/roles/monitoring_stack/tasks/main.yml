@@ -79,7 +79,6 @@
     - "{{ monitoring_root }}/grafana/provisioning/datasources"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/homelab"
-    - "{{ monitoring_root }}/grafana/provisioning/dashboards/network-hosts"
     - "{{ monitoring_root }}/grafana/provisioning/dashboards/production"
 
 - name: Ensure monitor node-exporter textfile directory exists
