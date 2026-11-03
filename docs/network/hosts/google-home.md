@@ -50,33 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T14:02:32+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `a4:77:33:5f:94:fe`
-- Identity confidence: **high**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely Google Home smart speaker/media device. The hostname, Google vendor attribution, and Nmap device classification align; exact firmware/OS is not supported by the evidence. TCP ports 8008, 8009, and 8443 are open. No matching actionable Greenbone findings were reported for 192.168.2.125.
+Google-vendor device at 192.168.2.125; no hostname, service, DNS, or OS evidence is available, so the device identity remains unresolved.
 
 ### Confirmed facts
 
-- The device hostname is Google-Home.
-- The inventory and Nmap vendor fields identify Google.
-- Nmap reports a Google Home device classification.
-- TCP ports 8008, 8009, and 8443 are open.
-- The device is online at 192.168.2.125.
-- Greenbone reported zero matching actionable findings for 192.168.2.125.
-- The router data contains a Google-Home record at 192.168.2.17.
+- The device IP address is 192.168.2.125.
+- The observed MAC address is a4:77:33:5f:94:fe.
+- The device vendor is identified as Google by inventory and Nmap metadata.
+- The device is currently online.
+- No TCP or UDP ports were reported by the Nmap baseline.
+- No actionable Greenbone findings matched this current IP; this does not prove the host is vulnerability-free or fully scanned.
 
 ### Inferences
 
-- The device is most likely a Google Home smart speaker or related Google media device.
-- It likely uses embedded IoT firmware, possibly Linux-based, but the exact OS and firmware version cannot be determined.
-- The separate router IP record may reflect a stale or separate DHCP observation and does not by itself establish a second device.
+- The device may be a Google embedded or IoT-oriented device, but its specific product and function cannot be determined from the supplied evidence.
+- The exact operating system or firmware is not supported by the available evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

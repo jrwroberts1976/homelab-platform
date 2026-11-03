@@ -50,32 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T14:02:32+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `20:23:51:dc:ef:05`
-- Identity confidence: **high**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-TP-Link H100-class Tapo IoT device identified from hostname, vendor data, and TP-Link/Tapo cloud DNS activity. TCP port 80 is open; Nmap suggests an lwIP-based embedded stack, not a complete operating-system identification. No matching actionable Greenbone findings were reported.
+Online TP-Link device at 192.168.2.100. No hostname, model, service, or OS evidence is available; identity requires review. No matching actionable Greenbone findings were reported, which does not establish that the device is vulnerability-free.
 
 ### Confirmed facts
 
-- The device hostname is H100.
-- The recorded vendor is TP-Link PTE.
-- DNS telemetry includes TP-Link cloud/Tapo endpoints, including security.iot.i.tplinknbu.com and euw1-device-cloudgateway.iot.i.tplinknbu.com.
-- TCP port 80 is open.
-- Nmap produced lwIP fingerprint matches, including lwIP 1.4.x through 2.x candidates.
-- No actionable Greenbone findings match the current IP address 192.168.2.100.
+- The device is online at 192.168.2.100.
+- The MAC address is 20:23:51:dc:ef:05.
+- The MAC vendor is reported as TP-Link PTE.
 - No authoritative OS fact is available.
+- Nmap baseline data contains no TCP or UDP ports and no OS matches.
+- No DNS policy matches were reported in the last hour.
+- No actionable Greenbone findings matched this IP in the supplied report.
 
 ### Inferences
 
-- The device is likely a TP-Link Tapo H100-class smart-home hub or related Tapo IoT device.
-- The device likely uses embedded firmware with an lwIP TCP/IP stack.
+- The device may be a TP-Link embedded or network appliance, but the exact device model and function are unresolved.
+- The platform family is cautiously classified as embedded IoT firmware based on the vendor evidence and lack of host-level OS data.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

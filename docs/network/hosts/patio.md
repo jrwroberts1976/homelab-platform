@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T15:01:29+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `c4:82:e1:f2:f9:9f`
 - Identity confidence: **medium**
@@ -60,23 +60,23 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Likely a Tuya Smart embedded IoT device at 192.168.2.109. The hostname is wlan0, but the specific product and operating system are not identified; Nmap returned no OS or port evidence.
+Online Tuya Smart IoT device at 192.168.2.109. No exact OS or model is identified; baseline Nmap reported no ports, and no matching actionable Greenbone findings were present.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.109.
-- The recorded hostname and DHCP hostname are wlan0.
-- The inventory and Nmap data identify the vendor as Tuya Smart.
-- The MAC address is c4:82:e1:f2:f9:9f.
-- Nmap status is partial with os_evidence_missing and no reported TCP or UDP ports.
-- No matching actionable Greenbone findings were reported for this IP.
-- No sampled Loki entries, recent high-risk DNS policy matches, or patch telemetry were reported.
+- The device IP is 192.168.2.109.
+- The device MAC address is c4:82:e1:f2:f9:9f.
+- Inventory and Nmap both identify the vendor as Tuya Smart.
+- The device is currently online.
+- Authoritative OS data is unavailable.
+- Baseline Nmap returned no TCP or UDP port records.
+- Greenbone reported zero actionable findings matching this current IP.
 
 ### Inferences
 
-- The device is likely a Tuya Smart embedded IoT product or firmware-based appliance.
-- The specific Tuya product model and function cannot be determined from the supplied evidence.
-- The operating system or firmware family cannot be determined.
+- The device is likely a Tuya-based embedded smart-home or IoT device.
+- The exact model, firmware, and operating system cannot be determined from the supplied evidence.
+- The lack of matching Greenbone findings is not proof that the device is vulnerability-free or fully scanned.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

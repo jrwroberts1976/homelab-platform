@@ -51,7 +51,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T13:02:13+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `ec:91:61:9c:a4:45`
 - Identity confidence: **low**
@@ -61,22 +61,21 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Online client at 192.168.2.113 with DHCP hostname APL-PF5F6D28 and a Cloud Network Technology Singapore PTE. MAC vendor. DNS activity includes Microsoft and Windows Update delivery endpoints, but no ports, service evidence, authoritative OS, or Nmap OS match are available.
+Unidentified device at 192.168.2.113. The available evidence identifies only the MAC-vendor association with Cloud Network Technology Singapore PTE.; no hostname, services, Nmap OS match, or DNS device hint is available.
 
 ### Confirmed facts
 
-- The device is online at 192.168.2.113.
-- The DHCP and inventory hostname is APL-PF5F6D28.
-- The recorded MAC vendor is Cloud Network Technology Singapore PTE.
-- Nmap OS identification is incomplete and returned no OS matches.
-- No TCP or UDP ports were reported by Nmap.
-- DNS observations included Windows Update and Microsoft delivery endpoints.
-- No matching actionable Greenbone findings were reported for the current IP.
+- IP address is 192.168.2.113.
+- MAC address is ec:91:61:9c:a4:45.
+- The reported MAC vendor is Cloud Network Technology Singapore PTE.
+- The device is currently marked offline in inventory.
+- No TCP or UDP ports are reported open by the baseline Nmap result.
+- No matching actionable Greenbone findings were reported for this IP.
 
 ### Inferences
 
-- The DNS activity is compatible with a Windows-related client or software component, but it does not establish the device operating system.
-- The device identity and device class remain unresolved.
+- The device identity, function, platform family, and operating system cannot be determined from the supplied evidence.
+- The MAC-vendor association may indicate the hardware manufacturer or network-interface vendor, but does not establish a specific device model or role.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

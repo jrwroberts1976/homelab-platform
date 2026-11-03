@@ -42,7 +42,7 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-11-01T16:01:00+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `f8:17:2d:65:b8:98`
 - Identity confidence: **low**
@@ -52,24 +52,23 @@ Use bounded service/domain-family summaries here, not raw browsing history. DNS 
 
 ### Assessment summary
 
-Device identity is unresolved. The host is reported as wlan0, but no vendor, OS, service, DNS, or Nmap fingerprint evidence is available. A conflicting DHCP record also reports wlan0 at 192.168.2.74 while the current host IP is 192.168.2.104.
+Online host 192.168.2.104 is unresolved. No hostname, vendor, DNS signal, open-port data, or OS fingerprint is available; manual review is required.
 
 ### Confirmed facts
 
-- The current host IP is 192.168.2.104.
-- The MAC address is f8:17:2d:65:b8:98.
-- The inventory and Nmap hostname is wlan0.
-- The device is currently marked online.
-- Authoritative OS evidence is unavailable.
-- Nmap OS and port evidence is unavailable; the scan status is partial with os_evidence_missing.
-- No actionable Greenbone findings match the current IP.
-- No sampled Loki warning or error entries were reported.
-- A router DHCP record reports hostname wlan0 at 192.168.2.74.
+- The host IP is 192.168.2.104.
+- The host MAC address is f8:17:2d:65:b8:98.
+- The inventory reports the host as online.
+- Authoritative OS data is unavailable.
+- No inventory hostname, kind, role, vendor, or OS is supplied.
+- Nmap baseline data contains no TCP or UDP ports and no OS matches.
+- No DNS policy matches or device hints are reported.
+- Greenbone reports zero actionable findings matching this current IP; this does not prove the host is vulnerability-free or fully scanned.
 
 ### Inferences
 
-- The hostname wlan0 may represent a wireless-interface-style host name, but it does not establish the device type or operating system.
-- The differing IP addresses may reflect stale, historical, or conflicting DHCP/ inventory data and require review.
+- The device identity and platform cannot be determined from the supplied evidence.
+- The MAC address alone does not provide a supported vendor or device classification.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

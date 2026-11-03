@@ -50,31 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `60:83:e7:f3:c1:92`
-- Identity confidence: **high**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo P110 smart plug. The device advertises TP-Link/Tapo cloud endpoints and exposes TCP port 80. Nmap identified lwIP, which is a TCP/IP stack rather than a complete operating system.
+Online TP-Link-vendor device at 192.168.2.112. No hostname, service, port, DNS, or OS evidence is available, so the specific device identity and operating system remain unresolved.
 
 ### Confirmed facts
 
-- The device hostname is P110.
-- The recorded vendor is TP-Link PTE.
-- DNS activity includes TP-Link cloud/Tapo endpoints.
-- Nmap reports a lwIP 1.4.1–2.0.3 fingerprint.
-- TCP port 80 is open.
-- No actionable Greenbone findings match the current IP 192.168.2.112.
+- The device IP is 192.168.2.112.
+- The device MAC address is 60:83:e7:f3:c1:92.
+- The recorded MAC vendor is TP-Link PTE.
+- The inventory marks the device as online.
+- No actionable Greenbone findings match the current IP; this does not establish that the host is vulnerability-free.
+- No Nmap TCP or UDP ports are reported open.
 
 ### Inferences
 
-- The hostname P110 together with TP-Link vendor data and Tapo cloud DNS strongly indicates a TP-Link Tapo P110 smart plug.
-- The device likely runs embedded IoT firmware using the lwIP networking stack.
+- The device may be a TP-Link embedded or IoT-oriented device, but its specific role cannot be determined from the supplied evidence.
+- The exact operating system or firmware is unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
