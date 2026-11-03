@@ -219,6 +219,7 @@
             == ((grafana_canary_plan.original_uids
                  | difference([grafana_canary_plan.selected_uid])) | sort)
         fail_msg: Grafana canary did not retire exactly one dashboard.
+      no_log: true
 
     - name: Require Grafana remains healthy
       ansible.builtin.uri:
