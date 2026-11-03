@@ -2043,3 +2043,41 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
   approve ONE dashboard test. Review its final summary and
   complete postflight, update issue #287 and handover, then design
   remaining 56 dashboard removals.
+
+## 2026-11-03 ~14:36 UTC — Single-dashboard Grafana canary PASS, bulk 56 staged
+
+- Operator intentionally executed `network-host-legacy-dashboard-canary.yml`
+  with no backup on `monitor-01`; `GRAFANA_CANARY=PASS`,
+  `monitor-01 ok=28 changed=1 failed=0`. One legacy generated
+  `net-host-*.json` was removed; Grafana's existing
+  `Network Hosts` provider auto-removed the corresponding dashboard
+  after three polling retries.
+- Live result: **72 total** Grafana dashboards, **51** generated legacy
+  dashboards, **5** named retired dashboards, **16** nonlegacy dashboards
+  all preserved by exact UID, Grafana and Prometheus HTTP 200.
+  No systemd change, provider change, restart, script removal, backup,
+  router change or network discovery reset.
+- Git-only `network-host-legacy-live-retirement.yml` changed from
+  blocked 57/52 pre-canary draft to scoped **56/51** post-canary
+  cleanup with `legacy_live_retirement_approved=true` and exact
+  phrase `RETIRE_56_LEGACY_DASHBOARDS_NO_BACKUP`. Added strict
+  checks that every protected Homelab-provisioned dashboard still
+  has an intact matching JSON file **before** temporarily enabling
+  deletion for the five retired Homelab dashboards. It preserves the
+  nonlegacy 16 by UID fingerprint, performs only Grafana container
+  restarts for provider reconciliation, and removes obsolete scripts
+  and eight systemd files only after Grafana postflight.
+- Official Grafana file provisioning uses `disableDeletion` to
+  control automatic deletion after source removal. The generated
+  provider's behaviour was proved live; the temporary Homelab
+  deletion change has **not** yet been tested live. The script
+  refuses drift and stops if any protected source is missing.
+- GitHub CI enforces 72/51/5/16 starting state, no backup,
+  approval gate, retained-source safeguards and syntax check.
+- **NEXT**: operator fast-forward clean retirement worktree, run
+  `git diff --check` and bulk syntax-check. After explicit
+  approval, run 56-target retirement and inspect full postflight;
+  verify 16 Grafana dashboards retained, four collector scripts
+  and eight unit files absent, discovery timers active, Prometheus
+  healthy. Do not repeat the canary or DHCP discovery reset.
+  Keep #287 open until proven live cleanup, PR/merge and final docs.
