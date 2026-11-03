@@ -1,0 +1,103 @@
+---
+# #291: pure read-only postflight; no scans, backups, dashboard deletion or restart.
+- name: Verify scheduled router-01 DHCP device pages and protected monitoring
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Require independent discovery owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Verify router DHCP device page timer active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      changed_when: false
+
+    - name: Verify all six original discovery timers active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-host-ai-resolver.timer
+        - homelab-network-dns-evidence.timer
+        - homelab-network-os-evidence.timer
+      register: router_dhcp_existing_timers
+      changed_when: false
+
+    - name: Verify live original discovery remained active
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_existing_timers.results | map(attribute='stdout') | unique | list == ['active']
+
+    - name: Verify all 16 original Grafana dashboards still exist by UID fingerprint
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages-audit
+          - --mode
+          - enabled
+      register: router_dhcp_page_postflight
+      changed_when: false
+      no_log: true
+
+    - name: Verify source state and generated file count agree
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            state=Path('/var/lib/homelab-network-hosts/router-dhcp-device-pages.json')
+            folder=Path('/opt/monitoring/grafana/provisioning/dashboards/router-dhcp-devices')
+            first_seen=Path('/var/lib/homelab-network-hosts/alerted-macs.json')
+            inventory=Path('/var/lib/homelab-network-hosts/inventory.json')
+            if any(f.is_symlink() or not f.is_file()
+                   for f in (state,first_seen,inventory)):
+                raise SystemExit('Protected device state missing or unsafe')
+            data=json.loads(state.read_text())
+            alerts=json.loads(first_seen.read_text())
+            inv=json.loads(inventory.read_text())
+            if data.get('schema_version')!=1 or not isinstance(data.get('devices'),dict):
+                raise SystemExit('Invalid new DHCP device page schema')
+            count=len(data['devices'])
+            files=list(folder.glob('routerdhcp-*.json'))
+            if len(files)!=count or not 1<=count<=254:
+                raise SystemExit('Generated page count differs from private DHCP state')
+            if not isinstance(inv,dict) or not inv:
+                raise SystemExit('Lost independent LAN discovery inventory')
+            if (not isinstance(alerts.get('devices'),dict)
+                or len(alerts['devices']) < 56):
+                raise SystemExit('Protected first-seen registry reduced')
+            print(json.dumps({'device_pages':count,
+              'independent_discovery_records':len(inv),
+              'protected_first_seen_records':len(alerts['devices']),
+              'no_deletions':True,'read_only':True},sort_keys=True))
+      register: router_dhcp_state_postflight
+      changed_when: false
+
+    - name: Require Grafana and Prometheus health
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        status_code: 200
+      loop:
+        - http://127.0.0.1:3000/api/health
+        - http://127.0.0.1:9090/-/ready
+      changed_when: false
+
+    - name: Report only non-identifying result counts
+      ansible.builtin.debug:
+        msg:
+          - "{{ router_dhcp_state_postflight.stdout }}"
+          - "{{ router_dhcp_page_postflight.stdout }}"
+          - "All original discovery timers active, Grafana/Prometheus healthy."
