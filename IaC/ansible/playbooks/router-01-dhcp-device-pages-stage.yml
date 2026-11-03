@@ -66,6 +66,15 @@
         mode: '0750'
         backup: false
 
+    - name: Install read-only Grafana UID guard without credentials
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/router_dhcp_device_pages/files/audit_router_dhcp_pages.py"
+        dest: /usr/local/sbin/router-dhcp-device-pages-audit
+        owner: root
+        group: root
+        mode: '0750'
+        backup: false
+
     - name: Validate installed Python script without writing bytecode
       ansible.builtin.command:
         argv:
@@ -76,7 +85,8 @@
             import ast
             from pathlib import Path
             ast.parse(Path('/usr/local/sbin/router-dhcp-device-pages').read_text())
-            print('router_dhcp_device_pages_script_syntax=PASS')
+            ast.parse(Path('/usr/local/sbin/router-dhcp-device-pages-audit').read_text())
+            print('router_dhcp_device_pages_scripts_syntax=PASS')
       changed_when: false
 
     - name: Install disabled dedicated page generator service
