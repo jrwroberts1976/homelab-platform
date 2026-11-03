@@ -1877,3 +1877,39 @@ Next:
   reset with temporary timer pause, direct fresh collector invocation
   (not the notifier post-hook), safe profiler baseline and postflight.
   Do not execute any removal before the preflight review.
+
+## 2026-11-03 — #287 no-backup DHCP-era discovery reset staged (not executed)
+
+- Operator ran `network-host-dhcp-reset-preflight.yml` from updated
+  retirement worktree. **All tasks PASS, changed=0, failed=0**.
+  `Proxmox-2` collector inactive; sole active discovery owner
+  `monitor-01`; all six collector/AI/DNS/OS-evidence timers active.
+  Router-01 reachable.
+- Before reset monitor-01 held **84 inventory IP entries**, 57 deep-profile
+  MACs, 54 enriched hosts, 35 DNS-evidence devices, 57 AI identities
+  (public/private), and **56 protected first-seen registry entries**.
+- Installed monitor-01 collector still referenced retired ASUS snapshot:
+  `installed_collector_uses_retired_asus_snapshot=true`.
+  This must be fixed before deletion; canonical hostname defaults in
+  Git already replace retired docker-01 .220 with router-01 .1.
+- Staged `IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml`
+  under existing #287 workstream. Explicit no-backup approval phrase and
+  read-only preflight. When intentionally run, pauses six discovery
+  timers, waits for idle workers, installs corrected collector and AI
+  resolver, removes exactly six regenerated JSON caches and five
+  discovery Prometheus textfile metrics (including old
+  `homelab_network_devices.prom`), runs ONE direct fresh LAN discovery
+  without notifier post-hook, preserves/extends first-seen registry
+  with baseline MAC entries, seeds deep-profiles without expensive
+  scanning and restores timers after verified postflight.
+- No live backup, no router/Proxmox identity/Pi-hole/dhcp/credential
+  modification. Old Prometheus/Loki historical time series and 52
+  provisioned legacy Grafana host pages persist until later cleanup.
+  The separate Proxmox guest-refresh failure must not be reset or
+  hidden. Failed partial reset deliberately leaves discovery timers
+  paused pending manual diagnosis; no backup exists by explicit
+  operator choice.
+- The new reset playbook has **not run on production**; GitHub CI and
+  local syntax-check must pass before approved execution. When it
+  runs, capture operator output and update CURRENT-STATE.md from
+  observed facts; no premature issue closure.
