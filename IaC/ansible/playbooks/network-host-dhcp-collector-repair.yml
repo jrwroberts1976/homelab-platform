@@ -104,6 +104,26 @@
       register: dhcp_repair_state
       changed_when: false
 
+    - name: Inspect six discovery timer states after collector-only repair
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-host-ai-resolver.timer
+        - homelab-network-dns-evidence.timer
+        - homelab-network-os-evidence.timer
+      register: dhcp_repair_timers
+      changed_when: false
+      failed_when: false
+
+    - name: Require all six discovery timers are active
+      ansible.builtin.assert:
+        that:
+          - dhcp_repair_timers.results | map(attribute='stdout') | unique | list == ['active']
+        fail_msg: Collector repaired but one or more discovery timers are not active.
+
     - name: Print only safe repair status and counts
       ansible.builtin.debug:
         msg:
