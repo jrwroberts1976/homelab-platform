@@ -117,8 +117,13 @@ def candidates(state, marker, already_known, inventory, profiles, source_dir, no
         if not isinstance(dashboard, dict) or dashboard.get("uid") != uid:
             raise ValueError("DHCP page source UID mismatch")
         ip = record["ip"]
-        host = inventory.get(ip, {})
-        if not isinstance(host, dict) or str(host.get("mac", "")).lower() != mac:
+        # The original sole SMTP notifier passes normalise_inventory(),
+        # which is MAC-keyed (not IP-keyed). Correlate both identity and the
+        # current DHCP address to avoid stale vendor/online evidence.
+        host = inventory.get(mac, {})
+        if (not isinstance(host, dict)
+                or str(host.get("mac", "")).lower() != mac
+                or str(host.get("ip", "")) != ip):
             host = {}
         pending.append({
             "mac": mac,
