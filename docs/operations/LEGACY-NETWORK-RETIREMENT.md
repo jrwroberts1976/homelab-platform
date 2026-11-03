@@ -1,6 +1,6 @@
 # Legacy ASUS, HP ProCurve and MAC dashboard retirement — #287
 
-**Status: DHCP discovery reset LIVE; one Grafana generated-dashboard deletion canary LIVE and verified; remaining collector/Grafana retirement staged.**
+**Status: DHCP discovery reset and Grafana legacy retirement playbooks PASSED LIVE; independent postflight and merge still pending.**
 **Active owner: `monitor-01`; gateway: `router-01`.**
 
 ## Purpose and exclusions
@@ -250,3 +250,32 @@ dashboard files. The operator must approve the 56-target run separately
 after reviewing syntax, CI and source attribution. The unrelated
 Proxmox guest-refresh failure and all new DHCP-era discovery remain
 outside this scope.
+
+## 3 November 2026 — Remaining legacy cleanup successful; read-only postflight
+
+The operator executed the approved no-backup
+`network-host-legacy-live-retirement.yml` on `monitor-01`.
+Final recap: **ok=54, changed=8, failed=0, unreachable=0,
+rescued=0, skipped=0**. The guarded 56-dashboard cleanup, final
+provider reconciliation, 16 retained-dashboard UID hash checks,
+removal of four obsolete executables and eight old systemd unit
+files, and active discovery/Prometheus gates all completed in the
+playbook's successful task flow. The supplied log contained the
+final recap, so the exact live totals still require an **independent**
+read-only validation.
+
+Run `IaC/ansible/playbooks/network-host-legacy-retirement-postflight.yml`
+only after syncing the clean dedicated worktree. It inspects exact
+legacy file/unit absence, the two protected dashboard JSON files,
+two permanent protected Grafana providers, all six discovery timers,
+retained inventory and 56+ first-seen entries, live Grafana's
+unchanged **16 UID** fingerprint, and Grafana/Prometheus health.
+No backups, changes, deletes, scans, retries of retired pipelines,
+systemd mutations or full-stack redeploy are included.
+
+**Do not rerun** the prior irreversible DHCP reset, one-dashboard
+canary or 56-dashboard bulk cleanup; all have already run.
+After postflight, complete the GitHub source reconciliation,
+review/merge the feature branch, update handover, and close #287
+only when live and Git state agree. Existing unrelated Proxmox
+guest-refresh failure remains untouched.
