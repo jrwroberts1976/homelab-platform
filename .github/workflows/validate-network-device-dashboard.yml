@@ -48,6 +48,7 @@ on:
       - "IaC/ansible/playbooks/network-host-dhcp-discovery-reset.yml"
       - "IaC/ansible/playbooks/network-host-dhcp-collector-repair.yml"
       - "IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml"
+      - "IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml"
 
 jobs:
   validate-dashboard:
@@ -89,6 +90,8 @@ jobs:
             playbooks/network-host-dhcp-collector-repair.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-legacy-cleanup-preflight.yml --syntax-check
+          ansible-playbook -i inventory/hosts.yml \
+            playbooks/network-host-legacy-dashboard-canary.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
             playbooks/network-host-monitor01-proxmox-tls.yml --syntax-check
           ansible-playbook -i inventory/hosts.yml \
@@ -286,6 +289,21 @@ jobs:
           assert "grafana_api_provisioning_unverified" in preflight_text
           assert "no_log: true" in preflight_text
           assert "        that: \n" not in preflight_text
+
+          canary_text = Path(
+              "IaC/ansible/playbooks/network-host-legacy-dashboard-canary.yml"
+          ).read_text()
+          assert "RETIRE_ONE_LEGACY_GRAFANA_DASHBOARD_NO_BACKUP" in canary_text
+          assert "network-host-legacy-cleanup-preflight.yml" in canary_text
+          assert "expected_files=52 if mode==\"before\" else 51" in canary_text
+          assert "original_count | int == 73" in canary_text
+          assert "grafana_canary_plan.original_uids" in canary_text
+          assert "grafana_canary_removed.changed" in canary_text
+          assert "no_log: true" in canary_text
+          assert "ansible.builtin.systemd_service" not in canary_text
+          assert "docker compose" not in canary_text
+          assert "ansible.builtin.template" not in canary_text
+          assert "homelab-proxmox-guest-refresh" not in canary_text
 
           # Keep the independently developed OS-evidence, cutover and
           # protected Proxmox guest-identity regression gates.
