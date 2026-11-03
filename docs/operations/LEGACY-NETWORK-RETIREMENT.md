@@ -1,6 +1,6 @@
 # Legacy ASUS, HP ProCurve and MAC dashboard retirement — #287
 
-**Status: CODE-ONLY SOURCE RETIREMENT STAGED; NOT DEPLOYED.**
+**Status: DHCP discovery reset LIVE and verified; legacy collector/Grafana SOURCE retirement staged, live cleanup NOT performed.**
 **Active owner: `monitor-01`; gateway: `router-01`.**
 
 ## Purpose and exclusions
@@ -131,3 +131,30 @@ after the ASUS-to-`router-01` DHCP migration, **without backups**.
   metrics. Grafana old generated dashboards are retired separately.
 - This is irreversible by operator choice. Fail closed if the active
   collector owner, schema or safe restart cannot be verified.
+
+## 3 November 2026 — Post-rediscovery live legacy inventory
+
+The operator's second successful no-backup rediscovery produced **38 fresh
+hosts, 38 profile baselines and 56 retained first-seen entries**; all six
+discovery timers were active after the reset. **Do not run that reset again.**
+
+A subsequent read-only monitor-01 audit verified all **four** retired
+`/usr/local/sbin/` collector executables are present; **52** per-host JSON
+files remain at `/opt/monitoring/grafana/provisioning/dashboards/network-hosts`;
+the old `Network Hosts` provider is still referenced in
+`/opt/monitoring/grafana/provisioning/dashboards/homelab.yml`.
+Grafana and Prometheus both returned HTTP 200.
+
+The source provider has `disableDeletion: true`, which may leave Grafana
+database dashboard entries after file removal. Do **not** merely delete JSON
+files or redeploy the whole monitoring role (the current live network traffic
+dashboard may have changes not reconciled to main).
+
+New **read-only** preflight:
+`IaC/ansible/playbooks/network-host-legacy-cleanup-preflight.yml`.
+It validates the isolated legacy file scope, independent Network Discovery
+and router DHCP dashboards, disabled obsolete timers, Grafana's file provider,
+and (when the Docker volume is found) counts legacy entries in Grafana SQLite
+in **read-only** mode. It never performs a backup or deletion. Use its result
+to design a separately approved, narrowly targeted IaC cleanup; preserve
+unrelated Grafana dashboards, router metrics and the Proxmox guest refresher.
