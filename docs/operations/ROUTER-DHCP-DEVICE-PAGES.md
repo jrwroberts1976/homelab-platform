@@ -86,3 +86,11 @@ Synchronise a clean worktree for branch `feature/router01-dhcp-device-pages-2026
 5. Only after these gates and explicit operator approval, run the separate `router-01-dhcp-device-pages-enable.yml`. It now **refuses to enable** automatic page generation without the approved DHCP email activation marker and original network-discovery timer.
 
 All code and no-send tests are in branch `feature/router01-dhcp-device-pages-20261103`; current CI [validation](https://github.com/jrwroberts1976/homelab-platform/actions/runs/41673996841) passed. **Do not run** the canary again or old #287 retirement. Preserve automatic first-seen history and all 16 protected original Grafana dashboards.
+
+## 3 November 2026 — Inert email stage live, corrected helper must be reconciled
+
+The operator ran the approved inert `router-01-dhcp-device-email-stage.yml` on monitor-01: **ok=24 changed=3 failed=0**. Existing SMTP notifier/recipient/first-seen registry were checksum-protected and remained unchanged; no mail was sent and no DHCP page timer was enabled.
+
+During pre-activation review, the new DHCP email enrichment policy was corrected to join the **MAC-keyed** `normalise_inventory()` output of the existing network collector (rather than attempting an IP-keyed lookup); it also requires the inventory IP to match the current DHCP address before displaying vendor and online evidence. Offline regressions cover both matching and stale IPs.
+
+**Critical gate:** The fix was committed AFTER the first inert stage. Repeat **only the idempotent, explicitly approved inert email staging playbook** from the freshly fast-forwarded feature branch to install the reviewed helper, and check its safe-state assertions. Do NOT run the email activation, SMTP test, or automatic DHCP device-page timer in that same step; each has its own approval and postflight. Never repeat the earlier one-dashboard canary or retired network reset.
