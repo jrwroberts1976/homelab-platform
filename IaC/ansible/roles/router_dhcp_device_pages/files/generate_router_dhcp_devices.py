@@ -262,7 +262,7 @@ def dashboard(mac, rec, inventory, profiles):
     }
 
 
-def atomic_json(path, obj, *, apply):
+def atomic_json(path, obj, *, apply, mode=0o644):
     payload = json.dumps(obj, indent=2, sort_keys=True) + "\n"
     if path.is_symlink():
         raise ValueError("Symlink output refused")
@@ -278,9 +278,8 @@ def atomic_json(path, obj, *, apply):
     fd, tmp = tempfile.mkstemp(dir=str(path.parent), prefix=".router-dhcp-")
     try:
         with os.fdopen(fd, "w", encoding="utf-8") as out:
-            # Existing Grafana container reads this bind-mounted directory as
-            # a non-root UID; match the provisioning role's 0644 JSON mode.
-            os.fchmod(out.fileno(), 0o644)
+            # Dashboard JSON is provisioner-readable; MAC state stays 0600.
+            os.fchmod(out.fileno(), mode)
             out.write(payload)
             out.flush()
             os.fsync(out.fileno())
@@ -302,7 +301,7 @@ def reconcile(events, inventory, profiles, state, output_dir, state_path,
         if atomic_json(output_dir / filename,
                        dashboard(mac, rec, inventory, profiles), apply=apply):
             writes += 1
-    state_write = atomic_json(state_path, updated, apply=apply)
+    state_write = atomic_json(state_path, updated, apply=apply, mode=0o600)
     return {"device_pages": len(updated["devices"]), "new_devices": added,
             "dashboard_writes": writes, "state_change": bool(state_write),
             "mode": "apply" if apply else "check", "no_deletions": True}
