@@ -1939,3 +1939,20 @@ Next:
   confirm correct installed interface and six timers active before
   reconsidering the explicit no-backup discovery reset. No earlier
   consent to the reset should be interpreted as proof it completed.
+
+## 2026-11-03 ~13:06 UTC — Collector-only repair verified LIVE
+
+- Operator synchronised local retirement worktree to remote `d940898c`,
+  `git diff --check` and collector repair syntax check passed.
+- `network-host-dhcp-collector-repair.yml` on `monitor-01`:
+  **ok=10, changed=1, failed=0**. Collector Python AST confirms
+  `eth0`, subnet `192.168.2.0/24` and canonical router identity.
+- Old inventory **84** entries and protected first-seen notification
+  registry **56** entries remain; `data_deleted=false`. All six
+  discovery timers checked active.
+- The successful repair did **not** scan, delete state, take backups,
+  or change systemd services. Previous reset attempt remains aborted.
+- Next: fast-forward worktree after this handover update, syntax-check
+  `network-host-dhcp-discovery-reset.yml`, intentionally run the
+  approval-gated no-backup reset, and review its new host counts/timers.
+  Separate Grafana legacy cleanup remains outstanding.
