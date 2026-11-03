@@ -87,33 +87,36 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `b8:27:eb:e8:36:cd`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-admin-01 is a managed Raspberry Pi 3 running Debian GNU/Linux 13 (trixie), serving as the administration, SSH jump, IaC controller, and Corosync QNetd host. Open TCP services include corroborated OpenSSH on port 22 and additional open ports 111 and 9100. No matching actionable Greenbone findings were reported; 11 non-security updates are available.
+Raspberry Pi 3 administration host and SSH/IaC controller, also serving as a Corosync QNetd host. Exact OS is not established by the supplied evidence. Host is online, patch telemetry is healthy, and no actionable Greenbone findings match the current IP.
 
 ### Confirmed facts
 
-- The documented hostname is admin-01, with FQDN admin-01.jameshouse and IP address 192.168.2.48.
-- The canonical estate record identifies this as a physical Raspberry Pi 3 used for administration, SSH jump access, IaC control, and Corosync QNetd.
-- The vendor is Raspberry Pi Foundation and the authoritative architecture is aarch64.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie) with kernel 6.18.50+rpt-rpi-v8.
-- TCP port 22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4 using protocol 2.0.
-- TCP ports 111 and 9100 are open; their Nmap service labels were omitted.
-- Greenbone reported zero matching actionable findings for this host IP.
-- Patch telemetry reports zero security updates, 11 total updates available, unattended upgrades enabled, and no reboot required.
+- Canonical estate identity is admin-01.
+- The documented role is Raspberry Pi 3 administration, SSH jump, IaC controller, and Corosync QNetd host.
+- The inventory hostname is admin-01.jameshouse and the telemetry hostname is admin-01.
+- The vendor is Raspberry Pi Foundation.
+- The host MAC address is b8:27:eb:e8:36:cd.
+- The host is online at 192.168.2.48.
+- The host is managed by Ansible.
+- Nmap provided no port or OS matches.
+- No authoritative OS fact is available.
+- Three updates are available, including zero security updates; unattended upgrades are enabled and no reboot is required.
+- Greenbone reported zero actionable findings matching the current IP.
 
 ### Inferences
 
-- The device is a Raspberry Pi-based Linux administration host rather than a general-purpose desktop system.
-- The authoritative Debian and architecture facts provide high-confidence operating-system identification; Nmap OS identification was correctly skipped.
+- The device is a Raspberry Pi 3 used as a general-purpose administration and infrastructure host.
+- The platform is likely an embedded Linux installation, but the distribution and version are unsupported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

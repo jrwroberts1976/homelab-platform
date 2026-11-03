@@ -59,33 +59,32 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T14:02:32+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `04:d4:c4:b8:52:28`
-- Identity confidence: **high**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely an ASUS RT-AC86U wireless router running embedded firmware. The host exposes Dropbear SSH and web services; the exact firmware/OS is not established.
+Online device at 192.168.2.2 with an ASUSTek Computer MAC vendor assignment. No hostname, OS, port, service, DNS, or vulnerability evidence is available, so the device identity remains unresolved.
 
 ### Confirmed facts
 
-- The hostname is RT-AC86U-5228.
-- The inventory and Nmap vendor is ASUSTek Computer.
-- The MAC address is 04:d4:c4:b8:52:28.
-- TCP port 22 is open and identified as Dropbear sshd, protocol 2.0.
-- TCP ports 80 and 8443 are open.
-- Nmap reported a Linux 3.2–4.14 fingerprint with 100% match accuracy.
-- DNS top domains include routerahs.asus.com and fwupdate.asuswrt-merlin.net.
-- Greenbone reported zero matching actionable findings for the current IP; this does not prove the host is vulnerability-free.
+- The device IP address is 192.168.2.2.
+- The device MAC address is 04:d4:c4:b8:52:28.
+- The MAC vendor is identified as ASUSTek Computer.
+- The device is currently online.
+- No authoritative OS fact is available.
+- Nmap baseline data contains no ports or OS matches.
+- No matching actionable Greenbone findings were reported for this IP.
 
 ### Inferences
 
-- The RT-AC86U model-like hostname, ASUSTek vendor, and ASUS-related DNS domains strongly support identification as an ASUS RT-AC86U-class router.
-- The device likely uses embedded Linux-based firmware, but the exact OS and firmware version are unsupported by the evidence.
+- The device is likely manufactured by ASUS or uses an ASUS-assigned MAC address.
+- It may be an embedded network or consumer device, but the available evidence does not establish its function or operating system.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

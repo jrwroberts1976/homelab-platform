@@ -87,34 +87,35 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:35:3b:11`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-dns-02 is CT100 on PROXMOX, running Debian GNU/Linux 13 (trixie) and serving Pi-hole/Unbound DNS. SSH and DNS are corroborated; ports 80, 443, and 9100 are open. Three updates are available, with no pending security updates or matching Greenbone findings.
+dns-02 is the documented CT100 Proxmox LXC container providing Pi-hole and Unbound. No exact guest OS is supported by the supplied evidence. Patch telemetry is healthy with no pending updates; no matching actionable Greenbone findings were reported, which does not prove the host is vulnerability-free.
 
 ### Confirmed facts
 
-- The canonical estate identity is dns-02, an LXC container designated for Pi-hole and Unbound, CT100 on PROXMOX.
-- The Proxmox cluster identifies the guest as LXC dns-02 on node PROXMOX with VMID 100.
-- Authoritative Zabbix Agent 2 facts report Debian GNU/Linux 13 (trixie), x86_64, kernel 7.0.14-23-pve.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is available on TCP port 22.
-- dnsmasq 2.93 is available on TCP port 53 with Pi-hole noted.
-- TCP ports 80, 443, and 9100 are open; their Nmap labels were omitted.
-- The TCP 443 service is recorded as corroborated WebDAV over TLS, and the certificate identifies pi.hole.
-- There are 3 updates available, 0 security updates available, and no reboot is required.
-- Greenbone reports zero actionable findings matching this host IP.
+- The documented estate name is dns-02.
+- The documented estate kind is lxc.
+- The documented role is Pi-hole and Unbound, CT100 on PROXMOX.
+- The device hostname is dns-02.jameshouse and its IP address is 192.168.2.50.
+- The reported vendor is Proxmox Server Solutions GmbH.
+- The device is online and managed by Ansible.
+- Nmap reported no TCP or UDP ports and no OS matches.
+- No authoritative OS record is available.
+- Patching is fresh, successful, and reports zero available updates.
+- Greenbone reported zero matching actionable findings for the current IP.
 
 ### Inferences
 
-- The host is a managed infrastructure service container rather than a standalone physical device.
-- Its primary network function is local DNS filtering and resolution through Pi-hole and Unbound.
+- The host is most likely a Proxmox-managed LXC container rather than a physical network appliance.
+- The guest operating system or firmware cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

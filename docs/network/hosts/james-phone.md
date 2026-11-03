@@ -50,7 +50,7 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T14:02:32+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `16:c1:05:ad:4b:8a`
 - Identity confidence: **low**
@@ -60,22 +60,22 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 ### Assessment summary
 
-Host identified only by the DHCP/telemetry hostname james-s-A13. IP association is inconsistent: the current record uses 192.168.2.198, while router DHCP data reports 192.168.2.206; Nmap also reports a scan-target mismatch. No ports, services, vendor, or OS evidence are available.
+Online host at 192.168.2.198 with MAC 16:c1:05:ad:4b:8a, but no hostname, vendor, service, DNS, or OS-identification evidence is available. Device identity requires review.
 
 ### Confirmed facts
 
-- The recorded hostname and telemetry hostname are james-s-A13.
-- The current host record associates the device with 192.168.2.198.
-- Router DHCP data reports james-s-A13 at 192.168.2.206.
-- The MAC address is 16:c1:05:ad:4b:8a.
-- Nmap has no reported TCP or UDP ports and no OS matches.
-- No authoritative OS fact is available.
-- Greenbone has zero actionable findings matching the current IP; this does not establish that the host is vulnerability-free.
+- The host IP is 192.168.2.198.
+- The observed MAC address is 16:c1:05:ad:4b:8a.
+- The inventory reports the host as online.
+- Nmap baseline completed with no TCP or UDP ports reported and no OS matches.
+- No vendor was reported by inventory or Nmap.
+- No matching actionable Greenbone findings were reported for the current IP.
+- No recent policy-matched DNS activity was reported.
 
 ### Inferences
 
-- The device identity cannot be reliably resolved from the supplied evidence because the current IP and DHCP-reported IP conflict.
-- The MAC address appears to use a locally administered address, so vendor identification cannot be established from it.
+- The device identity and platform cannot be determined from the supplied evidence.
+- No exact operating system or firmware is supported by the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

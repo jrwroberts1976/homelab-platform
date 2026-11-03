@@ -59,36 +59,36 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T16:03:23+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `2c:cf:67:30:be:1f`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-media-01 is a managed Raspberry Pi 5 running Debian GNU/Linux 13 (trixie), serving as the Kodi endpoint and primary Proxmox NFS backup target. Open services include SSH, HTTPS via nginx, and Samba; TCP/9100 is also open. No matching actionable Greenbone findings were reported.
+media-01 is a Raspberry Pi 5 used as a Kodi endpoint and primary Proxmox NFS backup target. No exact OS is established. A high-severity Debian security advisory is reported while patch telemetry shows no pending updates; both conditions merit review.
 
 ### Confirmed facts
 
-- The canonical device name is media-01.
-- The device is a physical host managed by Ansible.
-- The canonical role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
-- The vendor is Raspberry Pi (Trading).
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), kernel 6.18.50+rpt-rpi-2712, and aarch64 architecture.
-- TCP/22 is open and provides corroborated OpenSSH 10.0p2 Debian 7+deb13u4.
-- TCP/443 is open and provides corroborated nginx over TLS.
-- TCP/445 is open and provides corroborated Samba smbd version 4.
-- TCP/9100 is open; its service label was omitted.
-- Greenbone reported zero matching actionable findings for this host IP.
-- Patch telemetry reports 31 available updates, zero security updates, and no reboot required.
+- The canonical estate identity is media-01.
+- The device is classified as physical.
+- Its documented role is Raspberry Pi 5 Kodi endpoint and primary Proxmox NFS backup target.
+- The inventory hostname is media-01.jameshouse and the telemetry hostname is media-01.
+- The recorded vendor is Raspberry Pi (Trading).
+- The device is online at 192.168.2.195.
+- Nmap reported no OS matches and no TCP or UDP ports in the supplied baseline.
+- Greenbone reports one matching actionable finding: Debian Security Advisory DSA-6600-1, severity High, score 8.8, associated with package-level evidence.
+- Patch telemetry reports zero available updates, zero security updates, no reboot required, and unattended upgrades enabled.
+- No blocked high-risk DNS policy matches were recorded in the recent one-hour sample.
+- The bounded 24-hour Loki sample contains no warning or error samples.
 
 ### Inferences
 
-- The device identity is consistent across the canonical estate record, hostname, vendor data, and authoritative host inventory.
-- The host functions as a Linux-based network storage and media endpoint, consistent with its documented estate role and exposed services.
+- The device identity is strongly consistent with the documented Raspberry Pi 5 estate role.
+- The operating system or firmware cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

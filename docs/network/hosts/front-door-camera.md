@@ -50,34 +50,30 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T15:01:29+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `3c:52:a1:86:bc:56`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo TC65 IoT camera. TP-Link/Tapo DNS activity and the documented TC65 hostname support the identity, but conflicting low-level Nmap fingerprints require review. TCP/443 is open; no exact OS is established.
+Online TP-Link-vendor device at 192.168.2.190, but no hostname, service, Nmap fingerprint, or authoritative OS evidence is available. Identity requires review; no actionable Greenbone findings match the current IP.
 
 ### Confirmed facts
 
-- The device hostname and telemetry hostname are TC65.
-- Inventory and Nmap vendor identification report TP-Link Limited.
-- DNS signals include TP-Link cloud and Tapo endpoints.
-- TCP port 443 is open.
-- Nmap reported multiple conflicting fingerprints, including Linksys, Asus, AXIS, Linux 2.6.x, and OpenWrt candidates.
-- Greenbone reported zero actionable findings matching the current IP; this does not establish that the host is vulnerability-free.
-- No authoritative OS identification is available.
+- The device is online at 192.168.2.190.
+- The recorded MAC address is 3c:52:a1:86:bc:56.
+- The recorded vendor is TP-Link Limited.
+- No hostname, inventory OS, authoritative OS, Nmap OS match, or open TCP/UDP ports are supplied.
+- No actionable Greenbone findings match this current IP.
 
 ### Inferences
 
-- The device is likely a TP-Link Tapo TC65 network camera or related IoT device.
-- The platform is best classified cautiously as embedded IoT firmware.
-- The Nmap Linux 2.6.x and embedded-device matches are tentative and are not sufficient to identify the exact OS.
-- Manual review is warranted because the Nmap identity results conflict with the TP-Link/Tapo evidence.
+- The device is likely a TP-Link embedded or network appliance based on the recorded vendor attribution.
+- The exact device model and operating system cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

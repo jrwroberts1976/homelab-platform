@@ -87,36 +87,35 @@ complete household browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T17:01:31+00:00`
+- Assessed: `2026-11-03T17:00:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `bc:24:11:c3:75:ba`
 - Identity confidence: **high**
-- OS confidence: **high**
-- Exact OS: **Debian GNU/Linux 13 (trixie)**
+- OS confidence: **low**
+- Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-Managed Debian 13 LXC container CT101 on Proxmox-2, providing Pi-hole and Unbound DNS services. SSH and DNS are identified; ports 80, 443, and 9100 are open. No actionable Greenbone findings match the current host IP.
+dns-01 is the managed CT101 Pi-hole and Unbound container on Proxmox-2. It is online with no pending updates, no reboot required, and no matching actionable Greenbone findings. Exact guest OS is not available.
 
 ### Confirmed facts
 
-- The canonical estate identity is dns-01, an LXC container named dns-01 on Proxmox-2.
-- The container is CT101 with VMID 101 and is managed by Ansible.
-- Authoritative Zabbix Agent 2 inventory reports Debian GNU/Linux 13 (trixie), kernel 7.0.14-20-pve, architecture x86_64.
-- OpenSSH 10.0p2 Debian 7+deb13u4 is identified on TCP port 22.
-- dnsmasq 2.93 with Pi-hole extra information is identified on TCP port 53.
-- TCP ports 80, 443, and 9100 are open.
-- The TLS certificate on port 443 has subject and issuer information identifying pi.hole and Pi-hole.
-- Greenbone reports zero actionable findings matching this host IP.
-- Patch telemetry reports three updates available, zero security updates available, and no reboot required.
-- The bounded Loki sample contains network-connectivity wait-online timeout and error messages.
+- Canonical estate identity is dns-01.
+- The device is an LXC container, CT101 on Proxmox-2.
+- Its documented role is Pi-hole and Unbound.
+- It is managed by Ansible.
+- The hostname is dns-01.jameshouse and the current IP is 192.168.2.51.
+- Proxmox Server Solutions GmbH is reported as the vendor.
+- The device is online.
+- No security or general updates are available, and no reboot is required.
+- No actionable Greenbone findings match the current IP.
+- The bounded Loki sample contains entries from pihole and systemd-journal, with no warning or error samples.
 
 ### Inferences
 
-- The host functions as the estate's Pi-hole and Unbound DNS container, based on its canonical role and identified DNS/Pi-hole service.
-- The Proxmox vendor attribution likely reflects the virtualization/container platform rather than the guest operating-system vendor.
-- The sampled connectivity messages merit operational review, but the bounded log sample does not establish a persistent outage.
+- The host is a virtualized service container rather than a directly identified physical appliance.
+- The guest operating system or firmware cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
