@@ -1,0 +1,231 @@
+---
+# #291 — read-only source-of-truth verification, NOT a deployment.
+# No router DHCP edits, Grafana provider changes, scans or backups.
+- name: Verify source DHCP service and lease evidence on router-01
+  hosts: router-01
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Confirm router-01 physical LAN identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - "'192.168.2.1' in ansible_facts.all_ipv4_addresses"
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: Refusing to examine DHCP on an unexpected host.
+
+    - name: Check dnsmasq is serving DHCP
+      ansible.builtin.command:
+        argv: [systemctl, is-active, dnsmasq.service]
+      register: device_pages_dnsmasq
+      changed_when: false
+
+    - name: Inspect default dnsmasq lease file without copying its contents
+      ansible.builtin.stat:
+        path: /var/lib/misc/dnsmasq.leases
+        follow: false
+      register: device_pages_lease_path
+
+    - name: Count safely formatted leases without printing client identities
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ipaddress,json,re
+            from pathlib import Path
+            p=Path('/var/lib/misc/dnsmasq.leases')
+            if p.is_symlink() or not p.is_file():
+                print(json.dumps({"default_lease_file_available":False,
+                                  "valid_lease_records":0}))
+                raise SystemExit(0)
+            count=0
+            for line in p.read_text().splitlines():
+                cells=line.split()
+                if len(cells)!=5:
+                    continue
+                try:
+                    ip=ipaddress.IPv4Address(cells[2])
+                except ValueError:
+                    continue
+                if (ip in ipaddress.IPv4Network('192.168.2.0/24')
+                    and re.fullmatch(r'(?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2}',cells[1])):
+                    count+=1
+            print(json.dumps({"default_lease_file_available":True,
+                              "valid_lease_records":count},sort_keys=True))
+      register: device_pages_leases
+      changed_when: false
+      no_log: true
+
+    - name: Show only non-identifying router lease counts
+      ansible.builtin.debug:
+        var: device_pages_leases.stdout
+
+    - name: Confirm router DHCP log forwarder or Alloy state without modifying it
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - alloy.service
+        - homelab-router-dhcp-forwarder.service
+      register: device_pages_router_evidence_services
+      failed_when: false
+      changed_when: false
+
+    - name: Print router DHCP telemetry service states
+      ansible.builtin.debug:
+        msg: >-
+          {{ device_pages_router_evidence_services.results
+             | map(attribute='stdout') | list }}
+
+- name: Verify router-only DHCPACK log evidence and current host profiling on monitor-01
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Confirm production discovery monitor
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: Not the approved discovery owner.
+
+    - name: Check six existing discovery timers without changing them
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - homelab-network-host-collector.timer
+        - homelab-network-host-enricher.timer
+        - homelab-network-host-deep-profiler.timer
+        - homelab-network-host-ai-resolver.timer
+        - homelab-network-dns-evidence.timer
+        - homelab-network-os-evidence.timer
+      register: device_pages_timers
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse missing existing discovery pipeline
+      ansible.builtin.assert:
+        that:
+          - device_pages_timers.results | map(attribute='stdout') | unique | list == ['active']
+        fail_msg: One or more existing host discovery consumers are disabled.
+
+    - name: Inspect existing MAC and Nmap profile schemas without changing files
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            p=Path('/var/lib/homelab-network-hosts')
+            inventory=p/'inventory.json'
+            profiles=p/'deep-profiles.json'
+            if any(f.is_symlink() or not f.is_file() for f in (inventory,profiles)):
+                raise SystemExit('Missing trusted inventory/profile evidence')
+            inv=json.loads(inventory.read_text())
+            prof=json.loads(profiles.read_text())
+            if not isinstance(inv,dict) or not isinstance(prof.get('profiles'),dict):
+                raise SystemExit('Unexpected inventory or profile schema')
+            print(json.dumps({"inventory_records":len(inv),
+                              "mac_profile_records":len(prof['profiles']),
+                              "read_only":True},sort_keys=True))
+      register: device_pages_profile_counts
+      changed_when: false
+
+    - name: Print only profile counts
+      ansible.builtin.debug:
+        var: device_pages_profile_counts.stdout
+
+    - name: Query router-01 DHCPACK Loki stream without printing client identities
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ipaddress,json,re,time,urllib.parse,urllib.request
+            now=time.time_ns()
+            query='{host="router-01",service="dnsmasq"} |= "DHCPACK"'
+            params=urllib.parse.urlencode({
+              'query':query,'start':str(now-24*3600*1000000000),
+              'end':str(now),'direction':'backward','limit':'2000'
+            })
+            request=urllib.request.Request(
+              'http://127.0.0.1:3100/loki/api/v1/query_range?'+params,
+              headers={'Accept':'application/json'})
+            try:
+              with urllib.request.urlopen(request,timeout=15) as response:
+                data=json.loads(response.read(2500000))
+            except Exception:
+              raise SystemExit('Loki router DHCPACK read failed; no activation')
+            if data.get('status')!='success' or data.get('data',{}).get('resultType')!='streams':
+              raise SystemExit('Unexpected Loki stream response')
+            lines=[]
+            for stream in data['data'].get('result',[]):
+              labels=stream.get('stream',{})
+              if labels.get('host')!='router-01' or labels.get('service')!='dnsmasq':
+                raise SystemExit('Untrusted Loki source')
+              lines.extend(v[1] for v in stream.get('values',[]) if len(v)==2)
+            pattern=re.compile(
+              r'DHCPACK\(eth0\)\s+(\d{1,3}(?:\.\d{1,3}){3})\s+'
+              r'((?:[0-9a-fA-F]{2}:){5}[0-9a-fA-F]{2})'
+              r'(?:\s+|$)')
+            valid=0
+            for line in lines:
+              m=pattern.search(line)
+              if not m:
+                continue
+              try:
+                ip=ipaddress.IPv4Address(m.group(1))
+              except ValueError:
+                continue
+              if ip in ipaddress.IPv4Network('192.168.2.0/24'):
+                valid+=1
+            print(json.dumps({
+              'router_loki_24h_dhcpack_lines':len(lines),
+              'validated_router_dhcpack_events':valid,
+              'router_source_ready_for_canary':valid>0,
+              'query_limit_reached':len(lines)>=2000,
+              'read_only':True
+            },sort_keys=True))
+      register: device_pages_loki_counts
+      changed_when: false
+      no_log: true
+
+    - name: Print non-identifying DHCPACK source readiness
+      ansible.builtin.debug:
+        var: device_pages_loki_counts.stdout
+
+    - name: Check existing Grafana and Prometheus remain healthy
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        status_code: 200
+      loop:
+        - http://127.0.0.1:3000/api/health
+        - http://127.0.0.1:9090/-/ready
+      changed_when: false
+
+    - name: Check canonical Grafana provisioning before adding a separate provider
+      ansible.builtin.slurp:
+        src: /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
+      register: device_pages_provider_raw
+      no_log: true
+
+    - name: Require two protected pre-existing providers untouched
+      ansible.builtin.assert:
+        that:
+          - device_pages_provider.apiVersion == 1
+          - device_pages_provider.providers | length == 2
+          - device_pages_provider.providers[0].name == 'Homelab'
+          - device_pages_provider.providers[1].name == 'Homelab Production'
+          - device_pages_provider.providers[0].disableDeletion == true
+          - device_pages_provider.providers[1].disableDeletion == true
+        fail_msg: Existing Grafana provider state drifted.
+      vars:
+        device_pages_provider: "{{ device_pages_provider_raw.content | b64decode | from_yaml }}"
