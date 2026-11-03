@@ -50,31 +50,33 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T14:02:32+00:00`
+- Assessed: `2026-11-03T16:04:24+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `92:ff:53:0a:16:e9`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-POCO-C75 appears to be a POCO smartphone based on its DHCP and telemetry hostname. No authoritative OS, Nmap OS match, service data, or vendor-identifying MAC information is available.
+Online host with no hostname, vendor, service, DNS, or OS identification evidence. Device identity remains unresolved and requires review.
 
 ### Confirmed facts
 
-- The device hostname is POCO-C75 in inventory, telemetry, DHCP, and Nmap data.
-- The device is online at 192.168.2.179 with MAC address 92:ff:53:0a:16:e9.
-- The MAC address has no vendor information in the supplied evidence.
-- Nmap OS identification is incomplete because OS evidence is missing.
-- No TCP or UDP ports were reported by the bounded Nmap result.
-- No matching actionable Greenbone findings were reported for the current IP.
+- The host is currently online at 192.168.2.179.
+- The observed MAC address is 92:ff:53:0a:16:e9.
+- No authoritative OS fact is available.
+- No inventory hostname, kind, role, vendor, kernel, or OS is recorded.
+- Nmap completed a baseline scan with no TCP or UDP ports reported and no OS matches.
+- No bounded DNS policy matches were recorded in the last hour.
+- Greenbone reported zero actionable findings matching this IP; this does not prove the host is vulnerability-free or fully scanned.
+- Loki telemetry is unavailable and patching status is unavailable.
 
 ### Inferences
 
-- The model-like POCO-C75 hostname is consistent with a POCO smartphone.
-- The platform is likely mobile-device firmware, but Android or another exact operating system is not established.
+- The MAC address does not provide a reliable vendor identity from the supplied evidence.
+- The device type and platform cannot be determined from the available evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

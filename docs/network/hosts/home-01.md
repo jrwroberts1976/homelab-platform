@@ -72,34 +72,32 @@ Keep only bounded domain/service summaries, not complete browsing history.
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T13:02:13+00:00`
+- Assessed: `2026-11-03T16:04:24+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `02:00:00:00:02:04`
-- Identity confidence: **high**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
-- Manual review required: **No**
+- Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely Home Assistant host at 192.168.2.165, identified by hostname, Home Assistant DNS activity, and an aiohttp HTTP service. Exact OS is not established. Router telemetry also lists the hostname at 192.168.2.60, so the address association merits review.
+Online host with no identifying hostname, vendor, OS, service, DNS, or Nmap evidence. Identity requires manual review; no actionable Greenbone findings currently match this IP.
 
 ### Confirmed facts
 
-- The observed hostname is homeassistant.
-- The current host IP is 192.168.2.165.
-- TCP port 80 is open and identified with corroborated evidence as aiohttp, Python 3.14.3.
-- TCP port 111 is open; no service label is available in the supplied evidence.
-- Nmap reports Linux 4.15–5.19 as its highest-confidence OS match, but this is an identification result rather than an authoritative OS fact.
-- DNS telemetry includes checkonline.home-assistant.io, _checkdns.home-assistant.io, version.home-assistant.io, and beekeeper.hivehome.com.
-- The router telemetry lists hostname homeassistant at 192.168.2.60.
-- No actionable Greenbone findings match 192.168.2.165; this does not prove the host is vulnerability-free.
+- The host IP is 192.168.2.165.
+- The supplied MAC address is 02:00:00:00:02:04.
+- The host is currently marked online.
+- Authoritative OS information is unavailable.
+- No inventory hostname, operating system, vendor, role, or kind is recorded.
+- Nmap completed a baseline profile with no recorded TCP or UDP ports and no OS matches.
+- No recent policy-blocked DNS matches were recorded.
+- No actionable Greenbone findings currently match this IP.
 
 ### Inferences
 
-- The hostname and Home Assistant-related DNS activity strongly support identification as a Home Assistant home-automation host.
-- The host likely runs on a Linux-based platform, but the exact distribution, kernel, firmware, and version are unsupported by the evidence.
-- The vendor association with Home Assistant is inferred from the hostname and DNS activity rather than a direct vendor record.
+- The device identity and platform cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

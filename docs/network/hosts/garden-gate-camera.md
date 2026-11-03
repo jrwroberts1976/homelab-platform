@@ -50,31 +50,31 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T15:01:29+00:00`
+- Assessed: `2026-11-03T16:04:24+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `3c:64:cf:87:ae:ea`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-Likely a TP-Link Tapo TC40 security camera using TP-Link cloud services. TCP/443 is open; the exact operating system or firmware is not supported by the available evidence.
+Online host at 192.168.2.164 with MAC 3c:64:cf:87:ae:ea, but no hostname, vendor, service, or OS evidence is available. Manual review is required.
 
 ### Confirmed facts
 
-- The device hostname and DHCP hostname are TC40.
-- DNS activity includes TP-Link cloud and Tapo endpoints, including tplinkcloud.com and tplinknbu.com domains.
-- TCP port 443 is open.
-- No matching actionable Greenbone findings were reported for 192.168.2.164; this does not prove the host is vulnerability-free.
-- No authoritative OS information is available.
+- The device is currently online at IP address 192.168.2.164.
+- The observed MAC address is 3c:64:cf:87:ae:ea.
+- Authoritative OS information is unavailable.
+- Inventory contains no hostname, kind, role, vendor, or OS value.
+- Nmap baseline data contains no hostname, TCP or UDP ports, or OS matches.
+- No actionable Greenbone findings currently match this IP; this is not proof that the host is vulnerability-free or fully scanned.
+- Recent DNS policy-match data contains no matches.
 
 ### Inferences
 
-- TC40 combined with the Tapo-specific DNS signals is consistent with a TP-Link Tapo security camera.
-- The platform is likely embedded IoT firmware, but the exact OS and firmware version cannot be determined.
-- The Nmap OS matches are broad and conflicting legacy fingerprints, so they do not establish the device model or operating system.
+- The device identity and platform cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

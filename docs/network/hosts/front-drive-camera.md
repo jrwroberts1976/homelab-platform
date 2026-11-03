@@ -50,32 +50,32 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T13:02:13+00:00`
+- Assessed: `2026-11-03T16:04:24+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `5c:e9:31:18:c1:4a`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-TC40 is most consistent with a TP-Link Tapo IoT device. TP-Link/Tapo cloud DNS activity and vendor data support the identity; Nmap results are conflicting and do not establish an exact OS.
+Online TP-Link device at 192.168.2.153, but the supplied evidence does not identify its model, role, services, or operating system. No matching actionable Greenbone findings were reported.
 
 ### Confirmed facts
 
-- The device hostname is TC40.
-- The recorded vendor is TP-Link Limited.
-- DNS activity includes TP-Link cloud and Tapo endpoint domains.
-- TCP ports 443 and 8443 are open.
-- No authoritative OS information is available.
-- No actionable Greenbone findings match the current IP.
+- The device IP is 192.168.2.153.
+- The MAC address is 5c:e9:31:18:c1:4a.
+- The inventory and Nmap vendor are reported as TP-Link Limited.
+- The device was online at the latest inventory observation.
+- No TCP or UDP ports were reported by the supplied Nmap baseline.
+- No Nmap OS matches were reported.
+- No matching actionable Greenbone findings were reported for this IP.
 
 ### Inferences
 
-- The device is likely part of the TP-Link Tapo product family.
-- The device likely uses embedded IoT firmware.
-- The Nmap fingerprints are inconsistent and should not be treated as an exact OS or product identification.
+- The device may use embedded firmware, based only on the TP-Link vendor attribution.
+- The device identity and network role remain unresolved.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->

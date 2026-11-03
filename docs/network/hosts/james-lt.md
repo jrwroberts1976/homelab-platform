@@ -50,31 +50,30 @@ Use service/domain-family summaries here, not raw Pi-hole history. DNS resolutio
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T14:02:32+00:00`
+- Assessed: `2026-11-03T16:04:24+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `24:b2:b9:30:f8:55`
-- Identity confidence: **medium**
+- Identity confidence: **low**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **Yes**
 
 ### Assessment summary
 
-James-LT is an online network client identified by its documented hostname. The hostname suggests a laptop, but no vendor, service, or operating-system evidence is available; the Nmap scan is incomplete.
+Online host at 192.168.2.186 with MAC 24:b2:b9:30:f8:55, but no hostname, vendor, service, DNS, or OS-identification evidence is available. Device identity remains unresolved.
 
 ### Confirmed facts
 
-- The documented hostname is James-LT.
-- The host is online at 192.168.2.186 with MAC address 24:b2:b9:30:f8:55.
-- The inventory and telemetry hostname are both James-LT.
-- Nmap status is partial and reports missing OS evidence; no TCP or UDP ports were recorded.
-- No actionable Greenbone findings matched the current IP.
+- The host is currently marked online.
+- The assigned IP address is 192.168.2.186.
+- The MAC address is 24:b2:b9:30:f8:55.
+- Nmap baseline data contains no recorded TCP or UDP ports and no OS matches.
+- No matching actionable Greenbone findings were reported for the current IP.
+- Recent DNS policy-match data contains no matches.
 
 ### Inferences
 
-- The hostname suffix LT cautiously suggests a laptop or portable computer.
-- The exact operating system and hardware vendor cannot be determined from the supplied evidence.
-- The router also reports James-LT at 192.168.2.183, which may reflect a stale or separate DHCP observation.
+- The device type, vendor, platform family, and operating system cannot be determined from the supplied evidence.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
