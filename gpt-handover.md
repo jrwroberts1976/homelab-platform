@@ -1,3 +1,8 @@
+## 2026-11-04 — Approved Zabbix configuration cache reload executed
+
+- Operator pulled feature branch and syntax-checked `IaC/ansible/playbooks/router-01-zabbix-cache-reload.yml` successfully. Ran approved playbook against **zabbix-01 only**. Recap: `ok=5 changed=1 unreachable=0 failed=0 skipped=0`.
+- `zabbix_server -c /etc/zabbix/zabbix_server.conf -R config_cache_reload` returned `Runtime control command was forwarded successfully`. Before and after checks showed `zabbix-server` active. No router restart or network changes. Reload acknowledgment does **not** prove new host was picked up or that OS Facts data arrived. Next: read-only audit for current `router-01` active-check rejections in server log and lastclock/age/state for two OS Facts items via reporting token.
+
 ## 2026-11-04 — Router Zabbix active-check cache diagnostic
 
 - Host registered and enabled with two supported active OS Facts items, but repeated read-only `item.get` returns `lastclock=0` for both. `router-01` Agent 2 active, hostname correct and outbound port 10051 reachable; router PPPoE/dnsmasq/unbound/nftables all active. Zabbix server `zabbix-01` active but `/var/log/zabbix/zabbix_server.log` repeatedly reports `cannot process heartbeat from host "router-01": host not found` and `cannot send list of active checks` through 08:46:45 UTC despite API host registration. Server config shows DBName=zabbix, DBHost=localhost, DBPort=5432; no CacheUpdateFrequency override. Suspect server config cache or API/server state divergence; not yet diagnosed definitively.
