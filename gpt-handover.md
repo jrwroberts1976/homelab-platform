@@ -1,9 +1,17 @@
+## 2026-11-04 — router-01 Zabbix Agent 2 deployed LIVE; server-side ingestion pending
 
-## 2026-11-04 — #294 router-01 Zabbix Agent 2 install staged, NOT deployed
+- Operator created isolated `~/projects/homelab-router-zabbix` worktree, ran successful syntax checks for the scoped install and rollback playbooks, and explicitly approved the `router-01-zabbix-agent-active.yml` install. **router-01 recap: ok=18 changed=8 failed=0 unreachable=0 skipped=2.**
+- Official repository package and Zabbix Agent 2 installed; `zabbix-agent2` service enabled/running. Active destination `192.168.2.59:10051`; agent hostname `router-01`; passive service restricted to `127.0.0.1` (validated by playbook). UFW tasks skipped; no router firewall change.
+- Before and after, `router-pppoe`, `dnsmasq`, `unbound`, `nftables` were active and `ppp0` default route remained. No monitoring host enrollment confirmed yet: check Zabbix API `host.get`, then active item freshness before marking completed or merging PR #295.
+- Runtime Zabbix API is HTTPS `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php`, verified at version 7.0.32; read-only API token lives root-only on monitor-01 in `/etc/homelab-management-report/zabbix-api-token`. Do not print or move it. Existing management report defaults still point to stale port 8080 and need separate scoped review.
+- Keep work in #294/PR #295. Do not redeploy generic role to all hosts, alter router core services, activate scans or modify shared SMTP ledger.
+
+
+## 2026-11-04 — #294 router-01 Zabbix Agent 2 staged (historical, deployed afterward)
 
 - User requests Agent 2 on current Pi router `router-01` (`192.168.2.1`). Read-only operator preflight: Debian 13 ARM64; agent inactive, package installation not established; TCP `192.168.2.59:10051` reachable; `router-pppoe`, `dnsmasq`, `unbound`, `nftables` active; default route `ppp0`.
 - Created dedicated branch `feature/router01-zabbix-agent-20261104`. Scope: extend existing `zabbix_agent` role with optional restricted `ListenIP`; new approved `playbooks/router-01-zabbix-agent-active.yml` (active checks to zabbix-01, localhost-only passive listener and allowed host, core router pre/post assertions), `playbooks/router-01-zabbix-agent-stop.yml` (approved stop/disable only), and `docs/operations/ROUTER-01-ZABBIX-AGENT.md`.
-- **Git staging only.** No live installation, registration or changes to PPPoE/DHCP/DNS/nftables/QoS. Main worktree has unrelated modified/untracked nDPI/QoS files; do not clean or reset it. Use an isolated Git worktree. Before deploy run playbook syntax check and review scoped PR; afterwards verify agent port bindings, router services and Zabbix active data. Zabbix host registration is separate and not yet performed.
+- **At initial staging: Git only; deployment subsequently completed as recorded above.** No live installation, registration or changes to PPPoE/DHCP/DNS/nftables/QoS. Main worktree has unrelated modified/untracked nDPI/QoS files; do not clean or reset it. Use an isolated Git worktree. Before deploy run playbook syntax check and review scoped PR; afterwards verify agent port bindings, router services and Zabbix active data. Zabbix host registration is separate and not yet performed.
 
 ### 3 November 2026 — Router application traffic dashboard: operator accepted; Git closeout pending
 
