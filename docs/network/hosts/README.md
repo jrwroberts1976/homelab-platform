@@ -84,6 +84,7 @@ Validated on 5 October 2026, all **15 Ansible-managed Debian/Linux hosts** are e
 | iPhone | `192.168.2.135` | `be:ba:54:d7:ec:6f` | [Open](iphone-d7ec6f.md) |
 | Samsung embedded network device | `192.168.2.147` | `5c:a3:9d:49:46:22` | [Open](samsung-embedded-network-device.md) |
 | asus-aimesh-181 | `192.168.2.181` | `60:83:e7:f3:c8:de` | [Open](asus-aimesh-181-f3c8de.md) |
+| 192.168.2.140 | `192.168.2.140` | `d4:e9:f4:63:28:7c` | [Open](192-168-2-140.md) |
 
 ## What to maintain
 
