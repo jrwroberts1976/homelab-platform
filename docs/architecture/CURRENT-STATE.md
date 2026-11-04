@@ -1,3 +1,7 @@
+## 4 November 2026 — router Zabbix host health checks staged, NOT deployed
+
+Actual reference `monitor-01` telemetry was audited: active CPU load and idle CPU, active uptime, active memory total/available; CPU busy and memory used percentages are dependent items referencing other masters on the reference host. A separate, **not executed** approval-gated `router-01-zabbix-core-items.yml` is staged under #294 to create only seven basic independent active checks on `router-01` (CPU load, idle percentage, memory total/available/used percentage, root filesystem usage percentage, uptime). It fails closed on mismatched existing items and does not modify router networking, host agent or other Zabbix hosts. Existing OS Facts telemetry is still unverified (`lastclock=0`).
+
 ## 4 November 2026 — Approved Zabbix configuration cache reload executed
 
 Operator ran the approval-gated `router-01-zabbix-cache-reload.yml` playbook after local syntax check, exclusively on `zabbix-01`: `ok=5 changed=1 unreachable=0 failed=0 skipped=0`. Zabbix runtime control acknowledged `config_cache_reload` with `Runtime control command was forwarded successfully`; server remained active. This did not restart Zabbix or change router-01. **Telemetry remains unverified:** need fresh OS Facts `lastclock` and confirmation active-check rejection errors stopped before marking router monitoring complete. Issue #294 / PR #295.
