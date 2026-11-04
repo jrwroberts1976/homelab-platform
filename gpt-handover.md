@@ -1,3 +1,8 @@
+## 2026-11-04 — Router Zabbix active-check cache diagnostic
+
+- Host registered and enabled with two supported active OS Facts items, but repeated read-only `item.get` returns `lastclock=0` for both. `router-01` Agent 2 active, hostname correct and outbound port 10051 reachable; router PPPoE/dnsmasq/unbound/nftables all active. Zabbix server `zabbix-01` active but `/var/log/zabbix/zabbix_server.log` repeatedly reports `cannot process heartbeat from host "router-01": host not found` and `cannot send list of active checks` through 08:46:45 UTC despite API host registration. Server config shows DBName=zabbix, DBHost=localhost, DBPort=5432; no CacheUpdateFrequency override. Suspect server config cache or API/server state divergence; not yet diagnosed definitively.
+- Staged **only** gated `IaC/ansible/playbooks/router-01-zabbix-cache-reload.yml` using native Zabbix `zabbix_server -c /etc/zabbix/zabbix_server.conf -R config_cache_reload`, pre/post service-state checks. NOT EXECUTED. Verify syntax and use explicit approval; no router changes/restarts. After run audit new server log and OS item `lastclock` to determine actual outcome.
+
 ## 2026-11-04 — router-01 Zabbix registration SUCCESS; verify item ingestion next
 
 - Operator loaded valid privileged Zabbix API token (previous expired token had caused fail-closed no-change runs) and executed the scoped `IaC/ansible/playbooks/router-01-zabbix-register.yml`. **Recap: localhost ok=9 changed=1 failed=0 unreachable=0 skipped=0**. Postflight confirmed one enabled active-only router Zabbix host in `Homelab/Linux`, linked only to `Homelab Linux OS Facts`, no inbound agent interface. Token not shared or committed. No gateway service changes.
