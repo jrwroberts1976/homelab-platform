@@ -1,3 +1,7 @@
+## 2026-11-04 — #294 Zabbix reference host group/template verified
+
+- Read-only Zabbix API `host.get` on `monitor-01` and `zabbix-01` returned `Homelab/Linux` hostgroup ID **22**, `Homelab Linux OS Facts` linked template ID **10698**, and **no defined interfaces** for either reference host. `router-01` remains unregistered. These are observed identifiers, not authorization to create the host or proof that this template covers CPU/memory/disk. Next step: read-only inspect template items and identify scoped privileged registration credential. No production Zabbix API writes yet.
+
 ## 2026-11-04 — #294 Zabbix host enrollment blocker confirmed
 
 - Post-install read-only query using the existing monitor-01 management-report API token to Zabbix HTTPS `host.get` returned **`ROUTER-01 REGISTERED: NO`**. Agent 2 itself remains installed and was verified healthy, but its active checks are not yet bound to a Zabbix host, and no metrics have been verified. Registration must use a separately approved, scoped privileged API credential (never print or copy it), and existing group/template identities must be inspected first. Do not run broad Zabbix template-management playbooks (they target the existing fleet) or remove retired records as a shortcut.
