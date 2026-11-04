@@ -1,3 +1,7 @@
+## 4 November 2026 — Zabbix router active data still missing; cache reload staged
+
+After router host registration, read-only API queries still returned no OS Facts measurement (`lastclock=0`), while Zabbix server log showed active-check requests from `192.168.2.1` rejected with `host [router-01] not found` until at least 08:46:45 UTC. Server and Agent 2 both active, TCP 10051 reachable, router core services healthy. `playbooks/router-01-zabbix-cache-reload.yml` staged to request Zabbix runtime configuration-cache refresh after explicit approval; **not executed**, no Zabbix server restart or router change. Need verify item freshness after any approved reload.
+
 ## 4 November 2026 — router-01 Zabbix host registered, telemetry pending
 
 Operator successfully executed the approval-gated `router-01-zabbix-register.yml` playbook from the isolated Zabbix feature worktree after reloading a valid privileged API token. **Ansible recap: localhost ok=9 changed=1 unreachable=0 failed=0 skipped=0**. Prior playbook validation found group `Homelab/Linux` ID 22 and active-only `Homelab Linux OS Facts` template ID 10698. The registration postflight passed, indicating the single `router-01` Zabbix host was created/enabled with expected group, template and no passive interface. This was an API-only change; no router networking changes. **Fresh OS item telemetry is not yet proven**, and extended CPU/memory/disk/uptime host monitoring is not yet configured. Remain within issue #294/PR #295.
