@@ -1,6 +1,6 @@
 # docker-01
 
-> **RETIRED HISTORICAL RECORD — NOT AN ACTIVE HOST.** The former `docker-01` Raspberry Pi was repurposed as `router-01` (`192.168.2.1`). The old Docker/BirdNET workload and `asus-router` gateway identity are retired. Retain dated evidence below for history only; do not use this page for live inventory, monitoring or deployment. Current truth: `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md`.
+> **RETIRED HISTORICAL RECORD — NOT AN ACTIVE HOST.** The former `docker-01` Raspberry Pi was repurposed as `router-01` (`192.168.2.1`). The old Docker/BirdNET workload and `asus-router` **gateway identity** are retired; the physical ASUS RT-AC86U remains in service at `192.168.2.2` as an access point/AiMesh controller, not as the routing gateway. Retain dated evidence below for history only; do not use this page for live inventory, monitoring or deployment. Current truth: `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md`.
 >
 > Keep secrets and raw packet/DNS captures out of Git.
 
