@@ -128,7 +128,7 @@ Raspberry Pi 3 administration host and SSH/IaC controller, also serving as a Cor
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-03T22:47:53+00:00`
+- Last assessed: `2026-11-03T23:50:00+00:00`
 - Pending updates: **1**
 - Security updates pending: **0**
 - Reboot required: **No**
