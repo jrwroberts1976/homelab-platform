@@ -1,3 +1,7 @@
+## 4 November 2026 — router-01 Zabbix host registered, telemetry pending
+
+Operator successfully executed the approval-gated `router-01-zabbix-register.yml` playbook from the isolated Zabbix feature worktree after reloading a valid privileged API token. **Ansible recap: localhost ok=9 changed=1 unreachable=0 failed=0 skipped=0**. Prior playbook validation found group `Homelab/Linux` ID 22 and active-only `Homelab Linux OS Facts` template ID 10698. The registration postflight passed, indicating the single `router-01` Zabbix host was created/enabled with expected group, template and no passive interface. This was an API-only change; no router networking changes. **Fresh OS item telemetry is not yet proven**, and extended CPU/memory/disk/uptime host monitoring is not yet configured. Remain within issue #294/PR #295.
+
 ## 4 November 2026 — Zabbix router registration plan, NOT executed
 
 Read-only Zabbix 7.0.32 API audit: `router-01` is **not registered**. Existing `monitor-01` and `zabbix-01` are in host group `Homelab/Linux` (observed group ID 22), linked to `Homelab Linux OS Facts` (template ID 10698), with no passive interfaces. The OS Facts template contains only `system.sw.os.get` and `system.sw.os[name]`, both active items. Fresh Linux metrics on `monitor-01` include `system.cpu.util` (dependent item), `vm.memory.util` (dependent item), `system.uptime`, and dependent `vfs.fs.dependent.size[/,pused]`. Only OS Facts and HP ProCurve SNMP templates were returned to the read-only client; no generic Linux template can be assumed present.
