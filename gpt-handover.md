@@ -1,3 +1,7 @@
+## 2026-11-04 — #294 Zabbix host enrollment blocker confirmed
+
+- Post-install read-only query using the existing monitor-01 management-report API token to Zabbix HTTPS `host.get` returned **`ROUTER-01 REGISTERED: NO`**. Agent 2 itself remains installed and was verified healthy, but its active checks are not yet bound to a Zabbix host, and no metrics have been verified. Registration must use a separately approved, scoped privileged API credential (never print or copy it), and existing group/template identities must be inspected first. Do not run broad Zabbix template-management playbooks (they target the existing fleet) or remove retired records as a shortcut.
+
 ## 2026-11-04 — router-01 Zabbix Agent 2 deployed LIVE; server-side ingestion pending
 
 - Operator created isolated `~/projects/homelab-router-zabbix` worktree, ran successful syntax checks for the scoped install and rollback playbooks, and explicitly approved the `router-01-zabbix-agent-active.yml` install. **router-01 recap: ok=18 changed=8 failed=0 unreachable=0 skipped=2.**
