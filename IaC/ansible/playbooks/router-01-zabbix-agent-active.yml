@@ -1,0 +1,79 @@
+---
+# Opt-in scoped deployment; never run the generic zabbix-agent.yml against router-01.
+- name: Install active-only Zabbix Agent 2 on router-01
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_server_address: "192.168.2.59"
+    zabbix_agent_hostname: "router-01"
+    # Only local passive connections; no new inbound LAN/firewall exposure.
+    zabbix_agent_server_passive: "127.0.0.1"
+    zabbix_agent_server_active: "192.168.2.59"
+    zabbix_agent_listen_ip: "127.0.0.1"
+    zabbix_agent_manage_ufw: false
+
+  pre_tasks:
+    - name: Require explicit router-only deployment approval
+      ansible.builtin.assert:
+        that:
+          - router_zabbix_agent_install_approved | default(false) | bool
+          - router_zabbix_agent_install_phrase | default('') == 'INSTALL_ROUTER01_ZABBIX_AGENT2'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_distribution == 'Debian'
+          - ansible_distribution_major_version == '13'
+          - ansible_architecture in ['aarch64', 'arm64']
+        fail_msg: "Router-only agent install not approved or host identity differs; no changes made."
+
+    - name: Check Zabbix active-check destination from router
+      ansible.builtin.wait_for:
+        host: "192.168.2.59"
+        port: 10051
+        state: started
+        timeout: 5
+      changed_when: false
+
+    - name: Capture critical router service and default-route baseline
+      ansible.builtin.shell: |
+        set -eu
+        for svc in router-pppoe dnsmasq unbound nftables; do
+          test "$(systemctl is-active "$svc")" = active
+        done
+        ip -4 route show default | grep -Eq '^default dev ppp0( |$)'
+      args:
+        executable: /bin/sh
+      changed_when: false
+
+  roles:
+    - role: zabbix_agent
+
+  post_tasks:
+    - name: Confirm Zabbix Agent 2 is active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, zabbix-agent2]
+      register: _zabbix_agent_active
+      changed_when: false
+      failed_when: _zabbix_agent_active.stdout != 'active'
+
+    - name: Verify active-check server, hostname and loopback-only passive listener
+      ansible.builtin.shell: |
+        set -eu
+        grep -Fxq 'Server=127.0.0.1' /etc/zabbix/zabbix_agent2.conf
+        grep -Fxq 'ServerActive=192.168.2.59' /etc/zabbix/zabbix_agent2.conf
+        grep -Fxq 'Hostname=router-01' /etc/zabbix/zabbix_agent2.conf
+        grep -Fxq 'ListenIP=127.0.0.1' /etc/zabbix/zabbix_agent2.conf
+        if ss -lntH '( sport = :10050 )' | awk '{print $4}' | grep -Evq '^127\.0\.0\.1:10050$'; then
+          echo 'Unexpected Zabbix LAN listener' >&2
+          exit 1
+        fi
+      changed_when: false
+
+    - name: Confirm router core services and PPPoE default route remain healthy
+      ansible.builtin.shell: |
+        set -eu
+        for svc in router-pppoe dnsmasq unbound nftables; do
+          test "$(systemctl is-active "$svc")" = active
+        done
+        ip -4 route show default | grep -Eq '^default dev ppp0( |$)'
+      changed_when: false
