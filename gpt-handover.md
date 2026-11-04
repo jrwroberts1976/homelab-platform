@@ -1,3 +1,7 @@
+## 2026-11-04 — Router Zabbix seven-item local preflight (deployment held)
+
+- Operator pulled branch and syntax-checked `playbooks/router-01-zabbix-core-items.yml` successfully. On production router, read-only local `zabbix_agent2 -t` returned: `system.cpu.load[all,avg1]=0.241699`; `system.cpu.util[,idle]=ZBX_NODATA`; `vm.memory.size[total]=3980124160`; `vm.memory.size[available]=2120921088`; `vm.memory.size[pused]=92.773255`; `vfs.fs.size[/,pused]=0.597927`; `system.uptime=230137`. Six returned values, but CPU idle standalone collector is not yet validated and percentage-used RAM is not interchangeable with `(total-available)/total`. No API item enrollment yet. Inspect `/proc/meminfo`, agent measurement semantics, CPU collector via daemon/actual time-series, and decide safe metrics before approval; do not claim 7 checks end-to-end or fire memory alarms on unvalidated value. Core router configuration remains unchanged.
+
 ## 2026-11-04 — #294 router Zabbix host health item enrollment staged (not deployed)
 
 - Operator checked actual fresh `monitor-01` Zabbix item definitions: `system.cpu.load[all,avg1]` active/1m float; `system.cpu.util[,idle]` active/1m float; `system.uptime` active/30s unsigned; `vm.memory.size[total]` and `[available]` active/1m unsigned; `vm.memory.util` dependent type 18, not safe to copy without master item; `system.cpu.util` is dependent type 18; `vfs.fs.get` active/1m JSON. Reference data confirms how to avoid copying dependent items by ID.
