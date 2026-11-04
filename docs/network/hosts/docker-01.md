@@ -1,6 +1,6 @@
-# docker-01
+# docker-01 <!-- historical -->
 
-> **RETIRED HISTORICAL RECORD — NOT AN ACTIVE HOST.** The former `docker-01` Raspberry Pi was repurposed as `router-01` (`192.168.2.1`). The old Docker/BirdNET workload and `asus-router` **gateway identity** are retired; the physical ASUS RT-AC86U remains in service at `192.168.2.2` as an access point/AiMesh controller, not as the routing gateway. Retain dated evidence below for history only; do not use this page for live inventory, monitoring or deployment. Current truth: `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md`.
+> **RETIRED HISTORICAL RECORD — NOT AN ACTIVE HOST.** The former `docker-01` Raspberry Pi was repurposed as `router-01` (`192.168.2.1`). The old Docker/BirdNET workload and `asus-router` **gateway identity** are retired; the physical ASUS RT-AC86U remains in service at `192.168.2.2` as an access point/AiMesh controller, not as the routing gateway. Retain dated evidence below for history only; do not use this page for live inventory, monitoring or deployment. Current truth: `IaC/inventory/estate.json` and `docs/architecture/CURRENT-STATE.md`. <!-- historical -->
 >
 > Keep secrets and raw packet/DNS captures out of Git.
 
@@ -8,8 +8,8 @@
 
 | Field | Value |
 |---|---|
-| Canonical name | `docker-01` |
-| Former address | `192.168.2.220` (historical; not an active `docker-01` assignment) |
+| Canonical name | `docker-01` | <!-- historical -->
+| Former address | `192.168.2.220` (historical; not an active `docker-01` assignment) | <!-- historical -->
 | Type | physical |
 | Former role | Raspberry Pi 4 BirdNET-Go Docker host (retired) |
 | Managed by Ansible | Yes |
@@ -114,9 +114,9 @@ Documented as an ASUS RT-AC86U router at 192.168.2.1, providing DHCP, AiMesh con
 
 ## Monitoring and security
 
-> **Historical evidence only:** all changes described in this section were made before retirement of the `docker-01` role. Do not repeat these playbooks on `router-01` without a separately reviewed design.
+> **Historical evidence only:** all changes described in this section were made before retirement of the `docker-01` role. Do not repeat these playbooks on `router-01` without a separately reviewed design. <!-- historical -->
 
-**Verified 19 October 2026 live security change:** Read-only diagnostics identified `iptables v1.8.11 (nf_tables)`, INPUT ACCEPT with zero rules before installation, and Docker-controlled FORWARD/DOCKER chains; three of three Greenbone-side ICMP timestamp probes were answered before mitigation. Then `greenbone-icmp-timestamp-docker01-cutover.yml` installed a **single host INPUT-only IPv4 ICMP timestamp-request (type 13) DROP rule** plus dedicated one-shot persistence unit. Play recap `docker-01 ok=22 changed=3 failed=0`, `greenbone-01 ok=8 changed=0 failed=0`. Scanner-side ICMP timestamp responses now `NO_REPLY_OBSERVED` and ordinary ping PASS. Two Docker containers, Docker chain definitions/policy and BirdNET HTTPS were verified, without Docker restart. Manual rollback: `playbooks/greenbone-icmp-timestamp-docker01-rollback.yml`. Reboot persistence and fresh Greenbone scan clearance remain **unverified**. Risk acceptances are unchanged.
+**Verified 19 October 2026 live security change:** Read-only diagnostics identified `iptables v1.8.11 (nf_tables)`, INPUT ACCEPT with zero rules before installation, and Docker-controlled FORWARD/DOCKER chains; three of three Greenbone-side ICMP timestamp probes were answered before mitigation. Then `greenbone-icmp-timestamp-docker01-cutover.yml` installed a **single host INPUT-only IPv4 ICMP timestamp-request (type 13) DROP rule** plus dedicated one-shot persistence unit. Play recap `docker-01 ok=22 changed=3 failed=0`, `greenbone-01 ok=8 changed=0 failed=0`. Scanner-side ICMP timestamp responses now `NO_REPLY_OBSERVED` and ordinary ping PASS. Two Docker containers, Docker chain definitions/policy and BirdNET HTTPS were verified, without Docker restart. Manual rollback: `playbooks/greenbone-icmp-timestamp-docker01-rollback.yml`. Reboot persistence and fresh Greenbone scan clearance remain **unverified**. Risk acceptances are unchanged. <!-- historical -->
 
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:
