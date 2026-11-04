@@ -1,3 +1,7 @@
+## 4 November 2026 — Approved Zabbix configuration cache reload executed
+
+Operator ran the approval-gated `router-01-zabbix-cache-reload.yml` playbook after local syntax check, exclusively on `zabbix-01`: `ok=5 changed=1 unreachable=0 failed=0 skipped=0`. Zabbix runtime control acknowledged `config_cache_reload` with `Runtime control command was forwarded successfully`; server remained active. This did not restart Zabbix or change router-01. **Telemetry remains unverified:** need fresh OS Facts `lastclock` and confirmation active-check rejection errors stopped before marking router monitoring complete. Issue #294 / PR #295.
+
 ## 4 November 2026 — Zabbix router active data still missing; cache reload staged
 
 After router host registration, read-only API queries still returned no OS Facts measurement (`lastclock=0`), while Zabbix server log showed active-check requests from `192.168.2.1` rejected with `host [router-01] not found` until at least 08:46:45 UTC. Server and Agent 2 both active, TCP 10051 reachable, router core services healthy. `playbooks/router-01-zabbix-cache-reload.yml` staged to request Zabbix runtime configuration-cache refresh after explicit approval; **not executed**, no Zabbix server restart or router change. Need verify item freshness after any approved reload.
