@@ -59,8 +59,6 @@ Use bounded domain/service summaries only; do not commit a complete household br
 <!-- BEGIN AUTO:AI-ASSESSMENT -->
 ## AI-assisted host assessment
 
-> **Historical auto-generated evidence, not current device identity.** The assessment below conflates old ASUS and newer Raspberry Pi gateway identities and must not override canonical live router records.
->
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
 - Assessed: `2026-11-03T15:04:11+00:00`
