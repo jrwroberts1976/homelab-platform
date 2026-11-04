@@ -211,21 +211,32 @@
         - http://127.0.0.1:9090/-/ready
       changed_when: false
 
-    - name: Check canonical Grafana provisioning before adding a separate provider
+    - name: Check canonical Grafana provisioning (before or after DHCP canary)
       ansible.builtin.slurp:
         src: /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
       register: device_pages_provider_raw
       no_log: true
 
-    - name: Require two protected pre-existing providers untouched
+    - name: Require original providers plus only the approved DHCP canary provider
       ansible.builtin.assert:
         that:
           - device_pages_provider.apiVersion == 1
-          - device_pages_provider.providers | length == 2
+          - device_pages_provider.providers | length in [2, 3]
           - device_pages_provider.providers[0].name == 'Homelab'
           - device_pages_provider.providers[1].name == 'Homelab Production'
           - device_pages_provider.providers[0].disableDeletion == true
           - device_pages_provider.providers[1].disableDeletion == true
-        fail_msg: Existing Grafana provider state drifted.
+          - device_pages_provider.providers | length == 2 or (
+              device_pages_provider.providers[2].name == 'Router DHCP Devices' and
+              device_pages_provider.providers[2].folderUid == 'router-dhcp-devices' and
+              device_pages_provider.providers[2].folder == 'Router DHCP Devices' and
+              device_pages_provider.providers[2].orgId == 1 and
+              device_pages_provider.providers[2].type == 'file' and
+              device_pages_provider.providers[2].disableDeletion == true and
+              device_pages_provider.providers[2].allowUiUpdates == false and
+              device_pages_provider.providers[2].options.path == '/etc/grafana/provisioning/dashboards/router-dhcp-devices' and
+              device_pages_provider.providers[2].options.foldersFromFilesStructure == false
+              )
+        fail_msg: Existing Grafana providers differ from the approved two-provider baseline or three-provider DHCP canary.
       vars:
         device_pages_provider: "{{ device_pages_provider_raw.content | b64decode | from_yaml }}"
