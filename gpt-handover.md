@@ -1,3 +1,10 @@
+
+## 2026-11-04 — #294 router-01 Zabbix Agent 2 install staged, NOT deployed
+
+- User requests Agent 2 on current Pi router `router-01` (`192.168.2.1`). Read-only operator preflight: Debian 13 ARM64; agent inactive, package installation not established; TCP `192.168.2.59:10051` reachable; `router-pppoe`, `dnsmasq`, `unbound`, `nftables` active; default route `ppp0`.
+- Created dedicated branch `feature/router01-zabbix-agent-20261104`. Scope: extend existing `zabbix_agent` role with optional restricted `ListenIP`; new approved `playbooks/router-01-zabbix-agent-active.yml` (active checks to zabbix-01, localhost-only passive listener and allowed host, core router pre/post assertions), `playbooks/router-01-zabbix-agent-stop.yml` (approved stop/disable only), and `docs/operations/ROUTER-01-ZABBIX-AGENT.md`.
+- **Git staging only.** No live installation, registration or changes to PPPoE/DHCP/DNS/nftables/QoS. Main worktree has unrelated modified/untracked nDPI/QoS files; do not clean or reset it. Use an isolated Git worktree. Before deploy run playbook syntax check and review scoped PR; afterwards verify agent port bindings, router services and Zabbix active data. Zabbix host registration is separate and not yet performed.
+
 ### 3 November 2026 — Router application traffic dashboard: operator accepted; Git closeout pending
 
 - **Canonical Grafana user URL:** https://grafana.home.jrwroberts.co.uk/ (use this instead of the raw monitor-01 HTTP/IP URL in user-facing instructions). The internal `http://127.0.0.1:3000/api/health` on `monitor-01` is still appropriate for local Ansible health checks.
