@@ -1,3 +1,10 @@
+## 2026-11-04 — #294 Zabbix registration staged; metrics provenance clarified
+
+- `router-01` has installed Agent 2 but Zabbix `host.get` returns no host record. Reference hosts `monitor-01`, `zabbix-01`: `Homelab/Linux` group 22, `Homelab Linux OS Facts` template 10698, interfaces empty. Two OS Facts items are active type 7: `system.sw.os.get`, `system.sw.os[name]`.
+- Live `monitor-01` telemetry is fresh for `system.cpu.util`, `vm.memory.util`, `system.uptime`, `vfs.fs.dependent.size[/,pused]`. Earlier `vm.memory.size[pused]` assumption was wrong. Host has no general Linux template link in API; many host items are direct/dependent. Do not assume template exists.
+- Git branch adds `playbooks/router-01-zabbix-register.yml` with approval, privileged-token and host identity requirements; HTTPS `hostgroup.get`, `template.get`, `host.get` preflight, one-host `host.create` and postflight; **not executed**. Privileged `HOMELAB_ZABBIX_API_TOKEN` is not loaded on admin-01; do not use read-only management-report token for writes or expose secrets. Need local syntax validation before registration.
+- #294 stays open; no router/production config changes from API design stage.
+
 ## 2026-11-04 — #294 Zabbix reference host group/template verified
 
 - Read-only Zabbix API `host.get` on `monitor-01` and `zabbix-01` returned `Homelab/Linux` hostgroup ID **22**, `Homelab Linux OS Facts` linked template ID **10698**, and **no defined interfaces** for either reference host. `router-01` remains unregistered. These are observed identifiers, not authorization to create the host or proof that this template covers CPU/memory/disk. Next step: read-only inspect template items and identify scoped privileged registration credential. No production Zabbix API writes yet.
