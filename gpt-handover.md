@@ -1,3 +1,8 @@
+## 2026-11-04 — #294 router Zabbix host health item enrollment staged (not deployed)
+
+- Operator checked actual fresh `monitor-01` Zabbix item definitions: `system.cpu.load[all,avg1]` active/1m float; `system.cpu.util[,idle]` active/1m float; `system.uptime` active/30s unsigned; `vm.memory.size[total]` and `[available]` active/1m unsigned; `vm.memory.util` dependent type 18, not safe to copy without master item; `system.cpu.util` is dependent type 18; `vfs.fs.get` active/1m JSON. Reference data confirms how to avoid copying dependent items by ID.
+- Added staged **one-host-only** approval-gated `playbooks/router-01-zabbix-core-items.yml` to the feature branch. Server-side API `item.create` only for absent seven independent active agent items: CPU load, CPU idle percentage, memory total and available, memory used %, root disk used %, uptime. Existing-item conflict checks; no other hosts, agent, firewall, DNS, PPPoE, QoS or Zabbix templates changed. Verify playbook syntax before run; proof of incoming telemetry remains a separate check. Since existing OS Facts items on router still have `lastclock=0`, do not mark end-to-end monitoring done.
+
 ## 2026-11-04 — Approved Zabbix configuration cache reload executed
 
 - Operator pulled feature branch and syntax-checked `IaC/ansible/playbooks/router-01-zabbix-cache-reload.yml` successfully. Ran approved playbook against **zabbix-01 only**. Recap: `ok=5 changed=1 unreachable=0 failed=0 skipped=0`.
