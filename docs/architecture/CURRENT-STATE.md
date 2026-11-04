@@ -541,3 +541,7 @@ Safety bounds: MAC-derived stable page identities, no automatic page deletion, a
 ### 4 November 2026 — scheduled generation and second production audit
 
 A second scheduled generator run at **07:39:24 GMT** succeeded: `new_devices=10`, `device_pages=21`, `dashboard_writes=10`, `no_deletions=true`, systemd service finished successfully. Subsequent independent authenticated Grafana `--mode enabled` audit returned **rc=0**, **37 total dashboards = 16 protected originals + 21 DHCP device pages**, with protected original UID fingerprint verified and all page provenance/source-file checks passing. No destructive operations performed. This validates multiple scheduled executions and Grafana ingestion, but does not yet prove renewals/IP changes never duplicate dashboard UIDs or Nmap enrichment of live pages.
+
+### 4 November 2026 — third run and 43-dashboard audit
+
+At **07:44:42 GMT**, the third scheduled generator execution completed successfully (`new_devices=6`, `device_pages=27`, `dashboard_writes=7`, `no_deletions=true`). The following read-only authenticated Grafana `--mode enabled` audit passed (`rc=0`), proving **43 dashboards total: 16 protected originals and 27 provisioned DHCP pages** with the original UID fingerprint verified. No settled `new_devices=0` run or independent live IP-reassignment/Nmap-enrichment proof has yet been observed; do not claim those acceptance criteria passed.
