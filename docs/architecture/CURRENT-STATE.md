@@ -1,3 +1,8 @@
+
+## 4 November 2026 — router-01 Zabbix Agent 2 planned, NOT deployed
+
+Operator preflight on the production gateway `router-01` (`192.168.2.1`) established Debian GNU/Linux 13 (trixie), ARM64, outbound reachability to `zabbix-01` TCP/10051, inactive/unconfirmed-package `zabbix-agent2`, active `router-pppoe`, `dnsmasq`, `unbound`, `nftables`, and `default dev ppp0`. A scoped, opt-in, active-check-only deployment and service-stop rollback are staged on `feature/router01-zabbix-agent-20261104`; **no agent installed or started through this work yet**. It keeps passive agent listening to loopback, does not add router LAN firewall openings, and does not enroll Zabbix's API host. See `docs/operations/ROUTER-01-ZABBIX-AGENT.md` and issue #294. Existing generic `zabbix_agents` inventory remains unchanged.
+
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
