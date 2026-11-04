@@ -1,3 +1,8 @@
+## 2026-11-04 — router-01 Zabbix registration SUCCESS; verify item ingestion next
+
+- Operator loaded valid privileged Zabbix API token (previous expired token had caused fail-closed no-change runs) and executed the scoped `IaC/ansible/playbooks/router-01-zabbix-register.yml`. **Recap: localhost ok=9 changed=1 failed=0 unreachable=0 skipped=0**. Postflight confirmed one enabled active-only router Zabbix host in `Homelab/Linux`, linked only to `Homelab Linux OS Facts`, no inbound agent interface. Token not shared or committed. No gateway service changes.
+- Need next read-only check on `monitor-01` using management-report token to confirm `system.sw.os[name]` and `system.sw.os.get` lastclock are fresh for `router-01`. Agent template alone does not provide CPU/memory/disk/uptime; these require separate scope. Retain #294 open and PR #295 unmerged pending validations.
+
 ## 2026-11-04 — #294 Zabbix registration staged; metrics provenance clarified
 
 - `router-01` has installed Agent 2 but Zabbix `host.get` returns no host record. Reference hosts `monitor-01`, `zabbix-01`: `Homelab/Linux` group 22, `Homelab Linux OS Facts` template 10698, interfaces empty. Two OS Facts items are active type 7: `system.sw.os.get`, `system.sw.os[name]`.
