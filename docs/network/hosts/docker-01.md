@@ -59,33 +59,33 @@ Use bounded domain/service summaries only; do not commit a complete household br
 
 > Advisory interpretation of bounded host evidence. Canonical inventory and direct telemetry remain authoritative.
 
-- Assessed: `2026-10-29T17:01:31+00:00`
+- Assessed: `2026-11-03T15:04:11+00:00`
 - Model: `gpt-5.6-luna`
 - MAC identity: `d8:3a:dd:5a:51:44`
-- Identity confidence: **low**
+- Identity confidence: **medium**
 - OS confidence: **low**
 - Exact OS: **Not established**
 - Manual review required: **No**
 
 ### Assessment summary
 
-192.168.2.1 is documented as the ASUS RT-AC86U router, DHCP server, AiMesh controller, and OpenVPN endpoint, but current inventory identifies an online _gateway with Raspberry Pi Trading hardware and Nmap results resembling several Linux/NAS platforms. Identity requires manual review.
+Documented as an ASUS RT-AC86U router at 192.168.2.1, providing DHCP, AiMesh control, and OpenVPN remote access. The observed Raspberry Pi Trading MAC vendor conflicts with the documented model and warrants review; no exact OS or open services were identified.
 
 ### Confirmed facts
 
-- The canonical estate record labels this device ASUS RT-AC86U, named asus-router, with router, DHCP, AiMesh-controller, and OpenVPN-endpoint roles.
-- The device is online at 192.168.2.1 with hostname and telemetry hostname _gateway.
-- Inventory and Nmap identify the vendor as Raspberry Pi Trading; MAC address is d8:3a:dd:5a:51:44.
-- TCP ports 22, 53, 80, 443, 111, 8443, and 9100 are reported open across the supplied evidence.
-- Port 8443 is reported as HTTPS-alt and presents a Let's Encrypt certificate for jrwroberts1976.asuscomm.com.
-- Nmap reports nginx on ports 80 and 443.
-- The Nmap OS matches are conflicting and include Western Digital My Cloud, Linux kernel 3.x through 5.x, and QNAP QTS.
+- Canonical estate identifies this device as ASUS RT-AC86U.
+- Canonical estate identifies the device as a network router providing DHCP, AiMesh controller, and OpenVPN remote-access functions.
+- The device hostname is router-01.jameshouse and telemetry hostname is router-01.
+- The device IP address is 192.168.2.1.
+- The observed MAC vendor is Raspberry Pi Trading.
+- Nmap reported no TCP or UDP ports and no OS matches.
+- No actionable Greenbone findings matched the current IP in the supplied scan data.
+- The device was online at the time of inventory.
 
 ### Inferences
 
-- The host is likely a Linux-based embedded gateway or network appliance, but the supplied evidence does not establish the exact hardware or firmware.
-- The canonical ASUS router identity conflicts with the Raspberry Pi Trading inventory identity and the _gateway hostname.
-- The differing SSH service reports—Dropbear in enrichment and OpenSSH in the Nmap profile—should be treated as unresolved service evidence.
+- The device is most likely an embedded router platform running vendor firmware.
+- The canonical ASUS identity is more specific than the available network-service evidence, but the Raspberry Pi Trading vendor attribution creates an identity discrepancy.
 
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
