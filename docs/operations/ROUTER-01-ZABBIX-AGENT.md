@@ -2,7 +2,7 @@
 # Router-01 Zabbix Agent 2 (active-check only) rollout
 
 ## Status
-**Staged in GitHub, NOT YET DEPLOYED.** Associated with #294. Preflight read-only operator evidence on 4 November 2026: router-01 at 192.168.2.1 is Debian 13 ARM64; no active Zabbix agent; outbound TCP to zabbix-01 192.168.2.59:10051 passes; router-pppoe, dnsmasq, unbound and nftables active; default route is ppp0. The generic zabbix_agents inventory does not include router-01, intentionally.
+**Agent installed LIVE on 4 November 2026; server-side Zabbix enrollment/item ingestion NOT YET VERIFIED.** Associated with #294. Preflight read-only operator evidence on 4 November 2026: router-01 at 192.168.2.1 is Debian 13 ARM64; no active Zabbix agent; outbound TCP to zabbix-01 192.168.2.59:10051 passes; router-pppoe, dnsmasq, unbound and nftables active; default route is ppp0. The generic zabbix_agents inventory does not include router-01, intentionally. Operator approved and ran scoped install with recap `ok=18 changed=8 failed=0 unreachable=0 skipped=2`; core router health and loopback-only passive listener postflight passed. The read-only Zabbix API previously returned 17 registered hosts without `router-01`, so recheck actual host registration and active-item freshness before declaring end-to-end monitoring.
 
 ## Safety boundaries
 - Use only `playbooks/router-01-zabbix-agent-active.yml`, never broad `zabbix-agent.yml` and never edit the gateway firewall to expose 10050.
@@ -19,14 +19,14 @@ ansible-playbook -i inventory/hosts.yml playbooks/router-01-zabbix-agent-active.
 ansible-playbook -i inventory/hosts.yml playbooks/router-01-zabbix-agent-stop.yml --syntax-check
 ```
 
-## Approved installation (not automatic)
+## Approved installation (completed on 4 November 2026; reruns require separate review)
 ```sh
 ansible-playbook -i inventory/hosts.yml playbooks/router-01-zabbix-agent-active.yml \
   --limit router-01 --ask-become-pass \
   -e router_zabbix_agent_install_approved=true \
   -e router_zabbix_agent_install_phrase=INSTALL_ROUTER01_ZABBIX_AGENT2
 ```
-Record exact recap, agent socket binding, service status, router core health and eventual active-check receipt before marking complete. A local no-change check-mode run is not an install proof.
+Recorded completed install recap above. Agent activity and core gateway checks passed; server-side active-check receipt remains unverified. A local no-change check-mode run is not an install proof.
 
 ## Emergency stop (separately authorised)
 ```sh
