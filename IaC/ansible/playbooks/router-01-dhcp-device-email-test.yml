@@ -1,0 +1,103 @@
+---
+# #291: optional, separately approved ONE test email (does not create fake MAC
+# or alter the first-seen ledger). SMTP acceptance != confirmed inbox delivery.
+- name: Send a single explicitly approved test through existing mail relay
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Require explicit one-test-email approval and correct monitor
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_email_test_approved | default(false) | bool
+          - (router_dhcp_email_test_phrase | default('')) == 'SEND_ONE_ROUTER_DHCP_ALERT_TEST_EMAIL'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+
+    - name: Require approved DHCP email marker
+      ansible.builtin.stat:
+        path: /etc/homelab-network-hosts/router-dhcp-alerts.enabled.json
+        follow: false
+      register: dhcp_test_marker
+
+    - name: Refuse test without enabled shared MAC notification policy
+      ansible.builtin.assert:
+        that:
+          - dhcp_test_marker.stat.isreg | default(false)
+          - not dhcp_test_marker.stat.islnk | default(false)
+
+    - name: Hash protected shared first-seen registry and recipient before test
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - /etc/homelab-network-hosts/alerts.env
+      register: dhcp_test_before
+      no_log: true
+
+    - name: Send precisely one test using monitor-01 recipient settings (never printed)
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import os,subprocess
+            from pathlib import Path
+            config=Path('/etc/homelab-network-hosts/alerts.env')
+            if config.is_symlink() or not config.is_file():
+                raise SystemExit('Unsafe recipient configuration')
+            recipients=[]
+            for line in config.read_text().splitlines():
+                if line.strip().startswith('NETWORK_DEVICE_ALERT_TO='):
+                    value=line.split('=',1)[1].strip().strip('"').strip("'")
+                    if value:
+                        recipients.append(value)
+            if len(recipients)!=1:
+                raise SystemExit('Expected one configured email recipient')
+            env=dict(os.environ,NETWORK_DEVICE_ALERT_TO=recipients[0])
+            result=subprocess.run(
+                ['/usr/bin/python3','-B',
+                 '/usr/local/sbin/homelab-network-device-email-alert',
+                 '--test-email'],
+                capture_output=True,text=True,timeout=20,env=env)
+            if result.returncode or 'network_device_alert_test_sent' not in result.stdout:
+                raise SystemExit('SMTP test not acknowledged')
+            print('network_device_alert_test_sent')
+      register: dhcp_test_sent
+      changed_when: true
+      no_log: true
+
+    - name: Verify notifier reported accepted test submission
+      ansible.builtin.assert:
+        that:
+          - "'network_device_alert_test_sent' in dhcp_test_sent.stdout"
+        fail_msg: Notifier did not report an accepted test send; do not claim inbox delivery.
+
+    - name: Hash protected first-seen registry and recipient after test
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - /var/lib/homelab-network-hosts/alerted-macs.json
+        - /etc/homelab-network-hosts/alerts.env
+      register: dhcp_test_after
+      no_log: true
+
+    - name: Require no fake MAC registration or recipient modification
+      ansible.builtin.assert:
+        that:
+          - dhcp_test_before.results[0].stat.checksum == dhcp_test_after.results[0].stat.checksum
+          - dhcp_test_before.results[1].stat.checksum == dhcp_test_after.results[1].stat.checksum
+
+    - name: Report SMTP test submission for operator inbox confirmation
+      ansible.builtin.debug:
+        msg:
+          - "ONE_TEST_EMAIL_SUBMITTED_TO_MAIL_RELAY"
+          - "Verify actual delivery in the inbox before enabling automatic DHCP pages."
+          - "The first-seen MAC registry and recipient file remained unchanged."

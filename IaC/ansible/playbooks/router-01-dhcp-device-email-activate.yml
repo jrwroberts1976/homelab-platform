@@ -1,0 +1,228 @@
+---
+# #291 guarded activation of DHCP source in the EXISTING sole SMTP notifier.
+# No test email, no collector restart, no router/DHCP/Grafana changes.
+- import_playbook: router-01-dhcp-device-email-preflight.yml
+
+- name: Authorise router-01 DHCP candidates inside existing shared-MAC notifier
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    dhcp_email_live_notifier: /usr/local/sbin/homelab-network-device-email-alert
+    dhcp_email_candidate: /usr/local/sbin/homelab-network-device-email-alert-dhcp-candidate
+    dhcp_email_policy: /usr/local/lib/homelab-router-dhcp-device-pages/dhcp_device_email_policy.py
+    dhcp_email_marker: /etc/homelab-network-hosts/router-dhcp-alerts.enabled.json
+    dhcp_email_ledger: /var/lib/homelab-network-hosts/alerted-macs.json
+    dhcp_email_recipient: /etc/homelab-network-hosts/alerts.env
+
+  tasks:
+    - name: Require explicit approval to add DHCP candidate source to existing email alerts
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_email_activate_approved | default(false) | bool
+          - (router_dhcp_email_activate_phrase | default('')) == 'ENABLE_SHARED_MAC_DHCP_EMAIL_ALERTS'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - (dhcp_email_readiness.stdout | from_json).alert_recipient_configured == true
+          - (dhcp_email_readiness.stdout | from_json).collector_notifier_hook_present == true
+          - (dhcp_email_readiness.stdout | from_json).existing_first_seen_registry_entries >= 56
+          - (dhcp_email_relay_result.stdout | from_json).mail_relay_01_smtp_greeting_ok == true
+        fail_msg: Missing email activation approval, protected ledger or SMTP preflight.
+
+    - name: Refuse replay if activation marker already exists
+      ansible.builtin.stat:
+        path: "{{ dhcp_email_marker }}"
+        follow: false
+      register: dhcp_email_marker_before
+
+    - name: Require no previous cutover or partial activation
+      ansible.builtin.assert:
+        that:
+          - not dhcp_email_marker_before.stat.exists
+
+    - name: Verify staged candidate, policy and original notifier are safe regular files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ dhcp_email_candidate }}"
+        - "{{ dhcp_email_policy }}"
+        - "{{ dhcp_email_live_notifier }}"
+        - "{{ dhcp_email_ledger }}"
+        - "{{ dhcp_email_recipient }}"
+      register: dhcp_email_before
+      no_log: true
+
+    - name: Refuse missing or untrusted staged scripts and saved MAC state
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+        fail_msg: Staged notifier or protected email state missing/unsafe.
+      loop: "{{ dhcp_email_before.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Require collector is idle before replacing the existing notifier only
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-collector.service]
+      register: dhcp_email_collector_idle
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse live notifier replacement while collector is running
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_collector_idle.stdout | trim == 'inactive'
+
+    - name: Verify existing collector timer is scheduled and untouched
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-collector.timer]
+      changed_when: false
+
+    - name: Require Grafana page timer remains disabled pending separate enable
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      register: dhcp_email_generator_timer
+      changed_when: false
+      failed_when: false
+
+    - name: Refuse joining an already-active unreviewed DHCP page timer
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_generator_timer.stdout | trim != 'active'
+
+    - name: Verify rendered candidate and helper compile without execution
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ast
+            from pathlib import Path
+            for p in (
+              '/usr/local/sbin/homelab-network-device-email-alert-dhcp-candidate',
+              '/usr/local/lib/homelab-router-dhcp-device-pages/dhcp_device_email_policy.py',
+            ):
+              ast.parse(Path(p).read_text(encoding='utf-8'))
+            assert 'DHCP_EMAIL_MARKER' in Path(
+              '/usr/local/sbin/homelab-network-device-email-alert-dhcp-candidate'
+            ).read_text(encoding='utf-8')
+            print('dhcp_email_candidate_syntax=PASS')
+      changed_when: false
+
+    - name: Replace only the existing notifier executable from reviewed inert candidate
+      ansible.builtin.copy:
+        src: "{{ dhcp_email_candidate }}"
+        dest: "{{ dhcp_email_live_notifier }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0750'
+        backup: false
+
+    - name: Confirm active notifier bytes match exactly the reviewed candidate
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - "{{ dhcp_email_candidate }}"
+        - "{{ dhcp_email_live_notifier }}"
+      register: dhcp_email_activated_notifier
+      no_log: true
+
+    - name: Require exact notifier executable identity
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_activated_notifier.results[0].stat.checksum == dhcp_email_activated_notifier.results[1].stat.checksum
+
+    - name: Read-only no-SMTP preview before enabling DHCP notifications
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - "{{ dhcp_email_live_notifier }}"
+          - --preview
+      register: dhcp_email_before_preview
+      changed_when: false
+      no_log: true
+
+    - name: Require preview reported no SMTP send
+      ansible.builtin.assert:
+        that:
+          - "'network_device_alert_preview' in dhcp_email_before_preview.stdout"
+          - "'\"email_sent\":false' in dhcp_email_before_preview.stdout"
+          - "'\"registry_changed\":false' in dhcp_email_before_preview.stdout"
+
+    - name: Read activation timestamp at the end of the no-send checks
+      ansible.builtin.command:
+        argv: [date, +%s%N]
+      register: dhcp_email_activation_clock
+      changed_when: false
+      no_log: true
+
+    - name: Refuse non-numeric activation timestamp
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_activation_clock.stdout is match('^[0-9]{19}$')
+
+    - name: Enable only future router-01 DHCP candidates, never historical backlog
+      ansible.builtin.copy:
+        dest: "{{ dhcp_email_marker }}"
+        content: >-
+          {"schema_version":1,"activated_at_ns":{{ dhcp_email_activation_clock.stdout | int }}}
+        owner: root
+        group: root
+        mode: '0600'
+        backup: false
+
+    - name: Verify read-only notifier preview after marker, without SMTP delivery
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - "{{ dhcp_email_live_notifier }}"
+          - --preview
+      register: dhcp_email_after_preview
+      changed_when: false
+      no_log: true
+
+    - name: Require active DHCP policy preview remained email-free
+      ansible.builtin.assert:
+        that:
+          - "'network_device_alert_preview' in dhcp_email_after_preview.stdout"
+          - "'\"email_sent\":false' in dhcp_email_after_preview.stdout"
+          - "'\"registry_changed\":false' in dhcp_email_after_preview.stdout"
+        fail_msg: Enabled notifier preview failed; stop and diagnose before enabling timer.
+
+    - name: Verify recipient and MAC notification history unchanged by activation
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - "{{ dhcp_email_ledger }}"
+        - "{{ dhcp_email_recipient }}"
+      register: dhcp_email_after
+      no_log: true
+
+    - name: Require no retroactive email writes or recipient modification
+      ansible.builtin.assert:
+        that:
+          - dhcp_email_before.results[3].stat.checksum == dhcp_email_after.results[0].stat.checksum
+          - dhcp_email_before.results[4].stat.checksum == dhcp_email_after.results[1].stat.checksum
+
+    - name: Report future-only shared-MAC DHCP notification path enabled
+      ansible.builtin.debug:
+        msg:
+          - "DHCP_EMAIL_INTEGRATION=ENABLED, no message sent by this playbook."
+          - "Original collector remains the SOLE SMTP sender and original 56+ MAC ledger unchanged."
+          - "Only page-backed DHCP MACs first seen AFTER activation can notify."
+          - "Router DHCP page timer still DISABLED until separate approval."

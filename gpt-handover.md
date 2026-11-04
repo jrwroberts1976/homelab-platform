@@ -2116,3 +2116,114 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 - Before merge, GitHub compare showed feature branch ahead of `main` with 57 changed files, while `main` had only 3 newer automated patch-status commits touching 13 `docs/network/hosts/*.md` files; these do not overlap the retirement branch files. Preserve those automatic updates.
 - Next finish normal GitHub PR, require CI and mergeability checks, merge to `main`, verify resulting commit and close issue #287. Do not touch the unrelated failed Proxmox guest-refresh service, router DHCP/QoS, or Grafana/Prometheus historical time series.
 
+## 2026-11-03 — #291 New per-device Grafana pages, router-01 DHCP source (STAGED, NOT LIVE)
+
+- User explicitly requested restoration of **automatic per-device
+  Grafana pages**, with router-01 dnsmasq DHCP as the device creation
+  source, replacing the retired ASUS/HP inventory/dashboard pipeline
+  removed under fully closed #287.
+- Opened GitHub issue **#291** and isolated branch
+  `feature/router01-dhcp-device-pages-20261103`. Staged read-only
+  `router-01-dhcp-device-pages-preflight.yml` inspecting router
+  dnsmasq/default lease count, router telemetry (Alloy or forwarder)
+  and **positive validated router-01 DHCPACK events from Loki**,
+  monitor-01 independent inventory/Nmap evidence and six timers.
+  No production preflight has yet run; actual DHCPACK stream availability
+  is **unverified**.
+- Implemented tested Python `router_dhcp_device_pages` generator:
+  bounded 36-hour Loki query, pinned source labels and VLAN/LAN,
+  strict unicast MAC/IP parsing, MAC-derived stable Grafana UID,
+  durable MAC-keyed state, idempotent IP/hostname updates, Nmap
+  inferred OS score and open TCP services. Missing/mismatched Nmap
+  profile displayed pending, no extra scan. Source JSON written only
+  on `--apply`; check-only mode is default. No page auto-deletion,
+  no external data exfiltration, no email.
+- Added dedicated disabled-by-default systemd service/timer stage
+  (max 10 new pages/run), separate Grafana provider default-off
+  in IaC, authenticated Grafana UID audit using unchanged
+  protected 16-dashboard fingerprint, explicitly approval-gated
+  one-page canary (expects 17/16), separately approved timer enable
+  and independent read-only postflight. Original six discovery
+  timers unaffected. Do not deploy this via broad monitoring.yml.
+- CI uses Python offline tests and Ansible syntax checks; consult
+  latest Actions result before next operator step.
+- **NEXT**: operator run read-only router + monitor source preflight
+  from clean dedicated worktree; inspect sanitized router DHCPACK
+  counts and lease count. If source ready, intentionally stage disabled
+  generator then perform exactly one approved dashboard canary;
+  review results before enabling timer. Do not claim production
+  activation or update verified CURRENT-STATE.md until live proof.
+
+## 2026-11-03 ~15:43 UTC — #291 router-01 DHCP source independently verified LIVE
+
+- Operator ran read-only `router-01-dhcp-device-pages-preflight.yml` from existing dedicated worktree `~/projects/homelab-dhcp-device-pages`. The `git worktree add -b` attempt reported branch exists: the worktree is already present; do not create another or delete it.
+- **PASS** Ansible recaps: `router-01 ok=8 changed=0 failed=0` and `monitor-01 ok=11 changed=0 failed=0`. Router dnsmasq active, 26 valid dnsmasq leases, Alloy active, old DHCP log forwarder inactive. Monitor: six existing discovery timers active, inventory 38 records, Nmap MAC profile state 38 records, router-01 DHCPACK Loki evidence **157 log lines / 157 valid DHCPACK events over 24 hours**, no query truncation, `router_source_ready_for_canary=true`. Existing protected 2-provider Grafana config and Grafana/Prometheus health validated.
+- As of this note, new device-page generator is **STAGED IN GIT ONLY**, NOT installed on production; Grafana remains 16 original dashboards, no DHCP device page or new timer enabled.
+- Branch `feature/router01-dhcp-device-pages-20261103` latest CI green at `111e6ae8f16032433702829c0ce974d81b2ced50`. Next: sync existing clean worktree, syntax-check and run ONLY approval-gated `router-01-dhcp-device-pages-stage.yml` with `router_dhcp_device_pages_stage_approved=true`. Stage creates isolated directory plus script, read-only audit and disabled systemd units. Inspect recap and timer disabled state before explicit one-page Grafana canary and separate timer activation. No router changes, no discovery reset, no legacy collector revival.
+
+## 2026-11-03 ~15:43 UTC — #291 disabled router-01 DHCP per-device generator STAGED LIVE
+
+- User completed approved `router-01-dhcp-device-pages-stage.yml` on monitor-01: **ok=16 changed=5 failed=0 unreachable=0 rescued=0**. Verified final task output: generator and audit scripts plus new service/timer files staged; dedicated Grafana JSON source directory created, timer **disabled**; no router config edit, scan, Grafana provider change, restart or automatic run. There is **no live per-device Grafana dashboard yet**.
+- Router DHCP source preflight previously passed: dnsmasq active / 26 valid leases, Alloy active, 157 router DHCPACK events on monitor-01 Loki, 38 network records / 38 Nmap profiles, all 6 original discovery timers active, Grafana and Prometheus healthy.
+- GitHub issue #291 updated. Next gated step is the **one-device Grafana canary** using `router-01-dhcp-device-pages-canary.yml` and approval `router_dhcp_device_pages_canary_approved=true`, phrase `CREATE_ONE_ROUTER_DHCP_DEVICE_PAGE`. Synchronise existing clean worktree and syntax-check first. Canary includes source preflight, original 16-UID fingerprint guard, check-only generator preview, isolated third Grafana provider, a **Grafana-only restart**, exactly one new DHCP MAC-derived page; final expected **17** dashboards / protected original **16**, timer still disabled. If any canary task fails, **do not replay** without inspecting live state. Automatic 5-minute timer enablement requires separate explicit approval.
+
+## 2026-11-03 — #291 router-01 DHCP Grafana canary PASS; email verification gate next
+
+- **Live one-device canary PASSED:** operator used `router-01-dhcp-device-pages-canary.yml`, with `monitor-01 ok=36 changed=3 failed=0`, `router-01 ok=8 changed=0 failed=0`. Output explicitly `ROUTER_DHCP_DEVICE_CANARY=PASS`, Grafana now **17** dashboards (original 16 UID fingerprint protected plus 1 MAC-stable new DHCP page). The new router-DHCP source provider is present and Grafana restarted only, but the new **automatic page generator timer is still DISABLED**.
+- User wants **email on newly detected DHCP device**. The current generator does **not email**. Existing `homelab-network-device-email-alert` is an independent first-seen mailer called by the network collector via `ExecStartPost`, using `alerted-macs.json` (56 preexisting entries) to avoid duplicates. Its recipient/env and current SMTP delivery were not independently validated during the canary. Do NOT tell user a newly DHCP-only detected MAC is guaranteed an email.
+- Added `router-01-dhcp-device-email-preflight.yml` (read-only, no email) to inspect existing mail hook, configured recipient boolean, first-seen registry count, canary MAC membership, Grafana 17 protected UID check and TCP SMTP 220 greeting from mail-relay-01 without exposing private addresses. New CI syntax and no-mutation assertions added. Next operator: sync existing worktree, `git diff --check`, syntax-check and run the read-only email preflight before modifying any active collector script or enabling the DHCP device page timer.
+- Integration design: reuse one shared MAC-keyed alert ledger rather than independently emailing both collector and router DHCP generator; do not flood emails for prior 26 leases or 56 known MACs, nor duplicate on renewals. Include stable Grafana page link and evidence-labelled OS or `Pending identification`; preserve existing notifier's functionality and prefer separate approval for a test email.
+- **Current production state remains 17 dashboards, 1 DHCP canary page, 16 original protected dashboards, disabled new timer.** Do not rerun the canary or old #287 retirement/reset. Never activate full per-device automation blindly.
+
+## 2026-11-03 — #291 DHCP mailer readiness PASSED; future-only shared alert integration Git-STAGED
+
+- User ran read-only `router-01-dhcp-device-email-preflight.yml` on monitor-01: **ok=9 changed=0 failed=0**. Sanitized output: `alert_recipient_configured=true`, `collector_notifier_hook_present=true`, `notifier_has_smtp_sender=true`, `existing_first_seen_registry_entries=56`, `canary_mac_already_in_first_seen_registry=true`, `mail_relay_01_smtp_greeting_ok=true`, **no test email sent**. Grafana canary remains 17 dashboards (16 original + 1 DHCP page) and new page timer **DISABLED**.
+- On feature branch `feature/router01-dhcp-device-pages-20261103` implemented **Git-only** optional email policy `IaC/ansible/roles/router_dhcp_device_pages/files/dhcp_device_email_policy.py`, deduping via the **existing** `/var/lib/homelab-network-hosts/alerted-macs.json`. Only notify for DHCP MAC never in ledger, with `first_seen_ns` **strictly after** explicit marker timestamp, and corresponding MAC-stable page source present. Existing **sole SMTP sender** remains network-host-collector `ExecStartPost`, whose notifier template now optionally imports DHCP candidates, adds Grafana page link and Nmap inferred OS/pending text. Existing ordinary discovery alerts remain; each acknowledged send is persisted to shared ledger immediately. No separate competing sender or retroactive blast.
+- Added guarded `router-01-dhcp-device-email-stage.yml` **inert** helper and candidate staging (never replace original notifier or run mail), `router-01-dhcp-device-email-activate.yml` explicit future-only activation marker and original notifier replacement with two **--preview** no-send checks, independently read-only `router-01-dhcp-device-email-postflight.yml`, and separately opt-in `router-01-dhcp-device-email-test.yml` for exactly one SMTP test email without fake MAC registration. `router-01-dhcp-device-pages-enable.yml` now blocks timer activation without the email marker, while preserving original collector timer. No live deployment of these new email changes has occurred.
+- Regression tests render original notifier template and cover prior MAC suppression, activation cutoff, current IP Nmap evidence, page link, no-send preview, no duplicate emails on renewals, atomic ledger persistence per acknowledged message, invalid state and inert stage. GitHub CI Python + Ansible checks passed; see latest branch Actions status.
+- **Next operator:** sync existing clean `~/projects/homelab-dhcp-device-pages` worktree (do not recreate it), `git diff --check`, syntax-check **only** `router-01-dhcp-device-email-stage.yml`, run with `-e router_dhcp_email_stage_approved=true` if clean. Expect no live notifier/ledger/recipient changes, no email, new timer still disabled; inspect recap. After that, separately approve activation, run read-only postflight and optionally send a test email with explicit approval and confirm inbox receipt; ONLY THEN enable five-minute page automation. Do not re-run DHCP canary or #287 cleanup. No router changes or full-stack redeploy.
+
+## 2026-11-03 — #291 inert DHCP email stage PASSED LIVE; MAC inventory mapping corrected before activation
+
+- User ran the gated `router-01-dhcp-device-email-stage.yml` on `monitor-01`. Live Ansible recap: **ok=24 changed=3 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The scoped stage installs DHCP email policy + inert candidate without changing the existing live SMTP notifier, recipient file or shared first-seen ledger, and creates no activation marker. **No email was sent; DHCP device page timer remains disabled**. Grafana previous one-device canary: **17 total = 16 original + 1 new**.
+- During next-gate code review, corrected DHCP email policy to enrich against `normalise_inventory()`'s **MAC-keyed** result, not IP-keyed input, and require the current DHCP IP match before attributing vendor/online evidence. Added offline tests for correct MAC-identity vendor and stale-IP guard. GitHub Actions at `5e6574dc15a3` **passed**: https://github.com/jrwroberts1976/homelab-platform/actions/runs/41675826762.
+- **Important:** This correction landed in Git AFTER the user's inert stage. Therefore the existing installed helper on monitor-01 predates the new source code. Before running any live email activation, sync existing worktree and deliberately re-run **only** the idempotent inert `router-01-dhcp-device-email-stage.yml` with `router_dhcp_email_stage_approved=true`. It verifies notifier/ledger/recipient checksums and should update the helper without sending mail. Do NOT run the email activation until the corrected helper is staged and verified.
+- Then later, after explicit separate approval, `router-01-dhcp-device-email-activate.yml` will swap only the original notifier, preview without SMTP, write future-only activation marker, and leave page timer off. Independent no-send postflight and separately approved one-test email are still outstanding. Only then enable automatic page creation. Keep protected MAC registry (>=56), original 16 dashboards, original collector timers and router unchanged. Do not re-run the one-device canary or #287 retirement.
+
+## 2026-11-03 ~16:51 UTC — #291 corrected inert email helper re-stage passed
+
+- User reran the explicit `router-01-dhcp-device-email-stage.yml` after the MAC-keyed vendor/online reconciliation correction was merged into the dedicated feature branch. Live `monitor-01` recap **ok=24 changed=1 failed=0 unreachable=0 skipped=0 rescued=0**. Final safeguards report inert helper and candidate beside existing original SMTP notifier; original notifier, recipient, 56+ MAC first-seen registry, timers and Grafana unchanged; **no activation marker and no email sent**. No actual first-seen DHCP email yet. Existing Grafana one-DHCP-page canary remains 17 dashboards (16 protected original + 1).
+- Issue #291 updated. Branch CI at `b5451d4806a3` passed. Next is **separate approval** to run `router-01-dhcp-device-email-activate.yml` with `router_dhcp_email_activate_approved=true` and `router_dhcp_email_activate_phrase=ENABLE_SHARED_MAC_DHCP_EMAIL_ALERTS`; play imports live read-only email preflight, requires existing collector idle, replaces ONLY existing original notifier with staged reviewed candidate, runs no-send previews, and creates a future-only activation marker last. Does **not** send mail or start DHCP device-page timer. If failure occurs mid-way, inspect, do not replay blindly. Afterwards run independent `router-01-dhcp-device-email-postflight.yml` (read-only); optionally send ONE explicitly approved SMTP test email, operator confirms inbox; only then separately enable 5-minute page generation. No #287 reset/canary reruns, no router changes.
+
+## 2026-11-03 ~17:00 UTC — #291 shared DHCP email activated PASS; replay guard verified
+
+- User's pasted Ansible log confirms **first** approved `router-01-dhcp-device-email-activate.yml` run **PASSED** on monitor-01: `ok=34 changed=2 failed=0 rescued=0`. Installed reviewed DHCP-aware candidate over the **existing sole SMTP notifier**, passed candidate/executable checksum, existing collector idle/timer active, created future-only timestamp marker `/etc/homelab-network-hosts/router-dhcp-alerts.enabled.json`, passed read-only **--preview** before and after marker, recipient and shared `alerted-macs.json` checksums unchanged. Final message `DHCP_EMAIL_INTEGRATION=ENABLED, no message sent by this playbook.` Existing registry count now 57 (previously 56; origin of new record not established). New router-DHCP automatic page timer **still disabled**, Grafana original 16 plus 1 canary preserved.
+- Log also includes a **second explicit execution** after a successful no-change sync/syntax check. It **FAILED AS INTENDED** at `Require no previous cutover or partial activation`: activation marker already exists; recap `ok=12 changed=0 failed=1`. This is NOT a failed initial activation. **Never rerun activation or delete the marker; it prevents duplicate cutover/re-alert.**
+- Issue #291 updated. **Next:** sync existing clean worktree; syntax-check and run read-only `router-01-dhcp-device-email-postflight.yml` (no SMTP send) verifying 17 Grafana UIDs, shared ledger/recipient, live reviewed notifier, activation marker and disabled new timer. Then separately approved ONE SMTP test email via `router-01-dhcp-device-email-test.yml`; operator must confirm actual delivery. Only after that, separately approve 5-minute `router-01-dhcp-device-pages-enable.yml` (page creation). No router changes, scans, legacy collectors, prior dashboard canary, #287 cleanup, or backups.
+
+## 2026-11-04 ~07:34 GMT — #291 automated DHCP pages LIVE; enabled audit PASS
+
+- Operator confirmed one explicitly approved DHCP SMTP test email arrived in the inbox. Test Ansible `router-01-dhcp-device-email-test.yml` passed on monitor-01: **ok=10 changed=1 failed=0**; no fake MAC registration or recipient edit.
+- First attempt at five-minute timer activation stopped safely at the shared source preflight: it still required exactly **2** Grafana provisioning providers despite the successfully deployed one-device canary's **3**. No changes occurred (`monitor-01 ok=10 changed=0 failed=1`; `router-01 ok=8 changed=0 failed=0`). Fixed shared `router-01-dhcp-device-pages-preflight.yml` on feature branch to accept only the original 2-provider baseline or the specifically checked approved third DHCP provider; GitHub commit `e160321af3c66bae7ea4cf8b6470f196833a5d1e`. Operator reran preflight successfully: **monitor-01 ok=11 changed=0 failed=0; router-01 ok=8 changed=0 failed=0**.
+- Operator then enabled `router-dhcp-device-pages.timer` through gated Ansible IaC; independent systemd inspection: **enabled**, **active**; scheduled last **2026-11-04 07:33:54 GMT**, next **07:39:16 GMT** at inspection. The activation play recap was not supplied, so do not claim its task counts.
+- First observed automatic `router-dhcp-device-pages.service` run succeeded at 07:33:54: `{ "dashboard_writes":11, "device_pages":11, "mode":"apply", "new_devices":10, "no_deletions":true, "state_change":true }`; `Result=success`, `ExecMainStatus=0`, and normal oneshot `ActiveState=inactive` between runs.
+- A manual `router-dhcp-device-pages-audit --mode canary` returned `rc=1` solely because it requires exactly **one** DHCP page, which is no longer true after live generation. **No loss of dashboards or generator failure was shown**. Existing script already supports `--mode enabled`; do not weaken or rewrite it just for this expected mode mismatch.
+- Operator reran read-only `--mode enabled` on monitor-01: **rc=0**, **27 total Grafana dashboards = 16 protected originals + 11 provisioned Router DHCP Devices**, `protected_uid_fingerprint_verified=true`, `read_only=true`. All page provenance/source JSON checks in audit passed.
+- Canonical live state now recorded in `docs/architecture/CURRENT-STATE.md`. Next: verify repeated scheduled run, safe evidence for DHCP renew/IP-change idempotency and Nmap OS/port enrichment as specified in issue #291; review CI and PR/merge before closing story. Do not rerun canary, email cutover, retirement reset or bulk monitoring playbook; do not alter router DHCP/NAT/QoS, ledger or historic dashboards.
+
+## 2026-11-04 ~07:39 GMT — #291 second automatic run and 37-dashboard production audit PASS
+
+- Systemd journal shows scheduled generator at **07:39:24 GMT** completed successfully: `dashboard_writes=10`, `device_pages=21`, `new_devices=10`, `no_deletions=true`, `state_change=true`; service deactivated normally.
+- Operator ran independent authenticated Grafana `/usr/local/sbin/router-dhcp-device-pages-audit --mode enabled` on monitor-01: **rc=0**, **37 total = 16 protected + 21 DHCP device dashboards**, `protected_uid_fingerprint_verified=true`, read-only; provisioned source-file and folder identity checks passed.
+- Remaining before #291 closure: safe evidence of MAC-stable renewal/IP reassignment and Nmap enrichment; optionally capture settled scheduled run with zero new pages. Avoid `--mode canary`, which cannot pass after >1 DHCP page; do not reset state, rerun initial canary or modify router.
+
+## 2026-11-04 ~07:44 GMT — #291 third timer run and 43-dashboard production audit PASS
+
+- Third scheduled run at 07:44:42 GMT succeeded: `dashboard_writes=7`, `device_pages=27`, `new_devices=6`, `no_deletions=true`, service finished normally. Increased page count is expected after max-10 batches in earlier runs; 7 writes with 6 new devices is compatible with an existing-page update, but does not establish cause.
+- Subsequent operator-run `router-dhcp-device-pages-audit --mode enabled` returned **rc=0**, `total_dashboards=43`, `protected_dashboards=16`, `router_dhcp_device_dashboards=27`, `protected_uid_fingerprint_verified=true`. All provisioned page source and folder identity checks passed; no modifications from audit despite Ansible ad-hoc `CHANGED` reporting.
+- Remaining safe acceptance: examine a later settled timer cycle for `new_devices=0`, verify MAC-stable UID/renewal-IP-update and Nmap enrichment with appropriate offline tests or non-mutating inspection. Keep issue #291 open until acceptance and PR/CI checks; no state reset, canary replay or router changes.
+
+## 2026-11-04 — #291 settled no-change generator preview PASS
+
+- Operator executed `/usr/bin/python3 -B /usr/local/sbin/router-dhcp-device-pages` **without `--apply`**. Successful read-only output: `dashboard_writes=0`, `device_pages=27`, `mode=check`, `new_devices=0`, `no_deletions=true`, `state_change=false`. Ansible ad-hoc `CHANGED` is its default reporting and does not mean the script modified state.
+- No pending DHCP device creation under current evidence; do not confuse this with a subsequent successful scheduled run. Remaining acceptance: demonstrate stable MAC-derived UID through DHCP IP reassignment and verify Nmap enrichment. Do not alter router, reset ledger or replay canary.

@@ -19,6 +19,14 @@ MAIL_TO = os.environ.get("NETWORK_DEVICE_ALERT_TO", "").strip()
 COLLECTOR_HOST = {{ network_host_collector_expected_hostname | to_json }}
 NOW = int(time.time())
 
+# Optional #291 router-01 DHCP enrichment: the original network collector
+# remains the ONLY SMTP sender. Not enabled unless the explicit marker exists.
+DHCP_EMAIL_MARKER = Path("/etc/homelab-network-hosts/router-dhcp-alerts.enabled.json")
+DHCP_DEVICE_STATE = Path("/var/lib/homelab-network-hosts/router-dhcp-device-pages.json")
+DHCP_NMAP_PROFILES = Path("/var/lib/homelab-network-hosts/deep-profiles.json")
+DHCP_DASHBOARD_DIR = Path("/opt/monitoring/grafana/provisioning/dashboards/router-dhcp-devices")
+DHCP_POLICY_LIB = "/usr/local/lib/homelab-router-dhcp-device-pages"
+
 
 def load_json(path):
     try:
@@ -138,7 +146,11 @@ def build_device_message(device):
         f"Hostname: {hostname}\n"
         f"Vendor: {device.get('vendor') or 'unknown'}\n"
         f"First seen: {timestamp_text(device.get('first_seen', 0))}\n"
-        f"Collector: {COLLECTOR_HOST}\n\n"
+        f"Collector: {COLLECTOR_HOST}\n"
+        + (f"Detection evidence: {device['source']}\n" if device.get("source") else "")
+        + (f"OS evidence: {device['os_evidence']}\n" if device.get("os_evidence") else "")
+        + (f"Device Grafana page: {device['dashboard_url']}\n" if device.get("dashboard_url") else "")
+        + "\n"
         "This alert is sent once per MAC address. A device returning later "
         "or receiving a different IP address will not generate another "
         "first-seen alert.\n"
@@ -218,6 +230,28 @@ def main():
         if mac not in known and device.get("online", False)
     ]
 
+    # Read DHCP-specific candidates only after a separately approved marker.
+    # This does not send a second email: both inputs share this notifier,
+    # and the existing MAC-keyed registry is still authoritative.
+    if DHCP_EMAIL_MARKER.exists() or DHCP_EMAIL_MARKER.is_symlink():
+        if DHCP_EMAIL_MARKER.is_symlink():
+            raise RuntimeError("Unsafe DHCP email activation marker")
+        sys.path.insert(0, DHCP_POLICY_LIB)
+        from dhcp_device_email_policy import from_files
+        dhcp_candidates = from_files(
+            DHCP_DEVICE_STATE, DHCP_EMAIL_MARKER, registry,
+            inventory, DHCP_NMAP_PROFILES, DHCP_DASHBOARD_DIR
+        )
+        pending_by_mac = {device["mac"]: device for device in pending}
+        for device in dhcp_candidates:
+            pending_by_mac[device["mac"]] = device
+        pending = [pending_by_mac[mac] for mac in sorted(pending_by_mac)]
+
+    if "--preview" in sys.argv:
+        emit("network_device_alert_preview", pending_count=len(pending),
+             registry_count=len(known), email_sent=False, registry_changed=False)
+        return 0
+
     if not pending:
         return 0
 
@@ -245,6 +279,11 @@ def main():
             continue
 
         known[mac] = registry_entry(device, "alerted")
+        # Commit after EACH acknowledged relay send, to limit replay after
+        # a later device fails. Keep the original shared ledger schema.
+        registry["version"] = 1
+        registry["devices"] = known
+        save_atomic(REGISTRY_FILE, registry)
         changed = True
 
         emit(
@@ -254,11 +293,6 @@ def main():
             hostname=device.get("hostname", ""),
             vendor=device.get("vendor", ""),
         )
-
-    if changed:
-        registry["version"] = 1
-        registry["devices"] = known
-        save_atomic(REGISTRY_FILE, registry)
 
     return 0
 

@@ -1,0 +1,240 @@
+---
+# #291: one-router-DHCP-device Grafana provisioning canary.
+# Imports independent, read-only router + monitor source verification.
+# NO timer enable, router changes, discovery reset, backup or broad Grafana deploy.
+- import_playbook: router-01-dhcp-device-pages-preflight.yml
+
+- name: Canary create one MAC-stable dashboard with new isolated DHCP provider
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars:
+    device_pages_provider_path: /opt/monitoring/grafana/provisioning/dashboards/homelab.yml
+    monitoring_router_dhcp_device_pages_provider_enabled: true
+    device_pages_provisioning_template: >-
+      {{ lookup('ansible.builtin.template',
+         playbook_dir + '/../roles/monitoring_stack/templates/grafana-dashboard-provider.yml.j2') }}
+  tasks:
+    - name: Require exact approval for new one-page canary
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_device_pages_canary_approved | default(false) | bool
+          - (router_dhcp_device_pages_canary_phrase | default('')) == 'CREATE_ONE_ROUTER_DHCP_DEVICE_PAGE'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: One-page live canary requires exact approval on monitor-01.
+
+    - name: Require usable router-01 DHCPACK events in existing Loki
+      ansible.builtin.assert:
+        that:
+          - (device_pages_loki_counts.stdout | from_json).router_source_ready_for_canary == true
+          - (device_pages_loki_counts.stdout | from_json).validated_router_dhcpack_events > 0
+          - (device_pages_loki_counts.stdout | from_json).query_limit_reached == false
+        fail_msg: Router-01 DHCPACK stream not established; refuse canary.
+
+    - name: Check dedicated generator service and timer files are already staged
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /usr/local/sbin/router-dhcp-device-pages
+        - /usr/local/sbin/router-dhcp-device-pages-audit
+        - /etc/systemd/system/router-dhcp-device-pages.service
+        - /etc/systemd/system/router-dhcp-device-pages.timer
+      register: device_pages_staged_files
+
+    - name: Refuse canary if scoped generator was not staged
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+      loop: "{{ device_pages_staged_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Verify timer is not active before any Grafana provider changes
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      changed_when: false
+      failed_when: false
+      register: device_pages_timer_precanary
+
+    - name: Refuse an already active device generator
+      ansible.builtin.assert:
+        that:
+          - device_pages_timer_precanary.stdout | trim != 'active'
+
+    - name: Verify exact original 16 Grafana UIDs before creating a new page
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages-audit
+          - --mode
+          - before
+      register: device_pages_baseline
+      changed_when: false
+      no_log: true
+
+    - name: Read existing two-provider Grafana config without any backup file
+      ansible.builtin.slurp:
+        src: "{{ device_pages_provider_path }}"
+      register: device_pages_original_provider
+      no_log: true
+
+    - name: Preserve raw original provider text in Ansible memory
+      ansible.builtin.set_fact:
+        device_pages_original_provider_text: "{{ device_pages_original_provider.content | b64decode }}"
+        device_pages_existing_providers: "{{ device_pages_original_provider.content | b64decode | from_yaml }}"
+      no_log: true
+
+    - name: Refuse unknown Grafana provider content or third-party changes
+      ansible.builtin.assert:
+        that:
+          - device_pages_existing_providers.apiVersion == 1
+          - device_pages_existing_providers.providers | length == 2
+          - device_pages_existing_providers.providers[0].name == 'Homelab'
+          - device_pages_existing_providers.providers[1].name == 'Homelab Production'
+          - device_pages_existing_providers.providers[0].disableDeletion == true
+          - device_pages_existing_providers.providers[1].disableDeletion == true
+          - device_pages_provisioning_template.startswith(device_pages_original_provider_text)
+          - "'folderUid: router-dhcp-devices' in device_pages_provisioning_template"
+          - "'disableDeletion: true' in device_pages_provisioning_template"
+        fail_msg: Grafana provider differs from reviewed 2-to-3 provider migration.
+
+    - name: Refuse nonempty generated source folder or previously written state
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            from pathlib import Path
+            root=Path('/opt/monitoring/grafana/provisioning/dashboards/router-dhcp-devices')
+            state=Path('/var/lib/homelab-network-hosts/router-dhcp-device-pages.json')
+            if root.is_symlink() or not root.is_dir() or any(root.iterdir()):
+                raise SystemExit('Source folder is unsafe or not empty')
+            if state.exists() or state.is_symlink():
+                raise SystemExit('DHCP device state already exists; no canary replay')
+            print('router_dhcp_canary_clean_start=PASS')
+      changed_when: false
+
+    - name: Run generator in check-only mode before provider mutation
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages
+          - --max-new
+          - '1'
+      register: device_pages_check_only
+      changed_when: false
+      no_log: true
+
+    - name: Require one prospective device page from authenticated router DHCP
+      ansible.builtin.assert:
+        that:
+          - (device_pages_check_only.stdout | from_json).device_pages == 1
+          - (device_pages_check_only.stdout | from_json).new_devices == 1
+          - (device_pages_check_only.stdout | from_json).dashboard_writes == 1
+          - (device_pages_check_only.stdout | from_json).mode == 'check'
+
+    - name: Install scoped canonical three-provider source without backups
+      ansible.builtin.copy:
+        dest: "{{ device_pages_provider_path }}"
+        content: "{{ device_pages_provisioning_template }}"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: false
+
+    - name: Restart only Grafana to add the Router DHCP Devices folder
+      ansible.builtin.command:
+        argv: [docker, compose, --project-directory, /opt/monitoring, restart, grafana]
+      changed_when: true
+
+    - name: Wait for Grafana API readiness after scoped provider change
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      register: device_pages_grafana_ready
+      retries: 18
+      delay: 5
+      until: device_pages_grafana_ready.status | default(0) == 200
+      changed_when: false
+
+    - name: Create exactly one DHCP-derived dashboard source in isolated folder
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages
+          - --apply
+          - --max-new
+          - '1'
+      register: device_pages_created
+      no_log: true
+      changed_when: true
+
+    - name: Confirm exactly one new page created and saved
+      ansible.builtin.assert:
+        that:
+          - (device_pages_created.stdout | from_json).device_pages == 1
+          - (device_pages_created.stdout | from_json).new_devices == 1
+          - (device_pages_created.stdout | from_json).dashboard_writes == 1
+          - (device_pages_created.stdout | from_json).mode == 'apply'
+        fail_msg: Generator canary did not create exactly one new page.
+
+    - name: Wait for Grafana to ingest only the new page without losing old UIDs
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages-audit
+          - --mode
+          - canary
+      register: device_pages_canary_probe
+      changed_when: false
+      failed_when: false
+      retries: 15
+      delay: 8
+      until: device_pages_canary_probe.rc == 0
+      no_log: true
+
+    - name: Require 17 dashboards total and original 16 unchanged
+      ansible.builtin.assert:
+        that:
+          - device_pages_canary_probe.rc == 0
+          - (device_pages_canary_probe.stdout | from_json).total_dashboards == 17
+          - (device_pages_canary_probe.stdout | from_json).router_dhcp_device_dashboards == 1
+          - (device_pages_canary_probe.stdout | from_json).protected_uid_fingerprint_verified == true
+        fail_msg: Grafana did not prove exact one-page addition and retention of 16 originals.
+
+    - name: Ensure timer remains disabled after successful one-page canary
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      register: device_pages_canary_timer
+      failed_when: false
+      changed_when: false
+
+    - name: Refuse silent activation during canary
+      ansible.builtin.assert:
+        that:
+          - device_pages_canary_timer.stdout | trim != 'active'
+
+    - name: Confirm Prometheus is still healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9090/-/ready
+        status_code: 200
+      changed_when: false
+
+    - name: Report one-page canary success without exposing device identities
+      ansible.builtin.debug:
+        msg:
+          - "ROUTER_DHCP_DEVICE_CANARY=PASS"
+          - "Grafana now has 17 dashboards: 16 original and 1 DHCP-derived."
+          - "Router DHCP device page timer remains DISABLED pending separate approval."
+          - "No router modifications, extra Nmap scans, backups or old collector reinstatement."

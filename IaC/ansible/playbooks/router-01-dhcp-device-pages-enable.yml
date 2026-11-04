@@ -1,0 +1,84 @@
+---
+# #291: Explicit second gate. Only enable new 5-minute timer after
+# verified one-dashboard canary; existing discovery timers unchanged.
+- import_playbook: router-01-dhcp-device-pages-preflight.yml
+
+- name: Enable automatic router-01 DHCP per-device pages after successful canary
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Require explicit approval of ongoing new device page creation
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_device_pages_enable_approved | default(false) | bool
+          - (router_dhcp_device_pages_enable_phrase | default('')) == 'ENABLE_ROUTER_DHCP_DEVICE_PAGES'
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+        fail_msg: No automatic device pages without explicit operator approval.
+
+    - name: Verify completed canary and all 16 original Grafana dashboard identities
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages-audit
+          - --mode
+          - canary
+      register: router_dhcp_enable_canary
+      changed_when: false
+      no_log: true
+
+    - name: Verify source stream is available before enabling timer
+      ansible.builtin.assert:
+        that:
+          - (device_pages_loki_counts.stdout | from_json).router_source_ready_for_canary == true
+          - (device_pages_loki_counts.stdout | from_json).query_limit_reached == false
+
+    - name: Require separately approved shared-MAC email activation marker
+      ansible.builtin.stat:
+        path: /etc/homelab-network-hosts/router-dhcp-alerts.enabled.json
+        follow: false
+      register: router_dhcp_email_marker
+
+    - name: Prevent automatic page creation without first-seen email integration
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_email_marker.stat.isreg | default(false)
+          - not router_dhcp_email_marker.stat.islnk | default(false)
+        fail_msg: >-
+          The shared first-seen DHCP email path has not yet been explicitly
+          activated. Complete email integration and tests before starting
+          the five-minute device page timer.
+
+    - name: Require original network discovery email timer still active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-collector.timer]
+      changed_when: false
+
+    - name: Enable and start only the scoped router DHCP page timer
+      ansible.builtin.systemd_service:
+        name: router-dhcp-device-pages.timer
+        daemon_reload: true
+        enabled: true
+        state: started
+
+    - name: Verify new timer active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-dhcp-device-pages.timer]
+      register: router_dhcp_enabled_timer
+      changed_when: false
+
+    - name: Require active timer
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_enabled_timer.stdout | trim == 'active'
+
+    - name: Confirm ongoing device pages enabled
+      ansible.builtin.debug:
+        msg:
+          - "Router DHCP dashboard generation is now scheduled every ~5 minutes."
+          - "Only router-01 DHCPACK records create pages, max 10 new devices per worker."
+          - "Existing 16 dashboards, network discovery services and router configuration untouched."

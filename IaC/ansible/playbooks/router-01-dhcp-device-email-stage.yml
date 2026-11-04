@@ -1,0 +1,147 @@
+---
+# #291: Stages the DHCP-aware notifier INERTLY beside the existing notifier.
+# Does not change the live mailer, recipient, first-seen ledger or any timer.
+- import_playbook: router-01-dhcp-device-email-preflight.yml
+
+- name: Stage optional router DHCP email integration without sending mail
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  vars_files:
+    - ../roles/network_host_collector/defaults/main.yml
+  vars:
+    network_host_collector_expected_hostname: monitor-01
+    dhcp_email_live_notifier: /usr/local/sbin/homelab-network-device-email-alert
+    dhcp_email_candidate: /usr/local/sbin/homelab-network-device-email-alert-dhcp-candidate
+    dhcp_email_policy_directory: /usr/local/lib/homelab-router-dhcp-device-pages
+    dhcp_email_ledger: /var/lib/homelab-network-hosts/alerted-macs.json
+    dhcp_email_marker: /etc/homelab-network-hosts/router-dhcp-alerts.enabled.json
+
+  tasks:
+    - name: Require explicit inert code staging approval
+      ansible.builtin.assert:
+        that:
+          - router_dhcp_email_stage_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - network_host_collector_alert_enabled | bool
+        fail_msg: Refusing any unapproved or incorrect-owner email code staging.
+
+    - name: Check existing notifier and first-seen ledger before inert staging
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ dhcp_email_live_notifier }}"
+        - "{{ dhcp_email_ledger }}"
+        - /etc/homelab-network-hosts/alerts.env
+      register: dhcp_email_before_files
+      no_log: true
+
+    - name: Require existing production mailer, ledger and configured recipient intact
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not item.stat.islnk | default(false)
+          - item.stat.pw_name == 'root'
+        fail_msg: Refuse to stage beside an unexpected existing notifier or ledger.
+      loop: "{{ dhcp_email_before_files.results }}"
+      loop_control:
+        label: "{{ item.item }}"
+
+    - name: Refuse staging if DHCP notification activation marker already exists
+      ansible.builtin.stat:
+        path: "{{ dhcp_email_marker }}"
+        follow: false
+      register: dhcp_email_existing_activation
+
+    - name: Require DHCP email source still disabled
+      ansible.builtin.assert:
+        that:
+          - not dhcp_email_existing_activation.stat.exists
+        fail_msg: Email integration already activated or partially deployed; do not restage.
+
+    - name: Create narrow root-owned Python helper directory
+      ansible.builtin.file:
+        path: "{{ dhcp_email_policy_directory }}"
+        owner: root
+        group: root
+        mode: '0755'
+        state: directory
+
+    - name: Install non-sending DHCP MAC candidate policy
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../roles/router_dhcp_device_pages/files/dhcp_device_email_policy.py"
+        dest: "{{ dhcp_email_policy_directory }}/dhcp_device_email_policy.py"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: false
+
+    - name: Render separate inert candidate of shared SMTP notifier
+      ansible.builtin.template:
+        src: "{{ playbook_dir }}/../roles/network_host_collector/templates/homelab-network-device-email-alert.py.j2"
+        dest: "{{ dhcp_email_candidate }}"
+        owner: root
+        group: root
+        mode: '0750'
+        backup: false
+
+    - name: Compile staged scripts in-memory without executing or sending email
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import ast
+            from pathlib import Path
+            for name in (
+                '/usr/local/lib/homelab-router-dhcp-device-pages/dhcp_device_email_policy.py',
+                '/usr/local/sbin/homelab-network-device-email-alert-dhcp-candidate',
+            ):
+                ast.parse(Path(name).read_text(encoding='utf-8'))
+            print('dhcp_email_inert_scripts_syntax=PASS')
+      changed_when: false
+
+    - name: Verify ledger, recipient and original mailer byte-identical after staging
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ dhcp_email_live_notifier }}"
+        - "{{ dhcp_email_ledger }}"
+        - /etc/homelab-network-hosts/alerts.env
+      register: dhcp_email_after_files
+      no_log: true
+
+    - name: Refuse unexpected modification of existing notification production state
+      ansible.builtin.assert:
+        that:
+          - item[0].stat.checksum == item[1].stat.checksum
+        fail_msg: Refuse because the existing email notifier or registry changed.
+      loop: "{{ dhcp_email_before_files.results | zip(dhcp_email_after_files.results) | list }}"
+      loop_control:
+        label: "{{ item[0].item }}"
+
+    - name: Verify marker remains absent and no DHCP alerts were activated
+      ansible.builtin.stat:
+        path: "{{ dhcp_email_marker }}"
+        follow: false
+      register: dhcp_email_staged_marker
+
+    - name: Refuse unintended notification activation
+      ansible.builtin.assert:
+        that:
+          - not dhcp_email_staged_marker.stat.exists
+
+    - name: Report scoped staging only
+      ansible.builtin.debug:
+        msg:
+          - "STAGED ONLY: DHCP MAC candidate helper and inert notifier alongside existing mailer."
+          - "Existing SMTP sender, recipient, 56+ first-seen registry, six timers and Grafana untouched."
+          - "No activation marker created; no email sent."

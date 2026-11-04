@@ -1,6 +1,20 @@
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 
+## 3 November 2026 ~17:00 UTC — DHCP first-seen email source now enabled on monitor-01
+
+The **router-01 DHCP-backed first-seen email candidate source is now LIVE**, inside the **existing sole network-discovery SMTP notifier** on `monitor-01` (not a second sender). The operator's first approved `router-01-dhcp-device-email-activate.yml` completed **ok=34 changed=2 failed=0**; it installed the reviewed notifier executable, created the **future-only** activation marker, passed checksums against the candidate, ran no-send previews before and after activation, and proved original email recipient and shared first-seen MAC ledger unchanged during the cutover. The latest observed protected registry count is **57**. SMTP was not exercised by this activation and actual inbox delivery is unproven. A second attempted execution was correctly blocked with `changed=0 failed=1` because the marker exists; do not rerun or delete marker.
+
+**Still disabled:** the new 5-minute router-01 DHCP per-device Grafana page generator timer. Existing Grafana **17 dashboards** (original 16 UID-protected plus the one approved DHCP canary), existing independent discovery timers, router DHCP/DNS/NAT/QoS and historic monitoring data remain unchanged. Next gates are independent read-only email postflight, separately approved one-test SMTP mail with inbox confirmation, then separately approved automatic page-timer activation. Issue [#291](https://github.com/jrwroberts1976/homelab-platform/issues/291) remains open.
+
+## 3 November 2026 — Router-01 DHCP per-device Grafana canary LIVE; email integration in Git only
+
+The approved DHCP device-page canary ran successfully on `monitor-01`: `monitor-01 ok=36 changed=3 failed=0` and `router-01 ok=8 changed=0 failed=0`. Grafana now has **17 dashboards**: the **original 16 UID-verified unchanged** and exactly one new MAC-stable `Router DHCP Devices` dashboard sourced from `router-01` dnsmasq DHCPACK via Alloy/Loki. The dedicated Grafana provider was added and Grafana-only restarted; **automatic device-page generator timer remains disabled**. No router, DHCP/NAT/QoS, monitoring discovery or OS scanning changes occurred.
+
+Independently verified source and alert readiness: router dnsmasq active with **26** valid leases, Alloy active, 157 validated router DHCPACK events in last 24 hours, 38 host inventory and 38 Nmap profile records, six discovery timers active, mail recipient configured and mail-relay-01 SMTP greeting working. The original first-seen notifier is connected to the network collector and retains **56** MAC entries; the new dashboard canary MAC is already in its registry. Read-only email preflight `monitor-01 ok=9 changed=0 failed=0` sent **no email**. End-to-end email delivery is not yet independently proven.
+
+**Not live yet:** The new DHCP email integration (a separately staged, default-off addition to the existing *sole* SMTP notifier), activation marker, test-email approval and five-minute DHCP device-page timer. All remain behind explicit Ansible approval gates in issue [#291](https://github.com/jrwroberts1976/homelab-platform/issues/291). The new code uses future-only MAC observation cutoffs and existing registry to prevent old-device alert floods. Do not claim every new DHCP lease produces an alert or that the new timer runs until its separate postflight passes. Preserve retired ASUS/HP collectors and #287 deletions.
+
 ## 3 November 2026 ~14:55 UTC — legacy network retirement independently verified LIVE
 
 **Operator-verified production postflight:** `monitor-01` ran `network-host-legacy-retirement-postflight.yml` read-only: **ok=14, changed=0, failed=0, rescued=0**. Confirmed **0** retired ASUS/HP/MAC collector executables, **0** retired service/timer unit files, **0** obsolete named dashboard JSON files, and **0** generated per-MAC dashboard JSON files. Grafana has exactly **16** live dashboards, with **0** legacy dashboards; retained 16-UID SHA-256 fingerprint matches the pre-retirement inventory. The two protected Grafana provisioning providers remain, both with `disableDeletion: true`. The Network Discovery and router DHCP dashboards are present.
@@ -513,3 +527,25 @@ The following are genuine future work and must not be confused with completed mi
 ## Historical evidence
 
 Dated audits, migrations and commissioning records under `docs/` and `production docs/` remain point-in-time evidence. They should preserve the state observed at the time and must not be rewritten to look current when they conflict with this document or `IaC/inventory/estate.json`.
+
+## Router DHCP per-device Grafana pages — live (4 November 2026)
+
+GitHub #291 has restored per-device Grafana dashboards from **router-01 dnsmasq DHCPACK evidence** forwarded to Loki on monitor-01, replacing the retired ASUS/HP dashboard discovery path. Production generator `router-dhcp-device-pages.service` is scheduled by `router-dhcp-device-pages.timer` (approximately five minutes; enabled and active, operator-confirmed on 4 November). Its first observed automatic run at 07:33:54 GMT succeeded with `new_devices=10`, `device_pages=11`, `dashboard_writes=11`, `no_deletions=true`; the oneshot service returned `Result=success`, `ExecMainStatus=0`.
+
+Authenticated Grafana read-only audit `/usr/local/sbin/router-dhcp-device-pages-audit --mode enabled` returned `rc=0` on 4 November: **27 dashboards total = 16 original protected + 11 DHCP-derived**, with `protected_uid_fingerprint_verified=true`, matching provisioned DHCP JSON files and folder provenance. The isolated `Router DHCP Devices` provider is the approved third provider; the original `Homelab` and `Homelab Production` providers are retained. The earlier `--mode canary` check deliberately requires exactly one DHCP page and must not be used as a steady-state audit after automatic generation.
+
+Shared future-only MAC email integration uses the existing sole network-host SMTP notifier and existing protected first-seen ledger, not a second sender. A single separately approved SMTP test passed on 4 November (`ok=10 changed=1 failed=0`); the operator confirmed receipt in the inbox, and recipient configuration and MAC ledger checksums remained unchanged by the test. Previous independent no-send postflight passed (`ok=15 changed=0 failed=0`). No bulk historic-device alerting was authorised. These facts confirm test delivery, **not** a complete end-to-end proof that a future genuinely new DHCP MAC sends exactly one notification.
+
+Safety bounds: MAC-derived stable page identities, no automatic page deletion, at most 10 newly created pages per generator run, no router configuration change, no additional Nmap scan, original 16 dashboards and six discovery timers preserved. Remaining acceptance work: confirm ongoing scheduled runs remain clean; explicitly prove renewal/IP-update idempotency and Nmap enrichment behaviour from safe evidence before closing #291. The production timer has already been enabled; do not replay the one-device canary or cutover marker.
+
+### 4 November 2026 — scheduled generation and second production audit
+
+A second scheduled generator run at **07:39:24 GMT** succeeded: `new_devices=10`, `device_pages=21`, `dashboard_writes=10`, `no_deletions=true`, systemd service finished successfully. Subsequent independent authenticated Grafana `--mode enabled` audit returned **rc=0**, **37 total dashboards = 16 protected originals + 21 DHCP device pages**, with protected original UID fingerprint verified and all page provenance/source-file checks passing. No destructive operations performed. This validates multiple scheduled executions and Grafana ingestion, but does not yet prove renewals/IP changes never duplicate dashboard UIDs or Nmap enrichment of live pages.
+
+### 4 November 2026 — third run and 43-dashboard audit
+
+At **07:44:42 GMT**, the third scheduled generator execution completed successfully (`new_devices=6`, `device_pages=27`, `dashboard_writes=7`, `no_deletions=true`). The following read-only authenticated Grafana `--mode enabled` audit passed (`rc=0`), proving **43 dashboards total: 16 protected originals and 27 provisioned DHCP pages** with the original UID fingerprint verified. No settled `new_devices=0` run or independent live IP-reassignment/Nmap-enrichment proof has yet been observed; do not claim those acceptance criteria passed.
+
+### 4 November 2026 — settled generator check-only preview
+
+Operator ran the deployed generator without `--apply` on `monitor-01`. It returned `rc=0` and `{"dashboard_writes":0,"device_pages":27,"mode":"check","new_devices":0,"no_deletions":true,"state_change":false}`. This proves no pending page additions or writes for the input and state observed at that moment; it does not itself prove future IP-reassignment identity or Nmap enrichment correctness. The most recent independently verified Grafana state remains 43 dashboards (16 protected, 27 DHCP-derived).

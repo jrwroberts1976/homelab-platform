@@ -1,0 +1,144 @@
+---
+# #291 email gate: read-only verification of existing MAC-deduplicated notifier.
+# Does NOT send any email, run the notifier, create dashboards or enable timers.
+- name: Read-only first-seen email notification readiness check
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+  tasks:
+    - name: Verify correct monitoring owner before inspecting notifier
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+
+    - name: Check Grafana still has the original 16 plus one canary page
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - /usr/local/sbin/router-dhcp-device-pages-audit
+          - --mode
+          - canary
+      register: dhcp_email_canary_fingerprint
+      changed_when: false
+      no_log: true
+
+    - name: Inspect current notifier, recipient, registry and DHCP page state privately
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import hashlib,json,re,subprocess
+            from pathlib import Path
+
+            script=Path('/usr/local/sbin/homelab-network-device-email-alert')
+            env=Path('/etc/homelab-network-hosts/alerts.env')
+            registry=Path('/var/lib/homelab-network-hosts/alerted-macs.json')
+            state=Path('/var/lib/homelab-network-hosts/router-dhcp-device-pages.json')
+            source=Path('/opt/monitoring/grafana/provisioning/dashboards/router-dhcp-devices')
+            for item in (script,env,registry,state):
+                if item.is_symlink() or not item.is_file():
+                    raise SystemExit('Notifier identity/recipient/device file absent or unsafe')
+            config={}
+            for line in env.read_text(encoding='utf-8').splitlines():
+                if not line or line.lstrip().startswith('#') or '=' not in line:
+                    continue
+                key,value=line.split('=',1)
+                config[key.strip()]=value.strip().strip('"').strip("'")
+            recipient=bool(config.get('NETWORK_DEVICE_ALERT_TO','').strip())
+            reg=json.loads(registry.read_text(encoding='utf-8'))
+            if not isinstance(reg,dict) or not isinstance(reg.get('devices'),dict):
+                raise SystemExit('Malformed shared first-seen registry')
+            known=reg['devices']
+            if len(known)<56:
+                raise SystemExit('Shared first-seen registry was unexpectedly reduced')
+            dhcp=json.loads(state.read_text(encoding='utf-8'))
+            if dhcp.get('schema_version')!=1 or not isinstance(dhcp.get('devices'),dict):
+                raise SystemExit('Malformed MAC-keyed DHCP page state')
+            if len(dhcp['devices'])!=1:
+                raise SystemExit('Expected exactly one initial DHCP page record')
+            mac=next(iter(dhcp['devices']))
+            if not re.fullmatch(r'(?:[0-9a-f]{2}:){5}[0-9a-f]{2}',mac):
+                raise SystemExit('Invalid canary MAC')
+            uid='routerdhcp-'+hashlib.sha256(mac.encode('ascii')).hexdigest()[:20]
+            page=source/(uid+'.json')
+            if page.is_symlink() or not page.is_file():
+                raise SystemExit('Canary Grafana JSON source missing')
+            if json.loads(page.read_text()).get('uid') != uid:
+                raise SystemExit('Canary Grafana UID does not match source')
+
+            unit=subprocess.run(
+                ['systemctl','cat','homelab-network-host-collector.service'],
+                capture_output=True,text=True,timeout=8,check=False)
+            if unit.returncode:
+                raise SystemExit('Collector service unit could not be inspected')
+            notifier_hook=(
+                'ExecStartPost=' in unit.stdout
+                and '/usr/local/sbin/homelab-network-device-email-alert' in unit.stdout
+            )
+            notifier_script_has_smtp=('smtplib.SMTP' in script.read_text())
+            print(json.dumps({
+                'existing_first_seen_registry_entries':len(known),
+                'canary_mac_already_in_first_seen_registry':mac in known,
+                'dhcp_device_pages_present':len(dhcp['devices']),
+                'alert_recipient_configured':recipient,
+                'collector_notifier_hook_present':notifier_hook,
+                'notifier_has_smtp_sender':notifier_script_has_smtp,
+                'read_only':True,'test_email_sent':False
+            },sort_keys=True))
+      register: dhcp_email_readiness
+      changed_when: false
+      no_log: true
+
+    - name: Print non-identifying recipient and registry readiness
+      ansible.builtin.debug:
+        var: dhcp_email_readiness.stdout
+
+    - name: Check SMTP relay TCP greeting without sending mail
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - |
+            import json,socket
+            try:
+                with socket.create_connection(('192.168.2.54',25),timeout=5) as sock:
+                    sock.settimeout(5)
+                    banner=sock.recv(160)
+                    smtp_ready=banner.startswith(b'220')
+            except (TimeoutError,OSError):
+                smtp_ready=False
+            print(json.dumps({
+                'mail_relay_01_smtp_greeting_ok':smtp_ready,
+                'email_sent':False,
+                'read_only':True
+            },sort_keys=True))
+      register: dhcp_email_relay_result
+      changed_when: false
+
+    - name: Print SMTP relay readiness without sending email
+      ansible.builtin.debug:
+        var: dhcp_email_relay_result.stdout
+
+    - name: Require retained Grafana health and protected first-seen state
+      ansible.builtin.uri:
+        url: "{{ item }}"
+        status_code: 200
+      loop:
+        - http://127.0.0.1:3000/api/health
+        - http://127.0.0.1:9090/-/ready
+      changed_when: false
+
+    - name: Conclude email preflight without activation or SMTP delivery
+      ansible.builtin.debug:
+        msg: >-
+          Email path examined read-only. No email has been sent or timer
+          activated. A configured recipient and a reachable mail relay
+          are prerequisites, but do not prove end-to-end delivery.

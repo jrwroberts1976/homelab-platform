@@ -1,0 +1,12 @@
+[Unit]
+Description=Update per-device Grafana pages from router-01 DHCP evidence
+
+[Timer]
+OnBootSec=4min
+OnUnitActiveSec=5min
+RandomizedDelaySec=30s
+Persistent=true
+Unit=router-dhcp-device-pages.service
+
+[Install]
+WantedBy=timers.target

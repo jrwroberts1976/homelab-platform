@@ -1,0 +1,25 @@
+[Unit]
+Description=Router-01 DHCP per-device Grafana page generator
+After=network-online.target
+Wants=network-online.target
+ConditionPathExists=/var/lib/homelab-network-hosts/inventory.json
+ConditionPathExists=/var/lib/homelab-network-hosts/deep-profiles.json
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+UMask=0027
+ExecStart=/usr/bin/python3 -B /usr/local/sbin/router-dhcp-device-pages --apply --max-new 10
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ProtectKernelTunables=true
+ProtectKernelModules=true
+ProtectControlGroups=true
+ReadWritePaths=/var/lib/homelab-network-hosts
+ReadWritePaths=/opt/monitoring/grafana/provisioning/dashboards/router-dhcp-devices
+RestrictAddressFamilies=AF_UNIX AF_INET
+IPAddressDeny=any
+IPAddressAllow=127.0.0.1/32
