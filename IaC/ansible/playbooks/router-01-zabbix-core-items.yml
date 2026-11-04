@@ -9,10 +9,9 @@
     router_zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
     router_zabbix_items:
       - {key: "system.cpu.load[all,avg1]", name: "Router CPU load (1m)", delay: "1m", value_type: "0", units: ""}
-      - {key: "system.cpu.util[,idle]", name: "Router CPU idle percentage", delay: "1m", value_type: "0", units: "%"}
       - {key: "vm.memory.size[total]", name: "Router memory total", delay: "5m", value_type: "3", units: "B"}
       - {key: "vm.memory.size[available]", name: "Router memory available", delay: "1m", value_type: "3", units: "B"}
-      - {key: "vm.memory.size[pused]", name: "Router memory used percentage", delay: "1m", value_type: "0", units: "%"}
+      - {key: "vm.memory.size[pavailable]", name: "Router memory available percentage", delay: "1m", value_type: "0", units: "%"}
       - {key: "vfs.fs.size[/,pused]", name: "Router root filesystem used percentage", delay: "5m", value_type: "0", units: "%"}
       - {key: "system.uptime", name: "Router uptime", delay: "30s", value_type: "3", units: "uptime"}
 
@@ -22,7 +21,7 @@
         that:
           - router_zabbix_core_items_approved | default(false) | bool
           - router_zabbix_core_items_phrase | default('') == 'CONFIGURE_ROUTER01_HEALTH_ITEMS'
-          - router_zabbix_items | length == 7
+          - router_zabbix_items | length == 6
         fail_msg: "Router-01 Zabbix host item enrollment requires explicit approval."
     - name: Require privileged API token
       ansible.builtin.assert:
@@ -185,9 +184,9 @@
           - >-
             _router_items_postflight.json.result | map(attribute='key_') | list | sort ==
             router_zabbix_items | map(attribute='key') | list | sort
-          - _router_items_postflight.json.result | selectattr('type', 'equalto', '7') | list | length == 7
+          - _router_items_postflight.json.result | selectattr('type', 'equalto', '7') | list | length == 6
           - _router_items_postflight.json.result | selectattr('status', 'equalto', '0') | list | length == 7
         fail_msg: "Router-01 basic monitoring item postflight not confirmed."
     - name: Report item enrollment scope without values or tokens
       ansible.builtin.debug:
-        msg: "router-01 has seven configured active-agent health checks. Collection freshness is not yet proven."
+        msg: "router-01 has six configured active-agent health checks. Collection freshness is not yet proven."
