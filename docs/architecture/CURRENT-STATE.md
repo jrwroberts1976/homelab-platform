@@ -545,3 +545,7 @@ A second scheduled generator run at **07:39:24 GMT** succeeded: `new_devices=10`
 ### 4 November 2026 — third run and 43-dashboard audit
 
 At **07:44:42 GMT**, the third scheduled generator execution completed successfully (`new_devices=6`, `device_pages=27`, `dashboard_writes=7`, `no_deletions=true`). The following read-only authenticated Grafana `--mode enabled` audit passed (`rc=0`), proving **43 dashboards total: 16 protected originals and 27 provisioned DHCP pages** with the original UID fingerprint verified. No settled `new_devices=0` run or independent live IP-reassignment/Nmap-enrichment proof has yet been observed; do not claim those acceptance criteria passed.
+
+### 4 November 2026 — settled generator check-only preview
+
+Operator ran the deployed generator without `--apply` on `monitor-01`. It returned `rc=0` and `{"dashboard_writes":0,"device_pages":27,"mode":"check","new_devices":0,"no_deletions":true,"state_change":false}`. This proves no pending page additions or writes for the input and state observed at that moment; it does not itself prove future IP-reassignment identity or Nmap enrichment correctness. The most recent independently verified Grafana state remains 43 dashboards (16 protected, 27 DHCP-derived).
