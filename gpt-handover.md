@@ -1,3 +1,8 @@
+## 2026-11-05 — #209 router patch LAN metric identity independently verified end-to-end
+
+- Read-only Prometheus query on monitor-01 now confirms `homelab_patch_pending_updates{host="router-01",ip="192.168.2.1",target_name="router-01"}=3`, `homelab_patch_security_updates_pending=0`, and `homelab_patch_status_timestamp_seconds=1793863552`. This confirms live Prometheus ingestion after the LAN identity-label fix. Prior public WAN `ip` label no longer appears in these current query results. Avoid recording or exposing historical WAN value.
+- Hourly telemetry-only patch collector deployed successfully; unattended-upgrades not installed and no automatic patch policy applied. Pending: user Grafana Hosts dashboard patch panels confirmation, collector security classification/index freshness caveat, idempotent Ansible verification and PR/CI review/merge. Issue #209 remains open.
+
 ## 2026-11-05 — #209 router patch LAN-label correction deployed; remote verification pending
 
 - Operator reran approval-gated `router-01-patch-telemetry-only.yml` after updating the exporter to label patch metrics with stable management IP (`ansible_host`, expected `192.168.2.1`). Ansible recap **router-01 ok=21 changed=2 unreachable=0 failed=0 skipped=7**. No failed pre/post gateway checks; telemetry-only flags remain in force and unattended upgrades not installed by the playbook.
