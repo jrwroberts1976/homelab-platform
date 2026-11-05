@@ -1,3 +1,8 @@
+## 2026-11-05 — #294 six-item Zabbix pilot postflight assertion corrected
+
+- Operator ran the approved `router-01-zabbix-core-items.yml` deployment; recap `localhost ok=9 changed=1 failed=1 skipped=1`. It failed only at the final assertion erroneously checking **7** enabled items after reducing intended pilot to **6**. No rollback is implied; at least one server-side change occurred. The feature branch has been patched to compare enabled/type counts against `router_zabbix_items | length`, commit `b0a51646`. The router host OS Facts ingestion was still previously unverified; no proof of fresh six-item time series yet.
+- **Next actions:** pull branch and syntax-check; independently run read-only API `item.get` against router-01 for six keys and status/type/lastclock, and check for failed/partial item creation before any rerun. Only then consider idempotent rerun, which should skip already-created items and finish with `changed=0` if all match. Keep secrets out of output.
+
 ## 2026-11-04 — #294 router-01 memory semantics verified; pilot corrected (not deployed)
 
 - Operator read-only measurements: `MemTotal=3886840 kB`, `MemFree=282968 kB`, `MemAvailable=2077460 kB`, `Cached=1744100 kB`; Zabbix `vm.memory.size[pused]=93.210011` and `vm.memory.size[pavailable]=53.031460`. High `pused` includes reclaimable caching and is **not an appropriate standalone memory-pressure alarm**. Root filesystem shows 1% used (about 5.4 GB used on 939 GB filesystem). CPU idle via standalone `zabbix_agent2 -t 'system.cpu.util[,idle]'` still returned `ZBX_NODATA`, possibly due to missing interval sampling; must verify daemon collection later. Router PPPoE, dnsmasq, Unbound, nftables, Zabbix Agent 2 all active.
