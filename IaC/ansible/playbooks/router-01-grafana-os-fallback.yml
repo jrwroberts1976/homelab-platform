@@ -1,0 +1,76 @@
+---
+# Scoped, opt-in deployment: only one production Grafana dashboard JSON.
+# Does not scan devices, restart containers, or change router services.
+- name: Publish verified router OS facts in existing Homelab Hosts panel
+  hosts: monitor-01
+  gather_facts: false
+  become: true
+  vars:
+    router_os_dashboard_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
+    router_os_dashboard_dest: /opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json
+    router_os_dashboard_json: "{{ lookup('file', router_os_dashboard_source) | from_json }}"
+    router_os_panel_query: "{{ (router_os_dashboard_json.panels | selectattr('id', 'equalto', 29) | first).targets[0].expr | replace('$host', 'router-01') }}"
+
+  pre_tasks:
+    - name: Require explicit one-dashboard approval and verified monitor identity
+      ansible.builtin.assert:
+        that:
+          - router_os_fallback_approved | default(false) | bool
+          - router_os_fallback_phrase | default('') == 'ADD_VERIFIED_ROUTER_OS_FACTS'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Only explicitly approved monitor-01 Grafana Hosts panel deployment is allowed."
+
+    - name: Parse and validate the staged Grafana JSON on controller
+      ansible.builtin.assert:
+        that:
+          - router_os_dashboard_json.uid == 'homelab-linux-estate'
+          - router_os_dashboard_json.panels | selectattr('id', 'equalto', 29) | list | length == 1
+          - "'node_os_info' in router_os_panel_query"
+          - "'node_uname_info' in router_os_panel_query"
+        fail_msg: "Unexpected Grafana dashboard identity or OS facts query."
+      delegate_to: localhost
+      become: false
+
+    - name: Verify actual router OS fallback query succeeds in central Prometheus
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9090/api/v1/query?query={{ router_os_panel_query | urlencode }}"
+        return_content: true
+        timeout: 15
+      register: _router_os_query_result
+      changed_when: false
+
+    - name: Require real router OS/kernel data before any dashboard write
+      ansible.builtin.assert:
+        that:
+          - _router_os_query_result.json.status == 'success'
+          - _router_os_query_result.json.data.result | length == 1
+          - _router_os_query_result.json.data.result[0].metric.hostname == 'router-01'
+          - _router_os_query_result.json.data.result[0].metric.os_source == 'node-exporter'
+          - _router_os_query_result.json.data.result[0].metric.os | length > 0
+          - _router_os_query_result.json.data.result[0].metric.architecture | length > 0
+          - _router_os_query_result.json.data.result[0].metric.kernel | length > 0
+        fail_msg: "Cannot prove router-01 OS facts fallback from live Prometheus. Dashboard unchanged."
+
+  tasks:
+    - name: Back up and install only the Homelab Hosts dashboard
+      ansible.builtin.copy:
+        src: "{{ router_os_dashboard_source }}"
+        dest: "{{ router_os_dashboard_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: _router_os_dashboard_copy
+
+    - name: Verify installed dashboard JSON parses
+      ansible.builtin.command:
+        argv: [jq, empty, "{{ router_os_dashboard_dest }}"]
+      changed_when: false
+
+    - name: Show deployment state and rollback copy
+      ansible.builtin.debug:
+        msg:
+          - "dashboard_changed={{ _router_os_dashboard_copy.changed }}"
+          - "backup_file={{ _router_os_dashboard_copy.backup_file | default('not needed') }}"
+          - "Verify router-01 Operating System & Platform panel in Grafana after provisioning reload."
