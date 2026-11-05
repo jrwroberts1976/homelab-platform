@@ -1,6 +1,7 @@
 """Offline regression checks for targeted Grafana panel-30 update."""
 import importlib.util
 import json
+import os
 import sys
 import tempfile
 import unittest
@@ -23,6 +24,7 @@ class DashboardPanelPatchTests(unittest.TestCase):
         live = root / "live.json"
         self.patches = [
             patch.object(mod, "STAGE", stage),
+            patch.object(mod, "STAGE_OWNER_UID", os.getuid()),
             patch.object(mod, "LIVE", live),
             patch.object(mod, "BACKUP", stage / "grafana-hosts-before-panel30.json"),
             patch.object(mod, "DEPLOYED_HASH", stage / "grafana-hosts-after-panel30.sha256"),
