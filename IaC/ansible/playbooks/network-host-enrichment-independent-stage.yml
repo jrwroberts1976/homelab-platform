@@ -111,6 +111,10 @@
         owner: root
         group: root
         mode: '0755'
+      vars:
+        # Task vars must override vars_files defaults (whose local mode
+        # otherwise takes precedence over the play-level setting).
+        network_host_enrichment_proxmox_source: snapshot_optional
 
     - name: Stage independent condition-only systemd drop-in
       ansible.builtin.copy:
