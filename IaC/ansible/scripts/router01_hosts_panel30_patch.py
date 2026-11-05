@@ -5,13 +5,14 @@ import hashlib
 import json
 import os
 from pathlib import Path
-import shutil
 import tempfile
 
 LIVE = Path("/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json")
 STAGE = Path("/var/backups/homelab-network-enrichment/independent-20261105")
 BACKUP = STAGE / "grafana-hosts-before-panel30.json"
 DEPLOYED_HASH = STAGE / "grafana-hosts-after-panel30.sha256"
+# Production stage must remain root-owned. Tests override only this constant.
+STAGE_OWNER_UID = 0
 OLD = 'max by (ip, port, protocol, service, product, version) (homelab_network_host_enrichment_port_info * on(ip) group_left(hostname) (homelab_network_device_card_info{hostname="$host"} == 1))'
 NEW = 'max by (ip, port, protocol, service, product, version) (homelab_network_host_enrichment_port_info{target_name="monitor-01"} * on(ip) group_left(hostname) (homelab_network_host_info{target_name="monitor-01",hostname=~"^${host:regex}(\\\\..*)?$"} == 1))'
 
@@ -62,7 +63,7 @@ def main():
 
     if not STAGE.is_dir() or not LIVE.is_file():
         raise SystemExit("Missing protected staging directory or live dashboard")
-    if STAGE.stat().st_uid != 0 or (STAGE.stat().st_mode & 0o777) != 0o700:
+    if STAGE.stat().st_uid != STAGE_OWNER_UID or (STAGE.stat().st_mode & 0o777) != 0o700:
         raise SystemExit("Unexpected staging directory owner/mode")
 
     original = LIVE.read_bytes()
