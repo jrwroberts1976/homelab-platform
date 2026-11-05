@@ -184,8 +184,8 @@
           - >-
             _router_items_postflight.json.result | map(attribute='key_') | list | sort ==
             router_zabbix_items | map(attribute='key') | list | sort
-          - _router_items_postflight.json.result | selectattr('type', 'equalto', '7') | list | length == 6
-          - _router_items_postflight.json.result | selectattr('status', 'equalto', '0') | list | length == 7
+          - _router_items_postflight.json.result | selectattr('type', 'equalto', '7') | list | length == router_zabbix_items | length
+          - _router_items_postflight.json.result | selectattr('status', 'equalto', '0') | list | length == router_zabbix_items | length
         fail_msg: "Router-01 basic monitoring item postflight not confirmed."
     - name: Report item enrollment scope without values or tokens
       ansible.builtin.debug:
