@@ -1,0 +1,125 @@
+---
+# Partial-stage reconciliation only. Does not invoke Nmap, refresh Proxmox,
+# change live service/drop-in, daemon-reload or modify any timer.
+- name: Repair incorrectly rendered inert candidate after verified partial stage
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/network_host_enrichment/defaults/main.yml
+  vars:
+    stage_root: /var/backups/homelab-network-enrichment/independent-20261105
+    installed_worker: /usr/local/sbin/homelab-network-host-enricher
+    installed_dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+    candidate: "{{ stage_root }}/candidate-enricher.py"
+    worker_template: "{{ playbook_dir }}/../roles/network_host_enrichment/templates/homelab-network-host-enricher.py.j2"
+    expected_candidate_dropin: "{{ playbook_dir }}/../roles/network_host_enrichment/files/20-proxmox-guest-refresh-independent.conf"
+  tasks:
+    - name: Require exact host, separate approval and no concurrent enricher work
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - network_enrichment_repair_approved | default(false) | bool
+          - network_enrichment_repair_phrase | default('') == 'REPAIR_INERT_NETWORK_ENRICHMENT_CANDIDATE'
+
+    - name: Verify protected stage and original backup identities
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ stage_root }}"
+        - "{{ installed_worker }}"
+        - "{{ stage_root }}/original-enricher.py"
+        - "{{ installed_dropin }}"
+        - "{{ stage_root }}/original-dropin.conf"
+        - "{{ candidate }}"
+        - "{{ stage_root }}/candidate-dropin.conf"
+      register: inspected
+
+    - name: Require exact protected partial stage with untouched originals
+      ansible.builtin.assert:
+        that:
+          - inspected.results[0].stat.isdir | default(false)
+          - inspected.results[0].stat.pw_name == 'root'
+          - inspected.results[0].stat.mode == '0700'
+          - inspected.results[1].stat.isreg | default(false)
+          - inspected.results[2].stat.isreg | default(false)
+          - inspected.results[1].stat.checksum == inspected.results[2].stat.checksum
+          - inspected.results[3].stat.isreg | default(false)
+          - inspected.results[4].stat.isreg | default(false)
+          - inspected.results[3].stat.checksum == inspected.results[4].stat.checksum
+          - inspected.results[5].stat.isreg | default(false)
+          - inspected.results[5].stat.pw_name == 'root'
+          - inspected.results[5].stat.mode == '0755'
+          - inspected.results[6].stat.isreg | default(false)
+          - inspected.results[6].stat.checksum == (lookup('file', expected_candidate_dropin) | hash('sha256'))
+        fail_msg: "Unexpected stage or altered originals; refuse repair."
+
+    - name: Read candidate source mode without executing scanner
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ast,pathlib; p=pathlib.Path('{{ candidate }}'); t=ast.parse(p.read_text()); a=[n for n in t.body if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='PROXMOX_SOURCE' for x in n.targets)]; assert len(a)==1 and isinstance(a[0].value,ast.Constant) and a[0].value.value=='local', 'unexpected candidate source mode'"
+      changed_when: false
+
+    - name: Require original dependency still present before repair
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-network-host-enricher.service, -p, Requires, -p, DropInPaths]
+      register: unit_before
+      changed_when: false
+
+    - name: Refuse changed live service dependency
+      ansible.builtin.assert:
+        that:
+          - "'homelab-proxmox-guest-refresh.service' in unit_before.stdout"
+          - installed_dropin in unit_before.stdout
+
+    - name: Repair only the inert candidate Python file
+      ansible.builtin.template:
+        src: "{{ worker_template }}"
+        dest: "{{ candidate }}"
+        owner: root
+        group: root
+        mode: '0755'
+      vars:
+        network_host_enrichment_proxmox_source: snapshot_optional
+
+    - name: Parse and verify exact candidate mode with Python AST
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ast,pathlib; p=pathlib.Path('{{ candidate }}'); t=ast.parse(p.read_text()); a=[n for n in t.body if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='PROXMOX_SOURCE' for x in n.targets)]; assert len(a)==1 and isinstance(a[0].value,ast.Constant) and a[0].value.value=='snapshot_optional', 'incorrect mode'"
+      changed_when: false
+
+    - name: Verify live originals and recovery backups still match
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ installed_worker }}"
+        - "{{ stage_root }}/original-enricher.py"
+        - "{{ installed_dropin }}"
+        - "{{ stage_root }}/original-dropin.conf"
+      register: after
+
+    - name: Require production state remains unchanged
+      ansible.builtin.assert:
+        that:
+          - after.results[0].stat.checksum == inspected.results[1].stat.checksum
+          - after.results[1].stat.checksum == inspected.results[2].stat.checksum
+          - after.results[2].stat.checksum == inspected.results[3].stat.checksum
+          - after.results[3].stat.checksum == inspected.results[4].stat.checksum
+
+    - name: Report staged-only candidate repair
+      ansible.builtin.debug:
+        msg:
+          - "Candidate repaired to snapshot_optional in protected staging only"
+          - "Installed worker and dependency unchanged, rollback backups preserved"
+          - "No timer, Nmap, API or active network changes"
