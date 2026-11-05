@@ -1,4 +1,4 @@
-"""Offline, fail-closed regression tests for router-01 Greenbone target addition."""
+"""Offline, fail-closed regression tests for docker-01 to router-01 Greenbone target replacement."""
 import unittest
 import xml.etree.ElementTree as ET
 from pathlib import Path
@@ -32,10 +32,10 @@ class RouterTargetTests(unittest.TestCase):
     def test_requires_approval(self):
         reconcile, writes = environment()
         with self.assertRaisesRegex(RuntimeError, "approval"):
-            reconcile(target("192.168.2.48,192.168.2.52"), "correct")
+            reconcile(target("192.168.2.48,192.168.2.52,192.168.2.220"), "correct")
         self.assertFalse(writes)
 
-    def test_approved_adds_only_router(self):
+    def test_approved_replaces_retired_docker_only(self):
         reconcile, writes = environment(True)
         self.assertEqual(reconcile(target("192.168.2.48,192.168.2.52"), "correct"), ("existing-target", True))
         self.assertEqual(len(writes), 1)
@@ -49,16 +49,35 @@ class RouterTargetTests(unittest.TestCase):
         self.assertEqual(reconcile(target("192.168.2.1,192.168.2.52,192.168.2.48"), "correct"), ("existing-target", False))
         self.assertFalse(writes)
 
+    def test_refuses_addition_without_retired_ip(self):
+        reconcile, writes = environment(True)
+        with self.assertRaisesRegex(RuntimeError, "drift"):
+            reconcile(target("192.168.2.48,192.168.2.52"), "correct")
+        self.assertFalse(writes)
+
     def test_rejects_unexpected_drift(self):
         reconcile, writes = environment(True)
         with self.assertRaisesRegex(RuntimeError, "drift"):
             reconcile(target("192.168.2.48"), "correct")
         self.assertFalse(writes)
 
+    def test_refuses_unexpected_extra_host(self):
+        reconcile, writes = environment(True)
+        with self.assertRaisesRegex(RuntimeError, "drift"):
+            reconcile(target("192.168.2.48,192.168.2.52,192.168.2.220,192.168.2.99"), "correct")
+        self.assertFalse(writes)
+
     def test_rejects_wrong_credential(self):
         reconcile, writes = environment(True)
         with self.assertRaisesRegex(RuntimeError, "credential"):
-            reconcile(target("192.168.2.48,192.168.2.52", "wrong"), "correct")
+            reconcile(target("192.168.2.48,192.168.2.52,192.168.2.220", "wrong"), "correct")
+        self.assertFalse(writes)
+
+    def test_refuses_retired_ip_in_desired_inventory(self):
+        reconcile, writes = environment(True)
+        reconcile.__globals__["HOSTS"] += ",192.168.2.220"
+        with self.assertRaisesRegex(RuntimeError, "drift"):
+            reconcile(target("192.168.2.48,192.168.2.52,192.168.2.220"), "correct")
         self.assertFalse(writes)
 
     def test_rejects_duplicate_target_hosts(self):
