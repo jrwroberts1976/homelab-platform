@@ -127,7 +127,7 @@ dns-02 is the documented CT100 Proxmox LXC container providing Pi-hole and Unbou
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-05T03:58:59+00:00`
+- Last assessed: `2026-11-05T05:02:22+00:00`
 - Pending updates: **3**
 - Security updates pending: **3**
 - Reboot required: **No**
