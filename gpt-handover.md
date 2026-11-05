@@ -1,3 +1,9 @@
+## 2026-11-05 — #209 router-01 patch telemetry verified in live Grafana Hosts dashboard
+
+- Operator selected `router-01` in Grafana Homelab — Hosts and confirmed **Total Updates=3**, **Security Updates=0**, **Last Patch Check=2.15 minutes**, after central Prometheus verified `host=router-01`, `ip=192.168.2.1`, `target_name=router-01`. CPU=5.79%, RAM=46.8%, exporter up=1, receive=225 kB/s, transmit=168 kB/s, root filesystem 4.67%, boot firmware 13.1% also displayed. This completes live end-to-end **patch telemetry data-path verification**.
+- Missing enriched OS/platform, open ports, Nmap fingerprint and vulnerability panels remain **No data**; `Failed systemd Units=0` may be panel `or vector(0)` fallback. Security count uses heuristic and cached package lists; do not call it security compliance or proof the host is fully updated. No unattended-upgrades package or automatic upgrade policy deployed.
+- Remaining #209 patch telemetry release: perform a second approval-gated Ansible idempotence run (`changed=0` expected), review CI/PR and merge. Branch `feature/router01-patch-telemetry-20261105` still unmerged.
+
 ## 2026-11-05 — #209 router patch LAN metric identity independently verified end-to-end
 
 - Read-only Prometheus query on monitor-01 now confirms `homelab_patch_pending_updates{host="router-01",ip="192.168.2.1",target_name="router-01"}=3`, `homelab_patch_security_updates_pending=0`, and `homelab_patch_status_timestamp_seconds=1793863552`. This confirms live Prometheus ingestion after the LAN identity-label fix. Prior public WAN `ip` label no longer appears in these current query results. Avoid recording or exposing historical WAN value.
