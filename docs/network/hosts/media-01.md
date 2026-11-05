@@ -100,7 +100,7 @@ media-01 is a Raspberry Pi 5 used as a Kodi endpoint and primary Proxmox NFS bac
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-05T20:33:53+00:00`
+- Last assessed: `2026-11-05T21:35:30+00:00`
 - Pending updates: **4**
 - Security updates pending: **0**
 - Reboot required: **No**
