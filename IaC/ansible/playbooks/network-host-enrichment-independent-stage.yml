@@ -1,0 +1,176 @@
+---
+# Gate 1: stage and back up only. Never start the worker/timer or invoke Nmap.
+- name: Stage independent network enrichment without activating it
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars_files:
+    - ../roles/network_host_enrichment/defaults/main.yml
+  vars:
+    network_host_enrichment_proxmox_source: snapshot_optional
+    stage_approval_phrase: STAGE_INDEPENDENT_NETWORK_ENRICHMENT
+    stage_root: /var/backups/homelab-network-enrichment/independent-20261105
+    installed_worker: /usr/local/sbin/homelab-network-host-enricher
+    installed_dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+    staged_worker: "{{ stage_root }}/candidate-enricher.py"
+    staged_dropin: "{{ stage_root }}/candidate-dropin.conf"
+    worker_template: "{{ playbook_dir }}/../roles/network_host_enrichment/templates/homelab-network-host-enricher.py.j2"
+    independent_dropin_source: "{{ playbook_dir }}/../roles/network_host_enrichment/files/20-proxmox-guest-refresh-independent.conf"
+  tasks:
+    - name: Require exact host and explicit staging approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - network_enrichment_stage_approved | default(false) | bool
+          - network_enrichment_stage_phrase | default('') == stage_approval_phrase
+
+    - name: Inspect current worker, drop-in, marker and protected identity helper
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ installed_worker }}"
+        - "{{ installed_dropin }}"
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+        - /usr/local/lib/homelab-network-hosts/proxmox_guest_identity.py
+        - /var/lib/homelab-network-hosts/inventory.json
+      register: existing
+
+    - name: Require expected installed files and original permissions
+      ansible.builtin.assert:
+        that:
+          - existing.results[0].stat.isreg | default(false)
+          - existing.results[0].stat.pw_name == 'root'
+          - existing.results[0].stat.mode == '0755'
+          - existing.results[1].stat.isreg | default(false)
+          - existing.results[1].stat.pw_name == 'root'
+          - existing.results[1].stat.mode == '0644'
+          - existing.results[2].stat.isreg | default(false)
+          - existing.results[3].stat.isreg | default(false)
+          - existing.results[4].stat.isreg | default(false)
+          - existing.results[4].stat.pw_name == 'root'
+
+    - name: Read existing loaded worker source and dependency configuration
+      ansible.builtin.command:
+        argv: [systemctl, cat, homelab-network-host-enricher.service]
+      register: unit_before
+      changed_when: false
+
+    - name: Require legacy dependency and active cutover-marker guard
+      ansible.builtin.assert:
+        that:
+          - "'Requires=homelab-proxmox-guest-refresh.service' in unit_before.stdout"
+          - "'ConditionPathExists=/etc/homelab-network-hosts/network-discovery-cutover-approved' in unit_before.stdout"
+
+    - name: Ensure stage directory has not been created by a conflicting operation
+      ansible.builtin.stat:
+        path: "{{ stage_root }}"
+        follow: false
+      register: old_stage
+
+    - name: Refuse to overwrite any earlier staging or rollback artifacts
+      ansible.builtin.assert:
+        that:
+          - not old_stage.stat.exists
+        fail_msg: "Stage directory already exists; inspect and reconcile manually rather than overwrite recovery evidence."
+
+    - name: Create protected staging and backup directory
+      ansible.builtin.file:
+        path: "{{ stage_root }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Back up current executable, preserving permission
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ installed_worker }}"
+        dest: "{{ stage_root }}/original-enricher.py"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Back up existing dependent systemd drop-in
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ installed_dropin }}"
+        dest: "{{ stage_root }}/original-dropin.conf"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Render independent worker candidate only in staging directory
+      ansible.builtin.template:
+        src: "{{ worker_template }}"
+        dest: "{{ staged_worker }}"
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Stage independent condition-only systemd drop-in
+      ansible.builtin.copy:
+        src: "{{ independent_dropin_source }}"
+        dest: "{{ staged_dropin }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Parse Python candidate without executing scanner or writing pycache
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ast, pathlib; ast.parse(pathlib.Path('{{ staged_worker }}').read_text())"
+      changed_when: false
+
+    - name: Confirm candidate's explicit optional snapshot mode
+      ansible.builtin.command:
+        argv:
+          - grep
+          - -F
+          - 'PROXMOX_SOURCE = "snapshot_optional"'
+          - "{{ staged_worker }}"
+      changed_when: false
+
+    - name: Inspect staged file SHA-256 and original rollback copies
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        checksum_algorithm: sha256
+        follow: false
+      loop:
+        - "{{ stage_root }}/original-enricher.py"
+        - "{{ stage_root }}/original-dropin.conf"
+        - "{{ staged_worker }}"
+        - "{{ staged_dropin }}"
+      register: staged
+
+    - name: Require original recovery copies byte-identical to installed originals
+      ansible.builtin.assert:
+        that:
+          - staged.results[0].stat.checksum == existing.results[0].stat.checksum
+          - staged.results[1].stat.checksum == existing.results[1].stat.checksum
+          - staged.results[2].stat.isreg
+          - staged.results[3].stat.isreg
+
+    - name: Confirm production drop-in remains unchanged
+      ansible.builtin.stat:
+        path: "{{ installed_dropin }}"
+        checksum_algorithm: sha256
+      register: after_dropin
+
+    - name: Confirm staged operation did not change production systemd unit
+      ansible.builtin.assert:
+        that:
+          - after_dropin.stat.checksum == existing.results[1].stat.checksum
+
+    - name: Summarise inert staged candidate
+      ansible.builtin.debug:
+        msg:
+          - "Stage directory {{ stage_root }}; original worker/drop-in backed up"
+          - "Installed worker/drop-in unchanged; no daemon reload, timer changes, guest refresh, or Nmap"
+          - "Separate approval and tested rollback required before activation"
