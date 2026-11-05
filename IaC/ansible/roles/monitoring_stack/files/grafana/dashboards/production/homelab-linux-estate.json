@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-linux-estate",
-  "title": "Homelab \u2014 Hosts",
+  "title": "Homelab — Hosts",
   "description": "Single-host health, resource diagnostics and patch status. Select exactly one host; estate-wide totals belong on Home.",
   "tags": [
     "homelab",
@@ -771,7 +771,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "max by (ip, port, protocol, service, product, version) (homelab_network_host_enrichment_port_info * on(ip) group_left(hostname) (homelab_network_device_card_info{hostname=\"$host\"} == 1))",
+          "expr": "max by (ip, port, protocol, service, product, version) (homelab_network_host_enrichment_port_info{target_name=\"monitor-01\"} * on(ip) group_left(hostname) (homelab_network_host_info{target_name=\"monitor-01\",hostname=~\"^${host:regex}(\\\\..*)?$\"} == 1))",
           "instant": true,
           "range": false,
           "format": "table"
