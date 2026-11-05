@@ -2444,3 +2444,9 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - User pulled feature branch after fixing missing defaults (`678cbaac`) and successfully ran `playbooks/greenbone-router-migration.yml --limit greenbone-01` with explicit stage-one approval. `ok=5 changed=2 failed=0`; response: `replacement_target_id=be77d8f0-2c51-42d8-a257-829ac2ac1931`, `replacement_target_created=true`, `replacement_task_id=3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`, `replacement_task_created=true`, `runner_switched=false`.
 - Legacy target `1c8418b5-1cae-4cca-8535-4700c2d2835b` and task `02b610fc-647a-4fb8-98c3-7763e0425c34` should remain intact; read-only verification pending. The production daily runner remains on the original task; no new scan started. Next run `greenbone-weekly-inventory-readonly.yml` and inspect new target 15 IPs, SSH credential, task-to-target, scan config/status. Only then prepare a separately approved IaC runner cutover with rollback and avoid accidental task launch.
+
+
+## 2026-11-05 — runner switch and rollback playbook staged, not deployed
+
+- Read-only GMP inventory confirms replacement target 15 hosts `192.168.2.1, .195, .48, .50, .51, .52, .53, .54, .55, .56, .57, .58, .59, .70, .71` and SSH credential `Homelab - Linux SSH Auth`; legacy `.220` absent. Replacement task UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9` status `New`.
+- Added `IaC/ansible/playbooks/greenbone-router-runner-cutover.yml` to stage proposed existing managed runner task switch/rollback; approval-gated, current state and inactive-service checks, backup, GMP `managed --check` candidate and installed verification. Does not edit systemd schedules or initiate scans. **Not applied or tested on live host yet.** Ensure syntax validated. Existing role defaults still point to old task; update desired-state config explicitly after successful production switch so subsequent broad role deployments cannot silently roll back.
