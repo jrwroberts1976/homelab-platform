@@ -1,3 +1,7 @@
+## 5 November 2026 — router-01 Zabbix OS facts live; eight monitoring items verified
+
+Final read-only Zabbix API audit found router-01 OS Facts system.sw.os.get fresh (209 s old) and system.sw.os[name] fresh (208 s old), both supported. Combined with six live core checks already verified (CPU load, total/available/available-percent memory, root filesystem used %, uptime), all 8 of 8 router monitoring items have now reported current values. The six-item Ansible definition passed a no-change rerun (ok=11 changed=0 failed=0). Router Zabbix Agent 2 monitoring is technically complete; PR #295 merge pending. Issue #294 wider Grafana enrichment remains pending. No gateway network config changed.
+
 ## 5 November 2026 — router-01 Zabbix core item configuration idempotence PASSED
 
 Operator reran corrected scoped Ansible playbook `router-01-zabbix-core-items.yml`: **localhost ok=11 changed=0 unreachable=0 failed=0 skipped=1**. All six previously verified fresh router health items now have a clean no-change IaC postflight. Router networking unaffected. Hourly OS Facts collection and PR #295 review still outstanding; issue #294 Grafana enrichment not complete.
