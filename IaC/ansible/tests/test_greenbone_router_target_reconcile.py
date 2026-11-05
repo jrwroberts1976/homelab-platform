@@ -37,7 +37,7 @@ class RouterTargetTests(unittest.TestCase):
 
     def test_approved_replaces_retired_docker_only(self):
         reconcile, writes = environment(True)
-        self.assertEqual(reconcile(target("192.168.2.48,192.168.2.52"), "correct"), ("existing-target", True))
+        self.assertEqual(reconcile(target("192.168.2.48,192.168.2.52,192.168.2.220"), "correct"), ("existing-target", True))
         self.assertEqual(len(writes), 1)
         xml = ET.fromstring(writes[0])
         self.assertEqual(xml.tag, "modify_target")
