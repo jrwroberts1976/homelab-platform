@@ -1,3 +1,7 @@
+## 5 November 2026 — router patch telemetry displayed in Grafana
+
+Operator confirmed the Homelab Hosts dashboard, router-01 selected, shows Total Updates 3, Security Updates 0, and Last Patch Check 2.15 minutes. These values are also present in the central Prometheus series with the stable LAN address 192.168.2.1. The update count is based on cached APT metadata; zero security updates is not a security-compliance guarantee. The production telemetry-only Ansible playbook completed a repeat run with 21 successful tasks, one changed task, zero failures and seven skipped. The single change may be the oneshot collector refresh; task-level confirmation is outstanding. No automatic patching was enabled. Issue #209.
+
 ## 5 November 2026 — router patch telemetry LAN label verified centrally
 
 Read-only Prometheus API on monitor-01 confirms three router-01 patch metrics with `host=router-01`, `ip=192.168.2.1`, `target_name=router-01`: pending updates 3, security updates 0, status assessment timestamp 1793863552. This verifies the scoped IaC LAN identity fix was effective through the Prometheus relay. Zero security updates is based on cached APT indices and a simple classification heuristic, not independent proof of no missing security patches. Grafana patch panels and idempotent rerun pending. No unattended-upgrades or automatic reboot policy introduced by the change.
