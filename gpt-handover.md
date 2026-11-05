@@ -1,3 +1,8 @@
+## 2026-11-05 — #209 router-01 patch telemetry-only deployment completed; metrics freshness follow-up
+
+- Operator ran approved `playbooks/router-01-patch-telemetry-only.yml` with telemetry-only vars on production router-01. Recap **router-01 ok=22 changed=6 unreachable=0 failed=0 skipped=6**. This passed role postflight, exposing script/service/timer and metrics in node-exporter; no apt upgrade/unattended-upgrades configuration enabled by this playbook. Router critical service checks included; no failures.
+- **Next** read-only audit: run `systemctl is-enabled/is-active homelab-patch-status.timer`, read patch `status.json` (no secrets), inspect metrics `/var/lib/prometheus/node-exporter/homelab_patching.prom`, verify Node Exporter `/metrics`, read Prometheus `homelab_patch_*{target_name="router-01"}` and age of apt package indexes, and check Grafana patch panels after scrape. Avoid interpreting 0 updates as verified until apt lists freshness is checked. Branch `feature/router01-patch-telemetry-20261105` not yet merged. Issue #209.
+
 ## 2026-11-05 — #209 router-01 patch telemetry-only canary STAGED, not deployed
 
 - Read-only operator audit confirmed: `unattended-upgrades` **not installed**, no effective periodic/unattended APT policy found, `apt-daily.timer` and `apt-daily-upgrade.timer` enabled, node exporter 1.9.0-1+b4 active on loopback 127.0.0.1:9100 with `--collector.textfile.directory=/var/lib/prometheus/node-exporter`, but `homelab-patch-status.service/.timer`, script, status.json and textfile metrics absent. No failed systemd units according to direct `systemctl --failed` read. PPPoE/dnsmasq/unbound/nftables active.
