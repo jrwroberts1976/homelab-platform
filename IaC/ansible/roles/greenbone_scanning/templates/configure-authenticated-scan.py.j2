@@ -24,6 +24,7 @@ SCANNER_ID = "{{ greenbone_scanning_scanner_id }}"
 
 
 ROUTER_IP = "192.168.2.1"
+RETIRED_DOCKER_IP = "192.168.2.220"
 ROUTER_ADD_APPROVED = {{ 'True' if greenbone_scanning_router_target_approved | default(false) | bool else 'False' }}
 
 
@@ -35,7 +36,7 @@ def target_hosts(value):
 
 
 def reconcile_router_host(target, credential_id):
-    """Only permit exact one-host extension of the existing authenticated target."""
+    """Only permit exact docker-01 (.220) -> router-01 (.1) replacement."""
     target_id = target.get("id")
     if not target_id:
         raise RuntimeError("Authenticated target has no UUID")
@@ -48,15 +49,16 @@ def reconcile_router_host(target, credential_id):
         raise RuntimeError("Router IP missing from expected inventory")
     if actual == desired:
         return target_id, False
-    if actual != desired - {ROUTER_IP}:
-        raise RuntimeError("Unexpected target-host drift: only adding router is allowed")
+    expected_before = (desired - {ROUTER_IP}) | {RETIRED_DOCKER_IP}
+    if RETIRED_DOCKER_IP in desired or actual != expected_before:
+        raise RuntimeError("Unexpected target-host drift: only .220 -> .1 replacement is allowed")
     if not ROUTER_ADD_APPROVED:
-        raise RuntimeError("Router target extension requires explicit approval")
+        raise RuntimeError("Router target replacement requires explicit approval")
     request = ET.Element("modify_target", {"target_id": target_id})
     ET.SubElement(request, "hosts").text = ",".join(sorted(desired))
     result = ET.fromstring(gmp(ET.tostring(request, encoding="unicode")))
     if result.get("status") not in ("200", "201"):
-        raise RuntimeError("Greenbone refused router target extension: " + str(result.get("status_text")))
+        raise RuntimeError("Greenbone refused router target replacement: " + str(result.get("status_text")))
     return target_id, True
 
 
