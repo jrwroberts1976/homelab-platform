@@ -1,3 +1,8 @@
+## 2026-11-05 — #294 six-item router monitoring Ansible idempotence PASSED
+
+- Operator reran corrected approval-gated `playbooks/router-01-zabbix-core-items.yml`; recap **localhost ok=11 changed=0 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0**. Confirms six router core active-check items are registered, correct and idempotently managed by IaC; previous independent API audit verified all six actively reporting values. Router services and network configuration were not targeted by this server-side API playbook.
+- Remaining: independently verify freshness of two hourly OS Facts items (`system.sw.os.get`, `system.sw.os[name]`); review GitHub PR #295 checks and changed files, and merge only after validation. Do not close #294 merely for router agent work because wider Grafana/Zabbix device-page enrichment remains.
+
 ## 2026-11-05 — #294 router-01 six health metrics LIVE, verified end to end
 
 - Read-only Zabbix API audit on monitor-01 confirmed all **6/6** `router-01` core item keys present, enabled, Zabbix active type 7, supported and collecting fresh values: `system.cpu.load[all,avg1]` age 50 s; `vm.memory.size[total]` 289 s; `vm.memory.size[available]` 48 s; `vm.memory.size[pavailable]` 47 s; `vfs.fs.size[/,pused]` 286 s; `system.uptime` 15 s. Confirms actual active-agent transmission router-01 -> zabbix-01 -> API, and that approved core-item creation had worked despite erroneous postflight assertion.
