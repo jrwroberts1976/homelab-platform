@@ -87,6 +87,24 @@ Online ASUS device at 192.168.2.180. No hostname, service, port, DNS, or OS evid
 > Greenbone zero-match results are not proof that a host is vulnerability-free. Nmap service labels and OS fingerprints remain evidence, not authoritative identity, unless corroborated.
 <!-- END AUTO:AI-ASSESSMENT -->
 
+<!-- BEGIN AUTO:PATCHING -->
+## Automated patching status
+
+> Generated from host patch metrics collected by Prometheus. This bounded section is maintained automatically.
+
+- Policy: **Not managed by unattended-upgrades**
+- Automatic reboot: **Disabled**
+- Last assessed: `2026-11-05T07:32:26+00:00`
+- Pending updates: **3**
+- Security updates pending: **0**
+- Reboot required: **No**
+- unattended-upgrades installed: **No**
+- Last APT transaction activity: `2026-11-04T08:25:27+00:00`
+- Patch state: **Attention required**
+
+> Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
+<!-- END AUTO:PATCHING -->
+
 ## Monitoring and security
 - Grafana host dashboard:
 - Zabbix / Node Exporter / other monitoring:

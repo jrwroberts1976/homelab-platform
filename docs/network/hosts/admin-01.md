@@ -128,13 +128,13 @@ Raspberry Pi 3 administration host and SSH/IaC controller, also serving as a Cor
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-05T06:02:53+00:00`
-- Pending updates: **8**
-- Security updates pending: **4**
+- Last assessed: `2026-11-05T07:07:00+00:00`
+- Pending updates: **4**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-11-03T12:13:23+00:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-11-05T06:34:24+00:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
