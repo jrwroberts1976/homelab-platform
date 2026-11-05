@@ -6,6 +6,10 @@
   become: true
   gather_facts: false
 
+  # Reuse the canonical Greenbone role configuration for the migration template.
+  vars_files:
+    - ../roles/greenbone_scanning/defaults/main.yml
+
   tasks:
     - name: Require exact router migration approval
       ansible.builtin.assert:
