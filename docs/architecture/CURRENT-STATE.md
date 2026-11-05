@@ -718,3 +718,10 @@ Operator ran the deployed generator without `--apply` on `monitor-01`. It return
 
 - New approval-gated `playbooks/greenbone-router-migration.yml` stages replacement **target and task** named with ` - Router01` suffix; no live Greenbone objects created yet. The helper checks legacy target/task UUIDs, exact `.220 -> .1` inventory replacement, SSH credential, idle status, exclusion list, scanner and scan config. It reuses the installed GMP transport and protected runtime credentials. Existing task/reports and the nightly runner remain unchanged.
 - Run offline `test_greenbone_router_migration.py`, then Ansible syntax check. Apply only with explicit `greenbone_router_migration_approved=true` and phrase `STAGE_ROUTER01_GREENBONE_REPLACEMENT`. Verify new target/task read-only before separately approving any nightly runner cutover. No immediate scan start.
+
+
+### 5 November 2026 — Greenbone router migration replacement objects created
+
+- Operator applied `playbooks/greenbone-router-migration.yml` on `greenbone-01` with exact approval phrase; `ok=5 changed=2 failed=0`. A prior attempt failed before changes because standalone playbook omitted Greenbone role defaults; corrected by commit `678cbaac`.
+- New authenticated target `Homelab - Managed Infrastructure - Authenticated - Router01`, UUID `be77d8f0-2c51-42d8-a257-829ac2ac1931`, reported `replacement_target_created=true`.
+- New authenticated task `Homelab - Managed Infrastructure - Authenticated Daily - Router01`, UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`, reported `replacement_task_created=true`. `runner_switched=false`; existing legacy task/reports preserved and automatic managed runner still targets original task. Next: confirm actual replacement target/task through read-only GMP inventory, then separately design, validate and gate runner switch. No scan begun by migration.
