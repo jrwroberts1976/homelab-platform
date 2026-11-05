@@ -56,6 +56,9 @@ def reconcile_router_host(target, credential_id):
         raise RuntimeError("Router target replacement requires explicit approval")
     request = ET.Element("modify_target", {"target_id": target_id})
     ET.SubElement(request, "hosts").text = ",".join(sorted(desired))
+    # GMP requires EXCLUDE_HOSTS whenever HOSTS is submitted. Preserve
+    # the existing exclusions rather than silently changing scan scope.
+    ET.SubElement(request, "exclude_hosts").text = target.findtext("exclude_hosts", "")
     result = ET.fromstring(gmp(ET.tostring(request, encoding="unicode")))
     if result.get("status") not in ("200", "201"):
         raise RuntimeError("Greenbone refused router target replacement: " + str(result.get("status_text")))
