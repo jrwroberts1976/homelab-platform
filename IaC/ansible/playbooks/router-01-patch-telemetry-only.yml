@@ -8,6 +8,8 @@
   vars:
     automated_patching_enabled: false
     automated_patching_publish_status: true
+    # Use the stable management address rather than default PPPoE/WAN egress IP.
+    automated_patching_reporting_ip: "{{ ansible_host }}"
   pre_tasks:
     - name: Require explicit router-01 patch telemetry approval
       ansible.builtin.assert:
