@@ -1,3 +1,8 @@
+## 2026-11-05 — #297 read-only preflight assertion correction
+
+- User ran `network-host-enrichment-decouple-preflight.yml` on monitor-01; `ok=6 changed=0 failed=1`. It stopped on preflight assertion checking that raw candidate drop-in text did not contain `Requires=`. The candidate contains that phrase solely in a comment, so the assertion was too broad. Production discovery/enrichment system was not changed, nor was any scan triggered.
+- Updated feature branch to assert only real uncommented directive lines using anchored multiline `regex_search` for `Requires=` and `After=`. Commit `d6df73242461aed1c65b9d061979f5a8adb3c39d`. Next step: worktree `git pull --ff-only`, Ansible syntax check and retry **read-only** preflight. No activation yet.
+
 ## 2026-11-05 — #297 user approved independent host/network enrichment design (Git staging only)
 
 - Current monitor-01 source: `homelab-network-host-enricher.service` unit with `20-proxmox-guest-refresh.conf` requiring Proxmox guest refresh; continuous six-hour timer fires but service shows repeated dependency-failed 30 Oct–5 Nov, `ExecStart` never started, missing `enrichment.json` and `homelab_network_host_enrichment.prom`. Fresh router-01 discovery and deep-profile records match 192.168.2.1 and Pi MAC. Legacy ASUS textfile exists, don't delete on assumption.
