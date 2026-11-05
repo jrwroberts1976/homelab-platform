@@ -1,3 +1,7 @@
+## 5 November 2026 — router patch telemetry LAN label verified centrally
+
+Read-only Prometheus API on monitor-01 confirms three router-01 patch metrics with `host=router-01`, `ip=192.168.2.1`, `target_name=router-01`: pending updates 3, security updates 0, status assessment timestamp 1793863552. This verifies the scoped IaC LAN identity fix was effective through the Prometheus relay. Zero security updates is based on cached APT indices and a simple classification heuristic, not independent proof of no missing security patches. Grafana patch panels and idempotent rerun pending. No unattended-upgrades or automatic reboot policy introduced by the change.
+
 ## 5 November 2026 — router patch status identity-label correction applied
 
 Operator reran approval-gated router-01 patch telemetry-only playbook with stable management-IP override; Ansible recap `ok=21 changed=2 failed=0 skipped=7`. The exporter template and status data refresh were expected changes; all playbook assertions passed, with no router gateway service failures. Need independent confirmation of `ip=192.168.2.1` in emitted textfile and Prometheus and display in Grafana. No automated upgrade policy enabled by this deployment. Issue #209.
