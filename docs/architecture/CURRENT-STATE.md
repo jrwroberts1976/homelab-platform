@@ -1,3 +1,7 @@
+## 5 November 2026 — independent enrichment read-only preflight passed
+
+Operator ran `IaC/ansible/playbooks/network-host-enrichment-decouple-preflight.yml` on `monitor-01`, recap `ok=9 changed=0 unreachable=0 failed=0 skipped=0`. Required existing unit/dependency, sole-owner cutover marker, executable, protected identity helper, existing live timer and data paths met preflight assertions. No scanner started or production system changes made. Next gate: confirm deployed enricher's actual Proxmox source/paths and installed unit/drop-in before rendering candidate, and prepare backup/rollback-controlled staging and activation. Issue #297 / draft PR #298. Do not activate from this read-only pass alone.
+
 ## 5 November 2026 — #297 independent network enrichment architecture (staged, NOT deployed)
 
 Operator-provided monitor-01 evidence shows the existing `homelab-network-host-enricher.timer` is enabled and fires on its six-hour schedule, but the service never reaches its `ExecStart`: recurring `Dependency failed` from Oct 30 through Nov 5, and `start_time=[n/a]`. Its intentional systemd drop-in requires `homelab-proxmox-guest-refresh.service`. Neither `/var/lib/homelab-network-hosts/enrichment.json` nor the matching Node Exporter textfile exists on monitor-01. Current discovery and deep profiling ARE fresh; router-01 at 192.168.2.1 is online and identified as Raspberry Pi. Legacy ASUS textfile exists, but is not proven to be the cause of these missing panels.
