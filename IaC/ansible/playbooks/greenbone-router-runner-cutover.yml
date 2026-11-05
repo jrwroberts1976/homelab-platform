@@ -1,0 +1,168 @@
+---
+# Explicit two-way cutover; never starts or schedules a scan.
+# Runs only on greenbone-01 and preserves an immutable copy of the pre-router runner.
+- name: Switch existing Greenbone managed runner between old and router01 tasks
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+  vars_files:
+    - ../roles/greenbone_scanning/defaults/main.yml
+  vars:
+    original_task_name: "Homelab - Managed Infrastructure - Authenticated Daily"
+    router_task_name: "Homelab - Managed Infrastructure - Authenticated Daily - Router01"
+    original_task_id: "02b610fc-647a-4fb8-98c3-7763e0425c34"
+    router_task_id: "3b4ceb53-efc8-44b6-82b5-0716f69ba3e9"
+    runner_backup: /var/backups/homelab-greenbone-runner-pre-router01.py
+    runner_candidate: /run/homelab-greenbone-managed-runner-candidate.py
+
+  tasks:
+    - name: Require explicit approved cutover or rollback
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "greenbone-01"
+          - greenbone_router_runner_action | default('') in ['switch', 'rollback']
+          - greenbone_router_runner_phrase | default('') == ('SWITCH_GREENBONE_ROUTER01' if greenbone_router_runner_action == 'switch' else 'ROLLBACK_GREENBONE_ROUTER01')
+        fail_msg: "Greenbone runner change requires an exact approved action and matching phrase."
+
+    - name: Verify existing live runner
+      ansible.builtin.stat:
+        path: "{{ greenbone_scanning_runner }}"
+        checksum_algorithm: sha256
+      register: current_runner
+
+    - name: Require existing root-owned executable runner
+      ansible.builtin.assert:
+        that:
+          - current_runner.stat.isreg | default(false)
+          - current_runner.stat.pw_name == 'root'
+          - current_runner.stat.gr_name == 'root'
+          - current_runner.stat.mode == '0750'
+
+    - name: Verify no managed scan service is active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-greenbone-managed-scan.service]
+      register: service_state
+      changed_when: false
+      failed_when: service_state.rc not in [0, 3]
+
+    - name: Refuse cutover while a scan is active
+      ansible.builtin.assert:
+        that:
+          - service_state.stdout | trim != 'active'
+        fail_msg: "Managed scan service is active; no cutover during execution."
+
+    - name: Read current runner task selection
+      ansible.builtin.slurp:
+        src: "{{ greenbone_scanning_runner }}"
+      register: runner_bytes
+      no_log: true
+
+    - name: Verify current task selection matches the requested direction
+      ansible.builtin.assert:
+        that:
+          - >-
+            (('"name": "' + (original_task_name if greenbone_router_runner_action == 'switch' else router_task_name) + '"')
+             in (runner_bytes.content | b64decode))
+          - >-
+            (('"name": "' + (router_task_name if greenbone_router_runner_action == 'switch' else original_task_name) + '"')
+             not in (runner_bytes.content | b64decode))
+        fail_msg: "Installed runner selection is unexpected; refusing cutover."
+
+    - name: Check immutable rollback snapshot
+      ansible.builtin.stat:
+        path: "{{ runner_backup }}"
+        checksum_algorithm: sha256
+      register: backup_state
+
+    - name: Require baseline snapshot for rollback
+      ansible.builtin.assert:
+        that:
+          - backup_state.stat.exists
+          - backup_state.stat.isreg
+        fail_msg: "No original runner snapshot found; refusing rollback."
+      when: greenbone_router_runner_action == 'rollback'
+
+    - name: Preserve original runner before switch
+      ansible.builtin.copy:
+        src: "{{ greenbone_scanning_runner }}"
+        dest: "{{ runner_backup }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0750"
+        force: false
+      when: greenbone_router_runner_action == 'switch'
+
+    - name: Render candidate against canonical Greenbone role template
+      ansible.builtin.template:
+        src: ../roles/greenbone_scanning/templates/homelab-greenbone-scan.py.j2
+        dest: "{{ runner_candidate }}"
+        owner: root
+        group: root
+        mode: "0700"
+      vars:
+        greenbone_scanning_runner_managed_task_name: "{{ router_task_name if greenbone_router_runner_action == 'switch' else original_task_name }}"
+
+    - name: Verify candidate Python syntax without writing pycache
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -B
+          - -c
+          - "import ast,sys; ast.parse(open(sys.argv[1]).read())"
+          - "{{ runner_candidate }}"
+      changed_when: false
+
+    - name: Read-only GMP check of candidate task identity
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -B
+          - "{{ runner_candidate }}"
+          - managed
+          - --check
+      register: candidate_check
+      changed_when: false
+
+    - name: Require exact expected task ID from GMP
+      ansible.builtin.assert:
+        that:
+          - >-
+            ('CHECK=PASS mode=managed task=' +
+            (router_task_name if greenbone_router_runner_action == 'switch' else original_task_name) +
+            ' id=' + (router_task_id if greenbone_router_runner_action == 'switch' else original_task_id))
+            in candidate_check.stdout
+        fail_msg: "Candidate runner did not resolve to the expected GMP task ID."
+
+    - name: Deploy tested candidate to existing managed runner path
+      ansible.builtin.copy:
+        src: "{{ runner_candidate }}"
+        dest: "{{ greenbone_scanning_runner }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0750"
+        backup: true
+
+    - name: Verify installed managed runner task via GMP without starting a scan
+      ansible.builtin.command:
+        argv:
+          - "{{ greenbone_scanning_runner }}"
+          - managed
+          - --check
+      changed_when: false
+      register: installed_check
+      failed_when: >-
+        installed_check.rc != 0 or
+        ('CHECK=PASS mode=managed task=' +
+        (router_task_name if greenbone_router_runner_action == 'switch' else original_task_name) +
+        ' id=' + (router_task_id if greenbone_router_runner_action == 'switch' else original_task_id))
+        not in installed_check.stdout
+
+    - name: Show task-selection result
+      ansible.builtin.debug:
+        msg:
+          - "action={{ greenbone_router_runner_action }}"
+          - "runner={{ greenbone_scanning_runner }}"
+          - "task_id={{ router_task_id if greenbone_router_runner_action == 'switch' else original_task_id }}"
+          - "scan_started=false"
