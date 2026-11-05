@@ -2420,3 +2420,10 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Operator executed `/usr/bin/python3 -B /usr/local/sbin/router-dhcp-device-pages` **without `--apply`**. Successful read-only output: `dashboard_writes=0`, `device_pages=27`, `mode=check`, `new_devices=0`, `no_deletions=true`, `state_change=false`. Ansible ad-hoc `CHANGED` is its default reporting and does not mean the script modified state.
 - No pending DHCP device creation under current evidence; do not confuse this with a subsequent successful scheduled run. Remaining acceptance: demonstrate stable MAC-derived UID through DHCP IP reassignment and verify Nmap enrichment. Do not alter router, reset ledger or replay canary.
+
+
+## 2026-11-05 — Greenbone router-01 target replacement staged; no live scan change
+
+- User confirmed former `docker-01` is now `router-01` (`192.168.2.1`); old `192.168.2.220` failed ping, neighbor state `INCOMPLETE`, new IP answered. The Prometheus `docker-01.jameshouse` record is stale attribution, not active-host proof.
+- `router-01` added to `zabbix_agents`; Ansible ping works. Existing `greenbone-authenticated-scan-account.yml --limit router-01` applied successfully, password locked, SSH source-only `192.168.2.57`, key permissions 700/600, four essential router services active. Network TCP/22 and source IP confirmed from `greenbone-01`, **actual scanner authentication not yet proven**. Test from admin-01 failed as expected due to source-IP restriction.
+- Existing `greenbone_scanning` authenticated reconciler updated to permit exactly `.220 -> .1`, reject all other drift and mismatched credential, and require `greenbone_scanning_router_target_approved=true` plus `greenbone_scanning_router_target_phrase=ADD_ROUTER01_TO_GREENBONE`. Tests updated, not yet rerun after replacement edit. Run tests and inspect before applying to `greenbone-01`. Do not modify gateway networking or initiate unapproved scans. Issue #297 Panel 32 remains open pending verified Greenbone router findings/report.
