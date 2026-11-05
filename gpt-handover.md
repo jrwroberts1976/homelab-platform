@@ -1,3 +1,7 @@
+## 2026-11-05 — #209 router patch metrics verified in central Prometheus
+
+- Operator queried Prometheus on monitor-01 at `127.0.0.1:9090/api/v1/query`. All three router-series returned under `job=router-node-exporter,target_name=router-01`: `homelab_patch_pending_updates=3`, `homelab_patch_security_updates_pending=0`, `homelab_patch_status_timestamp_seconds=1793863235` (5 Nov 2026 ~07:20 UTC). The series scrape sample was timestamp 1793863435, showing live relay -> Prometheus ingest. Current `ip` label still derives from WAN PPPoE, not stable management address. The branch's code correction to override that label with `ansible_host=192.168.2.1` is **not deployed**. Next: pull branch, syntax-check, reapply scoped gated telemetry playbook, verify labels/metric freshness and Grafana panels. Do not treat zero security updates as current compliance without validating APT index freshness and heuristic.
+
 ## 2026-11-05 — #209 patch telemetry live locally; WAN label bug fixed in staged IaC
 
 - Operator read-only proof on router-01: `homelab-patch-status.timer` enabled/active; service result success started 07:20:33 GMT. `status.json`: pending_updates=3, security_updates_pending=0, reboot_required=false, policy=not-managed, unattended_upgrades_installed=false. Corresponding `homelab_patch_*` metrics in `/var/lib/prometheus/node-exporter/homelab_patching.prom`; no evidence yet from Prometheus/Grafana scrape. APT index files last modified 2–4 Nov; counts are based on cached data and security detection is heuristic. PPPoE/dnsmasq/unbound/nftables all active.
