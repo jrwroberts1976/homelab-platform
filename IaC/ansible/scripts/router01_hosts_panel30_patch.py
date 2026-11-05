@@ -51,14 +51,77 @@ def atomic_write(path, content, original_stat):
         os.chmod(name, original_stat.st_mode & 0o777)
         os.chown(name, original_stat.st_uid, original_stat.st_gid)
         os.replace(name, path)
+        directory_fd = os.open(path.parent, os.O_RDONLY | os.O_DIRECTORY)
+        try:
+            os.fsync(directory_fd)
+        finally:
+            os.close(directory_fd)
     finally:
         if os.path.exists(name):
             os.unlink(name)
 
 
+def build_payload(original):
+    dashboard = load(original)
+    _, current = inspect(dashboard)
+    if current != OLD:
+        raise SystemExit("Original panel30 query unexpected")
+    updated = load(original)
+    panel(updated, 30)["targets"][0]["expr"] = NEW
+    payload = (json.dumps(updated, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
+    comparison = load(payload)
+    panel(comparison, 30)["targets"][0]["expr"] = OLD
+    if comparison != dashboard:
+        raise SystemExit("Scope violation: more than panel30 changed")
+    return payload
+
+
+def write_evidence(path, content):
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "wb") as stream:
+        stream.write(content)
+        stream.flush()
+        os.fsync(stream.fileno())
+
+
+def sync_stage():
+    fd = os.open(STAGE, os.O_RDONLY | os.O_DIRECTORY)
+    try:
+        os.fsync(fd)
+    finally:
+        os.close(fd)
+
+
+def recover(original, dashboard, current):
+    if not BACKUP.is_file():
+        raise SystemExit("Recovery requires protected original backup")
+    backup = BACKUP.read_bytes()
+    backed_os, backed_ports = inspect(load(backup))
+    if backed_ports != OLD or backed_os != panel(dashboard, 29)["targets"][0]["expr"]:
+        raise SystemExit("Recovery backup or panel29 invalid; refuse")
+    expected = build_payload(backup)
+    if DEPLOYED_HASH.exists():
+        if not DEPLOYED_HASH.is_file() or DEPLOYED_HASH.read_text().strip() != digest(expected):
+            raise SystemExit("Recovery checksum invalid; refuse")
+    if original == backup and current == OLD:
+        if DEPLOYED_HASH.exists():
+            DEPLOYED_HASH.unlink()
+        BACKUP.unlink()
+        sync_stage()
+        print("RECOVERED: original dashboard intact; incomplete evidence cleared")
+        return
+    if original == expected and current == NEW:
+        if not DEPLOYED_HASH.exists():
+            write_evidence(DEPLOYED_HASH, (digest(expected) + "\n").encode("ascii"))
+            sync_stage()
+        print("RECOVERED: deployed dashboard validated; verify or rollback available")
+        return
+    raise SystemExit("Recovery refused: live dashboard differs from expected bytes")
+
+
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument("mode", choices=["preflight", "apply", "verify", "rollback"])
+    parser.add_argument("mode", choices=["preflight", "apply", "verify", "rollback", "recover"])
     args = parser.parse_args()
 
     if not STAGE.is_dir() or not LIVE.is_file():
@@ -79,20 +142,18 @@ def main():
         if args.mode == "preflight":
             print("PASS: panel29 fallback intact, panel30 expected legacy query, no old backup")
             return
-        updated = load(original)
-        panel(updated, 30)["targets"][0]["expr"] = NEW
-        payload = (json.dumps(updated, indent=2, ensure_ascii=False) + "\n").encode("utf-8")
-        # Confirm no other dashboard object changes (comparison ignores serialization).
-        comparison = load(payload)
-        panel(comparison, 30)["targets"][0]["expr"] = OLD
-        if comparison != dashboard:
-            raise SystemExit("Scope violation: more than panel30 changed")
-        BACKUP.write_bytes(original)
-        os.chmod(BACKUP, 0o600)
+        payload = build_payload(original)
+        # Durable, root-only evidence must precede the live replacement.
+        write_evidence(BACKUP, original)
+        sync_stage()
+        write_evidence(DEPLOYED_HASH, (digest(payload) + "\n").encode("ascii"))
+        sync_stage()
         atomic_write(LIVE, payload, original_stat)
-        DEPLOYED_HASH.write_text(digest(payload) + "\n")
-        os.chmod(DEPLOYED_HASH, 0o600)
         print("APPLIED: panel 30 only, backup saved, panel 29 preserved")
+        return
+
+    if args.mode == "recover":
+        recover(original, dashboard, current)
         return
 
     if not BACKUP.is_file() or not DEPLOYED_HASH.is_file():
