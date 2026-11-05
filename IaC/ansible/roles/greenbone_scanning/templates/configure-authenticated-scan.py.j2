@@ -23,6 +23,43 @@ CONFIG_ID = "{{ greenbone_scanning_scan_config_id }}"
 SCANNER_ID = "{{ greenbone_scanning_scanner_id }}"
 
 
+ROUTER_IP = "192.168.2.1"
+ROUTER_ADD_APPROVED = {{ 'True' if greenbone_scanning_router_target_approved | default(false) | bool else 'False' }}
+
+
+def target_hosts(value):
+    hosts = [entry.strip() for entry in value.split(",") if entry.strip()]
+    if len(hosts) != len(set(hosts)):
+        raise RuntimeError("Duplicate IP in Greenbone target host list")
+    return set(hosts)
+
+
+def reconcile_router_host(target, credential_id):
+    """Only permit exact one-host extension of the existing authenticated target."""
+    target_id = target.get("id")
+    if not target_id:
+        raise RuntimeError("Authenticated target has no UUID")
+    ssh = target.find("ssh_credential")
+    if ssh is None or ssh.get("id") != credential_id:
+        raise RuntimeError("Existing authenticated target has unexpected SSH credential")
+    desired = target_hosts(HOSTS)
+    actual = target_hosts(target.findtext("hosts", ""))
+    if ROUTER_IP not in desired:
+        raise RuntimeError("Router IP missing from expected inventory")
+    if actual == desired:
+        return target_id, False
+    if actual != desired - {ROUTER_IP}:
+        raise RuntimeError("Unexpected target-host drift: only adding router is allowed")
+    if not ROUTER_ADD_APPROVED:
+        raise RuntimeError("Router target extension requires explicit approval")
+    request = ET.Element("modify_target", {"target_id": target_id})
+    ET.SubElement(request, "hosts").text = ",".join(sorted(desired))
+    result = ET.fromstring(gmp(ET.tostring(request, encoding="unicode")))
+    if result.get("status") not in ("200", "201"):
+        raise RuntimeError("Greenbone refused router target extension: " + str(result.get("status_text")))
+    return target_id, True
+
+
 def load_runtime_env():
     values = {}
 
@@ -171,22 +208,7 @@ def ensure_target(credential_id):
         )
 
     if matches:
-        target = matches[0]
-
-        ssh = target.find("ssh_credential")
-        current_credential = (
-            ssh.get("id", "")
-            if ssh is not None
-            else ""
-        )
-
-        if current_credential != credential_id:
-            raise RuntimeError(
-                "Existing authenticated target has "
-                "unexpected SSH credential"
-            )
-
-        return target.get("id"), False
+        return reconcile_router_host(matches[0], credential_id)
 
     request = ET.Element("create_target")
 
@@ -343,7 +365,7 @@ def main():
             ensure_credential()
         )
 
-        target_id, target_created = ensure_target(
+        target_id, target_changed = ensure_target(
             credential_id
         )
 
@@ -370,7 +392,7 @@ def main():
         )
         print(
             "target_created="
-            + str(target_created).lower()
+            + str(target_changed).lower()
         )
 
         print(
