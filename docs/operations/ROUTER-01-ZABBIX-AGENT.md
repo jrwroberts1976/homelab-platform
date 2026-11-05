@@ -39,3 +39,7 @@ ansible-playbook -i inventory/hosts.yml playbooks/router-01-zabbix-agent-stop.ym
 ## 4 November 2026 — host registration complete; telemetry not yet verified
 
 Operator ran approved `router-01-zabbix-register.yml` successfully: `localhost ok=9 changed=1 failed=0 unreachable=0 skipped=0`. API postflight passed and verified one enabled `router-01` host, group `Homelab/Linux`, template `Homelab Linux OS Facts`, no passive interface. Zabbix host registration is complete. Fresh active-agent OS items and full CPU/memory/disk/uptime monitoring are **not yet verified**. Previous temporary expired-token failures were no-change fail-closed runs. No router networking changes.
+
+## 5 November 2026 — core item idempotence validated
+
+Operator reran approved `playbooks/router-01-zabbix-core-items.yml` after corrected postflight; **localhost ok=11 changed=0 failed=0 skipped=1**. Previous read-only API audit confirmed all six health metrics fresh. Two hourly OS Facts items and final PR #295 review remain to be checked before declaring the whole router Zabbix integration complete.
