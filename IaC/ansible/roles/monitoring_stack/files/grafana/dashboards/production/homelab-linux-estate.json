@@ -1,7 +1,7 @@
 {
   "id": null,
   "uid": "homelab-linux-estate",
-  "title": "Homelab \u2014 Hosts",
+  "title": "Homelab — Hosts",
   "description": "Single-host health, resource diagnostics and patch status. Select exactly one host; estate-wide totals belong on Home.",
   "tags": [
     "homelab",
@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 4,
+  "version": 5,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -658,7 +658,7 @@
       "id": 29,
       "type": "table",
       "title": "Operating System & Platform",
-      "description": "Authoritative OS facts collected by Zabbix Agent 2 and published through the network inventory exporter.",
+      "description": "Reported OS/platform facts from network inventory; if router-01 has no device card, display live Node Exporter OS and kernel facts instead. Nmap-inferred OS remains separate.",
       "gridPos": {
         "x": 0,
         "y": 23,
@@ -672,7 +672,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_device_card_info{hostname=\"$host\"}",
+          "expr": "homelab_network_device_card_info{hostname=\"$host\"} or on() (label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(label_replace(node_os_info{job=\"router-node-exporter\",target_name=\"$host\"} * on(target_name) group_left(machine,release) node_uname_info{job=\"router-node-exporter\",target_name=\"$host\"}, \"hostname\", \"$1\", \"target_name\", \"(.*)\"), \"ip\", \"192.168.2.1\", \"target_name\", \"router-01\"), \"os\", \"$1\", \"pretty_name\", \"(.*)\"), \"architecture\", \"$1\", \"machine\", \"(.*)\"), \"kernel\", \"$1\", \"release\", \"(.*)\"), \"os_source\", \"node-exporter\", \"target_name\", \"router-01\"), \"os_evidence\", \"live OS and kernel metrics\", \"target_name\", \"router-01\"))",
           "instant": true,
           "range": false,
           "format": "table"
@@ -715,7 +715,18 @@
               "nmap_scanned_at": true,
               "nmap_time_basis": true,
               "nmap_services": true,
-              "nmap_scan_status": true
+              "nmap_scan_status": true,
+              "id": true,
+              "name": true,
+              "pretty_name": true,
+              "version": true,
+              "version_id": true,
+              "version_codename": true,
+              "machine": true,
+              "nodename": true,
+              "release": true,
+              "sysname": true,
+              "domainname": true
             },
             "indexByName": {
               "hostname": 0,
