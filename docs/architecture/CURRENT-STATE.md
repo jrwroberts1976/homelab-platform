@@ -1,3 +1,7 @@
+## 5 November 2026 — Zabbix router core-item postflight correction
+
+Operator ran approved six-item host-health creation on Zabbix, recap `localhost ok=9 changed=1 failed=1 skipped=1`. Final postflight mistakenly expected seven enabled items despite current six-item plan. **At least one Zabbix API modification occurred**; do not assume rollback. Fixed both postflight counts to derive from desired six-item list on branch commit `b0a51646`. Need independent read-only validation of registered router-01 items and lastclock before a rerun or completion. No direct router network change from this API-only playbook.
+
 ## 4 November 2026 — router Zabbix memory semantics and pilot corrected
 
 Live read-only verification confirms `MemTotal=3886840 kB`, `MemAvailable=2077460 kB`, `vm.memory.size[pavailable]=53.031460`, while `vm.memory.size[pused]=93.210011` counts cache and must not alone trigger a memory-pressure alarm. Root filesystem shows about 1% used. Standalone Agent 2 test for `system.cpu.util[,idle]` returned `ZBX_NODATA` again; its daemon/time-series collection is unverified. All critical router services remain active. Staged `playbooks/router-01-zabbix-core-items.yml` now defines **six** independent active health checks (CPU load, memory total/available/available %, root disk used %, uptime), excluding unvalidated CPU idle and misleading memory used %. This plan has **not been deployed** to Zabbix; earlier seven-check plan is superseded. Issue #294 / PR #295.
