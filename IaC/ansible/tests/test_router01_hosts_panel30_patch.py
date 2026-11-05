@@ -79,6 +79,54 @@ class DashboardPanelPatchTests(unittest.TestCase):
         with self.assertRaises(SystemExit):
             self.run_mode("rollback")
 
+    def test_evidence_is_present_before_replacement(self):
+        original_write = mod.atomic_write
+        def check(path, content, stat):
+            self.assertTrue(mod.BACKUP.is_file())
+            self.assertTrue(mod.DEPLOYED_HASH.is_file())
+            self.assertEqual(mod.BACKUP.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(mod.DEPLOYED_HASH.stat().st_mode & 0o777, 0o600)
+            self.assertEqual(mod.DEPLOYED_HASH.read_text().strip(), mod.digest(content))
+            return original_write(path, content, stat)
+        with patch.object(mod, "atomic_write", side_effect=check):
+            self.run_mode("apply")
+
+    def test_recover_interruption_before_replacement(self):
+        with patch.object(mod, "atomic_write", side_effect=RuntimeError("interrupted")):
+            with self.assertRaises(RuntimeError):
+                self.run_mode("apply")
+        self.run_mode("recover")
+        self.assertFalse(mod.BACKUP.exists())
+        self.assertFalse(mod.DEPLOYED_HASH.exists())
+        self.run_mode("preflight")
+
+    def test_recover_interruption_after_replacement(self):
+        original_write = mod.atomic_write
+        def interrupted(*args):
+            original_write(*args)
+            raise RuntimeError("interrupted")
+        with patch.object(mod, "atomic_write", side_effect=interrupted):
+            with self.assertRaises(RuntimeError):
+                self.run_mode("apply")
+        self.run_mode("recover")
+        self.run_mode("verify")
+        self.run_mode("rollback")
+
+    def test_recover_refuses_unrelated_changes(self):
+        self.run_mode("apply")
+        data = json.loads(mod.LIVE.read_text())
+        data["panels"][2]["targets"][0]["expr"] = "unexpected"
+        mod.LIVE.write_text(json.dumps(data))
+        with self.assertRaises(SystemExit):
+            self.run_mode("recover")
+        self.assertTrue(mod.BACKUP.exists())
+
+    def test_recover_missing_hash_rebuilds_only_exact_deployment(self):
+        self.run_mode("apply")
+        mod.DEPLOYED_HASH.unlink()
+        self.run_mode("recover")
+        self.run_mode("verify")
+
 
 if __name__ == "__main__":
     unittest.main()
