@@ -1,3 +1,9 @@
+## 2026-11-05 — #294 complete router resource panels on Grafana Hosts confirmed
+
+- User independently confirmed Grafana Homelab — Hosts selected `router-01`: Average CPU 3.74%, CPU timeseries 4.06%, memory 46.7%, Node Exporters Up=1, Network receive 812 kB/s, transmit 595 kB/s, filesystem `/boot/firmware` 13.1%, `/` 4.67%. Core dashboard selector+CPU+memory+network+filesystems are now **verified end-to-end in UI**.
+- Patch management (total/security updates, last patch check) and OS/platform, ports/services and Nmap fingerprint enrichment panels all show No data for router-01; do not present as zeros. `Failed systemd Units=0` can be dashboard query fallback, requires actual metric validation.
+- Continue with GitHub PR #295 CI review/merge workflow (not yet merged); broader #294 device enrichment and patch coverage remain separate. Scoped dashboard backup remains `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json.624522.2026-11-05@07:05:00~`. No router networking changes.
+
 ## 2026-11-05 — #294 Homelab Hosts router-01 live UI verified (partial panel coverage)
 
 - Operator confirmed `router-01` appears in Grafana `Homelab — Hosts` selector. With router selected: `Average CPU=4.02%`, `Average Memory Used=46.7%`, `Node Exporters Up=1` — existing router Prometheus relay/dashboard integration works.
