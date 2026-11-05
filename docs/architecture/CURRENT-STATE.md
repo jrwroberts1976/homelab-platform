@@ -1,3 +1,7 @@
+## 5 November 2026 — #297 inert candidate source mode repaired successfully
+
+Operator ran approved `network-host-enrichment-independent-repair-stage.yml` on `monitor-01`: recap `ok=12 changed=1 unreachable=0 failed=0 skipped=0`. The single candidate-file repair task updated the protected staged Python executable to `PROXMOX_SOURCE="snapshot_optional"`; candidate AST assertion and checksums of installed original worker, original drop-in and protected backups passed. **No production worker or systemd dependency changed; no service, scan, API refresh or timer action triggered by this repair.** Need independent read-only staged candidate/rollback inspection, then reviewed approval-gated controlled activation and rollback. Issue #297 / draft PR #298.
+
 ## 5 November 2026 — #297 inert candidate rendered wrong source; safe reconciliation staged
 
 Operator ran gated inert stage on monitor-01: `ok=14 changed=5 failed=1` at a check for `PROXMOX_SOURCE="snapshot_optional"`. Read-only inspection showed staged `/var/backups/homelab-network-enrichment/independent-20261105/candidate-enricher.py` incorrectly has `PROXMOX_SOURCE="local"`, because role defaults loaded through Ansible `vars_files` overrode the play-level setting. **Do not deploy that candidate.** Original installed executable SHA-256 equals protected original-worker backup (`d90cb215...`), original systemd drop-in SHA-256 equals protected backup (`b7f51c90...`); live Proxmox refresh dependency remains. No active service/timer altered by failed stage.
