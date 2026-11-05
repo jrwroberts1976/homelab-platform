@@ -1,3 +1,7 @@
+## 5 November 2026 — independent enrichment read-only preflight passed
+
+Operator ran `IaC/ansible/playbooks/network-host-enrichment-decouple-preflight.yml` on `monitor-01`, recap `ok=9 changed=0 unreachable=0 failed=0 skipped=0`. Required existing unit/dependency, sole-owner cutover marker, executable, protected identity helper, existing live timer and data paths met preflight assertions. No scanner started or production system changes made. Next gate: confirm deployed enricher's actual Proxmox source/paths and installed unit/drop-in before rendering candidate, and prepare backup/rollback-controlled staging and activation. Issue #297 / draft PR #298. Do not activate from this read-only pass alone.
+
 ## 2026-11-05 — #297 read-only preflight assertion correction
 
 - User ran `network-host-enrichment-decouple-preflight.yml` on monitor-01; `ok=6 changed=0 failed=1`. It stopped on preflight assertion checking that raw candidate drop-in text did not contain `Requires=`. The candidate contains that phrase solely in a comment, so the assertion was too broad. Production discovery/enrichment system was not changed, nor was any scan triggered.
