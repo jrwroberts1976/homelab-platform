@@ -25,6 +25,7 @@ def target(hosts, credential="correct"):
     root = ET.Element("target", id="existing-target")
     ET.SubElement(root, "hosts").text = hosts
     ET.SubElement(root, "ssh_credential", id=credential)
+    ET.SubElement(root, "exclude_hosts").text = "192.168.2.254"
     return root
 
 
@@ -42,7 +43,18 @@ class RouterTargetTests(unittest.TestCase):
         xml = ET.fromstring(writes[0])
         self.assertEqual(xml.tag, "modify_target")
         self.assertEqual(xml.get("target_id"), "existing-target")
+        self.assertEqual(xml.findtext("exclude_hosts"), "192.168.2.254")
         self.assertEqual(set(xml.findtext("hosts").split(",")), {"192.168.2.48", "192.168.2.52", "192.168.2.1"})
+
+    def test_empty_exclusions_are_sent(self):
+        reconcile, writes = environment(True)
+        existing = target("192.168.2.48,192.168.2.52,192.168.2.220")
+        existing.find("exclude_hosts").text = None
+        reconcile(existing, "correct")
+        self.assertEqual(len(writes), 1)
+        xml = ET.fromstring(writes[0])
+        self.assertIsNotNone(xml.find("exclude_hosts"))
+        self.assertEqual(xml.findtext("exclude_hosts", ""), "")
 
     def test_idempotent(self):
         reconcile, writes = environment()
