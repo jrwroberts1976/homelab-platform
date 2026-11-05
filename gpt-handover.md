@@ -1,3 +1,9 @@
+## 2026-11-05 — PR #295 merged; next enrichment follow-up needs correct issue tracking
+
+- PR #295 (router-01 Zabbix active Agent 2, six health items, two OS facts, and Homelab Hosts selector integration) merged into main via merge commit `99984564983373eca3b913c1366a6025f0bf140a`. Both latest checked CI workflows passed pre-merge. No local worktrees reset or cleaned.
+- Operator independently verified live Grafana Hosts CPU, RAM, node-exporter health, network throughput, filesystem graphs; all eight Zabbix checks fresh. Patch/update/OS enrichment dashboard panels show No data; failed-systemd=0 needs data validation due to dashboard fallback.
+- **Correction to earlier assumptions:** GitHub issue #294 `[STORY] Enrich router DHCP Grafana device pages with existing Zabbix agent data` currently shows CLOSED; do not call it open or silently reopen. It covers DHCP per-device pages, distinct from generic Homelab Hosts patch panels. Future patch/device-enrichment needs an appropriate separately scoped tracking story or confirmation of existing tracking.
+
 ## 2026-11-05 — #294 complete router resource panels on Grafana Hosts confirmed
 
 - User independently confirmed Grafana Homelab — Hosts selected `router-01`: Average CPU 3.74%, CPU timeseries 4.06%, memory 46.7%, Node Exporters Up=1, Network receive 812 kB/s, transmit 595 kB/s, filesystem `/boot/firmware` 13.1%, `/` 4.67%. Core dashboard selector+CPU+memory+network+filesystems are now **verified end-to-end in UI**.
