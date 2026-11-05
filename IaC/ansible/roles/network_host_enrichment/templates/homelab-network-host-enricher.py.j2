@@ -499,11 +499,14 @@ for ip in sorted(
             for field in (
                 "services",
                 "tls_certificates",
-                "proxmox",
                 "last_enriched",
             ):
                 if field in prior:
                     entry[field] = prior[field]
+            # Do not preserve previously trusted guest identities while
+            # the current protected Proxmox snapshot is unavailable.
+            if proxmox_identity_available and "proxmox" in prior:
+                entry["proxmox"] = prior["proxmox"]
 
         entry["enrichment_status"] = "offline_skipped"
         hosts[ip] = entry
