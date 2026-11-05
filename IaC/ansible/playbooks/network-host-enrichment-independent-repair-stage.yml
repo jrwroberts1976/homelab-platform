@@ -56,7 +56,7 @@
           - inspected.results[5].stat.pw_name == 'root'
           - inspected.results[5].stat.mode == '0755'
           - inspected.results[6].stat.isreg | default(false)
-          - inspected.results[6].stat.checksum == (lookup('file', expected_candidate_dropin) | hash('sha256'))
+          - inspected.results[6].stat.checksum == (lookup('file', expected_candidate_dropin, rstrip=False) | hash('sha256'))
         fail_msg: "Unexpected stage or altered originals; refuse repair."
 
     - name: Read candidate source mode without executing scanner
