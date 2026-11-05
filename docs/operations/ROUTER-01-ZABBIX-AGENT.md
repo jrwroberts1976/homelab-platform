@@ -1,3 +1,4 @@
+<!-- estate-authority: IaC/inventory/estate.json -->
 <!-- source-of-truth: docs/architecture/CURRENT-STATE.md -->
 # Router-01 Zabbix Agent 2 (active-check only) rollout
 
