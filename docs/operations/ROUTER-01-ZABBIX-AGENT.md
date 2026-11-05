@@ -43,3 +43,7 @@ Operator ran approved `router-01-zabbix-register.yml` successfully: `localhost o
 ## 5 November 2026 — core item idempotence validated
 
 Operator reran approved `playbooks/router-01-zabbix-core-items.yml` after corrected postflight; **localhost ok=11 changed=0 failed=0 skipped=1**. Previous read-only API audit confirmed all six health metrics fresh. Two hourly OS Facts items and final PR #295 review remain to be checked before declaring the whole router Zabbix integration complete.
+
+## 5 November 2026 — final OS Facts verification
+
+Operator confirmed supported fresh active OS Facts items: system.sw.os.get (age 209 s) and system.sw.os[name] (age 208 s). Together with six core checks all 8 of 8 router monitoring items are live. Idempotent core-item rerun passed with changed=0. Router monitoring technically complete; PR review/merge pending. Wider issue #294 Grafana enrichment remains open.
