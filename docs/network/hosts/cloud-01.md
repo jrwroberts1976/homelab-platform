@@ -127,7 +127,7 @@ cloud-01 is a managed Proxmox VM hosting production Nextcloud, PostgreSQL and Re
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-05T00:00:41+00:00`
+- Last assessed: `2026-11-05T01:04:44+00:00`
 - Pending updates: **0**
 - Security updates pending: **0**
 - Reboot required: **No**
