@@ -706,3 +706,9 @@ Operator ran the deployed generator without `--apply` on `monitor-01`. It return
 - Former `docker-01` at `192.168.2.220` is now production `router-01` at `192.168.2.1`. Operator confirmed ARP `INCOMPLETE` and no ICMP replies at `.220`, with ICMP replies at `.1`.
 - `router-01` is in `zabbix_agents`; the existing restricted `greenbone-scan` account was installed using router-limited Ansible and audited (locked password; key source `192.168.2.57`; PPPoE, dnsmasq, Unbound, nftables active). Source-IP reachability from Greenbone confirmed; **authenticated scan and report not yet verified**.
 - Existing authenticated target reconciler is staged to allow **only** the exact substitution `192.168.2.220 -> 192.168.2.1`, keeping all other target entries and the SSH credential unchanged, and requiring explicit approval. This is not a production target change until deployed.
+
+
+### 5 November 2026 — Greenbone authenticated target update blocked by GMP
+
+- Authenticated target `1c8418b5-1cae-4cca-8535-4700c2d2835b` and task `02b610fc-647a-4fb8-98c3-7763e0425c34` retain the original 15-host coverage including retired `192.168.2.220`. GMP rejected exact `.220 -> .1` substitution with `Target is in use`; previous malformed request was rejected with `HOSTS requires an EXCLUDE_HOSTS` and corrected. Temporary scan key cleanup completed.
+- Existing task has completed reports and cannot safely have its in-use target modified. **Do not retry `greenbone-authenticated-scan.yml` with router approval** until an explicit replacement-target and replacement-task migration is designed, regression-tested, and approved. Preserve legacy reports and avoid silent switch of the scheduled runner. Router scan coverage is not yet proven.
