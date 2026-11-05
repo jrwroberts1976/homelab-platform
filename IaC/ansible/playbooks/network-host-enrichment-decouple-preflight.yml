@@ -1,0 +1,90 @@
+---
+# Read-only preflight: no Nmap, Proxmox calls, timer changes or writes.
+- name: Audit monitor-01 independent enrichment migration prerequisites
+  hosts: monitor-01
+  gather_facts: true
+  become: true
+  vars:
+    enrichment_worker: /usr/local/sbin/homelab-network-host-enricher
+    enrichment_unit: homelab-network-host-enricher.service
+    enrichment_timer: homelab-network-host-enricher.timer
+    refresh_unit: homelab-proxmox-guest-refresh.service
+    legacy_dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+    candidate_dropin: "{{ playbook_dir }}/../roles/network_host_enrichment/files/20-proxmox-guest-refresh-independent.conf"
+  tasks:
+    - name: Require exact monitored system identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+    - name: Inspect installed discovery and trust prerequisites
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ enrichment_worker }}"
+        - "{{ legacy_dropin }}"
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/proxmox-guests.json
+        - /usr/local/lib/homelab-network-hosts/proxmox_guest_identity.py
+        - /var/lib/prometheus/node-exporter
+      register: inspected
+    - name: Refuse missing owner-marker, executable or data paths
+      ansible.builtin.assert:
+        that:
+          - inspected.results[0].stat.isreg | default(false)
+          - inspected.results[1].stat.isreg | default(false)
+          - inspected.results[2].stat.isreg | default(false)
+          - inspected.results[3].stat.isreg | default(false)
+          - inspected.results[5].stat.isreg | default(false)
+          - inspected.results[6].stat.isdir | default(false)
+    - name: Read resolved enrichment dependencies
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/systemctl
+          - show
+          - "{{ enrichment_unit }}"
+          - -p
+          - Requires
+          - -p
+          - After
+          - -p
+          - DropInPaths
+          - -p
+          - ActiveState
+      register: service_state
+      changed_when: false
+    - name: Read timer enablement
+      ansible.builtin.command:
+        argv: [/usr/bin/systemctl, is-enabled, "{{ enrichment_timer }}"]
+      register: timer_enabled
+      changed_when: false
+    - name: Verify old mandatory coupling still present before proposed migration
+      ansible.builtin.assert:
+        that:
+          - "'homelab-proxmox-guest-refresh.service' in service_state.stdout"
+          - legacy_dropin in service_state.stdout
+          - "'enabled' in timer_enabled.stdout"
+          - "'[Unit]' in lookup('file', candidate_dropin)"
+          - "'Requires=' not in lookup('file', candidate_dropin)"
+        fail_msg: Unexpected enrichment unit state; stop and reconcile.
+    - name: Read last service journal without initiating scanning
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/journalctl
+          - -u
+          - "{{ enrichment_unit }}"
+          - -n
+          - '8'
+          - --no-pager
+      register: recent
+      changed_when: false
+    - name: Record safe preflight only
+      ansible.builtin.debug:
+        msg:
+          - "Existing mandatory dependency confirmed. Proposed change not deployed."
+          - "No service starts, Nmap scans, Proxmox refresh or timers changed."
+          - "Next gate requires controlled stopped-timer staging, backups, tests and explicit separate deployment approval."
