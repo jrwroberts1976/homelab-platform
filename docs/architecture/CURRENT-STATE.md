@@ -1,3 +1,7 @@
+## 5 November 2026 — router-01 Zabbix core item configuration idempotence PASSED
+
+Operator reran corrected scoped Ansible playbook `router-01-zabbix-core-items.yml`: **localhost ok=11 changed=0 unreachable=0 failed=0 skipped=1**. All six previously verified fresh router health items now have a clean no-change IaC postflight. Router networking unaffected. Hourly OS Facts collection and PR #295 review still outstanding; issue #294 Grafana enrichment not complete.
+
 ## 5 November 2026 — Zabbix router-01 core health telemetry confirmed LIVE
 
 Read-only API audit through monitor-01 confirmed **all six router-01 basic health items present, enabled, active-agent type 7, supported, and reporting fresh measurements**: CPU load 50 s old, total RAM 289 s, available RAM 48 s, available RAM % 47 s, root filesystem % 286 s, uptime 15 s. This validates end-to-end active agent collection and proves the earlier deployment postflight failed solely on the incorrect hardcoded seven-item count; the correction is staged on feature branch `feature/router01-zabbix-agent-20261104` (`b0a51646`). A clean idempotent Ansible rerun and hourly OS Facts item freshness verification remain outstanding. Do not assume Zabbix Grafana enrichment complete. Issue #294 remains open.
