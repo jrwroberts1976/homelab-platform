@@ -1,3 +1,9 @@
+## 2026-11-05 — #294 Homelab Hosts router-01 live UI verified (partial panel coverage)
+
+- Operator confirmed `router-01` appears in Grafana `Homelab — Hosts` selector. With router selected: `Average CPU=4.02%`, `Average Memory Used=46.7%`, `Node Exporters Up=1` — existing router Prometheus relay/dashboard integration works.
+- `Total Updates`, `Security Updates`, `Last Patch Check` show **No data** for router-01; do not equate absence with zero or infer patch compliance. `Failed systemd Units=0` may be the `or vector(0)` fallback rather than actual metric; verify before considering it monitored. Filesystem and Network Throughput panels not yet reported by user.
+- Documented deployment backup remains `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json.624522.2026-11-05@07:05:00~`; no router networking changes. #295 merge after CI, #294 broader Zabbix/Grafana device-page enrichment remains open.
+
 ## 2026-11-05 — #294 router-01 added to provisioned Homelab Hosts dashboard; live UI not yet verified
 
 - Operator deployed approval-gated `router-01-grafana-hosts-dashboard.yml` to monitor-01: recap **ok=7 changed=1 unreachable=0 failed=0 skipped=0**. Updated `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json`, backing up previous JSON to `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json.624522.2026-11-05@07:05:00~`.
