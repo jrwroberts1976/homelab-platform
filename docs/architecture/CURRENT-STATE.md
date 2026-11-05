@@ -1,3 +1,7 @@
+## 5 November 2026 — Zabbix router-01 core health telemetry confirmed LIVE
+
+Read-only API audit through monitor-01 confirmed **all six router-01 basic health items present, enabled, active-agent type 7, supported, and reporting fresh measurements**: CPU load 50 s old, total RAM 289 s, available RAM 48 s, available RAM % 47 s, root filesystem % 286 s, uptime 15 s. This validates end-to-end active agent collection and proves the earlier deployment postflight failed solely on the incorrect hardcoded seven-item count; the correction is staged on feature branch `feature/router01-zabbix-agent-20261104` (`b0a51646`). A clean idempotent Ansible rerun and hourly OS Facts item freshness verification remain outstanding. Do not assume Zabbix Grafana enrichment complete. Issue #294 remains open.
+
 ## 5 November 2026 — Zabbix router core-item postflight correction
 
 Operator ran approved six-item host-health creation on Zabbix, recap `localhost ok=9 changed=1 failed=1 skipped=1`. Final postflight mistakenly expected seven enabled items despite current six-item plan. **At least one Zabbix API modification occurred**; do not assume rollback. Fixed both postflight counts to derive from desired six-item list on branch commit `b0a51646`. Need independent read-only validation of registered router-01 items and lastclock before a rerun or completion. No direct router network change from this API-only playbook.
