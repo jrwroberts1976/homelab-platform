@@ -712,3 +712,9 @@ Operator ran the deployed generator without `--apply` on `monitor-01`. It return
 
 - Authenticated target `1c8418b5-1cae-4cca-8535-4700c2d2835b` and task `02b610fc-647a-4fb8-98c3-7763e0425c34` retain the original 15-host coverage including retired `192.168.2.220`. GMP rejected exact `.220 -> .1` substitution with `Target is in use`; previous malformed request was rejected with `HOSTS requires an EXCLUDE_HOSTS` and corrected. Temporary scan key cleanup completed.
 - Existing task has completed reports and cannot safely have its in-use target modified. **Do not retry `greenbone-authenticated-scan.yml` with router approval** until an explicit replacement-target and replacement-task migration is designed, regression-tested, and approved. Preserve legacy reports and avoid silent switch of the scheduled runner. Router scan coverage is not yet proven.
+
+
+### 5 November 2026 — Greenbone router replacement objects staged in IaC
+
+- New approval-gated `playbooks/greenbone-router-migration.yml` stages replacement **target and task** named with ` - Router01` suffix; no live Greenbone objects created yet. The helper checks legacy target/task UUIDs, exact `.220 -> .1` inventory replacement, SSH credential, idle status, exclusion list, scanner and scan config. It reuses the installed GMP transport and protected runtime credentials. Existing task/reports and the nightly runner remain unchanged.
+- Run offline `test_greenbone_router_migration.py`, then Ansible syntax check. Apply only with explicit `greenbone_router_migration_approved=true` and phrase `STAGE_ROUTER01_GREENBONE_REPLACEMENT`. Verify new target/task read-only before separately approving any nightly runner cutover. No immediate scan start.
