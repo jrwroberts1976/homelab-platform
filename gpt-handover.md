@@ -1,3 +1,9 @@
+## 2026-11-05 — #294 router-01 added to provisioned Homelab Hosts dashboard; live UI not yet verified
+
+- Operator deployed approval-gated `router-01-grafana-hosts-dashboard.yml` to monitor-01: recap **ok=7 changed=1 unreachable=0 failed=0 skipped=0**. Updated `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json`, backing up previous JSON to `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json.624522.2026-11-05@07:05:00~`.
+- Dashboard UID `homelab-linux-estate` preserved. Selector uses both Prometheus `node-exporter` and `router-node-exporter` (router target_name=router-01); UP and Average CPU panels updated accordingly. Provisioned JSON was validated and router Prometheus scrape preflight passed in approved playbook. **Still need operator live Grafana UI confirmation** that router-01 is selectable and CPU/memory/filesystem/network panels show expected metrics; patch/systemd/vulnerability panels may not be populated. Do not claim Zabbix datasource integration or dashboard completion without live UI check.
+- No router firewall, PPPoE, DHCP, DNS or QoS changes. PR #295 review/CI and merge remain outstanding; #294 broader device-page enrichment remains open.
+
 ## 2026-11-05 — #294 Homelab Hosts dashboard router-01 option STAGED, not deployed
 
 - User requested adding router-01 to **Grafana > Dashboards > Homelab > Production Dashboards > Homelab — Hosts** host selector.
