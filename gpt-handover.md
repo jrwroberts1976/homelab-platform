@@ -1,3 +1,8 @@
+## 2026-11-05 — #294 router-01 six health metrics LIVE, verified end to end
+
+- Read-only Zabbix API audit on monitor-01 confirmed all **6/6** `router-01` core item keys present, enabled, Zabbix active type 7, supported and collecting fresh values: `system.cpu.load[all,avg1]` age 50 s; `vm.memory.size[total]` 289 s; `vm.memory.size[available]` 48 s; `vm.memory.size[pavailable]` 47 s; `vfs.fs.size[/,pused]` 286 s; `system.uptime` 15 s. Confirms actual active-agent transmission router-01 -> zabbix-01 -> API, and that approved core-item creation had worked despite erroneous postflight assertion.
+- Git branch already corrected the original hardcoded seven enabled-item assertion to derive from the six-item list, commit `b0a51646`. Next operator action: pull and syntax-check updated playbook if needed, rerun approval-gated `router-01-zabbix-core-items.yml` to get a clean idempotent `changed=0` recap, then check whether two 1h OS Facts items have timestamps; do not assume they are fresh. Do not close #294 until scope and Grafana enrichment are reconciled. No router firewall/routing changes.
+
 ## 2026-11-05 — #294 six-item Zabbix pilot postflight assertion corrected
 
 - Operator ran the approved `router-01-zabbix-core-items.yml` deployment; recap `localhost ok=9 changed=1 failed=1 skipped=1`. It failed only at the final assertion erroneously checking **7** enabled items after reducing intended pilot to **6**. No rollback is implied; at least one server-side change occurred. The feature branch has been patched to compare enabled/type counts against `router_zabbix_items | length`, commit `b0a51646`. The router host OS Facts ingestion was still previously unverified; no proof of fresh six-item time series yet.
