@@ -1,0 +1,79 @@
+---
+# Read-only inspection after activation, before the scanner's timer is resumed.
+- name: Validate independent network enricher cutover without scanning
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars:
+    stage: /var/backups/homelab-network-enrichment/independent-20261105
+    worker: /usr/local/sbin/homelab-network-host-enricher
+    dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+    timer: homelab-network-host-enricher.timer
+  tasks:
+    - name: Require exact owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+    - name: Inspect installed and staged files without changes
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ stage }}/candidate-enricher.py"
+        - "{{ worker }}"
+        - "{{ stage }}/candidate-dropin.conf"
+        - "{{ dropin }}"
+        - "{{ stage }}/original-enricher.py"
+        - "{{ stage }}/original-dropin.conf"
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+      register: files
+    - name: Require installed candidates match and original rollback evidence survives
+      ansible.builtin.assert:
+        that:
+          - files.results[0].stat.isreg | default(false)
+          - files.results[1].stat.checksum == files.results[0].stat.checksum
+          - files.results[2].stat.isreg | default(false)
+          - files.results[3].stat.checksum == files.results[2].stat.checksum
+          - files.results[4].stat.isreg | default(false)
+          - files.results[5].stat.isreg | default(false)
+          - files.results[6].stat.isreg | default(false)
+    - name: Parse installed worker to verify optional identity source
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ast,pathlib; t=ast.parse(pathlib.Path('{{ worker }}').read_text()); a=[n for n in t.body if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='PROXMOX_SOURCE' for x in n.targets)]; assert len(a)==1 and isinstance(a[0].value,ast.Constant) and a[0].value.value=='snapshot_optional'"
+      changed_when: false
+    - name: Inspect loaded unit dependencies
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-network-host-enricher.service, -p, Requires, -p, DropInPaths]
+      changed_when: false
+      register: loaded
+    - name: Inspect timer active state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ timer }}"]
+      changed_when: false
+      failed_when: false
+      register: timer_state
+    - name: Inspect timer enabled state
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ timer }}"]
+      changed_when: false
+      register: timer_enabled
+    - name: Verify independent dependency and intentionally paused schedule
+      ansible.builtin.assert:
+        that:
+          - "'homelab-proxmox-guest-refresh.service' not in loaded.stdout"
+          - dropin in loaded.stdout
+          - timer_state.stdout == 'inactive'
+          - timer_enabled.stdout == 'enabled'
+        fail_msg: "Do not resume the scanner; restore or reconcile first."
+    - name: Report safe postflight
+      ansible.builtin.debug:
+        msg:
+          - "Validated installed candidate, protected rollback copies and independent dependency."
+          - "Timer remains enabled but stopped. No Nmap execution initiated."
