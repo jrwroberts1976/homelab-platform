@@ -5,7 +5,7 @@
   become: true
   gather_facts: false
   vars:
-    router_hosts_dashboard_source: "../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
+    router_hosts_dashboard_source: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
     router_hosts_dashboard_dest: "/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json"
     router_hosts_prometheus_query: 'up{job="router-node-exporter",target_name="router-01"}'
   pre_tasks:
