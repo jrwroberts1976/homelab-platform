@@ -2433,3 +2433,8 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Existing authenticated target UUID `1c8418b5-1cae-4cca-8535-4700c2d2835b` references old `.220`, not `router-01` at `.1`. Authenticated daily task UUID `02b610fc-647a-4fb8-98c3-7763e0425c34` is `Done`, with historical reports.
 - GMP rejects `modify_target` even after correcting request with `exclude_hosts`: `Target is in use`. The retry failed; staged SSH key removed in Ansible `always` block. **Stop running the existing approved target reconciler**; Greenbone requires migration to a new target and new task, preserving historical task/reports. Existing automation's managed task is selected by name through `greenbone_scanning_runner_managed_task_name`; migration must handle that separately with explicit approval and rollback. No scans executed or live gateway networking changes observed.
+
+
+## 2026-11-05 — staged Greenbone migration implementation (not deployed)
+
+- Created `IaC/ansible/roles/greenbone_scanning/templates/greenbone-router-migration.py.j2`, `IaC/ansible/playbooks/greenbone-router-migration.yml`, `IaC/ansible/tests/test_greenbone_router_migration.py`. These create replacement target/task with suffix ` - Router01`, preserving original target UUID `1c8418b5-1cae-4cca-8535-4700c2d2835b` and task UUID `02b610fc-647a-4fb8-98c3-7763e0425c34`. Explicit approval, exact legacy hosts and identity, idle scan status and exclusions are fail-closed. No live objects created, runner not switched, no scan initiated. Validate offline tests and syntax before execution. Legacy `greenbone-authenticated-scan.yml` must not be rerun for this migration.
