@@ -1,0 +1,85 @@
+---
+# Only deploy existing read-only patch status exporter. Never enable unattended-upgrades.
+- name: Install router-01 patch telemetry without changing patch policy
+  hosts: router-01
+  gather_facts: true
+  become: true
+  serial: 1
+  vars:
+    automated_patching_enabled: false
+    automated_patching_publish_status: true
+  pre_tasks:
+    - name: Require explicit router-01 patch telemetry approval
+      ansible.builtin.assert:
+        that:
+          - router_patch_telemetry_approved | default(false) | bool
+          - router_patch_telemetry_phrase | default('') == 'INSTALL_ROUTER01_PATCH_TELEMETRY_ONLY'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Only explicitly approved router-01 read-only patch telemetry is allowed."
+
+    - name: Check critical router services before changes
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [router-pppoe, dnsmasq, unbound, nftables, prometheus-node-exporter]
+      changed_when: false
+
+    - name: Confirm automated upgrade package remains absent before install
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, "-f=${Status}", unattended-upgrades]
+      register: _router_unattended_package
+      failed_when: false
+      changed_when: false
+
+    - name: Ensure telemetry-only install is not confused with package automation
+      ansible.builtin.assert:
+        that:
+          - _router_unattended_package.rc != 0
+          - not automated_patching_enabled | bool
+        fail_msg: "Existing unattended-upgrades policy differs from known router baseline; review before deploying."
+
+  tasks:
+    - name: Publish update counts using existing homelab textfile exporter only
+      ansible.builtin.include_role:
+        name: automated_patching
+
+    - name: Verify unattended-upgrades package still absent
+      ansible.builtin.command:
+        argv: [dpkg-query, -W, "-f=${Status}", unattended-upgrades]
+      register: _router_unattended_after
+      changed_when: false
+      failed_when: false
+
+    - name: Enforce telemetry-only no-package-install invariant
+      ansible.builtin.assert:
+        that:
+          - _router_unattended_after.rc != 0
+        fail_msg: "unattended-upgrades unexpectedly installed: stop and investigate."
+
+    - name: Verify Prometheus textfile metric is served locally
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9100/metrics
+        return_content: true
+        timeout: 10
+      register: _router_metrics_endpoint
+      changed_when: false
+      no_log: true
+
+    - name: Confirm current patch metrics reached Node Exporter
+      ansible.builtin.assert:
+        that:
+          - "'homelab_patch_pending_updates' in _router_metrics_endpoint.content"
+          - "'homelab_patch_security_updates_pending' in _router_metrics_endpoint.content"
+          - "'homelab_patch_status_timestamp_seconds' in _router_metrics_endpoint.content"
+        fail_msg: "Patch metrics are not present in node-exporter; do not claim Grafana collection."
+
+    - name: Recheck critical gateway services
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: [router-pppoe, dnsmasq, unbound, nftables, prometheus-node-exporter]
+      changed_when: false
+
+    - name: Report telemetry-only deployment summary
+      ansible.builtin.debug:
+        msg: "router-01 patch textfile telemetry installed; unattended-upgrades NOT installed. Validate freshness in Prometheus and Grafana before closing."
