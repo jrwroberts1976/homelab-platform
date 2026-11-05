@@ -69,7 +69,8 @@
           - legacy_dropin in service_state.stdout
           - "'enabled' in timer_enabled.stdout"
           - "'[Unit]' in lookup('file', candidate_dropin)"
-          - "'Requires=' not in lookup('file', candidate_dropin)"
+          - "(lookup('file', candidate_dropin) | regex_search('(?m)^\\s*Requires\\s*=')) is none"
+          - "(lookup('file', candidate_dropin) | regex_search('(?m)^\\s*After\\s*=')) is none"
         fail_msg: Unexpected enrichment unit state; stop and reconcile.
     - name: Read last service journal without initiating scanning
       ansible.builtin.command:
