@@ -1,0 +1,192 @@
+---
+# Opt-in server-side item enrollment only. No connection to router-01, no changes to its networking.
+- name: Configure basic active-only router-01 host-health items in Zabbix
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    router_zabbix_api_url: "https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php"
+    router_zabbix_api_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+    router_zabbix_items:
+      - {key: "system.cpu.load[all,avg1]", name: "Router CPU load (1m)", delay: "1m", value_type: "0", units: ""}
+      - {key: "vm.memory.size[total]", name: "Router memory total", delay: "5m", value_type: "3", units: "B"}
+      - {key: "vm.memory.size[available]", name: "Router memory available", delay: "1m", value_type: "3", units: "B"}
+      - {key: "vm.memory.size[pavailable]", name: "Router memory available percentage", delay: "1m", value_type: "0", units: "%"}
+      - {key: "vfs.fs.size[/,pused]", name: "Router root filesystem used percentage", delay: "5m", value_type: "0", units: "%"}
+      - {key: "system.uptime", name: "Router uptime", delay: "30s", value_type: "3", units: "uptime"}
+
+  pre_tasks:
+    - name: Require explicit one-host approval
+      ansible.builtin.assert:
+        that:
+          - router_zabbix_core_items_approved | default(false) | bool
+          - router_zabbix_core_items_phrase | default('') == 'CONFIGURE_ROUTER01_HEALTH_ITEMS'
+          - router_zabbix_items | length == 6
+        fail_msg: "Router-01 Zabbix host item enrollment requires explicit approval."
+    - name: Require privileged API token
+      ansible.builtin.assert:
+        that:
+          - router_zabbix_api_token | length >= 20
+        fail_msg: "Load valid HOMELAB_ZABBIX_API_TOKEN in controller environment."
+      no_log: true
+
+  tasks:
+    - name: Read registered router with group and template links
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output: [hostid, host, status]
+            filter: {host: ["router-01"]}
+            selectHostGroups: [groupid, name]
+            selectParentTemplates: [templateid, host]
+            selectInterfaces: [interfaceid]
+          id: 21
+        return_content: true
+        timeout: 15
+      register: _router_host_response
+      changed_when: false
+      no_log: true
+
+    - name: Fail closed if router host is not exactly as enrolled
+      ansible.builtin.assert:
+        that:
+          - _router_host_response.json.error is not defined
+          - _router_host_response.json.result | length == 1
+          - _router_host_response.json.result[0].host == 'router-01'
+          - _router_host_response.json.result[0].status == '0'
+          - _router_host_response.json.result[0].hostgroups | length == 1
+          - _router_host_response.json.result[0].hostgroups[0].name == 'Homelab/Linux'
+          - _router_host_response.json.result[0].parentTemplates | length == 1
+          - _router_host_response.json.result[0].parentTemplates[0].host == 'Homelab Linux OS Facts'
+          - _router_host_response.json.result[0].interfaces | length == 0
+        fail_msg: "Unexpected router-01 identity, host group, templates or passive interfaces. No items written."
+
+    - name: Read existing router items
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            hostids: ["{{ _router_host_response.json.result[0].hostid }}"]
+            output: [itemid, key_, type, value_type, delay, status, units, templateid]
+          id: 22
+        return_content: true
+        timeout: 15
+      register: _router_existing_items
+      changed_when: false
+      no_log: true
+
+    - name: Require unambiguous item inventory
+      ansible.builtin.assert:
+        that:
+          - _router_existing_items.json.error is not defined
+          - >-
+            _router_existing_items.json.result | map(attribute='key_') | list | unique | length ==
+            _router_existing_items.json.result | length
+        fail_msg: "Zabbix existing item inventory ambiguous; no items added."
+
+    - name: Build current item map
+      ansible.builtin.set_fact:
+        _router_item_map: "{{ _router_existing_items.json.result | items2dict(key_name='key_', value_name='itemid') }}"
+      no_log: true
+
+    - name: Fail closed on conflicting existing item definition
+      ansible.builtin.assert:
+        that:
+          - item_existing.type == '7'
+          - item_existing.value_type == item.value_type
+          - item_existing.delay == item.delay
+          - item_existing.units == item.units
+          - item_existing.status == '0'
+          - item_existing.templateid == '0'
+        fail_msg: "Existing {{ item.key }} does not match router-only desired active item definition."
+      vars:
+        item_existing: "{{ _router_existing_items.json.result | selectattr('key_', 'equalto', item.key) | first }}"
+      loop: "{{ router_zabbix_items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: item.key in _router_item_map
+
+    - name: Create only absent basic active checks on router-01 host
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.create
+          params:
+            hostid: "{{ _router_host_response.json.result[0].hostid }}"
+            name: "{{ item.name }}"
+            key_: "{{ item.key }}"
+            type: 7
+            value_type: "{{ item.value_type | int }}"
+            delay: "{{ item.delay }}"
+            units: "{{ item.units }}"
+            status: 0
+          id: 23
+        return_content: true
+        timeout: 15
+      loop: "{{ router_zabbix_items }}"
+      loop_control:
+        label: "{{ item.key }}"
+      when: item.key not in _router_item_map
+      register: _router_items_created
+      changed_when: true
+      failed_when: _router_items_created.json.error is defined
+      no_log: true
+
+    - name: Retrieve router items after enrollment
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_api_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: item.get
+          params:
+            hostids: ["{{ _router_host_response.json.result[0].hostid }}"]
+            output: [itemid, key_, type, status, delay, lastclock]
+            filter:
+              key_: "{{ router_zabbix_items | map(attribute='key') | list }}"
+          id: 24
+        return_content: true
+        timeout: 15
+      register: _router_items_postflight
+      changed_when: false
+      no_log: true
+
+    - name: Confirm exact expected host-health items exist and are enabled
+      ansible.builtin.assert:
+        that:
+          - _router_items_postflight.json.error is not defined
+          - _router_items_postflight.json.result | length == router_zabbix_items | length
+          - >-
+            _router_items_postflight.json.result | map(attribute='key_') | list | sort ==
+            router_zabbix_items | map(attribute='key') | list | sort
+          - _router_items_postflight.json.result | selectattr('type', 'equalto', '7') | list | length == router_zabbix_items | length
+          - _router_items_postflight.json.result | selectattr('status', 'equalto', '0') | list | length == router_zabbix_items | length
+        fail_msg: "Router-01 basic monitoring item postflight not confirmed."
+    - name: Report item enrollment scope without values or tokens
+      ansible.builtin.debug:
+        msg: "router-01 has six configured active-agent health checks. Collection freshness is not yet proven."

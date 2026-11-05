@@ -10,7 +10,7 @@
   ],
   "timezone": "browser",
   "schemaVersion": 41,
-  "version": 3,
+  "version": 4,
   "refresh": "30s",
   "time": {
     "from": "now-24h",
@@ -28,7 +28,7 @@
           "uid": "prometheus"
         },
         "query": {
-          "query": "label_values(up{job=\"node-exporter\"}, target_name)",
+          "query": "label_values(up{job=~\"node-exporter|router-node-exporter\"}, target_name)",
           "refId": "PrometheusVariableQueryEditor-VariableQuery"
         },
         "refresh": 1,
@@ -99,7 +99,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "sum(up{job=\"node-exporter\",target_name=~\"$host\"})",
+          "expr": "sum(up{job=~\"node-exporter|router-node-exporter\",target_name=~\"$host\"})",
           "instant": true,
           "range": false
         }
@@ -152,7 +152,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "100 - (avg(rate(node_cpu_seconds_total{job=\"node-exporter\",mode=\"idle\",target_name=~\"$host\"}[5m])) * 100)",
+          "expr": "100 - (avg(rate(node_cpu_seconds_total{job=~\"node-exporter|router-node-exporter\",mode=\"idle\",target_name=~\"$host\"}[5m])) * 100)",
           "instant": true,
           "range": false
         }

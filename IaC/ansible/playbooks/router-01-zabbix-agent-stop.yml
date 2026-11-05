@@ -1,0 +1,29 @@
+---
+- name: Emergency stop of router-01 Zabbix Agent 2 without modifying routing
+  hosts: router-01
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require explicit router-only rollback approval
+      ansible.builtin.assert:
+        that:
+          - router_zabbix_agent_rollback_approved | default(false) | bool
+          - router_zabbix_agent_rollback_phrase | default('') == 'STOP_ROUTER01_ZABBIX_AGENT2'
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Rollback refused without explicit approval."
+  tasks:
+    - name: Stop and disable only the Zabbix agent
+      ansible.builtin.systemd_service:
+        name: zabbix-agent2
+        state: stopped
+        enabled: false
+
+    - name: Verify router functionality remains healthy
+      ansible.builtin.shell: |
+        set -eu
+        for svc in router-pppoe dnsmasq unbound nftables; do
+          test "$(systemctl is-active "$svc")" = active
+        done
+        ip -4 route show default | grep -Eq '^default dev ppp0( |$)'
+      changed_when: false

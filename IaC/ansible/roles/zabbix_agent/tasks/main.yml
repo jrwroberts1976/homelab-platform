@@ -54,6 +54,14 @@
     line: "ListenPort={{ zabbix_agent_port }}"
   register: zabbix_agent_port_config
 
+- name: Configure optional restricted Zabbix agent listen address
+  ansible.builtin.lineinfile:
+    path: /etc/zabbix/zabbix_agent2.conf
+    regexp: '^#?ListenIP='
+    line: "ListenIP={{ zabbix_agent_listen_ip }}"
+  register: zabbix_agent_listen_ip_config
+  when: zabbix_agent_listen_ip | default('') | length > 0
+
 - name: Restart Zabbix Agent 2 after configuration changes
   ansible.builtin.service:
     name: "{{ zabbix_agent_service_name }}"
@@ -63,7 +71,8 @@
     zabbix_agent_server_config.changed or
     zabbix_agent_active_config.changed or
     zabbix_agent_hostname_config.changed or
-    zabbix_agent_port_config.changed
+    zabbix_agent_port_config.changed or
+    (zabbix_agent_listen_ip_config is defined and zabbix_agent_listen_ip_config.changed | default(false))
 
 - name: Ensure Zabbix Agent 2 is enabled and running
   ansible.builtin.service:

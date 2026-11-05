@@ -1,0 +1,178 @@
+---
+# Router-only Zabbix API host registration. No router, firewall or agent changes.
+- name: Register router-01 for active-only Zabbix OS facts
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    router_zabbix_api_url: "https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php"
+    router_zabbix_host: "router-01"
+    router_zabbix_host_group_name: "Homelab/Linux"
+    router_zabbix_template_name: "Homelab Linux OS Facts"
+    router_zabbix_token: "{{ lookup('env', 'HOMELAB_ZABBIX_API_TOKEN') }}"
+  pre_tasks:
+    - name: Require explicit one-host registration approval
+      ansible.builtin.assert:
+        that:
+          - router_zabbix_register_approved | default(false) | bool
+          - router_zabbix_register_phrase | default('') == 'REGISTER_ROUTER01_ZABBIX'
+          - router_zabbix_host == 'router-01'
+        fail_msg: "Zabbix host enrollment is disabled without explicit router-only approval."
+
+    - name: Require dedicated privileged token from controller runtime
+      ansible.builtin.assert:
+        that:
+          - router_zabbix_token | length >= 20
+        fail_msg: "Set HOMELAB_ZABBIX_API_TOKEN securely in the controller environment; the existing management-report token is read-only."
+      no_log: true
+
+  tasks:
+    - name: Read Zabbix host group and expected active-only OS template
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: "{{ item.method }}"
+          params:
+            output: "{{ item.output }}"
+            filter: "{{ item.filter }}"
+          id: "{{ item.id }}"
+        return_content: true
+        timeout: 15
+      loop:
+        - method: hostgroup.get
+          output: [groupid, name]
+          filter: {name: ["Homelab/Linux"]}
+          id: 11
+        - method: template.get
+          output: [templateid, host, name]
+          filter: {host: ["Homelab Linux OS Facts"]}
+          id: 12
+      register: _registration_sources
+      changed_when: false
+      no_log: true
+
+    - name: Fail closed if expected group or template is not unique
+      ansible.builtin.assert:
+        that:
+          - _registration_sources.results[0].json.error is not defined
+          - _registration_sources.results[1].json.error is not defined
+          - _registration_sources.results[0].json.result | length == 1
+          - _registration_sources.results[1].json.result | length == 1
+          - _registration_sources.results[0].json.result[0].name == router_zabbix_host_group_name
+          - _registration_sources.results[1].json.result[0].host == router_zabbix_template_name
+        fail_msg: "Expected Zabbix host group or template not found uniquely; no registration performed."
+
+    - name: Read existing router host registration
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output: [hostid, host, status]
+            filter: {host: ["router-01"]}
+            selectHostGroups: [groupid, name]
+            selectParentTemplates: [templateid, host]
+            selectInterfaces: [interfaceid, ip, port, type]
+          id: 13
+        return_content: true
+        timeout: 15
+      register: _existing_router
+      changed_when: false
+      no_log: true
+
+    - name: Refuse ambiguous API results or inconsistent existing host
+      ansible.builtin.assert:
+        that:
+          - _existing_router.json.error is not defined
+          - _existing_router.json.result | length <= 1
+          - >-
+            (_existing_router.json.result | length == 0) or
+            (
+              _existing_router.json.result[0].host == router_zabbix_host and
+              _existing_router.json.result[0].status == '0' and
+              _existing_router.json.result[0].hostgroups | length == 1 and
+              _existing_router.json.result[0].hostgroups[0].groupid == _registration_sources.results[0].json.result[0].groupid and
+              _existing_router.json.result[0].parentTemplates | map(attribute='templateid') | list | sort ==
+                [_registration_sources.results[1].json.result[0].templateid] and
+              _existing_router.json.result[0].interfaces | length == 0
+            )
+        fail_msg: "An existing router host differs from desired active-only state. Refusing to modify it."
+
+    - name: Create one router-only active-check host when absent
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.create
+          params:
+            host: "router-01"
+            name: "router-01"
+            status: 0
+            groups:
+              - groupid: "{{ _registration_sources.results[0].json.result[0].groupid }}"
+            templates:
+              - templateid: "{{ _registration_sources.results[1].json.result[0].templateid }}"
+          id: 14
+        return_content: true
+        timeout: 15
+      when: _existing_router.json.result | length == 0
+      register: _created_router
+      changed_when: true
+      failed_when: _created_router.json.error is defined
+      no_log: true
+
+    - name: Re-read and validate registered router host
+      ansible.builtin.uri:
+        url: "{{ router_zabbix_api_url }}"
+        method: POST
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ router_zabbix_token }}"
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output: [hostid, host, status]
+            filter: {host: ["router-01"]}
+            selectHostGroups: [groupid, name]
+            selectParentTemplates: [templateid, host]
+            selectInterfaces: [interfaceid, ip, port, type]
+          id: 15
+        return_content: true
+        timeout: 15
+      register: _router_postflight
+      changed_when: false
+      no_log: true
+
+    - name: Assert one enabled router with correct group, template and no inbound interface
+      ansible.builtin.assert:
+        that:
+          - _router_postflight.json.error is not defined
+          - _router_postflight.json.result | length == 1
+          - _router_postflight.json.result[0].host == 'router-01'
+          - _router_postflight.json.result[0].status == '0'
+          - _router_postflight.json.result[0].hostgroups | length == 1
+          - _router_postflight.json.result[0].hostgroups[0].groupid == _registration_sources.results[0].json.result[0].groupid
+          - >-
+            _router_postflight.json.result[0].parentTemplates | map(attribute='templateid') | list | sort ==
+            [_registration_sources.results[1].json.result[0].templateid]
+          - _router_postflight.json.result[0].interfaces | length == 0
+        fail_msg: "Zabbix router-only registration postflight failed."

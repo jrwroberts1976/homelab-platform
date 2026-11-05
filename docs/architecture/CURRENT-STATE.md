@@ -1,3 +1,70 @@
+## 5 November 2026 — router-01 Grafana Hosts resource dashboard fully verified
+
+Operator selected router-01 in `Homelab — Hosts` (UID `homelab-linux-estate`) and confirmed live dashboard values: Average CPU 3.74%, CPU Usage timeseries 4.06%, Average Memory Used / Memory Usage 46.7%, Node Exporters Up 1, network receive 812 kB/s and transmit 595 kB/s, filesystem `/boot/firmware` 13.1% and `/` 4.67%. This confirms router selection and the core CPU, memory, network and filesystem panels. Patch-status panels (Total Updates, Security Updates, Last Patch Check) and device enrichment (Operating System & Platform, Open Ports & Services, Nmap OS Fingerprint) show **No data**. `Failed systemd Units=0` may be the fallback (`or vector(0)`) and is not proven by this report. Keep enrichment as separate follow-up under #294; do not falsely claim patch compliance or systemd monitoring. Existing scoped dashboard deploy had ok=7 changed=1 failed=0 and a backup; no router network changes. PR #295 pending final CI/merge.
+
+## 5 November 2026 — Homelab Hosts router selection confirmed in live Grafana
+
+Operator selected `router-01` on provisioned `Homelab — Hosts` dashboard (UID `homelab-linux-estate`) and confirmed `Average CPU=4.02%`, `Average Memory Used=46.7%`, `Node Exporters Up=1`. Patch-status panels (`Total Updates`, `Security Updates`, `Last Patch Check`) show `No data`, not zero; `Failed systemd Units=0` is not yet evidence of actual monitoring because the dashboard query includes `or vector(0)`. File system and network graphs have not been confirmed in this UI evidence. Do not claim these extra panels complete or extend monitoring/patch collection without separate approval. Router dashboard selector deployment and core CPU/memory/Node Exporter display are live. PR #295 still requires passing checks and merge; #294 broader device enrichment stays open.
+
+## 5 November 2026 — Homelab Hosts Grafana dashboard update deployed
+
+Operator ran the approved scoped `playbooks/router-01-grafana-hosts-dashboard.yml` on `monitor-01`, with recap `ok=7 changed=1 unreachable=0 failed=0 skipped=0`. The playbook updated only `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json`, preserving a timestamped backup at `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json.624522.2026-11-05@07:05:00~`. Dashboard Host variable now includes the existing `router-node-exporter` Prometheus job, in addition to `node-exporter`; affected Up and CPU stat filters include both jobs. No Grafana restart, router changes or other dashboard writes. **Live UI selection/panel verification remains outstanding**. #294 / PR #295.
+
+## 5 November 2026 — Grafana Homelab — Hosts router selector extension staged
+
+User requested `router-01` in Grafana production dashboard `Homelab — Hosts` (UID `homelab-linux-estate`). The dashboard Host dropdown currently selects Prometheus `up{job="node-exporter"}`, but router telemetry already uses a separately named `router-node-exporter` job (label `target_name=router-01`). The branch changes the variable and two explicitly job-filtered panel queries to include both jobs and keeps the dashboard UID/other hosts intact. A dedicated opt-in Ansible playbook deploys only the backed-up Hosts JSON to monitor-01 after testing router exporter is UP. **Not deployed to Grafana yet**; dashboard panels may lack patch or systemd sources for router. Existing Zabbix eight-item verification remains complete. Grafana-Zabbix datasource architecture review deferred; no need to migrate metrics for this selector change. Issue #294 / PR #295.
+
+## 5 November 2026 — router-01 Zabbix OS facts live; eight monitoring items verified
+
+Final read-only Zabbix API audit found router-01 OS Facts system.sw.os.get fresh (209 s old) and system.sw.os[name] fresh (208 s old), both supported. Combined with six live core checks already verified (CPU load, total/available/available-percent memory, root filesystem used %, uptime), all 8 of 8 router monitoring items have now reported current values. The six-item Ansible definition passed a no-change rerun (ok=11 changed=0 failed=0). Router Zabbix Agent 2 monitoring is technically complete; PR #295 merge pending. Issue #294 wider Grafana enrichment remains pending. No gateway network config changed.
+
+## 5 November 2026 — router-01 Zabbix core item configuration idempotence PASSED
+
+Operator reran corrected scoped Ansible playbook `router-01-zabbix-core-items.yml`: **localhost ok=11 changed=0 unreachable=0 failed=0 skipped=1**. All six previously verified fresh router health items now have a clean no-change IaC postflight. Router networking unaffected. Hourly OS Facts collection and PR #295 review still outstanding; issue #294 Grafana enrichment not complete.
+
+## 5 November 2026 — Zabbix router-01 core health telemetry confirmed LIVE
+
+Read-only API audit through monitor-01 confirmed **all six router-01 basic health items present, enabled, active-agent type 7, supported, and reporting fresh measurements**: CPU load 50 s old, total RAM 289 s, available RAM 48 s, available RAM % 47 s, root filesystem % 286 s, uptime 15 s. This validates end-to-end active agent collection and proves the earlier deployment postflight failed solely on the incorrect hardcoded seven-item count; the correction is staged on feature branch `feature/router01-zabbix-agent-20261104` (`b0a51646`). A clean idempotent Ansible rerun and hourly OS Facts item freshness verification remain outstanding. Do not assume Zabbix Grafana enrichment complete. Issue #294 remains open.
+
+## 5 November 2026 — Zabbix router core-item postflight correction
+
+Operator ran approved six-item host-health creation on Zabbix, recap `localhost ok=9 changed=1 failed=1 skipped=1`. Final postflight mistakenly expected seven enabled items despite current six-item plan. **At least one Zabbix API modification occurred**; do not assume rollback. Fixed both postflight counts to derive from desired six-item list on branch commit `b0a51646`. Need independent read-only validation of registered router-01 items and lastclock before a rerun or completion. No direct router network change from this API-only playbook.
+
+## 4 November 2026 — router Zabbix memory semantics and pilot corrected
+
+Live read-only verification confirms `MemTotal=3886840 kB`, `MemAvailable=2077460 kB`, `vm.memory.size[pavailable]=53.031460`, while `vm.memory.size[pused]=93.210011` counts cache and must not alone trigger a memory-pressure alarm. Root filesystem shows about 1% used. Standalone Agent 2 test for `system.cpu.util[,idle]` returned `ZBX_NODATA` again; its daemon/time-series collection is unverified. All critical router services remain active. Staged `playbooks/router-01-zabbix-core-items.yml` now defines **six** independent active health checks (CPU load, memory total/available/available %, root disk used %, uptime), excluding unvalidated CPU idle and misleading memory used %. This plan has **not been deployed** to Zabbix; earlier seven-check plan is superseded. Issue #294 / PR #295.
+
+## 4 November 2026 — router Zabbix host health checks staged, NOT deployed
+
+Actual reference `monitor-01` telemetry was audited: active CPU load and idle CPU, active uptime, active memory total/available; CPU busy and memory used percentages are dependent items referencing other masters on the reference host. A separate, **not executed** approval-gated `router-01-zabbix-core-items.yml` is staged under #294 to create only seven basic independent active checks on `router-01` (CPU load, idle percentage, memory total/available/used percentage, root filesystem usage percentage, uptime). It fails closed on mismatched existing items and does not modify router networking, host agent or other Zabbix hosts. Existing OS Facts telemetry is still unverified (`lastclock=0`).
+
+## 4 November 2026 — Approved Zabbix configuration cache reload executed
+
+Operator ran the approval-gated `router-01-zabbix-cache-reload.yml` playbook after local syntax check, exclusively on `zabbix-01`: `ok=5 changed=1 unreachable=0 failed=0 skipped=0`. Zabbix runtime control acknowledged `config_cache_reload` with `Runtime control command was forwarded successfully`; server remained active. This did not restart Zabbix or change router-01. **Telemetry remains unverified:** need fresh OS Facts `lastclock` and confirmation active-check rejection errors stopped before marking router monitoring complete. Issue #294 / PR #295.
+
+## 4 November 2026 — Zabbix router active data still missing; cache reload staged
+
+After router host registration, read-only API queries still returned no OS Facts measurement (`lastclock=0`), while Zabbix server log showed active-check requests from `192.168.2.1` rejected with `host [router-01] not found` until at least 08:46:45 UTC. Server and Agent 2 both active, TCP 10051 reachable, router core services healthy. `playbooks/router-01-zabbix-cache-reload.yml` staged to request Zabbix runtime configuration-cache refresh after explicit approval; **not executed**, no Zabbix server restart or router change. Need verify item freshness after any approved reload.
+
+## 4 November 2026 — router-01 Zabbix host registered, telemetry pending
+
+Operator successfully executed the approval-gated `router-01-zabbix-register.yml` playbook from the isolated Zabbix feature worktree after reloading a valid privileged API token. **Ansible recap: localhost ok=9 changed=1 unreachable=0 failed=0 skipped=0**. Prior playbook validation found group `Homelab/Linux` ID 22 and active-only `Homelab Linux OS Facts` template ID 10698. The registration postflight passed, indicating the single `router-01` Zabbix host was created/enabled with expected group, template and no passive interface. This was an API-only change; no router networking changes. **Fresh OS item telemetry is not yet proven**, and extended CPU/memory/disk/uptime host monitoring is not yet configured. Remain within issue #294/PR #295.
+
+## 4 November 2026 — Zabbix router registration plan, NOT executed
+
+Read-only Zabbix 7.0.32 API audit: `router-01` is **not registered**. Existing `monitor-01` and `zabbix-01` are in host group `Homelab/Linux` (observed group ID 22), linked to `Homelab Linux OS Facts` (template ID 10698), with no passive interfaces. The OS Facts template contains only `system.sw.os.get` and `system.sw.os[name]`, both active items. Fresh Linux metrics on `monitor-01` include `system.cpu.util` (dependent item), `vm.memory.util` (dependent item), `system.uptime`, and dependent `vfs.fs.dependent.size[/,pused]`. Only OS Facts and HP ProCurve SNMP templates were returned to the read-only client; no generic Linux template can be assumed present.
+
+Scoped one-host registration playbook `IaC/ansible/playbooks/router-01-zabbix-register.yml` is **staged only** on `feature/router01-zabbix-agent-20261104`. It requires a privileged runtime `HOMELAB_ZABBIX_API_TOKEN` (unavailable on admin-01 so far) and separate explicit approval. It refuses unexpected host/group/template state, uses Zabbix HTTPS API and creates no passive agent interface. No host registered or new monitoring items created yet, and CPU/memory/dashboard enrichment remains separate under #294.
+
+## 4 November 2026 — router-01 Zabbix Agent 2 installed LIVE; host registration not verified
+
+The operator deployed `IaC/ansible/playbooks/router-01-zabbix-agent-active.yml` exclusively to `router-01` (`192.168.2.1`) from isolated `feature/router01-zabbix-agent-20261104` worktree after both install and rollback syntax checks passed. Approved activation recap: **router-01 ok=18 changed=8 failed=0 unreachable=0 skipped=2**. Official Zabbix repository package and `zabbix-agent2` installed; service enabled and active. Configuration verifies `Hostname=router-01`, `ServerActive=192.168.2.59` (TCP 10051), `Server=127.0.0.1` and `ListenIP=127.0.0.1`; no UFW/firewall tasks ran. Preflight and postflight verified `router-pppoe`, `dnsmasq`, `unbound`, `nftables` active and default route via `ppp0`. **Not yet proven:** whether `router-01` is registered in Zabbix and delivering recent active-check items. Do not claim Zabbix host enrollment or Grafana enrichment completed. PR #295 / issue #294; rollback playbook and runbook under `docs/operations/ROUTER-01-ZABBIX-AGENT.md`.
+
+
+## 4 November 2026 — router-01 Zabbix Agent 2 rollout history (superseded by live install above)
+
+Operator preflight on the production gateway `router-01` (`192.168.2.1`) established Debian GNU/Linux 13 (trixie), ARM64, outbound reachability to `zabbix-01` TCP/10051, inactive/unconfirmed-package `zabbix-agent2`, active `router-pppoe`, `dnsmasq`, `unbound`, `nftables`, and `default dev ppp0`. A scoped, opt-in, active-check-only deployment and service-stop rollback are staged on `feature/router01-zabbix-agent-20261104`; **at initial staging time no agent had yet been installed; see newer live installation above**. It keeps passive agent listening to loopback, does not add router LAN firewall openings, and does not enroll Zabbix's API host. See `docs/operations/ROUTER-01-ZABBIX-AGENT.md` and issue #294. Existing generic `zabbix_agents` inventory remains unchanged.
+
 <!-- estate-authority: IaC/inventory/estate.json -->
 # Current-State Architecture
 

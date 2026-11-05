@@ -1,0 +1,43 @@
+---
+# Controlled Zabbix server configuration cache reload; does not restart services.
+- name: Reload Zabbix configuration cache for newly registered router-01
+  hosts: zabbix-01
+  become: true
+  gather_facts: false
+  pre_tasks:
+    - name: Require explicit one-time configuration-cache approval
+      ansible.builtin.assert:
+        that:
+          - zabbix_router_cache_reload_approved | default(false) | bool
+          - zabbix_router_cache_reload_phrase | default('') == 'RELOAD_ZABBIX_CONFIG_CACHE'
+          - inventory_hostname == 'zabbix-01'
+          - ansible_host == '192.168.2.59'
+        fail_msg: "Zabbix configuration cache reload not approved or wrong target."
+
+    - name: Confirm Zabbix server is active
+      ansible.builtin.command: systemctl is-active zabbix-server
+      register: _zabbix_pre_active
+      changed_when: false
+      failed_when: _zabbix_pre_active.stdout != 'active'
+
+  tasks:
+    - name: Request built-in Zabbix configuration-cache reload
+      ansible.builtin.command:
+        argv:
+          - zabbix_server
+          - -c
+          - /etc/zabbix/zabbix_server.conf
+          - -R
+          - config_cache_reload
+      register: _cache_reload
+      changed_when: true
+
+    - name: Show safe runtime-control output
+      ansible.builtin.debug:
+        msg: "{{ _cache_reload.stdout | default('') }}"
+
+    - name: Confirm Zabbix server remains active
+      ansible.builtin.command: systemctl is-active zabbix-server
+      register: _zabbix_post_active
+      changed_when: false
+      failed_when: _zabbix_post_active.stdout != 'active'
