@@ -1,0 +1,69 @@
+---
+# Scoped update to one production Grafana dashboard; no service restarts.
+- name: Add router-01 to Homelab Hosts selector using existing Prometheus relay
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  vars:
+    router_hosts_dashboard_source: "../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
+    router_hosts_dashboard_dest: "/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json"
+    router_hosts_prometheus_query: 'up{job="router-node-exporter",target_name="router-01"}'
+  pre_tasks:
+    - name: Require explicit limited dashboard deployment approval
+      ansible.builtin.assert:
+        that:
+          - router_hosts_dashboard_approved | default(false) | bool
+          - router_hosts_dashboard_phrase | default('') == 'ADD_ROUTER01_TO_HOSTS_DASHBOARD'
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+        fail_msg: "Single Grafana Hosts dashboard deployment is disabled unless explicitly approved."
+    - name: Verify proposed dashboard JSON syntax locally
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -m
+          - json.tool
+          - "{{ router_hosts_dashboard_source }}"
+      delegate_to: localhost
+      become: false
+      changed_when: false
+      no_log: true
+    - name: Verify router Prometheus scrape target is UP
+      ansible.builtin.uri:
+        url: "http://127.0.0.1:9090/api/v1/query?query={{ router_hosts_prometheus_query | urlencode }}"
+        method: GET
+        return_content: true
+        timeout: 10
+      register: _router_prometheus_status
+      changed_when: false
+    - name: Refuse dashboard changes if router exporter is absent or down
+      ansible.builtin.assert:
+        that:
+          - _router_prometheus_status.json.status == 'success'
+          - _router_prometheus_status.json.data.resultType == 'vector'
+          - _router_prometheus_status.json.data.result | length == 1
+          - _router_prometheus_status.json.data.result[0].value[1] == '1'
+        fail_msg: "router-node-exporter for router-01 is not UP; leave dashboard unchanged."
+
+  tasks:
+    - name: Back up and install only Homelab Hosts dashboard JSON
+      ansible.builtin.copy:
+        src: "{{ router_hosts_dashboard_source }}"
+        dest: "{{ router_hosts_dashboard_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        backup: true
+      register: _router_dashboard_copy
+
+    - name: Validate deployed dashboard JSON
+      ansible.builtin.command:
+        argv: [jq, empty, "{{ router_hosts_dashboard_dest }}"]
+      changed_when: false
+
+    - name: Report dashboard deployment state and optional backup path
+      ansible.builtin.debug:
+        msg:
+          - "dashboard_changed={{ _router_dashboard_copy.changed }}"
+          - "backup_file={{ _router_dashboard_copy.backup_file | default('not required') }}"
+          - "Open Grafana Homelab — Hosts and choose router-01 after provisioning refresh."
