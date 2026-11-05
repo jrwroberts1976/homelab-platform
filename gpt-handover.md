@@ -1,3 +1,7 @@
+## 2026-11-05 — #294 router-01 Zabbix OS Facts LIVE (router monitoring verified)
+
+Operator read-only Zabbix item.get confirmed router-01 system.sw.os.get fresh (209 seconds old), system.sw.os[name] fresh (208 seconds old), both supported. Along with six previous confirmed fresh core health metrics, all eight intended router checks report data. Six-item playbook idempotent recap: localhost ok=11 changed=0 failed=0 skipped=1. Router-specific Zabbix monitoring technically complete; PR #295 review/merge remains; issue #294 Grafana DHCP device page enrichment still open. No router networking changes.
+
 ## 2026-11-05 — #294 six-item router monitoring Ansible idempotence PASSED
 
 - Operator reran corrected approval-gated `playbooks/router-01-zabbix-core-items.yml`; recap **localhost ok=11 changed=0 unreachable=0 failed=0 skipped=1 rescued=0 ignored=0**. Confirms six router core active-check items are registered, correct and idempotently managed by IaC; previous independent API audit verified all six actively reporting values. Router services and network configuration were not targeted by this server-side API playbook.
