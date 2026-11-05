@@ -699,3 +699,10 @@ At **07:44:42 GMT**, the third scheduled generator execution completed successfu
 ### 4 November 2026 — settled generator check-only preview
 
 Operator ran the deployed generator without `--apply` on `monitor-01`. It returned `rc=0` and `{"dashboard_writes":0,"device_pages":27,"mode":"check","new_devices":0,"no_deletions":true,"state_change":false}`. This proves no pending page additions or writes for the input and state observed at that moment; it does not itself prove future IP-reassignment identity or Nmap enrichment correctness. The most recent independently verified Grafana state remains 43 dashboards (16 protected, 27 DHCP-derived).
+
+
+### 5 November 2026 — router-01 Greenbone enrollment staged (not yet scanned)
+
+- Former `docker-01` at `192.168.2.220` is now production `router-01` at `192.168.2.1`. Operator confirmed ARP `INCOMPLETE` and no ICMP replies at `.220`, with ICMP replies at `.1`.
+- `router-01` is in `zabbix_agents`; the existing restricted `greenbone-scan` account was installed using router-limited Ansible and audited (locked password; key source `192.168.2.57`; PPPoE, dnsmasq, Unbound, nftables active). Source-IP reachability from Greenbone confirmed; **authenticated scan and report not yet verified**.
+- Existing authenticated target reconciler is staged to allow **only** the exact substitution `192.168.2.220 -> 192.168.2.1`, keeping all other target entries and the SSH credential unchanged, and requiring explicit approval. This is not a production target change until deployed.
