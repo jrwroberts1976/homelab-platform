@@ -1,10 +1,10 @@
 ---
-- name: Guard router target extension approval
+- name: Guard router target replacement approval
   ansible.builtin.assert:
     that:
       - not (greenbone_scanning_router_target_approved | default(false) | bool) or
         (greenbone_scanning_router_target_phrase | default('') == 'ADD_ROUTER01_TO_GREENBONE')
-    fail_msg: "Router-01 Greenbone target extension requires exact approval phrase."
+    fail_msg: "Router-01 Greenbone target replacement requires exact approval phrase."
 
 - name: Require Greenbone authenticated-scan private key
   ansible.builtin.assert:
