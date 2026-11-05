@@ -1,3 +1,7 @@
+## 5 November 2026 — router patch status identity-label correction applied
+
+Operator reran approval-gated router-01 patch telemetry-only playbook with stable management-IP override; Ansible recap `ok=21 changed=2 failed=0 skipped=7`. The exporter template and status data refresh were expected changes; all playbook assertions passed, with no router gateway service failures. Need independent confirmation of `ip=192.168.2.1` in emitted textfile and Prometheus and display in Grafana. No automated upgrade policy enabled by this deployment. Issue #209.
+
 ## 5 November 2026 — central Prometheus receives router patch telemetry
 
 Read-only Prometheus API verification on monitor-01 confirmed `router-node-exporter`/`target_name=router-01` series for `homelab_patch_pending_updates=3`, `homelab_patch_security_updates_pending=0`, and patch assessment timestamp `1793863235`. Prometheus receipt is verified; patch status IP label is still the WAN-derived value until the staged `automated_patching_reporting_ip` fix is deployed. Existing APT metadata is cached and the security-update count uses a heuristic. Grafana patch-panel display has not yet been rechecked.
