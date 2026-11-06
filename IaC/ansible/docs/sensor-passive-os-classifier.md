@@ -341,3 +341,23 @@ ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-rollba
 ```
 
 These tests are simple source-policy checks, not proof of runtime safety or account ownership. Deployment still needs physical-console confirmation, explicit user approval for the live identity change, and a rollback/change window. **Do not run either playbook in apply mode at this stage.**
+
+## Stage 5.7C — offline authenticated-transport argv and response planner (NOT deployed)
+
+Added `scripts/passive_os_transport_plan.py` and 10 offline checks in `tests/test_passive_os_transport_plan.py`. These generate only a fixed `ssh` argument list (source identity sensor-01, restricted router destination `homelab-os-transfer@192.168.2.1`, exact `get-batch`), strict host-key checking with a *future* trusted known_hosts file and private identity key, no forwarding, and bounded connection attempts. The module neither executes SSH nor checks that files exist. Response validation fails closed on failed SSH exit codes, empty/oversized/noncanonical/corrupt data. The read-only API never alters a router checkpoint.
+
+**Host-key provenance verified as NOT independent:** user explicitly confirmed that the fingerprint command at `james@raspberrypi` was run over an SSH connection. It matched the preflight, but it was obtained over the same class of management channel and therefore does **not** satisfy independent host identity validation. Do not set `passive_os_fingerprint_independently_verified`, do not pin this key as trusted, and do not run either live identity provisioning or rollback playbook. A trusted local console or independently authenticated inventory record is still needed before future activation.
+
+This is a test-only transport planner: no service users, SSH key material, known_hosts pinning, forced-command installation, real key authentication, host key verification or receipt transfer has occurred. The client plan does not implement subprocess timeouts/output streaming or cancellation; these must be designed and exercised before any live transport. The forced command cannot run using the dormant `/usr/sbin/nologin` identity; a separately reviewed activation is required.
+
+Offline operator validation:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m py_compile scripts/passive_os_transport_plan.py
+python3 -m unittest discover -s tests -p 'test_passive_os_transport_plan.py' -v
+```
+
+Ten new tests require operator validation. Previous confirmed unique test count is 122; if all ten pass, total becomes 132. Continue without production changes.
