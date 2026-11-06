@@ -214,3 +214,25 @@ ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-readonly-prefli
 ```
 
 If syntax/test checks succeed, the optional read-only audit is: `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-readonly-preflight.yml --ask-become-pass`. The static policy tests are not proof of a functioning or secure SSH deployment; **do not provision users/keys or enable any timer yet**.
+
+## Stage 5.4 — fixed-command sanitised exporter prototype (OFFLINE ONLY)
+
+New `scripts/passive_os_ssh_export.py` is a **candidate** implementation, not installed at the configured `/usr/local/libexec/homelab-passive-os-export` path. It does not open SSH connections or modify any files. `main()` accepts **no CLI arguments**, obtains the exact SSH original command, and only accepts `get-batch`. It reads a fixed path `/var/lib/homelab-passive-os/pending.json`; tests call its pure export function with synthetic private temporary files.
+
+Exporter checks the pending batch is an ordinary private file, verifies existing batch/digest integrity, validates allowlisted per-event fields and LAN source IPs, then emits **only** protocol, batch ID, digest and minimised observations. No `next_state`, offset, file paths, DNS domains, URLs, SNI or raw user agents travel in its output. It cannot prepare a batch, acknowledge delivery or advance the checkpoint. It performs no account creation, chmod, HUP or Suricata actions.
+
+Added ten regression cases in `tests/test_passive_os_ssh_export.py`, including command injection, missing/unsafe input, extra sensitive fields, public IP, tampering, empty batch and no-ack behavior. **Tests require operator verification** after pulling the feature branch.
+
+**Integration caveat:** the existing offline receiver currently expects the internal pending-batch schema (including `next_state`), whereas this exporter deliberately sends a narrower wire schema. This **cannot yet be connected to a receiver**. A separate authenticated wire receiver and receiver-proof protocol must be designed and tested before deploying the exporter. Actual forced-command executable, SSH keys, service account, known_hosts pinning and scheduled work are still absent. No transport endpoint is authorised.
+
+Offline validation:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_ssh_export.py' -v
+python3 -m py_compile scripts/passive_os_ssh_export.py
+```
+
+Keep source-and-sensor live configuration unchanged until a manual, approval-gated and rollback-tested deployment design is complete.
