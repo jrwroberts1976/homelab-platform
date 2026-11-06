@@ -111,3 +111,24 @@ python3 -m unittest discover -s tests -p 'test_passive_os_batch_spool.py' -v
 python3 -m unittest discover -s tests -p 'test_passive_os_batch_receiver.py' -v
 python3 -m py_compile scripts/passive_os_batch_spool.py scripts/passive_os_batch_receiver.py
 ```
+
+
+## Stage 4 — rotation continuity gate (staged, not yet operator-tested)
+
+- The offline spool now **fails closed** whenever a previously checkpointed EVE stream reports `rotated`, `truncated` or `content_replaced`: no new batch is published, and the checkpoint is preserved for review. Three new synthetic regression cases were added to `test_passive_os_batch_spool.py`.
+- Added **read-only**, non-mutating Ansible playbook `playbooks/router-01-suricata-logrotate-readonly-audit.yml`. It checks expected router inventory target, actual hostname (currently `raspberrypi`), dedicated NFQUEUE service status, logrotate policy, logrotate timer and EVE file metadata. It does not invoke logrotate, read the EVE contents, change SSH/accounts/permissions, or restart services.
+- The fail-closed guard protects against **detected** discontinuity; it cannot guarantee that all gaps are detected. In particular a same-inode copytruncate and rapid regrowth may evade a short overlap hash, and logrotate's copy/truncate interval can itself lose data. **Do not claim gapless collection or approve production scheduling.**
+- Recommended policy unless a separately approved logging architecture removes the gap: a **best-effort, explicitly marked incomplete** passive OS evidence feed, never an authoritative source. Any continuity alarm must be surfaced as an operational fault rather than silently resuming. Never use the pipeline for security incident reconstruction.
+- A policy change from `copytruncate` or changing the HUP interaction with NFQUEUE is **out of scope** until independently proven safe for the live IPS.
+
+Next operator validation:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_batch_spool.py' -v
+ansible-playbook -i inventory/hosts.yml playbooks/router-01-suricata-logrotate-readonly-audit.yml --syntax-check
+```
+
+Only after the syntax check passes, optionally run the read-only playbook with `--ask-become-pass` to verify the *actual* rotation policy. No live collector should be enabled afterward just because the audit succeeds.
