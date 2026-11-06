@@ -382,3 +382,28 @@ python3 -m unittest discover -s tests -p 'test_passive_os_transport_plan.py' -v
 ```
 
 Expected new cases: 13. Previously confirmed 132 unique offline tests; when these pass, 145 unique cases. **No production apply step.**
+
+
+## Stage 5.7E — synthetic local end-to-end validation (NOT deployed)
+
+Added `scripts/passive_os_offline_pipeline.py` and `tests/test_passive_os_offline_pipeline.py` (**12 tests pending operator execution**). The deliberately local-only harness accepts an explicit `synthetic_test_only=True` gate and a Python `-c` fixture command, never SSH. It exercises the existing bounded subprocess runner, strict canonical wire validation and local private durable receiver. It does **not** automatically acknowledge, advance or delete a source-side pending batch.
+
+Tests cover successful store, duplicate retry, corrupted and truncated wire, nonzero child status, stalled subprocess, oversized stdout, explicit local-only gate, refusing ssh argv, unsafe destination mode and symlink, preserving existing receipt on later failure and unchanged source checkpoint. Tests are synthetic, not actual network authentication nor an end-to-end proof of crash consistency.
+
+Run on **admin-01** only:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m py_compile scripts/passive_os_offline_pipeline.py
+python3 -m unittest discover -s tests -p 'test_passive_os_offline_pipeline.py' -v
+```
+
+Prior confirmed unique offline checks: **145/145**. If all 12 newly staged cases pass, cumulative becomes **157/157**. **Do not invoke any account provisioning/rollback playbook, install keys or enable SSH transport**: independently authenticated router host key is still unavailable (the user confirmed the repeated fingerprint came via SSH) and explicit production approval is absent.
+
+### Open Stage 5.7E questions before any rollout
+
+- Simulate process cancellation and system crash at each write/fsync boundary; validate durability on actual intended filesystem before claiming power-loss guarantees.
+- Add cross-host authenticated sender identity and signed receiver attestation, with replay protection and proven write receipt before a separately gated upstream acknowledgment. This offline harness does not combine those guarantees.
+- Review path ownership and symlink races, concurrent receiver locking and quotas in integrated operation. The synthetic wrapper itself is not an authorised deployable service.
