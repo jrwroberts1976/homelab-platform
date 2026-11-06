@@ -85,6 +85,7 @@ Validated on 5 October 2026, all **15 Ansible-managed Debian/Linux hosts** are e
 | Samsung embedded network device | `192.168.2.147` | `5c:a3:9d:49:46:22` | [Open](samsung-embedded-network-device.md) |
 | asus-aimesh-181 | `192.168.2.181` | `60:83:e7:f3:c8:de` | [Open](asus-aimesh-181-f3c8de.md) |
 | 192.168.2.140 | `192.168.2.140` | `d4:e9:f4:63:28:7c` | [Open](192-168-2-140.md) |
+| 192.168.2.106 | `192.168.2.106` | `d4:f5:47:8d:23:2e` | [Open](192-168-2-106.md) |
 
 ## What to maintain
 
