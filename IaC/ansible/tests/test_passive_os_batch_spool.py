@@ -72,6 +72,35 @@ class SpoolTests(unittest.TestCase):
         self.assertNotEqual(next_batch['batch_id'], first['batch_id'])
         self.assertEqual(next_batch['observations'], 1)
 
+    def test_truncate_with_checkpoint_blocks_new_batch(self):
+        self.append([sample()] * 4)
+        first = mod.prepare(self.eve, self.spool)
+        mod.ack(self.spool, first['batch_id'])
+        self.eve.write_text(json.dumps(sample(kind='dns')) + '\n')
+        with self.assertRaisesRegex(RuntimeError, 'continuity unverified'):
+            mod.prepare(self.eve, self.spool)
+        self.assertFalse((self.spool / 'pending.json').exists())
+
+    def test_inode_rotation_with_checkpoint_blocks_new_batch(self):
+        self.append([sample()])
+        first = mod.prepare(self.eve, self.spool)
+        mod.ack(self.spool, first['batch_id'])
+        self.eve.rename(self.eve.with_suffix('.old'))
+        self.append([sample(kind='dns')])
+        with self.assertRaisesRegex(RuntimeError, 'continuity unverified'):
+            mod.prepare(self.eve, self.spool)
+        self.assertFalse((self.spool / 'pending.json').exists())
+
+    def test_same_inode_content_replacement_blocks_new_batch(self):
+        self.append([sample()])
+        first = mod.prepare(self.eve, self.spool)
+        mod.ack(self.spool, first['batch_id'])
+        changed = sample()
+        changed['http']['http_user_agent'] = 'Windows NT 10.0'
+        self.eve.write_text(json.dumps(changed) + '\n')
+        with self.assertRaisesRegex(RuntimeError, 'continuity unverified'):
+            mod.prepare(self.eve, self.spool)
+
     def test_pending_contains_only_minimised_evidence(self):
         self.append([sample()])
         mod.prepare(self.eve, self.spool)
