@@ -1,0 +1,89 @@
+---
+# Stage 5.7B: dormant account only. Never installs keys, authorized_keys,
+# sshd modifications, export executable or automatic transfers.
+# DO NOT use in production until independent fingerprint verification.
+- name: Provision passive OS dormant router service identity - APPROVAL GATED
+  hosts: router-01
+  gather_facts: false
+  become: true
+  vars:
+    passive_os_approved: false
+    passive_os_fingerprint_independently_verified: false
+    passive_os_approved_fingerprint: ''
+    passive_os_expected_router_fingerprint: 'SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI'
+    passive_os_transfer_user: homelab-os-transfer
+  tasks:
+    - name: Require exact inventory endpoint before any work
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Wrong target: never provision on another host"
+
+    - name: Stop unless two independent explicit approvals were supplied
+      ansible.builtin.assert:
+        that:
+          - passive_os_approved | bool
+          - passive_os_fingerprint_independently_verified | bool
+          - passive_os_approved_fingerprint == passive_os_expected_router_fingerprint
+        fail_msg: >-
+          No changes permitted. Independently verify router ED25519 host key
+          out of band, then explicitly supply both approval flags and matching
+          fingerprint through the reviewed deployment procedure.
+      no_log: false
+
+    - name: Recheck runtime host identity
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      register: runtime_hostname
+
+    - name: Require canonical router runtime hostname
+      ansible.builtin.assert:
+        that:
+          - runtime_hostname.stdout == 'raspberrypi'
+
+    - name: Check router ED25519 public host-key fingerprint
+      ansible.builtin.command:
+        argv: [ssh-keygen, -l, -E, sha256, -f, /etc/ssh/ssh_host_ed25519_key.pub]
+      changed_when: false
+      register: router_host_fingerprint
+
+    - name: Stop on changed or unexpected host identity
+      ansible.builtin.assert:
+        that:
+          - passive_os_expected_router_fingerprint in router_host_fingerprint.stdout
+        fail_msg: "Host key changed; never provision without another independent verification"
+
+    - name: Refuse an already-existing service account
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ passive_os_transfer_user }}"]
+      changed_when: false
+      failed_when: false
+      register: existing_transfer_user
+      no_log: true
+
+    - name: Refuse ambiguous account state and accidental modification
+      ansible.builtin.assert:
+        that:
+          - existing_transfer_user.rc == 2
+        fail_msg: >-
+          Account exists or lookup error; manual review required before any
+          update. Never modify/reuse an existing account automatically.
+
+    - name: Create dormant locked transfer identity with no home or login
+      ansible.builtin.user:
+        name: "{{ passive_os_transfer_user }}"
+        comment: "Passive OS evidence transport - disabled pending security review"
+        system: true
+        password_lock: true
+        create_home: false
+        home: /nonexistent
+        shell: /usr/sbin/nologin
+        state: present
+
+    - name: Report only dormant identity staging
+      ansible.builtin.debug:
+        msg: >-
+          Created dormant identity only; no keys, SSH login, exporter,
+          service changes, transfer or checkpoint acknowledgement.
