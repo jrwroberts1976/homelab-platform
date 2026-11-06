@@ -279,3 +279,23 @@ python3 -m unittest discover -s tests -p 'test_passive_os_wire_receiver.py' -v
 ```
 
 Expected new test count: 11; previous confirmed suites total 104. No new SSH host key trust established; no key provisioning, account creation, service installation, timer or checkpoint mutation.
+
+## Stage 5.7A — read-only SSH identity baseline (NOT provisioned)
+
+Staged `playbooks/passive-os-ssh-identity-readonly-preflight.yml`. This playbook checks the two canonical endpoints (router-01 at 192.168.2.1 and sensor-01 at 192.168.2.55), runtime hostname, whether the **candidate** `homelab-os-transfer` account already exists, Ed25519 public host-key metadata and locally computed SHA256 fingerprint, and SSH daemon global defaults. The public key fingerprint is not secret. The playbook does **not** create or modify any account, key, known_hosts entry, authorised_keys, sshd configuration, firewall, or running service. Uses become only for reading `sshd -T` global effective settings.
+
+**Crucial trust boundary:** a fingerprint read from router-01 through the existing admin SSH connection is audit evidence only; it is *not independently authenticated* simply because the command executed over SSH. Record the expected fingerprint using a trusted local/console route or a prior independently verified inventory, compare it out-of-band, and obtain explicit approval before pinning. Never use `ssh-keyscan` alone as proof of authenticity and do not auto-accept host keys.
+
+Service account name is a collision probe only; do not assume an existing account is safe to reuse. `sshd -T` reports broad/global defaults, not per-user `Match` or forced-command policy. No login or end-to-end transfer test is performed.
+
+Run after fast-forward pull from feature branch:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-readonly-preflight.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-readonly-preflight.yml --ask-become-pass
+```
+
+Expected result: `changed=0` for both endpoints. Review the printed fingerprints and candidate-account collision state; **do not add a pinned key or create credentials** until independent verification and the approval-gated identity provisioning playbook have been reviewed. Stage 5.6 has 115/115 uniquely verified offline tests; this read-only host audit does not add a new unit test.
