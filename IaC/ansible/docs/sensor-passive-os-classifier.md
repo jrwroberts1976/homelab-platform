@@ -257,3 +257,25 @@ python3 -m unittest discover -s tests -p 'test_passive_os_ssh_export.py' -v
 ```
 
 Remaining deployment blockers: separately verified pinned router host key, restricted account and installed forced-command program, manually validated authenticated transport/receipt proof, inter-host failure tests, storage quota observability, and an Ansible-approved no-automatic-ack pilot. No router-01 or sensor-01 settings changed.
+
+## Stage 5.6 — offline Ed25519 receipt attestation (NOT deployed)
+
+Added `scripts/passive_os_signed_receipt.py` and eleven tests in `tests/test_passive_os_signed_receipt.py`, pending operator validation. Requires Python package `cryptography` for Ed25519 and **fails to import if unavailable**; do not install it automatically on router-01.
+
+A synthetic receiver signer checks the expected canonical sanitised wire bytes, saved wire bytes and existing local receipt, then signs a domain-separated proof with batch ID, observation digest, stored bytes, SHA-256 of the complete wire batch, receiver identity `sensor-01` and a 32-byte caller challenge (hex). Verification accepts a separately pinned Ed25519 public key; it rejects wrong keys, modified proofs/signatures, stale challenges and mismatched expected wire batches. Test signing keys are generated only in process memory. No SSH keys or signed receipts are deployed.
+
+**Trust limits:** this helper operates on caller-supplied byte strings, not independently authenticated storage or a locked receiver filesystem. It does **not** obtain a live authenticated SSH identity, prove an actual network transfer or physical power-cut durability, obtain a fresh challenge securely, establish key custody/rotation or allow router acknowledgment. A production signer must be bound to private receiver storage and authentic key material; the verifier must receive the router's **currently pending** batch context over a trusted coordinator before any ack is even considered. The wire batch ID cannot be independently recalculated without the router-private checkpoint; signing an attacker-supplied batch alone does not resolve that.
+
+Offline validation after pulling feature branch:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -c 'from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey; print("Ed25519 available")'
+python3 -m py_compile scripts/passive_os_signed_receipt.py
+python3 -m unittest discover -s tests -p 'test_passive_os_signed_receipt.py' -v
+python3 -m unittest discover -s tests -p 'test_passive_os_wire_receiver.py' -v
+```
+
+Expected new test count: 11; previous confirmed suites total 104. No new SSH host key trust established; no key provisioning, account creation, service installation, timer or checkpoint mutation.
