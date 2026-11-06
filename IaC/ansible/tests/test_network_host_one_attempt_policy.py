@@ -58,6 +58,8 @@ class OneAttemptSafetyTests(unittest.TestCase):
     def test_legacy_profiles_without_counters_block_retry(self):
         attempted, due = load_guards(True)
         for record in (
+            {"status": "complete"},
+            {"status": "partial"},
             {"status": "complete", "profiled_at": 123},
             {"status": "partial", "profiled_ip": "192.168.2.184"},
             {"status": "partial", "profile": {"tcp": {"os_matches": []}}},
