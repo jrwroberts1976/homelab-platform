@@ -1,3 +1,14 @@
+## 6 November 2026 — passive OS offline integration passed; next gate is read-only production readiness
+
+- Operator fast-forwarded feature branch to `14bdf475` on admin-01 and successfully compiled the offline coordinator and end-to-end test suite.
+- `test_passive_os_offline_end_to_end.py`: **5/5 PASSED** on admin-01. Synthetic pipeline/metadata privacy, duplicate retry without ack, wrong signer/challenge refusal, corrupt delivery refusal, and tampered receipt rejection passed. The preceding `test_passive_os_offline_receipt_coordinator.py` suite also passed **10/10** on admin-01.
+- These tests are **synthetic local-only**. No router-01/sensor-01 runtime changes; no SSH accounts, keys, transfers, timers, source checkpoint acknowledgements or production signer were enabled.
+- Next step is **existing** read-only preflights: `playbooks/passive-os-ssh-identity-readonly-preflight.yml` for identity and `playbooks/router-01-suricata-logrotate-readonly-audit.yml` for log continuity, first syntax-checking both. Run only without write approvals. Explicit independent (out-of-band) authentication of the router ED25519 host key is still a hard gate; fingerprint observed over SSH cannot establish this.
+- Avoid adding further redundant offline transport prototypes. After review of audits, decide whether best-effort sample continuity with explicit gap signaling is acceptable; design reviewed minimal identity activation and rollback before any live changes. Maintain Ansible/IaC and separate operator approval.
+- Existing five-case offline E2E suite does **not** prove power-fail durability, network authentication or live collection. No production launch is authorised.
+
+---
+
 ## 5 November 2026 — #297 Grafana Hosts Panel 30 deployed and verified on monitor-01
 
 - **Panel 30 Open Ports & Services: production success.** Operator ran guarded preflight twice on monitor-01 (192.168.2.52), both `ok=4 changed=0 failed=0`, then deployed the scoped query via the approval-gated Ansible playbook. Final post-deployment `router01-grafana-panel30-verify.yml` reported `ok=4 changed=0 failed=0`: `PASS: deployed panel30 query, protected backup, panel29 unchanged`.
