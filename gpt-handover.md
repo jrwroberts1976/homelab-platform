@@ -1,3 +1,13 @@
+## 6 November 2026 — router Suricata rotation PID read-only follow-up
+
+- Operator ran read-only Ansible ad-hoc inspection on router-01. `router-suricata-nfq.service` is **active**, `MainPID=42090`, with `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10` and exception/stream overrides. There was one visible main Suricata process (plus the auditing shell).
+- `/var/run/suricata.pid` **does not exist**. Existing logrotate policy's `postrotate /bin/kill -HUP $(cat /var/run/suricata.pid)` may fail **if reached**; a successful `logrotate.service` at `2026-11-06 00:23:19 GMT` does **not** establish the Suricata postrotate hook executed. There is no evidence that HUP was delivered to the NFQUEUE process.
+- The Ansible ad-hoc shell returned `CHANGED` by default even though commands were inspection-only. No config writes, restarts or rotations were requested.
+- Next gate: read-only inspect logrotate status timestamps, service unit details and scoped journal/errors to establish whether rotation actually occurs. Do **not** invoke logrotate, send HUP, alter Suricata/NFQUEUE or change the current live policy merely to make the passive OS prototype work.
+- Deployment remains blocked by independent SSH identity verification and approval; passive OS evidence remains best-effort pending explicit acceptance of gaps.
+
+---
+
 ## 6 November 2026 — passive OS production read-only preflights PASSED; rotation risk identified
 
 - Operator pulled commit `336eb08e` on admin-01; both existing Ansible playbooks passed syntax-check and executed read-only with `changed=0 failed=0 unreachable=0`. Identity preflight: router-01 and sensor-01 each `ok=9`; rotation preflight: router-01 `ok=7`.
