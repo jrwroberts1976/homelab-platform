@@ -132,3 +132,22 @@ ansible-playbook -i inventory/hosts.yml playbooks/router-01-suricata-logrotate-r
 ```
 
 Only after the syntax check passes, optionally run the read-only playbook with `--ask-become-pass` to verify the *actual* rotation policy. No live collector should be enabled afterward just because the audit succeeds.
+
+
+## Stage 4 — observed DHCP snapshots, NOT lease history (offline only)
+
+Read-only router audit on 6 Nov 2026: dnsmasq enabled/active, 28 current DHCP leases, none expired or non-expiring, 24h pool `192.168.2.100–199`; lease-file root:root mode 0644. No `dhcp-script` hook was visible in the inspected configuration references. Current lease records have **expiry but no authoritative lease-start timestamp**, so don't backdate device identity.
+
+`scripts/passive_os_lease_snapshot.py` parses an **operator-provided, local** dnsmasq lease-file copy and emits `observed_at`, IP→MAC mapping, lease expiry bounded to a *maximum 5-minute forward observation window*, and an explicit `observed_dhcp_snapshot_not_verified_lease_history` provenance string. It rejects expired leases, outside-LAN entries, malformed MACs and conflicting IP assignments. Hostnames and lease client identifiers are not exported. Its `leases` object matches the offline classifier's expected lease input shape when extracted, but the classifier must not be pointed at the entire wrapper object.
+
+**Limitations:** forward windows are assumptions about continuity, not audited evidence that DHCP ownership could not have changed between observations; they may not capture static addresses or privacy MAC rotations. This cannot recover past IP→MAC history, and there is **no live DHCP capture, no timer, and no dnsmasq configuration change**. For stronger confidence later, evaluate a read-only neighbour/lease observation sampling policy and explicit temporal conflict management, or separately approve a dnsmasq lease-change hook after assessing DHCP/router risk.
+
+New offline validation (awaiting operator run):
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_lease_snapshot.py' -v
+python3 -m py_compile scripts/passive_os_lease_snapshot.py
+```
