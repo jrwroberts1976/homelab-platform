@@ -1,3 +1,12 @@
+## 6 November 2026 — existing monitor-01 router SSH host pin verified read-only
+
+- Operator read-only inspected `/etc/homelab/router-metrics-ssh/known_hosts` on monitor-01 using Ansible from admin-01. File exists as `root:root`, mode `0644`, and has exactly the reported lookup entry at line 2 for `192.168.2.1`: ED25519 `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` tagged `router-metrics-ansible-managed-20261029`. It matches the current router key and the historical October 29 pinning runbook.
+- The command was inspection-only; ad-hoc `ansible.builtin.shell` reported `CHANGED` as a convention, not evidence of a write. Existing monitoring key/pin/tunnel have **not** been changed.
+- This verifies historical **pin consistency**, not independently authenticated original key provenance. The Oct 29 runbook claims a physically verified key, while later operator context says the fingerprint was retrieved via SSH. Preserve this discrepancy. No silent acceptance, bypass of `StrictHostKeyChecking`, key re-pinning or automatic account activation.
+- Next: inspect current restricted-account/forced-command staging and identify the smallest approval-gated activation change. Keep monitoring identity separate and router production unchanged until explicitly authorised.
+
+---
+
 ## 6 November 2026 — passive OS read-only logrotate state checked; no router change
 
 - Operator inspected logrotate status/journal and EVE metadata via read-only Ansible ad-hoc shell. Status records last rotation timestamp `2026-11-02 00:00:00` for `eve.json`, `stats.log`, `fast.log` and `suricata.log`. Current EVE file is `1,450,139,849` bytes, last modified `2026-11-06 22:59:30 GMT`, demonstrating continued writes at audit time.
