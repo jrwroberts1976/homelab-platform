@@ -299,3 +299,26 @@ ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-readon
 ```
 
 Expected result: `changed=0` for both endpoints. Review the printed fingerprints and candidate-account collision state; **do not add a pinned key or create credentials** until independent verification and the approval-gated identity provisioning playbook have been reviewed. Stage 5.6 has 115/115 uniquely verified offline tests; this read-only host audit does not add a new unit test.
+
+## Stage 5.7B — gated *dormant identity* staging (NOT executed)
+
+Added `playbooks/passive-os-ssh-identity-provision-gated.yml`, targeted **only** at router-01. It is fail-closed by default: requires two explicit operator approval variables and a fingerprint value which the operator must **first** verify independently using a trusted local console or independently trusted record. The value currently observed through Ansible, `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`, is **not** itself trusted proof. The playbook checks the endpoint, runtime hostname `raspberrypi`, on-host ED25519 public-key fingerprint and absence of the prospective account before any write. It stops if the account already exists, requiring a separate idempotence/reconciliation policy. Never run with approval flags just to bypass the gate.
+
+If and only if approved later, this playbook creates a **dormant password-locked account** (`homelab-os-transfer`) with no home directory and `/usr/sbin/nologin`. It installs **no** authorised SSH key, known_hosts pin, SSH config, executable, timer, service or checkpoint hook. Such a nologin account **cannot run the planned forced-command exporter**; a separate future security-reviewed account activation mechanism is required and deliberately **not included** here.
+
+Offline-only Ansible syntax verification:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-provision-gated.yml --syntax-check
+```
+
+Do not run the playbook in apply mode or supply approval variables at this stage. To independently verify the host key, run the public-key fingerprint command **from a physically trusted local console**, not by SSH through the same currently unverified path:
+
+```bash
+ssh-keygen -l -E sha256 -f /etc/ssh/ssh_host_ed25519_key.pub
+```
+
+Record a verified fingerprint and obtain separate explicit approval before changing accounts. Later deployment needs an approved rollback plan, proper least-privilege execution with per-account restrictions, keyed authentication, evidence transfer, and no automatic acknowledgment.
