@@ -1,3 +1,13 @@
+## 6 November 2026 — passive OS dormant identity offline validation passed; activation still blocked
+
+- Operator on admin-01 ran `python3 -m unittest discover -s tests -p 'test_passive_os_identity_playbook_gates.py' -v`: **7/7 PASS**. Both `passive-os-ssh-identity-provision-gated.yml` and `passive-os-ssh-identity-rollback-gated.yml` passed `ansible-playbook --syntax-check`.
+- Read-only account lookup had previously confirmed `homelab-os-transfer` absent on router-01 (`getent` exit 2 expected). No transfer account creation, SSH change, key provisioning or transport execution has been approved or performed.
+- Source review: provisioning playbook is deliberately **dormant-only** (locked password, `/nonexistent`, `/usr/sbin/nologin`, no keys/forced command). Rollback handles **only unchanged dormant identity**; it cannot safely remove a later activated service account. Passing source-level tests does not validate live activation or rollback for an active transport.
+- Focus next on reviewing a complete separate activation **and its separate rollback**, strict forced command and service-user policy, network source constraint, authorised key, trusted host pin provenance, bounded read-only exporter, and explicit approval before any production write. The Oct 29 monitor router key pin matches, but historical physical-key provenance conflict remains; preserve as risk/approval gate.
+- Avoid deploying the dormant account merely to claim progress. Keep router NFQUEUE, logrotate, dnsmasq, QoS and SSH untouched while reviewing. No unattended collection or source ack.
+
+---
+
 ## 6 November 2026 — existing monitor-01 router SSH host pin verified read-only
 
 - Operator read-only inspected `/etc/homelab/router-metrics-ssh/known_hosts` on monitor-01 using Ansible from admin-01. File exists as `root:root`, mode `0644`, and has exactly the reported lookup entry at line 2 for `192.168.2.1`: ED25519 `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` tagged `router-metrics-ansible-managed-20261029`. It matches the current router key and the historical October 29 pinning runbook.
