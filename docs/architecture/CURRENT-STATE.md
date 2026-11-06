@@ -737,3 +737,9 @@ Operator ran the deployed generator without `--apply` on `monitor-01`. It return
 ### 6 November 2026 — Greenbone runner preflight mode verified
 
 - First Stage 2 runner-cutover attempt stopped before changes: original `/usr/local/sbin/homelab-greenbone-scan` is `root:root 0755` rather than expected `0750`. The live runner still selects the legacy authenticated daily task; managed service was inactive and timer enabled. The cutover guard now accepts verified existing `0755` or `0750`, while deploying its replacement as `0750`. No cutover or scan has yet been confirmed.
+
+
+### 6 November 2026 — Greenbone managed runner Router01 task cutover passed
+
+- Operator ran guarded `greenbone-router-runner-cutover.yml` with `switch` approval: Ansible `ok=16 changed=3 failed=0 skipped=1`. Runner selection now expected to resolve replacement task UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`; its embedded GMP `--check` verification had no failure. No scan was started by the cutover. Original authenticated task and report history preserved.
+- Canonical role default `greenbone_scanning_runner_managed_task_name` updated to the replacement Router01 task for future IaC convergence. Existing daily timer remains the same; post-cutover explicit runner `--check` and first scheduled scan evidence remain to be reviewed. Rollback must switch runtime runner **and** restore this IaC default to original authenticated task name before subsequent role deploys.
