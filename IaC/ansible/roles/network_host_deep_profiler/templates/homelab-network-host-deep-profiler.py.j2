@@ -146,7 +146,8 @@ def scan_retry_seconds(record):
 def already_attempted_nmap(record):
     """Existing scan evidence or attempt markers block automatic rescans."""
     return (
-        int(record.get("attempt_count", 0) or 0) > 0
+        record.get("status") in ("complete", "partial")
+        or int(record.get("attempt_count", 0) or 0) > 0
         or int(record.get("last_attempt", 0) or 0) > 0
         or int(record.get("profiled_at", 0) or 0) > 0
         or bool(record.get("profiled_ip"))
