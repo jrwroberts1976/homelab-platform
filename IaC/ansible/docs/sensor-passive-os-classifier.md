@@ -57,3 +57,26 @@ python3 -m py_compile scripts/sensor_passive_os_classifier.py
 ```
 
 No production deployment is authorised by these tests.
+
+
+## Stage 2 offline router EVE minimiser — staged, NOT deployed
+
+`IaC/ansible/scripts/router_eve_minimizer.py` is a **local file prototype** only. It parses a pre-existing file of Suricata EVE JSONL records and emits strictly `timestamp`, LAN `src_ip`, `event_type`, and (HTTP only, when recognisable) `os_family_hint`. Source records' URLs, DNS domains, TLS/QUIC SNI, raw User-Agent strings, remote IP addresses and payloads are never copied to the sanitised output. It does not read DHCP leases or assert an OS identity. `sensor_passive_os_classifier.py` accepts these hints but still requires a historical time-bounded IP→MAC lease map to attribute them, and labels each resulting OS as **low-confidence candidate** at best.
+
+- Resource cap per run: **1 MiB** of input and **2,000 complete lines**; each line ≤8 KiB; checkpoint file ≤4 KiB.
+- Resumes from persisted device/inode/offset and a short overlap hash; detects inode changes, file shrink, and changed content around the read position. Incomplete/oversized lines stop that batch without consuming them; a persistent oversized line can block progress pending an operator decision.
+- Writes sanitised output and checkpoint using root-/owner-private mode **0600** with atomic rename. No network listener, SSH service, timer, scans, or Suricata modifications.
+- **Reliability limitations:** the two output/checkpoint replacements are not transactional; a crash can cause replay or loss of an untransferred batch. Consumer acknowledgement, idempotency/deduplication, queue/spool limits, and recovery from copytruncate while content has already regrown beyond the prior offset remain unsolved. A 64-byte overlap check is *not* a guarantee of lossless rotation. The extractor is therefore **not approved for unattended production scheduling**. A future live design must address rotation gaps and input/output security without affecting NFQUEUE service operation.
+- The script currently starts at byte 0 of a supplied file if no checkpoint exists. **Never run it directly against the 1.2 GB live router EVE file** as a quick fix or infer that this handles the historical backlog; a first-live-start-from-current-EOF design is separately required.
+- Historical DHCP lease snapshots are not already available; the existing current leases cannot prove historical IP-to-MAC identity and must not be substituted without validation.
+
+Offline tests (on admin-01 after pulling the feature branch):
+
+```bash
+cd ~/projects/homelab-network-enrichment/IaC/ansible
+python3 -m unittest discover -s tests -p 'test_router_eve_minimizer.py' -v
+python3 -m unittest discover -s tests -p 'test_sensor_passive_os_classifier.py' -v
+python3 -m py_compile scripts/router_eve_minimizer.py scripts/sensor_passive_os_classifier.py
+```
+
+The extractor's 12 regression tests were exercised against a matching offline prototype locally in the authoring environment before committing. Re-run them from the actual Git checkout to validate committed bytes. **No live deployment or permission changes have been performed.**
