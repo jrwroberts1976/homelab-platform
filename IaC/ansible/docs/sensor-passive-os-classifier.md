@@ -236,3 +236,24 @@ python3 -m py_compile scripts/passive_os_ssh_export.py
 ```
 
 Keep source-and-sensor live configuration unchanged until a manual, approval-gated and rollback-tested deployment design is complete.
+
+## Stage 5.5 — offline sanitised wire receiver (NOT deployed)
+
+New `scripts/passive_os_wire_receiver.py` accepts the **four-field wire batch** emitted by the Stage 5.4 exporter (`protocol`, `batch_id`, `digest`, `observations`) without receiving any internal router checkpoint state. It rejects extra fields, duplicate JSON keys, invalid event/IP/OS fields, mismatched observation digest, oversized data, symlinks, insecure destination permissions and conflicting existing evidence. `receive_wire()` stores the canonical batch and a local receipt privately, with file fsync and an explicit parent-directory fsync, and reuses the Stage 5.2 fail-closed 256-batch/64MiB capacity rules. Command-line mode operates exclusively on local files under an exclusive destination lock; no SSH sockets or service actions are implemented.
+
+**Security limit:** the wire-format `batch_id` derives from the router's private checkpoint data, so the receiver can validate only its syntax and the observations digest, **not recompute the batch ID**. The future authenticated transport must establish the sender and bind that received ID to a verified router pending batch before upstream acknowledgment. A local receipt is NOT sender authentication, NOT a network acknowledgment, and NOT authority for the old `--ack-id` test hook. Durability is best-effort pending power-loss, filesystem and interrupted-write recovery testing. No automatic cleanup or timer.
+
+Fifteen additional tests in `tests/test_passive_os_wire_receiver.py` exercise local exporter/receiver roundtrip, malicious data rejection, idempotent retry, storage quota handling and no checkpoint advancement. **Tests pending operator verification.** The old internal-schema receiver remains for its prior offline regression suite; it must NOT be connected directly to the new restricted export.
+
+To validate on admin-01 after pulling:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m py_compile scripts/passive_os_wire_receiver.py
+python3 -m unittest discover -s tests -p 'test_passive_os_wire_receiver.py' -v
+python3 -m unittest discover -s tests -p 'test_passive_os_ssh_export.py' -v
+```
+
+Remaining deployment blockers: separately verified pinned router host key, restricted account and installed forced-command program, manually validated authenticated transport/receipt proof, inter-host failure tests, storage quota observability, and an Ansible-approved no-automatic-ack pilot. No router-01 or sensor-01 settings changed.
