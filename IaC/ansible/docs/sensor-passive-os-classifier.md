@@ -195,3 +195,22 @@ python3 -m unittest discover -s tests -p 'test_passive_os_batch_receiver.py' -v
 python3 -m unittest discover -s tests -p 'test_passive_os_receipt_verify.py' -v
 python3 -m py_compile scripts/passive_os_batch_receiver.py
 ```
+
+## Stage 5.3 — restricted SSH transport policy (offline, NOT installed)
+
+New `scripts/passive_os_ssh_policy.py` creates a **candidate** authorized_keys line with Ed25519 key, `restrict`, source IP 192.168.2.55, and fixed command `/usr/local/libexec/homelab-passive-os-export`. The forced-command program has **not** been created. No identity, key or SSH configuration has been installed. `tests/test_passive_os_ssh_policy.py` adds eleven offline synthetic security tests, not yet run on admin-01.
+
+New `playbooks/passive-os-ssh-readonly-preflight.yml` audits SSH daemon global defaults, service state, runtime hostname and ED25519 public host-key file *metadata only*. It does not retrieve private keys, change configuration, or validate effective per-user `Match`/authorized_keys restrictions.
+
+Security gates before live transport: (1) independently verify/pin router host key and use a distinct non-login service identity; (2) source-IP-scoped restricted forced-command key, rejecting shells, PTY, forwarding, arbitrary commands and paths, with no access to raw EVE; (3) bound bytes, time and server CPU plus storage and lease observation schedule; (4) prove authentic end-to-end receiver receipt and durability before any automatic source checkpoint acknowledgment; (5) fail closed on identity, host key, network or rotation interruption; (6) independently reviewed Ansible approval/rollback with no IPS, routing, QoS, DHCP or SSH daemon restart.
+
+Run after `git pull --ff-only` on admin-01:
+
+```bash
+cd ~/projects/homelab-network-enrichment/IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_ssh_policy.py' -v
+python3 -m py_compile scripts/passive_os_ssh_policy.py
+ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-readonly-preflight.yml --syntax-check
+```
+
+If syntax/test checks succeed, the optional read-only audit is: `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-readonly-preflight.yml --ask-become-pass`. The static policy tests are not proof of a functioning or secure SSH deployment; **do not provision users/keys or enable any timer yet**.
