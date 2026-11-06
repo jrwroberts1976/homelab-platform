@@ -64,7 +64,7 @@ class SSHExportTests(unittest.TestCase):
         self.assertFalse((self.spool / "checkpoint.json").exists())
 
     def test_missing_batch_rejected(self):
-        with self.assertRaises(ValueError):
+        with self.assertRaises(FileNotFoundError):
             export_batch(self.path.with_name("missing.json"), "get-batch")
 
     def test_symlink_rejected(self):
