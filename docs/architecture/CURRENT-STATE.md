@@ -732,3 +732,8 @@ Operator ran the deployed generator without `--apply` on `monitor-01`. It return
 - Verified replacement target `be77d8f0-2c51-42d8-a257-829ac2ac1931` contains 15 hosts including `192.168.2.1`, excludes `192.168.2.220`, and uses SSH credential `Homelab - Linux SSH Auth`. Replacement task `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9` is `New`.
 - Added explicit `playbooks/greenbone-router-runner-cutover.yml` for `switch` and `rollback`: exact approval phrase, idle service check, current runner selection check, original backup under `/var/backups`, candidate `--check` GMP task-ID proof, no scan start. **Playbook has not yet run on greenbone-01.** Validate syntax and review before use. Existing managed runner and timers are still unchanged.
 - Future routine `greenbone_scanning` role deployment must carry the chosen runner task-name override into canonical IaC after cutover, otherwise it may render the old task name again; do not run broad Greenbone redeploys without reviewing this drift.
+
+
+### 6 November 2026 — Greenbone runner preflight mode verified
+
+- First Stage 2 runner-cutover attempt stopped before changes: original `/usr/local/sbin/homelab-greenbone-scan` is `root:root 0755` rather than expected `0750`. The live runner still selects the legacy authenticated daily task; managed service was inactive and timer enabled. The cutover guard now accepts verified existing `0755` or `0750`, while deploying its replacement as `0750`. No cutover or scan has yet been confirmed.
