@@ -407,3 +407,23 @@ Prior confirmed unique offline checks: **145/145**. If all 12 newly staged cases
 - Simulate process cancellation and system crash at each write/fsync boundary; validate durability on actual intended filesystem before claiming power-loss guarantees.
 - Add cross-host authenticated sender identity and signed receiver attestation, with replay protection and proven write receipt before a separately gated upstream acknowledgment. This offline harness does not combine those guarantees.
 - Review path ownership and symlink races, concurrent receiver locking and quotas in integrated operation. The synthetic wrapper itself is not an authorised deployable service.
+
+
+## Stage 5.7F — locked signed-receipt offline prototype (pending validation)
+
+Added `scripts/passive_os_offline_receipt_coordinator.py` plus **10 synthetic offline tests** (`tests/test_passive_os_offline_receipt_coordinator.py`). An explicitly opted-in local-only function validates the canonical sanitised wire, challenge and disposable in-memory Ed25519 signer, takes a private advisory flock on receiver `.lock`, durably receives/compares the batch and local receipt, and signs a challenge-bound envelope while retaining the lock. It then verifies its synthetic signature against the same disposable public key, returning `signature_verified_only`. It deliberately **does not acknowledge a source batch or checkpoint**, create production signer keys, verify real SSH identity or authenticate any production sender.
+
+The 10 tests cover valid receipt/signature, identical retries, stale challenge, wrong verification key, missing synthetic opt-in, unsafe directory, lock symlink, invalid wire, invalid challenge and preservation of source pending checkpoint. This does **not** prove recovery from crashes, hardware power cuts, TOCTOU resilience on real hosts, inter-process concurrency under load or a trusted end-to-end sender/receiver identity. All participants must honour the same lock; the existing `receive_wire()` API alone does not acquire it.
+
+From **admin-01 only**:
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m py_compile scripts/passive_os_offline_receipt_coordinator.py
+python3 -m unittest discover -s tests -p 'test_passive_os_offline_receipt_coordinator.py' -v
+```
+
+Previously confirmed unique offline tests: **157/157**. New tests are **pending operator execution**; cumulative becomes 167 only if all ten pass.
+
+**Deployment gate remains closed**: the router host-key fingerprint was only cross-checked through SSH, not independently authenticated; no explicit approval for router service-account provisioning, key installation or live transfer was given. Do not run provisioning or rollback playbooks in apply mode and do not enable acknowledgement.
