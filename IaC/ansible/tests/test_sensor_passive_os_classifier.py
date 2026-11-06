@@ -41,6 +41,20 @@ class PassiveClassificationTests(unittest.TestCase):
         self.assertEqual(d["os_family"], "Linux")
         self.assertNotIn("version", d)
 
+    def test_preminimized_http_hint(self):
+        e = event()
+        e.pop("http_user_agent")
+        e["os_family_hint"] = "ChromeOS"
+        record = mod.classify([e], LEASES)["devices"][0]
+        self.assertEqual((record["os_family"], record["confidence"]),
+                         ("ChromeOS", "low"))
+
+    def test_malformed_hint_fails_closed(self):
+        e = event(ua=None)
+        e["os_family_hint"] = ["Windows"]
+        record = mod.classify([e], LEASES)["devices"][0]
+        self.assertEqual(record["os_family"], "unknown")
+
     def test_dns_tls_quic_alone_cannot_identify_os(self):
         events = [event(kind=k, ua="Windows NT 10.0")
                   for k in ("dns", "tls", "quic")]
