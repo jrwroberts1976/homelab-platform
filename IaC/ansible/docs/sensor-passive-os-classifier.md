@@ -175,3 +175,23 @@ python3 -m py_compile scripts/passive_os_receipt_verify.py
 ```
 
 **There is no production transfer yet.**
+
+
+## Stage 5.2 — offline receiver capacity guard (not deployed)
+
+The receiver now rejects new batches when the private receiving directory would exceed **256 stored batch files** or **64 MiB** of retained batch-plus-receipt content. It rejects symlinks, unexpected file names and excessive directory entries. Retried delivery of an existing unchanged batch remains idempotent. There is **no automatic deletion**, so quota pressure is a safe operational stop rather than evidence loss.
+
+Six new tests were added to `tests/test_passive_os_batch_receiver.py` for byte and batch ceilings, retries, unexpected/symlinked files, and non-deletion. These tests have **not yet been verified by the operator**; the earlier 6 receiver tests were verified and the previous cumulative total was 62 tests.
+
+Caveat: these are local prototype limits only. A production pipeline still needs an explicitly scoped storage location, filesystem safety and crash durability validation, signed/verified remote receipts, authenticated SSH forced commands, retention governance, and a separate reviewed process that marks evidence as *processed* before cleanup. No timers or automated acknowledgments may be enabled on this basis.
+
+Offline validation:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_batch_receiver.py' -v
+python3 -m unittest discover -s tests -p 'test_passive_os_receipt_verify.py' -v
+python3 -m py_compile scripts/passive_os_batch_receiver.py
+```
