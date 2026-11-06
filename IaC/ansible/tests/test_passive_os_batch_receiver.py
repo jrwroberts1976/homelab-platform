@@ -63,7 +63,7 @@ class ReceiverTests(unittest.TestCase):
 
     def test_byte_quota_refuses_new_batch(self):
         from unittest.mock import patch
-        self.dest.mkdir()
+        self.dest.mkdir(mode=0o700)
         with patch('passive_os_batch_receiver.MAX_RETAINED_BYTES', 10):
             with self.assertRaisesRegex(ValueError, 'byte quota'):
                 receive(self.pending, self.dest)
@@ -71,7 +71,7 @@ class ReceiverTests(unittest.TestCase):
 
     def test_batch_count_quota_refuses_new_batch(self):
         from unittest.mock import patch
-        self.dest.mkdir()
+        self.dest.mkdir(mode=0o700)
         with patch('passive_os_batch_receiver.MAX_RETAINED_BATCHES', 0):
             with self.assertRaisesRegex(ValueError, 'batch quota'):
                 receive(self.pending, self.dest)
@@ -86,13 +86,13 @@ class ReceiverTests(unittest.TestCase):
         self.assertEqual(again['status'], 'duplicate')
 
     def test_unexpected_files_refuse_new_batch(self):
-        self.dest.mkdir()
+        self.dest.mkdir(mode=0o700)
         (self.dest / 'unexpected.txt').write_text('unexpected')
         with self.assertRaisesRegex(ValueError, 'Unexpected receiver file'):
             receive(self.pending, self.dest)
 
     def test_symlink_in_receipt_directory_refused(self):
-        self.dest.mkdir()
+        self.dest.mkdir(mode=0o700)
         (self.dest / 'badlink').symlink_to(self.pending)
         with self.assertRaisesRegex(ValueError, 'Unsafe receiver'):
             receive(self.pending, self.dest)
