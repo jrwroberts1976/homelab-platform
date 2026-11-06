@@ -1,0 +1,76 @@
+---
+# Stage 5.7A: read-only identity and account-collision audit.
+# No user creation, SSH key pinning, configuration writes, or service changes.
+- name: Passive OS identity baseline - READ ONLY
+  hosts: router-01:sensor-01
+  gather_facts: false
+  become: false
+  vars:
+    passive_os_candidate_account: homelab-os-transfer
+  tasks:
+    - name: Refuse unexpected inventory endpoints
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in ['router-01', 'sensor-01']
+          - (inventory_hostname == 'router-01' and ansible_host == '192.168.2.1') or
+            (inventory_hostname == 'sensor-01' and ansible_host == '192.168.2.55')
+        fail_msg: Unexpected inventory address; refusing identity audit
+
+    - name: Inspect runtime hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      register: passive_hostname
+
+    - name: Check existing dedicated service-account name
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ passive_os_candidate_account }}"]
+      changed_when: false
+      failed_when: false
+      register: passive_account_check
+      no_log: true
+
+    - name: Fail on unexpected account lookup execution error
+      ansible.builtin.assert:
+        that:
+          - passive_account_check.rc in [0, 2]
+        fail_msg: Unable to establish candidate account collision status
+
+    - name: Inspect ED25519 public host key metadata
+      ansible.builtin.stat:
+        path: /etc/ssh/ssh_host_ed25519_key.pub
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: passive_public_key
+
+    - name: Require a regular public host key
+      ansible.builtin.assert:
+        that:
+          - passive_public_key.stat.exists | default(false)
+          - passive_public_key.stat.isreg | default(false)
+          - not (passive_public_key.stat.islnk | default(false))
+        fail_msg: Public host key missing, unsafe or not regular
+
+    - name: Print LOCAL host key fingerprint from public file only
+      ansible.builtin.command:
+        argv: [ssh-keygen, -l, -E, sha256, -f, /etc/ssh/ssh_host_ed25519_key.pub]
+      changed_when: false
+      register: passive_key_fingerprint
+
+    - name: Inspect SSH daemon global effective settings
+      ansible.builtin.command:
+        argv: [sshd, -T]
+      become: true
+      changed_when: false
+      register: passive_ssh_defaults
+
+    - name: Report audit evidence and unresolved identity trust
+      ansible.builtin.debug:
+        msg:
+          - "Inventory host: {{ inventory_hostname }}; runtime: {{ passive_hostname.stdout }}"
+          - "Local ED25519 host public-key fingerprint: {{ passive_key_fingerprint.stdout }}"
+          - "Candidate service account exists: {{ passive_account_check.rc == 0 }}"
+          - "Global SSH settings: {{ passive_ssh_defaults.stdout_lines | select('match', '^(pubkeyauthentication|passwordauthentication|permitrootlogin|allowtcpforwarding|permittty|x11forwarding) ') | list }}"
+          - Fingerprint is untrusted audit evidence until compared with an independently verified expected value
+          - No new account, key, pin, daemon change, or service restart
