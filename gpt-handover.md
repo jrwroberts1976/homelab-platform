@@ -2461,3 +2461,9 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Operator reports `greenbone-router-runner-cutover.yml`: `greenbone-01 ok=16 changed=3 failed=0 skipped=1`. Its switch path checks source selection and verifies candidate and installed managed task via GMP before success, targeting Router01 replacement task UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`. No scan was started by cutover; existing systemd timer remains enabled from prior audit. Legacy task and reports preserved.
 - Updated canonical `roles/greenbone_scanning/defaults/main.yml` `greenbone_scanning_runner_managed_task_name` to `Homelab - Managed Infrastructure - Authenticated Daily - Router01`. Follow-up: pull and verify runner `managed --check` returns expected ID, monitor next 02:00 scheduled scan / evidence and Grafana Panel 32. Rollback requires runner action `rollback` with approval **and** revert the canonical IaC default to original task before a future role deploy.
+
+
+## 2026-11-06 — GMP read-only verification proves new managed runner task
+
+- Operator ran `/usr/local/sbin/homelab-greenbone-scan managed --check` via Ansible on `greenbone-01`. Returned `rc=0`, GMP_CHECK_STAGE=task_lookup_complete elapsed_seconds=0.1, `CHECK=PASS mode=managed task=Homelab - Managed Infrastructure - Authenticated Daily - Router01 id=3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`. This proves the deployed daily runner points at the new task. Ad-hoc `CHANGED` is harmless default reporting.
+- Pending: first actual scheduled scan result with `192.168.2.1` assessment/auth status, evidence publisher into monitor-01, exporter/Prometheus and Grafana Panel 32. No manual scan started; preserve legacy task/reports and rollback path.
