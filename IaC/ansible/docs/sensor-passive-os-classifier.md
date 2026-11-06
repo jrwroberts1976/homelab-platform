@@ -151,3 +151,27 @@ cd IaC/ansible
 python3 -m unittest discover -s tests -p 'test_passive_os_lease_snapshot.py' -v
 python3 -m py_compile scripts/passive_os_lease_snapshot.py
 ```
+
+
+## Stage 5 — receiver integrity verification (offline only)
+
+Added `scripts/passive_os_receipt_verify.py` and eight regression tests in `tests/test_passive_os_receipt_verify.py`. The verifier compares the exact pending source batch with the locally stored receiver batch and verifies the receipt's ID, digest, protocol and size. It refuses missing, truncated, modified and symlinked artifacts. **It does not change a router checkpoint, call the ack hook, connect over SSH or create accounts.** Tests have been committed but **not yet executed on admin-01**.
+
+### Proposed future transfer/security contract (not configured)
+
+- **Account on router-01:** dedicated minimally privileged account, no password, only a pinned forced command to retrieve a pre-sanitised batch/receipt protocol, source-bound to sensor-01; deny PTY, X11, agent and TCP forwarding and disallow arbitrary shell commands. Do not grant general EVE read permission or sudo without reviewing an audited minimiser that writes only sanitised private batches.
+- **sensor-01:** use strict host key verification pinned to a separately validated router SSH host key; private key readable only by dedicated service account, no agent forwarding; retrieve only limited batches with maximum byte/time caps. Never disable host-key checking for convenience.
+- **End-to-end logic:** receiver writes batch and receipt durably; sensor independently confirms storage, then provides a receipt via a mutually authenticated channel. Router validates authenticated receipt against its still-pending batch ID/digest before a guarded checkpoint ack. The current local verifier **does not authenticate the receiver's identity** and a copied receipt alone is not sufficient.
+- **Resource limits:** one unacknowledged source batch; before deploying receiver enforce bounded retained batch count/bytes, safe cleanup only after verified processing and monitoring for backlog. Existing receiver lacks retention quota; **do not schedule**.
+- **Recovery and lease safety:** copytruncate can lose EVE lines; source best-effort only. DHCP snapshots are observational, not authoritative history. Explicitly monitor gaps, stalled batches, storage pressure and classification conflict.
+- **Deployment:** once fully reviewed, add approval-gated Ansible to stage code and account separately from any start/timer, with preflight checks on actual hostname `raspberrypi` and inventory host `router-01`, backup/rollback and no IPS, QoS, routing or DNS changes.
+
+Offline test command after pulling branch:
+
+```bash
+cd ~/projects/homelab-network-enrichment/IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_receipt_verify.py' -v
+python3 -m py_compile scripts/passive_os_receipt_verify.py
+```
+
+**There is no production transfer yet.**
