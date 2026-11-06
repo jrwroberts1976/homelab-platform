@@ -11,7 +11,8 @@ import stat
 from pathlib import Path
 
 from passive_os_wire_receiver import receive_wire, validate_wire
-from passive_os_signed_receipt import attest_locally, verify_signed_receipt
+from passive_os_signed_receipt import attest_locally, verify_signed_receipt, _challenge
+from cryptography.hazmat.primitives.asymmetric.ed25519 import Ed25519PrivateKey
 
 
 def receive_and_attest_local(wire, destination, challenge, signer, *,
@@ -30,6 +31,9 @@ def receive_and_attest_local(wire, destination, challenge, signer, *,
     mode = destination.stat().st_mode
     if not stat.S_ISDIR(mode) or mode & 0o077:
         raise ValueError("Unsafe receiver directory")
+    _challenge(challenge)
+    if not isinstance(signer, Ed25519PrivateKey):
+        raise ValueError("Synthetic Ed25519 signer required")
     batch, canonical = validate_wire(wire)
     lock_path = destination / ".lock"
     if lock_path.is_symlink():
