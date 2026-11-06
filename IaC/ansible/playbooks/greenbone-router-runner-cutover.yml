@@ -36,7 +36,8 @@
           - current_runner.stat.isreg | default(false)
           - current_runner.stat.pw_name == 'root'
           - current_runner.stat.gr_name == 'root'
-          - current_runner.stat.mode == '0750'
+          # Existing production runner is root:root 0755; the cutover installs 0750.
+          - current_runner.stat.mode in ['0750', '0755']
 
     - name: Verify no managed scan service is active
       ansible.builtin.command:
