@@ -104,7 +104,12 @@ def classify(events, leases, max_events=MAX_EVENTS):
         entry = groups[(mac, ip)]
         entry["last_observed"] = max(stamp, entry["last_observed"])
         if kind == "http":
-            family = family_from_user_agent(event.get("http_user_agent"))
+            # Sanitised router minimiser sends family only; never ship raw UA.
+            hint = event.get("os_family_hint")
+            allowed = {"ChromeOS", "Android", "iOS/iPadOS", "Windows", "macOS", "Linux"}
+            family = hint if hint in allowed else family_from_user_agent(
+                event.get("http_user_agent")
+            )
             if family:
                 entry["families"][family] += 1
             else:
