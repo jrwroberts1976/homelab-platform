@@ -2450,3 +2450,8 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Read-only GMP inventory confirms replacement target 15 hosts `192.168.2.1, .195, .48, .50, .51, .52, .53, .54, .55, .56, .57, .58, .59, .70, .71` and SSH credential `Homelab - Linux SSH Auth`; legacy `.220` absent. Replacement task UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9` status `New`.
 - Added `IaC/ansible/playbooks/greenbone-router-runner-cutover.yml` to stage proposed existing managed runner task switch/rollback; approval-gated, current state and inactive-service checks, backup, GMP `managed --check` candidate and installed verification. Does not edit systemd schedules or initiate scans. **Not applied or tested on live host yet.** Ensure syntax validated. Existing role defaults still point to old task; update desired-state config explicitly after successful production switch so subsequent broad role deployments cannot silently roll back.
+
+
+## 2026-11-06 — Greenbone Stage 2 permission preflight correction
+
+- Operator read-only audit found `/usr/local/sbin/homelab-greenbone-scan` `root:root 755`, still selecting `Homelab - Managed Infrastructure - Authenticated Daily`; `homelab-greenbone-managed-scan.service` inactive and timer enabled. Cutover playbook originally asserted exact `0750` and stopped before changes. GitHub commit `61ce7494` broadens existing mode preflight to `0750`/`0755`, preserving new-install mode `0750`. Pull and syntax-check before retry. No scan or cutover yet verified.
