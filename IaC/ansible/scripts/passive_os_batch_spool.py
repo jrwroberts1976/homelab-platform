@@ -68,6 +68,14 @@ def prepare(eve, spool):
                 'observations': len(existing['observations'])}
     previous = read_state(checkpoint_path)
     observations, state, meta = extract(eve, previous)
+    # Rotation/truncation after a checkpoint means continuity cannot be proven.
+    # Do not publish a new batch or silently skip/replay a segment.
+    # Operator-reviewed recovery policy is a separate future stage.
+    if previous is not None and meta['reset_reason'] != 'continue':
+        raise RuntimeError(
+            "EVE continuity unverified: " + str(meta['reset_reason'])
+            + "; checkpoint held, manual recovery required"
+        )
     if meta['read_bytes'] == 0:
         return {'status': 'idle', 'observations': 0, 'reset_reason': meta['reset_reason']}
     payload_digest = digest(canonical(observations))
