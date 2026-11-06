@@ -5,7 +5,7 @@ No SSH, key provisioning, routing changes, router log access, timer or Nmap.
 NOT deployable as-is: the forced-command target is not installed. The future
 consumer must validate transport authentication and durable delivery separately.
 """
-import json
+import ipaddress
 import os
 import re
 import stat
@@ -21,6 +21,7 @@ FAMILIES = frozenset({"ChromeOS", "Android", "iOS/iPadOS", "Windows", "macOS", "
 KINDS = frozenset({"dns", "http", "tls", "quic"})
 BATCH_ID = re.compile(r"^[0-9a-f]{64}$")
 MAX_WIRE_BYTES = 2 * 1024 * 1024 + 8192
+LAN = ipaddress.ip_network("192.168.2.0/24")
 
 
 def validate_request(original_command):
@@ -69,6 +70,13 @@ def export_batch(pending_path, original_command):
             raise ValueError("Invalid family hint")
         if not isinstance(e.get("src_ip"), str) or len(e["src_ip"]) > 45:
             raise ValueError("Invalid client address")
+        try:
+            addr = ipaddress.ip_address(e["src_ip"])
+        except ValueError:
+            raise ValueError("Invalid client address") from None
+        if (addr not in LAN or addr in
+                (LAN.network_address, LAN.broadcast_address, LAN.network_address + 1)):
+            raise ValueError("Client outside approved LAN")
         # Normalise nothing; wire evidence must match the locally stored batch.
         clean.append(e)
     wire = {
