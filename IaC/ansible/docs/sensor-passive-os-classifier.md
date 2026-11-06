@@ -361,3 +361,24 @@ python3 -m unittest discover -s tests -p 'test_passive_os_transport_plan.py' -v
 ```
 
 Ten new tests require operator validation. Previous confirmed unique test count is 122; if all ten pass, total becomes 132. Continue without production changes.
+
+## Stage 5.7D — bounded local subprocess runner (OFFLINE, NOT connected to SSH)
+
+Committed `scripts/passive_os_bounded_process.py` and 13 synthetic LOCAL subprocess tests in `tests/test_passive_os_bounded_process.py`. The runner uses fixed argv (no shell), detached process group, disabled stdin, no inherited handles, concurrent nonblocking reads of stdout/stderr via selectors, an absolute monotonic deadline (maximum 8 seconds), a 2 MiB+8 KiB stdout ceiling and 8 KiB stderr ceiling. On timeout, stream overflow, nonzero exit or interruption it rejects output and kills/reaps the isolated process group.
+
+**Not transport deployment:** this is an intentionally unconnected, low-level LOCAL test primitive. It does not call `retrieval_argv`, execute SSH, authenticate identities, pin host keys, transfer evidence, touch the router or update a checkpoint. Runtime process/failure guarantees require real integration/fault-injection review. If integrated later, use the fixed approved SSH argv and separately validate source identity, receipt durability, challenge freshness and trusted acknowledgments.
+
+**Host identity blocker remains:** operator explicitly said the router key fingerprint was collected *over SSH*. Matching repeated readings does not satisfy independent host authentication. The live identity provisioning and rollback approval flags remain unset. Do not create any account/key or enable a timer.
+
+Validate on admin-01 only:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m py_compile scripts/passive_os_bounded_process.py
+python3 -m unittest discover -s tests -p 'test_passive_os_bounded_process.py' -v
+python3 -m unittest discover -s tests -p 'test_passive_os_transport_plan.py' -v
+```
+
+Expected new cases: 13. Previously confirmed 132 unique offline tests; when these pass, 145 unique cases. **No production apply step.**
