@@ -1,3 +1,14 @@
+## 6 November 2026 — passive OS production read-only preflights PASSED; rotation risk identified
+
+- Operator pulled commit `336eb08e` on admin-01; both existing Ansible playbooks passed syntax-check and executed read-only with `changed=0 failed=0 unreachable=0`. Identity preflight: router-01 and sensor-01 each `ok=9`; rotation preflight: router-01 `ok=7`.
+- Router inventory `router-01` resolves to runtime hostname `raspberrypi`; sensor runtime `sensor-01`. No candidate dedicated transfer account exists on either host. Global SSH settings include public-key authentication enabled and password authentication disabled; these **do not** establish a restricted per-account forced-command policy.
+- Router ED25519 observed fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`; sensor ED25519 observed fingerprint `SHA256:2AI17daznNov9YyocX6TBz/+p01XzRb3WRG91r1zEic`. Both are audit observations over SSH; router identity is **not independently authenticated**. Do not set fingerprint approval, pin unverified keys, enable transfer or provision an account.
+- Router dedicated `router-suricata-nfq.service` was active. EVE file size `1,449,701,717` bytes, owner root, mode `0644`. Live `/etc/logrotate.d/suricata` selects `*.log` and `*.json`, `rotate 14`, `compress`, `copytruncate`, and `postrotate /bin/kill -HUP $(cat /var/run/suricata.pid)`. This configuration risks data gaps and deserves a read-only operational audit before any proposed change; do not infer HUP targets the dedicated NFQUEUE instance without verifying PID ownership.
+- Architecture decision proposed but **not yet approved**: classify the passive evidence stream as best-effort/incomplete with explicit gap and stale-data indicators, never authoritative forensic coverage. No router service/configuration changes; do not read entire live EVE file. Next: read-only verify HUP PID ownership/Suricata service configuration and rotation execution state, then review independent key verification and constrained deployment approvals.
+- Integration suite 5/5 and coordinator suite 10/10 previously passed. No production passive OS collector, SSH credentials, timer, account, checkpoint acknowledgement or Grafana publication has been activated.
+
+---
+
 ## 6 November 2026 — passive OS offline integration passed; next gate is read-only production readiness
 
 - Operator fast-forwarded feature branch to `14bdf475` on admin-01 and successfully compiled the offline coordinator and end-to-end test suite.
