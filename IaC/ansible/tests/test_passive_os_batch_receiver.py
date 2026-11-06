@@ -61,6 +61,53 @@ class ReceiverTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             receive(self.pending, self.dest)
 
+    def test_byte_quota_refuses_new_batch(self):
+        from unittest.mock import patch
+        self.dest.mkdir()
+        with patch('passive_os_batch_receiver.MAX_RETAINED_BYTES', 10):
+            with self.assertRaisesRegex(ValueError, 'byte quota'):
+                receive(self.pending, self.dest)
+        self.assertEqual(list(self.dest.glob('*.json')), [])
+
+    def test_batch_count_quota_refuses_new_batch(self):
+        from unittest.mock import patch
+        self.dest.mkdir()
+        with patch('passive_os_batch_receiver.MAX_RETAINED_BATCHES', 0):
+            with self.assertRaisesRegex(ValueError, 'batch quota'):
+                receive(self.pending, self.dest)
+        self.assertEqual(list(self.dest.glob('*.json')), [])
+
+    def test_duplicate_delivery_allowed_at_full_capacity(self):
+        from unittest.mock import patch
+        first = receive(self.pending, self.dest)
+        with patch('passive_os_batch_receiver.MAX_RETAINED_BATCHES', 1):
+            again = receive(self.pending, self.dest)
+        self.assertEqual(first['batch_id'], again['batch_id'])
+        self.assertEqual(again['status'], 'duplicate')
+
+    def test_unexpected_files_refuse_new_batch(self):
+        self.dest.mkdir()
+        (self.dest / 'unexpected.txt').write_text('unexpected')
+        with self.assertRaisesRegex(ValueError, 'Unexpected receiver file'):
+            receive(self.pending, self.dest)
+
+    def test_symlink_in_receipt_directory_refused(self):
+        self.dest.mkdir()
+        (self.dest / 'badlink').symlink_to(self.pending)
+        with self.assertRaisesRegex(ValueError, 'Unsafe receiver'):
+            receive(self.pending, self.dest)
+
+    def test_retention_never_automatically_deletes_existing_files(self):
+        from unittest.mock import patch
+        receive(self.pending, self.dest)
+        before = {p.name: p.read_bytes() for p in self.dest.glob('*.json')}
+        with patch('passive_os_batch_receiver.MAX_RETAINED_BATCHES', 0):
+            with self.assertRaisesRegex(ValueError, 'batch quota'):
+                __import__('passive_os_batch_receiver').capacity_check(
+                    self.dest, new_batch=True)
+        after = {p.name: p.read_bytes() for p in self.dest.glob('*.json')}
+        self.assertEqual(before, after)
+
     def test_unsafe_destination_rejected(self):
         self.dest.mkdir()
         self.dest.chmod(0o755)
