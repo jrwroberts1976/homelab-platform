@@ -2467,3 +2467,10 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Operator ran `/usr/local/sbin/homelab-greenbone-scan managed --check` via Ansible on `greenbone-01`. Returned `rc=0`, GMP_CHECK_STAGE=task_lookup_complete elapsed_seconds=0.1, `CHECK=PASS mode=managed task=Homelab - Managed Infrastructure - Authenticated Daily - Router01 id=3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`. This proves the deployed daily runner points at the new task. Ad-hoc `CHANGED` is harmless default reporting.
 - Pending: first actual scheduled scan result with `192.168.2.1` assessment/auth status, evidence publisher into monitor-01, exporter/Prometheus and Grafana Panel 32. No manual scan started; preserve legacy task/reports and rollback path.
+
+
+### 2026-11-06 — Nmap once-per-MAC safety gate staged (awaiting offline test and runtime deploy)
+- User confirmed Grafana Hosts Panel 31 now displays historical Nmap fingerprints after focused approval-gated deployment; live JSON backup preserved on monitor-01. Do not conflate this with new router fingerprint collection.
+- In `feature/network-enrichment-independent-proxmox-20261105`, the `network_host_deep_profiler` template/defaults now enforce one automatic Nmap profiling attempt per MAC. Guard treats persisted `attempt_count`/`last_attempt`, existing `profile`/`profiled_at`/`profiled_ip`, and `complete`/`partial` legacy statuses as already attempted. New unattempted MACs remain eligible subject to existing recency, ARP, cap and baseline controls. Crash-safe attempt persistence precedes Nmap. Never reset `deep-profiles.json` to re-enable scans.
+- Offline test `IaC/ansible/tests/test_network_host_one_attempt_policy.py` added (no Nmap execution). Existing `playbooks/network-host-monitor01-targeted-profiler-update.yml` explicitly enables and verifies one-attempt policy while preserving baseline-backlog disabled and existing timer. **Not yet run or deployed**; execute syntax/offline tests first, then deliberate approval-gated rollout, then check live status without initiating a scan.
+- Subsequent work: sensor-01 passive OS evidence and CMDB epic #299; live host enrichment story #297.
