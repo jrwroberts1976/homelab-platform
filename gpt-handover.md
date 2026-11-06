@@ -2543,3 +2543,9 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 ### 6 November 2026 — Stage 5.2 receiver tests: permission setup corrected, verification pending
 - Operator reported `test_passive_os_batch_receiver.py` 12 tests, 4 failures; visible `test_unexpected_files_refuse_new_batch` expected `Unexpected receiver file`, but code correctly raised `Unsafe receipt directory`. Root cause of four likely failures: test setup used default `Path.mkdir()` (typically 0755), while receiver intentionally requires private 0700 directory.
 - Fixed four **test fixtures only** to create 0700 receiver directories (byte cap, count cap, unexpected file, symlink). Kept explicit insecure-directory rejection test (0755) unchanged. Committed as `d21c78f0`; GitHub verified changed fixtures. **No production code or security check weakened; test suite must be rerun before claiming Stage 5.2 passed.** Receipt verification 8/8 already passed after earlier syntax fix. No host changes.
+
+
+### 6 November 2026 — Stage 5.2 receiver tests passed on admin-01
+- After fixture permission correction at `d21c78f0`, operator reran `test_passive_os_batch_receiver.py`: **12/12 passed (0.305s)**. Earlier corrected receipt verification ran **8/8 passing (0.063s)**. Cumulative confirmed offline regression checks: **68/68** across existing suites (12 minimiser + 11 classifier + 14 spool + 12 receiver + 11 DHCP + 8 receipt).
+- Test fixture now uses private 0700 receiver directory, consistent with required runtime directory permissions. No receiver security constraint was relaxed. Stage 5.2 offline validation complete; no actual SSH transfer, service accounts, automation, timer or changes to router/sensor services.
+- Next Stage 5.3: design restricted key-based sensor-01→router-01 SSH retrieval and authenticated durable receipt/ack with strict host-key validation, retention and rollback, all initially offline; do not enable live work yet. Issue #297.
