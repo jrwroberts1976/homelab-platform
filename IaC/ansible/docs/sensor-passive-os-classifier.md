@@ -322,3 +322,22 @@ ssh-keygen -l -E sha256 -f /etc/ssh/ssh_host_ed25519_key.pub
 ```
 
 Record a verified fingerprint and obtain separate explicit approval before changing accounts. Later deployment needs an approved rollback plan, proper least-privilege execution with per-account restrictions, keyed authentication, evidence transfer, and no automatic acknowledgment.
+
+## Stage 5.7B continuation — rollback and default-deny guardrails (OFFLINE)
+
+Added `playbooks/passive-os-ssh-identity-rollback-gated.yml` and seven lightweight offline source-level checks in `tests/test_passive_os_identity_playbook_gates.py`. The rollback targets router-01 **only**, is disabled by default (`passive_os_rollback_approved: false`), checks the live hostname, requires the exact project-owned dormant account marker, home and shell, refuses an existing account with active processes or unexpected login material, and only then removes the account without deleting a home directory. It never changes sshd or gateway services. **This rollback is NOT suited to later activated identities**: if the account has been modified, the playbook intentionally refuses removal.
+
+Neither the gated identity provisioning nor rollback playbook has been applied to any host. Their current status is prepared but **not authorised for execution**. The published fingerprint match from `james@raspberrypi` confirms consistency with the audit, but independent verification is conditional on a trusted local console path; that provenance has not yet been established by the user's latest messages. Do not set either approval flag as an inference.
+
+Operator offline checks:
+
+```bash
+cd ~/projects/homelab-network-enrichment
+git pull --ff-only origin feature/network-enrichment-independent-proxmox-20261105
+cd IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_identity_playbook_gates.py' -v
+ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-provision-gated.yml --syntax-check
+ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-rollback-gated.yml --syntax-check
+```
+
+These tests are simple source-policy checks, not proof of runtime safety or account ownership. Deployment still needs physical-console confirmation, explicit user approval for the live identity change, and a rollback/change window. **Do not run either playbook in apply mode at this stage.**
