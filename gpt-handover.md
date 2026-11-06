@@ -1,3 +1,12 @@
+## 6 November 2026 — passive OS read-only logrotate state checked; no router change
+
+- Operator inspected logrotate status/journal and EVE metadata via read-only Ansible ad-hoc shell. Status records last rotation timestamp `2026-11-02 00:00:00` for `eve.json`, `stats.log`, `fast.log` and `suricata.log`. Current EVE file is `1,450,139,849` bytes, last modified `2026-11-06 22:59:30 GMT`, demonstrating continued writes at audit time.
+- `find` showed only `eve.json` matching `eve.json*` in the active log directory, no rotated EVE files there. `journalctl -u logrotate.service -p warning --since '7 days ago'` showed no entries. These observations do **not** prove successful retention, complete rotation, HUP hook execution or zero event loss.
+- Prior audit showed `copytruncate` with postrotate reading missing `/var/run/suricata.pid`. No modifications have been made. Proposed bounded **best-effort** passive evidence with gap/stale status; this is a recommendation, not operator approval of continuity semantics or production activation.
+- Focus subsequent work on secure restricted transfer and independently verified router SSH identity; avoid reopening routine logrotate investigation unless a production acceptance gate requires it. No SSH identity, collector, timer or acknowledgement activated.
+
+---
+
 ## 6 November 2026 — router Suricata rotation PID read-only follow-up
 
 - Operator ran read-only Ansible ad-hoc inspection on router-01. `router-suricata-nfq.service` is **active**, `MainPID=42090`, with `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10` and exception/stream overrides. There was one visible main Suricata process (plus the auditing shell).
