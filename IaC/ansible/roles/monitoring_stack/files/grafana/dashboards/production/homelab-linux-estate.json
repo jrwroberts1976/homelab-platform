@@ -834,7 +834,7 @@
       "id": 31,
       "type": "table",
       "title": "Nmap OS Fingerprint",
-      "description": "Supporting Nmap OS fingerprint evidence. For managed hosts, authoritative OS and kernel facts remain those reported by Zabbix Agent 2; Nmap does not override them.",
+      "description": "Saved Nmap OS fingerprint evidence matched to selected host by current inventory IP. This is supplementary evidence and may be historical; managed OS/kernel facts from Zabbix remain authoritative. No scans are triggered by this panel.",
       "gridPos": {
         "x": 0,
         "y": 37,
@@ -848,7 +848,7 @@
       "targets": [
         {
           "refId": "A",
-          "expr": "homelab_network_device_card_info{hostname=\"$host\",nmap_name!=\"\"}",
+          "expr": "homelab_network_host_os_fingerprint_info{nmap_name!=\"\"} * on(profiled_ip) group_left() max by (profiled_ip) (label_replace(homelab_network_host_info{target_name=\"monitor-01\",hostname=~\"^${host:regex}(\\\\..*)?$\"}, \"profiled_ip\", \"$1\", \"ip\", \"(.*)\"))",
           "instant": true,
           "range": false,
           "format": "table"
@@ -890,7 +890,8 @@
               "os_evidence": true,
               "nmap_vendor": true,
               "nmap_cpe": true,
-              "nmap_services": true
+              "nmap_services": true,
+              "profiled_ip": false
             },
             "indexByName": {
               "nmap_name": 0,
@@ -900,7 +901,8 @@
               "nmap_device_type": 4,
               "nmap_scanned_at": 5,
               "nmap_time_basis": 6,
-              "nmap_scan_status": 7
+              "nmap_scan_status": 7,
+              "profiled_ip": 0
             },
             "renameByName": {
               "nmap_name": "Nmap match",
@@ -910,7 +912,8 @@
               "nmap_device_type": "Device type",
               "nmap_scanned_at": "Scanned",
               "nmap_time_basis": "Time basis",
-              "nmap_scan_status": "Status"
+              "nmap_scan_status": "Status",
+              "profiled_ip": "Profiled IP"
             }
           }
         }
