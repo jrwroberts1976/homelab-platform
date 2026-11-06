@@ -80,3 +80,34 @@ python3 -m py_compile scripts/router_eve_minimizer.py scripts/sensor_passive_os_
 ```
 
 The extractor's 12 regression tests were exercised against a matching offline prototype locally in the authoring environment before committing. Re-run them from the actual Git checkout to validate committed bytes. **No live deployment or permission changes have been performed.**
+
+
+## Stage 3 — offline delivery and acknowledgement proof of concept
+
+**Not deployed. No router-01 or sensor-01 runtime changes.** The following new files are committed on the feature branch:
+
+- `scripts/passive_os_batch_spool.py`: single pending batch prepared from a bounded EVE read. A private, atomic `pending.json` contains only the sanitised observations and next checkpoint. A second prepare while unacknowledged returns the **same batch ID**; the checkpoint is not advanced. `--ack-id` exists as an **offline test hook only**; it must never be automatically called based solely on an SSH exit code or file copy.
+- `scripts/passive_os_batch_receiver.py`: offline local recipient that validates the pending payload's integrity and batch ID, saves an immutable batch, and returns an idempotent receipt; duplicate deliveries do not generate duplicate batch files.
+- `tests/test_passive_os_batch_spool.py` and `tests/test_passive_os_batch_receiver.py`: verify blocked progress before ack, wrong ack rejection, retry, crash window, no sensitive fields, private modes, duplicate receipt, and corruption rejection. **These newly committed tests still need to be run on admin-01.**
+
+Manual offline experiment must use synthetic input in a private temporary directory. Do **not** copy any live EVE logs into the repo or GitHub. There is **no sensor-to-router SSH automation** and **no automatic wire-level acknowledgment** in this stage.
+
+Acknowledging a batch advances the extractor checkpoint. An operator or future coordinator must only acknowledge after proof that the sensor has durably stored, validated, and processed the batch as intended; the present offline receiver validates local storage only. The downstream classifier also still needs deduplicated cumulative host-summary behaviour for repeated/reordered event timestamps.
+
+### Remaining blockers before production
+
+1. **Gapless rotation handling is not solved:** copytruncate can lose bytes that arrive between copy and truncate; file overlap checking cannot recover historical bytes already removed. Need an architectural decision such as configuring a safe local nonblocking log output or accepting explicitly documented best-effort sampling. No changes to NFQUEUE/Suricata until separately approved.
+2. **Power-loss durability:** atomic replacement plus per-file fsync is implemented, but directory fsync and end-to-end delivery/ack recovery are not; the current program does not claim exact-once guarantees.
+3. **Access security:** no service account, restricted forced-command SSH key, peer key verification or source-IP restriction has been provisioned. Existing router EVE is mode 0644; separately review access with rotation, Suricata and minimiser ownership.
+4. **Lease timeline:** current dnsmasq lease snapshot does not establish historical IP-to-MAC attribution. Need time-bounded lease history; fail closed for stale/ambiguous clients.
+5. **Resource ceilings and retention:** the spool has at most one unacknowledged batch, but the offline recipient directory has no automatic retention/quota. Must specify quota, rate limits, monitoring and cleanup policy before scheduling.
+6. **Production safety:** design no live copy of full logs, explicit start-at-current-EOF bootstrap, rotation-aware bounded reads, under-load CPU/IO limits, safe rollback and approval-gated Ansible. Do not run this prototype against active `/var/log/suricata/eve.json`.
+
+Validate stage 3 locally on admin-01 after `git pull --ff-only`:
+
+```bash
+cd ~/projects/homelab-network-enrichment/IaC/ansible
+python3 -m unittest discover -s tests -p 'test_passive_os_batch_spool.py' -v
+python3 -m unittest discover -s tests -p 'test_passive_os_batch_receiver.py' -v
+python3 -m py_compile scripts/passive_os_batch_spool.py scripts/passive_os_batch_receiver.py
+```
