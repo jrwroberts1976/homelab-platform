@@ -1,3 +1,10 @@
+## 7 November 2026 — MAC OUI vendor evidence for 21 unmatched devices
+
+- Operator extracted vendor data from the fresh monitor-01 `inventory.json` for all 21 Zabbix-unmatched, currently online, blank-hostname records. Vendor evidence: `.2` ASUS; `.100` TP-Link PTE; `.103` Alertme.com Limited; `.104` unknown; `.106` Google; `.109` Tuya Smart; `.112` TP-Link PTE; `.125` Google; `.132` unknown; `.134` Hewlett Packard; `.151` Amazon Technologies; `.153` TP-Link Limited; `.164` unknown; `.165` unknown/locally administered MAC; `.168` TP-Link Technologies; `.174` TP-Link Limited; `.179` unknown/locally administered MAC; `.180` ASUS; `.186` unknown; `.189` TP-Link Technologies; `.190` TP-Link Limited.
+- OUI vendor is NOT proven model, operating system, or permission to scan. ASUS addresses may be AiMesh/AP infrastructure, TP-Link may be infrastructure or IoT, Google/Amazon/Tuya/AlertMe may be sensitive smart-home devices, HP unknown device; avoid blanket deep scans. Next low-impact classification: read existing router dnsmasq DHCP leases and monitor-01 enrichment evidence, check protected estate/host roles, then explicit limited scan allowlist for eligible noncritical unmanaged equipment. No new scans were authorized or executed here.
+
+---
+
 ## 7 November 2026 — 21 live unmatched candidates listed; identity review before Nmap
 
 - Operator pulled latest `cccf7b6d` audit-listing feature; `py_compile` and all 5 unit tests PASS. Live read-only `--show-unmatched` returned rc=0: total inventory 36, Zabbix OS authoritative 15, no Zabbix-without-OS or ambiguous entries, **21 unmatched, all online, all inventory hostname blank**.
