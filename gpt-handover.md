@@ -1,3 +1,12 @@
+## 7 November 2026 — #297 KISS sanitised outbound snapshot implementation staged in Git
+
+- Added `IaC/ansible/scripts/passive_os_publish_snapshot.py`: root-run, **manual only** bounded projection from already prepared private `pending.json` via the existing allowlist exporter into a separate `batch.json`; root-owned `0750` outbound directory with transfer-user group, atomic root-owned group-readable `0640` output; no raw EVE access, checkpoint acknowledgement, SSH or timer. It requires a separately provisioned transfer account/group and directory before use.
+- Added `IaC/ansible/tests/test_passive_os_publish_snapshot.py` with four smoke/source checks (unprivileged caller, symlink refusal, absent account, no ack). **Not yet run by operator**; do not declare PASS. Previous tests are unchanged.
+- This is code staging, not a working transport or deployment; no live router, sensor or Grafana change. Next: pull, run the new tests and syntax/compile check on admin-01; then add simple Ansible setup for sensor key, restricted router account plus authorised-key forced read-only `cat`, snapshot dir and install, a rollback, all default-off. Avoid altering existing router-metrics SSH Match block and SSH service configuration.
+- KISS acceptance: best-effort observations and visible missing data are acceptable. Preserve router internet/DNS/DHCP/firewall/QoS/Suricata; no unattended activation without operator decision.
+
+---
+
 ## 7 November 2026 — user KISS decision for passive OS and homelab development
 
 - User explicitly reinforced **KISS**: this is a home lab, not an enterprise production environment; avoid costly elaborate hardening and endless proof stages. Favour simple, working, maintainable implementations and make progress toward completing #297.
