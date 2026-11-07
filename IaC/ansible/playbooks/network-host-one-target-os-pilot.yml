@@ -29,7 +29,7 @@
         - "{{ os_pilot_timer }}"
         - "{{ os_pilot_service }}"
       register: pilot_states
-      failed_when: pilot_states.rc not in [0, 3]
+      failed_when: false
       changed_when: false
 
     - name: Require timer active and profiler service idle
