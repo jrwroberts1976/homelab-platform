@@ -1,3 +1,11 @@
+## 7 November 2026 — DHCP leases identify 20 of 21 non-Zabbix network entries
+
+- Operator read **existing** router-01 `/var/lib/misc/dnsmasq.leases` without scanning/modifying production. Twenty of the 21 unmatched IPs have current entries: `.100=H100` TP-Link, `.103=myHivehub` AlertMe, `.104=*` unknown, `.106=Google-Nest-Mini`, `.109=*` Tuya, `.112=P110` TP-Link, `.125=Google-Home`, `.132=wlan0` unknown, `.134=*` Hewlett Packard, `.151=*` Amazon, `.153=TC40` TP-Link, `.164=*` unknown, `.165=homeassistant` locally administered MAC, `.168=*` TP-Link, `.174=L510` TP-Link, `.179=POCO-C75` locally administered MAC, `.180=RT-AC86U-CCC8` ASUS, `.186=James-LT`, `.189=HS100` TP-Link, `.190=TC65` TP-Link. `.2` ASUS has no matching current DHCP lease; may be static/network infrastructure.
+- Recognisable DHCP names indicate likely smart-home hub, cameras, smart plugs/bulbs, Google speakers, Home Assistant, phone, laptop and ASUS network infrastructure. **DHCP names are not OS fingerprints**; vendor/model interpretations are provisional. Do not indiscriminately Nmap the 21 devices. Several may be fragile IoT endpoints; recognise router/mesh appliances and managed nodes.
+- Remaining weak identities: `.2` ASUS, `.104`, `.109` Tuya, `.132` wlan0, `.134` HP, `.151` Amazon, `.164`, `.168` TP-Link. Next: inspect **existing** enrichment records for these 8 and determine allowlist; do not rescan already known smart devices. Preserve 15 Zabbix OS authoritative hosts.
+
+---
+
 ## 7 November 2026 — MAC OUI vendor evidence for 21 unmatched devices
 
 - Operator extracted vendor data from the fresh monitor-01 `inventory.json` for all 21 Zabbix-unmatched, currently online, blank-hostname records. Vendor evidence: `.2` ASUS; `.100` TP-Link PTE; `.103` Alertme.com Limited; `.104` unknown; `.106` Google; `.109` Tuya Smart; `.112` TP-Link PTE; `.125` Google; `.132` unknown; `.134` Hewlett Packard; `.151` Amazon Technologies; `.153` TP-Link Limited; `.164` unknown; `.165` unknown/locally administered MAC; `.168` TP-Link Technologies; `.174` TP-Link Limited; `.179` unknown/locally administered MAC; `.180` ASUS; `.186` unknown; `.189` TP-Link Technologies; `.190` TP-Link Limited.
