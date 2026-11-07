@@ -1,3 +1,11 @@
+## 7 November 2026 — passive OS dry-run six tests PASS; Linux UA candidate is Google Home .125
+
+- Operator fast-forwarded feature branch to `17125464`, ran `py_compile` and all **six** offline `test_passive_os_sensor_metrics.py` tests PASS. Read-only sensor-01 `ansible.builtin.script -a 'scripts/passive_os_sensor_metrics.py --dry-run'` returned rc=0, `status=dry_run_only`: batch `0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d`, **554** sanitised observations, only **one** IP/family candidate `192.168.2.125` / `Linux` / **6** HTTP observations, low confidence and MAC attribution unverified.
+- Existing router dnsmasq lease identity for `.125` is `Google-Home`, MAC `a4:77:33:5f:94:fe` Google vendor. Treat this as **weak self-reported User-Agent hint, not identified OS/firmware**. Do not promote it to authoritative OS or publish to Grafana; little/no incremental identification value. Same batch ID as earlier live pilot; possible stale snapshot, not evidence of new passive capture.
+- Result supports SSH transfer, wire digest validation, sanitised dry-run and zero publication; **does not** demonstrate effective unmanaged OS fingerprinting. Keep original unfiltered metric deleted after reset and prevent re-publishing via older one-shot playbook. Next meaningful test: evaluate batch freshness/rotation and representative event sources while respecting DHCP time-attribution and Zabbix authority; if passive stream remains one old snapshot / one weak candidate, hold OS metrics integration rather than build more collectors.
+ 
+---
+
 ## 7 November 2026 — next #297 test staged: read-only passive candidate dry-run, no new active Nmap
 
 - Following James-LT targeted scan `OS_MATCH_COUNT=0` and `OPEN_PORTS=[]`, operator requested next test. To avoid indiscriminate Nmap probing of IoT and known infrastructure, added **read-only** `--dry-run` mode to existing `IaC/ansible/scripts/passive_os_sensor_metrics.py` (commit `2cd30443`). It uses sensor-01's established restricted SSH pull from router-01, validates batch SHA256/schema, emits bounded per-source-IP OS-family hint counts labelled low-confidence and MAC attribution unverified; **does not call `publish()` or create/change any Prometheus textfile**, router service or timer. New offline test covers minimised dry-run summary (commit `f8d315d4`); tests not yet run by operator.
