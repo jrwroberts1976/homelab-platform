@@ -84,6 +84,16 @@
     - name: Ensure SSH configuration already valid
       ansible.builtin.command: /usr/sbin/sshd -t
       changed_when: false
+    - name: Refuse pre-existing transfer identity before new setup
+      ansible.builtin.command:
+        argv: [getent, passwd, '{{ passive_os_user }}']
+      changed_when: false
+      failed_when: false
+      register: passive_os_prior_account
+    - name: Require new identity only
+      ansible.builtin.assert:
+        that: passive_os_prior_account.rc == 2
+        fail_msg: 'Existing account must be reviewed; this setup is initial-install only'
     - name: Create dedicated locked transfer account
       ansible.builtin.user:
         name: "{{ passive_os_user }}"
