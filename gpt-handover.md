@@ -1,3 +1,12 @@
+## 7 November 2026 — reused active Zabbix API/host-inventory integration identified; legacy exporter retired
+
+- GitHub inspection confirmed `IaC/ansible/playbooks/zabbix-network-inventory-exporter.yml` is **explicitly retired by #287**, fail-closed. Do **not** revive it despite historical statements about a Zabbix inventory exporter.
+- Active independent network collector `roles/network_host_collector/templates/homelab-network-host-collector.py.j2` persists IP-keyed `/var/lib/homelab-network-hosts/inventory.json` on monitor-01 and emits `homelab_network_host_info`; it contains IP/MAC/hostname/vendor, **no agent OS authority flag**.
+- Existing `roles/management_report/templates/management-report-collector.py.j2` has authenticated Zabbix API read-only `zabbix_api`, including `host.get` and `item.get`, plus Prometheus network inventory queries. Prefer leveraging this established Zabbix authentication and matched inventory evidence instead of new blind host discovery or legacy exporter.
+- Next implementation target: read-only compare existing Zabbix-managed host IP identities (with valid OS Facts) against existing monitor-01 IP-keyed network inventory; exclude managed IPs and preserve unknown when identity cannot be matched. Then and only then expose passive candidates for unmanaged IPs. Hold current sensor one-shot metrics publisher/Grafana deployment as it lacks this exclusion; do not alter Zabbix/router services or claim managed OS from UA.
+
+---
+
 ## 7 November 2026 — OS source-of-truth correction: Zabbix first and last for agent-managed hosts
 
 - Operator explicitly rejected the Linux passive-OS candidate as an unhelpful pilot target because Linux hosts already have Zabbix agents that report operating system details. **Decision:** for any Zabbix-agent-managed host, Zabbix is the first and last source for OS identification; passive User-Agent hints must **not** enrich, compete with or override that authoritative identity. Prefer existing management/SNMP identity for managed network equipment; use Nmap and then passive hints only for genuinely unmanaged/unidentified devices.
