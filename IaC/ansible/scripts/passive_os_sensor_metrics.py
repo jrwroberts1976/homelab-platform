@@ -110,6 +110,21 @@ def metrics_for(batch):
     return ("\n".join(lines) + "\n").encode(), len(counts)
 
 
+def candidate_summary(batch):
+    """Minimal, bounded read-only summary; no raw user agents or MAC claims."""
+    found = {}
+    for event in batch["observations"]:
+        family = event.get("os_family_hint")
+        if family:
+            key = (event["src_ip"], family)
+            found[key] = found.get(key, 0) + 1
+    return [
+        {"src_ip": ip, "os_family_hint": family, "observations": count,
+         "confidence": "low", "mac_attribution": "unverified"}
+        for (ip, family), count in sorted(found.items())
+    ]
+
+
 def publish(target, payload):
     if os.geteuid() != 0:
         raise PermissionError("Root required")
@@ -136,6 +151,8 @@ def publish(target, payload):
 def main():
     ap = argparse.ArgumentParser(description=__doc__)
     ap.add_argument("--output", type=Path, default=METRICS)
+    ap.add_argument("--dry-run", action="store_true",
+                    help="Fetch and validate, print minimal candidates, never publish")
     args = ap.parse_args()
     proc = subprocess.run([
         "/usr/bin/ssh", "-T", "-i", KEY, "-o", "IdentitiesOnly=yes",
@@ -148,6 +165,14 @@ def main():
         raise RuntimeError("Restricted router SSH fetch failed")
     batch = validate(proc.stdout)
     payload, candidates = metrics_for(batch)
+    if args.dry_run:
+        print(json.dumps({
+            "status": "dry_run_only", "batch_id": batch["batch_id"],
+            "observations": len(batch["observations"]),
+            "distinct_ip_family_candidates": candidates,
+            "candidates": candidate_summary(batch),
+        }, sort_keys=True))
+        return
     publish(args.output, payload)
     print(json.dumps({
         "status": "published", "batch_id": batch["batch_id"],
