@@ -86,6 +86,9 @@ Validated on 5 October 2026, all **15 Ansible-managed Debian/Linux hosts** are e
 | asus-aimesh-181 | `192.168.2.181` | `60:83:e7:f3:c8:de` | [Open](asus-aimesh-181-f3c8de.md) |
 | 192.168.2.140 | `192.168.2.140` | `d4:e9:f4:63:28:7c` | [Open](192-168-2-140.md) |
 | 192.168.2.106 | `192.168.2.106` | `d4:f5:47:8d:23:2e` | [Open](192-168-2-106.md) |
+| lwip0 | `192.168.2.193` | `00:33:7a:70:36:e6` | [Open](lwip0.md) |
+| lwip0 | `192.168.2.110` | `00:33:7a:70:3b:fb` | [Open](lwip0-703bfb.md) |
+| Tuya Smart device (192.168.2.166) | `192.168.2.166` | `d8:1f:12:f9:0a:ad` | [Open](tuya-smart-device-192-168-2-166.md) |
 
 ## What to maintain
 
