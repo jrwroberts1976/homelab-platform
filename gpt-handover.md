@@ -1,3 +1,11 @@
+## 7 November 2026 — Linux passive hint correlates with a current DHCP lease, not historical ownership
+
+- Operator performed read-only correlation of the actual minimised router batch with dnsmasq leases: `LINUX_HINT_EVENTS=6`, `DISTINCT_CANDIDATE_IPS=1`, `CURRENT_LEASE_MATCHES=1`, `EVENTS_BEFORE_MATCHING_LEASE_EXPIRY=6`, `HISTORICAL_IP_OWNERSHIP=UNVERIFIED`, `OS_CONFIDENCE=LOW`.
+- Router dnsmasq active, 29 current lease records with five fields (lease expiry, MAC, IP, hostname, client ID); no historical start period. This is **one low-confidence Linux HTTP self-report for an IP that currently has a lease**, not a verified historic IP-to-MAC assignment or a proven Linux device OS. Do not override authoritative managed OS facts or label MAC as historically verified.
+- Next KISS step: inspect the existing Hosts dashboard's OS enrichment precedence/metrics and identify a safe additive `passive candidate` route; do not publish unverified MAC attribution. Existing pipeline remains one-shot, with no timers, dashboards or new services enabled.
+
+---
+
 ## 7 November 2026 — first real passive OS family candidate found
 
 - Operator validated restricted SSH batch and ran per-family grouping on sensor-01. Result: `Linux: 1 distinct source IP(s)`, `TOTAL_DISTINCT_HINTED_IPS=1`, `STATUS=UNVERIFIED_CANDIDATES`. The previous batch had 6 HTTP OS hints in 554 observations; these hints concern one source IP and are not six distinct devices.
