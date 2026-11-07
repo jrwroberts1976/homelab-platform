@@ -1,3 +1,11 @@
+## 7 November 2026 — existing inventory vs Zabbix OS audit successful (44 classified)
+
+- Operator pulled `d4940fd9` HTTPS API fix; monitor-01 trusted `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php` (GET `HTTP_STATUS=412 TLS_VERIFY=0`, consistent with reachable POST-only endpoint). One-shot Ansible `script` ran as root on monitor-01, **rc=0**.
+- Actual read-only results: `ZABBIX_OS_AUTHORITATIVE=15`, `ZABBIX_WITHOUT_OS=0`, `AMBIGUOUS=0`, `UNMATCHED_INVENTORY=29`, `TOTAL_CLASSIFIED=44`. These counts derive from existing network inventory and Zabbix host/OS Facts records; **29 unmatched do not prove unmanaged**. No scan, Zabbix updates or host changes. Ansible `changed=true` for script execution isn't evidence of a persistent modification.
+- Existing passive SSH-to-sensor publisher was deployed separately earlier, but its one candidate is not yet Zabbix-filtered, so **do not deploy the new Grafana panel** or treat the Linux hint as new discovery. Next KISS gate: check whether that candidate IP falls within the 15 matched or 29 unmatched records before publishing any filtered metrics. For matched candidate, suppress passive record entirely. For unmatched, treat as candidate pending device identification and freshness.
+
+---
+
 ## 7 November 2026 — read-only unmanaged audit Zabbix API reachability corrected
 
 - Operator verified on zabbix-01: zabbix-server active, nginx active; port 8080 listens only on 127.0.0.1, localhost GET `/api_jsonrpc.php` returns HTTP 412; port 80 endpoint GET 404. From monitor-01, both `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php` and `https://192.168.2.59/api_jsonrpc.php` returned HTTP 412 using `curl -k`, demonstrating TLS endpoint reachability but **not trusted-certificate verification nor successful authenticated POST**.
