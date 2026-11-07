@@ -68,6 +68,7 @@
         network_host_deep_profiler_interface: eth0
         network_host_deep_profiler_scan_mode: targeted
         network_host_deep_profiler_enable_baseline_backlog: false
+        network_host_deep_profiler_one_attempt_per_host: true
         network_host_deep_profiler_allow_deploy: true
         network_host_deep_profiler_enable_timer: true
 
@@ -108,9 +109,35 @@
       register: backlog_guard
       changed_when: false
 
+    - name: Verify deployed worker has one-attempt policy enabled
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -B
+          - -c
+          - >-
+            import ast,pathlib,sys;
+            tree=ast.parse(pathlib.Path('{{ profiler_script }}').read_text());
+            values=[n.value for n in tree.body
+              if isinstance(n,ast.Assign)
+              and any(isinstance(t,ast.Name) and t.id=='ONE_ATTEMPT_PER_HOST'
+                      for t in n.targets)];
+            ok=(len(values)==1
+              and isinstance(values[0],ast.Call)
+              and isinstance(values[0].func,ast.Name)
+              and values[0].func.id=='bool'
+              and len(values[0].args)==1
+              and isinstance(values[0].args[0],ast.Constant)
+              and values[0].args[0].value==1);
+            print('one_attempt_per_host=enabled' if ok else 'one_attempt_per_host=unexpected');
+            sys.exit(0 if ok else 1)
+      register: one_attempt_guard
+      changed_when: false
+
     - name: Require live state preserved after code update
       ansible.builtin.assert:
         that:
           - profiler_enabled_after.stdout == 'enabled'
           - profiler_active_after.stdout == 'active'
           - backlog_guard.stdout == 'baseline_backlog=disabled'
+          - one_attempt_guard.stdout == 'one_attempt_per_host=enabled'

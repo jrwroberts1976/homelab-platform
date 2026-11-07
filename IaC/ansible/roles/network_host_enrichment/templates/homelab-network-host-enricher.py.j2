@@ -368,11 +368,27 @@ def proxmox_identity_by_mac():
 def selected_proxmox_identity_by_mac(inventory):
     if PROXMOX_SOURCE == "local":
         return proxmox_identity_by_mac(), None
-    if PROXMOX_SOURCE == "snapshot":
-        # The shared, validated loader also powers the no-scan identity
-        # check. Keep the same fail-closed parsing in actual enrichment.
+    if PROXMOX_SOURCE in ("snapshot", "snapshot_optional"):
+        # The same trusted, fail-closed loader is used in both modes.
+        # Optional mode degrades ONLY Proxmox identity: no stale guest
+        # identity can enter host JSON or metrics if validation fails.
         sys.path.insert(0, str(PROXMOX_HELPER_DIR))
         from proxmox_guest_identity import load_snapshot
+        if PROXMOX_SOURCE == "snapshot_optional":
+            try:
+                return load_snapshot(
+                    PROXMOX_SNAPSHOT_FILE, inventory,
+                    max_age_seconds=PROXMOX_MAX_AGE,
+                )
+            except (OSError, ValueError, TypeError, KeyError,
+                    json.JSONDecodeError) as exc:
+                # No raw guest data or credential material in public logs.
+                print(json.dumps({
+                    "event": "proxmox_identity_unavailable",
+                    "reason": type(exc).__name__,
+                    "guest_identities_published": 0,
+                }), file=sys.stderr, flush=True)
+                return {}, {"snapshot_valid": False}
         return load_snapshot(
             PROXMOX_SNAPSHOT_FILE, inventory,
             max_age_seconds=PROXMOX_MAX_AGE,
@@ -405,6 +421,12 @@ inventory = load_json(INVENTORY_FILE)
 # Refuse missing, malformed, stale or mismatched snapshot *before* any
 # ordinary Nmap service/TLS probe can run.
 proxmox_by_mac, _proxmox_counts = selected_proxmox_identity_by_mac(inventory)
+# Invalid/missing guest snapshots never become empty-but-successful mappings.
+# Base network discovery and port/TLS evidence can still proceed.
+proxmox_identity_available = (
+    PROXMOX_SOURCE != "snapshot_optional"
+    or bool(_proxmox_counts and _proxmox_counts.get("snapshot_valid", True))
+)
 
 previous = load_json(
     ENRICHMENT_FILE,
@@ -477,11 +499,14 @@ for ip in sorted(
             for field in (
                 "services",
                 "tls_certificates",
-                "proxmox",
                 "last_enriched",
             ):
                 if field in prior:
                     entry[field] = prior[field]
+            # Do not preserve previously trusted guest identities while
+            # the current protected Proxmox snapshot is unavailable.
+            if proxmox_identity_available and "proxmox" in prior:
+                entry["proxmox"] = prior["proxmox"]
 
         entry["enrichment_status"] = "offline_skipped"
         hosts[ip] = entry
@@ -514,6 +539,7 @@ document = {
     "online_hosts_scanned": len(online_ips),
     "scan_errors": scan_errors,
     "hosts": hosts,
+    "proxmox_identity_available": proxmox_identity_available,
 }
 
 save_atomic(
@@ -542,7 +568,14 @@ metrics = [
     "# TYPE homelab_network_host_enrichment_tls_not_after_seconds gauge",
     "# HELP homelab_network_host_enrichment_proxmox_guest_info Local Proxmox guest identity matched by MAC address.",
     "# TYPE homelab_network_host_enrichment_proxmox_guest_info gauge",
+    "# HELP homelab_network_host_enrichment_proxmox_identity_available Whether trusted Proxmox guest identity is available, independent of host enrichment.",
+    "# TYPE homelab_network_host_enrichment_proxmox_identity_available gauge",
 ]
+
+metrics.append(
+    "homelab_network_host_enrichment_proxmox_identity_available "
+    + ("1" if proxmox_identity_available else "0")
+)
 
 metrics.append(
     "homelab_network_host_enrichment_last_run_seconds "
@@ -677,6 +710,7 @@ summary = {
         for host in hosts.values()
         if host.get("proxmox")
     ),
+    "proxmox_identity_available": proxmox_identity_available,
     "scan_errors": scan_errors,
 }
 

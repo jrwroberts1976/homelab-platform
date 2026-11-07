@@ -1,0 +1,281 @@
+---
+- name: Change router-01 DHCP lease duration to infinite
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  vars:
+    dhcp_infinite_approved: false
+    dhcp_config: /etc/dnsmasq.d/router.conf
+    dhcp_old_range: "dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,24h"
+    dhcp_new_range: "dhcp-range=192.168.2.100,192.168.2.199,255.255.255.0,infinite"
+    dhcp_backup: /var/backups/homelab-router/dhcp-infinite/router.conf.original
+
+  pre_tasks:
+    - name: DEVELOPMENT LOCK - timed rollback not yet implemented
+      ansible.builtin.fail:
+        msg: >-
+          Deployment prohibited until independent timed rollback,
+          configuration verification and IaC dependency review pass.
+
+    - name: Require explicit deployment approval
+      ansible.builtin.assert:
+        that:
+          - dhcp_infinite_approved | bool
+          - inventory_hostname == 'router-01'
+        fail_msg: "DHCP deployment not approved"
+
+    - name: Check dnsmasq is active
+      ansible.builtin.command: systemctl is-active dnsmasq
+      register: dhcp_service
+      changed_when: false
+      failed_when: dhcp_service.stdout != 'active'
+
+    - name: Inspect current configuration
+      ansible.builtin.stat:
+        path: "{{ dhcp_config }}"
+        checksum_algorithm: sha256
+      register: dhcp_stat
+
+    - name: Require protected configuration
+      ansible.builtin.assert:
+        that:
+          - dhcp_stat.stat.isreg
+          - dhcp_stat.stat.pw_name == 'root'
+          - dhcp_stat.stat.gr_name == 'root'
+          - dhcp_stat.stat.mode == '0600'
+
+    - name: Read current configuration
+      ansible.builtin.slurp:
+        src: "{{ dhcp_config }}"
+      register: dhcp_original
+      no_log: true
+
+    - name: Require exact current range
+      ansible.builtin.assert:
+        that:
+          - (dhcp_original.content | b64decode).count(dhcp_old_range) == 1
+          - dhcp_new_range not in (dhcp_original.content | b64decode)
+
+  tasks:
+    - name: Create protected backup directory
+      ansible.builtin.file:
+        path: /var/backups/homelab-router/dhcp-infinite
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Preserve original configuration
+      ansible.builtin.copy:
+        content: "{{ dhcp_original.content | b64decode }}"
+        dest: "{{ dhcp_backup }}"
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      no_log: true
+
+    - name: Verify protected backup matches active baseline
+      ansible.builtin.stat:
+        path: "{{ dhcp_backup }}"
+        checksum_algorithm: sha256
+      register: dhcp_backup_stat
+
+    - name: Require exact backup checksum
+      ansible.builtin.assert:
+        that:
+          - dhcp_backup_stat.stat.checksum == dhcp_stat.stat.checksum
+          - dhcp_backup_stat.stat.mode == '0600'
+
+    - name: Create protected DHCP recovery lock directory
+      ansible.builtin.file:
+        path: /run/homelab-dhcp-infinite
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Create protected recovery executable directory
+      ansible.builtin.file:
+        path: /usr/local/libexec/homelab
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install DHCP recovery decision module
+      ansible.builtin.copy:
+        src: ../scripts/router_dhcp_infinite_recovery.py
+        dest: /usr/local/libexec/homelab/router_dhcp_infinite_recovery.py
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install independent DHCP rollback worker
+      ansible.builtin.copy:
+        src: ../scripts/router_dhcp_infinite_rollback_worker.py
+        dest: /usr/local/libexec/homelab/router_dhcp_infinite_rollback_worker.py
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install guarded DHCP configuration helper
+      ansible.builtin.copy:
+        src: ../scripts/router_dhcp_infinite_install.py
+        dest: /usr/local/libexec/homelab/router_dhcp_infinite_install.py
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Install DHCP recovery systemd service
+      ansible.builtin.copy:
+        src: ../files/systemd/homelab-dhcp-infinite-recovery.service
+        dest: /etc/systemd/system/homelab-dhcp-infinite-recovery.service
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Calculate router-local rollback deadline
+      ansible.builtin.command:
+        argv:
+          - date
+          - -u
+          - -d
+          - "+5 minutes"
+          - "+%Y-%m-%d %H:%M:%S UTC"
+      register: dhcp_rollback_deadline
+      changed_when: false
+
+    - name: Render persistent DHCP recovery timer
+      ansible.builtin.template:
+        src: ../files/systemd/homelab-dhcp-infinite-recovery.timer.j2
+        dest: /etc/systemd/system/homelab-dhcp-infinite-recovery.timer
+        owner: root
+        group: root
+        mode: '0644'
+      vars:
+        dhcp_rollback_deadline_utc: "{{ dhcp_rollback_deadline.stdout }}"
+
+    - name: Reload systemd unit definitions
+      ansible.builtin.systemd:
+        daemon_reload: true
+
+    - name: Arm independent DHCP recovery timer
+      ansible.builtin.systemd:
+        name: homelab-dhcp-infinite-recovery.timer
+        enabled: true
+        state: started
+
+    - name: Inspect armed recovery timer
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - homelab-dhcp-infinite-recovery.timer
+          - --property=ActiveState
+          - --property=UnitFileState
+          - --property=NextElapseUSecRealtime
+      register: dhcp_timer_status
+      changed_when: false
+
+    - name: Require independent recovery to be armed
+      ansible.builtin.assert:
+        that:
+          - "'ActiveState=active' in dhcp_timer_status.stdout_lines"
+          - "'UnitFileState=enabled' in dhcp_timer_status.stdout_lines"
+          - >-
+            dhcp_timer_status.stdout_lines
+            | select('match', '^NextElapseUSecRealtime=.+')
+            | reject('equalto', 'NextElapseUSecRealtime=')
+            | list | length == 1
+        fail_msg: "Independent DHCP recovery timer is not verified"
+
+    - name: Apply configuration with recovery
+      block:
+        - name: Install infinite lease duration using guarded helper
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - /usr/local/libexec/homelab/router_dhcp_infinite_install.py
+          register: dhcp_install_result
+          changed_when: "'CANDIDATE_INSTALLED' in dhcp_install_result.stdout"
+
+        - name: Validate dnsmasq configuration
+          ansible.builtin.command: dnsmasq --test
+          changed_when: false
+
+        - name: Restart dnsmasq to activate lease duration
+          ansible.builtin.systemd:
+            name: dnsmasq
+            state: restarted
+
+        - name: Confirm dnsmasq is running
+          ansible.builtin.command: systemctl is-active dnsmasq
+          register: dhcp_after
+          changed_when: false
+          failed_when: dhcp_after.stdout != 'active'
+
+        - name: Inspect deployed DHCP configuration
+          ansible.builtin.stat:
+            path: "{{ dhcp_config }}"
+            checksum_algorithm: sha256
+          register: dhcp_deployed_stat
+
+        - name: Require exact approved infinite lease configuration
+          ansible.builtin.assert:
+            that:
+              - dhcp_deployed_stat.stat.checksum == '152e161010d5492173a39bd01140e359471f6a61a06886d079f5e0dfde6e2160'
+              - dhcp_deployed_stat.stat.mode == '0600'
+            fail_msg: "DHCP configuration verification failed"
+
+        - name: Confirm DHCP service remains active
+          ansible.builtin.command:
+            argv:
+              - systemctl
+              - is-active
+              - dnsmasq
+          register: dhcp_final_service
+          changed_when: false
+          failed_when: dhcp_final_service.stdout != 'active'
+
+      rescue:
+        - name: Run checksum-guarded DHCP recovery worker
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - /usr/local/libexec/homelab/router_dhcp_infinite_rollback_worker.py
+              - --execute-approved-rollback
+          register: dhcp_recovery_result
+          changed_when: >-
+            'RESTORED_AND_RESTARTED' in dhcp_recovery_result.stdout
+
+        - name: Report deployment failure after recovery
+          ansible.builtin.fail:
+            msg: >-
+              DHCP deployment failed. The recovery worker completed;
+              inspect its result and verify router DNS/DHCP health.
+
+    - name: Finalise verified DHCP deployment
+      block:
+          - name: Cancel verified DHCP recovery timer
+            ansible.builtin.systemd:
+              name: homelab-dhcp-infinite-recovery.timer
+              state: stopped
+              enabled: false
+
+          - name: Confirm rollback timer is inactive
+            ansible.builtin.command:
+              argv:
+                - systemctl
+                - is-active
+                - homelab-dhcp-infinite-recovery.timer
+            register: dhcp_timer_final
+            changed_when: false
+            failed_when: false
+
+          - name: Require recovery timer cancellation
+            ansible.builtin.assert:
+              that:
+                - dhcp_timer_final.stdout == 'inactive'
+              fail_msg: "Recovery timer remains active"

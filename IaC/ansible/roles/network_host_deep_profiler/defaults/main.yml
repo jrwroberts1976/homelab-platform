@@ -43,6 +43,10 @@ network_host_deep_profiler_recent_seen_seconds: 360
 # Never launch multiple expensive full scans in one worker run.
 network_host_deep_profiler_max_profiles_per_run: 1
 
+# One automatic Nmap profiling attempt per MAC. Never retry incomplete or
+# completed profiles; preserve evidence and allow explicit reviewed exceptions.
+network_host_deep_profiler_one_attempt_per_host: true
+
 # Existing cutover-baseline hosts stay inert unless a separately reviewed
 # deployment explicitly opts them into the controlled weekly backlog.
 network_host_deep_profiler_enable_baseline_backlog: false

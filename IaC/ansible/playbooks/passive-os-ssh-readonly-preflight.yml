@@ -1,0 +1,51 @@
+---
+# Stage 5.3: evidence only. No service, user, sshd, key or file changes.
+- name: Read-only SSH transport safety preflight
+  hosts: router-01:sensor-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Require only canonical endpoints
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname in ['router-01', 'sensor-01']
+          - (inventory_hostname == 'router-01' and ansible_host == '192.168.2.1') or
+            (inventory_hostname == 'sensor-01' and ansible_host == '192.168.2.55')
+        fail_msg: "Unexpected endpoint; refusing preflight"
+
+    - name: Obtain runtime hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      register: runtime_hostname
+
+    - name: Obtain effective SSH daemon settings
+      ansible.builtin.command:
+        argv: [sshd, -T]
+      changed_when: false
+      register: ssh_effective
+
+    - name: Check SSH service state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, ssh.service]
+      changed_when: false
+      failed_when: false
+      register: ssh_service
+
+    - name: Inspect SSH host public-key file metadata only
+      ansible.builtin.stat:
+        path: /etc/ssh/ssh_host_ed25519_key.pub
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: host_key_public
+
+    - name: Report security-relevant settings without secrets
+      ansible.builtin.debug:
+        msg:
+          - "Ansible host: {{ inventory_hostname }}"
+          - "Runtime hostname: {{ runtime_hostname.stdout }}"
+          - "SSH service: {{ ssh_service.stdout }}"
+          - "Ed25519 host PUBLIC key file exists: {{ host_key_public.stat.exists | default(false) }}"
+          - "Effective SSH settings (general daemon defaults only): {{ ssh_effective.stdout_lines | select('match', '^(pubkeyauthentication|passwordauthentication|permitrootlogin|allowtcpforwarding|x11forwarding|permittty|authorizedkeysfile) ') | list }}"
+          - "No SSH key, account, daemon or network change was made"

@@ -1,0 +1,180 @@
+---
+# Offline staging only. Explicit approval required.
+# No Suricata restart, signal, forced rotation or NFQUEUE changes.
+
+- name: Guarded rollback of Suricata logrotate policy
+  hosts: router-01
+  gather_facts: false
+  become: true
+
+  vars:
+    router_suricata_logrotate_rollback_approved: false
+    router_suricata_logrotate_target: /etc/logrotate.d/suricata
+    router_suricata_logrotate_backup: /var/backups/homelab-router/suricata-logrotate/suricata.original
+    router_suricata_logrotate_original_sha256: f95789a4166f06c69695c31de79bf586cd72c0a862cf50292e35d2ae342f6c96
+    router_suricata_logrotate_candidate_sha256: 19f06bf2b87db4307d11e5e6be7922e803acc63fcbc3d7c357bc39e975ede677
+
+  pre_tasks:
+    - name: Require explicit rollback approval and correct inventory target
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_suricata_logrotate_rollback_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "STOP - rollback not explicitly approved"
+      delegate_to: localhost
+      become: false
+
+    - name: Verify runtime hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_suricata_rollback_hostname
+      changed_when: false
+
+    - name: Require expected router hostname
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rollback_hostname.stdout | trim == 'raspberrypi'
+
+    - name: Inspect protected original backup
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_backup }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_rollback_backup
+
+    - name: Verify original backup integrity
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rollback_backup.stat.exists
+          - router_suricata_rollback_backup.stat.isreg
+          - not router_suricata_rollback_backup.stat.islnk | default(false)
+          - router_suricata_rollback_backup.stat.checksum == router_suricata_logrotate_original_sha256
+          - router_suricata_rollback_backup.stat.pw_name == 'root'
+          - router_suricata_rollback_backup.stat.gr_name == 'root'
+          - router_suricata_rollback_backup.stat.mode == '0600'
+        fail_msg: "STOP - original backup integrity verification failed"
+
+    - name: Inspect active policy before rollback
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_target }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_rollback_active
+
+    - name: Refuse rollback of an unexpected active policy
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rollback_active.stat.exists
+          - router_suricata_rollback_active.stat.isreg
+          - not router_suricata_rollback_active.stat.islnk | default(false)
+          - router_suricata_rollback_active.stat.pw_name == 'root'
+          - router_suricata_rollback_active.stat.gr_name == 'root'
+          - router_suricata_rollback_active.stat.mode == '0644'
+          - router_suricata_rollback_active.stat.checksum == router_suricata_logrotate_candidate_sha256
+        fail_msg: "STOP - active policy differs from approved candidate"
+
+  tasks:
+    - name: Validate protected original policy in debug mode
+      ansible.builtin.command:
+        argv:
+          - logrotate
+          - --debug
+          - --state
+          - /dev/null
+          - "{{ router_suricata_logrotate_backup }}"
+      register: router_suricata_original_debug
+      changed_when: false
+      failed_when: router_suricata_original_debug.rc != 0
+
+    - name: Capture NFQUEUE PID before restoration
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-suricata-nfq.service
+          - --value
+          - -p
+          - MainPID
+      changed_when: false
+      register: router_suricata_pid_before
+
+    - name: Require running NFQUEUE process before restoration
+      ansible.builtin.assert:
+        that:
+          - router_suricata_pid_before.stdout | trim | int > 0
+        fail_msg: "STOP - NFQUEUE process is not running"
+
+    - name: Recheck active policy immediately before restoration
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_target }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_rollback_final_stat
+
+    - name: Refuse restoration if active policy has changed
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rollback_final_stat.stat.exists
+          - router_suricata_rollback_final_stat.stat.isreg
+          - not router_suricata_rollback_final_stat.stat.islnk | default(false)
+          - router_suricata_rollback_final_stat.stat.checksum == router_suricata_logrotate_candidate_sha256
+        fail_msg: "STOP - active configuration changed before restoration"
+
+    - name: Restore exact verified original configuration
+      ansible.builtin.copy:
+        src: "{{ router_suricata_logrotate_backup }}"
+        dest: "{{ router_suricata_logrotate_target }}"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+      register: router_suricata_rollback_restore
+
+    - name: Verify restored configuration SHA-256
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_target }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_rollback_restored_stat
+
+    - name: Require exact original configuration
+      ansible.builtin.assert:
+        that:
+          - router_suricata_rollback_restored_stat.stat.checksum == router_suricata_logrotate_original_sha256
+          - router_suricata_rollback_restored_stat.stat.mode == '0644'
+          - router_suricata_rollback_restored_stat.stat.pw_name == 'root'
+          - router_suricata_rollback_restored_stat.stat.gr_name == 'root'
+        fail_msg: "STOP - restored policy failed integrity verification"
+
+    - name: Capture NFQUEUE PID after restoration
+      ansible.builtin.command:
+        argv:
+          - systemctl
+          - show
+          - router-suricata-nfq.service
+          - --value
+          - -p
+          - MainPID
+      changed_when: false
+      register: router_suricata_pid_after
+
+    - name: Require unchanged NFQUEUE process
+      ansible.builtin.assert:
+        that:
+          - router_suricata_pid_after.stdout | trim == router_suricata_pid_before.stdout | trim
+          - router_suricata_pid_after.stdout | trim | int > 0
+        fail_msg: "STOP - Suricata NFQUEUE PID changed during rollback"
+
+    - name: Confirm Suricata NFQUEUE remains active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-suricata-nfq.service]
+      register: router_suricata_rollback_service
+      changed_when: false
+      failed_when: router_suricata_rollback_service.stdout | trim != 'active'

@@ -1,0 +1,67 @@
+---
+# Recovery for an authorised cutover; leaves the enricher schedule stopped.
+- name: Restore original network enrichment worker and dependency from protected backups
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars:
+    stage_root: /var/backups/homelab-network-enrichment/independent-20261105
+    worker_path: /usr/local/sbin/homelab-network-host-enricher
+    dropin_path: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+  tasks:
+    - name: Require explicit recovery authorisation on exact owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - network_enrichment_rollback_approved | default(false) | bool
+          - network_enrichment_rollback_phrase | default('') == 'RESTORE_ORIGINAL_ENRICHER'
+    - name: Confirm protected original files exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ stage_root }}/original-enricher.py"
+        - "{{ stage_root }}/original-dropin.conf"
+      register: originals
+    - name: Reject missing original backup files
+      ansible.builtin.assert:
+        that:
+          - originals.results[0].stat.isreg | default(false)
+          - originals.results[1].stat.isreg | default(false)
+    - name: Stop enrichment timer during restoration
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-enricher.timer
+        state: stopped
+    - name: Restore original worker
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ stage_root }}/original-enricher.py"
+        dest: "{{ worker_path }}"
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Restore mandatory refresh dependency
+      ansible.builtin.copy:
+        remote_src: true
+        src: "{{ stage_root }}/original-dropin.conf"
+        dest: "{{ dropin_path }}"
+        owner: root
+        group: root
+        mode: '0644'
+    - name: Reload restored systemd definition
+      ansible.builtin.systemd_service:
+        daemon_reload: true
+    - name: Check original dependency restored
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-network-host-enricher.service, -p, Requires]
+      changed_when: false
+      register: dependency
+    - name: Require restored Proxmox refresh dependency
+      ansible.builtin.assert:
+        that:
+          - "'homelab-proxmox-guest-refresh.service' in dependency.stdout"
+    - name: Leave timer paused until separately approved
+      ansible.builtin.debug:
+        msg: "Original worker/dependency restored. Enrichment timer remains stopped; do not restart blindly."

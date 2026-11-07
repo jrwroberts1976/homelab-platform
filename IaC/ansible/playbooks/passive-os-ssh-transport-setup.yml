@@ -1,0 +1,139 @@
+---
+# KISS: one-way sensor pull of a sanitised router snapshot. No sshd edits.
+# NEVER invoke without explicit operator approval. No collection timer here.
+- name: Prepare source SSH key and pinned router host key
+  hosts: sensor-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_transport_apply: false
+    passive_os_key_dir: /etc/homelab/passive-os-ssh
+    passive_os_router_fingerprint: SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI
+  tasks:
+    - name: Confirm explicit approval and expected sensor
+      ansible.builtin.assert:
+        that:
+          - passive_os_transport_apply | bool
+          - ansible_host == '192.168.2.55'
+    - name: Create protected SSH key directory
+      ansible.builtin.file:
+        path: "{{ passive_os_key_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Generate sensor-only ED25519 transfer key if missing
+      ansible.builtin.command:
+        argv: [ssh-keygen, -q, -t, ed25519, -N, '', -f, "{{ passive_os_key_dir }}/id_ed25519", -C, 'passive-os@sensor-01']
+        creates: "{{ passive_os_key_dir }}/id_ed25519"
+      no_log: true
+    - name: Read sensor public key
+      ansible.builtin.slurp:
+        src: "{{ passive_os_key_dir }}/id_ed25519.pub"
+      register: passive_os_sensor_pub
+      no_log: true
+    - name: Read router ED25519 public host key without modifying router
+      ansible.builtin.slurp:
+        src: /etc/ssh/ssh_host_ed25519_key.pub
+      delegate_to: router-01
+      register: passive_os_router_host_pub
+      no_log: true
+    - name: Verify router key fingerprint
+      ansible.builtin.command:
+        argv: [ssh-keygen, -l, -E, sha256, -f, /etc/ssh/ssh_host_ed25519_key.pub]
+      delegate_to: router-01
+      changed_when: false
+      register: passive_os_router_key_fingerprint
+    - name: Require historical pinned router fingerprint
+      ansible.builtin.assert:
+        that:
+          - passive_os_router_fingerprint in passive_os_router_key_fingerprint.stdout
+    - name: Install dedicated, strictly pinned sensor known_hosts
+      ansible.builtin.copy:
+        content: "192.168.2.1 {{ (passive_os_router_host_pub.content | b64decode).split()[0] }} {{ (passive_os_router_host_pub.content | b64decode).split()[1] }}\n"
+        dest: "{{ passive_os_key_dir }}/known_hosts"
+        owner: root
+        group: root
+        mode: '0600'
+      no_log: true
+
+- name: Configure separate router read-only SSH transfer account
+  hosts: router-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_transport_apply: false
+    passive_os_user: homelab-os-transfer
+    passive_os_user_home: /var/lib/homelab-os-transfer
+    passive_os_out: /var/lib/homelab-passive-os-outbound
+  tasks:
+    - name: Require explicit approval and canonical router
+      ansible.builtin.assert:
+        that:
+          - passive_os_transport_apply | bool
+          - ansible_host == '192.168.2.1'
+          - "'sensor-01' in hostvars"
+          - hostvars['sensor-01'].ansible_host == '192.168.2.55'
+    - name: Confirm router runtime hostname
+      ansible.builtin.command: hostname
+      changed_when: false
+      register: passive_os_router_hostname
+    - name: Refuse unexpected router
+      ansible.builtin.assert:
+        that: passive_os_router_hostname.stdout == 'raspberrypi'
+    - name: Ensure SSH configuration already valid
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
+    - name: Refuse pre-existing transfer identity before new setup
+      ansible.builtin.command:
+        argv: [getent, passwd, '{{ passive_os_user }}']
+      changed_when: false
+      failed_when: false
+      register: passive_os_prior_account
+    - name: Require new identity only
+      ansible.builtin.assert:
+        that: passive_os_prior_account.rc == 2
+        fail_msg: 'Existing account must be reviewed; this setup is initial-install only'
+    - name: Create dedicated locked transfer account
+      ansible.builtin.user:
+        name: "{{ passive_os_user }}"
+        comment: 'Passive OS sanitised file transfer'
+        system: true
+        password_lock: true
+        home: "{{ passive_os_user_home }}"
+        create_home: true
+        shell: /bin/sh
+        state: present
+    - name: Secure transfer home
+      ansible.builtin.file:
+        path: "{{ passive_os_user_home }}"
+        state: directory
+        owner: "{{ passive_os_user }}"
+        group: "{{ passive_os_user }}"
+        mode: '0700'
+    - name: Secure transfer SSH directory
+      ansible.builtin.file:
+        path: "{{ passive_os_user_home }}/.ssh"
+        state: directory
+        owner: "{{ passive_os_user }}"
+        group: "{{ passive_os_user }}"
+        mode: '0700'
+    - name: Permit only one fixed read-only command from sensor-01
+      ansible.builtin.copy:
+        content: >-
+          from="192.168.2.55",restrict,command="/bin/cat /var/lib/homelab-passive-os-outbound/batch.json" {{ (hostvars['sensor-01'].passive_os_sensor_pub.content | b64decode).split()[0] }} {{ (hostvars['sensor-01'].passive_os_sensor_pub.content | b64decode).split()[1] }} passive-os@sensor-01
+        dest: "{{ passive_os_user_home }}/.ssh/authorized_keys"
+        owner: "{{ passive_os_user }}"
+        group: "{{ passive_os_user }}"
+        mode: '0600'
+      no_log: true
+    - name: Create only sanitised outbound directory
+      ansible.builtin.file:
+        path: "{{ passive_os_out }}"
+        state: directory
+        owner: root
+        group: "{{ passive_os_user }}"
+        mode: '0750'
+    - name: Validate sshd without reload
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false

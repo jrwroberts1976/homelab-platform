@@ -1,0 +1,49 @@
+---
+# One-time, approval-gated creation of replacement objects only.
+# Does not change the existing daily runner, start scans or remove historical objects.
+- name: Stage router-01 Greenbone authenticated target and task
+  hosts: greenbone_hosts
+  become: true
+  gather_facts: false
+
+  # Reuse the canonical Greenbone role configuration for the migration template.
+  vars_files:
+    - ../roles/greenbone_scanning/defaults/main.yml
+
+  tasks:
+    - name: Require exact router migration approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'greenbone-01'
+          - greenbone_router_migration_approved | default(false) | bool
+          - greenbone_router_migration_phrase | default('') == 'STAGE_ROUTER01_GREENBONE_REPLACEMENT'
+        fail_msg: "Router migration not approved; refusing all changes."
+
+    - name: Install approved one-time migration helper
+      ansible.builtin.template:
+        src: ../roles/greenbone_scanning/templates/greenbone-router-migration.py.j2
+        dest: /usr/local/sbin/homelab-greenbone-router-migrate
+        owner: root
+        group: root
+        mode: "0750"
+
+    - name: Validate rendered migration helper syntax
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ast; ast.parse(open('/usr/local/sbin/homelab-greenbone-router-migrate').read())"
+      changed_when: false
+
+    - name: Stage replacement Greenbone objects without switching runner
+      ansible.builtin.command:
+        argv:
+          - /usr/local/sbin/homelab-greenbone-router-migrate
+      register: migration
+      changed_when: >-
+        'replacement_target_created=true' in migration.stdout or
+        'replacement_task_created=true' in migration.stdout
+
+    - name: Show replacement object IDs
+      ansible.builtin.debug:
+        var: migration.stdout_lines

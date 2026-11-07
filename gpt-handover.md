@@ -1,3 +1,569 @@
+## 7 November 2026 — #297 live read-only OS evidence preview passed; inventory now 37
+
+- Operator ran `playbooks/network-os-evidence-preview.yml` on monitor-01 after preparing code: **ok=8 changed=3 failed=0 unreachable=0**. The playbook read existing inventory/deep-profiles and Zabbix OS facts and removed the transient Python scripts. No persistent exporter, monitoring metric, router capture change or Grafana deployment.
+- Reported preview totals: `inventory=37` (previously 36), `zabbix_os=15`, `unmatched_not_proven_unmanaged=22` (previously 21), `managed_os_missing=0`, `identity_ambiguous=0`, `nmap_candidate=0`, `passive_low_confidence=0`, `passive_input=not_supplied`. An additional `192.168.2.198` entry appeared in preview; previous router dnsmasq evidence showed `.198` DHCPREQUEST with MAC `16:c1:05:ad:4b:8a`, but specific device identity/OS **not determined**. Do not call unmatched devices proven unmanaged.
+- James-LT `192.168.2.186` was classified `status=nmap_partial_no_os`, `os_source=unknown`, `os_family=null`, `confidence=none`; this is expected because no passive input was supplied and bounded Nmap produced no OS match. The external one-observation Windows UA hint remains low-confidence, not included or published. Zabbix OS authority remains intact.
+- **Next:** inspect new `.198` identity by read-only existing inventory/DHCP evidence if useful; design an explicit, verified method of passing the sanitised sensor dry-run candidate summary into the preview, with freshness limits and historical IP/MAC attribution remaining unverified. Only then consider a reviewed integration into the existing enrichment pipeline; retain offline tests and no extra collectors.
+
+---
+
+## 7 November 2026 — #297 read-only OS evidence integration preview staged, not yet run
+
+- Following confirmed NFQUEUE routing and expected `router-suricata-nfq.service` service ownership, proceeded with existing inventory integration safety preview, **without changing** production inventory, Proxmox enrichment, Zabbix, Prometheus or Grafana.
+- Added `IaC/ansible/scripts/os_evidence_inventory_preview.py`: reads monitor-01 existing `inventory.json`, `deep-profiles.json`, and Zabbix host/OS item facts via established existing audit API/token; reuses tested pure `os_evidence_precedence.resolve`. Classifies all inventory rows, produces aggregate totals and non-authoritative rows only. No OS guessed from Zabbix category, Nmap historic IP evidence or passive UA. Optional operator-supplied **validated** sensor dry-run JSON is supported but deliberately **not included in initial live preview**, because sensor's restricted SSH source is not mounted on monitor-01. Without that input James-LT should remain `nmap_partial_no_os`; prior Windows hint stays external low-confidence candidate. It emits **no metrics or files**.
+- Added seven offline tests `IaC/ansible/tests/test_os_evidence_inventory_preview.py`: Zabbix precedence, non-authoritative passive attribution, partial Nmap, wrong-IP profile, duplicate/contradictory classification rejected, strict low-confidence provenance, invalid mode refused. Tests **not yet run**; existing eleven predecessor resolver tests passed.
+- Added `IaC/ansible/playbooks/network-os-evidence-preview.yml`: read-only preview on monitor-01 using root-owned, temporary Ansible-copied Python modules, inventory/deep-profile and Zabbix token path assertions, host ownership check and always cleanup. It does **not deploy a persistent script, metric exporter or service**. A separate optional passive input would need deliberate secure transfer and freshness/ownership validation before production integration.
+- Next operator: pull branch; `python3 -m py_compile scripts/os_evidence_inventory_preview.py`; `python3 -m unittest discover -s tests -p 'test_os_evidence_inventory_preview.py' -v`; `ansible-playbook -i inventory/hosts.yml playbooks/network-os-evidence-preview.yml --syntax-check`. If all pass run `ansible-playbook -i inventory/hosts.yml playbooks/network-os-evidence-preview.yml --ask-become-pass`. No changes to production OS identification or Grafana yet; inspect preview result and reconcile unexpected counts before proceeding.
+
+---
+
+## 7 November 2026 — Suricata service ownership resolved; DHCP NFQUEUE visibility investigation closed
+
+- Operator inspected on router-01: PID `42090` belongs to `/system.slice/router-suricata-nfq.service`. `router-suricata-nfq.service` is **loaded, enabled, active (running)** since **2026-11-02 20:27:35 GMT**, with drop-in `/etc/systemd/system/router-suricata-nfq.service.d/alert-only.conf`. Command: `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10 --set stream.midstream-policy=ignore --set exception-policy=ignore --set stream.drop-invalid=no`. `router-suricata-queue.service` is **active (exited), enabled**, consistent with setup of forwarding NFQUEUE rules. Distribution `suricata.service` is **inactive/dead and disabled**, **expected**; do not restart it or treat as production IDS outage. `router-suricata-rollback.service` static and `router-suricata-rollback.timer` disabled. Process was running at inspection; do not infer tested rule detection or active attack blocking.
+- This closes the suspected Suricata/NFQUEUE service failure: NFT rules in FORWARD queue both LAN<->WAN directions to queue 10, kernel queue 10 registered to running process. DHCP to router uses INPUT path, so absent DHCP EVE records are consistent with configured capture scope. `alert-only.conf` exists; inspect its actual content before claiming exact enforcement policy; never assume IPS blocking. No operational changes made.
+- #297 continue next with controlled **offline** evidence integration design against existing enricher JSON and Grafana model. Preserve Zabbix authority, Nmap one-attempt scan guard, and low-confidence UA provenance; do not extend NFQUEUE to INPUT, add DHCP capture, restart services, or publish unverified OS metrics. Both new 11-test precedence suite and prior 6-test passive sanitisation suite passed on admin-01.
+
+---
+
+## 7 November 2026 — NFQUEUE routing verified, separate Suricata service ownership unresolved
+
+- Subsequent read-only router-01 diagnostics **resolved previous concern about missing queue rules**: nft rules use syntax `queue flags bypass to 10`, not `queue num` or `queue to`. Found two FORWARD-path rules: `iifname "eth0" oifname "ppp0" ip saddr 192.168.2.0/24 ... queue flags bypass to 10` with cumulative **86,330,122** packets; reverse WAN-to-LAN `iifname "ppp0" oifname "eth0" ip daddr 192.168.2.0/24 ... queue flags bypass to 10` with **156,792,098** packets. These are cumulative and by themselves not proof of live scan rate.
+- `/proc/net/netfilter/nfnetlink_queue` reports queue **10**, bound to PID **42090**, matching previously observed active `/usr/bin/suricata ... -q 10` process. NFQUEUE connection is genuinely configured; do **not** claim missing firewall queue rules or an idle/unfed IDS. The read-only Ansible shell task returned **rc=3** exclusively because `systemctl is-active suricata` reported **inactive**. Service unit may be named something else or process may be managed by a separate supervisor; process ownership **not yet established**. Do not restart/reload anything or switch capture modes.
+- Queue rules are in FORWARD path (LAN<->WAN). Local DHCP to router dnsmasq travels INPUT, so its absence from Suricata EVE is consistent with topology; EVE DHCP YAML `enabled: yes, extended: no` does not overcome unavailable packets. Existing dnsmasq DHCPACK logs already corroborate IP/MAC attribution around James-LT UA hint. **No need to expand Suricata queue to INPUT just for OS fingerprinting**; may affect router stability and writes.
+- Next minimally invasive check: inspect PID 42090 `/proc/42090/cgroup` and `systemctl status 42090 --no-pager`, relevant `systemctl list-units --all '*suricata*'`, `systemctl list-unit-files '*suricata*'`; read-only only. If manager identified and intentional, consider DHCP gap explained and proceed to offline identity-enrichment design.
+
+---
+
+## 7 November 2026 — NFQUEUE routing check inconclusive; no queue rule printed
+
+- Read-only `nft -a list ruleset` filtered for `hook input`, `hook forward`, `hook prerouting`, `queue num` or `queue to` returned input and forward hooks (including forward priority filter/mangle/filter+5/filter+10) but **no matching queue statement**. This does **not conclusively establish** that no NFQUEUE rules exist: output filter misses generic queue syntax, other firewall backends and alternative rule expressions.
+- Suricata runtime remains `-q 10`; do **not** conclude traffic is being sent to it, or that DHCP packets are excluded solely on this evidence. **Next:** inspect nftables JSON queue expressions and legacy iptables NFQUEUE targets plus `/proc/net/netfilter/nfnetlink_queue` counters read-only. Treat lack of queue routing as a possible IDS visibility/security monitoring gap until verified. No production changes authorized; avoid extra scans, packet captures, or queue edits without explicit safe IaC plan and rollback.
+
+---
+
+## 7 November 2026 — Suricata runs NFQUEUE 10, not AF_PACKET; DHCP EVE visibility diagnosis
+
+- Read-only router-01 process/addresses check: live process `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10 --set stream.midstream-policy=ignore --set exception-policy=ignore --set stream.drop-invalid=no`. The YAML has an `af-packet` section referring to `eth0`, but **active Suricata capture is NFQUEUE 10 (`-q 10`)**; AF_PACKET stanza is not proof Suricata is directly sniffing all eth0 traffic. `eth0=192.168.2.1/24`, WAN `ppp0` is up with public address. Tails of stats.log and suricata.log (500 lines each) revealed no `dhcp` matches; this is only absence in searched log tails, not definitive zero parser statistics.
+- EVE DHCP logging/parser both enabled in YAML with `extended: no`, but last 8 MiB / 10,940 sampled events had zero DHCP. Most plausible hypothesis: router-local DHCP INPUT packets are not sent to NFQUEUE 10 while transit packets are; this must be **confirmed by read-only nftables queue chain inspection**. Do **not** adjust NFQUEUE matching, switch Suricata capture mode, add AF_PACKET interface, enable extended DHCP, or broaden packet mirroring on production router just to obtain OS family guesses. Current dnsmasq DHCPACK already supplies reliable identity association without new writes.
+- Suggested next read-only query: `nft -a list ruleset` and inspect only queue and hook contexts (without editing), to verify whether queue rules are in FORWARD rather than INPUT; redact unrelated sensitive information before sharing full ruleset. Nmap one-attempt policy, Zabbix OS authority, passive-UA low confidence remain intact.
+
+---
+
+## 7 November 2026 — Suricata DHCP EVE enabled but no observed DHCP in 8 MiB tail
+
+- Operator inspected production router-01 `/etc/suricata/suricata.yaml` read-only: EVE type `- dhcp: enabled: yes`, **`extended: no`**; app-layer `dhcp: enabled: yes`. Bounded inspection of **last 8 MiB** `/var/log/suricata/eve.json` parsed **10,940 lines** and found **`DHCP_EVENTS=0`**. No claim that entire 1.5 GiB log has no DHCP, that DHCP protocol parsing is broken, or that clients haven't renewed; time span of bounded sample was not established.
+- Existing dnsmasq journal contains DHCPREQUEST/DHCPACK for James-LT .186 before and after its low-confidence Windows UA hint, proving router saw DHCP traffic independently. Suricata DHCP event collection may be affected by capture interface/direction, the short sampled time window, sensor topology or event emission. **Do not enable `extended: yes` or additional DHCP logging yet**: production Pi4 router, CPU and SD-card write cost must be justified, and even enabled extended events do not automatically guarantee OS fingerprints.
+- Next non-invasive check: inspect runtime Suricata capture interface and `eve-log` output/types versus configured LAN interface, plus current Suricata DHCP app-layer counters if already available. Avoid changes, full log scans, packet captures, timer additions and repeated Nmap.
+
+---
+
+## 7 November 2026 — DHCPACK corroborates James-LT; EVE recent-tail event mix
+
+- Operator used read-only Ansible on router-01 to inspect dnsmasq and the last 1 MiB of Suricata EVE. dnsmasq main/fragment grep exposed `dhcp-option=option:router,192.168.2.1` and `dhcp-option=option:dns-server,192.168.2.51,192.168.2.50`; did not reveal `dhcp-match`, `dhcp-vendorclass`, `log-dhcp` or `dhcp-script` settings in checked files. This does not prove DHCP option 55 or vendor class capture elsewhere.
+- Crucially, a more inclusive 06:30–07:30 UTC 7 Nov dnsmasq journal query returned matching **DHCPACK** as well as DHCPREQUEST for **James-LT `192.168.2.186` / `24:b2:b9:30:f8:55` at 06:37:56, 06:38:03, 07:22:29, 07:23:39, 07:23:52, and 07:25:44 UTC**. The lone `Windows` UA hint was observed at **07:12:42 UTC**, between confirmed acknowledgements. This corroborates the lease-holder near that point but does NOT prove uninterrupted historical address ownership or Windows OS/version. Previous empty journal query had searched a narrower 06:45–07:20 window, so it legitimately missed these relevant events.
+- Last 1 MiB EVE type counts: `dns=651`, `flow=433`, `bittorrent_dht=229`, `quic=145`, `stats=33`, `tls=26`, `http=14`, `alert=5`, `ssh=1`; **no DHCP events in sampled tail**. Suricata configuration references DHCP parser, but actual DHCP EVE emission not yet established; zero in a bounded tail is not proof it is disabled. No production changes or new scans were made.
+- Next focused read-only test: examine existing `eve-log` types/DHCP enabled setting and sample Suricata EVE source's current DHCP events without reading the full ~1.5 GB file or exposing payloads. Do not turn on verbose DHCP logging, full raw capture, timers or broader device probes on router-01 before assessing overhead and benefit. Preserve Zabbix OS authority and low-confidence label for self-reported UA.
+
+---
+
+## 7 November 2026 — offline OS evidence precedence unit tests passed
+
+- Operator ran `python3 -m unittest discover -s tests -p 'test_os_evidence_precedence.py' -v` on admin-01; output **Ran 11 tests in 0.004s; OK**. This confirms offline precedence-policy regression tests, not live deployment. Zabbix authority, Nmap provenance, passive-UA low confidence, ambiguity/stale evidence fail-closed checks are covered.
+- Next step: inspect existing inventory/enrichment persistence and Grafana data source before integrating any OS assessment. Do not deploy helper as separate collector or emit inferred authoritative OS from passive hints. Preserve scan safeguards and one-attempt policy.
+
+---
+
+## 7 November 2026 — #297 offline OS evidence precedence test staged (no deployment)
+
+- Added pure, **offline-only test-support** `IaC/ansible/scripts/os_evidence_precedence.py` (commit `18d1bb64`) and `IaC/ansible/tests/test_os_evidence_precedence.py` (commit `c10b0bcd`). Resolver takes existing Zabbix comparison classification, optional Nmap profile record and sanitised passive summary; it **performs no I/O, scanning, network requests or metric publication** and is **not wired into the live inventory exporter**.
+- Tests cover: Zabbix OS authority always wins; managed host lacking OS facts and ambiguous host attribution remain unknown; Nmap's nonstale matching-IP OS match outranks passive hints but is not called authoritative; partial/no-OS Nmap record remains partial or exposes **only a low-confidence, historically unverified IP-scoped UA family candidate**; contradictory hints fail closed; stale or wrong-IP scan evidence cannot override; unrelated-IP hints excluded; unexpected membership fails closed. Eleven unit tests added, **not yet run**.
+- Real inputs motivating tests: James-LT `.186` has one `Windows` UA hint at 07:12:42 UTC but Nmap `partial`, `OS_MATCHES=[]`, `OPEN_PORTS=[]`; historic DHCP ownership still unverified, so no host OS assertion. Google Home `.125` has six low-confidence Linux UA hints without OS verification. 15 current Zabbix OS-managed devices remain authoritative.
+- Next operator: pull feature branch, `python3 -m py_compile scripts/os_evidence_precedence.py`, `python3 -m unittest discover -s tests -p 'test_os_evidence_precedence.py' -v`; validate before any Grafana or publishing integration. The helper is illustrative/policy validation, **not deployed integration**, and must not become another redundant inventory collector.
+  
+---
+
+## 7 November 2026 — DHCP journal contains no corroborating James-LT lease event in checked window
+
+- Operator ran a read-only `journalctl -u dnsmasq --since '2026-11-07 06:45:00 UTC' --until '2026-11-07 07:20:00 UTC'` filtered for `192.168.2.186`, `24:b2:b9:30:f8:55`, `James-LT` on router-01. Command returned rc=0 but **no matching lines**. This is absence of matching retained journal evidence in that window, **not proof the device did not hold the lease**. No journal coverage or DHCP logging configuration was independently established.
+- Retain James-LT `.186` one `Windows` HTTP User-Agent observation at `07:12:42Z` as a **low-confidence passive candidate with MAC attribution unverified**. Current dnsmasq lease maps `.186` to James-LT MAC but does not prove historic binding. Bounded Nmap one-attempt pilot produced no OS matches or open ports. Do not promote to authoritative OS, rescan, re-run repeated DHCP queries or publish unfiltered metrics; continue #297 with evidence/provenance evaluation.
+
+---
+
+## 7 November 2026 — passive OS hint timestamps and current DHCP leases verified
+
+- Operator inspected only the refreshed sanitised router batch and current dnsmasq leases. **Google Home** `192.168.2.125`: six low-confidence `Linux` HTTP User-Agent hints, first `2026-11-07T07:10:50Z`, last `2026-11-07T07:15:50Z`, current DHCP MAC `a4:77:33:5f:94:fe`, name `Google-Home`, lease expires `2026-11-08T03:42:06Z`. **James-LT** `192.168.2.186`: one low-confidence `Windows` hint at `2026-11-07T07:12:42Z`, current DHCP MAC `24:b2:b9:30:f8:55`, name `James-LT`, lease expires `2026-11-08T06:38:03Z`.
+- Observations are recent relative to the refreshed one-shot snapshot and demonstrate new usable source timestamps. **No historical DHCP lease start/ownership has been verified**, and a UA string is self-reported. Thus don't promote either family to authoritative OS and don't infer firmware/version; the Windows-family hint adds useful *candidate* context because James-LT's targeted Nmap returned no OS matches and no open ports.
+- Keep sensor one-shot as **dry-run only**, do not redeploy unfiltered Prometheus metric or Grafana panel. For next corroboration, review existing DHCP logs for `.186` around the observation time if retained, then distinguish observation confidence from identity confidence; existing authoritative local agent/system facts preferred when possible. No new scans, timers or router service changes required.
+
+---
+
+## 7 November 2026 — refreshed passive wire snapshot; Windows hint for James-LT, low confidence
+
+- Operator executed the existing approved `playbooks/passive-os-one-shot-pilot.yml` on router-01: **ok=9 changed=1 failed=0**, with no new service/timer, router firewall or Suricata configuration changes. Subsequent read-only sensor-01 `passive_os_sensor_metrics.py --dry-run` returned `rc=0`, `status=dry_run_only`, new batch ID `a578a821a0a3b77afa30e55a38b55ce28130b71833fb087c3077678b3b35d6ca`, **411** sanitised observations and **2** low-confidence OS hint candidates: `192.168.2.125 Linux` from 6 HTTP observations (DHCP name Google-Home) and `192.168.2.186 Windows` from 1 HTTP observation (DHCP name James-LT).
+- The new batch differs from the earlier `0d097f66...` with 554 observations and one Linux hint. This demonstrates fresh **snapshot content**, not necessarily that the observation timestamps are all recent or that traffic capture runs on a timer. The `.186` Windows hint is potentially helpful because the bounded Nmap pilot for that laptop returned `OS_MATCH_COUNT=0`, `OPEN_PORTS=[]`, `os_evidence_missing`; however one self-reported User-Agent is **not authoritative Windows identification** and cannot determine version.
+- Both candidates have `mac_attribution=unverified`. The current DHCP lease for `.186` named `James-LT` does **not establish historical IP/MAC ownership at the event timestamp**. Next test should inspect only sanitised observation timestamps for these two candidates and compare router DHCP lease expiry/current MAC without claiming historical ownership, while using Zabbix as exclusive OS authority for any agent-managed host. Do NOT run another Nmap scan or publish unfiltered metrics to Grafana.
+
+---
+
+## 7 November 2026 — stale passive output vs live EVE; existing one-shot refresh available
+
+- Operator measured on router-01: `/var/lib/homelab-passive-os-outbound/batch.json` size 38,301 bytes, modified **2026-11-07 06:09:11 UTC**; `/var/log/suricata/eve.json` size **1,538,772,194 bytes**, modified **2026-11-07 07:13:24 UTC**, router clock **07:13:24 UTC**. Snapshot is ~64m12s older than latest log modification. Thus repeated sensor dry-run returned old batch `0d097f66...` by design, not a stream freshness test; actual ongoing EVE updates observed. Log mtime alone does not prove new HTTP OS hints.
+- Git source inspection confirms the **existing** approval-gated `IaC/ansible/playbooks/passive-os-one-shot-pilot.yml` deploys `passive_os_live_sample.py`, whose `sample_tail()` reads at most the trailing **1 MiB** of the existing live EVE, discards truncated lines, caps at **2,000** minimised events and publishes only one small sanitised batch to the already established restricted outbound path. It has **no timer/checkpoint**. No need to build a replacement or use legacy offline spool, which is explicitly not approved for live deployment.
+- Next: operator can explicitly approve rerunning the existing one-shot playbook `-e passive_os_pilot_approved=true` for a fresh bounded sample (writes only sanitised router batch and reinstalls identical scripts; no Suricata/router service change), then rerun sensor **dry-run only** `scripts/passive_os_sensor_metrics.py --dry-run`. Compare batch ID, candidate list and timestamps; do not run old unfiltered passive metrics publisher or promote user-agent guesses as verified OS. For a fully read-only preflight, inspect tail sample via existing Python helper without publication, but user requested progression to next test.
+
+---
+
+## 7 November 2026 — passive OS dry-run six tests PASS; Linux UA candidate is Google Home .125
+
+- Operator fast-forwarded feature branch to `17125464`, ran `py_compile` and all **six** offline `test_passive_os_sensor_metrics.py` tests PASS. Read-only sensor-01 `ansible.builtin.script -a 'scripts/passive_os_sensor_metrics.py --dry-run'` returned rc=0, `status=dry_run_only`: batch `0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d`, **554** sanitised observations, only **one** IP/family candidate `192.168.2.125` / `Linux` / **6** HTTP observations, low confidence and MAC attribution unverified.
+- Existing router dnsmasq lease identity for `.125` is `Google-Home`, MAC `a4:77:33:5f:94:fe` Google vendor. Treat this as **weak self-reported User-Agent hint, not identified OS/firmware**. Do not promote it to authoritative OS or publish to Grafana; little/no incremental identification value. Same batch ID as earlier live pilot; possible stale snapshot, not evidence of new passive capture.
+- Result supports SSH transfer, wire digest validation, sanitised dry-run and zero publication; **does not** demonstrate effective unmanaged OS fingerprinting. Keep original unfiltered metric deleted after reset and prevent re-publishing via older one-shot playbook. Next meaningful test: evaluate batch freshness/rotation and representative event sources while respecting DHCP time-attribution and Zabbix authority; if passive stream remains one old snapshot / one weak candidate, hold OS metrics integration rather than build more collectors.
+ 
+---
+
+## 7 November 2026 — next #297 test staged: read-only passive candidate dry-run, no new active Nmap
+
+- Following James-LT targeted scan `OS_MATCH_COUNT=0` and `OPEN_PORTS=[]`, operator requested next test. To avoid indiscriminate Nmap probing of IoT and known infrastructure, added **read-only** `--dry-run` mode to existing `IaC/ansible/scripts/passive_os_sensor_metrics.py` (commit `2cd30443`). It uses sensor-01's established restricted SSH pull from router-01, validates batch SHA256/schema, emits bounded per-source-IP OS-family hint counts labelled low-confidence and MAC attribution unverified; **does not call `publish()` or create/change any Prometheus textfile**, router service or timer. New offline test covers minimised dry-run summary (commit `f8d315d4`); tests not yet run by operator.
+- Next read-only test: operator pull the feature branch, run Python compile and `unittest discover -s tests -p 'test_passive_os_sensor_metrics.py' -v`, then run `ansible -i inventory/hosts.yml sensor-01 -b --ask-become-pass -m ansible.builtin.script -a 'scripts/passive_os_sensor_metrics.py --dry-run'` from `IaC/ansible`. This uses ephemeral Ansible transfer, **no installation**. Inspect `candidates[].src_ip` and compare it against existing monitor-01 Zabbix OS/inventory authority before any candidate is published. A candidate may be stale or absent; do not claim useful OS evidence until source ownership and freshness are checked.
+- Old live unfiltered passive OS metric was already removed during the approved discovery reset. **Do not rerun `passive-os-sensor-metrics-one-shot.yml`** until Zabbix managed-IP suppression has been implemented and tested. No new active OS scan authorized for unknown IoT targets.
+
+---
+
+## 7 November 2026 — James-LT OS fingerprint evidence reviewed; no scan retry
+
+- Operator read existing monitor-01 `deep-profiles.json` record for `24:b2:b9:30:f8:55` (192.168.2.186) after the single-host bounded Nmap pilot. Reported `STATUS=partial`, `LAST_ERROR=os_evidence_missing`, `NEEDS_OS_IDENTIFICATION=True`, `ATTEMPTS=1`, `OS_MATCHES=[]`, `OPEN_PORTS=[]`, `PROFILE_ERRORS={}`.
+- This is **not** a transport/Nmap exception recorded by the profiler; the bounded scan completed with no detected open ports and no OS matches. A firewall, closed services or top-100-port scan coverage could each explain it; no definitive cause is established. Nmap reliable OS fingerprinting commonly needs suitable open/closed TCP responses. **Do not reset the attempt marker or rescan laptop automatically.** Prefer authoritative local OS information for known laptop, while retaining deep profiler evidence/provenance as partial.
+- #297 next should assess remaining noncritical unmanaged devices for passive or existing DHCP/service evidence, or validate managed host OS coverage in Grafana. Current first targeted pilot establishes safety isolation, not a successful OS identification. Do not deploy unfiltered passive candidates or wide-scope active Nmap scans.
+
+---
+
+## 7 November 2026 — first approved one-laptop targeted OS fingerprint pilot: partial, no OS matches
+
+- Operator compiled and syntax-checked the gated pilot twice, both PASS, then executed `playbooks/network-host-one-target-os-pilot.yml --ask-become-pass -e os_pilot_approved=true` against monitor-01. Live recap: **ok=16 changed=5 failed=0 unreachable=0 skipped=0**. Safety assertions passed, profiler timer paused/resumed, deep profile backup created, only `James-LT` `192.168.2.186` MAC `24:b2:b9:30:f8:55` armed, installed targeted profiler started once, final stats:
+  `IP=192.168.2.186`, `STATUS=partial`, `ATTEMPTS=1`, `OS_MATCH_COUNT=0`, `OTHER_NONBASELINE=0`.
+- **Outcome:** single-host scope and safety isolation verified, **OS identification did not succeed**. No other MAC left baseline. Existing one-attempt policy intentionally prevents automatic retry; never reset attempted state or rerun pilot blindly. A partial profile might still contain valid port/service evidence, but this was not provided in play output and must be checked before declaring evidence value. Timer restoration was completed by Ansible; any fresh service-state claims need independent read-only check.
+- Next: read-only review the laptop's `deep-profiles.json` record fields `last_error`, `needs_os_identification`, TCP OS matches, open ports and errors; correlate whether target was temporarily offline/firewalled, without restarting scans. Then decide if passive evidence or Zabbix agent is more appropriate for this known laptop. Do NOT widen scanning to all 21 unmatched/IoT devices based only on this partial attempt.
+
+---
+
+## 7 November 2026 — isolated bounded single-laptop Nmap OS pilot staged, NOT deployed
+
+- Operator twice confirmed on live monitor-01: existing `homelab-network-host-deep-profiler` is `SCAN_MODE="targeted"`, interface `eth0`; 192.168.2.186 / `24:b2:b9:30:f8:55` (DHCP `James-LT`) currently `ONLINE=True`, `PROFILE_STATUS=baseline`, `ATTEMPTS=0`; deep-profiler timer active. This laptop is among the 21 Zabbix-unmatched LAN devices; it is NOT a production router, sensor, switch or IoT actuator. User's goal remains new controlled OS fingerprinting after reset.
+- Git staged `IaC/ansible/scripts/network_host_one_target_arm.py` and `playbooks/network-host-one-target-os-pilot.yml` (last code commit `50b176ad`). Helper hardcodes exact target IP/MAC and verifies deployed targeted mode, eth0, max one per run, one attempt per host, no global baseline backlog, fresh online inventory MAC mapping, baseline state and zero historical attempts, and every other profile still baseline. It promotes **only this MAC** to pending via atomic state file replacement; no other host is eligible.
+- Playbook requires `os_pilot_approved=true`, monitor-01 host/IP, active timer and idle service; refuses reusing the one-time backup path; pauses profiler timer; rechecks idle state; runs helper read-only preflight; backs up full deep profile state to `/var/backups/homelab-network-discovery-reset/deep-profiles-before-laptop-pilot.json` root-only; arms one laptop; starts existing targeted profiler exactly once; resumes timer in `always` block; prints OS-match count/status and checks that other profiles remain baseline. Any targeted scan uses existing <=100 TCP ports, host timeout 150s and ARP MAC presence guard; targeted mode does not run UDP deep scan. No change to router, Zabbix, other infrastructure or Grafana.
+- **NOT executed or syntax checked**. Next operator: git pull, `python3 -m py_compile scripts/network_host_one_target_arm.py`, `ansible-playbook ... network-host-one-target-os-pilot.yml --syntax-check`; evaluate failures and obtain explicit approval before execution. Stop if laptop IP/MAC changed or if it is no longer fresh/online; do not relax matching or auto-enable broad backlog. One-attempt protection means an unsuccessful scan remains attempted and should not be silently repeated. No OS fingerprint result yet.
+
+---
+
+## 7 November 2026 — operator confirmed HP ProCurve identity at 192.168.2.134
+
+- User explicitly confirmed `192.168.2.134` is the **HP ProCurve Switch 2510G-24**. Match existing discovered MAC `00:9c:02:45:39:00` and TCP/80 HTTP banner `HP ProCurve Switch 2510G-24 http config`; TCP/23 Telnet present. Device identity is now confirmed; exclude this switch from unknown-device OS fingerprint candidates and avoid invasive Nmap scans.
+- This confirmation **does not** establish the switch's current physical role, production criticality, intended management security settings or that retired switch-specific monitoring should be reinstalled. Preserve #287 retired collector state unless independently scoped and approved. Among 21 Zabbix-unmatched discovered devices, one more is now identified; 20 remain Zabbix-unmatched with varying DHCP/vendor identity confidence (not necessarily unidentified or unmanaged).
+- Next work: continue read-only classification of the others using saved evidence; do not restart discovery or rerun a completed reset.
+
+---
+
+## 7 November 2026 — post-reset enrichment identifies HP ProCurve at .134
+
+- Operator read existing fresh `/var/lib/homelab-network-hosts/enrichment.json` on monitor-01 for eight weak-identity unmatched hosts. All eight `inventory_online=true`, `enrichment_status=success`, `last_enriched=1794034061`; the collector's success flag does **not** mean an OS was identified.
+- **192.168.2.134 / 00:9c:02:45:39:00**: HTTP TCP/80 banner `HP ProCurve Switch 2510G-24 http config`, `eHTTP 2.0`; TCP/23 Telnet open. Strong evidence the previously offline HP ProCurve is now reachable. **Do not automatically reactivate retired HP collector** (#287); first reconcile its current physical/network role, credentials and monitoring scope. Do not initiate intrusive Nmap on it.
+- **192.168.2.164 / 3c:64:cf:87:ae:ea**: TLS/443 certificate subject and issuer CN `TPRI-DEVICE` with generic validity 2001–2070; no service/version metadata. This is only a device identifier hint, **not a verified OS/model**.
+- **.2** ASUS MAC and no services; likely network infrastructure but role unconfirmed. **.104, .132** same f8:17:2d OUI and no services; `.132` DHCP hostname `wlan0`; do not assume same device or exact family. **.109** Tuya, **.151** Amazon, **.168** TP-Link: no service banners in enrichment; no OS determination.
+- Stage remains **read-only reconciliation only**: no eligible explicit deep-scan allowlist yet. Respect 15 Zabbix OS authoritative devices; do not bulk scan 21 unmatched IoT/infrastructure, do not turn on legacy full Nmap mode. Existing backup retained.
+
+---
+
+## 7 November 2026 — DHCP leases identify 20 of 21 non-Zabbix network entries
+
+- Operator read **existing** router-01 `/var/lib/misc/dnsmasq.leases` without scanning/modifying production. Twenty of the 21 unmatched IPs have current entries: `.100=H100` TP-Link, `.103=myHivehub` AlertMe, `.104=*` unknown, `.106=Google-Nest-Mini`, `.109=*` Tuya, `.112=P110` TP-Link, `.125=Google-Home`, `.132=wlan0` unknown, `.134=*` Hewlett Packard, `.151=*` Amazon, `.153=TC40` TP-Link, `.164=*` unknown, `.165=homeassistant` locally administered MAC, `.168=*` TP-Link, `.174=L510` TP-Link, `.179=POCO-C75` locally administered MAC, `.180=RT-AC86U-CCC8` ASUS, `.186=James-LT`, `.189=HS100` TP-Link, `.190=TC65` TP-Link. `.2` ASUS has no matching current DHCP lease; may be static/network infrastructure.
+- Recognisable DHCP names indicate likely smart-home hub, cameras, smart plugs/bulbs, Google speakers, Home Assistant, phone, laptop and ASUS network infrastructure. **DHCP names are not OS fingerprints**; vendor/model interpretations are provisional. Do not indiscriminately Nmap the 21 devices. Several may be fragile IoT endpoints; recognise router/mesh appliances and managed nodes.
+- Remaining weak identities: `.2` ASUS, `.104`, `.109` Tuya, `.132` wlan0, `.134` HP, `.151` Amazon, `.164`, `.168` TP-Link. Next: inspect **existing** enrichment records for these 8 and determine allowlist; do not rescan already known smart devices. Preserve 15 Zabbix OS authoritative hosts.
+
+---
+
+## 7 November 2026 — MAC OUI vendor evidence for 21 unmatched devices
+
+- Operator extracted vendor data from the fresh monitor-01 `inventory.json` for all 21 Zabbix-unmatched, currently online, blank-hostname records. Vendor evidence: `.2` ASUS; `.100` TP-Link PTE; `.103` Alertme.com Limited; `.104` unknown; `.106` Google; `.109` Tuya Smart; `.112` TP-Link PTE; `.125` Google; `.132` unknown; `.134` Hewlett Packard; `.151` Amazon Technologies; `.153` TP-Link Limited; `.164` unknown; `.165` unknown/locally administered MAC; `.168` TP-Link Technologies; `.174` TP-Link Limited; `.179` unknown/locally administered MAC; `.180` ASUS; `.186` unknown; `.189` TP-Link Technologies; `.190` TP-Link Limited.
+- OUI vendor is NOT proven model, operating system, or permission to scan. ASUS addresses may be AiMesh/AP infrastructure, TP-Link may be infrastructure or IoT, Google/Amazon/Tuya/AlertMe may be sensitive smart-home devices, HP unknown device; avoid blanket deep scans. Next low-impact classification: read existing router dnsmasq DHCP leases and monitor-01 enrichment evidence, check protected estate/host roles, then explicit limited scan allowlist for eligible noncritical unmanaged equipment. No new scans were authorized or executed here.
+
+---
+
+## 7 November 2026 — 21 live unmatched candidates listed; identity review before Nmap
+
+- Operator pulled latest `cccf7b6d` audit-listing feature; `py_compile` and all 5 unit tests PASS. Live read-only `--show-unmatched` returned rc=0: total inventory 36, Zabbix OS authoritative 15, no Zabbix-without-OS or ambiguous entries, **21 unmatched, all online, all inventory hostname blank**.
+- Unmatched IP/MAC snapshot: `192.168.2.2 04:d4:c4:b8:52:28`, `.100 20:23:51:dc:ef:05`, `.103 00:1c:2b:5a:6d:fd`, `.104 f8:17:2d:65:b8:98`, `.106 d4:f5:47:8d:23:2e`, `.109 c4:82:e1:f2:f9:9f`, `.112 60:83:e7:f3:c1:92`, `.125 a4:77:33:5f:94:fe`, `.132 f8:17:2d:64:ca:04`, `.134 00:9c:02:45:39:00`, `.151 94:3a:91:cd:4c:51`, `.153 5c:e9:31:18:c1:4a`, `.164 3c:64:cf:87:ae:ea`, `.165 02:00:00:00:02:04`, `.168 68:ff:7b:1b:33:c0`, `.174 40:ed:00:7c:7b:80`, `.179 92:ff:53:0a:16:e9`, `.180 24:4b:fe:5e:cc:c8`, `.186 24:b2:b9:30:f8:55`, `.189 68:ff:7b:1b:2d:07`, `.190 3c:52:a1:86:bc:56`. All ONLINE=True in inventory; means discovered/responding, **not proof safe to actively scan**.
+- Note `.2` outside router DHCP dynamic 100–199 range; `.165` and `.179` locally administered MAC addresses (not necessarily suspicious; could be virtual/randomised). Next KISS step: read-only reconcile against existing monitor-01 `enrichment.json` and `inventory.json`, router-01 existing dnsmasq lease metadata, and canonical estate assets before creating explicit scan allowlist. Do NOT bulk Nmap 21 or assume all are unmanaged. Retain 15 Zabbix OS records as first and last authority.
+
+---
+
+## 7 November 2026 — refreshed 36-device Zabbix audit; 21 unmatched identities need review
+
+- Operator ran the existing approved read-only audit on monitor-01 after fresh discovery reset: `ZABBIX_OS_AUTHORITATIVE=15`, `ZABBIX_WITHOUT_OS=0`, `AMBIGUOUS=0`, `UNMATCHED_INVENTORY=21`, `TOTAL_CLASSIFIED=36`, rc=0. No OS scanning occurred during this audit.
+- Added optional `--show-unmatched` flag to existing `scripts/passive_os_unmanaged_inventory_audit.py` (commit `988c7fd6`) to print the 21 unmatched inventory records with IP, hostname, MAC and online flag *only on demand*. Default report stays aggregate-only and read-only. **Not yet locally tested or executed.** No new exporter or discovery component.
+- Next: operator pull, Python compile and existing five offline tests, then run `ansible -i inventory/hosts.yml monitor-01 -b --ask-become-pass -m ansible.builtin.script -a 'scripts/passive_os_unmanaged_inventory_audit.py --show-unmatched'`. Review real device identity/online state against managed inventory and protected production hosts; DO NOT scan all 21 blindly. Preserve existing Nmap profiler one-attempt-per-MAC, ARP presence and scan-rate bounds; approved targeted OS scan to follow once safe list identified.
+
+---
+
+## 7 November 2026 — post-reset live verification: 36 discovered, 36 baseline-only
+
+- Operator ran read-only post-reset inspection on monitor-01. Observed `FRESH_INVENTORY_RECORDS=36`; `ENRICHMENT_FILE_VALID=True`; `DEEP_PROFILES=36`; `BASELINE_ONLY=36`; all three collector/enricher/deep-profiler timers `active`; protected archive exists `/var/backups/homelab-network-discovery-reset/active-discovery-before-reset.tar.gz`, 11K, root:root mode 0600, timestamp 7 Nov 06:47.
+- Compared with earlier 44 retained inventory entries, the new count is eight fewer **retained records**, not proof eight live devices went offline. This is a clean discovery/enrichment baseline, **NOT** 36 newly fingerprinted operating systems. First deep-profiler run intentionally only baselines, zero Nmap deep fingerprints; do not mark OS scan work completed.
+- Next: rerun existing read-only `scripts/passive_os_unmanaged_inventory_audit.py` against the new 36-entry inventory and Zabbix OS facts; then scope bounded targeted active OS scans only to confidently eligible unmanaged devices. Preserve per-MAC presence checks and one-attempt policy; avoid turning on legacy full-network Nmap scan, do not reactivate retired Zabbix inventory exporter or rerun the reset.
+
+---
+
+## 7 November 2026 — approved fresh discovery reset executed successfully
+
+- Operator ran approved `playbooks/network-discovery-fresh-reset.yml` on the dedicated feature branch after syntax check passed. Reported actual live recaps: **monitor-01 ok=23 changed=10 failed=0 unreachable=0 skipped=0; sensor-01 ok=4 changed=1 failed=0 unreachable=0 skipped=0**. Thus both plays completed without Ansible errors. Scoped monitor inventory/enrichment/deep-profile active state and associated Prometheus metrics were backed up and recreated, three discovery timers returned to started state, and sensor's unfiltered one-shot passive metric was removed under the approved playbook. No action to Zabbix, router, Greenbone, protected guest mapping or alert state.
+- **Verification outstanding:** user supplied only PLAY RECAP, not `FRESH_INVENTORY_RECORDS` or new inventory contents. Do not infer refreshed host count or OS fingerprint quality. Deep profiler first run with cleared state is **baseline only, zero fresh deep scans**. Next read-only check actual new inventory count, timers, metrics and backup, then identify unmanaged devices for a separately bounded active OS scan.
+- Reset backup expected at `/var/backups/homelab-network-discovery-reset/active-discovery-before-reset.tar.gz` on monitor-01. Retain backup and avoid rerunning reset; second run is designed to refuse overwriting that backup.
+
+---
+
+## 7 November 2026 — fresh network discovery reset playbook staged, NOT executed
+
+- Operator explicitly requested deletion of existing discovery data and new scans. Read-only monitor-01 audit confirms the three `homelab-network-host-collector.timer`, `homelab-network-host-enricher.timer`, `homelab-network-host-deep-profiler.timer` are ACTIVE, corresponding oneshot services INACTIVE. Active state files: `inventory.json`, `enrichment.json`, `deep-profiles.json`. Directory also contains protected `proxmox-guests.json`, `router-dhcp-device-pages.json`, `router-hostnames.json`, AI/dns evidence, `alerted-macs.json`, prior backups and locks: **do not delete whole state directory**.
+- Github staged `IaC/ansible/playbooks/network-discovery-fresh-reset.yml` (last code commit `8f6bb9c9`), **not yet syntax checked or run**. Requires explicit `discovery_reset_approved=true`, exact monitor/sensor targets, three active timers and three idle services, exact six regular root-owned existing state+textfile paths, nonexisting dedicated backup file; stops timers, backs up six files to private `/var/backups/homelab-network-discovery-reset/active-discovery-before-reset.tar.gz`, removes precisely `inventory.json`, `enrichment.json`, `deep-profiles.json` and their three `.prom` metrics, starts existing collector and enricher to produce fresh scans, then runs deep profiler baseline, and restarts timers in `always` block. Second play removes only sensor's previously published unfiltered one-shot candidate metric after successful monitor reset. No Zabbix/Greenbone history changes, no changes to router EVE/PPPoE/DHCP/DNS/nftables/Suricata or alert registries.
+- **Important limitation:** deep profiler's first run without state **baselines all current devices, with zero deep scans**; the playbook refreshes lightweight inventory and selected-port enrichment, NOT all Nmap OS/deep profiles. These must be designed as controlled targeted follow-up for identified unmanaged devices. Do not suggest the reset by itself achieves new OS fingerprints.
+- Next: operator pull, `ansible-playbook --syntax-check`, check six metric/source files are present and inspect exact diff before explicitly approved deployment. If missing metric file, fail without deleting anything; adjust scope based on observed evidence. Do not claim reset complete until live play recap and fresh count verified.
+  
+---
+
+## 7 November 2026 — existing inventory vs Zabbix OS audit successful (44 classified)
+
+- Operator pulled `d4940fd9` HTTPS API fix; monitor-01 trusted `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php` (GET `HTTP_STATUS=412 TLS_VERIFY=0`, consistent with reachable POST-only endpoint). One-shot Ansible `script` ran as root on monitor-01, **rc=0**.
+- Actual read-only results: `ZABBIX_OS_AUTHORITATIVE=15`, `ZABBIX_WITHOUT_OS=0`, `AMBIGUOUS=0`, `UNMATCHED_INVENTORY=29`, `TOTAL_CLASSIFIED=44`. These counts derive from existing network inventory and Zabbix host/OS Facts records; **29 unmatched do not prove unmanaged**. No scan, Zabbix updates or host changes. Ansible `changed=true` for script execution isn't evidence of a persistent modification.
+- Existing passive SSH-to-sensor publisher was deployed separately earlier, but its one candidate is not yet Zabbix-filtered, so **do not deploy the new Grafana panel** or treat the Linux hint as new discovery. Next KISS gate: check whether that candidate IP falls within the 15 matched or 29 unmatched records before publishing any filtered metrics. For matched candidate, suppress passive record entirely. For unmatched, treat as candidate pending device identification and freshness.
+
+---
+
+## 7 November 2026 — read-only unmanaged audit Zabbix API reachability corrected
+
+- Operator verified on zabbix-01: zabbix-server active, nginx active; port 8080 listens only on 127.0.0.1, localhost GET `/api_jsonrpc.php` returns HTTP 412; port 80 endpoint GET 404. From monitor-01, both `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php` and `https://192.168.2.59/api_jsonrpc.php` returned HTTP 412 using `curl -k`, demonstrating TLS endpoint reachability but **not trusted-certificate verification nor successful authenticated POST**.
+- Original read-only inventory audit 5/5 offline unit tests and Python compile passed, but live audit failed connecting to `http://192.168.2.59:8080/api_jsonrpc.php` with Connection refused; there were no modifications. Changed `DEFAULT_ZABBIX` in `IaC/ansible/scripts/passive_os_unmanaged_inventory_audit.py` to existing HTTPS hostname in commit `d4940fd9`, using normal requests certificate verification (no insecure bypass). Must verify monitor-01 trusts the HTTPS certificate before rerun; otherwise diagnose CA/hostname properly without blanket `verify=False`.
+- Next: pull branch, test HTTPS with `curl` without `-k` on monitor-01, run corrected one-off audit if TLS valid; get counts only, still no discovery rescan or deployment.
+
+---
+
+## 7 November 2026 — sensor passive OS metric publisher actually deployed before Zabbix exclusion audit
+
+- Operator supplied live `passive-os-sensor-metrics-one-shot.yml` result on sensor-01: `ok=9 changed=3 failed=0 unreachable=0`; publisher stdout `{"batch_id":"0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d","distinct_ip_family_candidates":1,"metric_bytes":930,"observations":554,"status":"published"}`.
+- This means one **low-confidence, unfiltered** candidate metric file `/var/lib/prometheus/node-exporter/homelab_passive_os_candidates.prom` **is now live on sensor-01**. It DOES NOT exclude Zabbix-managed hosts despite the user's later architecture rule. The new Hosts dashboard panel is still only in Git; do not deploy it or call candidate an identified unmanaged device. The metric may already be scraped by Prometheus; check before proceeding.
+- Operator's shown Git pull fast-forwarded only `d48025bd..c83cd4b2`, older than the current feature branch commit containing new read-only unmanaged audit (`a2dc0575`). They may have executed an earlier command. Next: fast-forward from feature branch and run the read-only Zabbix-vs-inventory audit first; then suppress/remove or filter passive candidates from agent-managed hosts using Ansible. Treat all unfiltered hints as non-authoritative; do not change router services.
+
+---
+
+## 7 November 2026 — read-only unmanaged-device gap audit staged, no rescan
+
+- Implemented `IaC/ansible/scripts/passive_os_unmanaged_inventory_audit.py` on the active feature branch. It **reads only** monitor-01's existing `/var/lib/homelab-network-hosts/inventory.json`, uses the already deployed read-only Zabbix management-report token `/etc/homelab-management-report/zabbix-api-token` against `192.168.2.59:8080/api_jsonrpc.php` (`host.get` and `item.get` for `system.sw.os.get`, `system.sw.os[name]`), and categorises by matching IP interface or exact canonical host name. API hosts with enabled/supported nonempty OS facts are **Zabbix OS authoritative**, never passive OS targets. Zabbix-matched without OS facts and ambiguous matches are separate; unmatched inventory is **not automatically a proven unmanaged device**. Routine stdout reports counts only, no secrets, host IPs or full OS strings. No network scans, writes, services or router interaction.
+- Added `IaC/ansible/tests/test_passive_os_unmanaged_inventory_audit.py` with five offline unit tests for authority, missing OS facts, duplicate identities, disabled and unsupported hosts; **not yet run**.
+- Next: operator pull, `py_compile` and run 5 tests locally. Once green, operator can execute the read-only script via `ansible -i inventory/hosts.yml monitor-01 -b --ask-become-pass -m ansible.builtin.script -a scripts/passive_os_unmanaged_inventory_audit.py` from `IaC/ansible` to get actual category counts. This uses ephemeral Ansible script transfer, not persistent installation. Inspect results and decide which genuinely unmanaged targets can be offered passive OS candidate data. Do not deploy the existing ungated sensor publisher or Grafana passive panel yet.
+- Historical `zabbix-network-inventory-exporter.yml` remains retired (#287). Existing Zabbix OS data is source of truth for agent-managed hosts.
+
+---
+
+## 7 November 2026 — reused active Zabbix API/host-inventory integration identified; legacy exporter retired
+
+- GitHub inspection confirmed `IaC/ansible/playbooks/zabbix-network-inventory-exporter.yml` is **explicitly retired by #287**, fail-closed. Do **not** revive it despite historical statements about a Zabbix inventory exporter.
+- Active independent network collector `roles/network_host_collector/templates/homelab-network-host-collector.py.j2` persists IP-keyed `/var/lib/homelab-network-hosts/inventory.json` on monitor-01 and emits `homelab_network_host_info`; it contains IP/MAC/hostname/vendor, **no agent OS authority flag**.
+- Existing `roles/management_report/templates/management-report-collector.py.j2` has authenticated Zabbix API read-only `zabbix_api`, including `host.get` and `item.get`, plus Prometheus network inventory queries. Prefer leveraging this established Zabbix authentication and matched inventory evidence instead of new blind host discovery or legacy exporter.
+- Next implementation target: read-only compare existing Zabbix-managed host IP identities (with valid OS Facts) against existing monitor-01 IP-keyed network inventory; exclude managed IPs and preserve unknown when identity cannot be matched. Then and only then expose passive candidates for unmanaged IPs. Hold current sensor one-shot metrics publisher/Grafana deployment as it lacks this exclusion; do not alter Zabbix/router services or claim managed OS from UA.
+
+---
+
+## 7 November 2026 — OS source-of-truth correction: Zabbix first and last for agent-managed hosts
+
+- Operator explicitly rejected the Linux passive-OS candidate as an unhelpful pilot target because Linux hosts already have Zabbix agents that report operating system details. **Decision:** for any Zabbix-agent-managed host, Zabbix is the first and last source for OS identification; passive User-Agent hints must **not** enrich, compete with or override that authoritative identity. Prefer existing management/SNMP identity for managed network equipment; use Nmap and then passive hints only for genuinely unmanaged/unidentified devices.
+- **Hold deployment** of `passive-os-sensor-metrics-one-shot.yml` and the new passive-OS Grafana panel until managed hosts can be excluded and at least one genuinely unmanaged candidate is identified. Previous 5/5 offline tests and syntax checks prove code basics only. No sensor passive metric publication or Grafana deployment confirmed.
+- The previous 554-observation real wire test remains useful as a transport/minimisation proof (six Linux HTTP hints, one IP), **not** as proof of incremental OS identification value. Do not assume a current DHCP lease tells whether an IP belongs to a Zabbix-managed host. Next small step: establish a reliable way of excluding Zabbix inventory hosts (ideally existing canonical inventory/Prometheus labels) before publishing any passive metric. No router network or service changes.
+
+---
+
+## 7 November 2026 — sensor passive OS metrics offline retest passed
+
+- Operator pulled corrected source and ran `python3 -m py_compile scripts/passive_os_sensor_metrics.py` (no errors reported) and `python3 -m unittest discover -s tests -p 'test_passive_os_sensor_metrics.py' -v`: **5/5 PASS (0.006s)**.
+- Ansible syntax for `passive-os-sensor-metrics-one-shot.yml` passed in prior step. Source is ready for one-time approved sensor-01 metric publishing, but **no live metrics publication or dashboard deployment confirmed yet**.
+- Next run explicit one-time publisher with `passive_os_sensor_metrics_approved=true`, check aggregate output, sensor `/metrics` and monitor-01 Prometheus scrape, then deploy updated Hosts dashboard through existing IaC pathway. No timer/daemon, router service changes or OS authority override.
+
+---
+
+## 7 November 2026 — sensor passive OS metric script syntax fix
+
+- Operator ran one-shot sensor metrics tests: `Ran 1 test ... FAILED (errors=1)` due to a SyntaxError during module import; `py_compile` pinpointed line 74, which contained literal backslash-n (`\\n`) rather than an actual newline in OS hint type validation. Ansible playbook `passive-os-sensor-metrics-one-shot.yml --syntax-check` **passed**.
+- Corrected source in GitHub commit `f6320c03`, replacing literal escape with a real line break. **Tests/compile not yet rerun after fix**, no metrics deployed, no router/sensor runtime changes.
+- Next: operator fast-forward pull then rerun five offline unit tests and Python compile, then proceed to separate approval for one-time sensor metric publish. Keep existing monitoring and low-confidence labels intact.
+
+---
+
+## 7 November 2026 — sensor textfile collector confirmed; one-shot OS candidate metrics and Grafana panel staged
+
+- Operator on sensor-01: `prometheus-node-exporter` active, existing textfile directory `/var/lib/prometheus/node-exporter` and existing six `.prom` files; exporter `/metrics` shows `node_textfile_mtime_seconds` for files and `node_textfile_scrape_error 0`. This proves that the textfile collector works even though `/proc/$pid/cmdline` only displayed the executable path.
+- Located metrics producers: `network_host_collector` and `network_host_enrichment`, using existing Prometheus textfile publishing; **do not alter these established host authoritative facts**.
+- **Committed but not deployed/tested** `IaC/ansible/scripts/passive_os_sensor_metrics.py`: one-shot root-run sensor SSH fetch using existing restricted key/known_hosts, strict minimal wire check and SHA256 digest, emits separate `homelab_passive_os_candidate_info`, `homelab_passive_os_candidate_observations`, `homelab_passive_os_candidate_last_seen_seconds` with `source=http_user_agent`, `confidence=low`, `mac_attribution=unverified`; write atomic `/var/lib/prometheus/node-exporter/homelab_passive_os_candidates.prom`. No mac lookup or confirmed identity, no new service/timer.
+- Added `IaC/ansible/tests/test_passive_os_sensor_metrics.py` (five offline checks, NOT RUN), and approval-gated `IaC/ansible/playbooks/passive-os-sensor-metrics-one-shot.yml` (NOT syntax checked/ran). No automatic refresh; candidate metrics can stale after pilot, labelled accordingly. Exact host sensor-01 gate. Existing Grafana `homelab-network-hosts.json` now contains additive **panel 15** table at y47 titled `Passive OS Candidates — Low Confidence` querying the new separate metric, NOT YET deployed to live Grafana.
+- Before running live metric publisher, operator to pull and run five offline tests, Python compile and Ansible syntax check; obtain explicit approval for one-shot sensor publish. Then verify sensor exporter `/metrics` and monitor-01 Prometheus can scrape it, deploy Grafana using existing monitored Ansible path when agreed. No router changes.
+- Existing one-shot router wire results: real 554 sanitised events, 6 Linux HTTP hints from 1 IP with current dnsmasq lease; historic MAC ownership unverified.
+
+---
+
+## 7 November 2026 — Hosts dashboard identified; passive OS metric not yet connected
+
+- Operator local search located `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/homelab-network-hosts.json`. GitHub inspection confirms 14 existing panels: inventory, availability, identity, latency, open ports, deep profiling, enrichment health, lifecycle logs. **No passive OS metric or panel currently present.** Separate `production/homelab-linux-estate.json` has Nmap OS Fingerprint; preserve that established evidence path.
+- Actual wire observations: one Linux HTTP User-Agent candidate (6 events), correlating to one currently leased IP; **historical MAC attribution remains unverified**. Do not conflate DHCP expiry with valid_from; do not overwrite authoritative managed/Nmap OS.
+- Next identify where network inventory Prometheus metrics are emitted/published so a small **separate, source-labelled low-confidence passive OS candidate** can be added, then a new panel. Do not invent a metric name without producing it; no Grafana/monitoring deployment performed yet.
+
+---
+
+## 7 November 2026 — Linux passive hint correlates with a current DHCP lease, not historical ownership
+
+- Operator performed read-only correlation of the actual minimised router batch with dnsmasq leases: `LINUX_HINT_EVENTS=6`, `DISTINCT_CANDIDATE_IPS=1`, `CURRENT_LEASE_MATCHES=1`, `EVENTS_BEFORE_MATCHING_LEASE_EXPIRY=6`, `HISTORICAL_IP_OWNERSHIP=UNVERIFIED`, `OS_CONFIDENCE=LOW`.
+- Router dnsmasq active, 29 current lease records with five fields (lease expiry, MAC, IP, hostname, client ID); no historical start period. This is **one low-confidence Linux HTTP self-report for an IP that currently has a lease**, not a verified historic IP-to-MAC assignment or a proven Linux device OS. Do not override authoritative managed OS facts or label MAC as historically verified.
+- Next KISS step: inspect the existing Hosts dashboard's OS enrichment precedence/metrics and identify a safe additive `passive candidate` route; do not publish unverified MAC attribution. Existing pipeline remains one-shot, with no timers, dashboards or new services enabled.
+
+---
+
+## 7 November 2026 — first real passive OS family candidate found
+
+- Operator validated restricted SSH batch and ran per-family grouping on sensor-01. Result: `Linux: 1 distinct source IP(s)`, `TOTAL_DISTINCT_HINTED_IPS=1`, `STATUS=UNVERIFIED_CANDIDATES`. The previous batch had 6 HTTP OS hints in 554 observations; these hints concern one source IP and are not six distinct devices.
+- Linux is a **low-confidence HTTP self-reported family hint**, not yet MAC-attributed, verified OS, persisted classifier output or Grafana metric. No lease evidence has been validated; do not mark as confirmed.
+- Next read-only inspect DNSmasq lease file layout and observation event time (aggregate only). A live lease alone cannot prove historic ownership unless expiry/start time evidence safely covers the event; otherwise retain `unknown` MAC attribution.
+
+---
+
+## 7 November 2026 — actual real EVE wire validated; outbound snapshot changed
+
+- Operator fetched live wire via sensor-01 restricted pinned-key SSH; current `BATCH_ID=0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d`, `OBSERVATIONS=554`, `DIGEST_VALID=True`, `HTTP_OS_HINTS=6`. Verified transfer/JSON/digest; no individual household IPs exposed in terminal summary.
+- The original pilot run reported `batch_id=7fa643811826e2e445a46709b6fd2cd2be2d9e5dcf9b34f60f8d42f27767225e`, 561 observations. The current snapshot is **different** and reason unknown (possible repeat run). First verification failed solely on an incorrectly presumed stable 561 count; not proof of corruption.
+- Next KISS step: group 6 self-reported HTTP OS hints by family/distinct source hosts without dumping IPs, then identify time-valid DHCP lease data for MAC attribution. No claim of 6 known devices; no live classification or Grafana enrichment yet. Avoid rerunning sampler until needed.
+
+---
+
+## 7 November 2026 — first live bounded Suricata OS sample succeeded
+
+- Operator executed explicitly approved `passive-os-one-shot-pilot.yml` on router-01. Result: `ok=9 changed=1 failed=0 unreachable=0`.
+- Collector output: `{"batch_id":"7fa643811826e2e445a46709b6fd2cd2be2d9e5dcf9b34f60f8d42f27767225e","observations":561,"status":"published-sanitised-tail-sample"}`. This proves the root-run bounded EVE tail minimiser published one sanitised batch on the router. It does **not** yet establish successful transfer of this real batch, SHA256 wire validation, device attribution or OS classification.
+- Next: fetch over the already verified pinned SSH transport to sensor-01, validate digest, count and allowed keys without printing all 561 observations. Keep one-shot; no timers or router network/service changes.
+
+---
+
+## 7 November 2026 — one-shot real EVE tail pilot offline validation passed
+
+- Operator on admin-01 ran `python3 -m unittest discover -s tests -p test_passive_os_live_sample.py -v`: **4/4 PASS** (0.010s), `python3 -m py_compile scripts/passive_os_live_sample.py`: PASS, and `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-one-shot-pilot.yml --syntax-check`: PASS.
+- This verifies offline code and playbook syntax only. **No real EVE collection or live pilot playbook has yet been executed.** The synthetic SSH batch was successfully transferred and cleaned up in the previous step.
+- Next milestone: separately approve one-time bounded live read/publish on router-01, then fetch the sanitised batch from sensor-01. Do not enable a timer, restart Suricata, or change PPPoE/DHCP/DNS/nftables/CAKE/NFQUEUE.
+
+---
+
+## 7 November 2026 — synthetic cleanup complete; KISS one-shot real EVE tail pilot staged
+
+- Operator ran approved `passive-os-ssh-synthetic-batch.yml` cleanup on router-01: `ok=5 changed=1 failed=0 skipped=2`. The exact synthetic `batch.json` matched before removal; no live Suricata/router service changed.
+- Added `IaC/ansible/scripts/passive_os_live_sample.py`: a single-shot best-effort reader of the **last 1 MiB maximum** of the existing `/var/log/suricata/eve.json`, discarding the first possibly partial line; reuse existing minimiser for allowlisted IP/time/event type/low-confidence HTTP OS family only; cap at 2000 observations; output canonical batch/digest to existing restricted `batch.json`. No raw UA, URLs, domain names, state checkpoint or background timer. Multiple manual runs may replace the previous outbound sample; this is deliberate pilot behaviour, not a reliable queue.
+- Added `IaC/ansible/tests/test_passive_os_live_sample.py` (4 new offline tests) and `IaC/ansible/playbooks/passive-os-one-shot-pilot.yml` (default-deny, explicit `passive_os_pilot_approved=true` installs four scripts in dedicated root-owned folder and runs one bounded sample). **Neither new tests nor playbook syntax has yet been run by operator; nothing deployed.**
+- This is a KISS observation pilot, not a guaranteed-delivery collector, no source ack, no receiver/classifier/Grafana metrics yet. Before live run, operator should pull, run four tests, syntax-check playbook, and explicitly approve the one-shot sample. Preserve router NFQUEUE, PPPoE, dnsmasq, Unbound, nftables, QoS and logrotate.
+- Next: after a successful pilot, pull via the existing pinned sensor SSH key, validate wire and classify against *valid time-bounded* lease evidence; label unknown when lease mapping unavailable. No pretending that one HTTP User-Agent identifies authoritative OS.
+
+---
+
+## 7 November 2026 — first authenticated synthetic passive OS SSH transfer PASSED
+
+- Operator executed sensor-01 strict-key SSH pull from router-01 as `homelab-os-transfer`. Output was one synthetic protocol-v1 JSON batch, `batch_id=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`, a single `192.168.2.113` synthetic HTTP ChromeOS hint at Unix timestamp `1794000000`, and **SSH_EXIT_CODE=0**.
+- Wire observation SHA256 digest `3ea2b728b9a74dee5757c406b12e8790d44733b5157032c5471b8645245a0af0` matches the canonical observations. This proves SSH auth, fixed-command output and one payload delivery, **not** receiver persistence, classification, live source collection or Grafana updates.
+- Temporary synthetic router `/var/lib/homelab-passive-os-outbound/batch.json` needs gated cleanup via `passive-os-ssh-synthetic-batch.yml` with `passive_os_test_action=cleanup`; no successful cleanup reported yet.
+- Next KISS milestones: clean synthetic test, then provision a bounded source-side EVE-to-sanitised batch run and sensor-side receiver/classification wiring via Ansible, verify one live observed batch, and only then schedule cautiously. Preserve gateway services; no requirement for forensic continuity.
+
+---
+
+## 7 November 2026 — sensor-to-router SSH authentication works; synthetic transfer next
+
+- Operator ran strict SSH pull from sensor-01 to router-01 via `homelab-os-transfer@192.168.2.1 get-batch` with pinned known_hosts and dedicated key. Actual remote result: `cat: /var/lib/homelab-passive-os-outbound/batch.json: No such file or directory`, `SSH_EXIT_CODE=1`. This **demonstrates successful authentication and execution of the router-side fixed command**, not yet a successful file transfer.
+- Confirmed router transfer identity `homelab-os-transfer:x:995:982:Passive OS sanitised file transfer:/var/lib/homelab-os-transfer:/bin/sh`, locked password, `.ssh/authorized_keys` 0600 and protected home; outbound directory root-owned with transfer group 0750. Earlier setup run refused a preexisting account before modifying router; sensor setup had 0 changes. Do not re-run initial-install playbook.
+- Added a **one-shot Ansible synthetic batch fixture** `IaC/ansible/playbooks/passive-os-ssh-synthetic-batch.yml`: stage only if `batch.json` absent, no EVE reads or checkpoint changes; cleanup only if exact synthetic content matches. Both actions require explicit flag and operator-approved command. **Not yet syntax checked or deployed.**
+- Next: operator pull + syntax-check, stage synthetic fixture under explicit test approval, SSH fetch using existing strict options, optionally validate via offline `passive_os_wire_receiver.py`, then gated fixture cleanup. Never mistake the synthetic ChromeOS hint for real device OS identification.
+
+---
+
+## 7 November 2026 — passive OS SSH setup and rollback validation PASS, not deployed
+
+- Operator ran `test_passive_os_ssh_transport_setup.py`: **5/5 PASS** (`0.003s`). Both new Ansible playbooks `passive-os-ssh-transport-setup.yml` and `passive-os-ssh-transport-rollback.yml` passed `--syntax-check`.
+- Combined with earlier snapshot publisher 4/4 PASS, these are **9 passing newly reported tests**, but still only source/offline checks. No live deployment or authenticated SSH transfer has occurred, and no production change approved by testing alone.
+- Next step is one explicitly approved initial setup with `passive_os_transport_apply=true`, then validate effective restricted transport and a sanitised synthetic batch. Preserve router PPPoE/DHCP/DNS/nftables/CAKE/NFQUEUE and existing router-metrics SSH.
+
+---
+
+## 7 November 2026 — #297 KISS SSH transport setup/rollback staged, not deployed
+
+- Operator ran the **four** `test_passive_os_publish_snapshot.py` tests on admin-01: `Ran 4 tests in 0.025s — OK`. `py_compile` and `git status` were requested but their independent output was not supplied.
+- Added `IaC/ansible/playbooks/passive-os-ssh-transport-setup.yml`: explicit `passive_os_transport_apply=false` by default, separate root-owned sensor-01 Ed25519 key/known_hosts, router fingerprint check against 29 Oct key, and a dedicated locked router `homelab-os-transfer` account with a single source-IP-restricted forced command to `cat` a sanitised outbound file. Pre-existing transfer account causes failure; no sshd configuration write/reload, no router services, NFQUEUE, QoS, DHCP, DNS or firewall changes. This chooses the existing history-backed trust pin as pragmatic KISS homelab trust; prior caveat about original out-of-band provenance remains.
+- Added `IaC/ansible/playbooks/passive-os-ssh-transport-rollback.yml` with explicit default-deny rollback, account marker/process checks and cleanup limited to the dedicated key, outbound and account/home. It does **not** touch source pending/checkpoint or any router service. Do not confuse with the prior dormant-account rollback.
+- Added `IaC/ansible/tests/test_passive_os_ssh_transport_setup.py` (5 source-level tests), **not yet executed**. Both new playbooks also require local Ansible syntax checks on admin-01 before any live run.
+- **Current boundary:** the sanitised outbound directory is prepared, but the source `pending.json` and production collector have NOT been deployed; there is no `batch.json` yet, no SSH live proof, no sensor receiver integration/timer, and no Grafana passive OS metrics. Following KISS, a one-off synthetic file transfer is first; no preflight marathon or extra service.
+- Next: pull branch, run 5 tests and both syntax checks, then review proposed one-time setup/rollback commands and explicitly approve if desired. Do not assume this user message's test approval authorises a live write.
+
+---
+
+## 7 November 2026 — #297 KISS sanitised outbound snapshot implementation staged in Git
+
+- Added `IaC/ansible/scripts/passive_os_publish_snapshot.py`: root-run, **manual only** bounded projection from already prepared private `pending.json` via the existing allowlist exporter into a separate `batch.json`; root-owned `0750` outbound directory with transfer-user group, atomic root-owned group-readable `0640` output; no raw EVE access, checkpoint acknowledgement, SSH or timer. It requires a separately provisioned transfer account/group and directory before use.
+- Added `IaC/ansible/tests/test_passive_os_publish_snapshot.py` with four smoke/source checks (unprivileged caller, symlink refusal, absent account, no ack). **Not yet run by operator**; do not declare PASS. Previous tests are unchanged.
+- This is code staging, not a working transport or deployment; no live router, sensor or Grafana change. Next: pull, run the new tests and syntax/compile check on admin-01; then add simple Ansible setup for sensor key, restricted router account plus authorised-key forced read-only `cat`, snapshot dir and install, a rollback, all default-off. Avoid altering existing router-metrics SSH Match block and SSH service configuration.
+- KISS acceptance: best-effort observations and visible missing data are acceptable. Preserve router internet/DNS/DHCP/firewall/QoS/Suricata; no unattended activation without operator decision.
+
+---
+
+## 7 November 2026 — user KISS decision for passive OS and homelab development
+
+- User explicitly reinforced **KISS**: this is a home lab, not an enterprise production environment; avoid costly elaborate hardening and endless proof stages. Favour simple, working, maintainable implementations and make progress toward completing #297.
+- Keep the essentials reliable: router-01 is the live household gateway; preserve PPPoE, DHCP, DNS, firewall, QoS and NFQUEUE. Continue Ansible/IaC for changes, basic SSH key verification, least privilege, bounded resource use, scoped rollback and gpt-handover updates.
+- Accept **best-effort** passive OS sampling and explicitly displayed uncertainty/gaps; no forensic continuity or exactly-once delivery requirement. Prefer one simple restricted SSH transport with known hosts and bounded sanitised batches, rather than additional prototypes or unnecessary identities where an existing restricted mechanism is demonstrably sufficient.
+- The design document `IaC/ansible/docs/passive-os-transport-activation-plan.md` (commit `9b02d415`) was added before this instruction; treat its enterprise-style requirements as proposals, not mandatory gates. Simplify the implementation before deployment. The existing router-metrics forwarding identity must not be repurposed without understanding permissions.
+- No live router changes authorised by this preference alone. The next deliverable should be a small, offline-tested Ansible implementation with a straightforward rollback and a single optional, explicitly agreed live pilot.
+
+---
+
+## 6 November 2026 — passive OS dormant identity offline validation passed; activation still blocked
+
+- Operator on admin-01 ran `python3 -m unittest discover -s tests -p 'test_passive_os_identity_playbook_gates.py' -v`: **7/7 PASS**. Both `passive-os-ssh-identity-provision-gated.yml` and `passive-os-ssh-identity-rollback-gated.yml` passed `ansible-playbook --syntax-check`.
+- Read-only account lookup had previously confirmed `homelab-os-transfer` absent on router-01 (`getent` exit 2 expected). No transfer account creation, SSH change, key provisioning or transport execution has been approved or performed.
+- Source review: provisioning playbook is deliberately **dormant-only** (locked password, `/nonexistent`, `/usr/sbin/nologin`, no keys/forced command). Rollback handles **only unchanged dormant identity**; it cannot safely remove a later activated service account. Passing source-level tests does not validate live activation or rollback for an active transport.
+- Focus next on reviewing a complete separate activation **and its separate rollback**, strict forced command and service-user policy, network source constraint, authorised key, trusted host pin provenance, bounded read-only exporter, and explicit approval before any production write. The Oct 29 monitor router key pin matches, but historical physical-key provenance conflict remains; preserve as risk/approval gate.
+- Avoid deploying the dormant account merely to claim progress. Keep router NFQUEUE, logrotate, dnsmasq, QoS and SSH untouched while reviewing. No unattended collection or source ack.
+
+---
+
+## 6 November 2026 — existing monitor-01 router SSH host pin verified read-only
+
+- Operator read-only inspected `/etc/homelab/router-metrics-ssh/known_hosts` on monitor-01 using Ansible from admin-01. File exists as `root:root`, mode `0644`, and has exactly the reported lookup entry at line 2 for `192.168.2.1`: ED25519 `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` tagged `router-metrics-ansible-managed-20261029`. It matches the current router key and the historical October 29 pinning runbook.
+- The command was inspection-only; ad-hoc `ansible.builtin.shell` reported `CHANGED` as a convention, not evidence of a write. Existing monitoring key/pin/tunnel have **not** been changed.
+- This verifies historical **pin consistency**, not independently authenticated original key provenance. The Oct 29 runbook claims a physically verified key, while later operator context says the fingerprint was retrieved via SSH. Preserve this discrepancy. No silent acceptance, bypass of `StrictHostKeyChecking`, key re-pinning or automatic account activation.
+- Next: inspect current restricted-account/forced-command staging and identify the smallest approval-gated activation change. Keep monitoring identity separate and router production unchanged until explicitly authorised.
+
+---
+
+## 6 November 2026 — passive OS read-only logrotate state checked; no router change
+
+- Operator inspected logrotate status/journal and EVE metadata via read-only Ansible ad-hoc shell. Status records last rotation timestamp `2026-11-02 00:00:00` for `eve.json`, `stats.log`, `fast.log` and `suricata.log`. Current EVE file is `1,450,139,849` bytes, last modified `2026-11-06 22:59:30 GMT`, demonstrating continued writes at audit time.
+- `find` showed only `eve.json` matching `eve.json*` in the active log directory, no rotated EVE files there. `journalctl -u logrotate.service -p warning --since '7 days ago'` showed no entries. These observations do **not** prove successful retention, complete rotation, HUP hook execution or zero event loss.
+- Prior audit showed `copytruncate` with postrotate reading missing `/var/run/suricata.pid`. No modifications have been made. Proposed bounded **best-effort** passive evidence with gap/stale status; this is a recommendation, not operator approval of continuity semantics or production activation.
+- Focus subsequent work on secure restricted transfer and independently verified router SSH identity; avoid reopening routine logrotate investigation unless a production acceptance gate requires it. No SSH identity, collector, timer or acknowledgement activated.
+
+---
+
+## 6 November 2026 — router Suricata rotation PID read-only follow-up
+
+- Operator ran read-only Ansible ad-hoc inspection on router-01. `router-suricata-nfq.service` is **active**, `MainPID=42090`, with `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10` and exception/stream overrides. There was one visible main Suricata process (plus the auditing shell).
+- `/var/run/suricata.pid` **does not exist**. Existing logrotate policy's `postrotate /bin/kill -HUP $(cat /var/run/suricata.pid)` may fail **if reached**; a successful `logrotate.service` at `2026-11-06 00:23:19 GMT` does **not** establish the Suricata postrotate hook executed. There is no evidence that HUP was delivered to the NFQUEUE process.
+- The Ansible ad-hoc shell returned `CHANGED` by default even though commands were inspection-only. No config writes, restarts or rotations were requested.
+- Next gate: read-only inspect logrotate status timestamps, service unit details and scoped journal/errors to establish whether rotation actually occurs. Do **not** invoke logrotate, send HUP, alter Suricata/NFQUEUE or change the current live policy merely to make the passive OS prototype work.
+- Deployment remains blocked by independent SSH identity verification and approval; passive OS evidence remains best-effort pending explicit acceptance of gaps.
+
+---
+
+## 6 November 2026 — passive OS production read-only preflights PASSED; rotation risk identified
+
+- Operator pulled commit `336eb08e` on admin-01; both existing Ansible playbooks passed syntax-check and executed read-only with `changed=0 failed=0 unreachable=0`. Identity preflight: router-01 and sensor-01 each `ok=9`; rotation preflight: router-01 `ok=7`.
+- Router inventory `router-01` resolves to runtime hostname `raspberrypi`; sensor runtime `sensor-01`. No candidate dedicated transfer account exists on either host. Global SSH settings include public-key authentication enabled and password authentication disabled; these **do not** establish a restricted per-account forced-command policy.
+- Router ED25519 observed fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`; sensor ED25519 observed fingerprint `SHA256:2AI17daznNov9YyocX6TBz/+p01XzRb3WRG91r1zEic`. Both are audit observations over SSH; router identity is **not independently authenticated**. Do not set fingerprint approval, pin unverified keys, enable transfer or provision an account.
+- Router dedicated `router-suricata-nfq.service` was active. EVE file size `1,449,701,717` bytes, owner root, mode `0644`. Live `/etc/logrotate.d/suricata` selects `*.log` and `*.json`, `rotate 14`, `compress`, `copytruncate`, and `postrotate /bin/kill -HUP $(cat /var/run/suricata.pid)`. This configuration risks data gaps and deserves a read-only operational audit before any proposed change; do not infer HUP targets the dedicated NFQUEUE instance without verifying PID ownership.
+- Architecture decision proposed but **not yet approved**: classify the passive evidence stream as best-effort/incomplete with explicit gap and stale-data indicators, never authoritative forensic coverage. No router service/configuration changes; do not read entire live EVE file. Next: read-only verify HUP PID ownership/Suricata service configuration and rotation execution state, then review independent key verification and constrained deployment approvals.
+- Integration suite 5/5 and coordinator suite 10/10 previously passed. No production passive OS collector, SSH credentials, timer, account, checkpoint acknowledgement or Grafana publication has been activated.
+
+---
+
+## 6 November 2026 — passive OS offline integration passed; next gate is read-only production readiness
+
+- Operator fast-forwarded feature branch to `14bdf475` on admin-01 and successfully compiled the offline coordinator and end-to-end test suite.
+- `test_passive_os_offline_end_to_end.py`: **5/5 PASSED** on admin-01. Synthetic pipeline/metadata privacy, duplicate retry without ack, wrong signer/challenge refusal, corrupt delivery refusal, and tampered receipt rejection passed. The preceding `test_passive_os_offline_receipt_coordinator.py` suite also passed **10/10** on admin-01.
+- These tests are **synthetic local-only**. No router-01/sensor-01 runtime changes; no SSH accounts, keys, transfers, timers, source checkpoint acknowledgements or production signer were enabled.
+- Next step is **existing** read-only preflights: `playbooks/passive-os-ssh-identity-readonly-preflight.yml` for identity and `playbooks/router-01-suricata-logrotate-readonly-audit.yml` for log continuity, first syntax-checking both. Run only without write approvals. Explicit independent (out-of-band) authentication of the router ED25519 host key is still a hard gate; fingerprint observed over SSH cannot establish this.
+- Avoid adding further redundant offline transport prototypes. After review of audits, decide whether best-effort sample continuity with explicit gap signaling is acceptable; design reviewed minimal identity activation and rollback before any live changes. Maintain Ansible/IaC and separate operator approval.
+- Existing five-case offline E2E suite does **not** prove power-fail durability, network authentication or live collection. No production launch is authorised.
+
+---
+
+## 5 November 2026 — #297 Grafana Hosts Panel 30 deployed and verified on monitor-01
+
+- **Panel 30 Open Ports & Services: production success.** Operator ran guarded preflight twice on monitor-01 (192.168.2.52), both `ok=4 changed=0 failed=0`, then deployed the scoped query via the approval-gated Ansible playbook. Final post-deployment `router01-grafana-panel30-verify.yml` reported `ok=4 changed=0 failed=0`: `PASS: deployed panel30 query, protected backup, panel29 unchanged`.
+- **Visible Grafana result:** Selecting router-01 shows 192.168.2.1 TCP/22 ssh OpenSSH 10.0p2 Debian 7+deb13u4 and TCP/53 domain Unbound 1.26.2; Operating System & Platform still displays Debian GNU/Linux 13 (trixie), aarch64, kernel 6.18.50+rpt-rpi-v8 from node-exporter. This is evidence of the collector's discovered services, not an exhaustive listening-port list.
+- **Regression / recoverability:** On admin-01, the updated script and tests were pulled from `feature/network-enrichment-independent-proxmox-20261105`; 9/9 offline tests passed, including interruptions before and after dashboard replacement, guarded recovery, missing-hash reconstruction only for matching expected bytes, and rejection of unrelated dashboard changes. Original backup and deployed checksum are securely created before the atomic live replacement. Relevant commits `e87d8974` and `0399423c`.
+- **Scope and remaining work:** Panel 29 preserved; no scanner or Grafana service restart in the guarded playbook. Nmap OS Fingerprint and Vulnerabilities for Selected Host still show `No data`; do not infer no vulnerabilities or invent scan coverage. Story #297 remains open for these separate evidence/coverage questions, CI/PR/merge and branch housekeeping. No router networking cutover authorised.
+
+---
+
+## 5 November 2026 — #297 panel30 offline test fixture ownership corrected (deploy blocked)
+
+Operator ran 4 new offline `test_router01_hosts_panel30_patch.py` tests: 3 failed at `Unexpected staging directory owner/mode` because temporary fixture directory belongs to non-root admin-01, while production script correctly requires protected root-owned 0700 stage. Four Ansible playbook syntax checks all passed. Updated patch utility with production default `STAGE_OWNER_UID=0` and mock-only test fixture override `STAGE_OWNER_UID=os.getuid()` so security check remains mandatory in production; removed unused import. **Fix committed in Git; tests not rerun yet, no production dashboard change made.** Next: pull, rerun four offline tests and four syntax checks, then read-only preflight before any gated deployment. Preserve OS fallback panel29 and do not overwrite unrelated dashboard settings. Issue #297 / draft PR #298.
+
+## 5 November 2026 — #297 Grafana live panels inspected; targeted panel30 deployment staged, not executed
+
+Operator inspected deployed `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json` on monitor-01. **Panel 29** contains active separately deployed `node_os_info`/`node_uname_info` router OS fallback, while **panel 30** still has original `homelab_network_device_card_info` join and no source filter. Protect panel29 from any full-dashboard overwrite. Authoritative PromQL was manually verified to return router-01 current ports 22/OpenSSH, 53/Unbound from monitor-01, not legacy Proxmox-2. Git dashboard file panel30 source query was updated but not deployed.
+
+Added `IaC/ansible/scripts/router01_hosts_panel30_patch.py` with strict old-query and OS fallback preflight, protected original-dashboard backup, SHA-256 of the applied dashboard and scoped change to *only* panel 30; `preflight`, `apply`, `verify`, `rollback` modes and independently gated Ansible playbooks `router01-grafana-panel30-{preflight,deploy,verify,rollback}.yml`, plus offline tests `test_router01_hosts_panel30_patch.py`. **All newly added files are Git-only and as yet untested/undeployed.** Next on admin-01: pull feature branch, run 4 offline tests, syntax-check four playbooks, then run read-only preflight. Do not deploy or restart Grafana without the verified preflight and explicit approval. Note Grafana provisioned JSON source in Git still lacks panel29 fallback from separately deployed branch; this divergence must be reconciled before future full dashboard rollouts. Issue #297 / draft PR #298.
+
+## 5 November 2026 — #297 authoritative router identity join proven; Grafana panel 30 Git change pending deployment
+
+Operator tested Prometheus read-only PromQL joining only `homelab_network_host_enrichment_port_info{target_name="monitor-01"}` with `homelab_network_host_info{target_name="monitor-01",hostname=~"^router-01(\\..*)?$"}` on IP: exactly TWO series returned for 192.168.2.1, OpenSSH 10.0p2 (22/tcp), Unbound 1.26.2 (53/tcp), hostname router-01.jameshouse; no legacy Proxmox-2 data. Exact `profiled_ip="192.168.2.1"` Nmap fingerprint grep had no result; do not borrow lwIP fingerprint for .181. Committed dashboard source change on PR #298 to use source-qualified ports and host inventory with a Grafana `${host:regex}` hostname prefix+optional DNS suffix match instead of absent device-card join. **Dashboard source change is Git-only, NOT deployed, and dashboard source may differ from live due to separately deployed OS fallback on another branch. Must inspect live dashboard before deploying to prevent overwriting panel 29.** Issue #297 / draft PR #298. Legacy Proxmox-2 textfile retirement remains a separate IaC audit; no deletion.
+
+## 5 November 2026 — #297 live router port verification: duplicate legacy scrape and missing device-card join
+
+Operator read-only Prometheus/new textfile audit: monitor-01 collector produced router `192.168.2.1` TCP port 22 (`ssh`, `OpenSSH`, `10.0p2 Debian 7+deb13u4`) and port 53 (`domain`, `Unbound`, `1.26.2`). Prometheus additionally still ingests legacy series from `instance=192.168.2.71:9100,target_name=Proxmox-2`: router ports 22 Dropbear, 53 Cloudflare public DNS, 80 HTTP and 8443 HTTPS-alt. Current authoritative source `instance=192.168.2.52:9100,target_name=monitor-01` contains 22 OpenSSH and 53 Unbound, services component success=1 on both. Therefore do NOT trust unfiltered `homelab_network_host_enrichment_port_info` or `component_success=1` as scan provenance. Grafana `Homelab — Hosts` panel 30 currently joins all ports by IP to `homelab_network_device_card_info{hostname="$host"}`; router lacks a device-card metric and will still show No data even after new scanner success. Need source-qualified PromQL with validated host-to-IP bridge and conservative treatment of missing ports; review legacy Proxmox exporter retirement via IaC before removing. Panel 31 Nmap fingerprint and 32 Greenbone coverage remain separate; do not infer clean vulnerability scan. Draft PR #298 / issue #297.
+
+## 5 November 2026 — #297 independent network enrichment live execution confirmed
+
+After separate approval-gated timer resumption, existing `homelab-network-host-enricher.service` fired at 09:00:10 GMT, completed 09:00:54 GMT on monitor-01 (systemd process exited **0/SUCCESS**). Journal completion: `online_hosts_scanned=38`, `service_endpoints=52`, `tls_certificates=11`, `scan_errors={}`, `proxmox_guests_matched=0`, `proxmox_identity_available=false`. Missing/invalid Proxmox guest snapshot produced `proxmox_identity_unavailable`, `reason=ValueError`; optional mapping failed closed without blocking service/TLS scans. Wrote `/var/lib/homelab-network-hosts/enrichment.json` (31,745 bytes) and `/var/lib/prometheus/node-exporter/homelab_network_host_enrichment.prom` (14,120 bytes), timestamp 2026-11-05 09:00:54 UTC. Exported `homelab_network_host_enrichment_component_success{component="services"} 1`, `{component="tls"} 1`, `homelab_network_host_enrichment_proxmox_identity_available 0`. **First live collector execution verified**, not yet evidence that router-01 ports are accurate, that Prometheus scrapes the new monitor-01 textfile, or Grafana panels have recovered. Next: read-only inspect router IP `192.168.2.1` port metrics and Prometheus ingestion, compare with old stale Proxmox-2 series; don't mislabel scraped legacy ports as current. Draft PR #298 / issue #297; no automatic PR merge yet.
+
+## 5 November 2026 — #297 existing network enrichment schedule resumed, live collection pending verification
+
+Operator ran separately approved `network-host-enrichment-independent-resume.yml` on `monitor-01` after a 10-task zero-change postflight. Resume recap **ok=11 changed=1 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The changed task started the **existing** enabled six-hour enrichment timer, after checking installed candidate hashes, preserved backups, approved cutover marker and that the effective service no longer requires Proxmox guest refresh. No extra scanner/timer was installed. This proves scheduling has resumed, **not yet that the enrichment worker completed or its JSON/textfile and Grafana port data have populated**. Next read-only audit: timer/service/journal, output files and data freshness, collector component success/optional Proxmox status, Prometheus scrape and Grafana panels. Do not assert all four No data panels fixed; Greenbone and Nmap remain separate coverage checks. Issue #297, draft PR #298.
+
+## 5 November 2026 — #297 independent enricher read-only postflight passed
+
+Operator executed `network-host-enrichment-independent-postflight.yml` against monitor-01. Ansible recap **ok=10 changed=0 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. Verified deployed Python candidate byte-matches protected staged source, optional Proxmox snapshot mode, installed systemd drop-in byte-matches independent candidate, original executable/drop-in backups survive, effective systemd `Requires` no longer contains Proxmox guest refresh, and enrichment timer is **enabled but inactive**. No scanner or timer restart during postflight. Next: separate approval-gated resume of existing Persistent six-hour timer (may immediately start Nmap); verify execution and new JSON/textfile, Prometheus identity/freshness and Grafana panels. Do not call enrichment operational or ports current until successful run. Tracking draft PR #298, issue #297.
+
+## 5 November 2026 — #297 independent network enrichment activation successful; postflight pending
+
+Operator ran the explicitly gated `network-host-enrichment-independent-activate.yml` on `monitor-01` with recap **ok=17 changed=3 unreachable=0 failed=0 skipped=0 rescued=0 ignored=0**. The activation's guarded tasks reported success. Expected changes: stopped existing six-hour enrichment timer, installed verified `snapshot_optional` candidate, replaced mandatory Proxmox refresh drop-in with condition-only one, reloaded systemd. The activation intentionally **did not execute the enrichment service or initiate Nmap**, and left the existing timer stopped for a separate read-only postflight and separately approved scan resumption. Independent live postflight still required to confirm file hashes, effective `Requires` and timer state; do not claim resumed enrichment or populated dashboard data. Original worker/drop-in backups retained in protected staged directory. Draft PR #298 and issue #297 remain open.
+
+## 5 November 2026 — #297 activation and rollback syntax verified; postflight/resume gates staged
+
+Operator fetched branch and ran Ansible syntax checks for `network-host-enrichment-independent-activate.yml` and `network-host-enrichment-independent-rollback.yml`: both passed. No production activation occurred. Added Git-only read-only `network-host-enrichment-independent-postflight.yml` to verify candidate file hashes, original backups, `snapshot_optional` AST config, loaded Proxmox independence and paused/enabled enrichment timer after activation. Added separately approval-gated `network-host-enrichment-independent-resume.yml` to resume **only the existing** six-hour enrichment timer after successful postflight; timer is Persistent=true and could immediately run network Nmap, so explicit approval phrase is mandatory. **Neither new playbook has been syntax-checked or executed; no scanner started.** Next: operator pull branch, validate both syntax checks, review activation/checkpoint and separate resume; do not deploy or resume implicitly. Draft PR #298 / issue #297.
+
+## 5 November 2026 — #297 independent enricher activation and rollback staged, not executed
+
+Operator's final read-only inspection verified staged Python candidate `PROXMOX_SOURCE="snapshot_optional"` and AST syntax, installed worker matching original backup SHA256 `d90cb215...`, installed original systemd drop-in matching backup `b7f51c90...`, active legacy Requires=Proxmox refresh and enrichment timer enabled/active. Created scoped Git-only Ansible `network-host-enrichment-independent-activate.yml` (exact monitor-01, explicit separate approval, byte-verified originals, validated candidate mode, stop timer first, no worker start, replace staged worker + condition-only drop-in, systemd reload, assert dependency removed; rescue restores original files and keeps timer stopped) and `network-host-enrichment-independent-rollback.yml` (restore originals from protected backups with timer stopped). **Neither has been syntax-checked or run in production yet.** The activation deliberately leaves timer stopped for separate postflight and approval before any scanning resumes. Separate postflight and timer-resume gate still need review/implementation, then offline syntax/CI checks and manual controlled verification. No new services installed; no Nmap or Proxmox refresh executed. Track draft PR #298 / issue #297.
+
+## 5 November 2026 — #297 inert candidate source mode repaired successfully
+
+Operator ran approved `network-host-enrichment-independent-repair-stage.yml` on `monitor-01`: recap `ok=12 changed=1 unreachable=0 failed=0 skipped=0`. The single candidate-file repair task updated the protected staged Python executable to `PROXMOX_SOURCE="snapshot_optional"`; candidate AST assertion and checksums of installed original worker, original drop-in and protected backups passed. **No production worker or systemd dependency changed; no service, scan, API refresh or timer action triggered by this repair.** Need independent read-only staged candidate/rollback inspection, then reviewed approval-gated controlled activation and rollback. Issue #297 / draft PR #298.
+
+## 5 November 2026 — #297 inert candidate rendered wrong source; safe reconciliation staged
+
+Operator ran gated inert stage on monitor-01: `ok=14 changed=5 failed=1` at a check for `PROXMOX_SOURCE="snapshot_optional"`. Read-only inspection showed staged `/var/backups/homelab-network-enrichment/independent-20261105/candidate-enricher.py` incorrectly has `PROXMOX_SOURCE="local"`, because role defaults loaded through Ansible `vars_files` overrode the play-level setting. **Do not deploy that candidate.** Original installed executable SHA-256 equals protected original-worker backup (`d90cb215...`), original systemd drop-in SHA-256 equals protected backup (`b7f51c90...`); live Proxmox refresh dependency remains. No active service/timer altered by failed stage.
+
+Fixed template-task override to `snapshot_optional` in original single-use stage playbook for future clean installs, and added independently approval-gated `network-host-enrichment-independent-repair-stage.yml` to **repair only the existing inert staged Python candidate**, with strict original/backup hashes and stage ownership checks and Python AST tests, preserving all rollback files and live configuration. Candidate config and recovery gates must be verified on monitor-01 before any live activation. The reconciliation playbook is Git-only and unexecuted; first run `git pull --ff-only`, regression tests, syntax check. Issue #297 / draft PR #298.
+
+## 5 November 2026 — #297 independent enrichment unit configuration verified; inert stage available
+
+Operator's read-only `monitor-01` inspection shows installed enricher paths `/var/lib/homelab-network-hosts/inventory.json`, `/var/lib/homelab-network-hosts/enrichment.json`, `/var/lib/prometheus/node-exporter/homelab_network_host_enrichment.prom`, `PROXMOX_SOURCE="snapshot"`, guest snapshot `/var/lib/homelab-network-hosts/proxmox-guests.json`, max age 172800 seconds. Loaded systemd drop-in still requires `homelab-proxmox-guest-refresh.service`, and enrichment timer is enabled/active. Proxmox guest refresh is independently **failed** with `Result=exit-code`, `ExecMainStatus=1`; no reason to treat periodic enricher as functioning until dependency is separated.
+
+Added `IaC/ansible/playbooks/network-host-enrichment-independent-stage.yml`: independently approval-gated **single-use stage only**, targets exact monitor-01, refuses existing recovery directory, backs up installed executable and drop-in, renders `snapshot_optional` candidate to root-only directory, verifies Python parse and rollback copy checksums, leaves installed executable, systemd unit, active timer, scanner and Proxmox API untouched. **Code committed only; no staging run or activation; production remains unchanged.** Before staging: user to pull branch, run test+syntax. Follow with explicit approval and a separately prepared activation/rollback; do not execute scan until controlled gate. Issue #297 and draft PR #298.
+
+## 5 November 2026 — independent enrichment read-only preflight passed
+
+Operator ran `IaC/ansible/playbooks/network-host-enrichment-decouple-preflight.yml` on `monitor-01`, recap `ok=9 changed=0 unreachable=0 failed=0 skipped=0`. Required existing unit/dependency, sole-owner cutover marker, executable, protected identity helper, existing live timer and data paths met preflight assertions. No scanner started or production system changes made. Next gate: confirm deployed enricher's actual Proxmox source/paths and installed unit/drop-in before rendering candidate, and prepare backup/rollback-controlled staging and activation. Issue #297 / draft PR #298. Do not activate from this read-only pass alone.
+
+## 2026-11-05 — #297 read-only preflight assertion correction
+
+- User ran `network-host-enrichment-decouple-preflight.yml` on monitor-01; `ok=6 changed=0 failed=1`. It stopped on preflight assertion checking that raw candidate drop-in text did not contain `Requires=`. The candidate contains that phrase solely in a comment, so the assertion was too broad. Production discovery/enrichment system was not changed, nor was any scan triggered.
+- Updated feature branch to assert only real uncommented directive lines using anchored multiline `regex_search` for `Requires=` and `After=`. Commit `d6df73242461aed1c65b9d061979f5a8adb3c39d`. Next step: worktree `git pull --ff-only`, Ansible syntax check and retry **read-only** preflight. No activation yet.
+
+## 2026-11-05 — #297 user approved independent host/network enrichment design (Git staging only)
+
+- Current monitor-01 source: `homelab-network-host-enricher.service` unit with `20-proxmox-guest-refresh.conf` requiring Proxmox guest refresh; continuous six-hour timer fires but service shows repeated dependency-failed 30 Oct–5 Nov, `ExecStart` never started, missing `enrichment.json` and `homelab_network_host_enrichment.prom`. Fresh router-01 discovery and deep-profile records match 192.168.2.1 and Pi MAC. Legacy ASUS textfile exists, don't delete on assumption.
+- User explicitly selected redesign: host facts from Node Exporter/Zabbix; independent remote host network enrichment from existing collector; Proxmox mapping is separate optional validated identity source. Preserve guest snapshot fail-closed per-source, strict provenance/freshness checks and suppress cached offline guest mappings when unavailable; publish `homelab_network_host_enrichment_proxmox_identity_available` indicator. Never publish raw stale guest records.
+- Created **new branch** `feature/network-enrichment-independent-proxmox-20261105` from main and staged only: `snapshot_optional` mode in existing enricher Jinja template (strict `snapshot` default unchanged), guarded offline-cached mapping, diagnostic gauge, condition-only candidate drop-in, offline regression test, read-only `network-host-enrichment-decouple-preflight.yml`. NO production change, no timer restarted and no scan. An explicit separate gated activation and rollback must be built/reviewed only after successful read-only preflight and offline tests. #297 tracks four missing panels; no false Greenbone clean scan or Nmap claims.
+- Earlier dedicated Grafana OS fallback playbook user deployed successfully on monitor-01: ok=7 changed=1 failed=0; dashboard backup `/opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json.633129.2026-11-05@07:45:33~`. Live OS query passed. Still require visual confirmation.
+- Keep PR #296 router patch telemetry independent; do not merge this architectural branch without production rollout checks. Canonical owner monitor-01, Proxmox-2 collectors retired. `admin-01` controller/jump box only.
+
 ## 2026-11-05 — PR #295 merged; next enrichment follow-up needs correct issue tracking
 
 - PR #295 (router-01 Zabbix active Agent 2, six health items, two OS facts, and Homelab Hosts selector integration) merged into main via merge commit `99984564983373eca3b913c1366a6025f0bf140a`. Both latest checked CI workflows passed pre-merge. No local worktrees reset or cleaned.
@@ -2336,3 +2902,327 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Operator executed `/usr/bin/python3 -B /usr/local/sbin/router-dhcp-device-pages` **without `--apply`**. Successful read-only output: `dashboard_writes=0`, `device_pages=27`, `mode=check`, `new_devices=0`, `no_deletions=true`, `state_change=false`. Ansible ad-hoc `CHANGED` is its default reporting and does not mean the script modified state.
 - No pending DHCP device creation under current evidence; do not confuse this with a subsequent successful scheduled run. Remaining acceptance: demonstrate stable MAC-derived UID through DHCP IP reassignment and verify Nmap enrichment. Do not alter router, reset ledger or replay canary.
+
+
+## 2026-11-05 — Greenbone router-01 target replacement staged; no live scan change
+
+- User confirmed former `docker-01` is now `router-01` (`192.168.2.1`); old `192.168.2.220` failed ping, neighbor state `INCOMPLETE`, new IP answered. The Prometheus `docker-01.jameshouse` record is stale attribution, not active-host proof.
+- `router-01` added to `zabbix_agents`; Ansible ping works. Existing `greenbone-authenticated-scan-account.yml --limit router-01` applied successfully, password locked, SSH source-only `192.168.2.57`, key permissions 700/600, four essential router services active. Network TCP/22 and source IP confirmed from `greenbone-01`, **actual scanner authentication not yet proven**. Test from admin-01 failed as expected due to source-IP restriction.
+- Existing `greenbone_scanning` authenticated reconciler updated to permit exactly `.220 -> .1`, reject all other drift and mismatched credential, and require `greenbone_scanning_router_target_approved=true` plus `greenbone_scanning_router_target_phrase=ADD_ROUTER01_TO_GREENBONE`. Tests updated, not yet rerun after replacement edit. Run tests and inspect before applying to `greenbone-01`. Do not modify gateway networking or initiate unapproved scans. Issue #297 Panel 32 remains open pending verified Greenbone router findings/report.
+
+
+## 2026-11-05 — Greenbone GMP in-use target blocker
+
+- Existing authenticated target UUID `1c8418b5-1cae-4cca-8535-4700c2d2835b` references old `.220`, not `router-01` at `.1`. Authenticated daily task UUID `02b610fc-647a-4fb8-98c3-7763e0425c34` is `Done`, with historical reports.
+- GMP rejects `modify_target` even after correcting request with `exclude_hosts`: `Target is in use`. The retry failed; staged SSH key removed in Ansible `always` block. **Stop running the existing approved target reconciler**; Greenbone requires migration to a new target and new task, preserving historical task/reports. Existing automation's managed task is selected by name through `greenbone_scanning_runner_managed_task_name`; migration must handle that separately with explicit approval and rollback. No scans executed or live gateway networking changes observed.
+
+
+## 2026-11-05 — staged Greenbone migration implementation (not deployed)
+
+- Created `IaC/ansible/roles/greenbone_scanning/templates/greenbone-router-migration.py.j2`, `IaC/ansible/playbooks/greenbone-router-migration.yml`, `IaC/ansible/tests/test_greenbone_router_migration.py`. These create replacement target/task with suffix ` - Router01`, preserving original target UUID `1c8418b5-1cae-4cca-8535-4700c2d2835b` and task UUID `02b610fc-647a-4fb8-98c3-7763e0425c34`. Explicit approval, exact legacy hosts and identity, idle scan status and exclusions are fail-closed. No live objects created, runner not switched, no scan initiated. Validate offline tests and syntax before execution. Legacy `greenbone-authenticated-scan.yml` must not be rerun for this migration.
+
+
+## 2026-11-05 — Greenbone Stage 1 replacement objects created successfully
+
+- User pulled feature branch after fixing missing defaults (`678cbaac`) and successfully ran `playbooks/greenbone-router-migration.yml --limit greenbone-01` with explicit stage-one approval. `ok=5 changed=2 failed=0`; response: `replacement_target_id=be77d8f0-2c51-42d8-a257-829ac2ac1931`, `replacement_target_created=true`, `replacement_task_id=3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`, `replacement_task_created=true`, `runner_switched=false`.
+- Legacy target `1c8418b5-1cae-4cca-8535-4700c2d2835b` and task `02b610fc-647a-4fb8-98c3-7763e0425c34` should remain intact; read-only verification pending. The production daily runner remains on the original task; no new scan started. Next run `greenbone-weekly-inventory-readonly.yml` and inspect new target 15 IPs, SSH credential, task-to-target, scan config/status. Only then prepare a separately approved IaC runner cutover with rollback and avoid accidental task launch.
+
+
+## 2026-11-05 — runner switch and rollback playbook staged, not deployed
+
+- Read-only GMP inventory confirms replacement target 15 hosts `192.168.2.1, .195, .48, .50, .51, .52, .53, .54, .55, .56, .57, .58, .59, .70, .71` and SSH credential `Homelab - Linux SSH Auth`; legacy `.220` absent. Replacement task UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9` status `New`.
+- Added `IaC/ansible/playbooks/greenbone-router-runner-cutover.yml` to stage proposed existing managed runner task switch/rollback; approval-gated, current state and inactive-service checks, backup, GMP `managed --check` candidate and installed verification. Does not edit systemd schedules or initiate scans. **Not applied or tested on live host yet.** Ensure syntax validated. Existing role defaults still point to old task; update desired-state config explicitly after successful production switch so subsequent broad role deployments cannot silently roll back.
+
+
+## 2026-11-06 — Greenbone Stage 2 permission preflight correction
+
+- Operator read-only audit found `/usr/local/sbin/homelab-greenbone-scan` `root:root 755`, still selecting `Homelab - Managed Infrastructure - Authenticated Daily`; `homelab-greenbone-managed-scan.service` inactive and timer enabled. Cutover playbook originally asserted exact `0750` and stopped before changes. GitHub commit `61ce7494` broadens existing mode preflight to `0750`/`0755`, preserving new-install mode `0750`. Pull and syntax-check before retry. No scan or cutover yet verified.
+
+
+## 2026-11-06 — Greenbone managed runner switch succeeds; desired state updated
+
+- Operator reports `greenbone-router-runner-cutover.yml`: `greenbone-01 ok=16 changed=3 failed=0 skipped=1`. Its switch path checks source selection and verifies candidate and installed managed task via GMP before success, targeting Router01 replacement task UUID `3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`. No scan was started by cutover; existing systemd timer remains enabled from prior audit. Legacy task and reports preserved.
+- Updated canonical `roles/greenbone_scanning/defaults/main.yml` `greenbone_scanning_runner_managed_task_name` to `Homelab - Managed Infrastructure - Authenticated Daily - Router01`. Follow-up: pull and verify runner `managed --check` returns expected ID, monitor next 02:00 scheduled scan / evidence and Grafana Panel 32. Rollback requires runner action `rollback` with approval **and** revert the canonical IaC default to original task before a future role deploy.
+
+
+## 2026-11-06 — GMP read-only verification proves new managed runner task
+
+- Operator ran `/usr/local/sbin/homelab-greenbone-scan managed --check` via Ansible on `greenbone-01`. Returned `rc=0`, GMP_CHECK_STAGE=task_lookup_complete elapsed_seconds=0.1, `CHECK=PASS mode=managed task=Homelab - Managed Infrastructure - Authenticated Daily - Router01 id=3b4ceb53-efc8-44b6-82b5-0716f69ba3e9`. This proves the deployed daily runner points at the new task. Ad-hoc `CHANGED` is harmless default reporting.
+- Pending: first actual scheduled scan result with `192.168.2.1` assessment/auth status, evidence publisher into monitor-01, exporter/Prometheus and Grafana Panel 32. No manual scan started; preserve legacy task/reports and rollback path.
+
+
+### 2026-11-06 — Nmap once-per-MAC safety gate staged (awaiting offline test and runtime deploy)
+- User confirmed Grafana Hosts Panel 31 now displays historical Nmap fingerprints after focused approval-gated deployment; live JSON backup preserved on monitor-01. Do not conflate this with new router fingerprint collection.
+- In `feature/network-enrichment-independent-proxmox-20261105`, the `network_host_deep_profiler` template/defaults now enforce one automatic Nmap profiling attempt per MAC. Guard treats persisted `attempt_count`/`last_attempt`, existing `profile`/`profiled_at`/`profiled_ip`, and `complete`/`partial` legacy statuses as already attempted. New unattempted MACs remain eligible subject to existing recency, ARP, cap and baseline controls. Crash-safe attempt persistence precedes Nmap. Never reset `deep-profiles.json` to re-enable scans.
+- Offline test `IaC/ansible/tests/test_network_host_one_attempt_policy.py` added (no Nmap execution). Existing `playbooks/network-host-monitor01-targeted-profiler-update.yml` explicitly enables and verifies one-attempt policy while preserving baseline-backlog disabled and existing timer. **Not yet run or deployed**; execute syntax/offline tests first, then deliberate approval-gated rollout, then check live status without initiating a scan.
+- Subsequent work: sensor-01 passive OS evidence and CMDB epic #299; live host enrichment story #297.
+
+
+### 6 November 2026 — passive OS classifier offline stage, not deployed
+- Live router-01 Suricata NFQUEUE IPS already emits DNS/HTTP/TLS/QUIC events. Pilot LAN IPs .113/.125/.179/.186 mapped to DHCP leases; HTTP UA samples gave ChromeOS candidate for .113 and Linux-family candidate for .125, but hostnames and UA can disagree and no definitive OS can be inferred. Router EVE ~1.2GB; logrotate uses copytruncate + HUP; no new changes to router or sensor permitted without review.
+- Committed pure offline proof of concept `IaC/ansible/scripts/sensor_passive_os_classifier.py` plus offline tests `IaC/ansible/tests/test_sensor_passive_os_classifier.py` and safety/design notes `IaC/ansible/docs/sensor-passive-os-classifier.md` on existing `feature/network-enrichment-independent-proxmox-20261105` branch. Classification requires minimal local JSONL and time-bounded DHCP lease maps; UA candidates are low confidence, conflicting and weak metadata fail closed; no network, Suricata, timer, scan, or Grafana change.
+- **Next:** pull branch on admin-01, run offline unittest/py_compile. Verify outputs before designing incremental and privacy-limited router→sensor feed; review log-rotation semantics and load. Do not point prototype at full EVE or deploy as service. GitHub story #297 tracks.
+
+
+### 6 November 2026 — Stage 2 EVE minimiser offline only, no production changes
+- After router↔sensor SSH/permission audit, operator approved moving ahead with offline incremental evidence extractor. Implemented `IaC/ansible/scripts/router_eve_minimizer.py`, with 12 offline synthetic regression tests `IaC/ansible/tests/test_router_eve_minimizer.py`; the matching prototype passed locally before GitHub commit. Extended sensor classifier to consume `os_family_hint` instead of raw UA, with two more offline tests. Git branch `feature/network-enrichment-independent-proxmox-20261105`; see `IaC/ansible/docs/sensor-passive-os-classifier.md`.
+- It reads capped chunks of an *offline* Suricata EVE file, converts ISO timestamps, emits only LAN source IP/time/event type/optional OS family, and checkpoints inode/offset/overlap fingerprint. Drops URL/SNI/domain/raw UA. **Not installed, invoked, or scheduled on router-01 or sensor-01.**
+- Important unresolved safety and reliability: no durable transfer acknowledgment, potential replay or missing events across crash/copytruncate, no verified historical DHCP lease-to-MAC timeline, no fixed-command SSH restriction. Do not activate live EVE reader or change NFQUEUE/SSH/logrotate until those are designed and tested. Next action: pull GitHub branch and run both offline unittest files plus py_compile on admin-01, then design safe at-least-once spool/ack and zero-impact deployment.
+
+
+### 6 November 2026 — Stage 3 offline batch/replay safety code staged (UNTESTED on admin-01)
+- Operator verified 12 router EVE minimiser tests + 11 sensor classifier tests (23/23 pass) and Python compilation on admin-01 at feature branch commit 139c7fad.
+- Stage 3 code on same branch now includes `IaC/ansible/scripts/passive_os_batch_spool.py` (single unacknowledged sanitised batch; only commit EVE offset after explicit matching ack), `passive_os_batch_receiver.py` (validated idempotent local receipt), and tests `test_passive_os_batch_spool.py` (11 cases) and `test_passive_os_batch_receiver.py` (6 cases). Updated `IaC/ansible/docs/sensor-passive-os-classifier.md` with protocol and safety gaps. **Stage 3 tests have not yet been run on admin-01; do not claim passing.**
+- These are LOCAL OFFLINE prototypes; no SSH/forced-command account, live pull, deployment, timer, or firewall, IPS, QoS, routing or Suricata changes. Acknowledgment CLI is a simulation/manual hook only, NOT a verified sensor transfer.
+- Gate before deployment: close copytruncate/rotation blind spot, local power-loss/directory fsync gap, recipient retention/capacity, historical DHCP lease association, restricted SSH, remotely verified receipt and cumulative deduplication; then preflight/approval-gated Ansible and rollback. Next operator action: pull branch and run new tests + py_compile; see project doc for commands.
+
+
+### 6 November 2026 — Stage 3 validation passed on admin-01
+- Operator fast-forward pulled feature branch to `245d9597`, ran offline tests: `test_passive_os_batch_spool.py` 11/11 passing (0.058s); `test_passive_os_batch_receiver.py` 6/6 passing (0.066s); `python3 -m py_compile` for both modules returned no errors. Total Stage 3 17/17; with previous Stage 2 23/23, total of 40 offline tests passed across four suites. No live changes to router-01 or sensor-01.
+- **Important:** local spool and receiver acknowledgement are prototype-only. Do NOT deploy timers or grant router access before a reviewed end-to-end SSH protocol, durable confirmed receipt, lease timeline, copytruncate/rotation policy, retention and rollback safety gates. GitHub issue #297.
+
+
+### 6 November 2026 — Stage 4 rotation guard and read-only audit staged, not deployed
+- Added fail-closed rotation continuity check in offline `IaC/ansible/scripts/passive_os_batch_spool.py`: an existing checkpoint followed by detected inode rotation, truncation or rewritten content blocks new batch publication and cursor progression, pending explicit operator review. Added 3 regression tests to `tests/test_passive_os_batch_spool.py` (now 14 spool test cases; not yet executed by operator).
+- Added `IaC/ansible/playbooks/router-01-suricata-logrotate-readonly-audit.yml` for observing router hostname, NFQUEUE service, logrotate policy/timer and EVE metadata ONLY, with no EVE content read or configuration/service mutation. Updated `IaC/ansible/docs/sensor-passive-os-classifier.md` with the best-effort rotation decision and limitations.
+- **IMPORTANT:** no guaranteed gapless collection with copytruncate; rapid regrowth can escape a short fingerprint and writes in copy/truncate interval may be lost. Do NOT deploy live feed or claim security-grade completeness. No router/service changes. Next pull feature branch; run spool tests and playbook syntax-check on admin-01, then optionally read-only audit with become password. Issue #297.
+
+
+### 6 November 2026 — Stage 4 rotation safety audit verified on router-01
+- Operator fast-forwarded feature branch to `dcccef9a`, ran `test_passive_os_batch_spool.py`: **14 tests passed (0.080 s)**, and `router-01-suricata-logrotate-readonly-audit.yml --syntax-check` passed. Then ran read-only audit on router-01, recap `ok=7 changed=0 unreachable=0 failed=0`.
+- Verified system hostname `raspberrypi`, dedicated `router-suricata-nfq` active, EVE log 1,259,411,018 bytes owned root mode 0644, logrotate policy applies to /var/log/suricata/*.log and *.json, `rotate 14`, `compress`, `copytruncate`, `sharedscripts`, HUP in postrotate; logrotate.timer next scheduled 2026-11-07 00:01:46 GMT.
+- Rotation outcome: **best-effort OS evidence only**; detected discontinuity now blocks spool, but some copytruncate gaps may be undetectable. No approved changes to IPS, log rotation, ownership, SSH or services. Next: read-only assess dnsmasq lease metadata and configuration to design time-valid IP-to-MAC attribution, then offline tests before deployment.
+
+
+### 6 November 2026 — Stage 4 DHCP lease attribution audit and offline prototype
+- Router read-only audit: dnsmasq active/enabled; 28 current leases, zero expired, zero non-expiring; pool 192.168.2.100–199 with 24h duration; root:root 0644 dnsmasq.leases; no dhcp-script hook shown. DHCP lease file records expiry but does NOT prove start time or older ownership.
+- Added offline `IaC/ansible/scripts/passive_os_lease_snapshot.py` and 11 synthetic tests `IaC/ansible/tests/test_passive_os_lease_snapshot.py` on feature branch. Strict 5-minute max forward observational window from timestamp supplied with local lease snapshot, bounded by expiry; refuse ambiguous IP→MAC and malformed data; exclude hostnames. **Not tested yet by operator and not installed on router or sensor.** A forward observation window remains best effort, not verified continuous DHCP ownership. Updated architecture notes in `IaC/ansible/docs/sensor-passive-os-classifier.md`.
+- Next: operator pulls branch and runs 11 offline tests + py_compile, then design lease sampling and trustworthy timestamp under Ansible with strong router safeguards; SSH security and receipt transport remain open. No live change.
+
+
+### 6 November 2026 — Stage 4 DHCP attribution regression tests verified
+- Operator ran `test_passive_os_lease_snapshot.py`: 11 tests in 0.076s, all OK. `py_compile` was invoked for the lease snapshot script; no error shown. Combined with previously verified offline suites: **54/54 tests passed** (12 EVE + 11 classifier + 14 spool + 6 receiver + 11 lease snapshot).
+- The lease snapshot is a strictly bounded **observational** time window, not authoritative history; no claim of continuous ownership or automatic collection. No live router-01 or sensor-01 modifications.
+- Next safety gate: design/review restricted authenticated SSH transfer of minimised, immutable batches with verifiable durable receipt; no active timer or router service changes before approval, synthetic integration tests and rollback checks. Track in GitHub #297.
+
+
+### 6 November 2026 — Stage 5 local receipt integrity verification staged, not deployed
+- Added offline-only `IaC/ansible/scripts/passive_os_receipt_verify.py` and eight regression cases `IaC/ansible/tests/test_passive_os_receipt_verify.py`, covering exact stored batch/receipt match, missing or interrupted storage, corruption, mismatched ID/digest and symlinks. Updated `IaC/ansible/docs/sensor-passive-os-classifier.md` with future restricted SSH authentication/host-key, storage quota and durability safeguards. **New tests not yet run on admin-01**; previous 54/54 tests remain passed.
+- NO router/sensor credentials, accounts, SSH jobs, timers, router/Suricata/IPS changes. Local receipt integrity is not remote receiver authentication; no automatic source checkpoint acknowledgment. Next: pull and run new offline tests. Then develop offline bounded receiver quota/retention and authenticated transport protocol prior to any approval-gated staging. GitHub story #297.
+
+
+### 6 November 2026 — Stage 5.1 passed; Stage 5.2 receiver quota staged
+- User confirmed Stage 5.1 `test_passive_os_receipt_verify.py`: **8 tests passed (0.063s)**, cumulative 62/62 offline tests across all previously verified suites. No live changes.
+- Stage 5.2 code committed on `feature/network-enrichment-independent-proxmox-20261105`: `IaC/ansible/scripts/passive_os_batch_receiver.py` now fails closed when new stored batches exceed 256 or 64 MiB total saved evidence/receipt bytes; rejects unexpected/symlinked files and entry overpopulation; never automatically deletes evidence, allows unchanged duplicate re-delivery. Added six new offline tests in `tests/test_passive_os_batch_receiver.py`, updated project docs. **New tests not yet verified on admin-01.**
+- This is still offline only; no authenticated SSH connection, forced command, scheduled service, automatic ack, lease collector or router configuration change. Next operator action: pull and run receiver plus receipt-verifier regression tests and py_compile. Then assess actual SSH protocol and preflight before any deployment. Story #297.
+
+
+### 6 November 2026 — Stage 5.2 receiver syntax regression fixed (validation pending)
+- Operator reported import/py_compile SyntaxError in `IaC/ansible/scripts/passive_os_batch_receiver.py`, line 17 (`ID = re.compile(r'^[a-f0-9]{64}` unterminated). Root cause: previous patch malformed regex and duplicated receiver module body. This was a code-authoring error, NOT an Ansible or production host issue.
+- Replaced the entire receiver module with a single syntactically structured implementation (one `receive`, one `main`), restored the exact regex `^[a-f0-9]{64}$`, retained fail-closed 256-batch and 64MiB limits, and checked GitHub fetched file structure at commit `11189bcd`. No live changes. **Must pull and rerun `py_compile`, 12 receiver tests and 8 receipt verifier tests on admin-01; tests are NOT yet claimed as passing.**
+
+
+### 6 November 2026 — Stage 5.2 receiver tests: permission setup corrected, verification pending
+- Operator reported `test_passive_os_batch_receiver.py` 12 tests, 4 failures; visible `test_unexpected_files_refuse_new_batch` expected `Unexpected receiver file`, but code correctly raised `Unsafe receipt directory`. Root cause of four likely failures: test setup used default `Path.mkdir()` (typically 0755), while receiver intentionally requires private 0700 directory.
+- Fixed four **test fixtures only** to create 0700 receiver directories (byte cap, count cap, unexpected file, symlink). Kept explicit insecure-directory rejection test (0755) unchanged. Committed as `d21c78f0`; GitHub verified changed fixtures. **No production code or security check weakened; test suite must be rerun before claiming Stage 5.2 passed.** Receipt verification 8/8 already passed after earlier syntax fix. No host changes.
+
+
+### 6 November 2026 — Stage 5.2 receiver tests passed on admin-01
+- After fixture permission correction at `d21c78f0`, operator reran `test_passive_os_batch_receiver.py`: **12/12 passed (0.305s)**. Earlier corrected receipt verification ran **8/8 passing (0.063s)**. Cumulative confirmed offline regression checks: **68/68** across existing suites (12 minimiser + 11 classifier + 14 spool + 12 receiver + 11 DHCP + 8 receipt).
+- Test fixture now uses private 0700 receiver directory, consistent with required runtime directory permissions. No receiver security constraint was relaxed. Stage 5.2 offline validation complete; no actual SSH transfer, service accounts, automation, timer or changes to router/sensor services.
+- Next Stage 5.3: design restricted key-based sensor-01→router-01 SSH retrieval and authenticated durable receipt/ack with strict host-key validation, retention and rollback, all initially offline; do not enable live work yet. Issue #297.
+
+
+### 6 November 2026 — Stage 5.3 SSH policy and read-only preflight staged
+- Previous Stage 5.2 receiver quota regression suite PASSED 12/12 on admin-01 (0.305s) after 0700 test-fixture correction; receipt verifier 8/8 passed earlier; cumulative offline tests validated: 68/68.
+- Added OFFLINE-only `IaC/ansible/scripts/passive_os_ssh_policy.py`, 11 synthetic security tests `IaC/ansible/tests/test_passive_os_ssh_policy.py`, and READ-ONLY `IaC/ansible/playbooks/passive-os-ssh-readonly-preflight.yml`. Candidate SSH key policy: Ed25519, forced command placeholder, restrict, bound source IP sensor-01 192.168.2.55; client policy requires pinned known_hosts, strict host-key checking, batch mode and disabled forwarding. No SSH key/account/service/forced-command program provisioned; no network call or host change. Project design doc updated.
+- **New 11 tests and Ansible syntax check need operator verification.** Do NOT deploy candidate authorized_keys line because forced-command target is not installed. Need authentication and durable remote receiver acknowledgement, strict source and host key validation, storage/lease/rotation gap assessment, approval gate and rollback before live traffic. Next: pull feature branch, run offline policy tests, py_compile, Ansible syntax check, then optional read-only SSH preflight on router-01 and sensor-01. Story #297.
+
+
+### 6 November 2026 — Stage 5.3 SSH policy tests and read-only live preflight PASSED
+- Operator fast-forwarded feature branch to `67900528`, ran `test_passive_os_ssh_policy.py`: **11/11 OK (0.005s)**, `python3 -m py_compile scripts/passive_os_ssh_policy.py` without errors, and `passive-os-ssh-readonly-preflight.yml --syntax-check` succeeded. Cumulative validated offline regression tests: **79/79** (68 prior + 11 SSH policy).
+- Operator ran read-only SSH preflight on router-01 and sensor-01: both **ok=6 changed=0 failed=0 unreachable=0**. Runtime hostnames raspberrypi (router-01) and sensor-01; SSH active on both; SSH Ed25519 host PUBLIC key files exist; public-key authentication yes, password auth no; router root login no, sensor root login without-password; both globally permit TCP forwarding and PTY, router X11 no, sensor X11 yes. These are daemon defaults, not proof of per-account forced-command restrictions.
+- Next: stage/test an auditable fixed-command-only transfer protocol, verify SSH host-key fingerprint via trusted independent channel before pinning, and create approval-gated (not automatically activated) Ansible design. No SSH account, key, connection, timer or gateway service changes done; remote authenticated receipt not yet implemented. Story #297.
+
+
+### 6 November 2026 — Stage 5.4 offline forced-command exporter staged (tests pending)
+- Operator verified Stage 5.3 11/11 SSH policy tests and read-only preflight router-01 and sensor-01 (both ok=6 changed=0 failed=0); aggregate offline tests 79/79.
+- Added `IaC/ansible/scripts/passive_os_ssh_export.py` and ten synthetic tests `IaC/ansible/tests/test_passive_os_ssh_export.py`. Candidate forced command accepts exact `get-batch` only and uses fixed private pending batch path, validates internal batch and event allowlist, outputs wire projection with batch id/digest/sanitised observations only. It does NOT publish internal next_state/cursor or accept any paths/commands remotely; no network or file changes.
+- **Important integration gap:** current offline receiver consumes source pending schema including next_state, whereas exporter emits restricted wire projection. Must implement and test a separate authenticated wire receiver before live transport; do not install forced-command key yet. Stage 5.4 tests pending operator run. No router/sensor services, keys, accounts, SSH config or timers changed. `IaC/ansible/docs/sensor-passive-os-classifier.md` updated. Issue #297.
+
+
+### 6 November 2026 — Stage 5.4 fixed-command exporter tests passed on admin-01
+- Operator executed `test_passive_os_ssh_export.py`: **10/10 passing (0.053s)**, no failures. Previous cumulative validated offline tests 79/79, now **89/89**. `py_compile` was included in prescribed commands, but no separate error output was presented.
+- Exporter remains an **offline prototype**: only exact `get-batch` request, validates a private source batch, exposes sanitised wire observation/ID/digest and never checkpoint or raw domain/URL data; no SSH accounts/keys, forced-command installation, scheduled transfers or live router/sensor changes.
+- Next Stage 5.5: develop compatible wire receiver and authenticated, durable receipt protocol, offline regression tests and independent validation; no automatic ack or deployment yet. Story #297.
+
+
+### 6 November 2026 — Stage 5.5 offline wire receiver staged (tests pending)
+- Operator's latest Stage 5.4 fixed-command exporter rerun: **10/10 passed (0.052s)**. Previous aggregate offline regression tests **89/89**.
+- Added `IaC/ansible/scripts/passive_os_wire_receiver.py`: separate offline receiver for the four-field sanitized Stage 5.4 wire format, no source next_state. Strict duplicate-key/schema/event/IP/digest/size checks, private directory and file restrictions, Stage 5.2 fail-closed 256 batch/64MiB capacity reuse, idempotent duplicate handling, file and directory fsync for local receipt. Fifteen new synthetic tests `IaC/ansible/tests/test_passive_os_wire_receiver.py` committed, **NOT yet executed on admin-01**; docs updated.
+- Security blocker: wire `batch_id` cannot be re-derived without withheld router checkpoint, and local `receipt.json` does not authenticate sender or establish remote acknowledgment. No auto-ack, no SSH account/key, no forced-command installation, no timers, and no router/sensor runtime changes. Future authenticated SSH transport, endpoint key verification, receipt binding/durability proof and power-loss tests needed before deployment. Story #297.
+
+
+### 6 November 2026 — Stage 5.5 offline wire receiver tests PASSED
+- Operator confirmed `test_passive_os_wire_receiver.py`: **15/15 OK (0.110s)**; previously ran `test_passive_os_ssh_export.py`: **10/10 OK (0.053s)**. Cumulative six prior suites plus SSH exporter/wire receiver validated offline regression total: **104/104**.
+- Stage 5.5 offline implementation validated against synthetic data: four-field wire format, sanitised observation payload, local integrity and quota checks, private files, local receipt, duplicates and no checkpoint update. **Not proof of authenticated SSH delivery, remote receipt, or production durability.**
+- No service accounts, SSH keys, SSH transport, router or sensor service edits, timers, or checkpoint acknowledgements deployed. Stage 5.6 next: authenticated host/key identity and verifiable receipt binding with safe recovery and approval-gated Ansible design. GitHub Story #297.
+
+
+### 6 November 2026 — Stage 5.6 offline signed-receipt attestation staged (tests pending)
+- Operator confirmed Stage 5.5 wire receiver 15/15 passed, Stage 5.4 exporter 10/10 passed, cumulative **104/104 verified offline tests**; no production changes.
+- Added `IaC/ansible/scripts/passive_os_signed_receipt.py`: OFFLINE-only Ed25519 signer/verifier for wire batch ID+digest+wire hash+length, signed receiver identity and 32-byte challenge. Added **11 synthetic regression tests** in `IaC/ansible/tests/test_passive_os_signed_receipt.py` for correct key, wrong key, replay, tampering, mismatched expected wire and local receipt, and no source ack. **Operator validation pending**. Python `cryptography` dependency must be checked on admin-01; do not auto-install packages on router or sensor.
+- Crucial remaining gates: actual SSH mutual host/key verification, independently verified host-key pin, signer key custody, sender/receiver authentication, fresh challenge generation, filesystem-locked durable receipt readback, router pending batch binding and no auto-ack until approval. No user/key/service/timer/router change; offline helper never invokes `ack()`.
+- Design documentation updated; GitHub Story #297. Next command: pull branch; check Ed25519 dependency; py_compile; run 11 signed receipt tests plus 15 wire receiver regressions.
+
+
+### 6 November 2026 — Stage 5.6 signed receipt and wire receiver tests PASSED
+- Operator pulled feature branch through `d97de5ac` and reran both tests twice. `cryptography` Ed25519 dependency available; `scripts/passive_os_signed_receipt.py` py_compile completed without reported errors.
+- `test_passive_os_signed_receipt.py`: **11/11 passing** in 0.168s and 0.166s. `test_passive_os_wire_receiver.py`: **15/15 passing** in 0.109s and 0.108s. Previously verified regression total 104/104; new 11 tests bring cumulative confirmed **115/115**. Repeated suites do not increase unique test count.
+- Stage 5.6 OFFLINE cryptographic checks validated, **not an authenticated live transfer**: keys are disposable test keys, no independently pinned router SSH host key or receiver signing identity provisioned, no real SSH session, locked signer and end-to-end durability/ack protocol, service accounts/timers or router/sensor runtime changes. Next: review trusted identity provisioning and authenticated transport plus rollback/negative tests in IaC, approval-gated before any live host change. GitHub Story #297.
+
+
+### 6 November 2026 — Stage 5.7A read-only SSH identity preflight staged (operator run pending)
+- Stage 5.6 previously confirmed 115/115 unique offline regression tests. Stage 5.7A `IaC/ansible/playbooks/passive-os-ssh-identity-readonly-preflight.yml` staged on feature branch; this **read-only** Ansible audit checks router-01 (192.168.2.1) and sensor-01 (192.168.2.55), runtime hostname, collision status of proposed `homelab-os-transfer` service account, on-host SHA256 fingerprint of each public Ed25519 SSH host key, and global sshd effective settings. Does not create users, secrets, SSH connections beyond existing Ansible management, pins, services or timers; no Suricata/PPPoE/QoS/DHCP changes.
+- **Pending operator**: `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-readonly-preflight.yml --syntax-check`, then same with `--ask-become-pass`; require both hosts changed=0. Public fingerprint collected through current SSH administrative path is *not itself independent authenticity proof*; must compare through trusted console/prior independently verified reference before pinning. No SSH credentials or production cutover authorised. Stage 5.7A docs updated. Story #297.
+
+
+### 6 November 2026 — Stage 5.7A read-only SSH identity preflight PASSED
+- Operator ran `passive-os-ssh-identity-readonly-preflight.yml`: `router-01` **ok=9 changed=0 unreachable=0 failed=0**, `sensor-01` **ok=9 changed=0 unreachable=0 failed=0**. Proposed `homelab-os-transfer` account absent on both hosts. Existing SSH pubkey auth=yes and password auth=no; both global defaults allow PTY and TCP forwarding, so dedicated restrictions remain necessary.
+- Observed ED25519 SSH public host-key SHA256 fingerprints: router-01 (runtime `raspberrypi`) `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`; sensor-01 `SHA256:2AI17daznNov9YyocX6TBz/+p01XzRb3WRG91r1zEic`. These were observed through existing management SSH, **NOT independently authenticated**, and MUST NOT be automatically pinned. Root SSH policy on router `no`, sensor `without-password`; sensor X11 globally yes, router X11 globally no.
+- No user, key, sshd, firewall, daemon, SSH host-key pinning, auto-ack or router/sensor service change. Stage 5.7A read-only audit passed; **identity trust approval gate remains open**. Next: independently verify router fingerprint via trusted console/prior verified inventory, then review approval-gated disabled service-account Ansible design. Prior offline regressions 115/115. Story #297.
+
+
+### 6 November 2026 — Stage 5.7B gated dormant router identity playbook staged (NOT run)
+- After Stage 5.7A read-only audit (both hosts ok=9 changed=0), staged `IaC/ansible/playbooks/passive-os-ssh-identity-provision-gated.yml` on feature branch. Explicit default-deny gates require `passive_os_approved`, `passive_os_fingerprint_independently_verified`, and exact independently confirmed router ED25519 SHA256 fingerprint. The observed fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI` **has not been independently verified**; do not assume the flags can be truthfully set without trusted console verification.
+- If later approved, playbook could create a **dormant** router-only `homelab-os-transfer` password-locked system account with `/usr/sbin/nologin`, no home, keys, SSH config, services or exporter. No active SSH transfer would be possible; account activation with a safely restricted fixed-command execution context is separate future work. Playbook refuses existing account rather than silently modifying it. No changes applied to any host. Ansible syntax check awaits operator.
+- Next operator action: pull feature branch, syntax-check new playbook only. Then independently verify router public host key from trusted physical console. Do **not** run apply mode yet. Story #297 and design doc updated.
+
+
+### 6 November 2026 — Stage 5.7B Ansible syntax check passed; identity trust gate still open
+- Operator fast-forwarded branch to `291dab46` and ran `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-ssh-identity-provision-gated.yml --syntax-check`; output `playbook: playbooks/passive-os-ssh-identity-provision-gated.yml` with no error. This is **syntax validation only**, not a run, dry-run or deployed account.
+- Still pending: trusted local-console/prior independent verification of router-01 Ed25519 public host-key fingerprint `SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`. Do not set `passive_os_approved` or `passive_os_fingerprint_independently_verified` and do not run apply mode until independent verification and explicit approval. No user/key/service/router changes. Previously 115/115 offline regression tests passed. Story #297.
+
+
+### 6 November 2026 — Stage 5.7B router ED25519 fingerprint exact match (console provenance to confirm)
+- Operator provided command output from `james@raspberrypi` running `ssh-keygen -l -E sha256 -f /etc/ssh/ssh_host_ed25519_key.pub`: `256 SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI root@raspberrypi (ED25519)`. This **exactly matches** the previously observed read-only Ansible audit fingerprint for router-01.
+- **Provenance caveat:** prompt identifies the router, but the pasted result alone does not establish whether it was run at a physically trusted/local console versus another SSH session. Treat independent trust as conditional until operator confirms console path. Do not automatically set `passive_os_fingerprint_independently_verified` or run gated provisioning; approval gate remains closed. No host/account/key/service change.
+- Stage 5.7B gated playbook syntax checked successfully; 115/115 unique offline regression tests passed previously. Next review is dormant identity provisioning change window, explicit operator approval, rollback, then separate fixed-command activation design. Story #297.
+
+
+### 6 November 2026 — Stage 5.7B default-deny rollback prepared (offline only)
+- User asked to move on after reporting an exact SSH ED25519 fingerprint match from `james@raspberrypi`; physical-console vs existing SSH provenance **not established**, so independent trust remains an open approval gate. No live identity provisioning authorised or applied.
+- Added `IaC/ansible/playbooks/passive-os-ssh-identity-rollback-gated.yml`: explicit default false approval, canonical router-only checks, strict project-account marker/home/nologin identity comparison, refuses active processes or unexpected login material; removes only the validated dormant account, not home/services. This is not suitable once the identity is later activated or modified.
+- Added **7 new offline source guardrail tests** in `IaC/ansible/tests/test_passive_os_identity_playbook_gates.py` covering default-deny, no SSH service activation, and rollback ownership gates. Tests and both playbook syntax checks **pending operator run**; prior unique regression count 115/115. Updated design docs. No SSH keys, users, timers, services, router or sensor configuration changed. Next: run new offline tests and syntax checks only; do not run provisioning/rollback in apply mode. Story #297.
+
+
+### 6 November 2026 — Stage 5.7B gated identity/rollback safeguards validated on admin-01
+- Operator returned to admin-01 after accidentally attempting commands on raspberrypi (where Git/Ansible/repository are intentionally absent). Successfully fast-forwarded feature branch and ran `test_passive_os_identity_playbook_gates.py`: **7/7 passed (0.003s)**. Both `passive-os-ssh-identity-provision-gated.yml --syntax-check` and `passive-os-ssh-identity-rollback-gated.yml --syntax-check` passed.
+- Cumulative unique offline tests now **122/122** (previous 115 + new 7). These seven are static/source guardrails, not execution tests. Neither playbook executed in apply mode; no accounts, SSH keys, services, timers or router/sensor runtime settings changed.
+- **Remaining identity gate:** router ED25519 fingerprint matches earlier SSH audit, but whether the `james@raspberrypi` measurement used a trusted physically local console vs SSH remains unconfirmed. Do NOT assume independent verification or supply approval flags until confirmed and explicitly approved. Next: confirm provenance, review restricted account deployment and rollback safeguards prior to any approved live change. Story #297.
+
+
+### 6 November 2026 — SSH fingerprint source confirmed as SSH, Stage 5.7C offline planner staged
+- User explicitly confirmed the `ssh-keygen` output from `james@raspberrypi` was obtained **via SSH, NOT a physically trusted local console**. Fingerprint matches prior audit (`SHA256:4+g89AyhxUGCOGMZD5FRlqMSOlwdgVwt/0N/N4a7XxI`), but identity **has NOT been independently authenticated**. Do not set `passive_os_fingerprint_independently_verified`, do not pin observed key as trusted, do not run gated account provisioning or rollback.
+- Stage 5.7B offline tests 7/7 and Ansible syntax checks for provision and rollback both passed, unique offline regression count 122/122.
+- Stage 5.7C candidate `IaC/ansible/scripts/passive_os_transport_plan.py` plus **10 new offline synthetic tests** in `tests/test_passive_os_transport_plan.py` committed. Constructs fixed secure SSH argv and rejects unsuccessful, noncanonical, corrupt or oversized wire responses. No SSH connections, key provisioning, accounts, known_hosts pin, services, timers or checkpoint ack. Tests **not yet run by operator**. Run py_compile and ten tests on admin-01. Still needs independently validated host key, proper constrained signer/transport, subprocess resource and timeout controls, actual identity and trusted receipt tests before live deployment. Design doc and Story #297.
+
+
+### 6 November 2026 — Stage 5.7C offline SSH transport planner validated
+- Operator pulled branch through `0aa9e48c` on admin-01, ran `python3 -m py_compile scripts/passive_os_transport_plan.py` without errors, and ran `test_passive_os_transport_plan.py`: **10/10 passed (0.083s)**. Previous cumulative 122/122 unique offline cases; **now 132/132**.
+- Tests cover fixed SSH argv with strict host-key policy, failed command even if stdout looks valid, truncated/noncanonical/oversized/corrupt wire evidence, bounded diagnostics and no source checkpoint advance. No SSH subprocess/real transport, service account, key, known_hosts pin, installed forced command, timer, router/sensor service change or ack.
+- **Independently verified host key still absent**: operator confirmed reported matching router fingerprint was collected over SSH rather than a trusted local console. Do NOT approve/gate-bypass account provisioning or enable transport until separately verified and explicitly authorised. Next work: offline subprocess timeout/output-bound planning and approval-gated manual synthetic transport preparation, without production changes. Story #297.
+
+
+### 6 November 2026 — Stage 5.7D bounded local subprocess runner staged (operator tests pending)
+- Following Stage 5.7C 10/10 success, cumulative verified offline cases **132/132**. Stage 5.7D adds `IaC/ansible/scripts/passive_os_bounded_process.py`, an OFFLINE-ONLY low-level subprocess runner (no SSH invoked), and **13 synthetic local subprocess tests** in `tests/test_passive_os_bounded_process.py`. Design: shell-free argv, disabled stdin, isolated POSIX process group, bounded concurrent stdout/stderr reads, <=8s deadline, stdout <=2MiB+8KiB and stderr <=8KiB, kill and reap on failure. Tests **NOT yet run on admin-01**. Potential validated cumulative total 145 if all pass.
+- Independent router SSH host-key verification remains **blocked**: user explicitly confirmed matching fingerprint was collected through SSH, not trusted physical console; do not set provisioning/independent-verification flags or pin key as trusted. Neither dormant account playbook nor rollback executed; no accounts/keys, SSH transfers, timers, services or checkpoints changed.
+- Project documentation updated. Next operator action: git pull feature branch, run py_compile and 13 subprocess tests + previous 10 transport tests. Future work: reviewed fixed-SSH-argv integration, authenticated receipt/ack, storage/failure/power-loss testing and explicit approval. GitHub Story #297.
+
+
+### 6 November 2026 — Stage 5.7D offline bounded subprocess tests PASSED
+- Operator ran `test_passive_os_bounded_process.py`: **13/13 OK (0.965s)** on admin-01. Previous Stage 5.7C transport regression was rerun **10/10 OK (0.061s)**. Unique offline regression count is now **145/145** (previous 132 + 13 new). Stage 5.7D offline test validation complete.
+- Test coverage includes shell-free argv, closed stdin, concurrent bounded output, 8s maximum timeout, strict subprocess failure rejection and process group termination. This does NOT prove actual SSH transport or host identity and does not install/run services.
+- Router ED25519 fingerprint remains matched only via SSH, **not independently authenticated**; no approval to create dedicated account, pin known_hosts or run live transport. No router/sensor configuration, account, key, service, timer or checkpoint changed. Next Stage 5.7E: offline-only end-to-end integration and failure/recovery tests with approved boundary maintained. Story #297.
+
+
+### 6 November 2026 — Stage 5.7E offline local-only transport-to-receipt integration staged
+- Prior Stage 5.7D 13/13 tests passed, cumulative **145/145** unique offline tests. New `IaC/ansible/scripts/passive_os_offline_pipeline.py` runs **only opted-in local Python synthetic subprocess fixtures** through bounded process, canonical transport response validation and private durable wire receiver; it refuses direct ssh argv. No SSH connection, credentials, keys, router, real host identity, service or auto-ack.
+- Added **12 new synthetic integration tests** at `IaC/ansible/tests/test_passive_os_offline_pipeline.py`, covering stored batch, idempotent duplicate, corruption, subprocess failure/timeout/oversize, destination symlink/mode restrictions, explicit fixture gate, no source checkpoint advance and preserved receipt after failed retry. **Tests NOT YET RUN by operator**, cumulative target 157 if successful. Design docs updated. Next: git pull on admin-01, py_compile and 12 tests. Do not claim Stage 5.7E validated until results.
+- Independently authenticated router Ed25519 key **still unavailable**: matching fingerprint was collected via SSH per operator, not a physically trusted console. Account approval and transport deployment remain blocked; no router/sensor configuration changed. Further offline work needed on authenticated signed receipts, exclusive storage lock, process/host crash durability and checkpoints before any production approval. Story #297.
+
+
+### 6 November 2026 — Stage 5.7E synthetic offline integration tests PASSED
+- Operator ran `python3 -m unittest discover -s tests -p 'test_passive_os_offline_pipeline.py' -v` on admin-01; reported `Ran 12 tests in 1.645s` / `OK`. Stage 5.7E local-only synthetic pipeline validated **12/12**; cumulative distinct previously confirmed offline tests now **157/157** (145 + 12).
+- Tests use synthetic local fixture subprocess only and exercise bounded output, strict wire validation, durable local receipt, duplicate handling, fail-closed errors and unchanged source checkpoint. No real SSH transfer, account, host-key pin, signer key or authorized production ack. Power-cut resilience, cross-host identity and concurrent storage safety are not yet proven.
+- User confirmed the previously matching router Ed25519 fingerprint was gathered over SSH, so **independent host-key verification remains open**. Approval gates for router account provisioning and live transfers stay closed. No production changes. Next: offline review of locking/crash boundaries, signed-receipt integration and replay/ack design before separately approved controlled pilot. Story #297.
+
+
+### 6 November 2026 — Stage 5.7F locked signed-receipt prototype staged, offline validation pending
+- Prior 5.7E synthetic local integration 12/12 passed; cumulative **157/157** unique offline tests. Added `IaC/ansible/scripts/passive_os_offline_receipt_coordinator.py` (explicit synthetic test-only, validates challenge/signer/wire before writing, obtains receiver `.lock` flock, stores wire and receipt, signs challenge-bound Ed25519 envelope and self-verifies synthetic signer). No source ack/checkpoint, no SSH or key deployment.
+- Added **10 new offline synthetic tests** in `IaC/ansible/tests/test_passive_os_offline_receipt_coordinator.py`. Tests **NOT yet run by operator**; if all pass cumulative becomes 167. Run py_compile and unittest on admin-01. The test key is generated in memory, not a real pinned/trusted production receiver signer.
+- No claims of real power-cut safety, inter-process race freedom, independently trusted receiver identity or authorised upstream ack. No production changes. Router ED25519 host fingerprint matched through SSH only: independent trust check is **not satisfied**. Router dormant account playbooks remain unexecuted and approval flags closed. Design docs and Story #297. Next: operator tests, then offline fault-injection and crash/restart design; no active cutover.
+
+## Suricata logrotate recovery development — 2026-11-07
+
+- Target: router-01, `/etc/logrotate.d/suricata`.
+- Production configuration remains unchanged.
+- Production NFQUEUE service must not be restarted or signalled.
+- Existing policy uses weekly rotation, copytruncate and an obsolete
+  postrotate hook referencing a missing PID file.
+- Candidate policy: daily, maxsize 100M, rotate 14,
+  compress, delaycompress, copytruncate; no postrotate hook.
+- Candidate SHA-256:
+  `19f06bf2b87db4307d11e5e6be7922e803acc63fcbc3d7c357bc39e975ede677`
+- Original SHA-256:
+  `f95789a4166f06c69695c31de79bf586cd72c0a862cf50292e35d2ae342f6c96`
+- Deployment playbook remains blocked.
+- Draft deployment has an unconditional early development lock.
+- Draft installation and fail-closed recovery logic are staged.
+- Rollback logic is staged but not approved for production.
+- 43 offline tests passed.
+- Synthetic log rotation using disposable files passed.
+- Actual Ansible installation/recovery integration tests remain pending.
+- First production rotation may process approximately 2 GB of logs;
+  I/O impact, retention requirements and maintenance arrangements
+  require review.
+- No production deployment approval has been given.
+
+Next: create localhost-only Ansible integration tests covering successful
+installation, post-installation failure, recovery refusal for unexpected
+configuration and staging cleanup. Review results before enabling any
+production deployment or rollback.
+
+## DHCP infinite-lease migration — 2026-11-07
+
+- Target: router-01, `/etc/dnsmasq.d/router.conf`.
+- Current lease: 24h; requested lease: infinite.
+- Existing DHCP pool: 192.168.2.100–199.
+- Last observed active leases: 29.
+- Production deployment: NOT performed.
+- Deployment playbook retains an unconditional development lock.
+- Offline deployment/recovery/finalisation tests: 20 passed.
+- DHCP fingerprint parser tests: 9 passed.
+- Eight legacy IaC files contain assumptions about 24h leases.
+- Do not globally replace historical lease values.
+- Legacy rollback and migration playbooks require individual
+  compatibility reviews before reuse after the lease change.
+- Outstanding: atomic success/rollback finalisation, timer-race
+  and reboot testing, DHCP functionality checks and production approval.
+
+## Network enrichment progress — 2026-11-07
+- Router-01 DHCP lease duration changed from 24h to infinite using Ansible.
+- dnsmasq verified active after the change.
+- Simple DHCP lease update playbook retained.
+- Nmap OS descriptions added to the read-only evidence preview.
+- Nmap change committed as e01464ee.
+- Next: improve identification of unknown network devices.
+
+## Network OS profiling backlog — 2026-11-07
+- Enabled the existing targeted deep-profiler backlog on monitor-01.
+- All 35 baseline devices scheduled across seven days.
+- First scan: 2026-11-07 20:04 UTC.
+- Last scan: 2026-11-14 08:32 UTC.
+- One attempt per host retained.
+- Profiler timer active.
+- Next: review OS identification results as scans complete.

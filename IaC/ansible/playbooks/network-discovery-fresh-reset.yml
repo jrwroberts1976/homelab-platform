@@ -1,0 +1,212 @@
+---
+# One-off reset of active discovery results, NOT the whole state directory.
+# Keeps Zabbix, guest mappings, alert registry, router services, backups and
+# the existing independent Nmap fingerprint archive untouched.
+- name: Freshen active monitor-01 network discovery results
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  vars:
+    discovery_reset_approved: false
+    discovery_reset_dir: /var/lib/homelab-network-hosts
+    discovery_reset_metrics_dir: /var/lib/prometheus/node-exporter
+    discovery_reset_archive: /var/backups/homelab-network-discovery-reset
+    discovery_reset_state_files:
+      - inventory.json
+      - enrichment.json
+      - deep-profiles.json
+    discovery_reset_metric_files:
+      - homelab_network_hosts.prom
+      - homelab_network_host_enrichment.prom
+      - homelab_network_host_deep_profiles.prom
+    discovery_reset_timers:
+      - homelab-network-host-collector.timer
+      - homelab-network-host-enricher.timer
+      - homelab-network-host-deep-profiler.timer
+    discovery_reset_services:
+      - homelab-network-host-collector.service
+      - homelab-network-host-enricher.service
+      - homelab-network-host-deep-profiler.service
+  tasks:
+    - name: Require explicit approval and exact monitor-01 address
+      ansible.builtin.assert:
+        that:
+          - discovery_reset_approved | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_host == '192.168.2.52'
+
+    - name: Require existing discovery and Prometheus state directories
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ discovery_reset_dir }}"
+        - "{{ discovery_reset_metrics_dir }}"
+      register: reset_dirs
+
+    - name: Validate root-owned source directories
+      ansible.builtin.assert:
+        that:
+          - item.stat.isdir | default(false)
+          - not (item.stat.islnk | default(false))
+          - item.stat.uid == 0
+      loop: "{{ reset_dirs.results }}"
+
+    - name: Capture current timer states
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ discovery_reset_timers }}"
+      register: reset_timer_states
+      changed_when: false
+      failed_when: reset_timer_states.rc not in [0, 3]
+
+    - name: Refuse reset if any timer was not active
+      ansible.builtin.assert:
+        that: item.stdout == 'active'
+        fail_msg: "Expected active timer, refusing to change prior state"
+      loop: "{{ reset_timer_states.results }}"
+
+    - name: Require all discovery services idle before resetting state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop: "{{ discovery_reset_services }}"
+      register: reset_service_states
+      changed_when: false
+      failed_when: reset_service_states.rc not in [0, 3]
+
+    - name: Refuse reset while a scan is in progress
+      ansible.builtin.assert:
+        that: item.stdout == 'inactive'
+      loop: "{{ reset_service_states.results }}"
+
+    - name: Check exact active files before reset
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop: "{{ (discovery_reset_state_files | map('regex_replace', '^', discovery_reset_dir ~ '/') | list) + (discovery_reset_metric_files | map('regex_replace', '^', discovery_reset_metrics_dir ~ '/') | list) }}"
+      register: reset_source_files
+
+    - name: Refuse symlinks or nonregular existing files
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+          - item.stat.uid == 0
+      loop: "{{ reset_source_files.results }}"
+
+    - name: Create private backup directory
+      ansible.builtin.file:
+        path: "{{ discovery_reset_archive }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Reset discovery safely
+      block:
+        - name: Stop only three discovery timers (leave enabled state unchanged)
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: stopped
+          loop: "{{ discovery_reset_timers }}"
+
+        - name: Refuse overwriting a previous reset backup
+          ansible.builtin.stat:
+            path: "{{ discovery_reset_archive }}/active-discovery-before-reset.tar.gz"
+            follow: false
+          register: reset_backup_preexisting
+
+        - name: Require new backup filename
+          ansible.builtin.assert:
+            that: not (reset_backup_preexisting.stat.exists | default(false))
+
+        - name: Take exact-file backup before removal
+          ansible.builtin.command:
+            argv: "{{ ['tar', '-C', '/', '-czf', discovery_reset_archive ~ '/active-discovery-before-reset.tar.gz'] + (discovery_reset_state_files | map('regex_replace', '^', 'var/lib/homelab-network-hosts/') | list) + (discovery_reset_metric_files | map('regex_replace', '^', 'var/lib/prometheus/node-exporter/') | list) }}"
+          changed_when: true
+
+        - name: Protect backup file
+          ansible.builtin.file:
+            path: "{{ discovery_reset_archive }}/active-discovery-before-reset.tar.gz"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Remove active discovery state files after backup
+          ansible.builtin.file:
+            path: "{{ discovery_reset_dir }}/{{ item }}"
+            state: absent
+          loop: "{{ discovery_reset_state_files }}"
+
+        - name: Remove stale corresponding Prometheus textfiles after backup
+          ansible.builtin.file:
+            path: "{{ discovery_reset_metrics_dir }}/{{ item }}"
+            state: absent
+          loop: "{{ discovery_reset_metric_files }}"
+
+        - name: Run fresh lightweight Nmap host discovery
+          ansible.builtin.systemd_service:
+            name: homelab-network-host-collector.service
+            state: started
+
+        - name: Run fresh selected-port enrichment against new inventory
+          ansible.builtin.systemd_service:
+            name: homelab-network-host-enricher.service
+            state: started
+
+        - name: Recreate deep-profile baseline without broad port scans
+          ansible.builtin.systemd_service:
+            name: homelab-network-host-deep-profiler.service
+            state: started
+
+      always:
+        - name: Resume the three discovery timers
+          ansible.builtin.systemd_service:
+            name: "{{ item }}"
+            state: started
+          loop: "{{ discovery_reset_timers }}"
+
+    - name: Report refreshed host inventory record count
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "import json; from pathlib import Path; print('FRESH_INVENTORY_RECORDS=' + str(len(json.loads(Path('/var/lib/homelab-network-hosts/inventory.json').read_text()))))"
+      register: reset_inventory_count
+      changed_when: false
+
+    - name: Display aggregate count only
+      ansible.builtin.debug:
+        var: reset_inventory_count.stdout
+
+- name: Remove stale one-shot passive OS metrics from sensor-01
+  hosts: sensor-01
+  become: true
+  gather_facts: false
+  vars:
+    discovery_reset_approved: false
+    passive_metric_path: /var/lib/prometheus/node-exporter/homelab_passive_os_candidates.prom
+  tasks:
+    - name: Require approval and exact sensor
+      ansible.builtin.assert:
+        that:
+          - discovery_reset_approved | bool
+          - inventory_hostname == 'sensor-01'
+          - ansible_host == '192.168.2.55'
+
+    - name: Check the exact unfiltered passive metric
+      ansible.builtin.stat:
+        path: "{{ passive_metric_path }}"
+        follow: false
+      register: passive_file
+
+    - name: Refuse unexpected file type
+      ansible.builtin.assert:
+        that:
+          - not (passive_file.stat.islnk | default(false))
+          - not (passive_file.stat.exists | default(false)) or (passive_file.stat.isreg | default(false))
+
+    - name: Delete only obsolete unfiltered one-shot candidate metric
+      ansible.builtin.file:
+        path: "{{ passive_metric_path }}"
+        state: absent
