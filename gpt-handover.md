@@ -1,3 +1,11 @@
+## 7 November 2026 — read-only unmanaged audit Zabbix API reachability corrected
+
+- Operator verified on zabbix-01: zabbix-server active, nginx active; port 8080 listens only on 127.0.0.1, localhost GET `/api_jsonrpc.php` returns HTTP 412; port 80 endpoint GET 404. From monitor-01, both `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php` and `https://192.168.2.59/api_jsonrpc.php` returned HTTP 412 using `curl -k`, demonstrating TLS endpoint reachability but **not trusted-certificate verification nor successful authenticated POST**.
+- Original read-only inventory audit 5/5 offline unit tests and Python compile passed, but live audit failed connecting to `http://192.168.2.59:8080/api_jsonrpc.php` with Connection refused; there were no modifications. Changed `DEFAULT_ZABBIX` in `IaC/ansible/scripts/passive_os_unmanaged_inventory_audit.py` to existing HTTPS hostname in commit `d4940fd9`, using normal requests certificate verification (no insecure bypass). Must verify monitor-01 trusts the HTTPS certificate before rerun; otherwise diagnose CA/hostname properly without blanket `verify=False`.
+- Next: pull branch, test HTTPS with `curl` without `-k` on monitor-01, run corrected one-off audit if TLS valid; get counts only, still no discovery rescan or deployment.
+
+---
+
 ## 7 November 2026 — sensor passive OS metric publisher actually deployed before Zabbix exclusion audit
 
 - Operator supplied live `passive-os-sensor-metrics-one-shot.yml` result on sensor-01: `ok=9 changed=3 failed=0 unreachable=0`; publisher stdout `{"batch_id":"0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d","distinct_ip_family_candidates":1,"metric_bytes":930,"observations":554,"status":"published"}`.
