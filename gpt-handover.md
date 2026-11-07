@@ -1,3 +1,11 @@
+## 7 November 2026 — 21 live unmatched candidates listed; identity review before Nmap
+
+- Operator pulled latest `cccf7b6d` audit-listing feature; `py_compile` and all 5 unit tests PASS. Live read-only `--show-unmatched` returned rc=0: total inventory 36, Zabbix OS authoritative 15, no Zabbix-without-OS or ambiguous entries, **21 unmatched, all online, all inventory hostname blank**.
+- Unmatched IP/MAC snapshot: `192.168.2.2 04:d4:c4:b8:52:28`, `.100 20:23:51:dc:ef:05`, `.103 00:1c:2b:5a:6d:fd`, `.104 f8:17:2d:65:b8:98`, `.106 d4:f5:47:8d:23:2e`, `.109 c4:82:e1:f2:f9:9f`, `.112 60:83:e7:f3:c1:92`, `.125 a4:77:33:5f:94:fe`, `.132 f8:17:2d:64:ca:04`, `.134 00:9c:02:45:39:00`, `.151 94:3a:91:cd:4c:51`, `.153 5c:e9:31:18:c1:4a`, `.164 3c:64:cf:87:ae:ea`, `.165 02:00:00:00:02:04`, `.168 68:ff:7b:1b:33:c0`, `.174 40:ed:00:7c:7b:80`, `.179 92:ff:53:0a:16:e9`, `.180 24:4b:fe:5e:cc:c8`, `.186 24:b2:b9:30:f8:55`, `.189 68:ff:7b:1b:2d:07`, `.190 3c:52:a1:86:bc:56`. All ONLINE=True in inventory; means discovered/responding, **not proof safe to actively scan**.
+- Note `.2` outside router DHCP dynamic 100–199 range; `.165` and `.179` locally administered MAC addresses (not necessarily suspicious; could be virtual/randomised). Next KISS step: read-only reconcile against existing monitor-01 `enrichment.json` and `inventory.json`, router-01 existing dnsmasq lease metadata, and canonical estate assets before creating explicit scan allowlist. Do NOT bulk Nmap 21 or assume all are unmanaged. Retain 15 Zabbix OS records as first and last authority.
+
+---
+
 ## 7 November 2026 — refreshed 36-device Zabbix audit; 21 unmatched identities need review
 
 - Operator ran the existing approved read-only audit on monitor-01 after fresh discovery reset: `ZABBIX_OS_AUTHORITATIVE=15`, `ZABBIX_WITHOUT_OS=0`, `AMBIGUOUS=0`, `UNMATCHED_INVENTORY=21`, `TOTAL_CLASSIFIED=36`, rc=0. No OS scanning occurred during this audit.
