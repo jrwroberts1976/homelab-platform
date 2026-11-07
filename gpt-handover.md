@@ -1,3 +1,11 @@
+## 7 November 2026 — refreshed 36-device Zabbix audit; 21 unmatched identities need review
+
+- Operator ran the existing approved read-only audit on monitor-01 after fresh discovery reset: `ZABBIX_OS_AUTHORITATIVE=15`, `ZABBIX_WITHOUT_OS=0`, `AMBIGUOUS=0`, `UNMATCHED_INVENTORY=21`, `TOTAL_CLASSIFIED=36`, rc=0. No OS scanning occurred during this audit.
+- Added optional `--show-unmatched` flag to existing `scripts/passive_os_unmanaged_inventory_audit.py` (commit `988c7fd6`) to print the 21 unmatched inventory records with IP, hostname, MAC and online flag *only on demand*. Default report stays aggregate-only and read-only. **Not yet locally tested or executed.** No new exporter or discovery component.
+- Next: operator pull, Python compile and existing five offline tests, then run `ansible -i inventory/hosts.yml monitor-01 -b --ask-become-pass -m ansible.builtin.script -a 'scripts/passive_os_unmanaged_inventory_audit.py --show-unmatched'`. Review real device identity/online state against managed inventory and protected production hosts; DO NOT scan all 21 blindly. Preserve existing Nmap profiler one-attempt-per-MAC, ARP presence and scan-rate bounds; approved targeted OS scan to follow once safe list identified.
+
+---
+
 ## 7 November 2026 — post-reset live verification: 36 discovered, 36 baseline-only
 
 - Operator ran read-only post-reset inspection on monitor-01. Observed `FRESH_INVENTORY_RECORDS=36`; `ENRICHMENT_FILE_VALID=True`; `DEEP_PROFILES=36`; `BASELINE_ONLY=36`; all three collector/enricher/deep-profiler timers `active`; protected archive exists `/var/backups/homelab-network-discovery-reset/active-discovery-before-reset.tar.gz`, 11K, root:root mode 0600, timestamp 7 Nov 06:47.
