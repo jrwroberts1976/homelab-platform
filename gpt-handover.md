@@ -1,3 +1,10 @@
+## 7 November 2026 — NFQUEUE routing check inconclusive; no queue rule printed
+
+- Read-only `nft -a list ruleset` filtered for `hook input`, `hook forward`, `hook prerouting`, `queue num` or `queue to` returned input and forward hooks (including forward priority filter/mangle/filter+5/filter+10) but **no matching queue statement**. This does **not conclusively establish** that no NFQUEUE rules exist: output filter misses generic queue syntax, other firewall backends and alternative rule expressions.
+- Suricata runtime remains `-q 10`; do **not** conclude traffic is being sent to it, or that DHCP packets are excluded solely on this evidence. **Next:** inspect nftables JSON queue expressions and legacy iptables NFQUEUE targets plus `/proc/net/netfilter/nfnetlink_queue` counters read-only. Treat lack of queue routing as a possible IDS visibility/security monitoring gap until verified. No production changes authorized; avoid extra scans, packet captures, or queue edits without explicit safe IaC plan and rollback.
+
+---
+
 ## 7 November 2026 — Suricata runs NFQUEUE 10, not AF_PACKET; DHCP EVE visibility diagnosis
 
 - Read-only router-01 process/addresses check: live process `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10 --set stream.midstream-policy=ignore --set exception-policy=ignore --set stream.drop-invalid=no`. The YAML has an `af-packet` section referring to `eth0`, but **active Suricata capture is NFQUEUE 10 (`-q 10`)**; AF_PACKET stanza is not proof Suricata is directly sniffing all eth0 traffic. `eth0=192.168.2.1/24`, WAN `ppp0` is up with public address. Tails of stats.log and suricata.log (500 lines each) revealed no `dhcp` matches; this is only absence in searched log tails, not definitive zero parser statistics.
