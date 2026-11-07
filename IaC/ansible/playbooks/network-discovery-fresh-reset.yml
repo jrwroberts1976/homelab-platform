@@ -89,8 +89,9 @@
     - name: Refuse symlinks or nonregular existing files
       ansible.builtin.assert:
         that:
+          - item.stat.isreg | default(false)
           - not (item.stat.islnk | default(false))
-          - not (item.stat.exists | default(false)) or (item.stat.isreg | default(false))
+          - item.stat.uid == 0
       loop: "{{ reset_source_files.results }}"
 
     - name: Create private backup directory
@@ -109,13 +110,27 @@
             state: stopped
           loop: "{{ discovery_reset_timers }}"
 
-        - name: Take exact-file backup of active discovery state and textfiles
-          ansible.builtin.archive:
-            path: "{{ (discovery_reset_state_files | map('regex_replace', '^', discovery_reset_dir ~ '/') | list) + (discovery_reset_metric_files | map('regex_replace', '^', discovery_reset_metrics_dir ~ '/') | list) }}"
-            dest: "{{ discovery_reset_archive }}/active-discovery-before-reset.tar.gz"
-            format: gz
+        - name: Refuse overwriting a previous reset backup
+          ansible.builtin.stat:
+            path: "{{ discovery_reset_archive }}/active-discovery-before-reset.tar.gz"
+            follow: false
+          register: reset_backup_preexisting
+
+        - name: Require new backup filename
+          ansible.builtin.assert:
+            that: not (reset_backup_preexisting.stat.exists | default(false))
+
+        - name: Take exact-file backup before removal
+          ansible.builtin.command:
+            argv: "{{ ['tar', '-C', '/', '-czf', discovery_reset_archive ~ '/active-discovery-before-reset.tar.gz'] + (discovery_reset_state_files | map('regex_replace', '^', 'var/lib/homelab-network-hosts/') | list) + (discovery_reset_metric_files | map('regex_replace', '^', 'var/lib/prometheus/node-exporter/') | list) }}"
+          changed_when: true
+
+        - name: Protect backup file
+          ansible.builtin.file:
+            path: "{{ discovery_reset_archive }}/active-discovery-before-reset.tar.gz"
+            owner: root
+            group: root
             mode: '0600'
-            force_archive: true
 
         - name: Remove active discovery state files after backup
           ansible.builtin.file:
