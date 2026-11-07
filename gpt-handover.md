@@ -3162,3 +3162,33 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 - Prior 5.7E synthetic local integration 12/12 passed; cumulative **157/157** unique offline tests. Added `IaC/ansible/scripts/passive_os_offline_receipt_coordinator.py` (explicit synthetic test-only, validates challenge/signer/wire before writing, obtains receiver `.lock` flock, stores wire and receipt, signs challenge-bound Ed25519 envelope and self-verifies synthetic signer). No source ack/checkpoint, no SSH or key deployment.
 - Added **10 new offline synthetic tests** in `IaC/ansible/tests/test_passive_os_offline_receipt_coordinator.py`. Tests **NOT yet run by operator**; if all pass cumulative becomes 167. Run py_compile and unittest on admin-01. The test key is generated in memory, not a real pinned/trusted production receiver signer.
 - No claims of real power-cut safety, inter-process race freedom, independently trusted receiver identity or authorised upstream ack. No production changes. Router ED25519 host fingerprint matched through SSH only: independent trust check is **not satisfied**. Router dormant account playbooks remain unexecuted and approval flags closed. Design docs and Story #297. Next: operator tests, then offline fault-injection and crash/restart design; no active cutover.
+
+## Suricata logrotate recovery development — 2026-11-07
+
+- Target: router-01, `/etc/logrotate.d/suricata`.
+- Production configuration remains unchanged.
+- Production NFQUEUE service must not be restarted or signalled.
+- Existing policy uses weekly rotation, copytruncate and an obsolete
+  postrotate hook referencing a missing PID file.
+- Candidate policy: daily, maxsize 100M, rotate 14,
+  compress, delaycompress, copytruncate; no postrotate hook.
+- Candidate SHA-256:
+  `19f06bf2b87db4307d11e5e6be7922e803acc63fcbc3d7c357bc39e975ede677`
+- Original SHA-256:
+  `f95789a4166f06c69695c31de79bf586cd72c0a862cf50292e35d2ae342f6c96`
+- Deployment playbook remains blocked.
+- Draft deployment has an unconditional early development lock.
+- Draft installation and fail-closed recovery logic are staged.
+- Rollback logic is staged but not approved for production.
+- 43 offline tests passed.
+- Synthetic log rotation using disposable files passed.
+- Actual Ansible installation/recovery integration tests remain pending.
+- First production rotation may process approximately 2 GB of logs;
+  I/O impact, retention requirements and maintenance arrangements
+  require review.
+- No production deployment approval has been given.
+
+Next: create localhost-only Ansible integration tests covering successful
+installation, post-installation failure, recovery refusal for unexpected
+configuration and staging cleanup. Review results before enabling any
+production deployment or rollback.
