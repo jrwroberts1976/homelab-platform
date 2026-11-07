@@ -1,3 +1,31 @@
+## 5 November 2026 — router patch telemetry displayed in Grafana
+
+Operator confirmed the Homelab Hosts dashboard, router-01 selected, shows Total Updates 3, Security Updates 0, and Last Patch Check 2.15 minutes. These values are also present in the central Prometheus series with the stable LAN address 192.168.2.1. The update count is based on cached APT metadata; zero security updates is not a security-compliance guarantee. The production telemetry-only Ansible playbook completed a repeat run with 21 successful tasks, one changed task, zero failures and seven skipped. The single change may be the oneshot collector refresh; task-level confirmation is outstanding. No automatic patching was enabled. Issue #209.
+
+## 5 November 2026 — router patch telemetry LAN label verified centrally
+
+Read-only Prometheus API on monitor-01 confirms three router-01 patch metrics with `host=router-01`, `ip=192.168.2.1`, `target_name=router-01`: pending updates 3, security updates 0, status assessment timestamp 1793863552. This verifies the scoped IaC LAN identity fix was effective through the Prometheus relay. Zero security updates is based on cached APT indices and a simple classification heuristic, not independent proof of no missing security patches. Grafana patch panels and idempotent rerun pending. No unattended-upgrades or automatic reboot policy introduced by the change.
+
+## 5 November 2026 — router patch status identity-label correction applied
+
+Operator reran approval-gated router-01 patch telemetry-only playbook with stable management-IP override; Ansible recap `ok=21 changed=2 failed=0 skipped=7`. The exporter template and status data refresh were expected changes; all playbook assertions passed, with no router gateway service failures. Need independent confirmation of `ip=192.168.2.1` in emitted textfile and Prometheus and display in Grafana. No automated upgrade policy enabled by this deployment. Issue #209.
+
+## 5 November 2026 — central Prometheus receives router patch telemetry
+
+Read-only Prometheus API verification on monitor-01 confirmed `router-node-exporter`/`target_name=router-01` series for `homelab_patch_pending_updates=3`, `homelab_patch_security_updates_pending=0`, and patch assessment timestamp `1793863235`. Prometheus receipt is verified; patch status IP label is still the WAN-derived value until the staged `automated_patching_reporting_ip` fix is deployed. Existing APT metadata is cached and the security-update count uses a heuristic. Grafana patch-panel display has not yet been rechecked.
+
+## 5 November 2026 — patch metrics reporting and LAN identity correction staged
+
+Operator verified telemetry-only status collector on router-01: `homelab-patch-status.timer` enabled and active, last oneshot execution successful at 07:20:33 GMT; JSON and Prometheus textfile written; three APT updates pending, security updates reported zero (heuristic and index freshness caveat), reboot_required false, unattended-upgrades absent; gateway PPPoE/dnsmasq/unbound/nftables active. APT indexes observed dated 2–4 November 2026, so reported counts should not be presented as a newly refreshed security assessment. Status JSON emitted a WAN-derived `ip` label because `ansible_default_ipv4.address` resolves to PPPoE on this gateway. IaC stage now supplies `automated_patching_reporting_ip: "{{ ansible_host }}"` to use stable `192.168.2.1` for this router only, leaving other hosts unchanged. This **label correction has not yet been deployed**. Need verify end-to-end Prometheus scrape, deploy label fix with explicit approval, confirm fresh new label and Grafana patch panels. Issue #209.
+
+## 5 November 2026 — router-01 patch telemetry canary deployed; scrape verification pending
+
+Operator deployed gated `playbooks/router-01-patch-telemetry-only.yml` to router-01 using the isolated worktree. Ansible recap: **ok=22 changed=6 unreachable=0 failed=0 skipped=6**. Existing `automated_patching` role was explicitly configured as `automated_patching_enabled=false`, `automated_patching_publish_status=true`, so installation scope is the hourly status script/service/timer and textfile metrics, without enabling automatic upgrades. Preflight/postflight playbook checks completed. Before claiming fully integrated patch reporting, independently confirm exported values and freshness via Node Exporter, Prometheus and Grafana, and inspect APT package index age; collector counts may be stale if package lists are old. Issue #209; branch `feature/router01-patch-telemetry-20261105`, not merged.
+
+## 5 November 2026 — router-01 patch telemetry preflight; IaC only staged
+
+Direct read-only router audit: unattended-upgrades not installed; APT daily timers enabled but no effective unattended-upgrades policy identified; node exporter active and exposes local textfile directory `/var/lib/prometheus/node-exporter`; no `homelab-patch-status` script/service/timer/status or Prometheus artifact; no failed systemd units reported by `systemctl --failed`; gateway PPPoE, dnsmasq, unbound, nftables active. A new explicitly approval-gated, telemetry-only playbook is staged in branch `feature/router01-patch-telemetry-20261105`, reusing `automated_patching` role with automated package installation **disabled**. It will report APT update counts into existing Prometheus textfile collector but not install unattended-upgrades, change patch policy or reboot. **Not deployed**. Issue #209.
+
 ## 5 November 2026 — PR #295 merged, router monitoring and Hosts Grafana integration
 
 PR #295 merged into main (merge commit `99984564983373eca3b913c1366a6025f0bf140a`) after both relevant CI workflows passed. All eight router-01 Zabbix items confirmed supported/fresh. Grafana Homelab Hosts router selection and core CPU, memory, network and filesystem panels verified by operator. Missing patch panels, OS/port/Nmap enrichment and ambiguous systemd-failure zero remain unverified, not proof of zero updates or issues. No production network configuration touched in Grafana work. GitHub #294 (DHCP per-device Zabbix enrichment) is already CLOSED; follow-up must respect existing issue status and be separately tracked if needed.

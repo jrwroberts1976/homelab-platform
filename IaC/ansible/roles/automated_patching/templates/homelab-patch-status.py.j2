@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 
 HOST = "{{ inventory_hostname }}"
-IP = "{{ ansible_default_ipv4.address | default(ansible_host | default('unknown')) }}"
+IP = "{{ automated_patching_reporting_ip | default(ansible_default_ipv4.address | default(ansible_host | default('unknown'))) }}"
 STATUS_DIR = Path("{{ automated_patching_status_dir }}")
 STATUS_FILE = STATUS_DIR / "status.json"
 METRICS_DIR = Path("{{ automated_patching_textfile_dir }}")
