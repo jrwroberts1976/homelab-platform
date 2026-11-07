@@ -1,3 +1,11 @@
+## 7 November 2026 — James-LT OS fingerprint evidence reviewed; no scan retry
+
+- Operator read existing monitor-01 `deep-profiles.json` record for `24:b2:b9:30:f8:55` (192.168.2.186) after the single-host bounded Nmap pilot. Reported `STATUS=partial`, `LAST_ERROR=os_evidence_missing`, `NEEDS_OS_IDENTIFICATION=True`, `ATTEMPTS=1`, `OS_MATCHES=[]`, `OPEN_PORTS=[]`, `PROFILE_ERRORS={}`.
+- This is **not** a transport/Nmap exception recorded by the profiler; the bounded scan completed with no detected open ports and no OS matches. A firewall, closed services or top-100-port scan coverage could each explain it; no definitive cause is established. Nmap reliable OS fingerprinting commonly needs suitable open/closed TCP responses. **Do not reset the attempt marker or rescan laptop automatically.** Prefer authoritative local OS information for known laptop, while retaining deep profiler evidence/provenance as partial.
+- #297 next should assess remaining noncritical unmanaged devices for passive or existing DHCP/service evidence, or validate managed host OS coverage in Grafana. Current first targeted pilot establishes safety isolation, not a successful OS identification. Do not deploy unfiltered passive candidates or wide-scope active Nmap scans.
+
+---
+
 ## 7 November 2026 — first approved one-laptop targeted OS fingerprint pilot: partial, no OS matches
 
 - Operator compiled and syntax-checked the gated pilot twice, both PASS, then executed `playbooks/network-host-one-target-os-pilot.yml --ask-become-pass -e os_pilot_approved=true` against monitor-01. Live recap: **ok=16 changed=5 failed=0 unreachable=0 skipped=0**. Safety assertions passed, profiler timer paused/resumed, deep profile backup created, only `James-LT` `192.168.2.186` MAC `24:b2:b9:30:f8:55` armed, installed targeted profiler started once, final stats:
