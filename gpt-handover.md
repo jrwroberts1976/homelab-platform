@@ -1,3 +1,11 @@
+## 7 November 2026 — passive OS hint timestamps and current DHCP leases verified
+
+- Operator inspected only the refreshed sanitised router batch and current dnsmasq leases. **Google Home** `192.168.2.125`: six low-confidence `Linux` HTTP User-Agent hints, first `2026-11-07T07:10:50Z`, last `2026-11-07T07:15:50Z`, current DHCP MAC `a4:77:33:5f:94:fe`, name `Google-Home`, lease expires `2026-11-08T03:42:06Z`. **James-LT** `192.168.2.186`: one low-confidence `Windows` hint at `2026-11-07T07:12:42Z`, current DHCP MAC `24:b2:b9:30:f8:55`, name `James-LT`, lease expires `2026-11-08T06:38:03Z`.
+- Observations are recent relative to the refreshed one-shot snapshot and demonstrate new usable source timestamps. **No historical DHCP lease start/ownership has been verified**, and a UA string is self-reported. Thus don't promote either family to authoritative OS and don't infer firmware/version; the Windows-family hint adds useful *candidate* context because James-LT's targeted Nmap returned no OS matches and no open ports.
+- Keep sensor one-shot as **dry-run only**, do not redeploy unfiltered Prometheus metric or Grafana panel. For next corroboration, review existing DHCP logs for `.186` around the observation time if retained, then distinguish observation confidence from identity confidence; existing authoritative local agent/system facts preferred when possible. No new scans, timers or router service changes required.
+
+---
+
 ## 7 November 2026 — refreshed passive wire snapshot; Windows hint for James-LT, low confidence
 
 - Operator executed the existing approved `playbooks/passive-os-one-shot-pilot.yml` on router-01: **ok=9 changed=1 failed=0**, with no new service/timer, router firewall or Suricata configuration changes. Subsequent read-only sensor-01 `passive_os_sensor_metrics.py --dry-run` returned `rc=0`, `status=dry_run_only`, new batch ID `a578a821a0a3b77afa30e55a38b55ce28130b71833fb087c3077678b3b35d6ca`, **411** sanitised observations and **2** low-confidence OS hint candidates: `192.168.2.125 Linux` from 6 HTTP observations (DHCP name Google-Home) and `192.168.2.186 Windows` from 1 HTTP observation (DHCP name James-LT).
