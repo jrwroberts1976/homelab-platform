@@ -1,3 +1,11 @@
+## 7 November 2026 — post-reset live verification: 36 discovered, 36 baseline-only
+
+- Operator ran read-only post-reset inspection on monitor-01. Observed `FRESH_INVENTORY_RECORDS=36`; `ENRICHMENT_FILE_VALID=True`; `DEEP_PROFILES=36`; `BASELINE_ONLY=36`; all three collector/enricher/deep-profiler timers `active`; protected archive exists `/var/backups/homelab-network-discovery-reset/active-discovery-before-reset.tar.gz`, 11K, root:root mode 0600, timestamp 7 Nov 06:47.
+- Compared with earlier 44 retained inventory entries, the new count is eight fewer **retained records**, not proof eight live devices went offline. This is a clean discovery/enrichment baseline, **NOT** 36 newly fingerprinted operating systems. First deep-profiler run intentionally only baselines, zero Nmap deep fingerprints; do not mark OS scan work completed.
+- Next: rerun existing read-only `scripts/passive_os_unmanaged_inventory_audit.py` against the new 36-entry inventory and Zabbix OS facts; then scope bounded targeted active OS scans only to confidently eligible unmanaged devices. Preserve per-MAC presence checks and one-attempt policy; avoid turning on legacy full-network Nmap scan, do not reactivate retired Zabbix inventory exporter or rerun the reset.
+
+---
+
 ## 7 November 2026 — approved fresh discovery reset executed successfully
 
 - Operator ran approved `playbooks/network-discovery-fresh-reset.yml` on the dedicated feature branch after syntax check passed. Reported actual live recaps: **monitor-01 ok=23 changed=10 failed=0 unreachable=0 skipped=0; sensor-01 ok=4 changed=1 failed=0 unreachable=0 skipped=0**. Thus both plays completed without Ansible errors. Scoped monitor inventory/enrichment/deep-profile active state and associated Prometheus metrics were backed up and recreated, three discovery timers returned to started state, and sensor's unfiltered one-shot passive metric was removed under the approved playbook. No action to Zabbix, router, Greenbone, protected guest mapping or alert state.
