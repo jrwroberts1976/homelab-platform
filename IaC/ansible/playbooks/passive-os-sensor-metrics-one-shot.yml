@@ -1,0 +1,78 @@
+---
+# One-shot passive OS candidate metric publish on sensor-01 only.
+# This does not enable timers, configure services or touch router networking.
+- name: Install and publish one passive OS candidate metrics snapshot
+  hosts: sensor-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_sensor_metrics_approved: false
+    passive_os_sensor_metrics_script: /usr/local/lib/homelab-passive-os/passive_os_sensor_metrics.py
+    passive_os_sensor_metrics_target: /var/lib/prometheus/node-exporter/homelab_passive_os_candidates.prom
+  tasks:
+    - name: Require explicit one-shot approval and sensor host
+      ansible.builtin.assert:
+        that:
+          - passive_os_sensor_metrics_approved | bool
+          - inventory_hostname == 'sensor-01'
+          - ansible_host == '192.168.2.55'
+
+    - name: Check existing sensor SSH key, known hosts and textfile directory
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /etc/homelab/passive-os-ssh/id_ed25519
+        - /etc/homelab/passive-os-ssh/known_hosts
+        - /var/lib/prometheus/node-exporter
+      register: passive_os_sensor_metric_paths
+
+    - name: Refuse missing transport or textfile directory
+      ansible.builtin.assert:
+        that:
+          - passive_os_sensor_metric_paths.results[0].stat.isreg | default(false)
+          - passive_os_sensor_metric_paths.results[1].stat.isreg | default(false)
+          - passive_os_sensor_metric_paths.results[2].stat.isdir | default(false)
+          - passive_os_sensor_metric_paths.results[2].stat.uid == 0
+
+    - name: Install script directory
+      ansible.builtin.file:
+        path: /usr/local/lib/homelab-passive-os
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install one-shot SSH metrics exporter
+      ansible.builtin.copy:
+        src: ../scripts/passive_os_sensor_metrics.py
+        dest: "{{ passive_os_sensor_metrics_script }}"
+        owner: root
+        group: root
+        mode: '0644'
+
+    - name: Validate sensor node exporter textfile scraping
+      ansible.builtin.uri:
+        url: http://127.0.0.1:9100/metrics
+        return_content: true
+        status_code: 200
+      register: passive_os_sensor_node_metrics
+
+    - name: Require working node textfile collector
+      ansible.builtin.assert:
+        that:
+          - "'node_textfile_scrape_error 0' in passive_os_sensor_node_metrics.content"
+
+    - name: Publish one validated current batch as low-confidence metrics
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - "{{ passive_os_sensor_metrics_script }}"
+          - --output
+          - "{{ passive_os_sensor_metrics_target }}"
+      register: passive_os_sensor_publish
+      changed_when: true
+
+    - name: Show only aggregate candidate counts
+      ansible.builtin.debug:
+        var: passive_os_sensor_publish.stdout
