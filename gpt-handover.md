@@ -1,3 +1,12 @@
+## 7 November 2026 — first authenticated synthetic passive OS SSH transfer PASSED
+
+- Operator executed sensor-01 strict-key SSH pull from router-01 as `homelab-os-transfer`. Output was one synthetic protocol-v1 JSON batch, `batch_id=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`, a single `192.168.2.113` synthetic HTTP ChromeOS hint at Unix timestamp `1794000000`, and **SSH_EXIT_CODE=0**.
+- Wire observation SHA256 digest `3ea2b728b9a74dee5757c406b12e8790d44733b5157032c5471b8645245a0af0` matches the canonical observations. This proves SSH auth, fixed-command output and one payload delivery, **not** receiver persistence, classification, live source collection or Grafana updates.
+- Temporary synthetic router `/var/lib/homelab-passive-os-outbound/batch.json` needs gated cleanup via `passive-os-ssh-synthetic-batch.yml` with `passive_os_test_action=cleanup`; no successful cleanup reported yet.
+- Next KISS milestones: clean synthetic test, then provision a bounded source-side EVE-to-sanitised batch run and sensor-side receiver/classification wiring via Ansible, verify one live observed batch, and only then schedule cautiously. Preserve gateway services; no requirement for forensic continuity.
+
+---
+
 ## 7 November 2026 — sensor-to-router SSH authentication works; synthetic transfer next
 
 - Operator ran strict SSH pull from sensor-01 to router-01 via `homelab-os-transfer@192.168.2.1 get-batch` with pinned known_hosts and dedicated key. Actual remote result: `cat: /var/lib/homelab-passive-os-outbound/batch.json: No such file or directory`, `SSH_EXIT_CODE=1`. This **demonstrates successful authentication and execution of the router-side fixed command**, not yet a successful file transfer.
