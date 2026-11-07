@@ -1,3 +1,10 @@
+## 7 November 2026 — offline OS evidence precedence unit tests passed
+
+- Operator ran `python3 -m unittest discover -s tests -p 'test_os_evidence_precedence.py' -v` on admin-01; output **Ran 11 tests in 0.004s; OK**. This confirms offline precedence-policy regression tests, not live deployment. Zabbix authority, Nmap provenance, passive-UA low confidence, ambiguity/stale evidence fail-closed checks are covered.
+- Next step: inspect existing inventory/enrichment persistence and Grafana data source before integrating any OS assessment. Do not deploy helper as separate collector or emit inferred authoritative OS from passive hints. Preserve scan safeguards and one-attempt policy.
+
+---
+
 ## 7 November 2026 — #297 offline OS evidence precedence test staged (no deployment)
 
 - Added pure, **offline-only test-support** `IaC/ansible/scripts/os_evidence_precedence.py` (commit `18d1bb64`) and `IaC/ansible/tests/test_os_evidence_precedence.py` (commit `c10b0bcd`). Resolver takes existing Zabbix comparison classification, optional Nmap profile record and sanitised passive summary; it **performs no I/O, scanning, network requests or metric publication** and is **not wired into the live inventory exporter**.
