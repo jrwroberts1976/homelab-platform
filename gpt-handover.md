@@ -1,3 +1,11 @@
+## 7 November 2026 — sensor passive OS metric script syntax fix
+
+- Operator ran one-shot sensor metrics tests: `Ran 1 test ... FAILED (errors=1)` due to a SyntaxError during module import; `py_compile` pinpointed line 74, which contained literal backslash-n (`\\n`) rather than an actual newline in OS hint type validation. Ansible playbook `passive-os-sensor-metrics-one-shot.yml --syntax-check` **passed**.
+- Corrected source in GitHub commit `f6320c03`, replacing literal escape with a real line break. **Tests/compile not yet rerun after fix**, no metrics deployed, no router/sensor runtime changes.
+- Next: operator fast-forward pull then rerun five offline unit tests and Python compile, then proceed to separate approval for one-time sensor metric publish. Keep existing monitoring and low-confidence labels intact.
+
+---
+
 ## 7 November 2026 — sensor textfile collector confirmed; one-shot OS candidate metrics and Grafana panel staged
 
 - Operator on sensor-01: `prometheus-node-exporter` active, existing textfile directory `/var/lib/prometheus/node-exporter` and existing six `.prom` files; exporter `/metrics` shows `node_textfile_mtime_seconds` for files and `node_textfile_scrape_error 0`. This proves that the textfile collector works even though `/proc/$pid/cmdline` only displayed the executable path.
