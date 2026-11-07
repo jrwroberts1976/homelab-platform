@@ -1,3 +1,11 @@
+## 7 November 2026 — OS source-of-truth correction: Zabbix first and last for agent-managed hosts
+
+- Operator explicitly rejected the Linux passive-OS candidate as an unhelpful pilot target because Linux hosts already have Zabbix agents that report operating system details. **Decision:** for any Zabbix-agent-managed host, Zabbix is the first and last source for OS identification; passive User-Agent hints must **not** enrich, compete with or override that authoritative identity. Prefer existing management/SNMP identity for managed network equipment; use Nmap and then passive hints only for genuinely unmanaged/unidentified devices.
+- **Hold deployment** of `passive-os-sensor-metrics-one-shot.yml` and the new passive-OS Grafana panel until managed hosts can be excluded and at least one genuinely unmanaged candidate is identified. Previous 5/5 offline tests and syntax checks prove code basics only. No sensor passive metric publication or Grafana deployment confirmed.
+- The previous 554-observation real wire test remains useful as a transport/minimisation proof (six Linux HTTP hints, one IP), **not** as proof of incremental OS identification value. Do not assume a current DHCP lease tells whether an IP belongs to a Zabbix-managed host. Next small step: establish a reliable way of excluding Zabbix inventory hosts (ideally existing canonical inventory/Prometheus labels) before publishing any passive metric. No router network or service changes.
+
+---
+
 ## 7 November 2026 — sensor passive OS metrics offline retest passed
 
 - Operator pulled corrected source and ran `python3 -m py_compile scripts/passive_os_sensor_metrics.py` (no errors reported) and `python3 -m unittest discover -s tests -p 'test_passive_os_sensor_metrics.py' -v`: **5/5 PASS (0.006s)**.
