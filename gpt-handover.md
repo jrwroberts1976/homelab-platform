@@ -1,3 +1,11 @@
+## 7 November 2026 — sensor passive OS metric publisher actually deployed before Zabbix exclusion audit
+
+- Operator supplied live `passive-os-sensor-metrics-one-shot.yml` result on sensor-01: `ok=9 changed=3 failed=0 unreachable=0`; publisher stdout `{"batch_id":"0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d","distinct_ip_family_candidates":1,"metric_bytes":930,"observations":554,"status":"published"}`.
+- This means one **low-confidence, unfiltered** candidate metric file `/var/lib/prometheus/node-exporter/homelab_passive_os_candidates.prom` **is now live on sensor-01**. It DOES NOT exclude Zabbix-managed hosts despite the user's later architecture rule. The new Hosts dashboard panel is still only in Git; do not deploy it or call candidate an identified unmanaged device. The metric may already be scraped by Prometheus; check before proceeding.
+- Operator's shown Git pull fast-forwarded only `d48025bd..c83cd4b2`, older than the current feature branch commit containing new read-only unmanaged audit (`a2dc0575`). They may have executed an earlier command. Next: fast-forward from feature branch and run the read-only Zabbix-vs-inventory audit first; then suppress/remove or filter passive candidates from agent-managed hosts using Ansible. Treat all unfiltered hints as non-authoritative; do not change router services.
+
+---
+
 ## 7 November 2026 — read-only unmanaged-device gap audit staged, no rescan
 
 - Implemented `IaC/ansible/scripts/passive_os_unmanaged_inventory_audit.py` on the active feature branch. It **reads only** monitor-01's existing `/var/lib/homelab-network-hosts/inventory.json`, uses the already deployed read-only Zabbix management-report token `/etc/homelab-management-report/zabbix-api-token` against `192.168.2.59:8080/api_jsonrpc.php` (`host.get` and `item.get` for `system.sw.os.get`, `system.sw.os[name]`), and categorises by matching IP interface or exact canonical host name. API hosts with enabled/supported nonempty OS facts are **Zabbix OS authoritative**, never passive OS targets. Zabbix-matched without OS facts and ambiguous matches are separate; unmatched inventory is **not automatically a proven unmanaged device**. Routine stdout reports counts only, no secrets, host IPs or full OS strings. No network scans, writes, services or router interaction.
