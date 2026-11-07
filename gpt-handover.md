@@ -1,3 +1,11 @@
+## 7 November 2026 — one-shot real EVE tail pilot offline validation passed
+
+- Operator on admin-01 ran `python3 -m unittest discover -s tests -p test_passive_os_live_sample.py -v`: **4/4 PASS** (0.010s), `python3 -m py_compile scripts/passive_os_live_sample.py`: PASS, and `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-one-shot-pilot.yml --syntax-check`: PASS.
+- This verifies offline code and playbook syntax only. **No real EVE collection or live pilot playbook has yet been executed.** The synthetic SSH batch was successfully transferred and cleaned up in the previous step.
+- Next milestone: separately approve one-time bounded live read/publish on router-01, then fetch the sanitised batch from sensor-01. Do not enable a timer, restart Suricata, or change PPPoE/DHCP/DNS/nftables/CAKE/NFQUEUE.
+
+---
+
 ## 7 November 2026 — synthetic cleanup complete; KISS one-shot real EVE tail pilot staged
 
 - Operator ran approved `passive-os-ssh-synthetic-batch.yml` cleanup on router-01: `ok=5 changed=1 failed=0 skipped=2`. The exact synthetic `batch.json` matched before removal; no live Suricata/router service changed.
