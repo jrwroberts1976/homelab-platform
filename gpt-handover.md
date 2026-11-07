@@ -3192,3 +3192,20 @@ Next: create localhost-only Ansible integration tests covering successful
 installation, post-installation failure, recovery refusal for unexpected
 configuration and staging cleanup. Review results before enabling any
 production deployment or rollback.
+
+## DHCP infinite-lease migration — 2026-11-07
+
+- Target: router-01, `/etc/dnsmasq.d/router.conf`.
+- Current lease: 24h; requested lease: infinite.
+- Existing DHCP pool: 192.168.2.100–199.
+- Last observed active leases: 29.
+- Production deployment: NOT performed.
+- Deployment playbook retains an unconditional development lock.
+- Offline deployment/recovery/finalisation tests: 20 passed.
+- DHCP fingerprint parser tests: 9 passed.
+- Eight legacy IaC files contain assumptions about 24h leases.
+- Do not globally replace historical lease values.
+- Legacy rollback and migration playbooks require individual
+  compatibility reviews before reuse after the lease change.
+- Outstanding: atomic success/rollback finalisation, timer-race
+  and reboot testing, DHCP functionality checks and production approval.
