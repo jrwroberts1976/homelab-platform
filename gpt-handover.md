@@ -1,3 +1,14 @@
+## 7 November 2026 — sensor textfile collector confirmed; one-shot OS candidate metrics and Grafana panel staged
+
+- Operator on sensor-01: `prometheus-node-exporter` active, existing textfile directory `/var/lib/prometheus/node-exporter` and existing six `.prom` files; exporter `/metrics` shows `node_textfile_mtime_seconds` for files and `node_textfile_scrape_error 0`. This proves that the textfile collector works even though `/proc/$pid/cmdline` only displayed the executable path.
+- Located metrics producers: `network_host_collector` and `network_host_enrichment`, using existing Prometheus textfile publishing; **do not alter these established host authoritative facts**.
+- **Committed but not deployed/tested** `IaC/ansible/scripts/passive_os_sensor_metrics.py`: one-shot root-run sensor SSH fetch using existing restricted key/known_hosts, strict minimal wire check and SHA256 digest, emits separate `homelab_passive_os_candidate_info`, `homelab_passive_os_candidate_observations`, `homelab_passive_os_candidate_last_seen_seconds` with `source=http_user_agent`, `confidence=low`, `mac_attribution=unverified`; write atomic `/var/lib/prometheus/node-exporter/homelab_passive_os_candidates.prom`. No mac lookup or confirmed identity, no new service/timer.
+- Added `IaC/ansible/tests/test_passive_os_sensor_metrics.py` (five offline checks, NOT RUN), and approval-gated `IaC/ansible/playbooks/passive-os-sensor-metrics-one-shot.yml` (NOT syntax checked/ran). No automatic refresh; candidate metrics can stale after pilot, labelled accordingly. Exact host sensor-01 gate. Existing Grafana `homelab-network-hosts.json` now contains additive **panel 15** table at y47 titled `Passive OS Candidates — Low Confidence` querying the new separate metric, NOT YET deployed to live Grafana.
+- Before running live metric publisher, operator to pull and run five offline tests, Python compile and Ansible syntax check; obtain explicit approval for one-shot sensor publish. Then verify sensor exporter `/metrics` and monitor-01 Prometheus can scrape it, deploy Grafana using existing monitored Ansible path when agreed. No router changes.
+- Existing one-shot router wire results: real 554 sanitised events, 6 Linux HTTP hints from 1 IP with current dnsmasq lease; historic MAC ownership unverified.
+
+---
+
 ## 7 November 2026 — Hosts dashboard identified; passive OS metric not yet connected
 
 - Operator local search located `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/homelab-network-hosts.json`. GitHub inspection confirms 14 existing panels: inventory, availability, identity, latency, open ports, deep profiling, enrichment health, lifecycle logs. **No passive OS metric or panel currently present.** Separate `production/homelab-linux-estate.json` has Nmap OS Fingerprint; preserve that established evidence path.
