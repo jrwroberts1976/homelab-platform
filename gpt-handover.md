@@ -1,3 +1,11 @@
+## 7 November 2026 — first real passive OS family candidate found
+
+- Operator validated restricted SSH batch and ran per-family grouping on sensor-01. Result: `Linux: 1 distinct source IP(s)`, `TOTAL_DISTINCT_HINTED_IPS=1`, `STATUS=UNVERIFIED_CANDIDATES`. The previous batch had 6 HTTP OS hints in 554 observations; these hints concern one source IP and are not six distinct devices.
+- Linux is a **low-confidence HTTP self-reported family hint**, not yet MAC-attributed, verified OS, persisted classifier output or Grafana metric. No lease evidence has been validated; do not mark as confirmed.
+- Next read-only inspect DNSmasq lease file layout and observation event time (aggregate only). A live lease alone cannot prove historic ownership unless expiry/start time evidence safely covers the event; otherwise retain `unknown` MAC attribution.
+
+---
+
 ## 7 November 2026 — actual real EVE wire validated; outbound snapshot changed
 
 - Operator fetched live wire via sensor-01 restricted pinned-key SSH; current `BATCH_ID=0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d`, `OBSERVATIONS=554`, `DIGEST_VALID=True`, `HTTP_OS_HINTS=6`. Verified transfer/JSON/digest; no individual household IPs exposed in terminal summary.
