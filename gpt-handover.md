@@ -1,3 +1,14 @@
+## 7 November 2026 — #297 KISS SSH transport setup/rollback staged, not deployed
+
+- Operator ran the **four** `test_passive_os_publish_snapshot.py` tests on admin-01: `Ran 4 tests in 0.025s — OK`. `py_compile` and `git status` were requested but their independent output was not supplied.
+- Added `IaC/ansible/playbooks/passive-os-ssh-transport-setup.yml`: explicit `passive_os_transport_apply=false` by default, separate root-owned sensor-01 Ed25519 key/known_hosts, router fingerprint check against 29 Oct key, and a dedicated locked router `homelab-os-transfer` account with a single source-IP-restricted forced command to `cat` a sanitised outbound file. Pre-existing transfer account causes failure; no sshd configuration write/reload, no router services, NFQUEUE, QoS, DHCP, DNS or firewall changes. This chooses the existing history-backed trust pin as pragmatic KISS homelab trust; prior caveat about original out-of-band provenance remains.
+- Added `IaC/ansible/playbooks/passive-os-ssh-transport-rollback.yml` with explicit default-deny rollback, account marker/process checks and cleanup limited to the dedicated key, outbound and account/home. It does **not** touch source pending/checkpoint or any router service. Do not confuse with the prior dormant-account rollback.
+- Added `IaC/ansible/tests/test_passive_os_ssh_transport_setup.py` (5 source-level tests), **not yet executed**. Both new playbooks also require local Ansible syntax checks on admin-01 before any live run.
+- **Current boundary:** the sanitised outbound directory is prepared, but the source `pending.json` and production collector have NOT been deployed; there is no `batch.json` yet, no SSH live proof, no sensor receiver integration/timer, and no Grafana passive OS metrics. Following KISS, a one-off synthetic file transfer is first; no preflight marathon or extra service.
+- Next: pull branch, run 5 tests and both syntax checks, then review proposed one-time setup/rollback commands and explicitly approve if desired. Do not assume this user message's test approval authorises a live write.
+
+---
+
 ## 7 November 2026 — #297 KISS sanitised outbound snapshot implementation staged in Git
 
 - Added `IaC/ansible/scripts/passive_os_publish_snapshot.py`: root-run, **manual only** bounded projection from already prepared private `pending.json` via the existing allowlist exporter into a separate `batch.json`; root-owned `0750` outbound directory with transfer-user group, atomic root-owned group-readable `0640` output; no raw EVE access, checkpoint acknowledgement, SSH or timer. It requires a separately provisioned transfer account/group and directory before use.
