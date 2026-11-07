@@ -14,7 +14,7 @@ import requests
 
 DEFAULT_INVENTORY = "/var/lib/homelab-network-hosts/inventory.json"
 DEFAULT_TOKEN = "/etc/homelab-management-report/zabbix-api-token"
-DEFAULT_ZABBIX = "http://192.168.2.59:8080/api_jsonrpc.php"
+DEFAULT_ZABBIX = "https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php"
 OS_KEYS = {"system.sw.os.get", "system.sw.os[name]"}
 MAX_INVENTORY = 5000
 
