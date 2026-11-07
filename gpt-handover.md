@@ -1,3 +1,10 @@
+## 7 November 2026 — DHCP journal contains no corroborating James-LT lease event in checked window
+
+- Operator ran a read-only `journalctl -u dnsmasq --since '2026-11-07 06:45:00 UTC' --until '2026-11-07 07:20:00 UTC'` filtered for `192.168.2.186`, `24:b2:b9:30:f8:55`, `James-LT` on router-01. Command returned rc=0 but **no matching lines**. This is absence of matching retained journal evidence in that window, **not proof the device did not hold the lease**. No journal coverage or DHCP logging configuration was independently established.
+- Retain James-LT `.186` one `Windows` HTTP User-Agent observation at `07:12:42Z` as a **low-confidence passive candidate with MAC attribution unverified**. Current dnsmasq lease maps `.186` to James-LT MAC but does not prove historic binding. Bounded Nmap one-attempt pilot produced no OS matches or open ports. Do not promote to authoritative OS, rescan, re-run repeated DHCP queries or publish unfiltered metrics; continue #297 with evidence/provenance evaluation.
+
+---
+
 ## 7 November 2026 — passive OS hint timestamps and current DHCP leases verified
 
 - Operator inspected only the refreshed sanitised router batch and current dnsmasq leases. **Google Home** `192.168.2.125`: six low-confidence `Linux` HTTP User-Agent hints, first `2026-11-07T07:10:50Z`, last `2026-11-07T07:15:50Z`, current DHCP MAC `a4:77:33:5f:94:fe`, name `Google-Home`, lease expires `2026-11-08T03:42:06Z`. **James-LT** `192.168.2.186`: one low-confidence `Windows` hint at `2026-11-07T07:12:42Z`, current DHCP MAC `24:b2:b9:30:f8:55`, name `James-LT`, lease expires `2026-11-08T06:38:03Z`.
