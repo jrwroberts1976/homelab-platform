@@ -1,3 +1,12 @@
+## 7 November 2026 — NFQUEUE routing verified, separate Suricata service ownership unresolved
+
+- Subsequent read-only router-01 diagnostics **resolved previous concern about missing queue rules**: nft rules use syntax `queue flags bypass to 10`, not `queue num` or `queue to`. Found two FORWARD-path rules: `iifname "eth0" oifname "ppp0" ip saddr 192.168.2.0/24 ... queue flags bypass to 10` with cumulative **86,330,122** packets; reverse WAN-to-LAN `iifname "ppp0" oifname "eth0" ip daddr 192.168.2.0/24 ... queue flags bypass to 10` with **156,792,098** packets. These are cumulative and by themselves not proof of live scan rate.
+- `/proc/net/netfilter/nfnetlink_queue` reports queue **10**, bound to PID **42090**, matching previously observed active `/usr/bin/suricata ... -q 10` process. NFQUEUE connection is genuinely configured; do **not** claim missing firewall queue rules or an idle/unfed IDS. The read-only Ansible shell task returned **rc=3** exclusively because `systemctl is-active suricata` reported **inactive**. Service unit may be named something else or process may be managed by a separate supervisor; process ownership **not yet established**. Do not restart/reload anything or switch capture modes.
+- Queue rules are in FORWARD path (LAN<->WAN). Local DHCP to router dnsmasq travels INPUT, so its absence from Suricata EVE is consistent with topology; EVE DHCP YAML `enabled: yes, extended: no` does not overcome unavailable packets. Existing dnsmasq DHCPACK logs already corroborate IP/MAC attribution around James-LT UA hint. **No need to expand Suricata queue to INPUT just for OS fingerprinting**; may affect router stability and writes.
+- Next minimally invasive check: inspect PID 42090 `/proc/42090/cgroup` and `systemctl status 42090 --no-pager`, relevant `systemctl list-units --all '*suricata*'`, `systemctl list-unit-files '*suricata*'`; read-only only. If manager identified and intentional, consider DHCP gap explained and proceed to offline identity-enrichment design.
+
+---
+
 ## 7 November 2026 — NFQUEUE routing check inconclusive; no queue rule printed
 
 - Read-only `nft -a list ruleset` filtered for `hook input`, `hook forward`, `hook prerouting`, `queue num` or `queue to` returned input and forward hooks (including forward priority filter/mangle/filter+5/filter+10) but **no matching queue statement**. This does **not conclusively establish** that no NFQUEUE rules exist: output filter misses generic queue syntax, other firewall backends and alternative rule expressions.
