@@ -1,3 +1,11 @@
+## 7 November 2026 — actual real EVE wire validated; outbound snapshot changed
+
+- Operator fetched live wire via sensor-01 restricted pinned-key SSH; current `BATCH_ID=0d097f666267909d2c9379377c866f5f58f066ed70a111c9f60e3d536f0ed00d`, `OBSERVATIONS=554`, `DIGEST_VALID=True`, `HTTP_OS_HINTS=6`. Verified transfer/JSON/digest; no individual household IPs exposed in terminal summary.
+- The original pilot run reported `batch_id=7fa643811826e2e445a46709b6fd2cd2be2d9e5dcf9b34f60f8d42f27767225e`, 561 observations. The current snapshot is **different** and reason unknown (possible repeat run). First verification failed solely on an incorrectly presumed stable 561 count; not proof of corruption.
+- Next KISS step: group 6 self-reported HTTP OS hints by family/distinct source hosts without dumping IPs, then identify time-valid DHCP lease data for MAC attribution. No claim of 6 known devices; no live classification or Grafana enrichment yet. Avoid rerunning sampler until needed.
+
+---
+
 ## 7 November 2026 — first live bounded Suricata OS sample succeeded
 
 - Operator executed explicitly approved `passive-os-one-shot-pilot.yml` on router-01. Result: `ok=9 changed=1 failed=0 unreachable=0`.
