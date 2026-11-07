@@ -1,3 +1,12 @@
+## 7 November 2026 — sensor-to-router SSH authentication works; synthetic transfer next
+
+- Operator ran strict SSH pull from sensor-01 to router-01 via `homelab-os-transfer@192.168.2.1 get-batch` with pinned known_hosts and dedicated key. Actual remote result: `cat: /var/lib/homelab-passive-os-outbound/batch.json: No such file or directory`, `SSH_EXIT_CODE=1`. This **demonstrates successful authentication and execution of the router-side fixed command**, not yet a successful file transfer.
+- Confirmed router transfer identity `homelab-os-transfer:x:995:982:Passive OS sanitised file transfer:/var/lib/homelab-os-transfer:/bin/sh`, locked password, `.ssh/authorized_keys` 0600 and protected home; outbound directory root-owned with transfer group 0750. Earlier setup run refused a preexisting account before modifying router; sensor setup had 0 changes. Do not re-run initial-install playbook.
+- Added a **one-shot Ansible synthetic batch fixture** `IaC/ansible/playbooks/passive-os-ssh-synthetic-batch.yml`: stage only if `batch.json` absent, no EVE reads or checkpoint changes; cleanup only if exact synthetic content matches. Both actions require explicit flag and operator-approved command. **Not yet syntax checked or deployed.**
+- Next: operator pull + syntax-check, stage synthetic fixture under explicit test approval, SSH fetch using existing strict options, optionally validate via offline `passive_os_wire_receiver.py`, then gated fixture cleanup. Never mistake the synthetic ChromeOS hint for real device OS identification.
+
+---
+
 ## 7 November 2026 — passive OS SSH setup and rollback validation PASS, not deployed
 
 - Operator ran `test_passive_os_ssh_transport_setup.py`: **5/5 PASS** (`0.003s`). Both new Ansible playbooks `passive-os-ssh-transport-setup.yml` and `passive-os-ssh-transport-rollback.yml` passed `--syntax-check`.
