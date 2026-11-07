@@ -1,3 +1,11 @@
+## 7 November 2026 — operator confirmed HP ProCurve identity at 192.168.2.134
+
+- User explicitly confirmed `192.168.2.134` is the **HP ProCurve Switch 2510G-24**. Match existing discovered MAC `00:9c:02:45:39:00` and TCP/80 HTTP banner `HP ProCurve Switch 2510G-24 http config`; TCP/23 Telnet present. Device identity is now confirmed; exclude this switch from unknown-device OS fingerprint candidates and avoid invasive Nmap scans.
+- This confirmation **does not** establish the switch's current physical role, production criticality, intended management security settings or that retired switch-specific monitoring should be reinstalled. Preserve #287 retired collector state unless independently scoped and approved. Among 21 Zabbix-unmatched discovered devices, one more is now identified; 20 remain Zabbix-unmatched with varying DHCP/vendor identity confidence (not necessarily unidentified or unmanaged).
+- Next work: continue read-only classification of the others using saved evidence; do not restart discovery or rerun a completed reset.
+
+---
+
 ## 7 November 2026 — post-reset enrichment identifies HP ProCurve at .134
 
 - Operator read existing fresh `/var/lib/homelab-network-hosts/enrichment.json` on monitor-01 for eight weak-identity unmatched hosts. All eight `inventory_online=true`, `enrichment_status=success`, `last_enriched=1794034061`; the collector's success flag does **not** mean an OS was identified.
