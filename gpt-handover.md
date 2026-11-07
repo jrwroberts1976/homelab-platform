@@ -1,3 +1,12 @@
+## 7 November 2026 — read-only unmanaged-device gap audit staged, no rescan
+
+- Implemented `IaC/ansible/scripts/passive_os_unmanaged_inventory_audit.py` on the active feature branch. It **reads only** monitor-01's existing `/var/lib/homelab-network-hosts/inventory.json`, uses the already deployed read-only Zabbix management-report token `/etc/homelab-management-report/zabbix-api-token` against `192.168.2.59:8080/api_jsonrpc.php` (`host.get` and `item.get` for `system.sw.os.get`, `system.sw.os[name]`), and categorises by matching IP interface or exact canonical host name. API hosts with enabled/supported nonempty OS facts are **Zabbix OS authoritative**, never passive OS targets. Zabbix-matched without OS facts and ambiguous matches are separate; unmatched inventory is **not automatically a proven unmanaged device**. Routine stdout reports counts only, no secrets, host IPs or full OS strings. No network scans, writes, services or router interaction.
+- Added `IaC/ansible/tests/test_passive_os_unmanaged_inventory_audit.py` with five offline unit tests for authority, missing OS facts, duplicate identities, disabled and unsupported hosts; **not yet run**.
+- Next: operator pull, `py_compile` and run 5 tests locally. Once green, operator can execute the read-only script via `ansible -i inventory/hosts.yml monitor-01 -b --ask-become-pass -m ansible.builtin.script -a scripts/passive_os_unmanaged_inventory_audit.py` from `IaC/ansible` to get actual category counts. This uses ephemeral Ansible script transfer, not persistent installation. Inspect results and decide which genuinely unmanaged targets can be offered passive OS candidate data. Do not deploy the existing ungated sensor publisher or Grafana passive panel yet.
+- Historical `zabbix-network-inventory-exporter.yml` remains retired (#287). Existing Zabbix OS data is source of truth for agent-managed hosts.
+
+---
+
 ## 7 November 2026 — reused active Zabbix API/host-inventory integration identified; legacy exporter retired
 
 - GitHub inspection confirmed `IaC/ansible/playbooks/zabbix-network-inventory-exporter.yml` is **explicitly retired by #287**, fail-closed. Do **not** revive it despite historical statements about a Zabbix inventory exporter.
