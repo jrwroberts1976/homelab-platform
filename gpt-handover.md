@@ -1,3 +1,13 @@
+## 7 November 2026 — synthetic cleanup complete; KISS one-shot real EVE tail pilot staged
+
+- Operator ran approved `passive-os-ssh-synthetic-batch.yml` cleanup on router-01: `ok=5 changed=1 failed=0 skipped=2`. The exact synthetic `batch.json` matched before removal; no live Suricata/router service changed.
+- Added `IaC/ansible/scripts/passive_os_live_sample.py`: a single-shot best-effort reader of the **last 1 MiB maximum** of the existing `/var/log/suricata/eve.json`, discarding the first possibly partial line; reuse existing minimiser for allowlisted IP/time/event type/low-confidence HTTP OS family only; cap at 2000 observations; output canonical batch/digest to existing restricted `batch.json`. No raw UA, URLs, domain names, state checkpoint or background timer. Multiple manual runs may replace the previous outbound sample; this is deliberate pilot behaviour, not a reliable queue.
+- Added `IaC/ansible/tests/test_passive_os_live_sample.py` (4 new offline tests) and `IaC/ansible/playbooks/passive-os-one-shot-pilot.yml` (default-deny, explicit `passive_os_pilot_approved=true` installs four scripts in dedicated root-owned folder and runs one bounded sample). **Neither new tests nor playbook syntax has yet been run by operator; nothing deployed.**
+- This is a KISS observation pilot, not a guaranteed-delivery collector, no source ack, no receiver/classifier/Grafana metrics yet. Before live run, operator should pull, run four tests, syntax-check playbook, and explicitly approve the one-shot sample. Preserve router NFQUEUE, PPPoE, dnsmasq, Unbound, nftables, QoS and logrotate.
+- Next: after a successful pilot, pull via the existing pinned sensor SSH key, validate wire and classify against *valid time-bounded* lease evidence; label unknown when lease mapping unavailable. No pretending that one HTTP User-Agent identifies authoritative OS.
+
+---
+
 ## 7 November 2026 — first authenticated synthetic passive OS SSH transfer PASSED
 
 - Operator executed sensor-01 strict-key SSH pull from router-01 as `homelab-os-transfer`. Output was one synthetic protocol-v1 JSON batch, `batch_id=ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff`, a single `192.168.2.113` synthetic HTTP ChromeOS hint at Unix timestamp `1794000000`, and **SSH_EXIT_CODE=0**.
