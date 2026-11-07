@@ -1,3 +1,11 @@
+## 7 November 2026 — Suricata DHCP EVE enabled but no observed DHCP in 8 MiB tail
+
+- Operator inspected production router-01 `/etc/suricata/suricata.yaml` read-only: EVE type `- dhcp: enabled: yes`, **`extended: no`**; app-layer `dhcp: enabled: yes`. Bounded inspection of **last 8 MiB** `/var/log/suricata/eve.json` parsed **10,940 lines** and found **`DHCP_EVENTS=0`**. No claim that entire 1.5 GiB log has no DHCP, that DHCP protocol parsing is broken, or that clients haven't renewed; time span of bounded sample was not established.
+- Existing dnsmasq journal contains DHCPREQUEST/DHCPACK for James-LT .186 before and after its low-confidence Windows UA hint, proving router saw DHCP traffic independently. Suricata DHCP event collection may be affected by capture interface/direction, the short sampled time window, sensor topology or event emission. **Do not enable `extended: yes` or additional DHCP logging yet**: production Pi4 router, CPU and SD-card write cost must be justified, and even enabled extended events do not automatically guarantee OS fingerprints.
+- Next non-invasive check: inspect runtime Suricata capture interface and `eve-log` output/types versus configured LAN interface, plus current Suricata DHCP app-layer counters if already available. Avoid changes, full log scans, packet captures, timer additions and repeated Nmap.
+
+---
+
 ## 7 November 2026 — DHCPACK corroborates James-LT; EVE recent-tail event mix
 
 - Operator used read-only Ansible on router-01 to inspect dnsmasq and the last 1 MiB of Suricata EVE. dnsmasq main/fragment grep exposed `dhcp-option=option:router,192.168.2.1` and `dhcp-option=option:dns-server,192.168.2.51,192.168.2.50`; did not reveal `dhcp-match`, `dhcp-vendorclass`, `log-dhcp` or `dhcp-script` settings in checked files. This does not prove DHCP option 55 or vendor class capture elsewhere.
