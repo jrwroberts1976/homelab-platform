@@ -1,3 +1,12 @@
+## 7 November 2026 — #297 offline OS evidence precedence test staged (no deployment)
+
+- Added pure, **offline-only test-support** `IaC/ansible/scripts/os_evidence_precedence.py` (commit `18d1bb64`) and `IaC/ansible/tests/test_os_evidence_precedence.py` (commit `c10b0bcd`). Resolver takes existing Zabbix comparison classification, optional Nmap profile record and sanitised passive summary; it **performs no I/O, scanning, network requests or metric publication** and is **not wired into the live inventory exporter**.
+- Tests cover: Zabbix OS authority always wins; managed host lacking OS facts and ambiguous host attribution remain unknown; Nmap's nonstale matching-IP OS match outranks passive hints but is not called authoritative; partial/no-OS Nmap record remains partial or exposes **only a low-confidence, historically unverified IP-scoped UA family candidate**; contradictory hints fail closed; stale or wrong-IP scan evidence cannot override; unrelated-IP hints excluded; unexpected membership fails closed. Eleven unit tests added, **not yet run**.
+- Real inputs motivating tests: James-LT `.186` has one `Windows` UA hint at 07:12:42 UTC but Nmap `partial`, `OS_MATCHES=[]`, `OPEN_PORTS=[]`; historic DHCP ownership still unverified, so no host OS assertion. Google Home `.125` has six low-confidence Linux UA hints without OS verification. 15 current Zabbix OS-managed devices remain authoritative.
+- Next operator: pull feature branch, `python3 -m py_compile scripts/os_evidence_precedence.py`, `python3 -m unittest discover -s tests -p 'test_os_evidence_precedence.py' -v`; validate before any Grafana or publishing integration. The helper is illustrative/policy validation, **not deployed integration**, and must not become another redundant inventory collector.
+  
+---
+
 ## 7 November 2026 — DHCP journal contains no corroborating James-LT lease event in checked window
 
 - Operator ran a read-only `journalctl -u dnsmasq --since '2026-11-07 06:45:00 UTC' --until '2026-11-07 07:20:00 UTC'` filtered for `192.168.2.186`, `24:b2:b9:30:f8:55`, `James-LT` on router-01. Command returned rc=0 but **no matching lines**. This is absence of matching retained journal evidence in that window, **not proof the device did not hold the lease**. No journal coverage or DHCP logging configuration was independently established.
