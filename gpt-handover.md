@@ -3209,3 +3209,11 @@ production deployment or rollback.
   compatibility reviews before reuse after the lease change.
 - Outstanding: atomic success/rollback finalisation, timer-race
   and reboot testing, DHCP functionality checks and production approval.
+
+## Network enrichment progress — 2026-11-07
+- Router-01 DHCP lease duration changed from 24h to infinite using Ansible.
+- dnsmasq verified active after the change.
+- Simple DHCP lease update playbook retained.
+- Nmap OS descriptions added to the read-only evidence preview.
+- Nmap change committed as e01464ee.
+- Next: improve identification of unknown network devices.

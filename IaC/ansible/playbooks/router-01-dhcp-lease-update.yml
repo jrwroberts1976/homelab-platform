@@ -1,0 +1,35 @@
+---
+- name: Set router-01 DHCP leases to infinite
+  hosts: router-01
+  become: true
+  gather_facts: false
+
+  tasks:
+    - name: Back up dnsmasq configuration
+      ansible.builtin.copy:
+        src: /etc/dnsmasq.d/router.conf
+        dest: /etc/dnsmasq.d/router.conf.bak
+        remote_src: true
+        force: false
+        mode: preserve
+
+    - name: Set DHCP lease duration to infinite
+      ansible.builtin.replace:
+        path: /etc/dnsmasq.d/router.conf
+        regexp: '^(dhcp-range=192\.168\.2\.100,192\.168\.2\.199,255\.255\.255\.0,)24h$'
+        replace: '\g<1>infinite'
+      notify: Restart dnsmasq
+
+    - name: Apply configuration change
+      ansible.builtin.meta: flush_handlers
+
+  handlers:
+    - name: Restart dnsmasq
+      ansible.builtin.command: dnsmasq --test
+      changed_when: false
+      notify: Perform dnsmasq restart
+
+    - name: Perform dnsmasq restart
+      ansible.builtin.systemd:
+        name: dnsmasq
+        state: restarted
