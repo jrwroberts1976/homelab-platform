@@ -1,10 +1,12 @@
 #!/usr/bin/env python3
 """Focused KISS tests for the passive OS read-only snapshot publisher."""
 import tempfile
+import sys
 import unittest
 from pathlib import Path
 from unittest.mock import patch
 
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 from passive_os_publish_snapshot import publish
 
 
