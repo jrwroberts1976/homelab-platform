@@ -3226,3 +3226,14 @@ production deployment or rollback.
 - One attempt per host retained.
 - Profiler timer active.
 - Next: review OS identification results as scans complete.
+
+### 2026-11-07 — DHCP hostname enrichment
+- Added DHCP hostname fallback to the existing network host collector.
+- Reuses router-dhcp-device-pages.json, matching devices by MAC.
+- Priority: canonical hostname, reverse DNS, then DHCP hostname.
+- Excludes generic hostnames such as wlan0.
+- Deployed to monitor-01 using targeted Ansible playbook.
+- Correct interface eth0 explicitly set at the template task.
+- Verified 16 online inventory hostnames match DHCP data.
+- Seven online devices remain unnamed.
+- Existing timers and services retained.
