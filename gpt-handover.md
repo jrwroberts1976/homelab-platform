@@ -1,3 +1,11 @@
+## 7 November 2026 — Hosts dashboard identified; passive OS metric not yet connected
+
+- Operator local search located `IaC/ansible/roles/monitoring_stack/files/grafana/dashboards/homelab-network-hosts.json`. GitHub inspection confirms 14 existing panels: inventory, availability, identity, latency, open ports, deep profiling, enrichment health, lifecycle logs. **No passive OS metric or panel currently present.** Separate `production/homelab-linux-estate.json` has Nmap OS Fingerprint; preserve that established evidence path.
+- Actual wire observations: one Linux HTTP User-Agent candidate (6 events), correlating to one currently leased IP; **historical MAC attribution remains unverified**. Do not conflate DHCP expiry with valid_from; do not overwrite authoritative managed/Nmap OS.
+- Next identify where network inventory Prometheus metrics are emitted/published so a small **separate, source-labelled low-confidence passive OS candidate** can be added, then a new panel. Do not invent a metric name without producing it; no Grafana/monitoring deployment performed yet.
+
+---
+
 ## 7 November 2026 — Linux passive hint correlates with a current DHCP lease, not historical ownership
 
 - Operator performed read-only correlation of the actual minimised router batch with dnsmasq leases: `LINUX_HINT_EVENTS=6`, `DISTINCT_CANDIDATE_IPS=1`, `CURRENT_LEASE_MATCHES=1`, `EVENTS_BEFORE_MATCHING_LEASE_EXPIRY=6`, `HISTORICAL_IP_OWNERSHIP=UNVERIFIED`, `OS_CONFIDENCE=LOW`.
