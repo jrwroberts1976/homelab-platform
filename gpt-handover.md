@@ -1,3 +1,12 @@
+## 7 November 2026 — first approved one-laptop targeted OS fingerprint pilot: partial, no OS matches
+
+- Operator compiled and syntax-checked the gated pilot twice, both PASS, then executed `playbooks/network-host-one-target-os-pilot.yml --ask-become-pass -e os_pilot_approved=true` against monitor-01. Live recap: **ok=16 changed=5 failed=0 unreachable=0 skipped=0**. Safety assertions passed, profiler timer paused/resumed, deep profile backup created, only `James-LT` `192.168.2.186` MAC `24:b2:b9:30:f8:55` armed, installed targeted profiler started once, final stats:
+  `IP=192.168.2.186`, `STATUS=partial`, `ATTEMPTS=1`, `OS_MATCH_COUNT=0`, `OTHER_NONBASELINE=0`.
+- **Outcome:** single-host scope and safety isolation verified, **OS identification did not succeed**. No other MAC left baseline. Existing one-attempt policy intentionally prevents automatic retry; never reset attempted state or rerun pilot blindly. A partial profile might still contain valid port/service evidence, but this was not provided in play output and must be checked before declaring evidence value. Timer restoration was completed by Ansible; any fresh service-state claims need independent read-only check.
+- Next: read-only review the laptop's `deep-profiles.json` record fields `last_error`, `needs_os_identification`, TCP OS matches, open ports and errors; correlate whether target was temporarily offline/firewalled, without restarting scans. Then decide if passive evidence or Zabbix agent is more appropriate for this known laptop. Do NOT widen scanning to all 21 unmatched/IoT devices based only on this partial attempt.
+
+---
+
 ## 7 November 2026 — isolated bounded single-laptop Nmap OS pilot staged, NOT deployed
 
 - Operator twice confirmed on live monitor-01: existing `homelab-network-host-deep-profiler` is `SCAN_MODE="targeted"`, interface `eth0`; 192.168.2.186 / `24:b2:b9:30:f8:55` (DHCP `James-LT`) currently `ONLINE=True`, `PROFILE_STATUS=baseline`, `ATTEMPTS=0`; deep-profiler timer active. This laptop is among the 21 Zabbix-unmatched LAN devices; it is NOT a production router, sensor, switch or IoT actuator. User's goal remains new controlled OS fingerprinting after reset.
