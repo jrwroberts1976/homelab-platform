@@ -1,3 +1,13 @@
+## 7 November 2026 — user KISS decision for passive OS and homelab development
+
+- User explicitly reinforced **KISS**: this is a home lab, not an enterprise production environment; avoid costly elaborate hardening and endless proof stages. Favour simple, working, maintainable implementations and make progress toward completing #297.
+- Keep the essentials reliable: router-01 is the live household gateway; preserve PPPoE, DHCP, DNS, firewall, QoS and NFQUEUE. Continue Ansible/IaC for changes, basic SSH key verification, least privilege, bounded resource use, scoped rollback and gpt-handover updates.
+- Accept **best-effort** passive OS sampling and explicitly displayed uncertainty/gaps; no forensic continuity or exactly-once delivery requirement. Prefer one simple restricted SSH transport with known hosts and bounded sanitised batches, rather than additional prototypes or unnecessary identities where an existing restricted mechanism is demonstrably sufficient.
+- The design document `IaC/ansible/docs/passive-os-transport-activation-plan.md` (commit `9b02d415`) was added before this instruction; treat its enterprise-style requirements as proposals, not mandatory gates. Simplify the implementation before deployment. The existing router-metrics forwarding identity must not be repurposed without understanding permissions.
+- No live router changes authorised by this preference alone. The next deliverable should be a small, offline-tested Ansible implementation with a straightforward rollback and a single optional, explicitly agreed live pilot.
+
+---
+
 ## 6 November 2026 — passive OS dormant identity offline validation passed; activation still blocked
 
 - Operator on admin-01 ran `python3 -m unittest discover -s tests -p 'test_passive_os_identity_playbook_gates.py' -v`: **7/7 PASS**. Both `passive-os-ssh-identity-provision-gated.yml` and `passive-os-ssh-identity-rollback-gated.yml` passed `ansible-playbook --syntax-check`.
