@@ -1,3 +1,11 @@
+## 7 November 2026 — Suricata runs NFQUEUE 10, not AF_PACKET; DHCP EVE visibility diagnosis
+
+- Read-only router-01 process/addresses check: live process `/usr/bin/suricata -c /etc/suricata/suricata.yaml -q 10 --set stream.midstream-policy=ignore --set exception-policy=ignore --set stream.drop-invalid=no`. The YAML has an `af-packet` section referring to `eth0`, but **active Suricata capture is NFQUEUE 10 (`-q 10`)**; AF_PACKET stanza is not proof Suricata is directly sniffing all eth0 traffic. `eth0=192.168.2.1/24`, WAN `ppp0` is up with public address. Tails of stats.log and suricata.log (500 lines each) revealed no `dhcp` matches; this is only absence in searched log tails, not definitive zero parser statistics.
+- EVE DHCP logging/parser both enabled in YAML with `extended: no`, but last 8 MiB / 10,940 sampled events had zero DHCP. Most plausible hypothesis: router-local DHCP INPUT packets are not sent to NFQUEUE 10 while transit packets are; this must be **confirmed by read-only nftables queue chain inspection**. Do **not** adjust NFQUEUE matching, switch Suricata capture mode, add AF_PACKET interface, enable extended DHCP, or broaden packet mirroring on production router just to obtain OS family guesses. Current dnsmasq DHCPACK already supplies reliable identity association without new writes.
+- Suggested next read-only query: `nft -a list ruleset` and inspect only queue and hook contexts (without editing), to verify whether queue rules are in FORWARD rather than INPUT; redact unrelated sensitive information before sharing full ruleset. Nmap one-attempt policy, Zabbix OS authority, passive-UA low confidence remain intact.
+
+---
+
 ## 7 November 2026 — Suricata DHCP EVE enabled but no observed DHCP in 8 MiB tail
 
 - Operator inspected production router-01 `/etc/suricata/suricata.yaml` read-only: EVE type `- dhcp: enabled: yes`, **`extended: no`**; app-layer `dhcp: enabled: yes`. Bounded inspection of **last 8 MiB** `/var/log/suricata/eve.json` parsed **10,940 lines** and found **`DHCP_EVENTS=0`**. No claim that entire 1.5 GiB log has no DHCP, that DHCP protocol parsing is broken, or that clients haven't renewed; time span of bounded sample was not established.
