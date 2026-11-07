@@ -92,6 +92,10 @@ def main():
     ap.add_argument("--inventory", type=Path, default=Path(DEFAULT_INVENTORY))
     ap.add_argument("--token", type=Path, default=Path(DEFAULT_TOKEN))
     ap.add_argument("--zabbix-url", default=DEFAULT_ZABBIX)
+    ap.add_argument(
+        "--show-unmatched", action="store_true",
+        help="List IP, hostname, MAC and online state for unmatched inventory only",
+    )
     args = ap.parse_args()
     if args.inventory.stat().st_size > 5_000_000:
         raise ValueError("Inventory too large")
@@ -114,7 +118,15 @@ def main():
         print(group.upper() + "=" + str(len(groups[group])))
     print("TOTAL_CLASSIFIED=" + str(sum(len(x) for x in groups.values())))
     print("NOTE=Unmatched is not proven unmanaged; review identities before passive publication")
-    # Do not dump IP addresses in routine output or expose token/OS fact strings.
+    if args.show_unmatched:
+        print("=== UNMATCHED INVENTORY: REVIEW BEFORE SCANNING ===")
+        for ip in sorted(groups["unmatched_inventory"], key=lambda ip: ipaddress.ip_address(ip)):
+            entry = inventory[ip]
+            hostname = str(entry.get("hostname") or "").replace("\\n", " ")[:100]
+            mac = str(entry.get("mac") or "").replace("\\n", " ")[:40]
+            online = bool(entry.get("online", False))
+            print(f"IP={ip} HOSTNAME={hostname!r} MAC={mac!r} ONLINE={online}")
+    # Routine output remains aggregate-only, without credentials or OS strings.
 
 
 if __name__ == "__main__":
