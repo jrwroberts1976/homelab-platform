@@ -1,3 +1,11 @@
+## 7 November 2026 — passive OS SSH setup and rollback validation PASS, not deployed
+
+- Operator ran `test_passive_os_ssh_transport_setup.py`: **5/5 PASS** (`0.003s`). Both new Ansible playbooks `passive-os-ssh-transport-setup.yml` and `passive-os-ssh-transport-rollback.yml` passed `--syntax-check`.
+- Combined with earlier snapshot publisher 4/4 PASS, these are **9 passing newly reported tests**, but still only source/offline checks. No live deployment or authenticated SSH transfer has occurred, and no production change approved by testing alone.
+- Next step is one explicitly approved initial setup with `passive_os_transport_apply=true`, then validate effective restricted transport and a sanitised synthetic batch. Preserve router PPPoE/DHCP/DNS/nftables/CAKE/NFQUEUE and existing router-metrics SSH.
+
+---
+
 ## 7 November 2026 — #297 KISS SSH transport setup/rollback staged, not deployed
 
 - Operator ran the **four** `test_passive_os_publish_snapshot.py` tests on admin-01: `Ran 4 tests in 0.025s — OK`. `py_compile` and `git status` were requested but their independent output was not supplied.
