@@ -1,0 +1,116 @@
+---
+# One-shot, gated, NON-RECURRING targeted Nmap pilot; never use broad backlog.
+- name: Single known laptop OS fingerprint pilot
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  vars:
+    os_pilot_approved: false
+    os_pilot_ip: "192.168.2.186"
+    os_pilot_mac: "24:b2:b9:30:f8:55"
+    os_pilot_state: /var/lib/homelab-network-hosts/deep-profiles.json
+    os_pilot_timer: homelab-network-host-deep-profiler.timer
+    os_pilot_service: homelab-network-host-deep-profiler.service
+    os_pilot_backup: /var/backups/homelab-network-discovery-reset/deep-profiles-before-laptop-pilot.json
+  tasks:
+    - name: Require approval and exact known owner and target
+      ansible.builtin.assert:
+        that:
+          - os_pilot_approved | bool
+          - inventory_hostname == "monitor-01"
+          - ansible_host == "192.168.2.52"
+          - os_pilot_ip == "192.168.2.186"
+          - os_pilot_mac == "24:b2:b9:30:f8:55"
+
+    - name: Check profiler timer and service states
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ item }}"]
+      loop:
+        - "{{ os_pilot_timer }}"
+        - "{{ os_pilot_service }}"
+      register: pilot_states
+      failed_when: pilot_states.rc not in [0, 3]
+      changed_when: false
+
+    - name: Require timer active and profiler service idle
+      ansible.builtin.assert:
+        that:
+          - pilot_states.results[0].stdout == 'active'
+          - pilot_states.results[1].stdout == 'inactive'
+
+    - name: Require exact existing profile backup directory
+      ansible.builtin.stat:
+        path: /var/backups/homelab-network-discovery-reset
+      register: pilot_dir
+
+    - name: Refuse missing or unexpected backup directory
+      ansible.builtin.assert:
+        that:
+          - pilot_dir.stat.isdir | default(false)
+          - pilot_dir.stat.uid == 0
+          - not (pilot_dir.stat.islnk | default(false))
+
+    - name: Refuse repeat pilot when backup already exists
+      ansible.builtin.stat:
+        path: "{{ os_pilot_backup }}"
+        follow: false
+      register: pilot_backup
+
+    - name: Require new backup name for one-time pilot
+      ansible.builtin.assert:
+        that: not (pilot_backup.stat.exists | default(false))
+
+    - name: One-target pilot under stopped timer
+      block:
+        - name: Pause deep profiler timer
+          ansible.builtin.systemd_service:
+            name: "{{ os_pilot_timer }}"
+            state: stopped
+
+        - name: Confirm profiler idle after timer pause
+          ansible.builtin.command:
+            argv: [systemctl, is-active, "{{ os_pilot_service }}"]
+          register: pilot_idle
+          failed_when: pilot_idle.rc != 3 or pilot_idle.stdout != 'inactive'
+          changed_when: false
+
+        - name: Validate exact deployed mode, inventory, MAC and baseline
+          ansible.builtin.script: ../scripts/network_host_one_target_arm.py
+          register: pilot_preflight
+          changed_when: false
+
+        - name: Back up existing baseline profile state
+          ansible.builtin.copy:
+            src: "{{ os_pilot_state }}"
+            dest: "{{ os_pilot_backup }}"
+            remote_src: true
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Arm only confirmed laptop MAC
+          ansible.builtin.script: ../scripts/network_host_one_target_arm.py --arm
+
+        - name: Run installed targeted profiler once
+          ansible.builtin.systemd_service:
+            name: "{{ os_pilot_service }}"
+            state: started
+
+      always:
+        - name: Restore profiler timer to active state
+          ansible.builtin.systemd_service:
+            name: "{{ os_pilot_timer }}"
+            state: started
+
+    - name: Summarise laptop-only resulting profile
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - -c
+          - "import json; from pathlib import Path; s=json.loads(Path('/var/lib/homelab-network-hosts/deep-profiles.json').read_text())['profiles']; p=s['24:b2:b9:30:f8:55']; print('IP=' + str(p.get('profiled_ip',''))); print('STATUS=' + str(p.get('status'))); print('ATTEMPTS=' + str(p.get('attempt_count',0))); print('OS_MATCH_COUNT=' + str(len(p.get('profile',{}).get('tcp',{}).get('os_matches',[])))); print('OTHER_NONBASELINE=' + str(sum(v.get('status') != 'baseline' for k,v in s.items() if k != '24:b2:b9:30:f8:55')))"
+      register: pilot_result
+      changed_when: false
+
+    - name: Display aggregate pilot result
+      ansible.builtin.debug:
+        var: pilot_result.stdout_lines
