@@ -1,0 +1,69 @@
+---
+# Read-only OS evidence preview: temporary Python helpers only; NO metrics writes.
+- name: Preview existing inventory OS evidence provenance
+  hosts: monitor-01
+  become: true
+  gather_facts: false
+  vars:
+    preview_scripts:
+      - os_evidence_precedence.py
+      - passive_os_unmanaged_inventory_audit.py
+      - os_evidence_inventory_preview.py
+  tasks:
+    - name: Verify expected host identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == "monitor-01"
+          - ansible_host == "192.168.2.52"
+
+    - name: Verify existing required input files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - /var/lib/homelab-network-hosts/inventory.json
+        - /var/lib/homelab-network-hosts/deep-profiles.json
+        - /etc/homelab-management-report/zabbix-api-token
+      register: preview_inputs
+
+    - name: Refuse missing or symlinked inputs
+      ansible.builtin.assert:
+        that:
+          - item.stat.isreg | default(false)
+          - not (item.stat.islnk | default(false))
+      loop: "{{ preview_inputs.results }}"
+
+    - name: Execute read-only preview with transient helper files
+      block:
+        - name: Create private temporary script directory
+          ansible.builtin.tempfile:
+            state: directory
+            suffix: network-os-evidence-preview
+          register: preview_dir
+
+        - name: Copy tested helper modules into temporary directory
+          ansible.builtin.copy:
+            src: "../scripts/{{ item }}"
+            dest: "{{ preview_dir.path }}/{{ item }}"
+            owner: root
+            group: root
+            mode: '0600'
+          loop: "{{ preview_scripts }}"
+
+        - name: Evaluate on existing inventory and Zabbix, without any passive feed
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - "{{ preview_dir.path }}/os_evidence_inventory_preview.py"
+          register: preview_result
+          changed_when: false
+
+        - name: Show OS evidence preview
+          ansible.builtin.debug:
+            var: preview_result.stdout_lines
+      always:
+        - name: Remove transient helper scripts
+          ansible.builtin.file:
+            path: "{{ preview_dir.path }}"
+            state: absent
+          when: preview_dir.path is defined
