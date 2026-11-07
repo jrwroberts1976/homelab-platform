@@ -1,3 +1,11 @@
+## 7 November 2026 — first live bounded Suricata OS sample succeeded
+
+- Operator executed explicitly approved `passive-os-one-shot-pilot.yml` on router-01. Result: `ok=9 changed=1 failed=0 unreachable=0`.
+- Collector output: `{"batch_id":"7fa643811826e2e445a46709b6fd2cd2be2d9e5dcf9b34f60f8d42f27767225e","observations":561,"status":"published-sanitised-tail-sample"}`. This proves the root-run bounded EVE tail minimiser published one sanitised batch on the router. It does **not** yet establish successful transfer of this real batch, SHA256 wire validation, device attribution or OS classification.
+- Next: fetch over the already verified pinned SSH transport to sensor-01, validate digest, count and allowed keys without printing all 561 observations. Keep one-shot; no timers or router network/service changes.
+
+---
+
 ## 7 November 2026 — one-shot real EVE tail pilot offline validation passed
 
 - Operator on admin-01 ran `python3 -m unittest discover -s tests -p test_passive_os_live_sample.py -v`: **4/4 PASS** (0.010s), `python3 -m py_compile scripts/passive_os_live_sample.py`: PASS, and `ansible-playbook -i inventory/hosts.yml playbooks/passive-os-one-shot-pilot.yml --syntax-check`: PASS.
