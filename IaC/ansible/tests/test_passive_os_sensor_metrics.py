@@ -6,7 +6,7 @@ import sys
 import unittest
 from pathlib import Path
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
-from passive_os_sensor_metrics import validate, metrics_for
+from passive_os_sensor_metrics import validate, metrics_for, candidate_summary
 
 
 def batch_for(observations):
@@ -38,6 +38,15 @@ class PassiveOSMetricsTests(unittest.TestCase):
         self.assertIn(b'confidence="low",mac_attribution="unverified"', payload)
         self.assertIn(b'candidate_observations{', payload)
         self.assertIn(b'} 2\n', payload)
+
+    def test_dry_run_summary_minimised(self):
+        result = candidate_summary(batch_for(self.events))
+        self.assertEqual(result, [{
+            "src_ip": "192.168.2.113", "os_family_hint": "Linux",
+            "observations": 2, "confidence": "low",
+            "mac_attribution": "unverified",
+        }])
+        self.assertNotIn("http_user_agent", repr(result))
 
     def test_digest_mismatch_rejected(self):
         batch = batch_for(self.events)
