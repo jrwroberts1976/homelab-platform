@@ -1,3 +1,11 @@
+## 7 November 2026 — refreshed passive wire snapshot; Windows hint for James-LT, low confidence
+
+- Operator executed the existing approved `playbooks/passive-os-one-shot-pilot.yml` on router-01: **ok=9 changed=1 failed=0**, with no new service/timer, router firewall or Suricata configuration changes. Subsequent read-only sensor-01 `passive_os_sensor_metrics.py --dry-run` returned `rc=0`, `status=dry_run_only`, new batch ID `a578a821a0a3b77afa30e55a38b55ce28130b71833fb087c3077678b3b35d6ca`, **411** sanitised observations and **2** low-confidence OS hint candidates: `192.168.2.125 Linux` from 6 HTTP observations (DHCP name Google-Home) and `192.168.2.186 Windows` from 1 HTTP observation (DHCP name James-LT).
+- The new batch differs from the earlier `0d097f66...` with 554 observations and one Linux hint. This demonstrates fresh **snapshot content**, not necessarily that the observation timestamps are all recent or that traffic capture runs on a timer. The `.186` Windows hint is potentially helpful because the bounded Nmap pilot for that laptop returned `OS_MATCH_COUNT=0`, `OPEN_PORTS=[]`, `os_evidence_missing`; however one self-reported User-Agent is **not authoritative Windows identification** and cannot determine version.
+- Both candidates have `mac_attribution=unverified`. The current DHCP lease for `.186` named `James-LT` does **not establish historical IP/MAC ownership at the event timestamp**. Next test should inspect only sanitised observation timestamps for these two candidates and compare router DHCP lease expiry/current MAC without claiming historical ownership, while using Zabbix as exclusive OS authority for any agent-managed host. Do NOT run another Nmap scan or publish unfiltered metrics to Grafana.
+
+---
+
 ## 7 November 2026 — stale passive output vs live EVE; existing one-shot refresh available
 
 - Operator measured on router-01: `/var/lib/homelab-passive-os-outbound/batch.json` size 38,301 bytes, modified **2026-11-07 06:09:11 UTC**; `/var/log/suricata/eve.json` size **1,538,772,194 bytes**, modified **2026-11-07 07:13:24 UTC**, router clock **07:13:24 UTC**. Snapshot is ~64m12s older than latest log modification. Thus repeated sensor dry-run returned old batch `0d097f66...` by design, not a stream freshness test; actual ongoing EVE updates observed. Log mtime alone does not prove new HTTP OS hints.
