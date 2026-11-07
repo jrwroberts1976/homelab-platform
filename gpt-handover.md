@@ -1,3 +1,11 @@
+## 7 November 2026 — sensor passive OS metrics offline retest passed
+
+- Operator pulled corrected source and ran `python3 -m py_compile scripts/passive_os_sensor_metrics.py` (no errors reported) and `python3 -m unittest discover -s tests -p 'test_passive_os_sensor_metrics.py' -v`: **5/5 PASS (0.006s)**.
+- Ansible syntax for `passive-os-sensor-metrics-one-shot.yml` passed in prior step. Source is ready for one-time approved sensor-01 metric publishing, but **no live metrics publication or dashboard deployment confirmed yet**.
+- Next run explicit one-time publisher with `passive_os_sensor_metrics_approved=true`, check aggregate output, sensor `/metrics` and monitor-01 Prometheus scrape, then deploy updated Hosts dashboard through existing IaC pathway. No timer/daemon, router service changes or OS authority override.
+
+---
+
 ## 7 November 2026 — sensor passive OS metric script syntax fix
 
 - Operator ran one-shot sensor metrics tests: `Ran 1 test ... FAILED (errors=1)` due to a SyntaxError during module import; `py_compile` pinpointed line 74, which contained literal backslash-n (`\\n`) rather than an actual newline in OS hint type validation. Ansible playbook `passive-os-sensor-metrics-one-shot.yml --syntax-check` **passed**.
