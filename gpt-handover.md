@@ -1,3 +1,13 @@
+## 7 November 2026 — post-reset enrichment identifies HP ProCurve at .134
+
+- Operator read existing fresh `/var/lib/homelab-network-hosts/enrichment.json` on monitor-01 for eight weak-identity unmatched hosts. All eight `inventory_online=true`, `enrichment_status=success`, `last_enriched=1794034061`; the collector's success flag does **not** mean an OS was identified.
+- **192.168.2.134 / 00:9c:02:45:39:00**: HTTP TCP/80 banner `HP ProCurve Switch 2510G-24 http config`, `eHTTP 2.0`; TCP/23 Telnet open. Strong evidence the previously offline HP ProCurve is now reachable. **Do not automatically reactivate retired HP collector** (#287); first reconcile its current physical/network role, credentials and monitoring scope. Do not initiate intrusive Nmap on it.
+- **192.168.2.164 / 3c:64:cf:87:ae:ea**: TLS/443 certificate subject and issuer CN `TPRI-DEVICE` with generic validity 2001–2070; no service/version metadata. This is only a device identifier hint, **not a verified OS/model**.
+- **.2** ASUS MAC and no services; likely network infrastructure but role unconfirmed. **.104, .132** same f8:17:2d OUI and no services; `.132` DHCP hostname `wlan0`; do not assume same device or exact family. **.109** Tuya, **.151** Amazon, **.168** TP-Link: no service banners in enrichment; no OS determination.
+- Stage remains **read-only reconciliation only**: no eligible explicit deep-scan allowlist yet. Respect 15 Zabbix OS authoritative devices; do not bulk scan 21 unmatched IoT/infrastructure, do not turn on legacy full Nmap mode. Existing backup retained.
+
+---
+
 ## 7 November 2026 — DHCP leases identify 20 of 21 non-Zabbix network entries
 
 - Operator read **existing** router-01 `/var/lib/misc/dnsmasq.leases` without scanning/modifying production. Twenty of the 21 unmatched IPs have current entries: `.100=H100` TP-Link, `.103=myHivehub` AlertMe, `.104=*` unknown, `.106=Google-Nest-Mini`, `.109=*` Tuya, `.112=P110` TP-Link, `.125=Google-Home`, `.132=wlan0` unknown, `.134=*` Hewlett Packard, `.151=*` Amazon, `.153=TC40` TP-Link, `.164=*` unknown, `.165=homeassistant` locally administered MAC, `.168=*` TP-Link, `.174=L510` TP-Link, `.179=POCO-C75` locally administered MAC, `.180=RT-AC86U-CCC8` ASUS, `.186=James-LT`, `.189=HS100` TP-Link, `.190=TC65` TP-Link. `.2` ASUS has no matching current DHCP lease; may be static/network infrastructure.
