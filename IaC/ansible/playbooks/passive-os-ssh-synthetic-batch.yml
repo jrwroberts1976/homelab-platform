@@ -1,0 +1,62 @@
+---
+# KISS one-off transfer smoke test. SYNTHETIC ONLY. No EVE or checkpoint.
+# Stage: -e passive_os_test_action=stage -e passive_os_test_approved=true
+# Cleanup: -e passive_os_test_action=cleanup -e passive_os_test_approved=true
+- name: Stage or clean up single synthetic passive OS transfer batch
+  hosts: router-01
+  gather_facts: false
+  become: true
+  vars:
+    passive_os_test_action: none
+    passive_os_test_approved: false
+    passive_os_test_path: /var/lib/homelab-passive-os-outbound/batch.json
+    passive_os_test_payload: '{"batch_id":"ffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff","digest":"3ea2b728b9a74dee5757c406b12e8790d44733b5157032c5471b8645245a0af0","observations":[{"event_type":"http","os_family_hint":"ChromeOS","src_ip":"192.168.2.113","timestamp":1794000000}],"protocol":1}'
+  tasks:
+    - name: Require explicit test approval and exact router
+      ansible.builtin.assert:
+        that:
+          - passive_os_test_approved | bool
+          - passive_os_test_action in ['stage', 'cleanup']
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+    - name: Verify existing test-path state
+      ansible.builtin.stat:
+        path: "{{ passive_os_test_path }}"
+        follow: false
+      register: passive_os_test_existing
+    - name: Reject overwrite of any existing production or foreign batch
+      ansible.builtin.assert:
+        that:
+          - not (passive_os_test_existing.stat.exists | default(false))
+        fail_msg: "batch.json already exists; refuse test overwrite"
+      when: passive_os_test_action == 'stage'
+    - name: Require expected test fixture before cleanup
+      ansible.builtin.slurp:
+        src: "{{ passive_os_test_path }}"
+      register: passive_os_test_actual
+      when:
+        - passive_os_test_action == 'cleanup'
+        - passive_os_test_existing.stat.exists | default(false)
+    - name: Refuse deletion of any non-test batch
+      ansible.builtin.assert:
+        that:
+          - not (passive_os_test_existing.stat.islnk | default(false))
+          - (passive_os_test_actual.content | b64decode) == passive_os_test_payload + '\n'
+        fail_msg: "Unexpected batch data; do not delete"
+      when:
+        - passive_os_test_action == 'cleanup'
+        - passive_os_test_existing.stat.exists | default(false)
+    - name: Stage synthetic allowlisted, digest-checked wire only
+      ansible.builtin.copy:
+        content: "{{ passive_os_test_payload }}\n"
+        dest: "{{ passive_os_test_path }}"
+        owner: root
+        group: homelab-os-transfer
+        mode: '0640'
+        force: false
+      when: passive_os_test_action == 'stage'
+    - name: Remove exact synthetic test fixture after successful transfer
+      ansible.builtin.file:
+        path: "{{ passive_os_test_path }}"
+        state: absent
+      when: passive_os_test_action == 'cleanup'
