@@ -53,7 +53,8 @@ def resolve(ip, mac, membership, nmap_record=None, passive_hints=()):
         ):
             # No arbitrary OS family parsing from Nmap's model description.
             result.update(os_source="nmap", status="nmap_os_fingerprint",
-                          confidence="candidate", attribution="scan_ip_only")
+                          confidence="candidate", attribution="scan_ip_only",
+                          os_name=matches[0]["name"].strip())
             return result
 
     # A passive candidate is an IP-scoped, self-reported family, not a host
