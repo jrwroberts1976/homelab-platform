@@ -71,7 +71,7 @@ def validate(raw):
         if kind not in KINDS:
             raise ValueError("Invalid event type")
         if "os_family_hint" in event and (
-            kind != "http" or event["os_family_hint"] not in FAMILIES
+            kind != "http" or not isinstance(event["os_family_hint"], str)\n            or event["os_family_hint"] not in FAMILIES
         ):
             raise ValueError("Invalid OS family hint")
     canonical = json.dumps(observations, sort_keys=True, separators=(",", ":")).encode()
