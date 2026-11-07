@@ -1,3 +1,12 @@
+## 7 November 2026 — DHCPACK corroborates James-LT; EVE recent-tail event mix
+
+- Operator used read-only Ansible on router-01 to inspect dnsmasq and the last 1 MiB of Suricata EVE. dnsmasq main/fragment grep exposed `dhcp-option=option:router,192.168.2.1` and `dhcp-option=option:dns-server,192.168.2.51,192.168.2.50`; did not reveal `dhcp-match`, `dhcp-vendorclass`, `log-dhcp` or `dhcp-script` settings in checked files. This does not prove DHCP option 55 or vendor class capture elsewhere.
+- Crucially, a more inclusive 06:30–07:30 UTC 7 Nov dnsmasq journal query returned matching **DHCPACK** as well as DHCPREQUEST for **James-LT `192.168.2.186` / `24:b2:b9:30:f8:55` at 06:37:56, 06:38:03, 07:22:29, 07:23:39, 07:23:52, and 07:25:44 UTC**. The lone `Windows` UA hint was observed at **07:12:42 UTC**, between confirmed acknowledgements. This corroborates the lease-holder near that point but does NOT prove uninterrupted historical address ownership or Windows OS/version. Previous empty journal query had searched a narrower 06:45–07:20 window, so it legitimately missed these relevant events.
+- Last 1 MiB EVE type counts: `dns=651`, `flow=433`, `bittorrent_dht=229`, `quic=145`, `stats=33`, `tls=26`, `http=14`, `alert=5`, `ssh=1`; **no DHCP events in sampled tail**. Suricata configuration references DHCP parser, but actual DHCP EVE emission not yet established; zero in a bounded tail is not proof it is disabled. No production changes or new scans were made.
+- Next focused read-only test: examine existing `eve-log` types/DHCP enabled setting and sample Suricata EVE source's current DHCP events without reading the full ~1.5 GB file or exposing payloads. Do not turn on verbose DHCP logging, full raw capture, timers or broader device probes on router-01 before assessing overhead and benefit. Preserve Zabbix OS authority and low-confidence label for self-reported UA.
+
+---
+
 ## 7 November 2026 — offline OS evidence precedence unit tests passed
 
 - Operator ran `python3 -m unittest discover -s tests -p 'test_os_evidence_precedence.py' -v` on admin-01; output **Ran 11 tests in 0.004s; OK**. This confirms offline precedence-policy regression tests, not live deployment. Zabbix authority, Nmap provenance, passive-UA low confidence, ambiguity/stale evidence fail-closed checks are covered.
