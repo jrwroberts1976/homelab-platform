@@ -1,3 +1,12 @@
+## 7 November 2026 — #297 live read-only OS evidence preview passed; inventory now 37
+
+- Operator ran `playbooks/network-os-evidence-preview.yml` on monitor-01 after preparing code: **ok=8 changed=3 failed=0 unreachable=0**. The playbook read existing inventory/deep-profiles and Zabbix OS facts and removed the transient Python scripts. No persistent exporter, monitoring metric, router capture change or Grafana deployment.
+- Reported preview totals: `inventory=37` (previously 36), `zabbix_os=15`, `unmatched_not_proven_unmanaged=22` (previously 21), `managed_os_missing=0`, `identity_ambiguous=0`, `nmap_candidate=0`, `passive_low_confidence=0`, `passive_input=not_supplied`. An additional `192.168.2.198` entry appeared in preview; previous router dnsmasq evidence showed `.198` DHCPREQUEST with MAC `16:c1:05:ad:4b:8a`, but specific device identity/OS **not determined**. Do not call unmatched devices proven unmanaged.
+- James-LT `192.168.2.186` was classified `status=nmap_partial_no_os`, `os_source=unknown`, `os_family=null`, `confidence=none`; this is expected because no passive input was supplied and bounded Nmap produced no OS match. The external one-observation Windows UA hint remains low-confidence, not included or published. Zabbix OS authority remains intact.
+- **Next:** inspect new `.198` identity by read-only existing inventory/DHCP evidence if useful; design an explicit, verified method of passing the sanitised sensor dry-run candidate summary into the preview, with freshness limits and historical IP/MAC attribution remaining unverified. Only then consider a reviewed integration into the existing enrichment pipeline; retain offline tests and no extra collectors.
+
+---
+
 ## 7 November 2026 — #297 read-only OS evidence integration preview staged, not yet run
 
 - Following confirmed NFQUEUE routing and expected `router-suricata-nfq.service` service ownership, proceeded with existing inventory integration safety preview, **without changing** production inventory, Proxmox enrichment, Zabbix, Prometheus or Grafana.
