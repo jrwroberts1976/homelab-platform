@@ -1,3 +1,11 @@
+## 7 November 2026 — next #297 test staged: read-only passive candidate dry-run, no new active Nmap
+
+- Following James-LT targeted scan `OS_MATCH_COUNT=0` and `OPEN_PORTS=[]`, operator requested next test. To avoid indiscriminate Nmap probing of IoT and known infrastructure, added **read-only** `--dry-run` mode to existing `IaC/ansible/scripts/passive_os_sensor_metrics.py` (commit `2cd30443`). It uses sensor-01's established restricted SSH pull from router-01, validates batch SHA256/schema, emits bounded per-source-IP OS-family hint counts labelled low-confidence and MAC attribution unverified; **does not call `publish()` or create/change any Prometheus textfile**, router service or timer. New offline test covers minimised dry-run summary (commit `f8d315d4`); tests not yet run by operator.
+- Next read-only test: operator pull the feature branch, run Python compile and `unittest discover -s tests -p 'test_passive_os_sensor_metrics.py' -v`, then run `ansible -i inventory/hosts.yml sensor-01 -b --ask-become-pass -m ansible.builtin.script -a 'scripts/passive_os_sensor_metrics.py --dry-run'` from `IaC/ansible`. This uses ephemeral Ansible transfer, **no installation**. Inspect `candidates[].src_ip` and compare it against existing monitor-01 Zabbix OS/inventory authority before any candidate is published. A candidate may be stale or absent; do not claim useful OS evidence until source ownership and freshness are checked.
+- Old live unfiltered passive OS metric was already removed during the approved discovery reset. **Do not rerun `passive-os-sensor-metrics-one-shot.yml`** until Zabbix managed-IP suppression has been implemented and tested. No new active OS scan authorized for unknown IoT targets.
+
+---
+
 ## 7 November 2026 — James-LT OS fingerprint evidence reviewed; no scan retry
 
 - Operator read existing monitor-01 `deep-profiles.json` record for `24:b2:b9:30:f8:55` (192.168.2.186) after the single-host bounded Nmap pilot. Reported `STATUS=partial`, `LAST_ERROR=os_evidence_missing`, `NEEDS_OS_IDENTIFICATION=True`, `ATTEMPTS=1`, `OS_MATCHES=[]`, `OPEN_PORTS=[]`, `PROFILE_ERRORS={}`.
