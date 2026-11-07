@@ -3217,3 +3217,12 @@ production deployment or rollback.
 - Nmap OS descriptions added to the read-only evidence preview.
 - Nmap change committed as e01464ee.
 - Next: improve identification of unknown network devices.
+
+## Network OS profiling backlog — 2026-11-07
+- Enabled the existing targeted deep-profiler backlog on monitor-01.
+- All 35 baseline devices scheduled across seven days.
+- First scan: 2026-11-07 20:04 UTC.
+- Last scan: 2026-11-14 08:32 UTC.
+- One attempt per host retained.
+- Profiler timer active.
+- Next: review OS identification results as scans complete.
