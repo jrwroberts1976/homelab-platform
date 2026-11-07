@@ -1,0 +1,71 @@
+---
+# KISS rollback: only the passive OS transport. No sshd reload, router networking,
+# Suricata, metrics, spool/checkpoint or other identities are touched.
+- name: Remove sensor passive OS SSH key and dedicated host trust
+  hosts: sensor-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_transport_rollback: false
+    passive_os_key_dir: /etc/homelab/passive-os-ssh
+  tasks:
+    - name: Require explicit rollback approval and correct sensor
+      ansible.builtin.assert:
+        that:
+          - passive_os_transport_rollback | bool
+          - ansible_host == '192.168.2.55'
+    - name: Remove dedicated passive OS sensor key directory
+      ansible.builtin.file:
+        path: "{{ passive_os_key_dir }}"
+        state: absent
+
+- name: Remove router passive OS SSH identity and outbound snapshot
+  hosts: router-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_transport_rollback: false
+    passive_os_user: homelab-os-transfer
+    passive_os_user_home: /var/lib/homelab-os-transfer
+    passive_os_out: /var/lib/homelab-passive-os-outbound
+  tasks:
+    - name: Require explicit rollback approval and canonical router
+      ansible.builtin.assert:
+        that:
+          - passive_os_transport_rollback | bool
+          - ansible_host == '192.168.2.1'
+    - name: Read proposed account identity
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ passive_os_user }}"]
+      changed_when: false
+      failed_when: false
+      register: passive_os_current_account
+      no_log: true
+    - name: Refuse unexpected account properties or active processes
+      ansible.builtin.assert:
+        that:
+          - passive_os_current_account.rc == 0
+          - passive_os_current_account.stdout.split(':')[4] == 'Passive OS sanitised file transfer'
+          - passive_os_current_account.stdout.split(':')[5] == passive_os_user_home
+          - passive_os_current_account.stdout.split(':')[6] == '/bin/sh'
+    - name: Check for live transfer identity processes
+      ansible.builtin.command:
+        argv: [pgrep, -u, "{{ passive_os_user }}"]
+      changed_when: false
+      failed_when: false
+      register: passive_os_live_pids
+    - name: Refuse rollback during an active session
+      ansible.builtin.assert:
+        that: passive_os_live_pids.rc == 1
+    - name: Remove only dedicated outbound snapshot directory
+      ansible.builtin.file:
+        path: "{{ passive_os_out }}"
+        state: absent
+    - name: Remove only project-owned router account and its home
+      ansible.builtin.user:
+        name: "{{ passive_os_user }}"
+        state: absent
+        remove: true
+    - name: Revalidate unchanged SSH daemon configuration
+      ansible.builtin.command: /usr/sbin/sshd -t
+      changed_when: false
