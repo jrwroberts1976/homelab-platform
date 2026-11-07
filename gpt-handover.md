@@ -1,3 +1,11 @@
+## 7 November 2026 — approved fresh discovery reset executed successfully
+
+- Operator ran approved `playbooks/network-discovery-fresh-reset.yml` on the dedicated feature branch after syntax check passed. Reported actual live recaps: **monitor-01 ok=23 changed=10 failed=0 unreachable=0 skipped=0; sensor-01 ok=4 changed=1 failed=0 unreachable=0 skipped=0**. Thus both plays completed without Ansible errors. Scoped monitor inventory/enrichment/deep-profile active state and associated Prometheus metrics were backed up and recreated, three discovery timers returned to started state, and sensor's unfiltered one-shot passive metric was removed under the approved playbook. No action to Zabbix, router, Greenbone, protected guest mapping or alert state.
+- **Verification outstanding:** user supplied only PLAY RECAP, not `FRESH_INVENTORY_RECORDS` or new inventory contents. Do not infer refreshed host count or OS fingerprint quality. Deep profiler first run with cleared state is **baseline only, zero fresh deep scans**. Next read-only check actual new inventory count, timers, metrics and backup, then identify unmanaged devices for a separately bounded active OS scan.
+- Reset backup expected at `/var/backups/homelab-network-discovery-reset/active-discovery-before-reset.tar.gz` on monitor-01. Retain backup and avoid rerunning reset; second run is designed to refuse overwriting that backup.
+
+---
+
 ## 7 November 2026 — fresh network discovery reset playbook staged, NOT executed
 
 - Operator explicitly requested deletion of existing discovery data and new scans. Read-only monitor-01 audit confirms the three `homelab-network-host-collector.timer`, `homelab-network-host-enricher.timer`, `homelab-network-host-deep-profiler.timer` are ACTIVE, corresponding oneshot services INACTIVE. Active state files: `inventory.json`, `enrichment.json`, `deep-profiles.json`. Directory also contains protected `proxmox-guests.json`, `router-dhcp-device-pages.json`, `router-hostnames.json`, AI/dns evidence, `alerted-macs.json`, prior backups and locks: **do not delete whole state directory**.
