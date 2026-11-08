@@ -1,3 +1,9 @@
+## 2026-11-08 — Zabbix OS/patch telemetry audit staged
+
+- Following successful deployment of 15 OS-enriched managed dashboards, user approved proceeding with patching situation.
+- Added read-only `IaC/ansible/roles/monitoring_stack/files/grafana/audit_zabbix_patch_os.py` and `IaC/ansible/playbooks/grafana-zabbix-patching-audit.yml` on PR #326. Uses monitor-01's existing restricted Zabbix API token and verified 15-host inventory; checks Zabbix `host.get` OS inventory and `item.get` actual OS, patch, security, reboot and last-patch item candidates. Reports per-host availability and explicit UNKNOWN where missing; no package management commands, host-level changes, Grafana dashboard mutations, Zabbix writes or credential prints. Audits name/key candidates, **not compliance proof**.
+- **Staged, not deployed.** Next operator steps: sync two files from feature branch, Python syntax-check auditor, Ansible syntax-check playbook, execute with become; review per-host result to design actual patch item collector and compliance dashboards using IaC. Keep patching monitoring-only; package installs remain Ansible controlled.
+
 ## 2026-11-08 — OS inventory dashboard deployment confirmed
 
 - Operator ran `grafana-zabbix-rebuild.yml` after syncing the OS inventory generator update; result **monitor-01 ok=7 changed=2 failed=0 unreachable=0**. OS fields and central Zabbix OS inventory layout are therefore deployed; actual OS values/panel visuals are not yet independently verified.
