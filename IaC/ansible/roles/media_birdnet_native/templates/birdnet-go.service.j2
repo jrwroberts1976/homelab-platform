@@ -1,0 +1,25 @@
+[Unit]
+Description=BirdNET-Go native bird-sound detection
+After=network-online.target sound.target
+Wants=network-online.target
+
+[Service]
+Type=simple
+User=birdnet
+Group=birdnet
+SupplementaryGroups=audio
+WorkingDirectory={{ media_birdnet_state_dir }}
+Environment=HOME={{ media_birdnet_state_dir }}
+Environment=LD_LIBRARY_PATH={{ media_birdnet_release_dir }}
+Environment=TZ=Europe/London
+ExecStart={{ media_birdnet_release_dir }}/birdnet-go serve --config {{ media_birdnet_state_dir }}/config.yaml
+Restart=on-failure
+RestartSec=10
+NoNewPrivileges=true
+ProtectSystem=full
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths={{ media_birdnet_state_dir }}
+
+[Install]
+WantedBy=multi-user.target
