@@ -441,6 +441,12 @@ def main():
         if not any(p.get("id") == 91 and p.get("type") == "table"
                    for p in admin_action[1]["panels"]):
             raise RuntimeError("No verified live admin-01 patch table; no changes")
+        existing = grafana_api(
+            graf_headers, "/api/dashboards/uid/" + admin_action[1]["uid"])
+        previous_panels = [p for p in existing["dashboard"]["panels"] if p.get("id") != 91]
+        candidate_panels = [p for p in admin_action[1]["panels"] if p.get("id") != 91]
+        if previous_panels != candidate_panels:
+            raise RuntimeError("Pilot refuses changes outside admin-01 patch panel 91")
         print("PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged")
         actions = [admin_action]
 
