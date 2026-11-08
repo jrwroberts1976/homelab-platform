@@ -125,7 +125,7 @@ edge-01 is a managed LXC container on Proxmox-2 at 192.168.2.56. Exact OS is not
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T05:27:20+00:00`
+- Last assessed: `2026-11-08T06:31:05+00:00`
 - Pending updates: **1**
 - Security updates pending: **1**
 - Reboot required: **No**

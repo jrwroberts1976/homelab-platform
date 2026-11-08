@@ -125,7 +125,7 @@ sensor-01 is a Proxmox-hosted VM serving as the managed Suricata and Zeek passiv
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T04:47:42+00:00`
+- Last assessed: `2026-11-08T05:50:22+00:00`
 - Pending updates: **3**
 - Security updates pending: **2**
 - Reboot required: **No**
