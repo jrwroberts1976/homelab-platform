@@ -1,3 +1,11 @@
+## 2026-11-08 — BirdNET-Go internal DNS and trusted HTTPS LIVE, idempotence confirmed
+
+- Operator applied `playbooks/dns-local-records.yml` on both dns-01 and dns-02, each `ok=4 changed=0 failed=0`; direct `dig` to each DNS resolver returned `birds.home.jrwroberts.co.uk A 192.168.2.195`.
+- Operator syntax-checked and executed `playbooks/media-01-birds-https.yml` on media-01. First run `ok=33 changed=5 failed=0`; Cloudflare DNS-01 Certbot issued a Let's Encrypt certificate whose SAN contains `birds.home.jrwroberts.co.uk`, validity Nov 8 2026 13:14:02 GMT through Feb 6 2027 13:14:01 GMT. Nginx dedicated birds.conf enabled and reloaded; trusted BirdNET HTTPS and existing qBittorrent HTTPS health checks passed; BirdNET service stayed active. Certbot timer enabled and renewal deploy hook installed (future renewal not yet observed).
+- Second full HTTPS run `ok=32 changed=0 failed=0 skipped=1`: no certificate or Nginx change; HTTPS checks again PASS. One concatenated/mistyped terminal command failed to locate a playbook, but subsequent clean run succeeded; not a production failure.
+- **Verified internal HTTPS URL:** `https://birds.home.jrwroberts.co.uk/`. Browser access from end-user device remains unconfirmed; internal Ansible HTTPS validation passes. The old LAN HTTP/8080 firewall rule is still enabled and can be retired in a *separate* scoped IaC change once browser login and websocket audio/UI behaviour confirmed. Keep existing NFS backup, qBittorrent, BirdNET and media server plans intact.
+- Open tasks: natural species detection threshold observation, Docker/nftables compatibility, optional historical data migration, future Certbot actual renewal check; no claim these have been completed.
+
 ## 2026-11-08 — BirdNET-Go local DNS alias and HTTPS IaC staged, NOT DEPLOYED
 
 - User requested `https://birds.home.jrwroberts.co.uk` for the already-working native BirdNET-Go on `media-01` (`192.168.2.195:8080`).
