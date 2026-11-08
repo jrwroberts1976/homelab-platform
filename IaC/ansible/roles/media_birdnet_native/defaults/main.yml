@@ -3,7 +3,8 @@ media_birdnet_version: "20261031"
 media_birdnet_archive: "/var/cache/birdnet-go/{{ media_birdnet_version }}/birdnet-go-linux-arm64-{{ media_birdnet_version }}.tar.gz"
 media_birdnet_release_dir: "/opt/birdnet-go/releases/{{ media_birdnet_version }}"
 media_birdnet_state_dir: /var/lib/birdnet-go
-media_birdnet_audio_device: "usb-id:0c76:161e:"
+# Verified from media-01 BirdNET-Go 20261031 /api/v2/system/audio/devices on 2026-11-08.
+media_birdnet_audio_device: "usb-path:usb-xhci-hcd.0-1"
 media_birdnet_port: "8080"
 media_birdnet_threshold: 0.8
 media_birdnet_latitude: 50.79039
