@@ -3237,3 +3237,11 @@ production deployment or rollback.
 - Verified 16 online inventory hostnames match DHCP data.
 - Seven online devices remain unnamed.
 - Existing timers and services retained.
+
+### 2026-11-08 — New-device email notifier identity correction
+- Confirmed new-device emails are successfully delivered.
+- Corrected legacy collector label from Proxmox-2 to monitor-01.
+- Updated only the notifier identity using targeted Ansible.
+- Dry run confirmed a one-line difference.
+- Deployed successfully and verified Python compilation.
+- Preserved SMTP settings, alert registry and once-per-MAC notification behaviour.

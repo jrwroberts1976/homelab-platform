@@ -23,3 +23,14 @@
         group: root
         mode: '0755'
         backup: true
+
+    - name: Update notifier collector identity
+      ansible.builtin.template:
+        src: ../roles/network_host_collector/templates/homelab-network-device-email-alert.py.j2
+        dest: /usr/local/sbin/homelab-network-device-email-alert
+        owner: root
+        group: root
+        mode: '0750'
+        backup: true
+      vars:
+        network_host_collector_expected_hostname: monitor-01
