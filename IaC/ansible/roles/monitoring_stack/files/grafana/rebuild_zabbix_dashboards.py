@@ -198,9 +198,9 @@ def host_dashboard(name, host, items, os_info):
         "options": {"mode": "markdown", "content":
                     "### " + name + "\n\n"
                     + "**Zabbix technical host:** " + host["host"] + "\n\n"
-                    + "**Operating system:** " + os_info["os"] + "\\n\\n"
-                    + "**Kernel / architecture:** " + os_info["kernel"] + "\\n\\n"
-                    + "**OS source:** " + os_info["source"] + " (snapshot at last dashboard generation).\\n\\n"
+                    + "**Operating system:** " + os_info["os"] + "\n\n"
+                    + "**Kernel / architecture:** " + os_info["kernel"] + "\n\n"
+                    + "**OS source:** " + os_info["source"] + " (snapshot at last dashboard generation).\n\n"
                     + "**Monitored data:** live Zabbix API / enabled, supported numeric items.\n\n"
                     + "If a panel is absent, the required item is not available on this host."},
     }]
@@ -246,8 +246,8 @@ def overview_dashboard(host_names, os_inventory):
         "id": 1, "type": "text", "title": "Operating systems — Zabbix inventory",
         "gridPos": {"x": 0, "y": 0, "w": 24, "h": 12},
         "options": {"mode": "markdown",
-                    "content": "Latest Zabbix OS information at dashboard generation; missing fields are **Unknown**.\\n\\n"
-                               + "\\n".join(rows)},
+                    "content": "Latest Zabbix OS information at dashboard generation; missing fields are **Unknown**.\n\n"
+                               + "\n".join(rows)},
     }
     cpu["gridPos"]["y"] = 12
     agent["gridPos"]["y"] = 22
@@ -279,6 +279,7 @@ def main():
     zbx_hosts = zabbix_api(token, "host.get", {
         "output": ["hostid", "host", "name", "status"],
         "selectInventory": ["os", "os_full"],
+        "selectParentTemplates": ["templateid", "host"],
         "filter": {"status": "0"},
         "limit": 1000,
     })
@@ -289,8 +290,22 @@ def main():
             print("SKIP: " + name + " (not uniquely present among enabled Zabbix hosts)")
             continue
         found[name] = matches[0]
-    if not found:
-        raise RuntimeError("No enabled Zabbix hosts match confirmed inventory")
+    if len(found) != len(names) or len(names) != 15:
+        raise RuntimeError("Expected exactly 15 verified Zabbix hosts; refusing incomplete Grafana build")
+
+    # Never build pages from a mixture of legacy and standard host templates.
+    standard = zabbix_api(token, "template.get", {
+        "filter": {"host": ["Linux by Zabbix agent active"]},
+        "output": ["templateid", "host"],
+    })
+    if len(standard) != 1:
+        raise RuntimeError("Standard active Linux template not uniquely present")
+    standard_id = standard[0]["templateid"]
+    for name, host in found.items():
+        linked = host.get("parentTemplates") or []
+        if {t["templateid"] for t in linked} != {standard_id}:
+            raise RuntimeError("Nonstandard Zabbix template assignment on " + name)
+    print("TEMPLATE AUDIT: all 15 managed hosts use only Linux by Zabbix agent active")
 
     candidates = []
     os_inventory = {}
