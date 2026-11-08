@@ -35,6 +35,7 @@
         timeout: 10
       become: false
       delegate_to: localhost
+      when: media_firewall_birdnet_lan_enabled | bool
 
     - name: Check NFS listener remains available
       ansible.builtin.command: ss -lnt
