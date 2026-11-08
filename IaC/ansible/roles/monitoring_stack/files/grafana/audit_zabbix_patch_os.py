@@ -18,7 +18,7 @@ PATTERNS = {
     "reboot": re.compile(r"(?:reboot|restart.required|needs.restarting)", re.I),
     "last_patch": re.compile(r"(?:last.patch|last.updat|last.upgrad|patch.date)", re.I),
 }
-OS_KEYS = re.compile(r"^(?:system\\.sw\\.os(?:\\[.*\\])?|system\\.uname)$", re.I)
+OS_KEYS = re.compile(r"^(?:system\.sw\.os(?:\[.*\])?|system\.uname)$", re.I)
 
 
 def module():
