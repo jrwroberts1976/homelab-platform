@@ -242,7 +242,7 @@ def admin_patching_live_panel(y, items):
             "no APT refresh is triggered. A stale or missing snapshot is not compliance."
         ),
         "datasource": DS,
-        "gridPos": {"x": 0, "y": y, "w": 24, "h": 6},
+        "gridPos": {"x": 0, "y": y, "w": 12, "h": 6},
         "targets": [{
             "datasource": DS, "refId": "A", "queryType": "2",
             "resultFormat": "table",
@@ -312,6 +312,26 @@ def admin_patching_live_panel(y, items):
     }
 
 
+def admin_security_patch_placeholder(y):
+    """Explicitly Unknown until a verified security update count is collected."""
+    return {
+        "id": 92, "type": "text", "title": "Security patches — admin-01",
+        "gridPos": {"x": 12, "y": y, "w": 12, "h": 6},
+        "options": {
+            "mode": "markdown",
+            "content": (
+                "<div style='text-align:center;padding-top:18px'>"
+                "<div style='font-size:18px;color:#aab2c0'>Security patches</div>"
+                "<div style='font-size:64px;font-weight:600;line-height:1.6'>Unknown</div>"
+                "<div style='font-size:13px;color:#aab2c0'>"
+                "Awaiting verified classification</div></div>"
+            ),
+        },
+        "description": ("Security patch count is not yet established. "
+                        "Zero security-origin candidates is not evidence of zero security patches."),
+    }
+
+
 def host_dashboard(name, host, items, os_info):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
@@ -345,8 +365,11 @@ def host_dashboard(name, host, items, os_info):
                                        host["host"], item, y, "Bps"))
             pid += 1
     problems_y = 6 + ((pid - 1) // 2) * 8
-    panels.append(admin_patching_live_panel(problems_y, items) if name == "admin-01"
-                  else patch_status_panel(problems_y))
+    if name == "admin-01":
+        panels.append(admin_patching_live_panel(problems_y, items))
+        panels.append(admin_security_patch_placeholder(problems_y))
+    else:
+        panels.append(patch_status_panel(problems_y))
     panels.append(problem_panel(host["host"], problems_y + 6))
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
@@ -497,10 +520,16 @@ def main():
             raise RuntimeError("No verified live admin-01 patch table; no changes")
         existing = grafana_api(
             graf_headers, "/api/dashboards/uid/" + admin_action[1]["uid"])
-        previous_panels = [p for p in existing["dashboard"]["panels"] if p.get("id") != 91]
-        candidate_panels = [p for p in admin_action[1]["panels"] if p.get("id") != 91]
+        allowed_patch_ids = {91, 92}
+        if not any(p.get("id") == 92 and p.get("type") == "text"
+                   for p in admin_action[1]["panels"]):
+            raise RuntimeError("Expected security Unknown placeholder panel 92")
+        previous_panels = [p for p in existing["dashboard"]["panels"]
+                           if p.get("id") not in allowed_patch_ids]
+        candidate_panels = [p for p in admin_action[1]["panels"]
+                            if p.get("id") not in allowed_patch_ids]
         if previous_panels != candidate_panels:
-            raise RuntimeError("Pilot refuses changes outside admin-01 patch panel 91")
+            raise RuntimeError("Pilot refuses changes outside admin-01 patch panels 91/92")
         print("PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged")
         actions = [admin_action]
 
