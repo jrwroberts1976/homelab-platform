@@ -1,3 +1,9 @@
+## 2026-11-08 — router-01 Pi-hole DNS source-of-truth correction (staged)
+
+- Operator evidence: admin-01 uses Pi-hole servers 192.168.2.51 and 192.168.2.50; neither resolves `router-01.jameshouse` or `router-01`. Active Pi-hole entries at 192.168.2.1 still identify retired `rt-ac86u-ccc8` (plus `router` alias). admin-01 uses NetworkManager without `resolvectl`; do not introduce systemd-resolved changes.
+- Root cause located in `IaC/ansible/roles/dns_resolver/defaults/main.yml`: static `pihole_local_hosts` entry remained `192.168.2.1 rt-ac86u-ccc8.jameshouse rt-ac86u-ccc8 router`. Changed it to `192.168.2.1 router-01.jameshouse router-01 router` and added direct localhost DNS checks for FQDN and short name to `roles/dns_resolver/tasks/local_dns.yml`.
+- **Not yet applied**. Deploy only through existing `IaC/ansible/playbooks/dns-local-records.yml` against `dns_resolvers` group; this only reconciles Pi-hole local host records. Test both DNS servers directly and `getent hosts router-01` on admin-01 afterwards. Router-01 agent2 confirmed active on Debian 13.7 aarch64; Zabbix agent setup should not be altered as part of DNS correction.
+
 ## 2026-11-08 — Zabbix-first Grafana dashboards staged after full reset
 
 - Operator confirmed full Grafana reset Ansible recap `monitor-01: ok=8 changed=4 failed=0`. All previous Grafana dashboards were removed by reset playbook; Grafana folders and Zabbix datasource/plugin retained.
