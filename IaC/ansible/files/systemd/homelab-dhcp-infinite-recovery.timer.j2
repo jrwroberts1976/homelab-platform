@@ -1,0 +1,11 @@
+[Unit]
+Description=DHCP configuration rollback safeguard
+
+[Timer]
+OnCalendar={{ dhcp_rollback_deadline_utc }}
+Persistent=true
+AccuracySec=1s
+Unit=homelab-dhcp-infinite-recovery.service
+
+[Install]
+WantedBy=timers.target

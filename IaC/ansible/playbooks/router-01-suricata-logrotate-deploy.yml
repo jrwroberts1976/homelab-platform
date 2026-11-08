@@ -1,0 +1,235 @@
+---
+# Production deployment is disabled by default.
+# No Suricata restart, signal, NFQUEUE modification or forced rotation.
+
+- name: Deploy guarded Suricata logrotate policy
+  hosts: router-01
+  gather_facts: false
+  become: true
+
+  vars:
+    router_suricata_logrotate_approved: false
+    router_suricata_logrotate_target: /etc/logrotate.d/suricata
+    router_suricata_logrotate_expected_sha256: f95789a4166f06c69695c31de79bf586cd72c0a862cf50292e35d2ae342f6c96
+    router_suricata_logrotate_candidate_sha256: 19f06bf2b87db4307d11e5e6be7922e803acc63fcbc3d7c357bc39e975ede677
+    router_suricata_logrotate_backup_dir: /var/backups/homelab-router/suricata-logrotate
+
+  pre_tasks:
+    - name: Require explicit deployment approval
+      ansible.builtin.assert:
+        that:
+          - not ansible_check_mode
+          - router_suricata_logrotate_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "STOP - Suricata logrotate deployment not approved"
+      delegate_to: localhost
+      become: false
+
+    - name: Inspect candidate policy on controller
+      ansible.builtin.stat:
+        path: "{{ playbook_dir }}/../files/router-suricata.logrotate"
+        checksum_algorithm: sha256
+        get_checksum: true
+      delegate_to: localhost
+      become: false
+      register: router_suricata_candidate_stat
+
+    - name: Verify candidate policy checksum on controller
+      ansible.builtin.assert:
+        that:
+          - router_suricata_candidate_stat.stat.exists
+          - router_suricata_candidate_stat.stat.isreg
+          - router_suricata_candidate_stat.stat.checksum == router_suricata_logrotate_candidate_sha256
+        fail_msg: "STOP - candidate policy differs from reviewed SHA-256"
+      delegate_to: localhost
+      become: false
+
+    - name: Verify runtime router hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      register: router_hostname
+      changed_when: false
+
+    - name: Require expected runtime hostname
+      ansible.builtin.assert:
+        that:
+          - router_hostname.stdout | trim == 'raspberrypi'
+
+    - name: Verify production NFQUEUE service is active
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-suricata-nfq.service]
+      register: router_suricata_active
+      changed_when: false
+      failed_when: router_suricata_active.stdout | trim != 'active'
+
+    - name: Inspect existing logrotate configuration
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_target }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_existing_policy
+
+    - name: Refuse unexpected production configuration
+      ansible.builtin.assert:
+        that:
+          - router_suricata_existing_policy.stat.exists
+          - router_suricata_existing_policy.stat.isreg
+          - not router_suricata_existing_policy.stat.islnk | default(false)
+          - router_suricata_existing_policy.stat.pw_name == 'root'
+          - router_suricata_existing_policy.stat.gr_name == 'root'
+          - router_suricata_existing_policy.stat.mode == '0644'
+          - router_suricata_existing_policy.stat.checksum == router_suricata_logrotate_expected_sha256
+        fail_msg: "STOP - Suricata logrotate policy differs from verified baseline"
+
+  tasks:
+    - name: Recheck production configuration before backup
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_target }}"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_prebackup_stat
+
+    - name: Require unchanged production policy before backup
+      ansible.builtin.assert:
+        that:
+          - router_suricata_prebackup_stat.stat.exists
+          - router_suricata_prebackup_stat.stat.isreg
+          - not router_suricata_prebackup_stat.stat.islnk | default(false)
+          - router_suricata_prebackup_stat.stat.checksum == router_suricata_logrotate_expected_sha256
+        fail_msg: "STOP - production policy changed before backup"
+
+    - name: Create protected backup directory
+      ansible.builtin.file:
+        path: "{{ router_suricata_logrotate_backup_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+
+    - name: Back up original Suricata logrotate policy
+      ansible.builtin.copy:
+        src: "{{ router_suricata_logrotate_target }}"
+        dest: "{{ router_suricata_logrotate_backup_dir }}/suricata.original"
+        remote_src: true
+        owner: root
+        group: root
+        mode: '0600'
+        force: false
+      register: router_suricata_logrotate_backup
+
+    - name: Verify protected backup checksum
+      ansible.builtin.stat:
+        path: "{{ router_suricata_logrotate_backup_dir }}/suricata.original"
+        checksum_algorithm: sha256
+        get_checksum: true
+        follow: false
+      register: router_suricata_logrotate_backup_stat
+
+    - name: Require backup to match verified production baseline
+      ansible.builtin.assert:
+        that:
+          - router_suricata_logrotate_backup_stat.stat.exists
+          - router_suricata_logrotate_backup_stat.stat.isreg
+          - router_suricata_logrotate_backup_stat.stat.checksum == router_suricata_logrotate_expected_sha256
+          - router_suricata_logrotate_backup_stat.stat.pw_name == 'root'
+          - router_suricata_logrotate_backup_stat.stat.gr_name == 'root'
+          - router_suricata_logrotate_backup_stat.stat.mode == '0600'
+        fail_msg: "STOP - protected original backup does not match baseline"
+
+    - name: Stage and validate candidate with guaranteed cleanup
+      block:
+        - name: Create temporary candidate staging directory
+          ansible.builtin.tempfile:
+            state: directory
+            path: /run
+            prefix: router-suricata-logrotate-
+          register: router_suricata_stage_dir
+
+        - name: Stage candidate policy in temporary directory
+          ansible.builtin.copy:
+            src: "{{ playbook_dir }}/../files/router-suricata.logrotate"
+            dest: "{{ router_suricata_stage_dir.path }}/suricata"
+            owner: root
+            group: root
+            mode: '0600'
+
+        - name: Verify staged candidate checksum
+          ansible.builtin.stat:
+            path: "{{ router_suricata_stage_dir.path }}/suricata"
+            checksum_algorithm: sha256
+            get_checksum: true
+            follow: false
+          register: router_suricata_stage_stat
+
+        - name: Require exact staged candidate identity
+          ansible.builtin.assert:
+            that:
+              - router_suricata_stage_stat.stat.exists
+              - router_suricata_stage_stat.stat.isreg
+              - not router_suricata_stage_stat.stat.islnk | default(false)
+              - router_suricata_stage_stat.stat.checksum == router_suricata_logrotate_candidate_sha256
+            fail_msg: "STOP - staged candidate differs from reviewed policy"
+
+        - name: Capture NFQUEUE PID before installation
+          ansible.builtin.command:
+            argv:
+              - systemctl
+              - show
+              - router-suricata-nfq.service
+              - --value
+              - -p
+              - MainPID
+          register: router_suricata_deploy_pid_before
+          changed_when: false
+
+        - name: Require running NFQUEUE process
+          ansible.builtin.assert:
+            that:
+              - router_suricata_deploy_pid_before.stdout | trim | int > 0
+            fail_msg: "STOP - Suricata NFQUEUE process is not running"
+
+        - name: Recheck original policy before installation
+          ansible.builtin.stat:
+            path: "{{ router_suricata_logrotate_target }}"
+            checksum_algorithm: sha256
+            get_checksum: true
+            follow: false
+          register: router_suricata_preinstall_stat
+
+        - name: Refuse changed original policy before installation
+          ansible.builtin.assert:
+            that:
+              - router_suricata_preinstall_stat.stat.exists
+              - router_suricata_preinstall_stat.stat.isreg
+              - not router_suricata_preinstall_stat.stat.islnk | default(false)
+              - router_suricata_preinstall_stat.stat.checksum == router_suricata_logrotate_expected_sha256
+            fail_msg: "STOP - original policy changed before installation"
+
+        - name: Validate staged candidate with logrotate debug mode
+          ansible.builtin.command:
+            argv:
+              - logrotate
+              - --debug
+              - --state
+              - /dev/null
+              - "{{ router_suricata_stage_dir.path }}/suricata"
+          register: router_suricata_stage_validation
+          changed_when: false
+          failed_when: router_suricata_stage_validation.rc != 0
+
+      always:
+        - name: Remove temporary candidate staging directory
+          ansible.builtin.file:
+            path: "{{ router_suricata_stage_dir.path }}"
+            state: absent
+          when: router_suricata_stage_dir.path is defined
+
+    - name: Stop before deployment implementation
+      ansible.builtin.fail:
+        msg: >-
+          Deployment implementation is intentionally incomplete.
+          Add reviewed backup, hash verification, validation,
+          atomic installation and rollback safeguards before use.

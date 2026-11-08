@@ -1,0 +1,15 @@
+# Managed by homelab-network-enrichment Ansible/IaC.
+# Suricata NFQUEUE must not be restarted or signalled.
+
+/var/log/suricata/*.log
+/var/log/suricata/*.json
+{
+    daily
+    maxsize 100M
+    rotate 14
+    missingok
+    notifempty
+    compress
+    delaycompress
+    copytruncate
+}

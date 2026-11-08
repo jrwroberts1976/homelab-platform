@@ -14,6 +14,24 @@ INTERFACE = "{{ network_host_collector_interface }}"
 
 CANONICAL_HOSTNAMES = {{ network_host_collector_canonical_hostnames | to_json }}
 
+# Existing DHCP device-page state; optional hostname fallback.
+DHCP_NAMES = {}
+try:
+    import json
+    with open("/var/lib/homelab-network-hosts/router-dhcp-device-pages.json") as f:
+        records = json.load(f).get("devices", {})
+    DHCP_NAMES = {
+        mac.lower(): r["hostname"]
+        for mac, r in records.items()
+        if isinstance(r, dict)
+        and isinstance(r.get("hostname"), str)
+        and r["hostname"].strip()
+        and r["hostname"].lower() not in ("wlan0", "unknown", "*")
+    }
+except (OSError, ValueError, AttributeError, TypeError):
+    pass
+
+
 STATE_FILE = Path("{{ network_host_collector_inventory }}")
 EVENT_FILE = Path("{{ network_host_collector_events }}")
 METRIC_FILE = Path("{{ network_host_collector_metrics }}")
@@ -202,6 +220,8 @@ def scan():
         hostname = CANONICAL_HOSTNAMES.get(ip, "")
         if not hostname:
             hostname = reverse_dns(ip)
+        if not hostname:
+            hostname = DHCP_NAMES.get(mac.lower(), "")
         found[ip] = {
             "ip": ip,
             "mac": mac,

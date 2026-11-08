@@ -1,0 +1,137 @@
+---
+# Controlled cutover: does NOT start enricher or run Nmap.
+# Timer is left STOPPED; a separate verification and approval must resume it.
+- name: Install independent enricher from verified protected stage
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars:
+    stage: /var/backups/homelab-network-enrichment/independent-20261105
+    worker: /usr/local/sbin/homelab-network-host-enricher
+    dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+  tasks:
+    - name: Require independently approved exact production target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - network_enrichment_activate_approved | default(false) | bool
+          - network_enrichment_activate_phrase | default('') == 'ACTIVATE_INDEPENDENT_ENRICHER'
+    - name: Hash protected staging, originals and installed files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ stage }}/original-enricher.py"
+        - "{{ stage }}/original-dropin.conf"
+        - "{{ stage }}/candidate-enricher.py"
+        - "{{ stage }}/candidate-dropin.conf"
+        - "{{ worker }}"
+        - "{{ dropin }}"
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+      register: verified
+    - name: Refuse missing or modified original recovery evidence
+      ansible.builtin.assert:
+        that:
+          - verified.results[0].stat.isreg | default(false)
+          - verified.results[1].stat.isreg | default(false)
+          - verified.results[2].stat.isreg | default(false)
+          - verified.results[3].stat.isreg | default(false)
+          - verified.results[4].stat.checksum == verified.results[0].stat.checksum
+          - verified.results[5].stat.checksum == verified.results[1].stat.checksum
+          - verified.results[6].stat.isreg | default(false)
+    - name: Check candidate is valid Python with optional snapshot identity
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - "import ast,pathlib; t=ast.parse(pathlib.Path('{{ stage }}/candidate-enricher.py').read_text()); a=[n for n in t.body if isinstance(n,ast.Assign) and any(isinstance(x,ast.Name) and x.id=='PROXMOX_SOURCE' for x in n.targets)]; assert len(a)==1 and isinstance(a[0].value,ast.Constant) and a[0].value.value=='snapshot_optional'"
+      changed_when: false
+    - name: Check current worker idle
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-enricher.service]
+      register: worker_state
+      changed_when: false
+      failed_when: false
+    - name: Read timer before cutover
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-enricher.timer]
+      register: timer_state
+      changed_when: false
+    - name: Require idle worker and active timer
+      ansible.builtin.assert:
+        that:
+          - worker_state.stdout == 'inactive'
+          - timer_state.stdout == 'active'
+    - name: Pause enrichment schedule before changing its worker
+      ansible.builtin.systemd_service:
+        name: homelab-network-host-enricher.timer
+        state: stopped
+    - name: Verify no worker started during timer pause
+      ansible.builtin.command:
+        argv: [systemctl, is-active, homelab-network-host-enricher.service]
+      register: paused_worker
+      changed_when: false
+      failed_when: false
+    - name: Fail closed if worker is not idle
+      ansible.builtin.assert:
+        that:
+          - paused_worker.stdout == 'inactive'
+    - name: Replace production worker and drop-in with staged candidates
+      block:
+        - name: Install verified candidate worker
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ stage }}/candidate-enricher.py"
+            dest: "{{ worker }}"
+            owner: root
+            group: root
+            mode: '0755'
+        - name: Install independent unit drop-in
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ stage }}/candidate-dropin.conf"
+            dest: "{{ dropin }}"
+            owner: root
+            group: root
+            mode: '0644'
+        - name: Reload unit without starting worker
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+        - name: Check effective required units
+          ansible.builtin.command:
+            argv: [systemctl, show, homelab-network-host-enricher.service, -p, Requires]
+          register: actual_requires
+          changed_when: false
+        - name: Require Proxmox refresh no longer mandatory
+          ansible.builtin.assert:
+            that:
+              - "'homelab-proxmox-guest-refresh.service' not in actual_requires.stdout"
+      rescue:
+        - name: Restore worker from original protected copy
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ stage }}/original-enricher.py"
+            dest: "{{ worker }}"
+            owner: root
+            group: root
+            mode: '0755'
+        - name: Restore original drop-in
+          ansible.builtin.copy:
+            remote_src: true
+            src: "{{ stage }}/original-dropin.conf"
+            dest: "{{ dropin }}"
+            owner: root
+            group: root
+            mode: '0644'
+        - name: Reload restored unit
+          ansible.builtin.systemd_service:
+            daemon_reload: true
+        - name: Stop after safe restoration without restarting schedule
+          ansible.builtin.fail:
+            msg: "Activation failed and original files restored. Timer STOPPED; investigate before resuming."
+    - name: Confirm activation is staged for separate postflight
+      ansible.builtin.debug:
+        msg: "Independent worker installed, but timer intentionally STOPPED. No scans or Proxmox calls executed."

@@ -1,0 +1,140 @@
+#!/usr/bin/env python3
+"""Stage a replacement authenticated Greenbone task; do not switch the daily runner."""
+import importlib.util
+from importlib.machinery import SourceFileLoader
+import xml.etree.ElementTree as ET
+
+RECONCILER = "/usr/local/sbin/homelab-greenbone-auth-configure"
+EXPECTED_OLD_TARGET = "1c8418b5-1cae-4cca-8535-4700c2d2835b"
+EXPECTED_OLD_TASK = "02b610fc-647a-4fb8-98c3-7763e0425c34"
+OLD_TARGET_NAME = "{{ greenbone_scanning_authenticated_target_name }}"
+OLD_TASK_NAME = "{{ greenbone_scanning_authenticated_task_name }}"
+NEW_TARGET_NAME = OLD_TARGET_NAME + " - Router01"
+NEW_TASK_NAME = OLD_TASK_NAME + " - Router01"
+APPROVED = {{ 'True' if greenbone_router_migration_approved | default(false) | bool else 'False' }}
+
+
+def unique_named(root, tag, name):
+    matches = [item for item in root.findall(".//" + tag)
+               if item.findtext("name", "").strip() == name]
+    if len(matches) > 1:
+        raise RuntimeError("Duplicate Greenbone " + tag + " named " + name)
+    return matches[0] if matches else None
+
+
+def verified_existing(old_target, old_task, credential_id, desired):
+    if old_target is None or old_target.get("id") != EXPECTED_OLD_TARGET:
+        raise RuntimeError("Unexpected original authenticated target identity")
+    ssh = old_target.find("ssh_credential")
+    if ssh is None or ssh.get("id") != credential_id:
+        raise RuntimeError("Original target SSH credential mismatch")
+    current = {h.strip() for h in old_target.findtext("hosts", "").split(",") if h.strip()}
+    expected = (desired - {"192.168.2.1"}) | {"192.168.2.220"}
+    if current != expected or len(current) != len(old_target.findtext("hosts", "").split(",")):
+        raise RuntimeError("Original target hosts drifted; refusing migration")
+    if old_task is None or old_task.get("id") != EXPECTED_OLD_TASK:
+        raise RuntimeError("Unexpected original authenticated task identity")
+    task_target = old_task.find("target")
+    if task_target is None or task_target.get("id") != EXPECTED_OLD_TARGET:
+        raise RuntimeError("Original authenticated task target changed")
+    if old_task.findtext("status", "") not in ("Done", "Stopped", "New", "Interrupted"):
+        raise RuntimeError("Original authenticated task is not idle")
+
+
+def ensure_new_target(gmp, root, old_target, credential_id, desired):
+    target = unique_named(root, "target", NEW_TARGET_NAME)
+    if target is not None:
+        ssh = target.find("ssh_credential")
+        if target.get("id") is None or ssh is None or ssh.get("id") != credential_id:
+            raise RuntimeError("Replacement target identity or credential mismatch")
+        hosts = [x.strip() for x in target.findtext("hosts", "").split(",") if x.strip()]
+        if len(hosts) != len(desired) or set(hosts) != desired:
+            raise RuntimeError("Replacement target host drift")
+        if target.findtext("exclude_hosts", "").strip() != old_target.findtext("exclude_hosts", "").strip():
+            raise RuntimeError("Replacement target exclusions differ")
+        return target.get("id"), False
+    request = ET.Element("create_target")
+    ET.SubElement(request, "name").text = NEW_TARGET_NAME
+    ET.SubElement(request, "comment").text = "Router01 migration; original target retained for report history"
+    ET.SubElement(request, "hosts").text = ",".join(sorted(desired))
+    excludes = old_target.findtext("exclude_hosts", "")
+    if excludes:
+        ET.SubElement(request, "exclude_hosts").text = excludes
+    ssh = ET.SubElement(request, "ssh_credential", {"id": credential_id})
+    ET.SubElement(ssh, "port").text = old_target.findtext("ssh_credential/port", "22")
+    old_ports = old_target.find("port_list")
+    if old_ports is None or not old_ports.get("id"):
+        raise RuntimeError("Original target lacks port list")
+    ET.SubElement(request, "port_list", {"id": old_ports.get("id")})
+    ET.SubElement(request, "alive_tests").text = old_target.findtext("alive_tests", "Scan Config Default")
+    response = ET.fromstring(gmp(ET.tostring(request, encoding="unicode")))
+    if response.get("status") != "201" or not response.get("id"):
+        raise RuntimeError("Replacement target creation failed: " + str(response.get("status_text")))
+    return response.get("id"), True
+
+
+def ensure_new_task(gmp, root, old_task, target_id):
+    task = unique_named(root, "task", NEW_TASK_NAME)
+    expected_config = old_task.find("config")
+    expected_scanner = old_task.find("scanner")
+    if expected_config is None or expected_config.get("id") != "daba56c8-73ec-11df-a475-002264764cea":
+        raise RuntimeError("Original scan configuration unexpected")
+    if expected_scanner is None or expected_scanner.get("id") != "08b69003-5fc2-4037-a479-93b440211c73":
+        raise RuntimeError("Original scanner unexpected")
+    if task is not None:
+        target = task.find("target")
+        cfg = task.find("config")
+        scanner = task.find("scanner")
+        if not task.get("id") or target is None or target.get("id") != target_id or cfg is None or cfg.get("id") != expected_config.get("id") or scanner is None or scanner.get("id") != expected_scanner.get("id"):
+            raise RuntimeError("Replacement task identity or configuration drift")
+        return task.get("id"), False
+    request = ET.Element("create_task")
+    ET.SubElement(request, "name").text = NEW_TASK_NAME
+    ET.SubElement(request, "comment").text = "Router01 migration; original task and reports preserved"
+    ET.SubElement(request, "alterable").text = "1"
+    ET.SubElement(request, "config", {"id": expected_config.get("id")})
+    ET.SubElement(request, "target", {"id": target_id})
+    ET.SubElement(request, "scanner", {"id": expected_scanner.get("id")})
+    response = ET.fromstring(gmp(ET.tostring(request, encoding="unicode")))
+    if response.get("status") != "201" or not response.get("id"):
+        raise RuntimeError("Replacement task creation failed: " + str(response.get("status_text")))
+    return response.get("id"), True
+
+
+def main():
+    if not APPROVED:
+        raise RuntimeError("Replacement object creation requires explicit approval")
+    loader = SourceFileLoader("greenbone_auth_reconciler", RECONCILER)
+    spec = importlib.util.spec_from_loader(loader.name, loader)
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    if not hasattr(module, "target_hosts"):
+        raise RuntimeError("Existing Greenbone reconciler is incompatible")
+    desired = module.target_hosts(module.HOSTS)
+    if "192.168.2.1" not in desired or "192.168.2.220" in desired:
+        raise RuntimeError("Unexpected router inventory")
+    username, password = module.load_runtime_env()
+    try:
+        module.write_gmp_config(username, password)
+        credentials = ET.fromstring(module.gmp('<get_credentials details="1"/>'))
+        credential = unique_named(credentials, "credential", module.CREDENTIAL_NAME)
+        if credential is None or not credential.get("id"):
+            raise RuntimeError("Existing SSH credential missing")
+        targets = ET.fromstring(module.gmp('<get_targets details="1"/>'))
+        tasks = ET.fromstring(module.gmp('<get_tasks details="1"/>'))
+        old_target = unique_named(targets, "target", OLD_TARGET_NAME)
+        old_task = unique_named(tasks, "task", OLD_TASK_NAME)
+        verified_existing(old_target, old_task, credential.get("id"), desired)
+        target_id, target_created = ensure_new_target(module.gmp, targets, old_target, credential.get("id"), desired)
+        task_id, task_created = ensure_new_task(module.gmp, tasks, old_task, target_id)
+        print("replacement_target_id=" + target_id)
+        print("replacement_target_created=" + str(target_created).lower())
+        print("replacement_task_id=" + task_id)
+        print("replacement_task_created=" + str(task_created).lower())
+        print("runner_switched=false")
+    finally:
+        module.GMP_CONFIG.unlink(missing_ok=True)
+
+
+if __name__ == "__main__":
+    main()

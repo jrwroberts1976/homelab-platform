@@ -57,7 +57,7 @@
             wifi=d.get('192.168.2.196',{});
             ok=(wired.get('online') is True
                 and wired.get('mac')=='2c:cf:67:30:be:1f'
-                and wifi.get('online') is False);
+                and wifi.get('online') is not True);
             print('media01_current_ip_guard=pass' if ok else 'media01_current_ip_guard=fail');
             sys.exit(0 if ok else 1)
       register: media01_guard

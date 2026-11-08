@@ -1,0 +1,82 @@
+---
+# KISS one-shot live passive-OS tail pilot. No services, timers or checkpoint.
+# Set passive_os_pilot_approved=true only after user authorises the live pilot.
+- name: Install lightweight bounded passive OS reader and publish one snapshot
+  hosts: router-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_pilot_approved: false
+    passive_os_pilot_dir: /usr/local/lib/homelab-passive-os
+    passive_os_pilot_eve: /var/log/suricata/eve.json
+    passive_os_pilot_output: /var/lib/homelab-passive-os-outbound/batch.json
+  tasks:
+    - name: Require live pilot approval and exact router
+      ansible.builtin.assert:
+        that:
+          - passive_os_pilot_approved | bool
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+
+    - name: Require expected router runtime hostname
+      ansible.builtin.command: hostname
+      changed_when: false
+      register: passive_os_pilot_hostname
+    - name: Refuse unexpected router runtime
+      ansible.builtin.assert:
+        that: passive_os_pilot_hostname.stdout == 'raspberrypi'
+
+    - name: Check live EVE and transport directory exist
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+      loop:
+        - "{{ passive_os_pilot_eve }}"
+        - "{{ passive_os_pilot_output | dirname }}"
+      register: passive_os_pilot_paths
+    - name: Require real EVE log and established outbound directory
+      ansible.builtin.assert:
+        that:
+          - passive_os_pilot_paths.results[0].stat.isreg | default(false)
+          - not (passive_os_pilot_paths.results[0].stat.islnk | default(false))
+          - passive_os_pilot_paths.results[1].stat.isdir | default(false)
+          - not (passive_os_pilot_paths.results[1].stat.islnk | default(false))
+          - passive_os_pilot_paths.results[1].stat.uid == 0
+          - passive_os_pilot_paths.results[1].stat.mode == '0750'
+
+    - name: Install dedicated Python script folder
+      ansible.builtin.file:
+        path: "{{ passive_os_pilot_dir }}"
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+
+    - name: Install bounded scripts from reviewed Ansible source
+      ansible.builtin.copy:
+        src: "../scripts/{{ item }}"
+        dest: "{{ passive_os_pilot_dir }}/{{ item }}"
+        owner: root
+        group: root
+        mode: '0644'
+      loop:
+        - router_eve_minimizer.py
+        - passive_os_batch_spool.py
+        - passive_os_ssh_export.py
+        - passive_os_live_sample.py
+
+    - name: Run one bounded live EVE tail sample (no checkpoint)
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - "{{ passive_os_pilot_dir }}/passive_os_live_sample.py"
+          - --eve
+          - "{{ passive_os_pilot_eve }}"
+          - --output
+          - "{{ passive_os_pilot_output }}"
+      register: passive_os_pilot_result
+      changed_when: true
+
+    - name: Report bounded, sanitised sample count only
+      ansible.builtin.debug:
+        var: passive_os_pilot_result.stdout

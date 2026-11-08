@@ -1,0 +1,58 @@
+---
+# Stage 4: observability-only. No deployment, restart, logrotate invocation,
+# chmod, credential changes, event-content reads, or network scanning.
+- name: Read-only router-01 Suricata log rotation and service audit
+  hosts: router-01
+  gather_facts: false
+  become: true
+  tasks:
+    - name: Confirm the target is the canonical router inventory entry
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+        fail_msg: "Refusing audit against unexpected target"
+
+    - name: Inspect operating-system hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      register: router_hostname
+
+    - name: Inspect Suricata logrotate policy without triggering rotation
+      ansible.builtin.command:
+        argv: [cat, /etc/logrotate.d/suricata]
+      changed_when: false
+      register: rotation_policy
+
+    - name: Inspect EVE file metadata only
+      ansible.builtin.stat:
+        path: /var/log/suricata/eve.json
+        get_checksum: false
+        get_mime: false
+        get_attributes: false
+      register: eve_stat
+
+    - name: Check whether the dedicated NFQUEUE Suricata service is running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, router-suricata-nfq.service]
+      changed_when: false
+      register: nfq_service
+      failed_when: false
+
+    - name: Inspect rotation timer without activating it
+      ansible.builtin.command:
+        argv: [systemctl, list-timers, --all, --no-pager, logrotate.timer]
+      changed_when: false
+      register: rotate_timer
+
+    - name: Show safe audit results
+      ansible.builtin.debug:
+        msg:
+          - "Host: {{ router_hostname.stdout }}"
+          - "NFQUEUE Suricata active: {{ nfq_service.stdout }}"
+          - "EVE size bytes: {{ eve_stat.stat.size | default('missing') }}"
+          - "EVE owner/mode: {{ eve_stat.stat.pw_name | default('?') }} / {{ eve_stat.stat.mode | default('?') }}"
+          - "Rotation policy: {{ rotation_policy.stdout_lines }}"
+          - "Timer: {{ rotate_timer.stdout_lines }}"
+          - "Audit only: no configuration, timer, service or file content modified"

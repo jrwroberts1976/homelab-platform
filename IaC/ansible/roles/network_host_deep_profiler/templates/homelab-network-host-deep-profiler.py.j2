@@ -33,6 +33,11 @@ MAX_PROFILES_PER_RUN = (
     {{ network_host_deep_profiler_max_profiles_per_run }}
 )
 
+# Production safety policy: no automatic Nmap repeat for a MAC once attempted.
+ONE_ATTEMPT_PER_HOST = bool(
+    {{ network_host_deep_profiler_one_attempt_per_host | bool | int }}
+)
+
 BASELINE_BACKLOG_ENABLED = bool(
     {{ network_host_deep_profiler_enable_baseline_backlog | bool | int }}
 )
@@ -138,7 +143,25 @@ def scan_retry_seconds(record):
     return INITIAL_RETRY_SECONDS if attempts <= 1 else WEEKLY_RETRY_SECONDS
 
 
+def already_attempted_nmap(record):
+    """Existing scan evidence or attempt markers block automatic rescans."""
+    return (
+        record.get("status") in ("complete", "partial")
+        or int(record.get("attempt_count", 0) or 0) > 0
+        or int(record.get("last_attempt", 0) or 0) > 0
+        or int(record.get("profiled_at", 0) or 0) > 0
+        or bool(record.get("profiled_ip"))
+        or (
+            isinstance(record.get("profile"), dict)
+            and bool(record["profile"])
+        )
+    )
+
+
 def scan_due(record, now, cooldown=None):
+    if ONE_ATTEMPT_PER_HOST and already_attempted_nmap(record):
+        return False
+
     last_attempt = int(record.get("last_attempt", 0) or 0)
 
     if last_attempt <= 0:
@@ -813,6 +836,7 @@ pending = sorted(
             # Only currently inventoried MACs can become scan targets.
             # Historical profiles remain preserved but cannot be re-scanned.
             mac in current_inventory
+            and (not ONE_ATTEMPT_PER_HOST or not already_attempted_nmap(record))
             and (
                 record.get("status") in ("pending", "partial")
                 or (
@@ -821,10 +845,10 @@ pending = sorted(
                     and int(record.get("backlog_due_at", 0) or 0) <= NOW
                 )
                 or (
-                    # A completed identification is not "done forever".
-                    # Re-profile current hosts weekly so TCP ports, services,
-                    # versions and supporting OS evidence stay fresh.
-                    record.get("status") == "complete"
+                    # Historical weekly behaviour is preserved only when
+                    # the one-attempt safety policy is explicitly disabled.
+                    not ONE_ATTEMPT_PER_HOST
+                    and record.get("status") == "complete"
                     and scan_due(record, NOW, WEEKLY_RETRY_SECONDS)
                 )
             )
@@ -907,7 +931,7 @@ for mac, record in pending:
     record["last_error"] = ""
     profiles_started += 1
 
-    # Persist before Nmap: a crash must not bypass the cooldown.
+    # Persist before Nmap: crash/restart must never permit a second attempt.
     persist_profiles(state, profiles)
 
     previous_profile = record.get("profile", {})

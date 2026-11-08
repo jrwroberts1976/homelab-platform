@@ -682,6 +682,47 @@
         "dedupStrategy": "none",
         "sortOrder": "Descending"
       }
+    },
+    {
+      "id": 15,
+      "type": "table",
+      "title": "Passive OS Candidates — Low Confidence",
+      "description": "HTTP User-Agent self-reported OS family only. Not an authoritative device OS. IP-to-MAC historical attribution is unverified; candidates may be stale after this one-shot pilot. Managed OS and Nmap evidence remain separate and take precedence.",
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 24,
+        "h": 8
+      },
+      "datasource": {
+        "type": "prometheus",
+        "uid": "prometheus"
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "homelab_passive_os_candidate_info",
+          "instant": true,
+          "range": false,
+          "format": "table"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "labelsToFields",
+          "options": {
+            "mode": "columns"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm"
+      }
     }
   ]
 }

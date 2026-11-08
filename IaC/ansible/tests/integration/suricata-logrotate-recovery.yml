@@ -1,0 +1,97 @@
+---
+# LOCALHOST ONLY. Disposable test data.
+# No production inventory, services, signals or log rotation.
+
+- name: Test Suricata logrotate recovery with disposable files
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  become: false
+
+  vars:
+    test_scenario: success
+    expected_original: "original policy"
+    expected_candidate: "candidate policy"
+
+  tasks:
+    - name: Require localhost-only execution
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'localhost'
+          - test_scenario in ['success', 'failure', 'unexpected']
+
+    - name: Create disposable test directory
+      ansible.builtin.tempfile:
+        state: directory
+        prefix: suricata-recovery-test-
+      register: test_directory
+
+    - name: Exercise installation and recovery
+      block:
+        - name: Create original disposable configuration
+          ansible.builtin.copy:
+            dest: "{{ test_directory.path }}/suricata"
+            content: "{{ expected_original }}"
+            mode: '0600'
+
+        - name: Install disposable candidate configuration
+          ansible.builtin.copy:
+            dest: "{{ test_directory.path }}/suricata"
+            content: "{{ expected_candidate }}"
+            mode: '0600'
+
+        - name: Simulate unexpected external modification
+          ansible.builtin.copy:
+            dest: "{{ test_directory.path }}/suricata"
+            content: "unexpected policy"
+            mode: '0600'
+          when: test_scenario == 'unexpected'
+
+        - name: Trigger controlled failure
+          ansible.builtin.fail:
+            msg: "Simulated post-installation failure"
+          when: test_scenario in ['failure', 'unexpected']
+
+      rescue:
+        - name: Inspect disposable active configuration
+          ansible.builtin.slurp:
+            src: "{{ test_directory.path }}/suricata"
+          register: recovery_active
+
+        - name: Refuse recovery of unexpected configuration
+          ansible.builtin.assert:
+            that:
+              - recovery_active.content | b64decode == expected_candidate
+            fail_msg: "REFUSE - unexpected configuration"
+
+        - name: Restore disposable original configuration
+          ansible.builtin.copy:
+            dest: "{{ test_directory.path }}/suricata"
+            content: "{{ expected_original }}"
+            mode: '0600'
+
+      always:
+        - name: Capture final disposable configuration
+          ansible.builtin.slurp:
+            src: "{{ test_directory.path }}/suricata"
+          register: final_configuration
+
+        - name: Report final configuration
+          ansible.builtin.debug:
+            msg: "{{ final_configuration.content | b64decode }}"
+
+        - name: Remove disposable test directory
+          ansible.builtin.file:
+            path: "{{ test_directory.path }}"
+            state: absent
+
+        - name: Inspect disposable directory after cleanup
+          ansible.builtin.stat:
+            path: "{{ test_directory.path }}"
+          register: cleanup_result
+
+        - name: Verify disposable directory was removed
+          ansible.builtin.assert:
+            that:
+              - not cleanup_result.stat.exists
+            fail_msg: "FAIL - disposable test directory remains"

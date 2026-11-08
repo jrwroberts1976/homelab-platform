@@ -1,0 +1,91 @@
+---
+# OFFLINE STAGING ONLY: no invocation until a separately reviewed change approval.
+# Stage 5.7B rollback removes ONLY an account whose exact marker and properties
+# match the dormant account that the project's provisioning playbook creates.
+- name: Roll back dormant passive OS router identity - EXPLICIT APPROVAL REQUIRED
+  hosts: router-01
+  become: true
+  gather_facts: false
+  vars:
+    passive_os_rollback_approved: false
+    passive_os_rollback_expected_login: homelab-os-transfer
+    passive_os_rollback_expected_comment: 'Passive OS evidence transport - disabled pending security review'
+  tasks:
+    - name: Ensure router target and explicit rollback approval
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - passive_os_rollback_approved | bool
+        fail_msg: Rollback is disabled unless explicitly approved on canonical router
+
+    - name: Check router runtime hostname
+      ansible.builtin.command:
+        argv: [hostname]
+      changed_when: false
+      register: passive_rollback_hostname
+
+    - name: Require canonical runtime hostname
+      ansible.builtin.assert:
+        that:
+          - passive_rollback_hostname.stdout == 'raspberrypi'
+
+    - name: Look up exact proposed service account
+      ansible.builtin.command:
+        argv: [getent, passwd, "{{ passive_os_rollback_expected_login }}"]
+      changed_when: false
+      failed_when: false
+      register: passive_rollback_passwd
+      no_log: true
+
+    - name: Stop on missing or ambiguous account state
+      ansible.builtin.assert:
+        that:
+          - passive_rollback_passwd.rc == 0
+        fail_msg: No matching dormant identity found; manual review required
+
+    - name: Refuse removal if account identity differs from project marker
+      ansible.builtin.assert:
+        that:
+          - passive_rollback_passwd.stdout.split(':') | length == 7
+          - passive_rollback_passwd.stdout.split(':')[0] == passive_os_rollback_expected_login
+          - passive_rollback_passwd.stdout.split(':')[4] == passive_os_rollback_expected_comment
+          - passive_rollback_passwd.stdout.split(':')[5] == '/nonexistent'
+          - passive_rollback_passwd.stdout.split(':')[6] == '/usr/sbin/nologin'
+        fail_msg: Account is not the expected dormant identity - refuse removal
+      no_log: true
+
+    - name: Check for running processes owned by identity
+      ansible.builtin.command:
+        argv: [pgrep, -u, "{{ passive_os_rollback_expected_login }}"]
+      changed_when: false
+      failed_when: false
+      register: passive_rollback_processes
+
+    - name: Stop if any process exists or process check failed unexpectedly
+      ansible.builtin.assert:
+        that:
+          - passive_rollback_processes.rc == 1
+        fail_msg: Processes active or process check failed - refuse deletion
+
+    - name: Refuse removal if public-key login was ever provisioned
+      ansible.builtin.stat:
+        path: /nonexistent/.ssh/authorized_keys
+        get_checksum: false
+      register: passive_rollback_authorized_keys
+
+    - name: Stop if login material detected
+      ansible.builtin.assert:
+        that:
+          - not (passive_rollback_authorized_keys.stat.exists | default(false))
+        fail_msg: Login material detected; manual rollback plan required
+
+    - name: Remove only the verified dormant account
+      ansible.builtin.user:
+        name: "{{ passive_os_rollback_expected_login }}"
+        state: absent
+        remove: false
+
+    - name: Report manual rollback scope
+      ansible.builtin.debug:
+        msg: Dormant identity removed; no SSH daemon, router service or network changes

@@ -1,0 +1,16 @@
+[Unit]
+Description=Emergency DHCP lease configuration rollback
+StartLimitIntervalSec=300
+StartLimitBurst=20
+After=local-fs.target
+ConditionPathExists=/var/backups/homelab-router/dhcp-infinite/router.conf.original
+
+[Service]
+Type=oneshot
+User=root
+Group=root
+ExecStartPre=/usr/bin/install -d -o root -g root -m 0700 /run/homelab-dhcp-infinite
+ExecStart=/usr/bin/python3 /usr/local/libexec/homelab/router_dhcp_infinite_rollback_worker.py --execute-approved-rollback
+TimeoutStartSec=60
+Restart=on-failure
+RestartSec=15s

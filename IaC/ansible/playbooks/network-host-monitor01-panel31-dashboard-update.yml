@@ -1,0 +1,88 @@
+---
+# Scoped Grafana Panel 31 restoration. No Nmap runs, profiler changes, or
+# monitoring-stack restarts. Provisioned dashboard is backed up on change.
+- name: Restore the Nmap OS fingerprint panel in the existing Hosts dashboard
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  any_errors_fatal: true
+
+  vars:
+    dashboard_src: "{{ playbook_dir }}/../roles/monitoring_stack/files/grafana/dashboards/production/homelab-linux-estate.json"
+    dashboard_dest: /opt/monitoring/grafana/provisioning/dashboards/production/homelab-linux-estate.json
+
+  pre_tasks:
+    - name: Confirm identity and explicit deployment approval
+      ansible.builtin.assert:
+        that:
+          - panel31_dashboard_update_approved | default(false) | bool
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+        fail_msg: STOP - explicit approval and verified monitor-01 identity required.
+
+    - name: Verify existing provisioned dashboard
+      ansible.builtin.stat:
+        path: "{{ dashboard_dest }}"
+      register: existing_dashboard
+
+    - name: Refuse creating a dashboard in an unexpected location
+      ansible.builtin.assert:
+        that:
+          - existing_dashboard.stat.exists
+          - existing_dashboard.stat.isreg
+
+    - name: Read existing live dashboard JSON
+      ansible.builtin.slurp:
+        src: "{{ dashboard_dest }}"
+      register: live_dashboard_json
+
+    - name: Read proposed dashboard JSON from controller
+      ansible.builtin.set_fact:
+        proposed_dashboard_json: "{{ lookup('file', dashboard_src) | from_json }}"
+        current_dashboard_json: "{{ live_dashboard_json.content | b64decode | from_json }}"
+
+    - name: Require existing UID, unchanged dashboard population, and updated Panel 31
+      ansible.builtin.assert:
+        that:
+          - current_dashboard_json.uid == 'homelab-linux-estate'
+          - proposed_dashboard_json.uid == 'homelab-linux-estate'
+          - current_dashboard_json.title == proposed_dashboard_json.title
+          - current_dashboard_json.panels | map(attribute='id') | list | sort == proposed_dashboard_json.panels | map(attribute='id') | list | sort
+          - (proposed_dashboard_json.panels | selectattr('id', 'equalto', 31) | first).targets[0].expr is search('homelab_network_host_os_fingerprint_info')
+          - (proposed_dashboard_json.panels | selectattr('id', 'equalto', 31) | first).targets[0].expr is search('on\\(profiled_ip\\)')
+          - (current_dashboard_json.panels | selectattr('id', 'equalto', 30) | first) == (proposed_dashboard_json.panels | selectattr('id', 'equalto', 30) | first)
+          - (current_dashboard_json.panels | selectattr('id', 'equalto', 32) | first) == (proposed_dashboard_json.panels | selectattr('id', 'equalto', 32) | first)
+        fail_msg: STOP - dashboard identity or unrelated panels drifted; review before deploying.
+
+    - name: Check live Grafana API health
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+  tasks:
+    - name: Deploy only existing Hosts dashboard JSON with rollback backup
+      ansible.builtin.copy:
+        src: "{{ dashboard_src }}"
+        dest: "{{ dashboard_dest }}"
+        owner: root
+        group: root
+        mode: '0644'
+        backup: true
+        validate: "/usr/bin/python3 -m json.tool %s"
+      register: installed_dashboard
+
+    - name: Check Grafana stays healthy without a restart
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      changed_when: false
+
+    - name: Report deployment and available rollback
+      ansible.builtin.debug:
+        msg: >-
+          Panel 31 dashboard file changed={{ installed_dashboard.changed }}.
+          Backup={{ installed_dashboard.backup_file | default('not needed') }}.
+          Grafana provisioning observes changes without service restarts.

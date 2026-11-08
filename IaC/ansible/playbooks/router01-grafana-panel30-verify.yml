@@ -1,0 +1,21 @@
+---
+# Scope: Grafana Homelab Hosts panel 30 only. Panel 29 must remain unchanged.
+- name: verify targeted router-01 Grafana ports query
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Require exact production owner
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+    - name: verify dashboard panel without restarting Grafana or scanner
+      ansible.builtin.script: "{{ playbook_dir }}/../scripts/router01_hosts_panel30_patch.py verify"
+      register: panel30_result
+      changed_when: false
+    - name: Display result
+      ansible.builtin.debug:
+        var: panel30_result.stdout_lines

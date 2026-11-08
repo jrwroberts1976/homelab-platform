@@ -95,6 +95,8 @@ greenbone_scanning_ssh_private_key_runtime: /run/greenbone-auth/id_ed25519
 greenbone_scanning_authenticated_target_name: "Homelab - Managed Infrastructure - Authenticated"
 greenbone_scanning_authenticated_task_name: "Homelab - Managed Infrastructure - Authenticated Daily"
 
-# Task used by the automated "managed" scan runner.
-# Deliberately separate from the legacy unauthenticated task retained for history.
-greenbone_scanning_runner_managed_task_name: "{{ greenbone_scanning_authenticated_task_name }}"
+# Task used by the existing automated "managed" scan runner.
+# Router01 replacement task was validated and switched on 2026-11-06.
+# Original authenticated task and its reports are retained for rollback.
+# Rollback via greenbone-router-runner-cutover.yml must also restore this value.
+greenbone_scanning_runner_managed_task_name: "Homelab - Managed Infrastructure - Authenticated Daily - Router01"

@@ -1,0 +1,83 @@
+---
+# Separate approval gate to resume the EXISTING six-hour network enrichment
+# timer. Starting a Persistent=true timer may immediately initiate Nmap.
+- name: Resume independently validated network enrichment schedule
+  hosts: monitor-01
+  become: true
+  gather_facts: true
+  vars:
+    stage: /var/backups/homelab-network-enrichment/independent-20261105
+    worker: /usr/local/sbin/homelab-network-host-enricher
+    dropin: /etc/systemd/system/homelab-network-host-enricher.service.d/20-proxmox-guest-refresh.conf
+    timer: homelab-network-host-enricher.timer
+  tasks:
+    - name: Require specific approval for periodic Nmap on existing discovered LAN
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - ansible_facts.default_ipv4.address == '192.168.2.52'
+          - ansible_facts.default_ipv4.interface == 'eth0'
+          - network_enrichment_resume_approved | default(false) | bool
+          - network_enrichment_resume_phrase | default('') == 'RESUME_EXISTING_ENRICHMENT_SCANS'
+        fail_msg: "Resuming the periodic Nmap service requires separate explicit approval."
+    - name: Validate cutover files and protected original backups
+      ansible.builtin.stat:
+        path: "{{ item }}"
+        follow: false
+        checksum_algorithm: sha256
+      loop:
+        - "{{ stage }}/candidate-enricher.py"
+        - "{{ worker }}"
+        - "{{ stage }}/candidate-dropin.conf"
+        - "{{ dropin }}"
+        - "{{ stage }}/original-enricher.py"
+        - "{{ stage }}/original-dropin.conf"
+        - /etc/homelab-network-hosts/network-discovery-cutover-approved
+      register: files
+    - name: Require exact deployed candidate and retained rollback evidence
+      ansible.builtin.assert:
+        that:
+          - files.results[0].stat.isreg | default(false)
+          - files.results[1].stat.checksum == files.results[0].stat.checksum
+          - files.results[2].stat.isreg | default(false)
+          - files.results[3].stat.checksum == files.results[2].stat.checksum
+          - files.results[4].stat.isreg | default(false)
+          - files.results[5].stat.isreg | default(false)
+          - files.results[6].stat.isreg | default(false)
+    - name: Check resolved service dependencies
+      ansible.builtin.command:
+        argv: [systemctl, show, homelab-network-host-enricher.service, -p, Requires, -p, DropInPaths]
+      changed_when: false
+      register: loaded
+    - name: Refuse residual Proxmox refresh dependency
+      ansible.builtin.assert:
+        that:
+          - "'homelab-proxmox-guest-refresh.service' not in loaded.stdout"
+          - dropin in loaded.stdout
+    - name: Check enrichment timer state
+      ansible.builtin.command:
+        argv: [systemctl, is-active, "{{ timer }}"]
+      register: timer_active
+      changed_when: false
+      failed_when: false
+    - name: Check timer is already enabled, without modifying enablement
+      ansible.builtin.command:
+        argv: [systemctl, is-enabled, "{{ timer }}"]
+      register: timer_enabled
+      changed_when: false
+    - name: Require explicitly paused existing timer
+      ansible.builtin.assert:
+        that:
+          - timer_active.stdout == 'inactive'
+          - timer_enabled.stdout == 'enabled'
+    - name: Resume only original enrichment timer
+      ansible.builtin.systemd_service:
+        name: "{{ timer }}"
+        state: started
+    - name: Report scheduled scanner enabled
+      ansible.builtin.debug:
+        msg:
+          - "Existing enrichment timer resumed. Persistent timer may launch Nmap immediately."
+          - "Verify actual enrichment execution, JSON and Prometheus textfile freshness next."
+          - "Proxmox mapping is optional but guest identity remains fail-closed."
