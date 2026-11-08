@@ -1,6 +1,8 @@
 ---
 # Idempotent Grafana folder hierarchy:
 # Dashboards / Homelab / Devices / Managed Devices
+# Managed Devices is reserved for hosts running a Zabbix agent.
+# Network-discovered hosts without Zabbix belong in a separate folder.
 # Does not create dashboards or touch provisioning files.
 - name: Ensure Grafana managed-device folders exist
   hosts: monitoring_hosts
