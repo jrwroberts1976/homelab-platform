@@ -82,3 +82,16 @@ ansible-playbook playbooks/media-01-birds-https.yml
 ```
 
 The HTTPS playbook reuses the `homelab_certificate` Certbot/Cloudflare role, creates a **separate** `birds.conf` Nginx virtual host on TCP 443, and proxies requests/websockets to native BirdNET-Go on localhost:8080. It does not alter the working qBittorrent Nginx virtual host or open a new firewall port; TCP/443 is already permitted from the LAN. No Kodi, NFS, Docker, BirdNET systemd or media firewall role executes. This does not itself restrict the existing direct `http://192.168.2.195:8080/` LAN connection, which can be retired through a separate reviewed firewall change after HTTPS is confirmed from a browser. Do not call DNS/certificate/HTTPS live until both Ansible runs have succeeded.
+
+## HTTPS-only LAN cutover — staged, not yet applied
+
+After the operator confirmed `https://birds.home.jrwroberts.co.uk/` works in their browser, the `media_firewall_birdnet_lan_enabled` default was changed to `false` in Git. The existing scoped `playbooks/media-01-birdnet-lan.yml` now checks trusted HTTPS from the controller **before and after** applying the firewall and checks that TCP/8080 is unreachable from the controller afterward. Loopback TCP/8080 remains available to Nginx; TCP/443 remains LAN-accessible and Proxmox NFS is preserved. This removes only the temporary direct LAN HTTP rule, without restarting BirdNET-Go, Kodi, qBittorrent or Docker.
+
+```bash
+cd ~/projects/homelab-birdnet && git pull --ff-only
+cd IaC/ansible
+ansible-playbook --syntax-check playbooks/media-01-birdnet-lan.yml
+ansible-playbook playbooks/media-01-birdnet-lan.yml
+```
+
+Rollback for direct HTTP access, if required and approved: `ansible-playbook playbooks/media-01-birdnet-lan.yml -e media_firewall_birdnet_lan_enabled=true`, then return to Git to reconcile the variable with intended policy. Do not use the broad `media-01.yml` playbook.
