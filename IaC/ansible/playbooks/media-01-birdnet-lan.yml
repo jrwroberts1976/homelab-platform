@@ -1,0 +1,43 @@
+---
+# Scoped LAN access for the native BirdNET-Go dashboard.
+# Reuses the existing media firewall role; does not run Kodi, NFS or Docker roles.
+- name: Open native BirdNET-Go dashboard to the trusted media-01 LAN
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Confirm target host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'media-01'
+          - ansible_facts.hostname == 'media-01'
+          - "'192.168.2.195' in ansible_facts.all_ipv4_addresses"
+
+    - name: Check native BirdNET-Go is active
+      ansible.builtin.command: systemctl is-active birdnet-go
+      changed_when: false
+
+    - name: Check BirdNET-Go responds on localhost
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        status_code: [200, 302, 307]
+  roles:
+    - role: media_firewall
+  post_tasks:
+    - name: Verify native BirdNET-Go remains active after firewall reload
+      ansible.builtin.command: systemctl is-active birdnet-go
+      changed_when: false
+
+    - name: Verify BirdNET-Go responds from controller over LAN
+      ansible.builtin.uri:
+        url: http://192.168.2.195:8080/
+        status_code: [200, 302, 307]
+        timeout: 10
+      become: false
+      delegate_to: localhost
+
+    - name: Check NFS listener remains available
+      ansible.builtin.command: ss -lnt
+      register: media_nfs_listener
+      changed_when: false
+      failed_when: "'*:2049' not in media_nfs_listener.stdout and ':2049 ' not in media_nfs_listener.stdout"
