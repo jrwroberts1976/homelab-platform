@@ -1,3 +1,9 @@
+## 2026-11-08 — BirdNET-Go DB healthy but zero detections observed
+
+- Operator inspected SQLite database `/var/lib/birdnet-go/birdnet.db` (360448 bytes) in read-only mode. `detections` table exists with id/model_id/label_id/source_id/detected_at/confidence and related fields; `SELECT COUNT(*) FROM detections` returned **0**.
+- This is not evidence of audio failure: earlier SSE audio-level readings were nonzero (13–28) without clipping, and model initialized. BirdNET threshold configured at 0.8. Do not lower threshold without checking whether inference/audio processing is operating correctly and whether actual bird vocalisations are present.
+- Next: read-only processing/error logs, recheck detection count after natural activity, and operator test Kodi playback under BirdNET load. LAN firewall access and historical data migration not yet done.
+
 ## 2026-11-08 — BirdNET-Go live audio input verified on media-01
 
 - Operator's audio-level SSE stream from `http://127.0.0.1:8080/api/v2/streams/audio-level` showed repeated nonzero readings (approximately 13–28) for `Garden Room USB Microphone`, with `clipping=false`. The recent two-minute filtered journal query returned no audio/capture/error lines. Kodi systemd status remained `active`.
