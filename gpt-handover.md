@@ -1,3 +1,9 @@
+## 2026-11-08 — Zabbix-first Grafana dashboards staged after full reset
+
+- Operator confirmed full Grafana reset Ansible recap `monitor-01: ok=8 changed=4 failed=0`. All previous Grafana dashboards were removed by reset playbook; Grafana folders and Zabbix datasource/plugin retained.
+- User requested rebuilding historical monitoring scope from Zabbix. Staged `IaC/ansible/playbooks/grafana-zabbix-rebuild.yml` and `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py`. Read-only preview checks Grafana datasource/folder UIDs, the confirmed-running Zabbix agent inventory and Zabbix 7 `host.get`/`item.get` before any changes. Apply then builds `Homelab — Zabbix Overview` in Homelab and one per verified host under `Homelab / Devices / Managed Devices`, with CPU/load, memory, disk, uptime, agent availability, network and current Zabbix problems **only when actual enabled/supported numeric items exist**. Stable UIDs and managed tags protect existing custom dashboards; no deletion, Zabbix server reconfiguration, or network scanning.
+- **Not yet deployed**. Operator must retrieve both staged GitHub files, syntax-check and execute on admin-01; check live panel telemetry after apply. Zabbix network discovery for unmanaged/new hosts remains separate. Original Nmap OS/ports, bespoke patch, Suricata, router traffic, Loki logs and other Prometheus-only panels cannot be reconstructed solely from Zabbix until equivalent Zabbix items are configured or multi-datasource panels restored.
+
 ## 2026-11-08 — User-authorised full Grafana dashboard reset staged in IaC
 
 - User explicitly requested deleting **all** Grafana dashboards, including 14 newly-created Managed Devices pages, to rebuild around direct Zabbix 7.0.32 integration.
