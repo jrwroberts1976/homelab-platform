@@ -1,3 +1,9 @@
+## 2026-11-08 — OS information on Zabbix-first Grafana dashboards (staged)
+
+- User requested OS info on all 15 managed hosts in addition to pending patch compliance monitoring.
+- Updated `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py` in PR #326: Zabbix `host.get` with `selectInventory` for `os`/`os_full`; `item.get` includes `lastvalue`/`lastclock`; uses supported `system.sw.os` (or supported short/full/name variants) and `system.uname` where reported, with host inventory fallback and explicit Unknown labels. Adds OS and kernel/architecture fields to 15 per-host dashboards and an OS table on the existing Homelab Zabbix Overview. OS text is a Zabbix API snapshot at last IaC rebuild, not live auto-refreshed data. No new Zabbix items installed, no host configuration or firewall changes.
+- **Staged, not deployed.** Operator should sync the generator file, run Python compile check, then execute existing `grafana-zabbix-rebuild.yml` and verify `SUMMARY: 15 matched Zabbix hosts; 16 candidate dashboards`. Future patching-status dashboard requires verified patch items/collector and stays monitoring-only.
+
 ## 2026-11-08 — 15 managed Zabbix Grafana dashboards deployed
 
 - Operator completed `grafana-zabbix-refresh-managed-inventory.yml` successfully on second try, verifying all 15 agents including router-01. First run was blocked by a missing sudo password on admin-01; second succeeded.
