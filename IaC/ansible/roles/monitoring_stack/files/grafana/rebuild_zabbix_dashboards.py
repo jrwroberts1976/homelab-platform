@@ -254,6 +254,71 @@ def admin_patching_live_panel(y, items):
             "application": {"filter": ""}, "itemTag": {"filter": ""},
             "textFilter": "", "options": {"showDisabledItems": False},
         }],
+        "transformations": [
+            {
+                "id": "extractFields",
+                "options": {
+                    "source": "Last value",
+                    "format": "json",
+                    "replace": True,
+                    "keepTime": False,
+                },
+            },
+            {
+                "id": "organize",
+                "options": {
+                    "excludeByName": {
+                        "schema_version": True,
+                        "source": True,
+                        "error": True,
+                        "apt_index_latest_utc": True,
+                        "apt_index_age_hours": True,
+                    },
+                    "indexByName": {
+                        "pending_updates_cached": 0,
+                        "security_updates": 1,
+                        "reboot_required_flag": 2,
+                        "last_verified_patch_utc": 3,
+                        "collected_at": 4,
+                    },
+                    "renameByName": {
+                        "pending_updates_cached": "Pending updates (cached)",
+                        "security_updates": "Security updates",
+                        "reboot_required_flag": "Reboot-required flag",
+                        "last_verified_patch_utc": "Last verified patch",
+                        "collected_at": "Collection time (UTC)",
+                    },
+                },
+            },
+        ],
+        "fieldConfig": {
+            "defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}},
+            "overrides": [
+                {
+                    "matcher": {"id": "byName", "options": "Security updates"},
+                    "properties": [{"id": "mappings", "value": [
+                        {"type": "special", "options": {"match": "null",
+                          "result": {"text": "Unknown"}}}
+                    ]}],
+                },
+                {
+                    "matcher": {"id": "byName", "options": "Last verified patch"},
+                    "properties": [{"id": "mappings", "value": [
+                        {"type": "special", "options": {"match": "null",
+                          "result": {"text": "Unknown"}}}
+                    ]}],
+                },
+                {
+                    "matcher": {"id": "byName", "options": "Reboot-required flag"},
+                    "properties": [{"id": "mappings", "value": [
+                        {"type": "special", "options": {"match": "false",
+                          "result": {"text": "No flag detected"}}},
+                        {"type": "special", "options": {"match": "true",
+                          "result": {"text": "Flag detected"}}},
+                    ]}],
+                },
+            ],
+        },
         "options": {"showHeader": True},
     }
 
