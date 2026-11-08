@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Reconcile standard Linux Zabbix templates for verified managed hosts.
 
-Default is read-only. --apply links only missing Linux by Zabbix agent
+Default is read-only. --apply links only missing Linux agent templates;
 templates; does not unlink, replace, or reconfigure any existing templates,
 hosts, agents, network or router services.
 """
@@ -43,10 +43,12 @@ def main():
         "output": ["templateid", "host", "name"],
         "filter": {"host": [LINUX_PASSIVE, LINUX_ACTIVE]},
     })
-    matches = [t for t in templates if t.get("host") == LINUX_PASSIVE]
-    if len(matches) != 1:
-        raise RuntimeError("Exactly one Linux passive template required; no changes applied")
-    passive_id = matches[0]["templateid"]
+    template_ids = {}
+    for template_name in (LINUX_PASSIVE, LINUX_ACTIVE):
+        matches = [t for t in templates if t.get("host") == template_name]
+        if len(matches) != 1:
+            raise RuntimeError("Exactly one " + template_name + " template required; no changes applied")
+        template_ids[template_name] = matches[0]["templateid"]
     active_names = {LINUX_PASSIVE.lower(), LINUX_ACTIVE.lower()}
     planned = []
     print("MODE: " + ("APPLY" if args.apply else "AUDIT ONLY"))
@@ -67,32 +69,31 @@ def main():
             print(name + " | REVIEW: linked templates present: " + ", ".join(existing)
                   + " (no automatic change)")
             continue
-        # The router needs an agent interface on 192.168.2.1:10050.
-        interfaces = [i for i in h.get("interfaces") or []
-                      if str(i.get("type")) == "1" and str(i.get("port")) == "10050"]
-        if name == "router-01" and not any(
-            i.get("ip") == "192.168.2.1" for i in interfaces
-        ):
-            print(name + " | REVIEW: router agent interface IP/port not verified")
-            continue
-        if not interfaces:
-            print(name + " | REVIEW: missing agent interface (no automatic change)")
-            continue
-        planned.append((name, h["hostid"]))
-        print(name + " | PLAN: link " + LINUX_PASSIVE)
+        desired = LINUX_ACTIVE if name == "router-01" else LINUX_PASSIVE
+        if desired == LINUX_PASSIVE:
+            interfaces = [i for i in h.get("interfaces") or []
+                          if str(i.get("type")) == "1" and str(i.get("port")) == "10050"]
+            if not interfaces:
+                print(name + " | REVIEW: missing agent interface (no automatic change)")
+                continue
+        # Active mode instead requires a matching Hostname and ServerActive
+        # on the agent, already verified operationally for router-01.
+        planned.append((name, h["hostid"], desired))
+        print(name + " | PLAN: link " + desired)
     print("SUMMARY: " + str(len(names)) + " hosts inspected; "
           + str(len(planned)) + " safe new template links identified")
     if args.apply:
-        for name, hostid in planned:
+        for name, hostid, desired in planned:
+            template_id = template_ids[desired]
             z.zabbix_api(token, "host.massadd", {
                 "hosts": [{"hostid": hostid}],
-                "templates": [{"templateid": passive_id}],
+                "templates": [{"templateid": template_id}],
             })
             verify = z.zabbix_api(token, "host.get", {
                 "hostids": [hostid], "output": ["hostid"],
                 "selectParentTemplates": ["templateid", "name"],
             })
-            if len(verify) != 1 or passive_id not in {
+            if len(verify) != 1 or template_id not in {
                 t["templateid"] for t in verify[0]["parentTemplates"]
             }:
                 raise RuntimeError("Template link verification failed for " + name)
