@@ -1,3 +1,10 @@
+## 2026-11-08 — Grafana direct Zabbix integration staged in IaC (not yet executed)
+
+- User chose direct Grafana Zabbix plugin integration. Added `IaC/ansible/playbooks/grafana-zabbix-integration.yml` to validate TLS/API and a prompted read-scope Zabbix token against `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php`, provision plugin enablement plus token-secured Zabbix datasource, and recreate **only** Grafana to load pinned Grafana Labs Zabbix plugin 6.10.2. Added Grafana Compose template settings to persist pinned plugin through later monitoring redeploys.
+- The token is **never stored in Git**: Ansible prompts at runtime and writes protected Grafana provisioning YAML on monitor-01 (root:472, mode 0640). Avoid copying that file into public backups or paste output.
+- No deployment performed in GitHub session. User must review/execute playbook and ensure Zabbix read-only API token exists. No dashboards or network collectors are changed by this integration; next task is populating metrics on 14 Managed Devices dashboards after live datasource validation.
+- Risk: Grafana container will be recreated by the integration playbook and must download plugin from Grafana Labs. Existing Grafana Compose image and dashboard files unchanged. Keep a copy of active Compose config and current state for rollback before apply.
+
 ## 2026-11-08 — Grafana Zabbix device page formatting fix (GitHub only)
 
 - Operator ran Zabbix managed-device page reconciliation; first pass identified 13, with admin-01 excluded on sudo failure. Operator reran with `--ask-become-pass` and confirmed success, implying all 14 inventory candidates checked. `cloud-01` page displayed literal `\\n` instead of Markdown line breaks.
