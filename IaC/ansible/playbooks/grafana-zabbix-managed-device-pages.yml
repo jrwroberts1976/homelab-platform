@@ -1,0 +1,159 @@
+---
+# Create one Grafana Managed Devices page for each inventoried host whose
+# Zabbix agent service is actually running. No device state is changed.
+# This does not delete any dashboards; unreachable hosts are not newly added.
+- name: Identify running Zabbix agents without changing hosts
+  hosts: zabbix_agents
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Inspect host services
+      ansible.builtin.service_facts:
+
+    - name: Record current Zabbix agent state
+      ansible.builtin.set_fact:
+        grafana_zabbix_agent_running: >-
+          {{
+            (ansible_facts.services.get('zabbix-agent2.service', {}).get('state', '') == 'running')
+            or
+            (ansible_facts.services.get('zabbix-agent.service', {}).get('state', '') == 'running')
+          }}
+      changed_when: false
+
+- name: Create Grafana pages only for confirmed running agents
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_zabbix_hostlist: /var/lib/homelab-network-hosts/grafana-managed-zabbix-hosts.json
+  tasks:
+    - name: Require monitor-01
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Start with empty confirmed host list
+      ansible.builtin.set_fact:
+        grafana_zabbix_running_hosts: []
+      changed_when: false
+
+    - name: Include only hosts with running Zabbix agents
+      ansible.builtin.set_fact:
+        grafana_zabbix_running_hosts: >-
+          {{
+            grafana_zabbix_running_hosts
+            + [{'name': item, 'ip': hostvars[item].ansible_host | default('')}]
+          }}
+      loop: "{{ groups['zabbix_agents'] | default([]) | unique | sort }}"
+      when: hostvars[item].grafana_zabbix_agent_running | default(false) | bool
+      changed_when: false
+
+    - name: Save confirmed Zabbix agent host list
+      ansible.builtin.copy:
+        dest: "{{ grafana_zabbix_hostlist }}"
+        content: "{{ grafana_zabbix_running_hosts | to_nice_json }}\n"
+        owner: root
+        group: root
+        mode: "0600"
+
+    - name: Reconcile managed Zabbix pages through the existing Grafana API
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import base64
+            import hashlib
+            import json
+            import sys
+            import urllib.error
+            import urllib.request
+            from pathlib import Path
+
+            hosts = json.loads(Path(sys.argv[1]).read_text())
+            env = Path("/opt/monitoring/.env").read_text().splitlines()
+            passwords = [
+                entry.partition("=")[2] for entry in env
+                if entry.startswith("GF_SECURITY_ADMIN_PASSWORD=")
+            ]
+            if len(passwords) != 1 or not passwords[0]:
+                raise RuntimeError("Grafana credentials missing")
+            auth = "Basic " + base64.b64encode(
+                ("admin:" + passwords[0]).encode("utf-8")
+            ).decode("ascii")
+            base = "http://127.0.0.1:3000"
+            headers = {"Authorization": auth, "Content-Type": "application/json"}
+
+            def request(path, method="GET", body=None, missing_ok=False):
+                data = None if body is None else json.dumps(body).encode("utf-8")
+                req = urllib.request.Request(
+                    base + path, data=data, method=method, headers=headers
+                )
+                try:
+                    with urllib.request.urlopen(req, timeout=20) as reply:
+                        return json.load(reply)
+                except urllib.error.HTTPError as exc:
+                    if missing_ok and exc.code == 404:
+                        return None
+                    raise
+
+            folder = request("/api/folders/homelab-managed-devices")
+            if folder.get("title") != "Managed Devices" or folder.get("parentUid") != "homelab-devices":
+                raise RuntimeError("Refusing unexpected Grafana folder destination")
+            created = 0
+            existing = 0
+            for host in hosts:
+                name = host["name"]
+                ip = host["ip"]
+                if not name or any(ch not in "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789-_" for ch in name):
+                    raise RuntimeError("Unsafe inventory hostname")
+                uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
+                previous = request("/api/dashboards/uid/" + uid, missing_ok=True)
+                if previous:
+                    if previous.get("meta", {}).get("folderUid") != "homelab-managed-devices":
+                        raise RuntimeError("Existing dashboard belongs to another folder: " + name)
+                    existing += 1
+                    continue
+                dashboard = {
+                    "uid": uid,
+                    "title": name,
+                    "tags": ["homelab", "managed-devices", "zabbix-agent"],
+                    "schemaVersion": 41,
+                    "version": 0,
+                    "refresh": "1m",
+                    "time": {"from": "now-6h", "to": "now"},
+                    "panels": [{
+                        "id": 1,
+                        "type": "text",
+                        "title": "Managed device identity",
+                        "gridPos": {"h": 6, "w": 24, "x": 0, "y": 0},
+                        "options": {
+                            "mode": "markdown",
+                            "content": (
+                                "### " + name + "\\n"
+                                + "**Address:** " + ip + "\\n\\n"
+                                + "**Management:** Zabbix agent running at last Ansible verification.\\n\\n"
+                                + "This page is a starter record; live Zabbix metrics panels "
+                                + "must be connected to the monitored items separately."
+                            ),
+                        },
+                    }],
+                }
+                request("/api/dashboards/db", "POST", {
+                    "dashboard": dashboard,
+                    "folderUid": "homelab-managed-devices",
+                    "overwrite": False,
+                    "message": "Initial Zabbix managed-device inventory",
+                })
+                created += 1
+                print("CREATED: " + name)
+            print("Managed Zabbix pages: created=" + str(created) + ", existing=" + str(existing))
+          - "{{ grafana_zabbix_hostlist }}"
+      register: grafana_zabbix_pages_result
+      changed_when: "'CREATED:' in grafana_zabbix_pages_result.stdout"
+      no_log: true
+
+    - name: Confirm managed device page reconciliation
+      ansible.builtin.debug:
+        msg: "Managed Zabbix pages reconciled; Zabbix and discovery services were not changed."
