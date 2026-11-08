@@ -1,3 +1,9 @@
+## 2026-11-08 — Managed Devices Grafana page reconciliation (proposed, not deployed)
+
+- Added `IaC/ansible/playbooks/grafana-zabbix-managed-device-pages.yml` on PR #326. It checks `zabbix-agent2.service` and `zabbix-agent.service` in the existing `zabbix_agents` Ansible group; only confirmed running agents get new Grafana starter pages beneath `Homelab / Devices / Managed Devices` through the local authenticated API. Stable UIDs prevent duplicate dashboard creation. No deletes, service restarts or Zabbix configuration changes.
+- Scope is currently **Ansible-inventoried Zabbix-agent hosts**, not all devices on the LAN or all records from Zabbix server. Unreachable devices do not result in new pages. Generated pages are starter identity pages only, not yet rich Zabbix metric views. Grafana live deployment and execution remain operator actions.
+- `Unmanaged Devices` is a separate folder for non-Zabbix network discovery; generator routing remains pending.
+
 ## 2026-11-08 — Grafana managed-device folder IaC (proposed, not deployed)
 
 - Added `IaC/ansible/playbooks/grafana-homelab-folder.yml` to idempotently ensure `Homelab / Devices / Managed Devices` and `Homelab / Devices / Unmanaged Devices` using the existing Grafana admin credential on monitor-01. The change is in GitHub only; no playbook execution or Grafana deployment has been performed through this connector.
