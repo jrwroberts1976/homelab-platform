@@ -1,3 +1,8 @@
+## 2026-11-08 — patch-telemetry enablement: read-only admin-01 pilot staged
+
+- User asked how to turn on currently Unknown Grafana patch status. No existing verified patching Zabbix items or host telemetry can simply be toggled on. Do **not** mark healthy/compliant or 0 pending updates from unknown data.
+- Staged `IaC/ansible/playbooks/zabbix-patching-preflight.yml` on PR #326. **Not executed yet.** First pilot restricted explicitly to `admin-01` and `--limit admin-01`. Executes only cached `apt list --upgradable` (NO apt update, NO install/upgrade) and Ansible `stat` of APT metadata paths, reboot-required file, apt/dpkg history log existence. Reports cached candidate count and metadata presence, flags security updates and last successful patch Unknown pending validated parser/source; does not install services/cron, edit APT caches, restart anything or touch router. Preflight outcome will determine next safe IaC pilot: cached index freshness, security origin-aware classification, reliable history, collection freshness, delivery to Zabbix, then dynamic Grafana panels. Avoid SD-card-heavy daily apt update or automatic upgrade.
+
 ## 2026-11-08 — Grafana patch-status panel and corrected memory/filesystem dashboards deployed
 
 - Operator successfully ran `ansible-playbook playbooks/grafana-zabbix-rebuild.yml --ask-become-pass -e grafana_zabbix_apply=true` from `homelab-platform/IaC/ansible`, following successful read-only preview. Ansible monitor-01 ok=7 changed=1 failed=0, all 15 managed hosts verified as using only `Linux by Zabbix agent active`.
