@@ -1,3 +1,10 @@
+## 2026-11-08 — router-01 Zabbix firewall and listener staged (operator apply pending)
+
+- Operator confirms router-01 OS hostname playbook applied successfully `ok=7 changed=2 failed=0`.
+- Read-only audit confirmed `/etc/nftables.conf` starts with `flush ruleset`; **DO NOT restart or reload nftables, or apply nft -f**, as that would wipe independent running Suricata IPS, traffic-accounting, and possibly other live tables. Active `inet filter_router input` chain has default DROP, LAN eth0 SSH/DNS/DHCP/ICMP only; Zabbix Agent2 has `Server=127.0.0.1`, `ServerActive=192.168.2.59`, `Hostname=router-01`, `ListenIP=127.0.0.1`, `ListenPort=10050`; service enabled and active.
+- Added **staged** `IaC/ansible/playbooks/router-01-zabbix-access.yml` for router-01 ONLY. Validates identity/current config, backs up nftables+agent, adds minimal persistent `iifname eth0 ip saddr 192.168.2.59 tcp dport 10050 accept` in `filter_router input` (and syntax checks with `nft --check`), inserts one live rule directly (without flush/reload), changes agent passive Server and ListenIP, restarts only zabbix-agent2, verifies listener/rule, tests port from zabbix-01. Does not alter PPPoE, NAT, DHCP, DNS or QoS.
+- Operator to sync and syntax-check/execute, then inspect recap and any failure. Backups on router-01 at `/etc/nftables.conf.before-zabbix-access` and `/etc/zabbix/zabbix_agent2.conf.before-zabbix-access`. On failure do not reload nftables; inspect and roll back the single rule using its handle. Zabbix host registration and Grafana device dashboard regeneration remain pending.
+
 ## 2026-11-08 — router-01 OS hostname correction staged
 
 - User requested setting router-01's actual OS hostname from `raspberrypi` to `router-01` after read-only checks showed Debian 13.7, active Zabbix Agent 2 and `Hostname=router-01`, but OS hostname `raspberrypi`.
