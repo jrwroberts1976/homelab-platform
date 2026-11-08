@@ -1,3 +1,9 @@
+## 2026-11-08 — patch/OS audit succeeds; correctness fixes staged
+
+- Operator's second patch/OS audit run succeeded: `monitor-01 ok=8 changed=1 failed=0`, covering 15 monitored Zabbix hosts. Initially printed `Hosts reporting OS details: 15` and `Hosts with patch-related item candidates: 14`, **both misleading**: OS text was mangled by an incorrectly escaped Markdown-sanitizer regex (e.g. 'ebia / i u'), with router-01 actually reporting Unknown; the 14 apparent patch items were `system.sw.packages.get` (installed package discovery, **not** available/security update counts).
+- Staged fixes: corrected sanitizer and OS item key regex in `rebuild_zabbix_dashboards.py`; changed `audit_zabbix_patch_os.py` to exclude package discovery from patch candidate count and only match plausible pending/security/reboot/last-patched item keys; changed audit playbook to install the corrected shared API/OS reader on monitor-01 before audit. The audit must show **zero verified patch-compliant hosts**, even if some candidate items exist, until their semantics are confirmed.
+- **Not yet deployed.** Operator must sync updated audit playbook and both Python files; syntax check, rerun audit, then separately rerun `grafana-zabbix-rebuild.yml` to correct garbled OS strings already stored in Grafana. Expect 15 managed hosts and 16 dashboard candidates, but genuine router-01 OS is Unknown until an OS item is deployed or host inventory populated. No patch metrics or compliance dashboard should be fabricated. Package installation remains under Ansible/IaC.
+
 ## 2026-11-08 — patch/OS audit first run failed; loader fix staged
 
 - Operator ran `grafana-zabbix-patching-audit.yml` on monitor-01: first 3 tasks OK and script copied, but read-only audit command failed (no_log hides underlying stderr); no Zabbix/Grafana/monitored-host changes occurred.
