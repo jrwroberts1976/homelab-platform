@@ -97,9 +97,9 @@
       ansible.builtin.template:
         src: ../roles/monitoring_stack/templates/grafana-zabbix-datasource.yml.j2
         dest: "{{ monitoring_root }}/grafana/provisioning/datasources/zabbix.yml"
-        owner: root
-        group: "472"
-        mode: "0640"
+        owner: "472"
+        group: root
+        mode: "0600"
       no_log: true
 
     - name: Enable Grafana pinned Zabbix plugin preinstallation
