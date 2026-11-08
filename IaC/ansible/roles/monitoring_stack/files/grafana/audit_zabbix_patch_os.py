@@ -12,12 +12,15 @@ import time
 from pathlib import Path
 
 BUILDER = Path("/usr/local/sbin/homelab-grafana-zabbix-rebuild")
+# These are *potential* update/compliance items, not installed-package discovery.
+# Never classify system.sw.packages.get as patch coverage.
 PATTERNS = {
-    "pending": re.compile(r"(?:apt|dnf|yum|package|patch|update|upgrade)", re.I),
-    "security": re.compile(r"(?:security|cve|vulnerab)", re.I),
-    "reboot": re.compile(r"(?:reboot|restart.required|needs.restarting)", re.I),
-    "last_patch": re.compile(r"(?:last.patch|last.updat|last.upgrad|patch.date)", re.I),
+    "pending_updates": re.compile(r"(?:pending|available|outstanding|upgradable|updates\\.count|upgrade\\.count)", re.I),
+    "security_updates": re.compile(r"(?:security[_ .-]*(?:patch|update|upgrade)|(?:patch|update|upgrade)[_ .-]*security|cve\\.)", re.I),
+    "reboot_required": re.compile(r"(?:reboot[_ .-]*required|restart[_ .-]*required|needs[_ .-]*restarting)", re.I),
+    "last_patched": re.compile(r"(?:last[_ .-]*(?:patch|updated|upgraded)|patch[_ .-]*(?:date|timestamp))", re.I),
 }
+PACKAGE_DISCOVERY_KEYS = {"system.sw.packages.get"}
 OS_KEYS = re.compile(r"^(?:system\.sw\.os(?:\[.*\])?|system\.uname)$", re.I)
 
 
@@ -62,8 +65,10 @@ def main():
             key = item.get("key_", "")
             item_name = item.get("name", "")
             is_os = bool(OS_KEYS.search(key))
-            groups = [kind for kind, regex in PATTERNS.items()
-                      if regex.search(key) or regex.search(item_name)]
+            groups = [] if key in PACKAGE_DISCOVERY_KEYS else [
+                kind for kind, regex in PATTERNS.items()
+                if regex.search(key) or regex.search(item_name)
+            ]
             if not is_os and not groups:
                 continue
             lastclock = int(item.get("lastclock") or 0)
@@ -93,10 +98,11 @@ def main():
         })
     output = {
         "mode": "READ_ONLY",
-        "note": "Patch candidates are name/key matches, NOT validated compliance metrics.",
+        "note": "Package inventory discovery is excluded. Patch candidates are unverified; compliance is Unknown for all hosts.",
         "hosts_checked": len(report),
         "hosts_with_os": sum(not x["os"]["os"].startswith("Unknown") for x in report),
         "hosts_with_patch_candidates": sum(bool(x["patch_item_candidates"]) for x in report),
+        "hosts_with_verified_patch_compliance": 0,
         "hosts": report,
     }
     print(json.dumps(output, indent=2))
