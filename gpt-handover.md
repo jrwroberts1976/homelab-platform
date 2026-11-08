@@ -1,3 +1,11 @@
+## 2026-11-08 — BirdNET-Go HTTPS-only LAN firewall cutover DEPLOYED and verified
+
+- Operator ran scoped `playbooks/media-01-birdnet-lan.yml` after syntax-check PASS; Ansible recap `media-01 ok=18 changed=2 unreachable=0 failed=0 skipped=1`. Managed nftables ruleset changed/reloaded. The temporary LAN TCP/8080 allow was removed.
+- Preflight trusted HTTPS from admin-01 PASSED. Postfirewall trusted `https://birds.home.jrwroberts.co.uk/` passed from the controller. Direct controller-to-media-01 TCP/8080 probe verified BLOCKED. Localhost port 8080 backend remained responsive to Nginx. BirdNET systemd service remained active.
+- Existing LAN HTTPS TCP/443, SSH/SMB/qBittorrent, Proxmox NFS allowed clients 192.168.2.70 and .71, node_exporter monitoring firewall rules retained; nftables policy postflight passed and TCP/2049 NFS listener remained present. No Kodi, Docker, media or NFS service changes were made.
+- BirdNET-Go HTTPS migration complete, with user previously confirming browser HTTPS access; user browser reconnection following HTTP closure not separately recorded. BirdNET audio level and recurring inference stats proved live; no bird detections above live threshold 0.7 yet. Do not conflate model pipeline health with completed identification of birds.
+- Keep future media-01 Docker/media-server work separate; forward-drop nftables policy and `flush ruleset` require network coordination before Docker bridging. Continue Ansible/IaC and KISS. Branch PR #325 pending review/merge; existing working tree for router Grafana must remain untouched.
+
 ## 2026-11-08 — BirdNET HTTPS-only LAN firewall cutover staged (NOT APPLIED)
 
 - User confirmed working real-browser access at `https://birds.home.jrwroberts.co.uk/` and approved closing direct HTTP/8080 from LAN, while retaining HTTPS/443.
