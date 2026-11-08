@@ -1,3 +1,10 @@
+## 2026-11-08 — managed-host dashboards: add router-01 as 15th host (staged)
+
+- Operator confirms `router-01` exists in Zabbix and shows data. Grafana Zabbix-first rebuild previously created 15 dashboards: 14 host pages + Homelab Zabbix Overview.
+- Added `IaC/ansible/playbooks/grafana-zabbix-refresh-managed-inventory.yml` to verify 14 existing agents **plus** router-01, and write the verified 15-host JSON inventory on monitor-01. This does not add router-01 to `zabbix_agents` (the generic agent deployment group); gateway remains excluded from generic changes. This playbook does NOT run old starter page generation (which would conflict with live Zabbix dashboards).
+- Fixed two-column row positions in `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py` (per-host panels now align in rows with problems below). Then run existing `grafana-zabbix-rebuild.yml` to update the 14 existing generated pages and create the new router-01 page from actual Zabbix items, updating overview to 15 hosts.
+- **Staged, not deployed**. Operator must fetch new playbook and updated Python builder, syntax-check the new playbook, run inventory refresh and Grafana rebuild with become credentials. Validate overview and router-01 dashboard panel data afterwards. Zabbix ICMP network discovery/unmanaged dashboards remain future work.
+
 ## 2026-11-08 — router-01 restricted Zabbix access deployed successfully
 
 - Operator ran `playbooks/router-01-zabbix-access.yml` after YAML quote correction on feature branch. Recap: **router-01 ok=21 changed=6 failed=0 unreachable=0**.
