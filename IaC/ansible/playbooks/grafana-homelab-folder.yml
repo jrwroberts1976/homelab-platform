@@ -2,7 +2,7 @@
 # Idempotent Grafana folder hierarchy:
 # Dashboards / Homelab / Devices / Managed Devices
 # Managed Devices is reserved for hosts running a Zabbix agent.
-# Network-discovered hosts without Zabbix belong in a separate folder.
+# Unmanaged Devices is reserved for discovered hosts without a Zabbix agent.
 # Does not create dashboards or touch provisioning files.
 - name: Ensure Grafana managed-device folders exist
   hosts: monitoring_hosts
@@ -82,10 +82,11 @@
             ensure("homelab", "Homelab")
             ensure("homelab-devices", "Devices", "homelab")
             ensure("homelab-managed-devices", "Managed Devices", "homelab-devices")
+            ensure("homelab-unmanaged-devices", "Unmanaged Devices", "homelab-devices")
       register: grafana_folders
       changed_when: "'CREATED:' in grafana_folders.stdout"
       no_log: true
 
     - name: Confirm folder hierarchy checked
       ansible.builtin.debug:
-        msg: "Grafana folder hierarchy reconciled: Homelab / Devices / Managed Devices"
+        msg: "Grafana folders reconciled: Homelab / Devices / Managed Devices and Unmanaged Devices"
