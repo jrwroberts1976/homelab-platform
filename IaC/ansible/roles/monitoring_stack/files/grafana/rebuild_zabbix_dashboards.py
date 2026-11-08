@@ -208,6 +208,56 @@ def patch_status_panel(y):
     }
 
 
+def admin_patching_live_panel(y, items):
+    """Show live Zabbix TEXT history only after a recent valid pilot snapshot."""
+    import time
+    matches = [i for i in items if i.get("key_") == "homelab.patch.snapshot"]
+    if len(matches) != 1:
+        return patch_status_panel(y)
+    item = matches[0]
+    if (item.get("status") != "0" or item.get("state") != "0"
+            or item.get("value_type") != "4"):
+        return patch_status_panel(y)
+    try:
+        clock = int(item.get("lastclock") or 0)
+        snapshot = json.loads(item.get("lastvalue") or "")
+        if not (0 <= time.time() - clock <= 3 * 3600):
+            return patch_status_panel(y)
+        if (snapshot.get("schema_version") != 1
+                or snapshot.get("source") != "cached_apt_no_refresh"
+                or snapshot.get("error") is not None
+                or type(snapshot.get("pending_updates_cached")) is not int
+                or snapshot["pending_updates_cached"] < 0
+                or snapshot.get("security_updates") is not None
+                or snapshot.get("last_verified_patch_utc") is not None):
+            return patch_status_panel(y)
+    except (ValueError, TypeError, KeyError, AttributeError):
+        return patch_status_panel(y)
+    return {
+        "id": 91, "type": "table", "title": "Patching status — live cached APT snapshot",
+        "description": (
+            "Live Zabbix Text history for admin-01. JSON pending_updates_cached is "
+            "a cached candidate count, not verified compliance. "
+            "security_updates and last_verified_patch_utc are unknown (null). "
+            "reboot_required_flag records file presence only. "
+            "APT index age is unverified and must not be used for compliance. "
+            "No data within the dashboard time range means no recent snapshot."
+        ),
+        "datasource": DS,
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 8},
+        "targets": [{
+            "datasource": DS, "refId": "A", "queryType": "2",
+            "resultFormat": "table",
+            "group": {"filter": "/.*/"},
+            "host": {"filter": "admin-01"},
+            "item": {"filter": "/^Homelab patch snapshot \\(cached APT JSON\\)$/"},
+            "application": {"filter": ""}, "itemTag": {"filter": ""},
+            "textFilter": "", "options": {"showDisabledItems": False},
+        }],
+        "options": {"showHeader": True},
+    }
+
+
 def host_dashboard(name, host, items, os_info):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
@@ -241,8 +291,10 @@ def host_dashboard(name, host, items, os_info):
                                        host["host"], item, y, "Bps"))
             pid += 1
     problems_y = 6 + ((pid - 1) // 2) * 8
-    panels.append(patch_status_panel(problems_y))
-    panels.append(problem_panel(host["host"], problems_y + 6))
+    panels.append(admin_patching_live_panel(problems_y, items) if name == "admin-01"
+                  else patch_status_panel(problems_y))
+    panels.append(problem_panel(host["host"], problems_y + (8 if name == "admin-01"
+                                                           and panels[-1]["type"] == "table" else 6)))
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
@@ -296,6 +348,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument("--apply", action="store_true",
                         help="Write dashboards; default is read-only preview")
+    parser.add_argument("--patch-pilot", action="store_true",
+                        help="Refuse all dashboard writes except the admin-01 patch panel")
     args = parser.parse_args()
     names, token, graf_headers = read_secret_files()
 
@@ -373,6 +427,23 @@ def main():
                 actions.append(("EXISTS", page, folder_uid))
                 continue
         actions.append(("UPDATE" if prior else "CREATE", page, folder_uid))
+
+    if args.patch_pilot:
+        expected = "admin-01"
+        for action, page, _ in actions:
+            if page["title"] != expected and action != "EXISTS":
+                raise RuntimeError("Pilot refuses unrelated dashboard change: "
+                                   + page["title"] + " (" + action + ")")
+            if page["title"] == expected and action == "CREATE":
+                raise RuntimeError("Pilot refuses creating a replacement admin-01 dashboard")
+        admin_action = next((a for a in actions if a[1]["title"] == expected), None)
+        if admin_action is None:
+            raise RuntimeError("Missing admin-01 dashboard in pilot")
+        if not any(p.get("id") == 91 and p.get("type") == "table"
+                   for p in admin_action[1]["panels"]):
+            raise RuntimeError("No verified live admin-01 patch table; no changes")
+        print("PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged")
+        actions = [admin_action]
 
     for action, page, folder_uid in actions:
         if args.apply and action != "EXISTS":
