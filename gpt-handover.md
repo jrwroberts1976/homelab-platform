@@ -1,3 +1,10 @@
+## 2026-11-08 — BirdNET-Go LAN access deployed and verified on media-01
+
+- Operator executed scoped `playbooks/media-01-birdnet-lan.yml` from admin-01; syntax check passed; recap `ok=16 changed=2 unreachable=0 failed=0`.
+- Ansible updated `/etc/nftables.conf` and reloaded nftables. Post-apply checks passed for active firewall service/policy, explicit LAN-only TCP/8080 allow, SSH/SMB/qBittorrent/monitoring rules and two authorised Proxmox NFS client IP rules. BirdNET service remained active, local HTTP responded, controller-delegated LAN HTTP test `http://192.168.2.195:8080/` succeeded, and NFS TCP 2049 listener was present.
+- Browser access from user's PC is not yet separately confirmed. BirdNET live mic and inference verified previously, but natural bird detections remain zero at 0.8 threshold. Do not claim application bird identifications yet.
+- Media-01 new intended function: serve media and host future Docker containers, not Kodi playback; do **not** remove Kodi or disrupt backup until separate plan. Docker bridge/NAT compatibility with nftables `flush ruleset` and forward drop remains an important future work item. Keep Docker deployment as separate scoped IaC change.
+
 ## 2026-11-08 — Media-01 future Docker/media-server role; BirdNET LAN firewall IaC ready (NOT APPLIED)
 
 - User confirmed media-01 will no longer be used as a Kodi playback endpoint; instead will serve media and host Docker containers, alongside native BirdNET-Go. Preserve existing Proxmox NFS backup function. **Do not remove Kodi yet**; no Docker cutover or deployment authorised by this firewall change.
