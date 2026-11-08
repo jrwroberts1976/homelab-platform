@@ -244,7 +244,7 @@ def admin_patching_live_panel(y, items):
             "No data within the dashboard time range means no recent snapshot."
         ),
         "datasource": DS,
-        "gridPos": {"x": 0, "y": y, "w": 24, "h": 8},
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 6},
         "targets": [{
             "datasource": DS, "refId": "A", "queryType": "2",
             "resultFormat": "table",
@@ -293,8 +293,7 @@ def host_dashboard(name, host, items, os_info):
     problems_y = 6 + ((pid - 1) // 2) * 8
     panels.append(admin_patching_live_panel(problems_y, items) if name == "admin-01"
                   else patch_status_panel(problems_y))
-    panels.append(problem_panel(host["host"], problems_y + (8 if name == "admin-01"
-                                                           and panels[-1]["type"] == "table" else 6)))
+    panels.append(problem_panel(host["host"], problems_y + 6))
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
