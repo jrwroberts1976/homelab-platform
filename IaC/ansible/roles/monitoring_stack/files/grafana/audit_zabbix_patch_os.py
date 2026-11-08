@@ -5,6 +5,7 @@ Loads the same protected API configuration as the Grafana Zabbix dashboard
 builder. No package installation, package refresh, Zabbix writes or Grafana writes.
 """
 import importlib.util
+from importlib.machinery import SourceFileLoader
 import json
 import re
 import time
@@ -23,7 +24,8 @@ OS_KEYS = re.compile(r"^(?:system\\.sw\\.os(?:\\[.*\\])?|system\\.uname)$", re.I
 def module():
     if not BUILDER.is_file():
         raise RuntimeError("Zabbix-first dashboard builder not installed")
-    spec = importlib.util.spec_from_file_location("homelab_zabbix_dashboard", str(BUILDER))
+    loader = SourceFileLoader("homelab_zabbix_dashboard", str(BUILDER))
+    spec = importlib.util.spec_from_loader(loader.name, loader)
     if spec is None or spec.loader is None:
         raise RuntimeError("Cannot load existing trusted dashboard builder")
     m = importlib.util.module_from_spec(spec)
