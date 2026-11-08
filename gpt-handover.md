@@ -1,3 +1,10 @@
+## 2026-11-08 — BirdNET-Go native service deployed on media-01 (partial live acceptance)
+
+- Operator ran `playbooks/media-01-birdnet-install.yml` from dedicated admin-01 worktree on feature branch after passing Ansible syntax check. Recap: `media-01 ok=19 changed=10 unreachable=0 failed=0`.
+- Native release 20261031 installed; birdnet system user/group, audio group membership, persistent state/config and systemd unit created. Systemd service active and local HTTP 8080 responsive. Kodi remained active after deployment.
+- **Not yet verified**: BirdNET real-time audio samples, actual detections, Kodi playback under load, native source stable ID, external LAN reachability, previous BirdNET data/history migration, idempotent rerun. No firewall change was made; no claim of accessible LAN UI.
+- Next: read-only service log/audio-device API and audio-level verification, measure CPU/storage and user-check Kodi playback. Only then design a narrow IaC nftables TCP 8080 allow rule if desired and safe.
+
 ## 2026-11-08 — Native BirdNET-Go Ansible role staged for operator install (NOT YET DEPLOYED)
 
 - Operator binary preflight passed: `ok=7 changed=0 failed=0 unreachable=0`. Release executable aarch64, `libtensorflowlite_c.so` and other dynamic dependencies resolved; CLI `serve` and `--config` flags confirmed; Kodi still active. NOTE: `--help` unexpectedly created a default config under `/root/.config/birdnet-go`; isolated production service uses its own user and explicit config path, not this file.
