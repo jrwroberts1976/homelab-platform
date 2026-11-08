@@ -59,3 +59,26 @@ ansible-playbook playbooks/media-01-birdnet-lan.yml
 Dashboard address after successful LAN check: http://192.168.2.195:8080/. Roll back just this allow rule with `ansible-playbook playbooks/media-01-birdnet-lan.yml -e media_firewall_birdnet_lan_enabled=false`; the scoped playbook skips the positive LAN HTTP test for this rollback setting. For permanent rollback, also revert the enabled default in Git and re-apply through Ansible.
 
 **New host direction (operator decision):** media-01 is to be a media-serving/Docker host instead of a Kodi playback endpoint; do not change or remove existing Kodi until the new media server and client workflows are chosen and validated. Existing Docker installation and forwarding functionality are NOT verified. Current nftables rules contain a `flush ruleset` and a forward-chain drop policy; Docker's bridge/NAT rules need dedicated review before any Docker workload cutover, not an ad hoc change in this BirdNET firewall PR. Preserve Proxmox NFS storage.
+
+## Internal DNS alias and trusted HTTPS (planned; operator must deploy)
+
+Desired browser URL: `https://birds.home.jrwroberts.co.uk/`. The existing managed local A record for `media-01` at `192.168.2.195` is extended with `birds.home.jrwroberts.co.uk` on **both** Pi-hole resolvers (`dns-01` and `dns-02`), preserving the existing qBittorrent record. Cloudflare DNS-01 is used only to issue/renew the Let's Encrypt certificate using the pre-existing protected controller credentials; the DNS alias itself is local, not an externally exposed A record.
+
+Use a separate scoped DNS apply **first**:
+
+```bash
+cd ~/projects/homelab-birdnet && git pull --ff-only
+cd IaC/ansible
+ansible-playbook --syntax-check playbooks/dns-local-records.yml
+ansible-playbook playbooks/dns-local-records.yml
+for dns in 192.168.2.50 192.168.2.51; do dig @"$dns" birds.home.jrwroberts.co.uk A +short; done
+```
+
+Both DNS answers must be `192.168.2.195`. Only then apply scoped certificate/proxy configuration:
+
+```bash
+ansible-playbook --syntax-check playbooks/media-01-birds-https.yml
+ansible-playbook playbooks/media-01-birds-https.yml
+```
+
+The HTTPS playbook reuses the `homelab_certificate` Certbot/Cloudflare role, creates a **separate** `birds.conf` Nginx virtual host on TCP 443, and proxies requests/websockets to native BirdNET-Go on localhost:8080. It does not alter the working qBittorrent Nginx virtual host or open a new firewall port; TCP/443 is already permitted from the LAN. No Kodi, NFS, Docker, BirdNET systemd or media firewall role executes. This does not itself restrict the existing direct `http://192.168.2.195:8080/` LAN connection, which can be retired through a separate reviewed firewall change after HTTPS is confirmed from a browser. Do not call DNS/certificate/HTTPS live until both Ansible runs have succeeded.
