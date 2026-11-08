@@ -1,3 +1,10 @@
+## 2026-11-08 — Native BirdNET-Go Ansible role staged for operator install (NOT YET DEPLOYED)
+
+- Operator binary preflight passed: `ok=7 changed=0 failed=0 unreachable=0`. Release executable aarch64, `libtensorflowlite_c.so` and other dynamic dependencies resolved; CLI `serve` and `--config` flags confirmed; Kodi still active. NOTE: `--help` unexpectedly created a default config under `/root/.config/birdnet-go`; isolated production service uses its own user and explicit config path, not this file.
+- Added dedicated `playbooks/media-01-birdnet-install.yml` and `roles/media_birdnet_native` to the BirdNET feature branch. Role installs verified staged native release under `/opt/birdnet-go/releases/20261031`, creates `birdnet` service user/group with audio access and persistent `/var/lib/birdnet-go`, installs Ansible-managed config and systemd unit, starts service, verifies localhost HTTP and Kodi. Does not run Docker, existing BirdNET Docker role, media Kodi role, NFS role, or firewall role.
+- Current audio stable ID `usb-id:0c76:161e:` is inherited from prior setup; live native enumeration/detections must be proven. Media firewall not changed; no LAN UI claim. Installation playbook has not yet been executed, no runtime success is claimed. Operator should perform syntax check then scoped install and report output.
+- If Kodi playback suffers, isolate BirdNET by stopping only birdnet-go while diagnosing. Historical BirdNET data migration still unverified and out of scope for first fresh installation. Documentation: `docs/operations/media-01-birdnet-native.md`.
+
 ## 2026-11-08 — BirdNET staged release verified; native dependency check pending
 
 - Operator ran stage playbook successfully: `ok=12 changed=3 failed=0 unreachable=0`. Checksum-verified 20261031 ARM64 archive contains README.md, birdnet-go, libonnxruntime.so, libtensorflowlite_c.so. Kodi remained active. Changes limited to release staging under /var/cache/birdnet-go/20261031.
