@@ -1,3 +1,9 @@
+## 2026-11-08 — 15 managed Zabbix Grafana dashboards deployed
+
+- Operator completed `grafana-zabbix-refresh-managed-inventory.yml` successfully on second try, verifying all 15 agents including router-01. First run was blocked by a missing sudo password on admin-01; second succeeded.
+- Operator then ran `grafana-zabbix-rebuild.yml`: monitor-01 **ok=7 changed=2 failed=0** and `SUMMARY: 15 matched Zabbix hosts; 16 candidate dashboards`. This means 15 managed-host dashboards and 1 Homelab Zabbix Overview were reconciled. Live Grafana panel values/graphs have **not yet been visually inspected**.
+- User next asked for the patching situation. Patching and reboot status are not guaranteed by the current Zabbix item catalogue; plan read-only patch state item audit and separate patch compliance overview, with all package installs remaining governed by Ansible/IaC and no automated patching by monitoring components.
+
 ## 2026-11-08 — managed-host dashboards: add router-01 as 15th host (staged)
 
 - Operator confirms `router-01` exists in Zabbix and shows data. Grafana Zabbix-first rebuild previously created 15 dashboards: 14 host pages + Homelab Zabbix Overview.
