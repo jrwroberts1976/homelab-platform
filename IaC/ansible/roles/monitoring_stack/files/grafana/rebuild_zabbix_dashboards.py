@@ -104,7 +104,7 @@ def metric_target(host, name):
 def metric_panel(panel_id, title, host, item, y, unit="short", kind="timeseries"):
     p = {
         "id": panel_id, "type": kind, "title": title,
-        "datasource": DS, "gridPos": {"x": 0 if panel_id % 2 else 12, "y": y, "w": 12, "h": 8},
+        "datasource": DS, "gridPos": {"x": 12 * ((panel_id - 2) % 2), "y": y, "w": 12, "h": 8},
         "targets": [metric_target(host, item["name"])],
         "fieldConfig": {"defaults": {"unit": unit}, "overrides": []},
     }
@@ -183,27 +183,23 @@ def host_dashboard(name, host, items):
                     + "If a panel is absent, the required item is not available on this host."},
     }]
     missing = []
-    y = 4
     pid = 2
     for title, patterns, unit in METRICS:
         item = pick(active, patterns)
         if item:
+            y = 4 + ((pid - 2) // 2) * 8
             panels.append(metric_panel(pid, title, host["host"], item, y, unit))
-            if pid % 2 == 0:
-                y += 8
             pid += 1
         else:
             missing.append(title)
     for direction, label in (("in", "Network received"), ("out", "Network sent")):
         for item in network_items(active, direction):
+            y = 4 + ((pid - 2) // 2) * 8
             panels.append(metric_panel(pid, label + " — " + item["name"],
                                        host["host"], item, y, "Bps"))
-            if pid % 2 == 0:
-                y += 8
             pid += 1
-    if pid % 2 == 1:
-        y += 8
-    panels.append(problem_panel(host["host"], y))
+    problems_y = 4 + ((pid - 1) // 2) * 8
+    panels.append(problem_panel(host["host"], problems_y))
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
