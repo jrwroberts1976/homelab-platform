@@ -5,6 +5,8 @@
   hosts: monitoring_hosts
   become: true
   gather_facts: true
+  vars:
+    grafana_zabbix_apply: false
 
   tasks:
     - name: Verify monitor-01 identity
@@ -30,7 +32,7 @@
 
     - name: Show safe preview summary
       ansible.builtin.debug:
-        msg: "{{ zabbix_dashboard_preview.stdout_lines | select('match', '^SUMMARY:') | list }}"
+        msg: "{{ zabbix_dashboard_preview.stdout_lines | select('match', '^(TEMPLATE AUDIT:|HOST:|PLANNED |SUMMARY:)') | list }}"
 
     - name: Create or update Zabbix dashboards
       ansible.builtin.command:
@@ -38,7 +40,9 @@
       register: zabbix_dashboard_apply
       changed_when: "'APPLIED CREATE:' in zabbix_dashboard_apply.stdout or 'APPLIED UPDATE:' in zabbix_dashboard_apply.stdout"
       no_log: true
+      when: grafana_zabbix_apply | bool
 
     - name: Show safe deployment summary
       ansible.builtin.debug:
-        msg: "{{ zabbix_dashboard_apply.stdout_lines | select('match', '^SUMMARY:') | list }}"
+        msg: "{{ zabbix_dashboard_apply.stdout_lines | select('match', '^(TEMPLATE AUDIT:|APPLIED |SUMMARY:)') | list }}"
+      when: grafana_zabbix_apply | bool
