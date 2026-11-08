@@ -1,7 +1,7 @@
 ## 2026-11-08 — Grafana managed-device folder IaC (proposed, not deployed)
 
-- Added `IaC/ansible/playbooks/grafana-homelab-folder.yml` to idempotently ensure `Homelab / Devices / Managed Devices` using the existing Grafana admin credential on monitor-01. The change is in GitHub only; no playbook execution or Grafana deployment has been performed through this connector.
-- Operator clarified that **Managed Devices** is for hosts running a **Zabbix agent**. Do **not** place all DHCP/Nmap-discovered network hosts here; those need a separate destination and explicit dashboard generation logic.
+- Added `IaC/ansible/playbooks/grafana-homelab-folder.yml` to idempotently ensure `Homelab / Devices / Managed Devices` and `Homelab / Devices / Unmanaged Devices` using the existing Grafana admin credential on monitor-01. The change is in GitHub only; no playbook execution or Grafana deployment has been performed through this connector.
+- Operator clarified that **Managed Devices** is for hosts running a **Zabbix agent**. Place DHCP/Nmap-discovered hosts **without Zabbix agents** under **Unmanaged Devices**; dashboard generation/routing still requires a separate change. Do not classify a host as managed from mere discovery.
 - Grafana dashboard generator timer was paused during cleanup; network discovery and Nmap timer were active, AI resolver timer paused, at last operator check. Reconcile operational state before deployment; no automatic dashboard provisioning change is part of this commit.
 
 ## 2026-11-05 — PR #295 merged; next enrichment follow-up needs correct issue tracking
