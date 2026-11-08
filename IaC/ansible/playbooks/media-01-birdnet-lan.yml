@@ -1,0 +1,75 @@
+---
+# Scoped BirdNET-Go LAN HTTP firewall policy (HTTPS-only by default).
+# Reuses the existing media firewall role; does not run Kodi, NFS or Docker roles.
+- name: Manage BirdNET-Go direct HTTP LAN access while preserving trusted HTTPS
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+  pre_tasks:
+    - name: Confirm target host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'media-01'
+          - ansible_facts.hostname == 'media-01'
+          - "'192.168.2.195' in ansible_facts.all_ipv4_addresses"
+
+    - name: Check native BirdNET-Go is active
+      ansible.builtin.command: systemctl is-active birdnet-go
+      changed_when: false
+
+    - name: Check BirdNET-Go responds on localhost
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        status_code: [200, 302, 307]
+    - name: Confirm trusted HTTPS works from the controller before firewall changes
+      ansible.builtin.uri:
+        url: https://birds.home.jrwroberts.co.uk/
+        status_code: [200, 302, 307]
+        validate_certs: true
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      when: not (media_firewall_birdnet_lan_enabled | bool)
+
+  roles:
+    - role: media_firewall
+  post_tasks:
+    - name: Verify native BirdNET-Go remains active after firewall reload
+      ansible.builtin.command: systemctl is-active birdnet-go
+      changed_when: false
+
+    - name: Verify BirdNET-Go responds from controller over LAN
+      ansible.builtin.uri:
+        url: http://192.168.2.195:8080/
+        status_code: [200, 302, 307]
+        timeout: 10
+      become: false
+      delegate_to: localhost
+      when: media_firewall_birdnet_lan_enabled | bool
+
+    - name: Confirm HTTPS still works after closing LAN HTTP
+      ansible.builtin.uri:
+        url: https://birds.home.jrwroberts.co.uk/
+        status_code: [200, 302, 307]
+        validate_certs: true
+        timeout: 10
+      delegate_to: localhost
+      become: false
+      when: not (media_firewall_birdnet_lan_enabled | bool)
+
+    - name: Confirm direct LAN HTTP port 8080 is blocked
+      ansible.builtin.wait_for:
+        host: 192.168.2.195
+        port: 8080
+        state: stopped
+        connect_timeout: 2
+        timeout: 6
+      delegate_to: localhost
+      become: false
+      when: not (media_firewall_birdnet_lan_enabled | bool)
+
+    - name: Check NFS listener remains available
+      ansible.builtin.command: ss -lnt
+      register: media_nfs_listener
+      changed_when: false
+      failed_when: "'*:2049' not in media_nfs_listener.stdout and ':2049 ' not in media_nfs_listener.stdout"

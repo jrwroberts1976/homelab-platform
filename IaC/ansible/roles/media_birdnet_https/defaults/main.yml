@@ -1,0 +1,9 @@
+---
+media_birdnet_https_fqdn: birds.home.jrwroberts.co.uk
+media_birdnet_https_ip: "192.168.2.195"
+media_birdnet_https_backend: "127.0.0.1"
+media_birdnet_https_backend_port: 8080
+media_birdnet_https_cert_fullchain: "/etc/letsencrypt/live/{{ media_birdnet_https_fqdn }}/fullchain.pem"
+media_birdnet_https_cert_key: "/etc/letsencrypt/live/{{ media_birdnet_https_fqdn }}/privkey.pem"
+media_birdnet_https_site: /etc/nginx/sites-available/birds.conf
+media_birdnet_https_site_enabled: /etc/nginx/sites-enabled/birds.conf

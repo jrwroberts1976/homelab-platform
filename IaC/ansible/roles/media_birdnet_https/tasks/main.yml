@@ -1,0 +1,95 @@
+---
+- name: Confirm native BirdNET-Go service is running
+  ansible.builtin.command:
+    argv: [systemctl, is-active, birdnet-go]
+  register: birdnet_tls_service
+  changed_when: false
+  failed_when: birdnet_tls_service.stdout | trim != 'active'
+
+- name: Confirm native BirdNET-Go HTTP backend responds before HTTPS setup
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ media_birdnet_https_backend_port }}/"
+    status_code: [200, 302, 307]
+    timeout: 8
+  changed_when: false
+
+- name: Confirm certificate and private key exist
+  ansible.builtin.stat:
+    path: "{{ item }}"
+    follow: true
+  loop:
+    - "{{ media_birdnet_https_cert_fullchain }}"
+    - "{{ media_birdnet_https_cert_key }}"
+  register: birds_certs
+
+- name: Refuse proxy configuration without signed certificate material
+  ansible.builtin.assert:
+    that:
+      - birds_certs.results | map(attribute='stat.isreg') | map('default', false) | min
+    fail_msg: "BirdNET signed certificate/key missing, refusing Nginx changes."
+
+- name: Require existing Nginx installation
+  ansible.builtin.command:
+    argv: [nginx, -v]
+  register: birds_nginx_version
+  changed_when: false
+
+- name: Confirm existing qBittorrent Nginx site is preserved
+  ansible.builtin.stat:
+    path: /etc/nginx/sites-enabled/qbittorrent.conf
+  register: birds_existing_qbt
+
+- name: Refuse replacing shared HTTPS configuration
+  ansible.builtin.assert:
+    that:
+      - birds_existing_qbt.stat.exists
+    fail_msg: "Existing qBittorrent HTTPS site missing; inspect media-01 before proceeding."
+
+- name: Install distinct BirdNET-Go TLS virtual host
+  ansible.builtin.template:
+    src: birds.conf.j2
+    dest: "{{ media_birdnet_https_site }}"
+    owner: root
+    group: root
+    mode: "0644"
+    backup: true
+  register: birds_nginx_config
+
+- name: Enable BirdNET-Go HTTPS site
+  ansible.builtin.file:
+    src: "{{ media_birdnet_https_site }}"
+    dest: "{{ media_birdnet_https_site_enabled }}"
+    state: link
+  register: birds_nginx_link
+
+- name: Validate all Nginx virtual hosts before reload
+  ansible.builtin.command:
+    argv: [nginx, -t]
+  changed_when: false
+
+- name: Reload only Nginx when BirdNET host changes
+  ansible.builtin.systemd_service:
+    name: nginx
+    state: reloaded
+  when: birds_nginx_config.changed or birds_nginx_link.changed
+
+- name: Verify trusted BirdNET HTTPS endpoint
+  ansible.builtin.uri:
+    url: "https://{{ media_birdnet_https_fqdn }}/"
+    validate_certs: true
+    status_code: [200, 302, 307]
+    timeout: 10
+  changed_when: false
+
+- name: Verify qBittorrent HTTPS server still responds
+  ansible.builtin.uri:
+    url: https://qbittorrent.home.jrwroberts.co.uk/
+    validate_certs: true
+    status_code: [200, 302, 307, 401, 403]
+    timeout: 10
+  changed_when: false
+
+- name: Verify BirdNET-Go has not been restarted
+  ansible.builtin.command:
+    argv: [systemctl, is-active, birdnet-go]
+  changed_when: false

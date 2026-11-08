@@ -33,6 +33,9 @@ table inet media_filter {
 {% if media_firewall_qbittorrent_http_lan_enabled | bool %}
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 8081 accept comment "LAN qBittorrent WebUI"
 {% endif %}
+{% if media_firewall_birdnet_lan_enabled | bool %}
+    ip saddr {{ media_firewall_lan_subnet }} tcp dport 8080 accept comment "LAN BirdNET-Go dashboard"
+{% endif %}
     ip saddr {{ media_firewall_lan_subnet }} udp dport 1900 accept comment "LAN Kodi SSDP/DLNA"
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 1255 accept comment "LAN Kodi UPnP server"
     ip saddr {{ media_firewall_lan_subnet }} tcp dport 1879 accept comment "LAN Kodi UPnP server"

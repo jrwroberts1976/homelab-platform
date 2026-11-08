@@ -1,3 +1,107 @@
+## 2026-11-08 — BirdNET-Go HTTPS-only LAN firewall cutover DEPLOYED and verified
+
+- Operator ran scoped `playbooks/media-01-birdnet-lan.yml` after syntax-check PASS; Ansible recap `media-01 ok=18 changed=2 unreachable=0 failed=0 skipped=1`. Managed nftables ruleset changed/reloaded. The temporary LAN TCP/8080 allow was removed.
+- Preflight trusted HTTPS from admin-01 PASSED. Postfirewall trusted `https://birds.home.jrwroberts.co.uk/` passed from the controller. Direct controller-to-media-01 TCP/8080 probe verified BLOCKED. Localhost port 8080 backend remained responsive to Nginx. BirdNET systemd service remained active.
+- Existing LAN HTTPS TCP/443, SSH/SMB/qBittorrent, Proxmox NFS allowed clients 192.168.2.70 and .71, node_exporter monitoring firewall rules retained; nftables policy postflight passed and TCP/2049 NFS listener remained present. No Kodi, Docker, media or NFS service changes were made.
+- BirdNET-Go HTTPS migration complete, with user previously confirming browser HTTPS access; user browser reconnection following HTTP closure not separately recorded. BirdNET audio level and recurring inference stats proved live; no bird detections above live threshold 0.7 yet. Do not conflate model pipeline health with completed identification of birds.
+- Keep future media-01 Docker/media-server work separate; forward-drop nftables policy and `flush ruleset` require network coordination before Docker bridging. Continue Ansible/IaC and KISS. Branch PR #325 pending review/merge; existing working tree for router Grafana must remain untouched.
+
+## 2026-11-08 — BirdNET HTTPS-only LAN firewall cutover staged (NOT APPLIED)
+
+- User confirmed working real-browser access at `https://birds.home.jrwroberts.co.uk/` and approved closing direct HTTP/8080 from LAN, while retaining HTTPS/443.
+- Updated `roles/media_firewall/defaults/main.yml` default `media_firewall_birdnet_lan_enabled: false`. Existing managed nftables template omits only the temporary LAN `tcp dport 8080` allow; localhost Nginx-to-BirdNET HTTP remains functional. Existing SSH, SMB, NFS, HTTPS/qBittorrent, node exporter, and monitoring rules unchanged.
+- Updated scoped `playbooks/media-01-birdnet-lan.yml` to validate trusted HTTPS on controller before firewall reload, validate HTTPS afterward, confirm direct TCP/8080 is blocked from controller, retain NFS listener check and BirdNET active check. Conditional override `-e media_firewall_birdnet_lan_enabled=true` reopens LAN 8080 if required and must be reconciled in Git.
+- **NOT EXECUTED**: operator should pull feature branch, syntax check and execute scoped playbook. Preserve unrelated branch changes and do NOT run broad `media-01.yml`. Existing HTTPS was verified previously and no new claims made before operator deploy.
+
+## 2026-11-08 — BirdNET-Go internal DNS and trusted HTTPS LIVE, idempotence confirmed
+
+- Operator applied `playbooks/dns-local-records.yml` on both dns-01 and dns-02, each `ok=4 changed=0 failed=0`; direct `dig` to each DNS resolver returned `birds.home.jrwroberts.co.uk A 192.168.2.195`.
+- Operator syntax-checked and executed `playbooks/media-01-birds-https.yml` on media-01. First run `ok=33 changed=5 failed=0`; Cloudflare DNS-01 Certbot issued a Let's Encrypt certificate whose SAN contains `birds.home.jrwroberts.co.uk`, validity Nov 8 2026 13:14:02 GMT through Feb 6 2027 13:14:01 GMT. Nginx dedicated birds.conf enabled and reloaded; trusted BirdNET HTTPS and existing qBittorrent HTTPS health checks passed; BirdNET service stayed active. Certbot timer enabled and renewal deploy hook installed (future renewal not yet observed).
+- Second full HTTPS run `ok=32 changed=0 failed=0 skipped=1`: no certificate or Nginx change; HTTPS checks again PASS. One concatenated/mistyped terminal command failed to locate a playbook, but subsequent clean run succeeded; not a production failure.
+- **Verified internal HTTPS URL:** `https://birds.home.jrwroberts.co.uk/`. Browser access from end-user device remains unconfirmed; internal Ansible HTTPS validation passes. The old LAN HTTP/8080 firewall rule is still enabled and can be retired in a *separate* scoped IaC change once browser login and websocket audio/UI behaviour confirmed. Keep existing NFS backup, qBittorrent, BirdNET and media server plans intact.
+- Open tasks: natural species detection threshold observation, Docker/nftables compatibility, optional historical data migration, future Certbot actual renewal check; no claim these have been completed.
+
+## 2026-11-08 — BirdNET-Go local DNS alias and HTTPS IaC staged, NOT DEPLOYED
+
+- User requested `https://birds.home.jrwroberts.co.uk` for the already-working native BirdNET-Go on `media-01` (`192.168.2.195:8080`).
+- Inspected existing patterns: `dns_resolver` manages `pihole_local_hosts` on both dns-01 (.51)/dns-02 (.50), `playbooks/dns-local-records.yml` does DNS-only; `homelab_certificate` manages Let's Encrypt Certbot Cloudflare DNS-01 using protected admin-01 credentials; media-01 has existing qBittorrent Nginx HTTPS on 443. TLS 443 already allowed LAN-only by media firewall. Existing qBittorrent server block must not be overwritten.
+- Committed Git-only change to append `birds.home.jrwroberts.co.uk` to existing media-01 local DNS record. Added scoped `playbooks/media-01-birds-https.yml` and `roles/media_birdnet_https`: require both local resolvers return 192.168.2.195, require controller Cloudflare credentials and healthy localhost BirdNET; get single-name certificate via existing cert role, add separate `birds.conf` Nginx server block forwarding to 127.0.0.1:8080 and verify both BirdNET and qBittorrent HTTPS. No Kodi/NFS/firewall/BirdNET service restart is requested; only Nginx reload.
+- **No playbook executed and no certificate/DNS service state independently verified.** Operator must (1) `git pull --ff-only`; (2) syntax-check and execute `playbooks/dns-local-records.yml`; (3) verify both DNS answers; (4) syntax-check and execute `playbooks/media-01-birds-https.yml`; (5) verify HTTPS in browser. Keep direct HTTP/8080 firewall rule until HTTPS proven, then optionally tighten it via separate IaC change.
+- Future media-01 serves media and hosts Docker containers (not Kodi playback), while retaining NFS backup; Docker rollout is a separate workstream with nftables compatibility review.
+
+## 2026-11-08 — BirdNET-Go LAN access deployed and verified on media-01
+
+- Operator executed scoped `playbooks/media-01-birdnet-lan.yml` from admin-01; syntax check passed; recap `ok=16 changed=2 unreachable=0 failed=0`.
+- Ansible updated `/etc/nftables.conf` and reloaded nftables. Post-apply checks passed for active firewall service/policy, explicit LAN-only TCP/8080 allow, SSH/SMB/qBittorrent/monitoring rules and two authorised Proxmox NFS client IP rules. BirdNET service remained active, local HTTP responded, controller-delegated LAN HTTP test `http://192.168.2.195:8080/` succeeded, and NFS TCP 2049 listener was present.
+- Browser access from user's PC is not yet separately confirmed. BirdNET live mic and inference verified previously, but natural bird detections remain zero at 0.8 threshold. Do not claim application bird identifications yet.
+- Media-01 new intended function: serve media and host future Docker containers, not Kodi playback; do **not** remove Kodi or disrupt backup until separate plan. Docker bridge/NAT compatibility with nftables `flush ruleset` and forward drop remains an important future work item. Keep Docker deployment as separate scoped IaC change.
+
+## 2026-11-08 — Media-01 future Docker/media-server role; BirdNET LAN firewall IaC ready (NOT APPLIED)
+
+- User confirmed media-01 will no longer be used as a Kodi playback endpoint; instead will serve media and host Docker containers, alongside native BirdNET-Go. Preserve existing Proxmox NFS backup function. **Do not remove Kodi yet**; no Docker cutover or deployment authorised by this firewall change.
+- Verified existing `media_firewall` role default-drop nftables policy has no TCP/8080 accept; this explains why BirdNET dashboard HTTP works localhost but not from LAN. Added LAN-only `ip saddr 192.168.2.0/24 tcp dport 8080 accept` behind `media_firewall_birdnet_lan_enabled`, with policy verification; added standalone `playbooks/media-01-birdnet-lan.yml` to apply only firewall role and verify BirdNET HTTP from controller and NFS listener. Operator must pull branch and execute syntax check/live playbook; **change not yet applied**.
+- Important future Docker consideration: media firewall template contains `flush ruleset` and `forward policy drop`; deploying Docker networking will require coordinating nftables/bridge/NAT rules with Ansible/IaC. Do not infer Docker networking works or do broad media-01.yml changes. Keep Kodi installation as-is until separately agreed.
+
+## 2026-11-08 — BirdNET inference pipeline confirmed operational; zero detections explained
+
+- Operator's five-minute BirdNET pipeline report at 13:57:49: source Garden Room USB Microphone, model BirdNET_V2.4, inferences=98, raw_results=1165, passed_filter=0, daylight_discards=0, max_confidence=0.33, threshold=0.8.
+- Conclusion: inference runs are occurring and predictions are generated, but all remain below the configured 0.80 threshold. No grounds to call inference broken or lower threshold merely to manufacture detections.
+- Preserve existing 0.8 threshold and monitor for genuine birds. Outstanding: confirm Kodi *video/audio playback* while BirdNET is running, allow LAN dashboard via scoped firewall IaC if wanted, verify future true detections and source history migration separately.
+
+## 2026-11-08 — BirdNET-Go DB healthy but zero detections observed
+
+- Operator inspected SQLite database `/var/lib/birdnet-go/birdnet.db` (360448 bytes) in read-only mode. `detections` table exists with id/model_id/label_id/source_id/detected_at/confidence and related fields; `SELECT COUNT(*) FROM detections` returned **0**.
+- This is not evidence of audio failure: earlier SSE audio-level readings were nonzero (13–28) without clipping, and model initialized. BirdNET threshold configured at 0.8. Do not lower threshold without checking whether inference/audio processing is operating correctly and whether actual bird vocalisations are present.
+- Next: read-only processing/error logs, recheck detection count after natural activity, and operator test Kodi playback under BirdNET load. LAN firewall access and historical data migration not yet done.
+
+## 2026-11-08 — BirdNET-Go live audio input verified on media-01
+
+- Operator's audio-level SSE stream from `http://127.0.0.1:8080/api/v2/streams/audio-level` showed repeated nonzero readings (approximately 13–28) for `Garden Room USB Microphone`, with `clipping=false`. The recent two-minute filtered journal query returned no audio/capture/error lines. Kodi systemd status remained `active`.
+- Microphone processing is now **verified live** (following the native stable-ID correction). Application service/model and localhost HTTP were previously verified. Actual bird detections/history and Kodi **playback** coexistence remain unverified; active service status is not a playback test.
+- Next: inspect recent detections through the BirdNET database or UI and test Kodi playback. LAN UI access requires a specifically scoped nftables IaC change, not an ad hoc firewall command.
+
+## 2026-11-08 — BirdNET-Go microphone ID mismatch identified and corrected in IaC (deployment pending)
+
+- Live after successful installation: BirdNET-Go active/enabled, BirdNET v2.4 model initialized with 6,522 species, local API returned USB PnP device vendor 0c76/product 161e, `stableId=usb-path:usb-xhci-hcd.0-1`. Sampled process CPU 9.3%, memory 4.7%, Kodi service active.
+- Initial native role had copied old Docker audio ID `usb-id:0c76:161e:`, which does **not** match observed native device ID. Updated `roles/media_birdnet_native/defaults/main.yml` to `usb-path:usb-xhci-hcd.0-1`. Not yet reconciled on host. Operator should pull feature branch, run scoped `media-01-birdnet-install.yml` again and inspect audio-level stream; continue verifying actual detections and Kodi playback.
+- Repeated ALSA `capture slave is not defined` / `unable to open slave` log lines noted; could be device-enumeration noise, but audio processing remains UNVERIFIED. Do not call migration complete based solely on service HTTP health.
+
+## 2026-11-08 — BirdNET-Go native service deployed on media-01 (partial live acceptance)
+
+- Operator ran `playbooks/media-01-birdnet-install.yml` from dedicated admin-01 worktree on feature branch after passing Ansible syntax check. Recap: `media-01 ok=19 changed=10 unreachable=0 failed=0`.
+- Native release 20261031 installed; birdnet system user/group, audio group membership, persistent state/config and systemd unit created. Systemd service active and local HTTP 8080 responsive. Kodi remained active after deployment.
+- **Not yet verified**: BirdNET real-time audio samples, actual detections, Kodi playback under load, native source stable ID, external LAN reachability, previous BirdNET data/history migration, idempotent rerun. No firewall change was made; no claim of accessible LAN UI.
+- Next: read-only service log/audio-device API and audio-level verification, measure CPU/storage and user-check Kodi playback. Only then design a narrow IaC nftables TCP 8080 allow rule if desired and safe.
+
+## 2026-11-08 — Native BirdNET-Go Ansible role staged for operator install (NOT YET DEPLOYED)
+
+- Operator binary preflight passed: `ok=7 changed=0 failed=0 unreachable=0`. Release executable aarch64, `libtensorflowlite_c.so` and other dynamic dependencies resolved; CLI `serve` and `--config` flags confirmed; Kodi still active. NOTE: `--help` unexpectedly created a default config under `/root/.config/birdnet-go`; isolated production service uses its own user and explicit config path, not this file.
+- Added dedicated `playbooks/media-01-birdnet-install.yml` and `roles/media_birdnet_native` to the BirdNET feature branch. Role installs verified staged native release under `/opt/birdnet-go/releases/20261031`, creates `birdnet` service user/group with audio access and persistent `/var/lib/birdnet-go`, installs Ansible-managed config and systemd unit, starts service, verifies localhost HTTP and Kodi. Does not run Docker, existing BirdNET Docker role, media Kodi role, NFS role, or firewall role.
+- Current audio stable ID `usb-id:0c76:161e:` is inherited from prior setup; live native enumeration/detections must be proven. Media firewall not changed; no LAN UI claim. Installation playbook has not yet been executed, no runtime success is claimed. Operator should perform syntax check then scoped install and report output.
+- If Kodi playback suffers, isolate BirdNET by stopping only birdnet-go while diagnosing. Historical BirdNET data migration still unverified and out of scope for first fresh installation. Documentation: `docs/operations/media-01-birdnet-native.md`.
+
+## 2026-11-08 — BirdNET staged release verified; native dependency check pending
+
+- Operator ran stage playbook successfully: `ok=12 changed=3 failed=0 unreachable=0`. Checksum-verified 20261031 ARM64 archive contains README.md, birdnet-go, libonnxruntime.so, libtensorflowlite_c.so. Kodi remained active. Changes limited to release staging under /var/cache/birdnet-go/20261031.
+- Added a scoped `media-01-birdnet-binary-check.yml` Ansible playbook to inspect packaged README, temporary ELF/dependencies and CLI help without installing the app. Await operator output before implementing systemd role.
+- Native executable *not* installed or started; BirdNET database/history unchanged. Keep Kodi and Proxmox NFS untouched.
+
+## 2026-11-08 — BirdNET-Go native release staging IaC added (not yet executed)
+
+- Operator completed `media-01-birdnet-preflight.yml` successfully: `ok=10 changed=0 failed=0 unreachable=0`, Kodi active and USB ALSA recording works.
+- Added `playbooks/media-01-birdnet-stage.yml` on BirdNET feature branch. This stages and validates official 20261031 ARM64 artifact by upstream SHA256, lists archive members, checks for traversal names and preserves Kodi; it does NOT install, extract, open ports or start a service.
+- Added `docs/operations/media-01-birdnet-native.md` documenting the staged-only boundary and next acceptance gates.
+- Next step: operator fetch/update branch worktree, run syntax and staging playbook, return archive member listing. Verify actual archive layout and native app dependencies before committing a systemd installation role. Do not conflate staged artifact with live BirdNET deployment.
+
+## 2026-11-08 — BirdNET-Go media-01 native deployment staging (NOT DEPLOYED)
+
+- User selected media-01 (Debian 13 ARM64 Raspberry Pi 5) as the new BirdNET-Go host, replacing the old docker-01 placement. Admin-01 remains the Ansible controller; Kodi must remain uninterrupted and media-01's Proxmox NFS backup target must not be changed.
+- Operator read-only checks: USB PnP microphone ALSA card 2 successfully captured five seconds at 48 kHz mono (469 KB WAV); stable ALSA name `plughw:CARD=Device,DEV=0` advertised; Kodi active, port 8080 not listening, 158 GB free, Docker absent, no BirdNET-Go service unit.
+- Existing `IaC/ansible/roles/birdnet_go` is Docker-specific and hard-codes retired docker-01 identity and nginx/certificate handling. DO NOT execute it or the general `media-01.yml` playbook for this scope: it can change Kodi services and firewall. `birdnet_hosts` currently empty.
+- Added a deliberately read-only, scope-limited `IaC/ansible/playbooks/media-01-birdnet-preflight.yml`. Run syntax-check and this playbook from admin-01, then review results before adding a native systemd install role. No live install or configuration change has occurred.
+- Next: establish 20261031 ARM64 archive layout, checksum and runtime dependencies; verify the current BirdNET-Go native audio source stable ID; prepare pinned native binary, dedicated user/group and systemd service, persistence and LAN-only access in a separate scoped playbook; deploy using Ansible with rollback; verify live audio and Kodi playback. Preserve any old history if available rather than silently resetting it.
+- KISS and IaC remain mandatory.
+
 ## 2026-11-05 — PR #295 merged; next enrichment follow-up needs correct issue tracking
 
 - PR #295 (router-01 Zabbix active Agent 2, six health items, two OS facts, and Homelab Hosts selector integration) merged into main via merge commit `99984564983373eca3b913c1366a6025f0bf140a`. Both latest checked CI workflows passed pre-merge. No local worktrees reset or cleaned.

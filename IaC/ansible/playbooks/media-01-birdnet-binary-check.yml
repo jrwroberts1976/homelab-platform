@@ -1,0 +1,60 @@
+---
+- name: Validate staged native BirdNET-Go executable and libraries
+  hosts: media_hosts
+  become: false
+  gather_facts: true
+  vars:
+    birdnet_native_stage: /var/cache/birdnet-go/20261031
+    birdnet_native_archive: "{{ birdnet_native_stage }}/birdnet-go-linux-arm64-20261031.tar.gz"
+  tasks:
+    - name: Confirm target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'media-01'
+          - ansible_facts.hostname == 'media-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+
+    - name: Read packaged release instructions
+      ansible.builtin.command:
+        argv:
+          - tar
+          - -xOzf
+          - "{{ birdnet_native_archive }}"
+          - README.md
+      changed_when: false
+      register: birdnet_native_readme
+
+    - name: Display packaged release instructions
+      ansible.builtin.debug:
+        msg: "{{ birdnet_native_readme.stdout_lines[:100] }}"
+
+    - name: Inspect ELF binary and dynamic dependencies without installing
+      ansible.builtin.shell: |
+        set -eu
+        tmp="$(mktemp -d)"
+        trap 'rm -rf "$tmp"' EXIT
+        tar -xzf "{{ birdnet_native_archive }}" -C "$tmp" birdnet-go libonnxruntime.so libtensorflowlite_c.so
+        chmod 0755 "$tmp/birdnet-go"
+        echo "=== ELF architecture ==="
+        file "$tmp/birdnet-go"
+        echo "=== Dynamic libraries ==="
+        LD_LIBRARY_PATH="$tmp" ldd "$tmp/birdnet-go"
+        echo "=== Program help ==="
+        cd "$tmp"
+        LD_LIBRARY_PATH="$tmp" timeout 15 ./birdnet-go --help
+      args:
+        executable: /bin/bash
+      register: birdnet_native_probe
+      changed_when: false
+
+    - name: Show native binary validation
+      ansible.builtin.debug:
+        msg: "{{ birdnet_native_probe.stdout_lines[:100] }}"
+
+    - name: Check Kodi remains active
+      ansible.builtin.command: systemctl is-active kodi
+      register: kodi_status
+      changed_when: false
+      failed_when: kodi_status.stdout | trim != 'active'

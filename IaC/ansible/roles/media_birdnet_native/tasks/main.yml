@@ -1,0 +1,141 @@
+---
+- name: Validate exact installation target
+  ansible.builtin.assert:
+    that:
+      - inventory_hostname == 'media-01'
+      - ansible_facts.hostname == 'media-01'
+      - ansible_facts.distribution == 'Debian'
+      - ansible_facts.distribution_major_version == '13'
+      - ansible_facts.architecture in ['aarch64', 'arm64']
+
+- name: Verify Kodi remains running
+  ansible.builtin.command: systemctl is-active kodi
+  register: birdnet_kodi_pre
+  changed_when: false
+  failed_when: birdnet_kodi_pre.stdout | trim != 'active'
+
+- name: Verify release archive staged by IaC
+  ansible.builtin.stat:
+    path: "{{ media_birdnet_archive }}"
+  register: birdnet_archive_stat
+  failed_when: not birdnet_archive_stat.stat.isreg | default(false)
+
+- name: Verify archive files match known release layout
+  ansible.builtin.command:
+    argv: [tar, -tzf, "{{ media_birdnet_archive }}"]
+  register: birdnet_archive_list
+  changed_when: false
+  failed_when: (birdnet_archive_list.stdout_lines | sort | list) != (['README.md', 'birdnet-go', 'libonnxruntime.so', 'libtensorflowlite_c.so'] | sort | list)
+
+- name: Ensure target USB microphone is present
+  ansible.builtin.command: arecord -L
+  register: birdnet_arecord
+  changed_when: false
+  failed_when: "'plughw:CARD=Device,DEV=0' not in birdnet_arecord.stdout"
+
+- name: Create dedicated BirdNET-Go service group
+  ansible.builtin.group:
+    name: birdnet
+    system: true
+
+- name: Create dedicated BirdNET-Go service user
+  ansible.builtin.user:
+    name: birdnet
+    group: birdnet
+    comment: BirdNET-Go native service
+    shell: /usr/sbin/nologin
+    home: "{{ media_birdnet_state_dir }}"
+    create_home: false
+    system: true
+    groups: audio
+    append: true
+
+- name: Create application release and state directories
+  ansible.builtin.file:
+    path: "{{ item.path }}"
+    state: directory
+    owner: "{{ item.owner }}"
+    group: "{{ item.group }}"
+    mode: "{{ item.mode }}"
+  loop:
+    - {path: /opt/birdnet-go, owner: root, group: root, mode: '0755'}
+    - {path: /opt/birdnet-go/releases, owner: root, group: root, mode: '0755'}
+    - {path: "{{ media_birdnet_release_dir }}", owner: root, group: root, mode: '0755'}
+    - {path: "{{ media_birdnet_state_dir }}", owner: birdnet, group: birdnet, mode: '0750'}
+    - {path: "{{ media_birdnet_state_dir }}/clips", owner: birdnet, group: birdnet, mode: '0750'}
+
+- name: Extract exact pinned native release
+  ansible.builtin.unarchive:
+    src: "{{ media_birdnet_archive }}"
+    dest: "{{ media_birdnet_release_dir }}"
+    remote_src: true
+    creates: "{{ media_birdnet_release_dir }}/birdnet-go"
+
+- name: Ensure installed native program is executable
+  ansible.builtin.file:
+    path: "{{ media_birdnet_release_dir }}/birdnet-go"
+    owner: root
+    group: root
+    mode: "0755"
+
+- name: Ensure native libraries are readable
+  ansible.builtin.file:
+    path: "{{ media_birdnet_release_dir }}/{{ item }}"
+    owner: root
+    group: root
+    mode: "0644"
+  loop:
+    - libtensorflowlite_c.so
+    - libonnxruntime.so
+
+- name: Install Ansible-managed configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: "{{ media_birdnet_state_dir }}/config.yaml"
+    owner: birdnet
+    group: birdnet
+    mode: "0640"
+    backup: true
+  notify: Restart BirdNET-Go native
+
+- name: Install native systemd unit
+  ansible.builtin.template:
+    src: birdnet-go.service.j2
+    dest: /etc/systemd/system/birdnet-go.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart BirdNET-Go native
+
+- name: Enable and start native BirdNET-Go
+  ansible.builtin.systemd_service:
+    name: birdnet-go.service
+    daemon_reload: true
+    enabled: true
+    state: started
+
+- name: Apply pending BirdNET-Go changes
+  ansible.builtin.meta: flush_handlers
+
+- name: Confirm BirdNET-Go service is active
+  ansible.builtin.command: systemctl is-active birdnet-go.service
+  changed_when: false
+  register: birdnet_native_active
+  retries: 12
+  delay: 5
+  until: birdnet_native_active.rc == 0
+
+- name: Confirm web endpoint is responding locally
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ media_birdnet_port }}/"
+    status_code: [200, 302, 307]
+  register: birdnet_native_http
+  retries: 18
+  delay: 5
+  until: birdnet_native_http.status in [200, 302, 307]
+
+- name: Verify Kodi remains active
+  ansible.builtin.command: systemctl is-active kodi
+  register: birdnet_kodi_post
+  changed_when: false
+  failed_when: birdnet_kodi_post.stdout | trim != 'active'

@@ -1,0 +1,64 @@
+---
+# Stage BirdNET-Go HTTPS on media-01 only. DNS records must already exist
+# on both Pi-hole resolvers. Does not run any Kodi, Docker or firewall role.
+- name: Configure certificate and HTTPS virtual host for native BirdNET-Go
+  hosts: media_hosts
+  become: true
+  gather_facts: false
+  vars:
+    media_birdnet_https_fqdn: birds.home.jrwroberts.co.uk
+    homelab_certificate_fqdn: "{{ media_birdnet_https_fqdn }}"
+    homelab_certificate_cert_name: "{{ media_birdnet_https_fqdn }}"
+    homelab_certificate_domains:
+      - "{{ media_birdnet_https_fqdn }}"
+    homelab_certificate_deploy_hook_name: reload-birds-nginx
+    homelab_certificate_deploy_hook_content: |
+      #!/bin/sh
+      systemctl reload nginx
+  pre_tasks:
+    - name: Require protected Cloudflare DNS-01 credentials on controller
+      ansible.builtin.stat:
+        path: "{{ homelab_certificate_cloudflare_credentials_source }}"
+      delegate_to: localhost
+      become: false
+      register: birds_dns01_credentials
+      no_log: true
+
+    - name: Refuse without protected Cloudflare credentials
+      ansible.builtin.assert:
+        that:
+          - birds_dns01_credentials.stat.isreg | default(false)
+        fail_msg: "Controller Cloudflare credentials missing; no host changes made."
+
+    - name: Confirm both internal resolvers direct birds to media-01
+      ansible.builtin.command:
+        argv:
+          - dig
+          - "@{{ item }}"
+          - "{{ media_birdnet_https_fqdn }}"
+          - A
+          - +short
+          - +time=2
+          - +tries=1
+      loop: [192.168.2.50, 192.168.2.51]
+      register: birds_dns_answers
+      delegate_to: localhost
+      become: false
+      changed_when: false
+
+    - name: Require matching DNS responses from both Pi-hole resolvers
+      ansible.builtin.assert:
+        that:
+          - birds_dns_answers.results | map(attribute='stdout') | map('trim') | select('equalto', '192.168.2.195') | list | length == 2
+        fail_msg: "BirdNET DNS is missing or incorrect on one or both Pi-hole resolvers."
+
+    - name: Check BirdNET HTTP backend is healthy
+      ansible.builtin.uri:
+        url: http://127.0.0.1:8080/
+        status_code: [200, 302, 307]
+        timeout: 8
+      changed_when: false
+
+  roles:
+    - role: homelab_certificate
+    - role: media_birdnet_https

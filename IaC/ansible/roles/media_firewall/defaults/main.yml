@@ -9,6 +9,10 @@ media_firewall_lan_subnet: "192.168.2.0/24"
 media_firewall_qbittorrent_https_lan_enabled: true
 media_firewall_qbittorrent_http_lan_enabled: false
 
+# Native BirdNET-Go HTTP is loopback-only behind LAN HTTPS via Nginx.
+# The earlier temporary LAN TCP/8080 allow has been retired after HTTPS browser verification.
+media_firewall_birdnet_lan_enabled: false
+
 # 19 Oct 2026 authorised ICMPv4 timestamp-response mitigation on media-01.
 # Drop type 13 (timestamp-request) before the broad IPv4 ICMP accept.
 # A scoped rollback can override this to false without removing other rules.
