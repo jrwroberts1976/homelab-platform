@@ -1,0 +1,65 @@
+---
+# Refresh Grafana Managed Devices inventory from running agents.
+# router-01 is explicitly included without adding it to the zabbix_agents
+# deployment group (the production gateway remains excluded from generic roles).
+# Does not touch Zabbix configuration or existing Grafana dashboards.
+- name: Inspect managed-device agents read-only
+  hosts: zabbix_agents:router-01
+  become: true
+  gather_facts: false
+  tasks:
+    - name: Inspect agent service state
+      ansible.builtin.service_facts:
+
+    - name: Record whether Zabbix Agent 2 is running
+      ansible.builtin.set_fact:
+        grafana_zabbix_agent_running: >-
+          {{
+            ansible_facts.services.get('zabbix-agent2.service', {}).get('state', '') == 'running'
+          }}
+      changed_when: false
+
+- name: Refresh Grafana verified agent inventory
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_zabbix_hostlist: /var/lib/homelab-network-hosts/grafana-managed-zabbix-hosts.json
+    managed_candidates: "{{ (groups['zabbix_agents'] | default([]) + ['router-01']) | unique | sort }}"
+  tasks:
+    - name: Verify Grafana host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Require router agent running before inventory change
+      ansible.builtin.assert:
+        that:
+          - hostvars['router-01'].grafana_zabbix_agent_running | default(false) | bool
+        fail_msg: "router-01 Zabbix Agent 2 is not running; refusing partial inventory update."
+
+    - name: Require all current managed-device agents running
+      ansible.builtin.assert:
+        that:
+          - hostvars[item].grafana_zabbix_agent_running | default(false) | bool
+        fail_msg: "Host {{ item }} agent is not running; leaving inventory unchanged."
+      loop: "{{ managed_candidates }}"
+
+    - name: Store verified managed devices, including router-01
+      ansible.builtin.copy:
+        dest: "{{ grafana_zabbix_hostlist }}"
+        content: |
+          [
+          {% for item in managed_candidates %}
+            {"name": "{{ item }}", "ip": "{{ hostvars[item].ansible_host | default('') }}"}{{ ',' if not loop.last else '' }}
+          {% endfor %}
+          ]
+        owner: root
+        group: root
+        mode: "0600"
+        backup: true
+
+    - name: Confirm inventory count
+      ansible.builtin.debug:
+        msg: "Verified {{ managed_candidates | length }} running managed agents, including router-01. No dashboards changed."
