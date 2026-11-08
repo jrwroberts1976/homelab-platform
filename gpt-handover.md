@@ -1,3 +1,9 @@
+## 2026-11-08 — BirdNET inference pipeline confirmed operational; zero detections explained
+
+- Operator's five-minute BirdNET pipeline report at 13:57:49: source Garden Room USB Microphone, model BirdNET_V2.4, inferences=98, raw_results=1165, passed_filter=0, daylight_discards=0, max_confidence=0.33, threshold=0.8.
+- Conclusion: inference runs are occurring and predictions are generated, but all remain below the configured 0.80 threshold. No grounds to call inference broken or lower threshold merely to manufacture detections.
+- Preserve existing 0.8 threshold and monitor for genuine birds. Outstanding: confirm Kodi *video/audio playback* while BirdNET is running, allow LAN dashboard via scoped firewall IaC if wanted, verify future true detections and source history migration separately.
+
 ## 2026-11-08 — BirdNET-Go DB healthy but zero detections observed
 
 - Operator inspected SQLite database `/var/lib/birdnet-go/birdnet.db` (360448 bytes) in read-only mode. `detections` table exists with id/model_id/label_id/source_id/detected_at/confidence and related fields; `SELECT COUNT(*) FROM detections` returned **0**.
