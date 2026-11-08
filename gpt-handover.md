@@ -1,3 +1,9 @@
+## 2026-11-08 — admin-01 unattended-upgrade package versions corroborated
+
+- User examined APT history transaction starting 2026-11-08 06:42:33 UTC, ending 06:42:44 UTC: `/usr/bin/unattended-upgrade` upgraded `libminizip1t64`, `zlib1g-dev`, and `zlib1g` to `1:1.3.dfsg+really1.3.1-1+deb13u1`.
+- Read-only `dpkg-query -W` confirmed all three currently match the recorded upgraded versions and each has status `install ok installed`. This corroborates a completed package upgrade at 06:42 UTC; it does not establish full system patch compliance, an absence of security vulnerabilities, or a verified end-to-end telemetry pipeline.
+- Next: design smallest read-only Ansible-managed Zabbix agent 2 collection for cached pending count, timestamp/freshness, reboot-file presence, and version-verified last upgrade; security count remains Unknown until trustworthy policy is defined. No collector installed or Grafana switched to live data yet.
+
 ## 2026-11-08 — read-only patch telemetry phase 2 admin-01 pilot completed
 
 - User ran Phase 2 via isolated worktree `~/projects/homelab-platform-patching` on branch snapshot ddc493a9 after current main checkout could not switch branches due to untracked-file conflicts/divergence. Syntax check passed. `ansible-playbook playbooks/zabbix-patching-preflight.yml --limit admin-01` completed **ok=10 changed=0 failed=0**.
