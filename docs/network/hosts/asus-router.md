@@ -94,7 +94,7 @@ Online ASUS device at 192.168.2.180. No hostname, service, port, DNS, or OS evid
 
 - Policy: **Not managed by unattended-upgrades**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T11:47:20+00:00`
+- Last assessed: `2026-11-08T12:52:15+00:00`
 - Pending updates: **3**
 - Security updates pending: **0**
 - Reboot required: **No**
