@@ -1,3 +1,11 @@
+## 2026-11-08 — BirdNET-Go local DNS alias and HTTPS IaC staged, NOT DEPLOYED
+
+- User requested `https://birds.home.jrwroberts.co.uk` for the already-working native BirdNET-Go on `media-01` (`192.168.2.195:8080`).
+- Inspected existing patterns: `dns_resolver` manages `pihole_local_hosts` on both dns-01 (.51)/dns-02 (.50), `playbooks/dns-local-records.yml` does DNS-only; `homelab_certificate` manages Let's Encrypt Certbot Cloudflare DNS-01 using protected admin-01 credentials; media-01 has existing qBittorrent Nginx HTTPS on 443. TLS 443 already allowed LAN-only by media firewall. Existing qBittorrent server block must not be overwritten.
+- Committed Git-only change to append `birds.home.jrwroberts.co.uk` to existing media-01 local DNS record. Added scoped `playbooks/media-01-birds-https.yml` and `roles/media_birdnet_https`: require both local resolvers return 192.168.2.195, require controller Cloudflare credentials and healthy localhost BirdNET; get single-name certificate via existing cert role, add separate `birds.conf` Nginx server block forwarding to 127.0.0.1:8080 and verify both BirdNET and qBittorrent HTTPS. No Kodi/NFS/firewall/BirdNET service restart is requested; only Nginx reload.
+- **No playbook executed and no certificate/DNS service state independently verified.** Operator must (1) `git pull --ff-only`; (2) syntax-check and execute `playbooks/dns-local-records.yml`; (3) verify both DNS answers; (4) syntax-check and execute `playbooks/media-01-birds-https.yml`; (5) verify HTTPS in browser. Keep direct HTTP/8080 firewall rule until HTTPS proven, then optionally tighten it via separate IaC change.
+- Future media-01 serves media and hosts Docker containers (not Kodi playback), while retaining NFS backup; Docker rollout is a separate workstream with nftables compatibility review.
+
 ## 2026-11-08 — BirdNET-Go LAN access deployed and verified on media-01
 
 - Operator executed scoped `playbooks/media-01-birdnet-lan.yml` from admin-01; syntax check passed; recap `ok=16 changed=2 unreachable=0 failed=0`.
