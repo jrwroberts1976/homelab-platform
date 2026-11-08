@@ -1,3 +1,8 @@
+## 2026-11-08 — guarded router active template link failed during preflight; no template mutation
+
+- Operator ran `zabbix-router-link-active-template.yml`; monitor-01 ok=3 changed=1 failed=1; the `Run read-only router-01 template preflight` step failed with output censored by `no_log`. Zabbix API `host.massadd` was NOT reached; active template was not linked. Router service/firewall unchanged. Last successful independent preflight: 43 active-template items, 2 OS Facts items, zero duplicate keys.
+- Staged corrective diagnostic: `link_router_active_template.py` now records a controlled stage name and error **class only**, without emitting exception details, API credentials, or token-bearing output. `zabbix-router-link-active-template.yml` defaults to `zabbix_router_link_apply: false`; safe preflight is observed even on non-zero rc, then assert fails with no write. Actual link requires explicit `-e zabbix_router_link_apply=true` after clean audit. Updated in PR #326, **not yet deployed**. Do not bypass failing preflight or disable no_log. Investigate reported safe stage/class before linking; preserve gateway stability.
+
 ## 2026-11-08 — guarded router active-template test staged, Wi-Fi monitoring concern
 
 - User reported a transient **Wi-Fi disconnection**. Subsequent router read-only diagnostics showed PPPoE and WAN eth1 up, zero interface errors/drops, router-pppoe/dnsmasq/unbound/nftables/agent active, low CPU load, no recent kernel link events or error logs. This does not rule out a Wi-Fi AP restart or intermittent network issue. No causal link to Zabbix established. User explicitly asked to deploy the Zabbix template again to observe whether symptoms recur.
