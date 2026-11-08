@@ -1,0 +1,48 @@
+# Ansible-managed configuration for media-01 BirdNET-Go.
+main:
+  name: media-01
+  timeas24h: true
+logging:
+  timezone: Local
+  default_level: info
+lowmemory:
+  mode: auto
+birdnet:
+  version: "2.4"
+  threshold: {{ media_birdnet_threshold }}
+  sensitivity: 1.0
+  overlap: 0.0
+  locale: en-uk
+  latitude: {{ media_birdnet_latitude }}
+  longitude: {{ media_birdnet_longitude }}
+  locationconfigured: true
+  modelregion: auto
+  usexnnpack: true
+models:
+  enabled:
+    - birdnet
+realtime:
+  interval: 15
+  audio:
+    sources:
+      - name: "Garden Room USB Microphone"
+        device: "{{ media_birdnet_audio_device }}"
+        samplerate: 48000
+        gain: 0
+        models:
+          - birdnet
+    export:
+      enabled: true
+      path: clips/
+      type: wav
+      retention:
+        policy: usage
+        maxage: 30d
+        maxusage: "80%"
+        minclips: 10
+        keepspectrograms: true
+        checkinterval: 15
+webserver:
+  enabled: true
+  port: "{{ media_birdnet_port }}"
+  enableterminal: false
