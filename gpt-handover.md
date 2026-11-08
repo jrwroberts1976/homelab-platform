@@ -1,3 +1,9 @@
+## 2026-11-08 — Media-01 future Docker/media-server role; BirdNET LAN firewall IaC ready (NOT APPLIED)
+
+- User confirmed media-01 will no longer be used as a Kodi playback endpoint; instead will serve media and host Docker containers, alongside native BirdNET-Go. Preserve existing Proxmox NFS backup function. **Do not remove Kodi yet**; no Docker cutover or deployment authorised by this firewall change.
+- Verified existing `media_firewall` role default-drop nftables policy has no TCP/8080 accept; this explains why BirdNET dashboard HTTP works localhost but not from LAN. Added LAN-only `ip saddr 192.168.2.0/24 tcp dport 8080 accept` behind `media_firewall_birdnet_lan_enabled`, with policy verification; added standalone `playbooks/media-01-birdnet-lan.yml` to apply only firewall role and verify BirdNET HTTP from controller and NFS listener. Operator must pull branch and execute syntax check/live playbook; **change not yet applied**.
+- Important future Docker consideration: media firewall template contains `flush ruleset` and `forward policy drop`; deploying Docker networking will require coordinating nftables/bridge/NAT rules with Ansible/IaC. Do not infer Docker networking works or do broad media-01.yml changes. Keep Kodi installation as-is until separately agreed.
+
 ## 2026-11-08 — BirdNET inference pipeline confirmed operational; zero detections explained
 
 - Operator's five-minute BirdNET pipeline report at 13:57:49: source Garden Room USB Microphone, model BirdNET_V2.4, inferences=98, raw_results=1165, passed_filter=0, daylight_discards=0, max_confidence=0.33, threshold=0.8.
