@@ -1,3 +1,9 @@
+## 2026-11-08 — Grafana Zabbix dashboards deployed, missing metrics audit staged
+
+- Operator successfully executed `ansible-playbook playbooks/grafana-zabbix-rebuild.yml --ask-become-pass -e grafana_zabbix_apply=true`. monitor-01 ok=7 changed=1 failed=0. Zabbix template audit confirmed all 15 managed hosts linked only to `Linux by Zabbix agent active`. All **16** generated Grafana dashboards updated: 15 Managed Devices host pages plus `Homelab — Zabbix Overview`. Neither router nor Wi-Fi equipment modified.
+- Builder reports all hosts have 11 generated panels and the same three metric panel gaps: `Memory utilisation`, `Root filesystem usage`, `Root filesystem free`. These are missing **item-key matches in the builder**, not confirmed absence of underlying Zabbix data. Do not change Zabbix templates, deploy collectors or claim zero metrics without examining actual item keys.
+- Added read-only audit `IaC/ansible/roles/monitoring_stack/files/grafana/audit_grafana_metric_keys.py` and `IaC/ansible/playbooks/grafana-zabbix-metric-audit.yml` to PR #326. Staged, NOT deployed. Lists matching memory/filesystem Zabbix item keys, enabled/supported/value presence for all 15 managed hosts without printing item values or making changes. After operator runs, modify dashboard key patterns based on actual items, preserving deterministic UIDs and existing generated dashboard ownership controls, then audit and explicit apply again.
+
 ## 2026-11-08 — Grafana integration for 15 standard active Linux Zabbix hosts staged
 
 - User requested moving to Grafana integration after successfully unlinking/clearing `Homelab Linux OS Facts` from all other 14 managed hosts; router-01 Zabbix active-only recreated hostid=10702, memory telemetry confirmed. All 15 hosts now linked only to `Linux by Zabbix agent active` as confirmed by previous template cleanup, but fresh item coverage for all host metrics remains to be reviewed.
