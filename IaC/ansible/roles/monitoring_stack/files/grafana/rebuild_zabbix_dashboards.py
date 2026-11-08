@@ -234,7 +234,7 @@ def admin_patching_live_panel(y, items):
     except (ValueError, TypeError, KeyError, AttributeError):
         return patch_status_panel(y)
     return {
-        "id": 91, "type": "table", "title": "Pending patches — admin-01",
+        "id": 91, "type": "stat", "title": "Pending patches — admin-01",
         "description": (
             "Two metrics only: cached pending APT package candidates and pending security "
             "patches. Security patch count remains Unknown until an independently "
@@ -287,7 +287,7 @@ def admin_patching_live_panel(y, items):
             },
         ],
         "fieldConfig": {
-            "defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}},
+            "defaults": {"unit": "short", "noValue": "Unknown", "decimals": 0},
             "overrides": [
                 {
                     "matcher": {"id": "byName", "options": "Security patches"},
@@ -298,7 +298,17 @@ def admin_patching_live_panel(y, items):
                 },
             ],
         },
-        "options": {"showHeader": True},
+        "options": {
+            "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
+            "orientation": "horizontal",
+            "textMode": "value_and_name",
+            "wideLayout": False,
+            "colorMode": "none",
+            "graphMode": "none",
+            "justifyMode": "center",
+            "percentChangeColorMode": "standard",
+            "showPercentChange": False,
+        },
     }
 
 
@@ -482,7 +492,7 @@ def main():
         admin_action = next((a for a in actions if a[1]["title"] == expected), None)
         if admin_action is None:
             raise RuntimeError("Missing admin-01 dashboard in pilot")
-        if not any(p.get("id") == 91 and p.get("type") == "table"
+        if not any(p.get("id") == 91 and p.get("type") == "stat"
                    for p in admin_action[1]["panels"]):
             raise RuntimeError("No verified live admin-01 patch table; no changes")
         existing = grafana_api(
