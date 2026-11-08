@@ -1,0 +1,58 @@
+---
+# Read-only feasibility audit for future Zabbix patch telemetry.
+# Pilot on admin-01 with --limit admin-01. Does not refresh package indexes,
+# install/upgrade anything, modify host facts, or start background services.
+- name: Audit cached Debian patch metadata without changing hosts
+  hosts: all
+  become: false
+  gather_facts: true
+  tasks:
+    - name: Require approved single-host pilot
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - inventory_hostname == 'admin-01'
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Pilot limited to admin-01 Debian only. Use --limit admin-01."
+
+    - name: Inspect cached package upgrade candidates without refreshing indexes
+      ansible.builtin.command:
+        argv: [apt, list, --upgradable]
+      environment:
+        LC_ALL: C
+      register: cached_upgrades
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect package-index age, reboot indicator and package history files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/apt/periodic/update-success-stamp
+        - /var/lib/apt/lists
+        - /var/run/reboot-required
+        - /var/log/apt/history.log
+        - /var/log/dpkg.log
+      register: metadata
+      changed_when: false
+
+    - name: Report only read-only pilot observations
+      ansible.builtin.debug:
+        msg:
+          - "PILOT: {{ inventory_hostname }} ({{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }})"
+          - "CACHED APT COMMAND RC: {{ cached_upgrades.rc }} (0 expected)"
+          - "CACHED UPGRADE CANDIDATE LINES: {{ cached_upgrades.stdout_lines | reject('match', '^Listing') | reject('equalto', '') | list | length }}"
+          - "REBOOT REQUIRED FLAG: {{ 'present' if metadata.results[2].stat.exists else 'absent (not a complete reboot-compliance proof)' }}"
+          - "APT UPDATE SUCCESS STAMP EXISTS: {{ metadata.results[0].stat.exists }}"
+          - "APT LISTS DIRECTORY EXISTS: {{ metadata.results[1].stat.exists }}"
+          - "APT HISTORY LOG EXISTS: {{ metadata.results[3].stat.exists }}"
+          - "DPKG LOG EXISTS: {{ metadata.results[4].stat.exists }}"
+          - "SECURITY UPDATE COUNT: Unknown pending origin-aware classification"
+          - "LAST SUCCESSFUL PATCH: Unknown pending trustworthy history interpretation"
+          - "READ ONLY: no apt update, installs, upgrades or service restarts"
+
+    - name: Fail pilot if cached package query errored
+      ansible.builtin.assert:
+        that:
+          - cached_upgrades.rc == 0
+        fail_msg: "Cached APT query failed; no collection will be deployed."
