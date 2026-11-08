@@ -95,14 +95,27 @@ def main():
     inherited = [i for i in items if str(i.get("templateid")) in passive_item_ids]
     local_items = [i for i in items if str(i.get("templateid", "0")) in ("0", "", "None")]
     unexpected = [i for i in items if i not in inherited and i not in local_items]
+    print("ITEM AUDIT: total=" + str(len(items)) +
+          " inherited_from_passive=" + str(len(inherited)) +
+          " unlinked_or_discovered=" + str(len(local_items)) +
+          " inherited_other=" + str(len(unexpected)))
     if unexpected:
+        print("UNEXPECTED ITEM DETAILS (up to 20):")
+        for item in unexpected[:20]:
+            print("  itemid=" + str(item["itemid"]) +
+                  " parent_itemid=" + str(item.get("templateid")) +
+                  " type=" + str(item.get("type")))
         raise RuntimeError("Unexpected inherited Zabbix item; manual review needed")
     new_keys = {i["key_"] for i in active_items}
     conflicting_local = sorted(i["key_"] for i in local_items if i["key_"] in new_keys)
     if conflicting_local:
         print("LOCAL KEY CONFLICTS: " + str(len(conflicting_local)))
+        for key in conflicting_local[:20]:
+            # Keys are Zabbix metadata. Limit displayed detail and avoid values.
+            print("CONFLICTING ITEM KEY: " + key[:120])
         raise RuntimeError("Local items conflict with target active template")
     if not inherited or not active_items:
+        print("TEMPLATE ITEM AUDIT: passive_inherited=" + str(len(inherited)) + " active_template=" + str(len(active_items)))
         raise RuntimeError("Expected passive and active items missing")
     triggers = api("trigger.get", {
         "hostids": [HOST_ID],
@@ -112,6 +125,7 @@ def main():
     })
     local_triggers = [t for t in triggers if str(t.get("templateid", "0")) in ("0", "", "None")]
     if local_triggers:
+        print("LOCAL TRIGGER COUNT: " + str(len(local_triggers)))
         raise RuntimeError("Locally defined triggers present; review before switching")
     discovery = api("discoveryrule.get", {
         "hostids": [HOST_ID],
@@ -119,6 +133,7 @@ def main():
     })
     unexpected_rules = [r for r in discovery if str(r.get("templateid")) not in passive_item_ids]
     if unexpected_rules:
+        print("UNEXPECTED DISCOVERY RULE COUNT: " + str(len(unexpected_rules)))
         raise RuntimeError("Locally defined or unexpected discovery rules")
     graphs = api("graph.get", {
         "hostids": [HOST_ID],
@@ -126,6 +141,7 @@ def main():
     })
     local_graphs = [g for g in graphs if str(g.get("templateid", "0")) in ("0", "", "None")]
     if local_graphs:
+        print("LOCAL GRAPH COUNT: " + str(len(local_graphs)))
         raise RuntimeError("Local graphs exist; review dependencies")
     interfaces = host.get("interfaces") or []
 
