@@ -1,0 +1,8 @@
+---
+# Scoped native installation; does not execute media_endpoint or media_firewall roles.
+- name: Install pinned native BirdNET-Go on media-01
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+  roles:
+    - media_birdnet_native
