@@ -234,14 +234,12 @@ def admin_patching_live_panel(y, items):
     except (ValueError, TypeError, KeyError, AttributeError):
         return patch_status_panel(y)
     return {
-        "id": 91, "type": "table", "title": "Patching status — live cached APT snapshot",
+        "id": 91, "type": "table", "title": "Pending patches — admin-01",
         "description": (
-            "Live Zabbix Text history for admin-01. JSON pending_updates_cached is "
-            "a cached candidate count, not verified compliance. "
-            "security_updates and last_verified_patch_utc are unknown (null). "
-            "reboot_required_flag records file presence only. "
-            "APT index age is unverified and must not be used for compliance. "
-            "No data within the dashboard time range means no recent snapshot."
+            "Two metrics only: cached pending APT package candidates and pending security "
+            "patches. Security patch count remains Unknown until an independently "
+            "validated classifier is available. Data comes from Zabbix Text history; "
+            "no APT refresh is triggered. A stale or missing snapshot is not compliance."
         ),
         "datasource": DS,
         "gridPos": {"x": 0, "y": y, "w": 24, "h": 6},
@@ -273,20 +271,17 @@ def admin_patching_live_panel(y, items):
                         "error": True,
                         "apt_index_latest_utc": True,
                         "apt_index_age_hours": True,
+                        "reboot_required_flag": True,
+                        "last_verified_patch_utc": True,
+                        "collected_at": True,
                     },
                     "indexByName": {
                         "pending_updates_cached": 0,
                         "security_updates": 1,
-                        "reboot_required_flag": 2,
-                        "last_verified_patch_utc": 3,
-                        "collected_at": 4,
                     },
                     "renameByName": {
-                        "pending_updates_cached": "Pending updates (cached)",
-                        "security_updates": "Security updates",
-                        "reboot_required_flag": "Reboot-required flag",
-                        "last_verified_patch_utc": "Last verified patch",
-                        "collected_at": "Collection time (UTC)",
+                        "pending_updates_cached": "Pending patches (cached)",
+                        "security_updates": "Security patches",
                     },
                 },
             },
@@ -295,26 +290,10 @@ def admin_patching_live_panel(y, items):
             "defaults": {"custom": {"align": "auto", "cellOptions": {"type": "auto"}}},
             "overrides": [
                 {
-                    "matcher": {"id": "byName", "options": "Security updates"},
+                    "matcher": {"id": "byName", "options": "Security patches"},
                     "properties": [{"id": "mappings", "value": [
                         {"type": "special", "options": {"match": "null",
                           "result": {"text": "Unknown"}}}
-                    ]}],
-                },
-                {
-                    "matcher": {"id": "byName", "options": "Last verified patch"},
-                    "properties": [{"id": "mappings", "value": [
-                        {"type": "special", "options": {"match": "null",
-                          "result": {"text": "Unknown"}}}
-                    ]}],
-                },
-                {
-                    "matcher": {"id": "byName", "options": "Reboot-required flag"},
-                    "properties": [{"id": "mappings", "value": [
-                        {"type": "special", "options": {"match": "false",
-                          "result": {"text": "No flag detected"}}},
-                        {"type": "special", "options": {"match": "true",
-                          "result": {"text": "Flag detected"}}},
                     ]}],
                 },
             ],
