@@ -1,3 +1,8 @@
+## 2026-11-08 — OS inventory dashboard deployment confirmed
+
+- Operator ran `grafana-zabbix-rebuild.yml` after syncing the OS inventory generator update; result **monitor-01 ok=7 changed=2 failed=0 unreachable=0**. OS fields and central Zabbix OS inventory layout are therefore deployed; actual OS values/panel visuals are not yet independently verified.
+- Next priority remains patching visibility: audit actual Zabbix item availability and establish reliable pending/security/reboot/last-patched metrics before adding a patch-compliance dashboard. Zabbix is monitoring only; package updates stay under Ansible/IaC.
+
 ## 2026-11-08 — OS information on Zabbix-first Grafana dashboards (staged)
 
 - User requested OS info on all 15 managed hosts in addition to pending patch compliance monitoring.
