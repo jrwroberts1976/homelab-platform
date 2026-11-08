@@ -8,7 +8,7 @@
   gather_facts: true
   vars:
     zabbix_patching_apply: false
-    patch_collector_dest: /usr/local/libexec/homelab-patch-snapshot
+    patch_collector_dest: /usr/local/bin/homelab-patch-snapshot
     patch_userparam_dest: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
   tasks:
     - name: Enforce single approved Debian pilot host
@@ -72,7 +72,7 @@
         mode: "0644"
         content: |
           # Read-only cached APT snapshot; no automatic APT refresh.
-          UserParameter=homelab.patch.snapshot,/usr/local/libexec/homelab-patch-snapshot
+          UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
       register: parameter_installed
       when: zabbix_patching_apply | bool
 
