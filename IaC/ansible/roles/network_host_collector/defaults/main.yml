@@ -43,6 +43,7 @@ network_host_collector_offline_after_seconds: 900
 # generic "pi.hole") so inventory identity remains stable.
 network_host_collector_canonical_hostnames:
   "192.168.2.1": "router-01.jameshouse"
+  "192.168.2.2": "asus-ap.jameshouse"
   "192.168.2.48": "admin-01.jameshouse"
   "192.168.2.50": "dns-02.jameshouse"
   "192.168.2.51": "dns-01.jameshouse"

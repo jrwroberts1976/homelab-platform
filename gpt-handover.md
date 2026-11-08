@@ -3245,3 +3245,13 @@ production deployment or rollback.
 - Dry run confirmed a one-line difference.
 - Deployed successfully and verified Python compilation.
 - Preserved SMTP settings, alert registry and once-per-MAC notification behaviour.
+
+### 2026-11-08 — Router and ASUS AP DNS identities
+- Added router-01.jameshouse -> 192.168.2.1.
+- Added asus-ap.jameshouse -> 192.168.2.2.
+- Preserved the router short-name alias.
+- Replaced obsolete ASUS router identity at 192.168.2.1.
+- Added ASUS AP canonical hostname to network inventory.
+- Deployed local DNS records using existing Pi-hole Ansible playbook.
+- Verified both records resolve on dns-01 and dns-02.
+- Router DHCP and Unbound configuration unchanged.
