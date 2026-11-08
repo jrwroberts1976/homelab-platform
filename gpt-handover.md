@@ -1,3 +1,10 @@
+## 2026-11-08 — Phase 4 admin-01 Grafana live patch panel staged (audit only)
+
+- Staged scoped changes to existing Grafana dashboard generator and new `IaC/ansible/playbooks/grafana-admin-patching-pilot.yml` on feature branch. **NOT YET DEPLOYED OR SYNTAX CHECKED.**
+- Pilot `--patch-pilot` uses existing Zabbix/Grafana API credentials and existing managed host dashboard UID. Validates enabled/supported admin-01 `homelab.patch.snapshot` Text item, schema, cached pending count and fresh collected history (<3h). Renders Grafana Zabbix datasource **Text** query (queryType 2, table format), not a static baked-in count. Panel describes cached-only pending, reboot flag being file-existence observation, security/last-verified-patch Unknown and APT index age not yet reliable.
+- Guard refuses any change/create on overview or other 14 managed host dashboards, and refuses any differences outside admin-01 patch panel id 91. Defaults audit only; explicit `-e grafana_patch_pilot_apply=true` needed for Grafana write. Does not touch Zabbix API item, OS packages or Agent2 service.
+- Next: update detached worktree, run syntax check and audit-only playbook `--limit monitor-01`, inspect guard preview; if no unrelated changes and item fresh, explicitly apply and visually verify Grafana table. Resolve Phase 2/Phase 3 APT index age selector discrepancy before promoting age to a trusted metric. This initial panel shows raw live JSON, not separately formatted metric cards.
+
 ## 2026-11-08 — Phase 3 patch telemetry end-to-end Zabbix ingestion confirmed
 
 - User supplied Zabbix Latest data history row for admin-01 `homelab.patch.snapshot` at **2026-11-08 22:41:25**; JSON collected_at `2026-11-08T22:41:25.221114+00:00`, `pending_updates_cached=20`, `reboot_required_flag=false`, `apt_index_age_hours=27.2`, index timestamp `2026-11-07T19:26:38+00:00`, security_updates=null, last_verified_patch_utc=null, error=null. Confirms Agent 2 active item is being ingested by Zabbix Server, itemid 52885; no longer awaiting first Zabbix value.
