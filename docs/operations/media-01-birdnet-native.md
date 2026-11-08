@@ -44,3 +44,19 @@ ansible-playbook playbooks/media-01-birdnet-install.yml
 No Kodi, NFS or nftables role is invoked. The media firewall is default-drop and this change does **not** open TCP/8080, so web UI may only work on media-01 itself until a separate scoped firewall change. To inspect a failed startup read-only: `ssh media-01 'sudo systemctl status birdnet-go --no-pager; sudo journalctl -u birdnet-go -n 60 --no-pager'`. Preserve output for diagnosis. Stop only BirdNET with `sudo systemctl stop birdnet-go` as immediate isolation if Kodi playback degrades; reconcile any service state change back into the IaC decision. No old BirdNET data has been migrated; old host recovery remains a distinct check.
 
 Before closing: verify service HTTP, BirdNET audio levels and detections, available model assets, Kodi video/audio playback, storage and host temperature. Do not advertise a LAN URL until firewall access is intentionally updated and validated.
+
+## LAN access (Ansible-managed, operator execution pending)
+
+The existing `media_firewall` role now allows TCP/8080 from `192.168.2.0/24` only, guarded by `media_firewall_birdnet_lan_enabled: true`. Other rules (SSH, HTTPS qBittorrent, SMB, restricted NFS, monitoring, and existing Kodi discovery) are retained. Use **only** the scoped `media-01-birdnet-lan.yml` playbook, not `media-01.yml` (which also runs a Kodi endpoint role). The scoped playbook verifies BirdNET locally before changing firewall, checks full active nftables policy afterward, checks LAN HTTP from the controller, and checks service/NFS listener.
+
+```bash
+cd ~/projects/homelab-birdnet && git pull --ff-only
+cd IaC/ansible
+ansible-playbook --syntax-check playbooks/media-01-birdnet-lan.yml
+ansible-playbook --check --diff playbooks/media-01-birdnet-lan.yml
+ansible-playbook playbooks/media-01-birdnet-lan.yml
+```
+
+Dashboard address after successful LAN check: http://192.168.2.195:8080/. Roll back just this allow rule with `ansible-playbook playbooks/media-01-birdnet-lan.yml -e media_firewall_birdnet_lan_enabled=false` **only if BirdNET remains active and the playbook's positive LAN HTTP check is temporarily removed or adapted for rollback**. The preferred rollback is a reviewed revert commit and re-apply through Ansible.
+
+**New host direction (operator decision):** media-01 is to be a media-serving/Docker host instead of a Kodi playback endpoint; do not change or remove existing Kodi until the new media server and client workflows are chosen and validated. Existing Docker installation and forwarding functionality are NOT verified. Current nftables rules contain a `flush ruleset` and a forward-chain drop policy; Docker's bridge/NAT rules need dedicated review before any Docker workload cutover, not an ad hoc change in this BirdNET firewall PR. Preserve Proxmox NFS storage.
