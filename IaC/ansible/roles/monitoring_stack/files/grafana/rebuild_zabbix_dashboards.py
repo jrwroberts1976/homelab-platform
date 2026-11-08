@@ -171,7 +171,7 @@ def dashboard(uid, title, panels, description, tags):
 
 def safe_markdown(value, maximum=250):
     """Keep Zabbix data from injecting Markdown into dashboard text."""
-    cleaned = re.sub(r"[\\r\\n\\t|\\x00-\\x1f\\x7f]", " ", str(value or ""))
+    cleaned = re.sub(r"[\r\n\t|\x00-\x1f\x7f]", " ", str(value or ""))
     return cleaned.replace("`", "'").replace("<", "&lt;").replace(">", "&gt;")[:maximum].strip()
 
 
@@ -179,8 +179,8 @@ def os_details(host, items):
     active = [item for item in items if item.get("status") == "0"
               and item.get("state") == "0"
               and item.get("lastclock") not in ("", "0", None)]
-    os_item = pick(active, [r"system\\.sw\\.os(?:\\[(?:short|full|name)\\])?"])
-    kernel_item = pick(active, [r"system\\.uname"])
+    os_item = pick(active, [r"system\.sw\.os(?:\[(?:short|full|name)\])?"])
+    kernel_item = pick(active, [r"system\.uname"])
     inv = host.get("inventory") or {}
     os_name = (os_item or {}).get("lastvalue") or inv.get("os_full") or inv.get("os") or "Unknown — no OS item available"
     kernel = (kernel_item or {}).get("lastvalue") or "Unknown — no kernel item available"
