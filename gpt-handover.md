@@ -1,3 +1,9 @@
+## 2026-11-08 — admin-01 Zabbix active patch item created
+
+- Operator ran `ansible-playbook playbooks/zabbix-patching-item.yml --limit monitor-01 -e zabbix_patching_item_apply=true`; result **ok=7 changed=1 failed=0**. Zabbix API reported `CREATED AND VERIFIED: homelab.patch.snapshot itemid=52885` on **admin-01**, active-agent TEXT, interval 1h, history 7d. No templates/other hosts/services changed.
+- Local `zabbix_agent2 -t homelab.patch.snapshot` previously returned supported JSON and Agent 2 service was active. **Server-side value ingestion not yet confirmed** (lastclock/latest data pending). Do not display telemetry as live in Grafana until fresh item history is verified.
+- Next: verify Zabbix Monitoring > Latest data for admin-01 key `homelab.patch.snapshot`, inspect last check, item support and JSON before making dashboard changes. Retain security_updates and last_verified_patch_utc as Unknown, and resolve APT index timestamp method mismatch.
+
 ## 2026-11-08 — Phase 3 Agent 2 key validated; Zabbix server item staged
 
 - User verified on admin-01: `sudo zabbix_agent2 -t homelab.patch.snapshot` yielded supported `[s|{...}]` JSON, and `systemctl is-active zabbix-agent2` returned `active`. Snapshot pending=20, APT package index age=27.2h, reboot flag false, security/last verified patch null, error null.
