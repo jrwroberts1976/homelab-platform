@@ -25,7 +25,7 @@
     argv: [tar, -tzf, "{{ media_birdnet_archive }}"]
   register: birdnet_archive_list
   changed_when: false
-  failed_when: birdnet_archive_list.stdout_lines | sort != ['README.md', 'birdnet-go', 'libonnxruntime.so', 'libtensorflowlite_c.so'] | sort
+  failed_when: (birdnet_archive_list.stdout_lines | sort | list) != (['README.md', 'birdnet-go', 'libonnxruntime.so', 'libtensorflowlite_c.so'] | sort | list)
 
 - name: Ensure target USB microphone is present
   ansible.builtin.command: arecord -L
@@ -33,9 +33,15 @@
   changed_when: false
   failed_when: "'plughw:CARD=Device,DEV=0' not in birdnet_arecord.stdout"
 
+- name: Create dedicated BirdNET-Go service group
+  ansible.builtin.group:
+    name: birdnet
+    system: true
+
 - name: Create dedicated BirdNET-Go service user
   ansible.builtin.user:
     name: birdnet
+    group: birdnet
     comment: BirdNET-Go native service
     shell: /usr/sbin/nologin
     home: "{{ media_birdnet_state_dir }}"
