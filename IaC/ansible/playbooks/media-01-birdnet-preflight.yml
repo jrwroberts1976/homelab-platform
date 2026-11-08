@@ -1,0 +1,78 @@
+---
+# Read-only preflight. This deliberately does not invoke media-01.yml
+# because that playbook owns Kodi and may restart it.
+- name: Verify media-01 is ready for native BirdNET-Go
+  hosts: media_hosts
+  become: false
+  gather_facts: true
+  tasks:
+    - name: Confirm intended host and OS
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'media-01'
+          - ansible_facts.hostname == 'media-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+        fail_msg: "Refusing BirdNET-Go setup on a host other than Debian 13 ARM64 media-01."
+
+    - name: Enumerate ALSA capture devices
+      ansible.builtin.command: arecord -L
+      changed_when: false
+      register: birdnet_audio
+
+    - name: Verify stable USB microphone name
+      ansible.builtin.assert:
+        that:
+          - "'plughw:CARD=Device,DEV=0' in birdnet_audio.stdout"
+        fail_msg: "USB microphone not found; no deployment should proceed."
+
+    - name: Verify microphone works for one second
+      ansible.builtin.command:
+        argv:
+          - timeout
+          - 8s
+          - arecord
+          - -D
+          - plughw:CARD=Device,DEV=0
+          - -f
+          - S16_LE
+          - -r
+          - '48000'
+          - -c
+          - '1'
+          - -d
+          - '1'
+          - -t
+          - raw
+          - /dev/null
+      changed_when: false
+
+    - name: Inspect listening ports
+      ansible.builtin.command: ss -ltn
+      changed_when: false
+      register: birdnet_ports
+
+    - name: Ensure BirdNET-Go's proposed port is unused
+      ansible.builtin.assert:
+        that:
+          - "'0.0.0.0:8080' not in birdnet_ports.stdout"
+          - "'127.0.0.1:8080' not in birdnet_ports.stdout"
+          - "'[::]:8080' not in birdnet_ports.stdout"
+        fail_msg: "Port 8080 already occupied; stop before installing."
+
+    - name: Check Kodi remains operational
+      ansible.builtin.command: systemctl is-active kodi
+      changed_when: false
+      register: kodi_active
+      failed_when: kodi_active.stdout | trim != 'active'
+
+    - name: Confirm current installation is absent
+      ansible.builtin.command: systemctl list-unit-files birdnet-go.service --no-legend
+      changed_when: false
+      register: existing_birdnet
+      failed_when: false
+
+    - name: Report preflight outcome
+      ansible.builtin.debug:
+        msg: "media-01 audio, port and Kodi preflight passed; BirdNET-Go service unit: {{ existing_birdnet.stdout | trim | default('none', true) }}. No changes made."
