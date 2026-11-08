@@ -1,3 +1,9 @@
+## 2026-11-08 — router-01 standard active-template migration: read-only preflight staged
+
+- Operator ran `zabbix-managed-host-templates.yml` in audit mode successfully: 14 hosts already linked to `Linux by Zabbix agent active`; router-01 only has `Homelab Linux OS Facts`. No template API changes were performed.
+- User explicitly requested active-only Zabbix monitoring. Router agent `ServerActive=192.168.2.59`, `Hostname=router-01` previously verified. Standard Zabbix docs warn overlapping item keys between linked templates, and `templates_clear` deletes inherited item history. Do **not** blindly add Linux active beside custom OS Facts or unlink-and-clear existing template.
+- Added `IaC/ansible/roles/monitoring_stack/files/grafana/audit_router_active_template.py` and `IaC/ansible/playbooks/zabbix-router-active-template-preflight.yml`: read-only Zabbix API audit of router template links, template item keys/overlap and host inherited-item counts. **Staged, not deployed.** After user runs, use results to design and implement guarded active-template migration, preserving history if feasible; once active items deliver fresh data, retire router inbound TCP/10050 and passive listener through separate router-specific IaC and nftables direct-rule rollback. Keep 14 other hosts' active templates untouched.
+
 ## 2026-11-08 — router-01 Linux active template preferred (staged)
 
 - User prefers `Linux by Zabbix agent active` for router-01, rather than the previously proposed passive template. Zabbix 7.0 documentation confirms active checks initiate from agent to Zabbix server TCP/10051 and require matching `Hostname` and `ServerActive`. Router has `Hostname=router-01`, `ServerActive=192.168.2.59` and agent2 active. Actual active item delivery needs confirmation after linking.
