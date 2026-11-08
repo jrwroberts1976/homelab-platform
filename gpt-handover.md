@@ -1,3 +1,9 @@
+## 2026-11-08 — router-01 OS hostname correction staged
+
+- User requested setting router-01's actual OS hostname from `raspberrypi` to `router-01` after read-only checks showed Debian 13.7, active Zabbix Agent 2 and `Hostname=router-01`, but OS hostname `raspberrypi`.
+- Added `IaC/ansible/playbooks/router-01-hostname.yml` on PR #326, guarded to inventory host `router-01` at `192.168.2.1` running Debian 13; sets static and running hostname with Ansible hostname module, updates only Debian `127.0.1.1` line in /etc/hosts with backup, verifies both hostname and /etc/hostname. No reboot or network-service restarts.
+- **Staged, not deployed**; operator should sync file and run syntax check then playbook with `--ask-become-pass`. Active agent2 still listens on 127.0.0.1:10050 and has passive Server=127.0.0.1; separate agent/firewall task pending, do not mix with hostname step.
+
 ## 2026-11-08 — router-01 Pi-hole DNS source-of-truth correction (staged)
 
 - Operator evidence: admin-01 uses Pi-hole servers 192.168.2.51 and 192.168.2.50; neither resolves `router-01.jameshouse` or `router-01`. Active Pi-hole entries at 192.168.2.1 still identify retired `rt-ac86u-ccc8` (plus `router` alias). admin-01 uses NetworkManager without `resolvectl`; do not introduce systemd-resolved changes.
