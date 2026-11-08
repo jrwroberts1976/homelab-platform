@@ -24,7 +24,7 @@
     - name: Keep Debian loopback hostname entry consistent
       ansible.builtin.lineinfile:
         path: /etc/hosts
-        regexp: '^127\\.0\\.1\\.1(?:\\s+|$)'
+        regexp: '^127[.]0[.]1[.]1([[:space:]]+|$)'
         line: '127.0.1.1 router-01'
         create: false
         backup: true
