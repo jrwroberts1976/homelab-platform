@@ -1,3 +1,10 @@
+## 2026-11-08 — Direct Grafana/Zabbix plugin integration deployed successfully
+
+- Operator ran `IaC/ansible/playbooks/grafana-zabbix-integration.yml` from admin-01 with prompted sudo and a read-only Zabbix API token. Play recap monitor-01: **ok=17, changed=6, failed=0, unreachable=0**. HTTPS API and token host query passed, protected datasource and plugin provisioning templates installed, Docker Compose validated, Grafana container reconciled; health API recovered after two brief retries; `grafana cli plugins ls` confirmed Zabbix plugin 6.10.2.
+- Grafana datasource URL: `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php`. No token is in Git. Operator prepared rollback copy: `/opt/monitoring/docker-compose.yml.pre-zabbix`.
+- **Next:** perform Grafana Zabbix datasource *Save & test* (end-to-end datasource usability was not established by the Ansible play recap alone), then implement live metric panels for 14 Managed Devices dashboards via IaC. Do not overwrite existing dashboard identities or restart discovery collectors.
+- Associated PR #326 remains open; ensure live deployment and Git merge convergence before a full monitoring-stack redeployment.
+
 ## 2026-11-08 — Grafana direct Zabbix integration staged in IaC (not yet executed)
 
 - User chose direct Grafana Zabbix plugin integration. Added `IaC/ansible/playbooks/grafana-zabbix-integration.yml` to validate TLS/API and a prompted read-scope Zabbix token against `https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php`, provision plugin enablement plus token-secured Zabbix datasource, and recreate **only** Grafana to load pinned Grafana Labs Zabbix plugin 6.10.2. Added Grafana Compose template settings to persist pinned plugin through later monitoring redeploys.
