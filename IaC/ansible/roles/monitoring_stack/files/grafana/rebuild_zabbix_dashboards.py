@@ -196,9 +196,9 @@ def patch_status_panel(y):
         "options": {
             "mode": "markdown",
             "content": (
-                "### Unknown — patch telemetry not yet verified\\n\\n"
+                "### Unknown — patch telemetry not yet verified\n\n"
                 "**Pending updates:** Unknown  |  **Security updates:** Unknown  |  "
-                "**Reboot required:** Unknown  |  **Last successful patch:** Unknown\\n\\n"
+                "**Reboot required:** Unknown  |  **Last successful patch:** Unknown\n\n"
                 "This dashboard does not yet collect verified package update counts or "
                 "patch completion timestamps. Existing installed-package inventory, "
                 "Zabbix uptime and ordinary agent availability do **not** prove patch compliance. "
@@ -280,7 +280,7 @@ def overview_dashboard(host_names, os_inventory):
             "options": {
                 "mode": "markdown",
                 "content": (
-                    "**Verified patch compliance:** Unknown on all 15 managed hosts.\\n\\n"
+                    "**Verified patch compliance:** Unknown on all 15 managed hosts.\n\n"
                     "**Pending/security updates, reboot-required and last-patched:** "
                     "Not currently verified by Zabbix telemetry. "
                     "Do not interpret unknown as zero outstanding updates."
