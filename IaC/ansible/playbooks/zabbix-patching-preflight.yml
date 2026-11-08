@@ -88,7 +88,7 @@
             for line in result.stdout.splitlines():
                 if not line or line.startswith("Listing"):
                     continue
-                match = re.match(r"^([^/]+)/\\S+\\s+(\\S+)\\s", line)
+                match = re.match(r"^([^/]+)/\S+\s+(\S+)\s", line)
                 if not match:
                     candidates.append({"package": "unparsed", "status": "unknown"})
                     continue
@@ -102,14 +102,14 @@
                     section = []
                     active = False
                     for ln in lines:
-                        if re.match(r"^\\s*(?:\\*\\*\\*\\s+)?\\S+\\s+\\d+\\s*$", ln):
+                        if re.match(r"^\s*(?:\*\*\*\s+)?\S+\s+\d+\s*$", ln):
                             tokens = ln.split()
                             value = tokens[1] if tokens[0] == "***" else tokens[0]
                             active = value == version
                             continue
                         if active:
                             section.append(ln)
-                    origin = "\\n".join(section).lower()
+                    origin = "\n".join(section).lower()
                     if candidate != version or not section:
                         status = "unknown"
                     elif any(tag in origin for tag in ("-security", "security.debian.org", "debian-security")):
@@ -139,11 +139,11 @@
             import re
             path = Path("/var/log/apt/history.log")
             text = path.read_text(errors="replace") if path.exists() else ""
-            blocks = re.split(r"\\n\\s*\\n", text)
+            blocks = re.split(r"\n\s*\n", text)
             completed = []
             for block in blocks:
-                start = re.search(r"(?m)^Start-Date:\\s*(.+)$", block)
-                end = re.search(r"(?m)^End-Date:\\s*(.+)$", block)
+                start = re.search(r"(?m)^Start-Date:\s*(.+)$", block)
+                end = re.search(r"(?m)^End-Date:\s*(.+)$", block)
                 changed = re.search(r"(?m)^(Upgrade|Install|Remove):", block)
                 if start and end and changed:
                     completed.append({"start": start.group(1), "end": end.group(1)})
