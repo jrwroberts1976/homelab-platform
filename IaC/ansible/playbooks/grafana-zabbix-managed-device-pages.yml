@@ -113,8 +113,6 @@
                 if previous:
                     if previous.get("meta", {}).get("folderUid") != "homelab-managed-devices":
                         raise RuntimeError("Existing dashboard belongs to another folder: " + name)
-                    existing += 1
-                    continue
                 dashboard = {
                     "uid": uid,
                     "title": name,
@@ -131,27 +129,45 @@
                         "options": {
                             "mode": "markdown",
                             "content": (
-                                "### " + name + "\\n"
-                                + "**Address:** " + ip + "\\n\\n"
-                                + "**Management:** Zabbix agent running at last Ansible verification.\\n\\n"
+                                "### " + name + "\n"
+                                + "**Address:** " + ip + "\n\n"
+                                + "**Management:** Zabbix agent running at last Ansible verification.\n\n"
                                 + "This page is a starter record; live Zabbix metrics panels "
                                 + "must be connected to the monitored items separately."
                             ),
                         },
                     }],
                 }
-                request("/api/dashboards/db", "POST", {
-                    "dashboard": dashboard,
-                    "folderUid": "homelab-managed-devices",
-                    "overwrite": False,
-                    "message": "Initial Zabbix managed-device inventory",
-                })
-                created += 1
-                print("CREATED: " + name)
+                if previous:
+                    old_dashboard = previous["dashboard"]
+                    old_panels = old_dashboard.get("panels", [])
+                    if (len(old_panels) != 1 or old_panels[0].get("type") != "text"
+                            or "starter record" not in old_panels[0].get("options", {}).get("content", "")):
+                        raise RuntimeError("Refusing to overwrite customised page: " + name)
+                    if old_panels[0].get("options", {}).get("content") == dashboard["panels"][0]["options"]["content"]:
+                        existing += 1
+                        continue
+                    old_dashboard["panels"][0]["options"]["content"] = dashboard["panels"][0]["options"]["content"]
+                    request("/api/dashboards/db", "POST", {
+                        "dashboard": old_dashboard,
+                        "folderUid": "homelab-managed-devices",
+                        "overwrite": True,
+                        "message": "Fix managed device identity text formatting",
+                    })
+                    print("UPDATED: " + name)
+                else:
+                    request("/api/dashboards/db", "POST", {
+                        "dashboard": dashboard,
+                        "folderUid": "homelab-managed-devices",
+                        "overwrite": False,
+                        "message": "Initial Zabbix managed-device inventory",
+                    })
+                    created += 1
+                    print("CREATED: " + name)
             print("Managed Zabbix pages: created=" + str(created) + ", existing=" + str(existing))
           - "{{ grafana_zabbix_hostlist }}"
       register: grafana_zabbix_pages_result
-      changed_when: "'CREATED:' in grafana_zabbix_pages_result.stdout"
+      changed_when: "'CREATED:' in grafana_zabbix_pages_result.stdout or 'UPDATED:' in grafana_zabbix_pages_result.stdout"
       no_log: true
 
     - name: Confirm managed device page reconciliation
