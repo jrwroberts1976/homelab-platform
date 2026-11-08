@@ -29,3 +29,18 @@ This scoped playbook fetches the 20261031 release archive and checksums from ups
 - Confirm previous BirdNET-Go history and configuration migration policy.
 - Implement Ansible-managed native installation and rollback, with check-mode/syntax checks and no Kodi or NFS ownership changes.
 - Validate app health, live audio processing and playback coexistence with Kodi before considering migration complete.
+
+## Native installation (ready for operator execution; unverified live)
+
+The scoped `playbooks/media-01-birdnet-install.yml` uses `media_birdnet_native`, not the old Docker role. It unpacks the already SHA256-verified 20261031 native archive into `/opt/birdnet-go/releases/20261031`, uses `LD_LIBRARY_PATH` for its two bundled libraries, and creates a dedicated `birdnet` system account in the `audio` group. Persistent configuration and history are under `/var/lib/birdnet-go`. The installed systemd unit starts `birdnet-go serve --config /var/lib/birdnet-go/config.yaml` and retains the existing 0c76:161e USB source identifier as a *candidate*; verify actual live audio enumeration rather than assuming it is correct for native runtime.
+
+```bash
+cd ~/projects/homelab-birdnet && git pull --ff-only
+cd IaC/ansible
+ansible-playbook --syntax-check playbooks/media-01-birdnet-install.yml
+ansible-playbook playbooks/media-01-birdnet-install.yml
+```
+
+No Kodi, NFS or nftables role is invoked. The media firewall is default-drop and this change does **not** open TCP/8080, so web UI may only work on media-01 itself until a separate scoped firewall change. To inspect a failed startup read-only: `ssh media-01 'sudo systemctl status birdnet-go --no-pager; sudo journalctl -u birdnet-go -n 60 --no-pager'`. Preserve output for diagnosis. Stop only BirdNET with `sudo systemctl stop birdnet-go` as immediate isolation if Kodi playback degrades; reconcile any service state change back into the IaC decision. No old BirdNET data has been migrated; old host recovery remains a distinct check.
+
+Before closing: verify service HTTP, BirdNET audio levels and detections, available model assets, Kodi video/audio playback, storage and host temperature. Do not advertise a LAN URL until firewall access is intentionally updated and validated.
