@@ -1,3 +1,9 @@
+## 2026-11-08 — BirdNET-Go microphone ID mismatch identified and corrected in IaC (deployment pending)
+
+- Live after successful installation: BirdNET-Go active/enabled, BirdNET v2.4 model initialized with 6,522 species, local API returned USB PnP device vendor 0c76/product 161e, `stableId=usb-path:usb-xhci-hcd.0-1`. Sampled process CPU 9.3%, memory 4.7%, Kodi service active.
+- Initial native role had copied old Docker audio ID `usb-id:0c76:161e:`, which does **not** match observed native device ID. Updated `roles/media_birdnet_native/defaults/main.yml` to `usb-path:usb-xhci-hcd.0-1`. Not yet reconciled on host. Operator should pull feature branch, run scoped `media-01-birdnet-install.yml` again and inspect audio-level stream; continue verifying actual detections and Kodi playback.
+- Repeated ALSA `capture slave is not defined` / `unable to open slave` log lines noted; could be device-enumeration noise, but audio processing remains UNVERIFIED. Do not call migration complete based solely on service HTTP health.
+
 ## 2026-11-08 — BirdNET-Go native service deployed on media-01 (partial live acceptance)
 
 - Operator ran `playbooks/media-01-birdnet-install.yml` from dedicated admin-01 worktree on feature branch after passing Ansible syntax check. Recap: `media-01 ok=19 changed=10 unreachable=0 failed=0`.
