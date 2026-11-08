@@ -1,0 +1,6 @@
+---
+- name: Restart BirdNET-Go native
+  ansible.builtin.systemd_service:
+    name: birdnet-go.service
+    daemon_reload: true
+    state: restarted
