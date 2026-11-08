@@ -1,3 +1,9 @@
+## 2026-11-08 — Grafana Zabbix device page formatting fix (GitHub only)
+
+- Operator ran Zabbix managed-device page reconciliation; first pass identified 13, with admin-01 excluded on sudo failure. Operator reran with `--ask-become-pass` and confirmed success, implying all 14 inventory candidates checked. `cloud-01` page displayed literal `\\n` instead of Markdown line breaks.
+- Fixed source Python content string escaping in `grafana-zabbix-managed-device-pages.yml`; added narrow idempotent update for existing starter-text pages only, preserving other dashboards and refusing customised page overwrites. This fix is committed but **not yet deployed**.
+- Pages still display identity only; real monitoring panels require a verified Grafana Zabbix datasource/plugin or a confirmed existing metrics source. No claim of live Zabbix telemetry yet.
+
 ## 2026-11-08 — Managed Devices Grafana page reconciliation (proposed, not deployed)
 
 - Added `IaC/ansible/playbooks/grafana-zabbix-managed-device-pages.yml` on PR #326. It checks `zabbix-agent2.service` and `zabbix-agent.service` in the existing `zabbix_agents` Ansible group; only confirmed running agents get new Grafana starter pages beneath `Homelab / Devices / Managed Devices` through the local authenticated API. Stable UIDs prevent duplicate dashboard creation. No deletes, service restarts or Zabbix configuration changes.
