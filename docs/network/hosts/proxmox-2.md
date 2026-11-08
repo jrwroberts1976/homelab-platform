@@ -97,7 +97,7 @@ Proxmox-2 is a confirmed physical Proxmox VE cluster node and former network-dis
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T04:08:55+00:00`
+- Last assessed: `2026-11-08T05:10:48+00:00`
 - Pending updates: **44**
 - Security updates pending: **1**
 - Reboot required: **Yes**
