@@ -19,7 +19,7 @@ def main():
     for line in q["stdout"].splitlines():
         if not line or line.startswith("Listing"):
             continue
-        m = re.match(r"^([^/]+)/\\S+\\s+(\\S+)\\s", line)
+        m = re.match(r"^([^/]+)/\S+\s+(\S+)\s", line)
         if not m:
             raise SystemExit("unexpected apt list row; refusing classification")
         name, version = m.groups()
@@ -29,7 +29,7 @@ def main():
         selected = []
         active = False
         for l in p["stdout"].splitlines():
-            v = re.match(r"^\\s*(?:\\*\\*\\*\\s+)?(\\S+)\\s+\\d+\\s*$", l)
+            v = re.match(r"^\s*(?:\*\*\*\s+)?(\S+)\s+\d+\s*$", l)
             if v:
                 active = v.group(1) == version
             elif active and ("release " in l or "http:" in l or "https:" in l):
