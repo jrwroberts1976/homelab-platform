@@ -1,3 +1,9 @@
+## 2026-11-08 — Phase 4 readable Grafana patch table staged
+
+- User confirmed that the existing admin-01 Grafana Patching status table displays live Zabbix raw JSON for `homelab.patch.snapshot`; server-to-Grafana path is working. User asked to make the panel readable.
+- Updated `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py` on `feature/grafana-managed-devices-folder-20261108` to add Grafana `extractFields` JSON transformation on existing `Last value` field and `organize` transformation for pending cached updates, security updates, reboot-required flag, last verified patch and collection time. Adds value mappings for null (Unknown) and reboot boolean labels; excludes unverified APT index age and other raw metadata from display. Data remains sourced live from the existing Zabbix Text query; no static metric values.
+- Existing `grafana-admin-patching-pilot.yml` preview/apply and builder `--patch-pilot` safeguard continue to restrict modifications to panel ID 91 on admin-01, refusing any unrelated dashboard/panel changes. **Staged; not yet syntax-checked or applied.** Next: operator fetch branch in separate patching worktree, run Ansible syntax check and audit-only preview, then explicit apply if guard passes and visually verify table fields. No host-agent/Zabbix server/other Grafana dashboards should change.
+
 ## 2026-11-08 — Phase 4 admin-01 Grafana live patch panel staged (audit only)
 
 - Staged scoped changes to existing Grafana dashboard generator and new `IaC/ansible/playbooks/grafana-admin-patching-pilot.yml` on feature branch. **NOT YET DEPLOYED OR SYNTAX CHECKED.**
