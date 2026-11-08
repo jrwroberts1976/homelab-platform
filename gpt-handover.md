@@ -1,3 +1,8 @@
+## 2026-11-08 — Admin-01 patch panel simplified to two figures (staged)
+
+- User asked for just number of patches and number of security patches. Updated existing builder on Grafana managed-devices feature branch to show only `Pending patches (cached)` from JSON `pending_updates_cached` and `Security patches` from JSON `security_updates` with null mapped to Unknown. Other fields are excluded from the Grafana table, but retained in raw Zabbix JSON.
+- Security count is not yet reliably established; **do not substitute 0** from prior origin-only classification. Pending total 20 is cached APT candidate packages, not validated security compliance. Existing admin-01-only panel 91 guard and Ansible pilot remain unchanged. **Staged, not applied.** Next operator fetches feature branch into isolated worktree, runs syntax check and audit-only preview; only then explicit apply and visual check. No host/Zabbix changes.
+
 ## 2026-11-08 — Phase 4 Grafana patch panel visually verified
 
 - User confirmed the admin-01 Grafana panel now renders separate fields after the Ansible-controlled transformation change: Pending updates (cached)=20, Security updates=Unknown, Reboot-required flag=No flag detected, Last verified patch=Unknown, Collection time (UTC)=2026-11-08T22:41:25.221114+... (timestamp truncated in pasted UI text). Raw JSON is no longer the primary presentation.
