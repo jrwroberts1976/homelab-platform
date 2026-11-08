@@ -1,0 +1,112 @@
+---
+# Adds a real Zabbix CPU panel to the existing cloud-01 Managed Devices page.
+# Does not alter other hosts, dashboard UID, discovery services, or agents.
+- name: Pilot Zabbix CPU utilisation on cloud-01 Grafana page
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Assert monitor-01 target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Add cloud-01 CPU panel with safe idempotent Grafana API update
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import base64
+            import hashlib
+            import json
+            import urllib.error
+            import urllib.request
+            from pathlib import Path
+
+            lines = Path("/opt/monitoring/.env").read_text().splitlines()
+            secrets = [s.partition("=")[2] for s in lines
+                       if s.startswith("GF_SECURITY_ADMIN_PASSWORD=")]
+            if len(secrets) != 1 or not secrets[0]:
+                raise RuntimeError("Grafana admin password unavailable")
+            token = base64.b64encode(("admin:" + secrets[0]).encode()).decode()
+            headers = {"Authorization": "Basic " + token,
+                       "Content-Type": "application/json"}
+            base = "http://127.0.0.1:3000"
+
+            def api(path, method="GET", payload=None):
+                request = urllib.request.Request(
+                    base + path,
+                    method=method,
+                    headers=headers,
+                    data=None if payload is None else json.dumps(payload).encode()
+                )
+                with urllib.request.urlopen(request, timeout=15) as response:
+                    return json.load(response)
+
+            uid = "zbx-host-" + hashlib.sha256(b"cloud-01").hexdigest()[:20]
+            response = api("/api/dashboards/uid/" + uid)
+            if response.get("meta", {}).get("folderUid") != "homelab-managed-devices":
+                raise RuntimeError("cloud-01 dashboard not in Managed Devices")
+            dashboard = response["dashboard"]
+            if dashboard.get("title") != "cloud-01":
+                raise RuntimeError("Dashboard UID/title mismatch")
+
+            datasources = api("/api/datasources/uid/zabbix")
+            if datasources.get("type") != "alexanderzobnin-zabbix-datasource":
+                raise RuntimeError("Zabbix datasource not correctly configured")
+
+            panels = dashboard.get("panels", [])
+            if any(p.get("id") == 2 and p.get("title") != "CPU utilization" for p in panels):
+                raise RuntimeError("Panel ID 2 already belongs to a different panel")
+            if any(p.get("id") == 2 and p.get("title") == "CPU utilization" for p in panels):
+                print("EXISTS: cloud-01 CPU utilization")
+                raise SystemExit(0)
+            if len(panels) != 1 or panels[0].get("type") != "text":
+                raise RuntimeError("Unexpected existing panel layout; refusing modification")
+
+            datasource = {"type": "alexanderzobnin-zabbix-datasource", "uid": "zabbix"}
+            panel = {
+                "id": 2,
+                "type": "timeseries",
+                "title": "CPU utilization",
+                "datasource": datasource,
+                "gridPos": {"x": 0, "y": 6, "w": 24, "h": 10},
+                "fieldConfig": {
+                    "defaults": {"unit": "percent", "min": 0, "max": 100},
+                    "overrides": []
+                },
+                "options": {
+                    "legend": {"displayMode": "list", "placement": "bottom"},
+                    "tooltip": {"mode": "single"}
+                },
+                "targets": [{
+                    "datasource": datasource,
+                    "refId": "A",
+                    "queryType": "0",
+                    "mode": 0,
+                    "group": {"filter": "/.*/"},
+                    "host": {"filter": "cloud-01"},
+                    "item": {"filter": "CPU utilization"},
+                    "itemTag": {"filter": ""},
+                    "application": {"filter": ""},
+                    "functions": [],
+                    "options": {"useTrends": "default"}
+                }]
+            }
+            dashboard["panels"].append(panel)
+            api("/api/dashboards/db", "POST", {
+                "dashboard": dashboard,
+                "folderUid": "homelab-managed-devices",
+                "overwrite": True,
+                "message": "Add verified Zabbix CPU utilization panel to cloud-01"
+            })
+            print("CREATED: cloud-01 CPU utilization")
+      register: cloud01_cpu_pilot
+      changed_when: "'CREATED:' in cloud01_cpu_pilot.stdout"
+      no_log: true
+
+    - name: Confirm pilot result
+      ansible.builtin.debug:
+        msg: "cloud-01 CPU panel reconciled; verify metric values in Grafana before wider rollout."
