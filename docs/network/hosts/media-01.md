@@ -100,13 +100,13 @@ media-01 is a Raspberry Pi 5 used as a Kodi endpoint and primary Proxmox NFS bac
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T10:17:30+00:00`
-- Pending updates: **19**
-- Security updates pending: **0**
+- Last assessed: `2026-11-08T11:20:30+00:00`
+- Pending updates: **22**
+- Security updates pending: **3**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
 - Last APT transaction activity: `2026-11-05T06:40:10+00:00`
-- Patch state: **Healthy**
+- Patch state: **Attention required**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
