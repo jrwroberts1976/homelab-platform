@@ -1,3 +1,12 @@
+## 2026-11-08 — BirdNET-Go media-01 native deployment staging (NOT DEPLOYED)
+
+- User selected media-01 (Debian 13 ARM64 Raspberry Pi 5) as the new BirdNET-Go host, replacing the old docker-01 placement. Admin-01 remains the Ansible controller; Kodi must remain uninterrupted and media-01's Proxmox NFS backup target must not be changed.
+- Operator read-only checks: USB PnP microphone ALSA card 2 successfully captured five seconds at 48 kHz mono (469 KB WAV); stable ALSA name `plughw:CARD=Device,DEV=0` advertised; Kodi active, port 8080 not listening, 158 GB free, Docker absent, no BirdNET-Go service unit.
+- Existing `IaC/ansible/roles/birdnet_go` is Docker-specific and hard-codes retired docker-01 identity and nginx/certificate handling. DO NOT execute it or the general `media-01.yml` playbook for this scope: it can change Kodi services and firewall. `birdnet_hosts` currently empty.
+- Added a deliberately read-only, scope-limited `IaC/ansible/playbooks/media-01-birdnet-preflight.yml`. Run syntax-check and this playbook from admin-01, then review results before adding a native systemd install role. No live install or configuration change has occurred.
+- Next: establish 20261031 ARM64 archive layout, checksum and runtime dependencies; verify the current BirdNET-Go native audio source stable ID; prepare pinned native binary, dedicated user/group and systemd service, persistence and LAN-only access in a separate scoped playbook; deploy using Ansible with rollback; verify live audio and Kodi playback. Preserve any old history if available rather than silently resetting it.
+- KISS and IaC remain mandatory.
+
 ## 2026-11-05 — PR #295 merged; next enrichment follow-up needs correct issue tracking
 
 - PR #295 (router-01 Zabbix active Agent 2, six health items, two OS facts, and Homelab Hosts selector integration) merged into main via merge commit `99984564983373eca3b913c1366a6025f0bf140a`. Both latest checked CI workflows passed pre-merge. No local worktrees reset or cleaned.
