@@ -1,3 +1,9 @@
+## 2026-11-08 — Grafana Stat only displayed pending count; two-panel fix staged
+
+- User screenshot confirmed Grafana stat panel 91 displays large cached pending count 20 but omits security patch null/Unknown entirely. A single stat with `lastNotNull` cannot be relied on to show null as an independent figure.
+- Staged change in existing dashboard builder: reduce panel 91 to width 12 (left) and add a separate security placeholder text panel 92 width 12 (right), displaying **Unknown** and 'Awaiting verified classification'. This is deliberately nonnumeric until classification is trustworthy. Both panels same y/h, above unchanged problems panel. Existing IaC `--patch-pilot` guard updated to permit changes only to panels 91/92 on admin-01 and refuse all other 15 dashboard updates, while preserving other admin-01 panels. **Not yet applied.**
+- Next: fetch feature branch to detached patching worktree, syntax check `grafana-admin-patching-pilot.yml`, run read-only preview targeting monitor-01, verify guard, then explicit apply and screenshot. Do not claim zero security patches or widen rollout.
+
 ## 2026-11-08 — Grafana admin-01 patch panel visual redesign staged
 
 - User showed screenshot of working but undersized two-column table, asked to improve visual design. Changed only admin-01 panel 91 in `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py` from Grafana table to **stat** visualization, horizontal orientation, `value_and_name`, `wideLayout=false`, centered large figures, no sparkline/background color. Retains existing live Zabbix Text query and JSON extraction with two fields: pending cached patches, security patches (null→Unknown). Uses `noValue=Unknown` for missing null. No hard-coded counts or APT changes.
