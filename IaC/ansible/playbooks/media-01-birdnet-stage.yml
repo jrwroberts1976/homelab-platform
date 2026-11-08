@@ -1,0 +1,95 @@
+---
+# Stage and verify the upstream release without installing or restarting services.
+- name: Stage verified BirdNET-Go native ARM64 release on media-01
+  hosts: media_hosts
+  become: true
+  gather_facts: true
+  vars:
+    birdnet_native_version: "20261031"
+    birdnet_native_asset: "birdnet-go-linux-arm64-{{ birdnet_native_version }}.tar.gz"
+    birdnet_native_release_url: "https://github.com/tphakala/birdnet-go/releases/download/{{ birdnet_native_version }}"
+    birdnet_native_stage: "/var/cache/birdnet-go/{{ birdnet_native_version }}"
+  tasks:
+    - name: Fail closed on unexpected target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'media-01'
+          - ansible_facts.hostname == 'media-01'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+          - ansible_facts.architecture in ['aarch64', 'arm64']
+
+    - name: Verify Kodi running before staging
+      ansible.builtin.command: systemctl is-active kodi
+      register: birdnet_kodi_before
+      changed_when: false
+      failed_when: birdnet_kodi_before.stdout | trim != 'active'
+
+    - name: Create dedicated release staging directory
+      ansible.builtin.file:
+        path: "{{ birdnet_native_stage }}"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Download official checksum manifest
+      ansible.builtin.get_url:
+        url: "{{ birdnet_native_release_url }}/checksums.txt"
+        dest: "{{ birdnet_native_stage }}/checksums.txt"
+        owner: root
+        group: root
+        mode: "0644"
+        force: true
+
+    - name: Obtain expected SHA256 from upstream manifest
+      ansible.builtin.shell: |
+        set -eu
+        awk -v target="{{ birdnet_native_asset }}" '$2 == target || $2 == ("*" target) {print $1}' "{{ birdnet_native_stage }}/checksums.txt"
+      args:
+        executable: /bin/sh
+      register: birdnet_expected_sha
+      changed_when: false
+
+    - name: Reject missing or ambiguous SHA256 entry
+      ansible.builtin.assert:
+        that:
+          - birdnet_expected_sha.stdout_lines | length == 1
+          - birdnet_expected_sha.stdout | trim is match('^[a-fA-F0-9]{64}$')
+        fail_msg: "Release checksum entry was missing or ambiguous; refusing artifact download."
+
+    - name: Download ARM64 release with SHA256 verification
+      ansible.builtin.get_url:
+        url: "{{ birdnet_native_release_url }}/{{ birdnet_native_asset }}"
+        dest: "{{ birdnet_native_stage }}/{{ birdnet_native_asset }}"
+        checksum: "sha256:{{ birdnet_expected_sha.stdout | trim }}"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: List release archive members without extracting
+      ansible.builtin.command:
+        argv:
+          - tar
+          - -tzf
+          - "{{ birdnet_native_stage }}/{{ birdnet_native_asset }}"
+      register: birdnet_archive_contents
+      changed_when: false
+
+    - name: Refuse archive with traversal or absolute-path members
+      ansible.builtin.assert:
+        that:
+          - birdnet_archive_contents.stdout_lines | length > 0
+          - birdnet_archive_contents.stdout_lines | select('match', '^/') | list | length == 0
+          - birdnet_archive_contents.stdout_lines | select('search', '(^|/)\\.\\.(/|$)') | list | length == 0
+        fail_msg: "Unexpected unsafe archive member names."
+
+    - name: Display archive layout for native service design
+      ansible.builtin.debug:
+        msg: "{{ birdnet_archive_contents.stdout_lines[:40] }}"
+
+    - name: Verify Kodi running after staging
+      ansible.builtin.command: systemctl is-active kodi
+      register: birdnet_kodi_after
+      changed_when: false
+      failed_when: birdnet_kodi_after.stdout | trim != 'active'
