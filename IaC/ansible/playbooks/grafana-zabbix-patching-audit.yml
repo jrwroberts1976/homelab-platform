@@ -1,0 +1,62 @@
+---
+# Stage 1: discover existing Zabbix OS/patch items without touching hosts.
+# Does not refresh apt caches or perform any Zabbix/Grafana writes.
+- name: Audit Zabbix-managed host patch and OS telemetry
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install read-only patch and OS item auditor
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/audit_zabbix_patch_os.py
+        dest: /usr/local/sbin/homelab-zabbix-patch-os-audit
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Run read-only Zabbix item audit
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-patch-os-audit]
+      register: patch_item_audit
+      changed_when: false
+      no_log: true
+
+    - name: Parse read-only audit
+      ansible.builtin.set_fact:
+        patch_item_findings: "{{ patch_item_audit.stdout | from_json }}"
+      changed_when: false
+      no_log: true
+
+    - name: Require all 15 managed hosts to have been audited
+      ansible.builtin.assert:
+        that:
+          - patch_item_findings.mode == 'READ_ONLY'
+          - patch_item_findings.hosts_checked | int == 15
+        fail_msg: "Audit did not cover all 15 hosts."
+
+    - name: Show overall OS and patch item coverage
+      ansible.builtin.debug:
+        msg:
+          - "Managed hosts audited: {{ patch_item_findings.hosts_checked }}"
+          - "Hosts reporting OS details: {{ patch_item_findings.hosts_with_os }}"
+          - "Hosts with patch-related item candidates: {{ patch_item_findings.hosts_with_patch_candidates }}"
+          - "Name matches alone are not patch compliance; missing coverage remains Unknown."
+
+    - name: Show per-host OS and patch telemetry candidates
+      ansible.builtin.debug:
+        msg: >-
+          {{ item.host }} | OS={{ item.os.os | truncate(95) }}
+          | patch candidates={{
+            item.patch_item_candidates
+            | map(attribute='key') | list | join(', ') | truncate(350)
+            if item.patch_item_candidates else 'NONE'
+          }}
+      loop: "{{ patch_item_findings.hosts }}"
+      loop_control:
+        label: "{{ item.host }}"
