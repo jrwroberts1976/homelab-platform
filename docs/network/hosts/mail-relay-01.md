@@ -126,7 +126,7 @@ Identified as the managed Proxmox LXC container mail-relay-01, documented as the
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T15:37:34+00:00`
+- Last assessed: `2026-11-08T16:38:34+00:00`
 - Pending updates: **2**
 - Security updates pending: **2**
 - Reboot required: **No**
