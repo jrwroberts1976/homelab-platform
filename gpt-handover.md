@@ -1,3 +1,9 @@
+## 2026-11-08 — Security patch counting evidence audit staged, not executed
+
+- User requested to proceed with accurate numeric security patch counts following visually verified admin-01 two-panel Grafana patching layout (cached pending 20, security Unknown).
+- Official Debian Security Tracker documents source-package vulnerability/fixed-version data; APT security repository origin alone does not prove which of all available updates contain fixes. See https://security-tracker.debian.org/tracker and https://security-team.debian.org/security_tracker.html. Raspberry Pi/vendor packages need independent handling; do not call zero security-origin packages zero security patches.
+- Added read-only `IaC/ansible/playbooks/zabbix-security-patching-audit.yml` and `IaC/ansible/roles/monitoring_stack/files/zabbix/audit_security_patch_candidates.py` on feature branch; **not syntax-checked/run**. Restricted to admin-01, gathers each cached APT candidate's version/repository evidence, configured sources summary and availability of tools such as debsecan. Explicitly emits security_patch_count=null pending validated classification. No apt update/install, service restarts, Zabbix or Grafana changes. Next: operator fetch to patching worktree, syntax check/run only --limit admin-01 and review evidence before choosing a minimal safe security metric. Keep existing Grafana layout.
+
 ## 2026-11-08 — Grafana patching two-tile layout visually verified
 
 - User supplied screenshot of admin-01 dashboard showing two equal-width panels: **Pending patches — admin-01** (live Zabbix cached APT candidate count **20**) and **Security patches — admin-01** (**Unknown**, awaiting verified classification). Both large-value tiles render correctly, no blank security tile. This verifies the panel 91/92 layout after guarded deployment.
