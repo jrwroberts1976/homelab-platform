@@ -1,3 +1,9 @@
+## 2026-11-08 — router-01 Zabbix active-only clean recreation completed
+
+- Operator executed `zabbix-router-recreate-active.yml` with approved fingerprint `4faf3eed2f8238d4`. Ansible result monitor-01 ok=9 changed=1 failed=0. Output confirms old `router-01` Zabbix host 10701 deleted, new Zabbix host **10702** created in `Homelab/Linux`, linked exclusively to `Linux by Zabbix agent active`, with no Zabbix interfaces (active-only). User explicitly chose no backup and disposal of old host history.
+- Operation changed Zabbix host metadata only, NOT router-01 Agent 2, nftables, PPPoE or ASUS AP 192.168.2.2. Other 14 hosts unchanged. Prior transient Wi-Fi dropouts remain unexplained; do not attribute them to Zabbix without evidence.
+- **Next mandatory validation:** ensure fresh Zabbix Latest data values on router-01 / new host 10702 for CPU, memory, uptime, filesystem/network; check Agent 2 active-check logs read-only if missing, check agent Hostname=router-01 and ServerActive=192.168.2.59; check active-only communication through Zabbix server TCP/10051. Keep existing restricted inbound TCP/10050 firewall rule until separate review, even though active-only template does not require it. Rebuild Grafana device page only after fresh active telemetry is confirmed. Update any pinned host IDs to 10702, and maintain Ansible/IaC + gpt-handover documentation.
+
 ## 2026-11-08 — router-01 Zabbix host clean recreation authorised (no backup)
 
 - User explicitly confirmed old Zabbix host has no value and **no backup required**. User wants to delete/recreate ONLY router-01 Zabbix host with `Linux by Zabbix agent active` instead of continuing failed template migrations. Current known Zabbix host `router-01` ID `10701`, group `Homelab/Linux`, standard passive Linux template linked. No other hosts should be changed; router-01 is the live internet gateway and ASUS Wi-Fi AP is at 192.168.2.2, with prior intermittent Wi-Fi disconnections of unknown cause.
