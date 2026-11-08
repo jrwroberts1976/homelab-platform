@@ -1,0 +1,59 @@
+---
+# router-01: standard Linux by Zabbix agent (passive) template only.
+# Audit first; no router SSH, no service restarts, no nftables change.
+- name: Safely audit or link router-01 passive Zabbix template
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_router_passive_apply: false
+  tasks:
+    - name: Assert monitor-01 controller identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded Zabbix passive-template helper
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/link_router_passive_template.py
+        dest: /usr/local/sbin/homelab-zabbix-router-passive-link
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Perform read-only Zabbix passive-template preflight
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/homelab-zabbix-router-passive-link
+      register: passive_audit
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Show safe passive-template preflight output
+      ansible.builtin.debug:
+        msg: "{{ passive_audit.stdout_lines }}"
+
+    - name: Stop if preflight failed
+      ansible.builtin.assert:
+        that:
+          - passive_audit.rc == 0
+        fail_msg: "Preflight failed; no template was changed. Inspect safe failure stage above."
+
+    - name: Link passive template only when explicitly requested
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/homelab-zabbix-router-passive-link
+          - --apply
+      register: passive_apply
+      changed_when: "'LINK VERIFIED:' in passive_apply.stdout"
+      no_log: true
+      when: zabbix_router_passive_apply | bool
+
+    - name: Show passive-template link result
+      ansible.builtin.debug:
+        msg: "{{ passive_apply.stdout_lines }}"
+      when: zabbix_router_passive_apply | bool
