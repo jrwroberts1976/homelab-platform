@@ -1,3 +1,9 @@
+## 2026-11-08 — patch/OS audit first run failed; loader fix staged
+
+- Operator ran `grafana-zabbix-patching-audit.yml` on monitor-01: first 3 tasks OK and script copied, but read-only audit command failed (no_log hides underlying stderr); no Zabbix/Grafana/monitored-host changes occurred.
+- Code inspection identified a likely cause: Python's `importlib.util.spec_from_file_location` returns no loader for extensionless `/usr/local/sbin/homelab-grafana-zabbix-rebuild`. Fixed auditor using explicit `SourceFileLoader` and corrected OS key regex. Committed to feature branch; **not yet rerun or verified**.
+- Next operator step: fetch updated `audit_zabbix_patch_os.py`, compile-check locally and rerun existing audit playbook. Keep no_log; do not paste API credentials or token-bearing files. If error persists, collect a sanitised exception class and limited context, not raw secrets.
+
 ## 2026-11-08 — Zabbix OS/patch telemetry audit staged
 
 - Following successful deployment of 15 OS-enriched managed dashboards, user approved proceeding with patching situation.
