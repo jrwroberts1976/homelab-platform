@@ -1,3 +1,8 @@
+## 2026-11-08 — Phase 3 patch telemetry end-to-end Zabbix ingestion confirmed
+
+- User supplied Zabbix Latest data history row for admin-01 `homelab.patch.snapshot` at **2026-11-08 22:41:25**; JSON collected_at `2026-11-08T22:41:25.221114+00:00`, `pending_updates_cached=20`, `reboot_required_flag=false`, `apt_index_age_hours=27.2`, index timestamp `2026-11-07T19:26:38+00:00`, security_updates=null, last_verified_patch_utc=null, error=null. Confirms Agent 2 active item is being ingested by Zabbix Server, itemid 52885; no longer awaiting first Zabbix value.
+- Phase 3 host collector + Agent 2 + server item ingestion verified for admin-01 only. Grafana dashboard dynamic patch panel NOT YET APPLIED. Before exposing APT index age, reconcile Phase 2/3 file selection difference. Security updates and last verified patch must remain Unknown; count of 20 is cached candidates rather than proven patch compliance. Keep changes via IaC, KISS, and protect other hosts.
+
 ## 2026-11-08 — admin-01 Zabbix active patch item created
 
 - Operator ran `ansible-playbook playbooks/zabbix-patching-item.yml --limit monitor-01 -e zabbix_patching_item_apply=true`; result **ok=7 changed=1 failed=0**. Zabbix API reported `CREATED AND VERIFIED: homelab.patch.snapshot itemid=52885` on **admin-01**, active-agent TEXT, interval 1h, history 7d. No templates/other hosts/services changed.
