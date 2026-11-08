@@ -1,3 +1,9 @@
+## 2026-11-08 — BirdNET-Go live audio input verified on media-01
+
+- Operator's audio-level SSE stream from `http://127.0.0.1:8080/api/v2/streams/audio-level` showed repeated nonzero readings (approximately 13–28) for `Garden Room USB Microphone`, with `clipping=false`. The recent two-minute filtered journal query returned no audio/capture/error lines. Kodi systemd status remained `active`.
+- Microphone processing is now **verified live** (following the native stable-ID correction). Application service/model and localhost HTTP were previously verified. Actual bird detections/history and Kodi **playback** coexistence remain unverified; active service status is not a playback test.
+- Next: inspect recent detections through the BirdNET database or UI and test Kodi playback. LAN UI access requires a specifically scoped nftables IaC change, not an ad hoc firewall command.
+
 ## 2026-11-08 — BirdNET-Go microphone ID mismatch identified and corrected in IaC (deployment pending)
 
 - Live after successful installation: BirdNET-Go active/enabled, BirdNET v2.4 model initialized with 6,522 species, local API returned USB PnP device vendor 0c76/product 161e, `stableId=usb-path:usb-xhci-hcd.0-1`. Sampled process CPU 9.3%, memory 4.7%, Kodi service active.
