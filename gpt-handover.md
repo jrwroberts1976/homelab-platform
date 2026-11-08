@@ -1,3 +1,9 @@
+## 2026-11-08 — Phase 3 admin-01 Zabbix patch collector installed
+
+- Operator applied `zabbix-patching-agent-pilot.yml --limit admin-01 -e zabbix_patching_apply=true` from isolated patching worktree. Ansible **ok=14 changed=3 unreachable=0 failed=0**. Created collector at /usr/local/bin/homelab-patch-snapshot and UserParameter /etc/zabbix/zabbix_agent2.d/homelab-patching.conf, validated JSON running as zabbix, restarted only zabbix-agent2. Temporary Ansible directory fallback warning for /var/lib/zabbix/.ansible/tmp was nonfatal.
+- First snapshot: `pending_updates_cached=20`, `apt_index_age_hours=27.1`, `apt_index_latest_utc=2026-11-07T19:26:38+00:00`, `collected_at=2026-11-08T22:35:07Z`, `reboot_required_flag=false`, `security_updates=null`, `last_verified_patch_utc=null`, `error=null`.
+- Note discrepancy with Phase 2 timestamp (2026-11-08T12:12:12Z) due to different file-selection logic. Must reconcile before presenting index age as reliable. Collector local execution verified but Zabbix server item/ingestion not yet established, and Grafana remains Unknown. Next inspect `zabbix_agent2 -t homelab.patch.snapshot`, whether service is active, and Zabbix item availability before creating managed item via IaC.
+
 ## 2026-11-08 — Phase 3 Zabbix patch telemetry single-host pilot staged
 
 - Staged `IaC/ansible/playbooks/zabbix-patching-agent-pilot.yml` and `IaC/ansible/roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py` on the Grafana managed-devices feature branch. **NOT EXECUTED**: syntax and target-host preflight still needed.
