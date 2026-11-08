@@ -188,6 +188,26 @@ def os_details(host, items):
     return {"os": safe_markdown(os_name), "kernel": safe_markdown(kernel), "source": source}
 
 
+def patch_status_panel(y):
+    """Visible but honest status until independently verified patch metrics exist."""
+    return {
+        "id": 91, "type": "text", "title": "Patching status",
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 6},
+        "options": {
+            "mode": "markdown",
+            "content": (
+                "### Unknown — patch telemetry not yet verified\\n\\n"
+                "**Pending updates:** Unknown  |  **Security updates:** Unknown  |  "
+                "**Reboot required:** Unknown  |  **Last successful patch:** Unknown\\n\\n"
+                "This dashboard does not yet collect verified package update counts or "
+                "patch completion timestamps. Existing installed-package inventory, "
+                "Zabbix uptime and ordinary agent availability do **not** prove patch compliance. "
+                "No updates or package refreshes have been triggered."
+            ),
+        },
+    }
+
+
 def host_dashboard(name, host, items, os_info):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
@@ -221,7 +241,8 @@ def host_dashboard(name, host, items, os_info):
                                        host["host"], item, y, "Bps"))
             pid += 1
     problems_y = 6 + ((pid - 1) // 2) * 8
-    panels.append(problem_panel(host["host"], problems_y))
+    panels.append(patch_status_panel(problems_y))
+    panels.append(problem_panel(host["host"], problems_y + 6))
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
@@ -253,8 +274,20 @@ def overview_dashboard(host_names, os_inventory):
     agent["gridPos"]["y"] = 22
     return dashboard(
         "homelab-zabbix-overview", "Homelab — Zabbix Overview",
-        [os_panel, cpu, agent, problem_panel(regex, 30)],
-        "OS inventory, managed-device CPU trends, agent ping and current Zabbix problems",
+        [os_panel, cpu, agent, {
+            "id": 91, "type": "text", "title": "Patching coverage — managed hosts",
+            "gridPos": {"x": 0, "y": 30, "w": 24, "h": 6},
+            "options": {
+                "mode": "markdown",
+                "content": (
+                    "**Verified patch compliance:** Unknown on all 15 managed hosts.\\n\\n"
+                    "**Pending/security updates, reboot-required and last-patched:** "
+                    "Not currently verified by Zabbix telemetry. "
+                    "Do not interpret unknown as zero outstanding updates."
+                ),
+            },
+        }, problem_panel(regex, 36)],
+        "OS inventory, managed-device CPU trends, patch coverage status, agent ping and Zabbix problems",
         ["zabbix", "overview"],
     )
 
