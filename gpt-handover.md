@@ -1,3 +1,10 @@
+## 2026-11-08 — Phase 3 Zabbix patch telemetry single-host pilot staged
+
+- Staged `IaC/ansible/playbooks/zabbix-patching-agent-pilot.yml` and `IaC/ansible/roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py` on the Grafana managed-devices feature branch. **NOT EXECUTED**: syntax and target-host preflight still needed.
+- Audit-only by default, explicitly limited to admin-01 Debian; verifies existing Agent 2 binary and drop-in directory; no files installed on audit. Explicit `-e zabbix_patching_apply=true` copies a read-only Python cached-APT collector into /usr/local/bin and a single Agent 2 UserParameter at /etc/zabbix/zabbix_agent2.d/homelab-patching.conf. It verifies JSON output under zabbix account and restarts **only zabbix-agent2** if its config file changes.
+- Collector provides JSON schema_version/collection timestamp, cached pending update count, latest APT index timestamp and age proxy, and presence of reboot-required flag. Security count and verified-last-patch remain null/Unknown deliberately; no history parsing or automatic apt refresh. It does not perform apt update/upgrade, write metrics to disk, change any other host or manage Grafana/Zabbix API items.
+- Next: in isolated worktree fetch branch revision, run syntax check and audit-only playbook with `--limit admin-01`; review output before any explicit apply. After apply, verify Agent 2 active key delivery and then design dedicated Zabbix item ingestion and Grafana display. Production monitoring/agent service will restart if UserParameter config changes on explicit apply; this is not zero-impact.
+
 ## 2026-11-08 — admin-01 unattended-upgrade package versions corroborated
 
 - User examined APT history transaction starting 2026-11-08 06:42:33 UTC, ending 06:42:44 UTC: `/usr/bin/unattended-upgrade` upgraded `libminizip1t64`, `zlib1g-dev`, and `zlib1g` to `1:1.3.dfsg+really1.3.1-1+deb13u1`.
