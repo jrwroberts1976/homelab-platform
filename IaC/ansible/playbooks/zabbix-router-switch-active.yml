@@ -1,0 +1,68 @@
+---
+# Router-01: switch the Zabbix host template from passive to active.
+# Default audit-only; changes ONLY Zabbix API data on monitoring server.
+- name: Audit or switch router-01 to Linux active Zabbix monitoring
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_router_switch_apply: false
+    zabbix_router_switch_fingerprint: ""
+  tasks:
+    - name: Verify monitor-01 host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded active-template migration
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/migrate_router_zabbix_active.py
+        dest: /usr/local/sbin/homelab-zabbix-router-switch-active
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Audit router-01 Linux template migration
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-switch-active]
+      register: router_switch_audit
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Report safe migration audit
+      ansible.builtin.debug:
+        msg: "{{ router_switch_audit.stdout_lines }}"
+
+    - name: Require successful migration preflight
+      ansible.builtin.assert:
+        that:
+          - router_switch_audit.rc == 0
+        fail_msg: "Router active template preflight failed; no changes applied."
+
+    - name: Require fingerprint approval for template replacement
+      ansible.builtin.assert:
+        that:
+          - zabbix_router_switch_fingerprint | length == 16
+          - "'PLAN FINGERPRINT: ' ~ zabbix_router_switch_fingerprint in router_switch_audit.stdout"
+        fail_msg: "Exact current preflight fingerprint required for template switch."
+      when: zabbix_router_switch_apply | bool
+
+    - name: Replace router passive template with active template
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/homelab-zabbix-router-switch-active
+          - --apply
+          - --approve-fingerprint
+          - "{{ zabbix_router_switch_fingerprint }}"
+      register: router_switch_result
+      changed_when: "'SUCCESS:' in router_switch_result.stdout"
+      no_log: true
+      when: zabbix_router_switch_apply | bool
+
+    - name: Report active-template replacement
+      ansible.builtin.debug:
+        msg: "{{ router_switch_result.stdout_lines }}"
+      when: zabbix_router_switch_apply | bool
