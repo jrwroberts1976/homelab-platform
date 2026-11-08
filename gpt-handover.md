@@ -1,3 +1,9 @@
+## 2026-11-08 — Phase 4 formatted Grafana admin-01 patch panel applied
+
+- Operator ran `ansible-playbook playbooks/grafana-admin-patching-pilot.yml --limit monitor-01 -e grafana_patch_pilot_apply=true`; Ansible **ok=7 changed=1 failed=0**. Guard output `PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged`, `APPLIED UPDATE: admin-01`, summary 15 matched Zabbix hosts / 16 candidate dashboards.
+- Intended update to **admin-01 panel 91** adds JSON extractFields + organize transformations and labels for pending cached candidates, unknown security updates, reboot-required flag, unknown last verified patch and collection timestamp. APT index freshness remains hidden pending evidence reconciliation. No Zabbix or host service changes; other dashboards protected by guard.
+- **Browser rendering not yet independently confirmed.** Next operator visual check on Grafana Managed Devices → admin-01; ensure table renders named fields (not raw JSON), nulls as Unknown, booleans as descriptive labels. If transformation source/field mappings are unsupported or null columns disappear, revise only panel 91 with IaC after observed evidence; do not assume success solely from API apply.
+
 ## 2026-11-08 — Phase 4 readable Grafana patch table staged
 
 - User confirmed that the existing admin-01 Grafana Patching status table displays live Zabbix raw JSON for `homelab.patch.snapshot`; server-to-Grafana path is working. User asked to make the panel readable.
