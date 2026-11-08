@@ -6,6 +6,7 @@ services, nftables, agent configuration, host interfaces or existing templates.
 """
 import argparse
 import importlib.util
+import re
 import sys
 from importlib.machinery import SourceFileLoader
 
@@ -110,6 +111,18 @@ def main():
                   if rec["key_"] in keys[PASSIVE]
                   and rec.get("templateid") not in facts_item_ids}
     if unexpected:
+        # Print Zabbix item-key metadata, not secret values.
+        def safe_key(value):
+            return re.sub(r"[^a-zA-Z0-9_.,/\\[\\]-]", "?", str(value))[:120]
+        print("HOST ITEM COLLISIONS: " + str(len(unexpected)))
+        for key in sorted(unexpected)[:20]:
+            sources = sorted({
+                "local" if rec.get("templateid") in ("0", "", None)
+                else "inherited-from-item:" + str(rec.get("templateid"))
+                for rec in existing if rec["key_"] == key
+            })
+            print("COLLISION: key=" + safe_key(key) + " source=" + ",".join(sources))
+        print("DECISION: no changes; review existing Zabbix items")
         raise RuntimeError("Host item key collision with passive Linux template")
 
     print("PRECHECK PASS: router-01 passive template; " +
