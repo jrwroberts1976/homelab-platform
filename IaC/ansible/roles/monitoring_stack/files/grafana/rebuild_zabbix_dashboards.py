@@ -144,10 +144,10 @@ def pick(items, patterns):
 METRICS = [
     ("CPU utilization", [r"system\.cpu\.util(?:\[.*\])?"], "percent"),
     ("CPU load", [r"system\.cpu\.load\[percpu,avg1\]", r"system\.cpu\.load\[all,avg1\]"], "short"),
-    ("Memory utilisation", [r"vm\.memory\.utilization", r"vm\.memory\.size\[pused\]"], "percent"),
+    ("Memory utilisation", [r"vm\.memory\.util", r"vm\.memory\.utilization", r"vm\.memory\.size\[pused\]"], "percent"),
     ("Available memory", [r"vm\.memory\.size\[available\]"], "bytes"),
-    ("Root filesystem usage", [r"vfs\.fs\.size\[/,pused\]"], "percent"),
-    ("Root filesystem free", [r"vfs\.fs\.size\[/,free\]"], "bytes"),
+    ("Root filesystem usage", [r"vfs\.fs\.dependent\.size\[/,pused\]", r"vfs\.fs\.size\[/,pused\]"], "percent"),
+    ("Root filesystem free", [r"vfs\.fs\.dependent\.size\[/,free\]", r"vfs\.fs\.size\[/,free\]"], "bytes"),
     ("System uptime", [r"system\.uptime"], "s"),
     ("Zabbix agent availability", [r"agent\.ping"], "short"),
 ]
