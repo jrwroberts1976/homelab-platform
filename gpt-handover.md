@@ -1,3 +1,9 @@
+## 2026-11-08 — router-01 restricted Zabbix access deployed successfully
+
+- Operator ran `playbooks/router-01-zabbix-access.yml` after YAML quote correction on feature branch. Recap: **router-01 ok=21 changed=6 failed=0 unreachable=0**.
+- Verified persistent nftables configuration syntax, narrow live `inet filter_router input` allow rule for `192.168.2.59 -> 192.168.2.1 TCP/10050`, agent listener bound to LAN address only, Zabbix Agent 2 running, and **remote TCP connectivity from zabbix-01**. `Server=192.168.2.59`, `ServerActive=192.168.2.59`, `Hostname=router-01` planned config. No nftables reload/flush or gateway services restart.
+- Next: verify whether Zabbix server contains enabled host `router-01` with agent interface `192.168.2.1` and live item values; only after that add router to managed-device inventory, reconcile host dashboard, and check panel data. TCP reachability alone is not Zabbix registration.
+
 ## 2026-11-08 — router-01 Zabbix firewall and listener staged (operator apply pending)
 
 - Operator confirms router-01 OS hostname playbook applied successfully `ok=7 changed=2 failed=0`.
