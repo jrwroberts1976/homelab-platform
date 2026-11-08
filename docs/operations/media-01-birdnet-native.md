@@ -53,10 +53,9 @@ The existing `media_firewall` role now allows TCP/8080 from `192.168.2.0/24` onl
 cd ~/projects/homelab-birdnet && git pull --ff-only
 cd IaC/ansible
 ansible-playbook --syntax-check playbooks/media-01-birdnet-lan.yml
-ansible-playbook --check --diff playbooks/media-01-birdnet-lan.yml
 ansible-playbook playbooks/media-01-birdnet-lan.yml
 ```
 
-Dashboard address after successful LAN check: http://192.168.2.195:8080/. Roll back just this allow rule with `ansible-playbook playbooks/media-01-birdnet-lan.yml -e media_firewall_birdnet_lan_enabled=false` **only if BirdNET remains active and the playbook's positive LAN HTTP check is temporarily removed or adapted for rollback**. The preferred rollback is a reviewed revert commit and re-apply through Ansible.
+Dashboard address after successful LAN check: http://192.168.2.195:8080/. Roll back just this allow rule with `ansible-playbook playbooks/media-01-birdnet-lan.yml -e media_firewall_birdnet_lan_enabled=false`; the scoped playbook skips the positive LAN HTTP test for this rollback setting. For permanent rollback, also revert the enabled default in Git and re-apply through Ansible.
 
 **New host direction (operator decision):** media-01 is to be a media-serving/Docker host instead of a Kodi playback endpoint; do not change or remove existing Kodi until the new media server and client workflows are chosen and validated. Existing Docker installation and forwarding functionality are NOT verified. Current nftables rules contain a `flush ruleset` and a forward-chain drop policy; Docker's bridge/NAT rules need dedicated review before any Docker workload cutover, not an ad hoc change in this BirdNET firewall PR. Preserve Proxmox NFS storage.
