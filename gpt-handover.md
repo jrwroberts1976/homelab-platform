@@ -1,3 +1,8 @@
+## 2026-11-08 — router Zabbix passive→active template migration preflight blocked
+
+- Operator ran read-only active migration preflight `/usr/local/sbin/homelab-zabbix-router-switch-active` on monitor-01; returned `SAFE FAILURE: stage=inspect existing router Zabbix objects; error_class=RuntimeError`. **No migration applied**; router remains on standard passive `Linux by Zabbix agent` as last confirmed. This stage may reflect discovered/inherited items or local conflicts; root cause not yet determined.
+- Staged richer read-only diagnostics in `migrate_router_zabbix_active.py` commit 097f17c: prints counts and bounded item IDs/parent IDs for unexpected inherited items, or conflicting item keys, triggers, discovery rules, graphs before refusing. Do not bypass guard or use `--apply` until the precise category has been audited; do not change router network, ASUS AP or firewall. Re-sync script from PR #326 and run audit-only playbook again.
+
 ## 2026-11-08 — switch router-01 Zabbix template from passive to active, staged
 
 - User requested to switch back to `Linux by Zabbix agent active` after successfully rebuilding `router-01` (Zabbix hostid 10701) with passive `Linux by Zabbix agent`. Passive template currently linked exclusively; agent2 already configured `Hostname=router-01`, `ServerActive=192.168.2.59` based on earlier deployment, but live active delivery still must be verified. ASUS AP at 192.168.2.2 previously showed transient Wi-Fi dropouts; cause unknown, do not attribute to Zabbix without evidence.
