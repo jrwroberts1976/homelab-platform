@@ -1,0 +1,28 @@
+---
+# Safe read-only preflight: no host/template API updates.
+- name: Audit router-01 template migration to Linux active
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify monitor-01
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+    - name: Install read-only preflight helper
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/audit_router_active_template.py
+        dest: /usr/local/sbin/homelab-zabbix-router-active-preflight
+        owner: root
+        group: root
+        mode: "0700"
+    - name: Check Zabbix template item collisions
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-active-preflight]
+      changed_when: false
+      register: router_template_audit
+      no_log: true
+    - name: Show safe preflight findings
+      ansible.builtin.debug:
+        msg: "{{ router_template_audit.stdout_lines }}"
