@@ -1,3 +1,9 @@
+## 2026-11-08 — patch telemetry phase 2 staged, awaiting admin-01 execution
+
+- Operator ran read-only `zabbix-patching-preflight.yml --limit admin-01`: Debian 13.7, 20 cached upgrade candidates, reboot flag absent, APT lists and history present, no APT success stamp. Ansible ok=6 changed=0 failed=0.
+- Extended the **same** playbook with read-only APT index-file timestamp evidence, candidate-version `apt-cache policy` repository origin classification and a last completed APT-history transaction observation. All commands are inspection-only; no `apt update`, upgrade, service restart, timer, or Zabbix item changes. Origin classification is explicitly **cached evidence**, not definitive current security compliance; file modification times are an imperfect freshness proxy; an APT End-Date does not certify successful patching.
+- **STAGED IN GIT, NOT YET RUN ON HOST.** Next: operator `git pull`, syntax check and execute only `--limit admin-01`; examine origin unknowns and evidence before deciding on Zabbix ingest or extending scope. Never turn Unknown values into zero.
+
 ## 2026-11-08 — patch-telemetry enablement: read-only admin-01 pilot staged
 
 - User asked how to turn on currently Unknown Grafana patch status. No existing verified patching Zabbix items or host telemetry can simply be toggled on. Do **not** mark healthy/compliant or 0 pending updates from unknown data.
