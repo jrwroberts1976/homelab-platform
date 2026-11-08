@@ -12,6 +12,14 @@
           - inventory_hostname == 'monitor-01'
           - ansible_facts.hostname == 'monitor-01'
 
+    - name: Update Zabbix API reader and OS parser without changing dashboards
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
     - name: Install read-only patch and OS item auditor
       ansible.builtin.copy:
         src: ../roles/monitoring_stack/files/grafana/audit_zabbix_patch_os.py
@@ -45,14 +53,15 @@
         msg:
           - "Managed hosts audited: {{ patch_item_findings.hosts_checked }}"
           - "Hosts reporting OS details: {{ patch_item_findings.hosts_with_os }}"
-          - "Hosts with patch-related item candidates: {{ patch_item_findings.hosts_with_patch_candidates }}"
+          - "Hosts with possible update-status items (unverified): {{ patch_item_findings.hosts_with_patch_candidates }}"
+          - "Hosts with verified patch compliance: {{ patch_item_findings.hosts_with_verified_patch_compliance }}"
           - "Name matches alone are not patch compliance; missing coverage remains Unknown."
 
     - name: Show per-host OS and patch telemetry candidates
       ansible.builtin.debug:
         msg: >-
           {{ item.host }} | OS={{ item.os.os | truncate(95) }}
-          | patch candidates={{
+          | update-status item candidates={{
             item.patch_item_candidates
             | map(attribute='key') | list | join(', ') | truncate(350)
             if item.patch_item_candidates else 'NONE'
