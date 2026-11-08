@@ -1,3 +1,10 @@
+## 2026-11-08 — User-authorised full Grafana dashboard reset staged in IaC
+
+- User explicitly requested deleting **all** Grafana dashboards, including 14 newly-created Managed Devices pages, to rebuild around direct Zabbix 7.0.32 integration.
+- Added `IaC/ansible/playbooks/grafana-clear-all-dashboards.yml`, which stops/disables `router-dhcp-device-pages.timer`, exports every dashboard via Grafana API to root-only `/var/backups/grafana-dashboards-zabbix-reset-<UTC>`, moves old dashboard provisioning files into the same backup, writes an empty providers file, restarts only Grafana, deletes all dashboards via the HTTP API and asserts zero remaining. The host folder hierarchy, plugin, API token/datasource, and Zabbix agents/server are not deleted. **Staged on PR #326, not deployed through connector.**
+- Changed dashboard-provider IaC template to `providers: []` so later monitoring role redeploys do not reintroduce old dashboards. The dashboard JSON templates remain in Git for selective future reuse.
+- Backup includes dashboard definitions, so protect it (mode 0700); never paste backup content into chat. User can recover individual pages later. Any other external job that writes dashboards via Grafana API must remain disabled or be identified during follow-up.
+
 ## 2026-11-08 — Grafana Zabbix CPU data verified and cloud-01 pilot staged
 
 - User confirmed a successful Grafana Explore `CPU utilization` Zabbix data query with timestamped readings around 2–5%, following successful Zabbix datasource test against Zabbix API 7.0.32.
