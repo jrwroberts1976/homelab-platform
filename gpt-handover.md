@@ -1,3 +1,8 @@
+## 2026-11-08 — Grafana admin-01 patch panel visual redesign staged
+
+- User showed screenshot of working but undersized two-column table, asked to improve visual design. Changed only admin-01 panel 91 in `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py` from Grafana table to **stat** visualization, horizontal orientation, `value_and_name`, `wideLayout=false`, centered large figures, no sparkline/background color. Retains existing live Zabbix Text query and JSON extraction with two fields: pending cached patches, security patches (null→Unknown). Uses `noValue=Unknown` for missing null. No hard-coded counts or APT changes.
+- Updated the existing `--patch-pilot` guard to require a stat panel 91 and preserve every other admin-01 panel and the other 15 dashboards. **STAGED IN GIT ONLY, NOT DEPLOYED.** Next: fetch branch in isolated worktree, syntax check `grafana-admin-patching-pilot.yml`, audit-only preview `--limit monitor-01`, then explicit apply after successful guard, and visually confirm both large stat tiles. If Grafana shows incorrect null handling or values, adjust via IaC only.
+
 ## 2026-11-08 — Admin-01 patch panel simplified to two figures (staged)
 
 - User asked for just number of patches and number of security patches. Updated existing builder on Grafana managed-devices feature branch to show only `Pending patches (cached)` from JSON `pending_updates_cached` and `Security patches` from JSON `security_updates` with null mapped to Unknown. Other fields are excluded from the Grafana table, but retained in raw Zabbix JSON.
