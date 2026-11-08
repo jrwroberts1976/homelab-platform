@@ -1,3 +1,10 @@
+## 2026-11-08 — read-only patch telemetry phase 2 admin-01 pilot completed
+
+- User ran Phase 2 via isolated worktree `~/projects/homelab-platform-patching` on branch snapshot ddc493a9 after current main checkout could not switch branches due to untracked-file conflicts/divergence. Syntax check passed. `ansible-playbook playbooks/zabbix-patching-preflight.yml --limit admin-01` completed **ok=10 changed=0 failed=0**.
+- Observed Debian 13.7 on admin-01, cached upgrade candidates=20, classified security-origin=0/other-origin=20/unknown-origin=0. 44 APT index files; newest mtime 2026-11-08 12:12:12 UTC, approx 10.3 hours old at audit. Latest completed APT history transaction 2026-11-08 06:42:33 to 06:42:44 UTC; successful patch still **Unknown**; reboot-required flag absent.
+- Interpretation: cached origin classification is not security compliance (ordinary repositories can carry fixes), freshest index mtime does not prove metadata refresh success, and completed APT history transaction does not independently establish successful patch. No Zabbix metrics/Grafana live values yet. Keep security updates and last successful patch Unknown until validated. No host changes or service restarts.
+- Follow-up: validate whether origin classification is accurate and history exit evidence usable; define freshness thresholds and low-write telemetry output before adding any Zabbix items. Preserve unrelated working tree and keep IaC changes on feature branch.
+
 ## 2026-11-08 — patch telemetry phase 2 staged, awaiting admin-01 execution
 
 - Operator ran read-only `zabbix-patching-preflight.yml --limit admin-01`: Debian 13.7, 20 cached upgrade candidates, reboot flag absent, APT lists and history present, no APT success stamp. Ansible ok=6 changed=0 failed=0.
