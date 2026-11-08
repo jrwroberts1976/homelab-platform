@@ -1,3 +1,10 @@
+## 2026-11-08 — BirdNET-Go native release staging IaC added (not yet executed)
+
+- Operator completed `media-01-birdnet-preflight.yml` successfully: `ok=10 changed=0 failed=0 unreachable=0`, Kodi active and USB ALSA recording works.
+- Added `playbooks/media-01-birdnet-stage.yml` on BirdNET feature branch. This stages and validates official 20261031 ARM64 artifact by upstream SHA256, lists archive members, checks for traversal names and preserves Kodi; it does NOT install, extract, open ports or start a service.
+- Added `docs/operations/media-01-birdnet-native.md` documenting the staged-only boundary and next acceptance gates.
+- Next step: operator fetch/update branch worktree, run syntax and staging playbook, return archive member listing. Verify actual archive layout and native app dependencies before committing a systemd installation role. Do not conflate staged artifact with live BirdNET deployment.
+
 ## 2026-11-08 — BirdNET-Go media-01 native deployment staging (NOT DEPLOYED)
 
 - User selected media-01 (Debian 13 ARM64 Raspberry Pi 5) as the new BirdNET-Go host, replacing the old docker-01 placement. Admin-01 remains the Ansible controller; Kodi must remain uninterrupted and media-01's Proxmox NFS backup target must not be changed.
