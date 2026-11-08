@@ -150,7 +150,7 @@
 
     - name: Verify agent listens only on router LAN IP
       ansible.builtin.command:
-        argv: [ss, -lnt, sport, =, :10050]
+        argv: ['ss', '-lnt', 'sport', '=', ':10050']
       register: router_zabbix_socket
       changed_when: false
       failed_when: >-
