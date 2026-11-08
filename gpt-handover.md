@@ -1,3 +1,10 @@
+## 2026-11-08 — BirdNET HTTPS-only LAN firewall cutover staged (NOT APPLIED)
+
+- User confirmed working real-browser access at `https://birds.home.jrwroberts.co.uk/` and approved closing direct HTTP/8080 from LAN, while retaining HTTPS/443.
+- Updated `roles/media_firewall/defaults/main.yml` default `media_firewall_birdnet_lan_enabled: false`. Existing managed nftables template omits only the temporary LAN `tcp dport 8080` allow; localhost Nginx-to-BirdNET HTTP remains functional. Existing SSH, SMB, NFS, HTTPS/qBittorrent, node exporter, and monitoring rules unchanged.
+- Updated scoped `playbooks/media-01-birdnet-lan.yml` to validate trusted HTTPS on controller before firewall reload, validate HTTPS afterward, confirm direct TCP/8080 is blocked from controller, retain NFS listener check and BirdNET active check. Conditional override `-e media_firewall_birdnet_lan_enabled=true` reopens LAN 8080 if required and must be reconciled in Git.
+- **NOT EXECUTED**: operator should pull feature branch, syntax check and execute scoped playbook. Preserve unrelated branch changes and do NOT run broad `media-01.yml`. Existing HTTPS was verified previously and no new claims made before operator deploy.
+
 ## 2026-11-08 — BirdNET-Go internal DNS and trusted HTTPS LIVE, idempotence confirmed
 
 - Operator applied `playbooks/dns-local-records.yml` on both dns-01 and dns-02, each `ok=4 changed=0 failed=0`; direct `dig` to each DNS resolver returned `birds.home.jrwroberts.co.uk A 192.168.2.195`.
