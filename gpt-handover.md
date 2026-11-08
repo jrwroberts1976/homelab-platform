@@ -1,3 +1,9 @@
+## 2026-11-08 — Grafana Zabbix CPU data verified and cloud-01 pilot staged
+
+- User confirmed a successful Grafana Explore `CPU utilization` Zabbix data query with timestamped readings around 2–5%, following successful Zabbix datasource test against Zabbix API 7.0.32.
+- Added `IaC/ansible/playbooks/grafana-zabbix-cloud01-cpu-pilot.yml` to PR #326. It adds a Zabbix CPU time-series panel only to the existing stable-UID `cloud-01` dashboard in `Homelab / Devices / Managed Devices`, preserving its identity panel and other hosts. Uses existing datasource UID `zabbix`, Zabbix host `cloud-01`, item `CPU utilization`, and Grafana API. Refuses unexpected existing dashboard layouts or conflicting panel IDs; no duplicates on rerun.
+- **Not yet deployed**. Operator to copy playbook from feature branch to admin-01, run syntax-check and apply, confirm CPU readings in the dashboard. Do not roll out other metrics until actual Zabbix item names and data are verified.
+
 ## 2026-11-08 — Direct Grafana/Zabbix plugin integration deployed successfully
 
 - Operator ran `IaC/ansible/playbooks/grafana-zabbix-integration.yml` from admin-01 with prompted sudo and a read-only Zabbix API token. Play recap monitor-01: **ok=17, changed=6, failed=0, unreachable=0**. HTTPS API and token host query passed, protected datasource and plugin provisioning templates installed, Docker Compose validated, Grafana container reconciled; health API recovered after two brief retries; `grafana cli plugins ls` confirmed Zabbix plugin 6.10.2.
