@@ -1,3 +1,9 @@
+## 2026-11-08 — guarded router active-template test staged, Wi-Fi monitoring concern
+
+- User reported a transient **Wi-Fi disconnection**. Subsequent router read-only diagnostics showed PPPoE and WAN eth1 up, zero interface errors/drops, router-pppoe/dnsmasq/unbound/nftables/agent active, low CPU load, no recent kernel link events or error logs. This does not rule out a Wi-Fi AP restart or intermittent network issue. No causal link to Zabbix established. User explicitly asked to deploy the Zabbix template again to observe whether symptoms recur.
+- The router template preflight was run twice successfully: `Homelab Linux OS Facts` is the only current router template (2 items), standard `Linux by Zabbix agent active` has 43 items, **no duplicate keys**; other 14 hosts already use Linux active. The template link was NOT previously deployed.
+- Added `IaC/ansible/playbooks/zabbix-router-link-active-template.yml` calling existing guarded `link_router_active_template.py`: read-only preflight followed by API link with verification. Preserves OS Facts and all other templates, no unlink/clear, no agent restart, no nftables or router service changes. **Staged, not yet run.** Operator should test while monitoring client Wi-Fi/AP and record the exact incident time if symptoms recur. The existing inbound 10050 firewall permission must not be retired until active template metrics prove healthy and user explicitly approves separate change.
+
 ## 2026-11-08 — router-01 standard active-template migration: read-only preflight staged
 
 - Operator ran `zabbix-managed-host-templates.yml` in audit mode successfully: 14 hosts already linked to `Linux by Zabbix agent active`; router-01 only has `Homelab Linux OS Facts`. No template API changes were performed.
