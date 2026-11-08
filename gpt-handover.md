@@ -1,3 +1,9 @@
+## 2026-11-08 — Phase 3 Agent 2 key validated; Zabbix server item staged
+
+- User verified on admin-01: `sudo zabbix_agent2 -t homelab.patch.snapshot` yielded supported `[s|{...}]` JSON, and `systemctl is-active zabbix-agent2` returned `active`. Snapshot pending=20, APT package index age=27.2h, reboot flag false, security/last verified patch null, error null.
+- Staged `IaC/ansible/playbooks/zabbix-patching-item.yml` and `IaC/ansible/roles/monitoring_stack/files/grafana/reconcile_zabbix_patching_item.py` on feature branch, **NOT EXECUTED**. Playbook targets monitor-01 only, copies guarded script and audits Zabbix API read-only by default. Script checks admin-01 is enabled/unique and has exactly standard active Linux template, refuses conflicting existing key, proposes one active-agent text JSON item `homelab.patch.snapshot`, 1h interval, 7d history. Explicit `-e zabbix_patching_item_apply=true` creates only this item and verifies item ID/shape; no shared template or other host alterations.
+- Next: operator update detached worktree to branch tip, run syntax check and audit-only playbook `--limit monitor-01`. Review result before explicit apply. Then verify live item lastclock/lastvalue in Zabbix; agent local -t alone does not prove server data ingestion. Reconcile differing APT index timestamp selection before presenting age as definitive in Grafana.
+
 ## 2026-11-08 — Phase 3 admin-01 Zabbix patch collector installed
 
 - Operator applied `zabbix-patching-agent-pilot.yml --limit admin-01 -e zabbix_patching_apply=true` from isolated patching worktree. Ansible **ok=14 changed=3 unreachable=0 failed=0**. Created collector at /usr/local/bin/homelab-patch-snapshot and UserParameter /etc/zabbix/zabbix_agent2.d/homelab-patching.conf, validated JSON running as zabbix, restarted only zabbix-agent2. Temporary Ansible directory fallback warning for /var/lib/zabbix/.ansible/tmp was nonfatal.
