@@ -1,3 +1,8 @@
+## 2026-11-08 — Grafana patching two-tile layout visually verified
+
+- User supplied screenshot of admin-01 dashboard showing two equal-width panels: **Pending patches — admin-01** (live Zabbix cached APT candidate count **20**) and **Security patches — admin-01** (**Unknown**, awaiting verified classification). Both large-value tiles render correctly, no blank security tile. This verifies the panel 91/92 layout after guarded deployment.
+- Treat UI work as complete for the admin-01 pilot. Security patch number remains unresolved; do not interpret zero security-origin candidates as zero security-related upgrades. Next work: read-only evidence-based classification, then add a real numeric security measurement and only afterwards consider rollout to other hosts. Avoid extra APT refresh and maintain Ansible/IaC with KISS safeguards.
+
 ## 2026-11-08 — Grafana Stat only displayed pending count; two-panel fix staged
 
 - User screenshot confirmed Grafana stat panel 91 displays large cached pending count 20 but omits security patch null/Unknown entirely. A single stat with `lastNotNull` cannot be relied on to show null as an independent figure.
