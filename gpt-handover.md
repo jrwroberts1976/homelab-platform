@@ -1,3 +1,8 @@
+## 2026-11-08 — passive Linux template stopped by existing router item collision
+
+- Operator executed read-only `homelab-zabbix-router-passive-link` on monitor-01 and received `SAFE FAILURE: stage=inspect existing router host items; error_class=RuntimeError`. This proves passive Zabbix host interface check now passed; the template remains unlinked. No router or ASUS AP changes were made. The script's explicit RuntimeError at this stage is raised when an existing router Zabbix item has a key required by the passive Linux template, outside OS Facts' expected inherited item IDs. Do not unlink/clear or delete these items without reviewing their origin/history.
+- Updated `link_router_passive_template.py` in PR #326 to print a bounded list of sanitized colliding Zabbix item keys and their source type, before the safety failure. **Staged, not deployed**; re-sync helper to admin-01 and rerun audit-only playbook. Do not run `-e zabbix_router_passive_apply=true` until collisions are resolved safely through IaC.
+
 ## 2026-11-08 — router-01 Zabbix passive-interface gap confirmed
 
 - User inspected Zabbix host edit page: `router-01`, hostid `10701`, group `Homelab/Linux`, linked template `Homelab Linux OS Facts`, and **no host interfaces defined**. This explains the earlier passive template preflight failure `stage=verify passive router agent interface; error_class=RuntimeError` and why the passive template has not been linked. This is Zabbix-side host configuration only; neither ASUS AP 192.168.2.2 nor router-01 system services have been modified by these preflight attempts.
