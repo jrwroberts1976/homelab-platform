@@ -1,0 +1,21 @@
+---
+# No APT update, package install, service restart or file writes on target.
+- name: Audit evidence for a trustworthy security patch count on admin-01
+  hosts: all
+  become: false
+  gather_facts: true
+  tasks:
+    - name: Enforce single host pilot
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - inventory_hostname == 'admin-01'
+          - ansible_facts.os_family == 'Debian'
+    - name: Audit cached security classification evidence
+      ansible.builtin.script:
+        cmd: ../roles/monitoring_stack/files/zabbix/audit_security_patch_candidates.py
+      register: security_audit
+      changed_when: false
+    - name: Display read-only evidence
+      ansible.builtin.debug:
+        msg: "{{ security_audit.stdout_lines }}"
