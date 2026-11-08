@@ -5,6 +5,8 @@
   hosts: monitoring_hosts
   become: true
   gather_facts: true
+  vars:
+    zabbix_router_link_apply: false
   tasks:
     - name: Verify monitoring controller identity
       ansible.builtin.assert:
@@ -25,11 +27,18 @@
         argv: [python3, /usr/local/sbin/homelab-zabbix-router-active-link]
       register: router_active_preflight
       changed_when: false
+      failed_when: false
       no_log: true
 
     - name: Show safe preflight result
       ansible.builtin.debug:
         msg: "{{ router_active_preflight.stdout_lines }}"
+
+    - name: Require successful router template preflight
+      ansible.builtin.assert:
+        that:
+          - router_active_preflight.rc == 0
+        fail_msg: "Read-only preflight failed; inspect the safe stage/class shown above. No template was linked."
 
     - name: Add router-01 Linux active template, preserving OS Facts
       ansible.builtin.command:
@@ -37,7 +46,9 @@
       register: router_active_apply
       changed_when: "'LINK VERIFIED:' in router_active_apply.stdout"
       no_log: true
+      when: zabbix_router_link_apply | bool
 
     - name: Show safe template-link result
       ansible.builtin.debug:
         msg: "{{ router_active_apply.stdout_lines }}"
+      when: zabbix_router_link_apply | bool
