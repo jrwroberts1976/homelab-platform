@@ -1,3 +1,9 @@
+## 2026-11-08 — router-01 Linux active template preferred (staged)
+
+- User prefers `Linux by Zabbix agent active` for router-01, rather than the previously proposed passive template. Zabbix 7.0 documentation confirms active checks initiate from agent to Zabbix server TCP/10051 and require matching `Hostname` and `ServerActive`. Router has `Hostname=router-01`, `ServerActive=192.168.2.59` and agent2 active. Actual active item delivery needs confirmation after linking.
+- Updated staged `reconcile_zabbix_templates.py`: read-only audit by default; if explicitly enabled, links `Linux by Zabbix agent active` to router-01 **only if no templates currently linked**, and links passive template to other missing-template hosts only if agent interface exists. Existing active/passive/other links are never unlinked or replaced; REVIEW printed if other templates exist. No router service changes or inbound firewall removal, and no modification to other hosts' existing monitoring.
+- **Not yet deployed.** Sync audit script and playbook; run read-only audit first. Existing restricted TCP/10050 firewall rule remains until active monitoring is proven and separate IaC retirement is approved. Do not automatically link both Linux templates or attempt blind replacement.
+
 ## 2026-11-08 — patch/OS audit succeeds; correctness fixes staged
 
 - Operator's second patch/OS audit run succeeded: `monitor-01 ok=8 changed=1 failed=0`, covering 15 monitored Zabbix hosts. Initially printed `Hosts reporting OS details: 15` and `Hosts with patch-related item candidates: 14`, **both misleading**: OS text was mangled by an incorrectly escaped Markdown-sanitizer regex (e.g. 'ebia / i u'), with router-01 actually reporting Unknown; the 14 apparent patch items were `system.sw.packages.get` (installed package discovery, **not** available/security update counts).
