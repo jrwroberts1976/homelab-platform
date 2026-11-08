@@ -127,13 +127,13 @@ dns-01 is the managed CT101 Pi-hole and Unbound container on Proxmox-2. It is on
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-08T05:47:32+00:00`
-- Pending updates: **1**
-- Security updates pending: **1**
+- Last assessed: `2026-11-08T06:50:32+00:00`
+- Pending updates: **0**
+- Security updates pending: **0**
 - Reboot required: **No**
 - unattended-upgrades installed: **Yes**
-- Last APT transaction activity: `2026-11-05T06:04:35+00:00`
-- Patch state: **Attention required**
+- Last APT transaction activity: `2026-11-08T06:09:07+00:00`
+- Patch state: **Healthy**
 
 > Automatic reboot remains disabled by policy; reboot-required state is reported for controlled maintenance.
 <!-- END AUTO:PATCHING -->
