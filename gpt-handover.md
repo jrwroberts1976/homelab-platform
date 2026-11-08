@@ -1,3 +1,9 @@
+## 2026-11-08 — BirdNET staged release verified; native dependency check pending
+
+- Operator ran stage playbook successfully: `ok=12 changed=3 failed=0 unreachable=0`. Checksum-verified 20261031 ARM64 archive contains README.md, birdnet-go, libonnxruntime.so, libtensorflowlite_c.so. Kodi remained active. Changes limited to release staging under /var/cache/birdnet-go/20261031.
+- Added a scoped `media-01-birdnet-binary-check.yml` Ansible playbook to inspect packaged README, temporary ELF/dependencies and CLI help without installing the app. Await operator output before implementing systemd role.
+- Native executable *not* installed or started; BirdNET database/history unchanged. Keep Kodi and Proxmox NFS untouched.
+
 ## 2026-11-08 — BirdNET-Go native release staging IaC added (not yet executed)
 
 - Operator completed `media-01-birdnet-preflight.yml` successfully: `ok=10 changed=0 failed=0 unreachable=0`, Kodi active and USB ALSA recording works.
