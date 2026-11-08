@@ -1,0 +1,68 @@
+---
+# Audit-first cleanup of obsolete Homelab Linux OS Facts links.
+# Scope: the 14 managed hosts excluding router-01; active Linux retained.
+- name: Audit or remove legacy OS Facts template from managed Zabbix hosts
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_os_facts_cleanup_apply: false
+    zabbix_os_facts_cleanup_fingerprint: ""
+  tasks:
+    - name: Verify monitoring controller
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install protected Zabbix legacy template cleanup helper
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/remove_legacy_os_facts_links.py
+        dest: /usr/local/sbin/homelab-zabbix-remove-os-facts
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Audit existing template links without changes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-remove-os-facts]
+      register: os_facts_audit
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Display proposed template cleanup
+      ansible.builtin.debug:
+        msg: "{{ os_facts_audit.stdout_lines }}"
+
+    - name: Require successful audit
+      ansible.builtin.assert:
+        that:
+          - os_facts_audit.rc == 0
+        fail_msg: "Legacy OS Facts audit failed; no template links were changed."
+
+    - name: Require exact audit fingerprint before removal
+      ansible.builtin.assert:
+        that:
+          - zabbix_os_facts_cleanup_fingerprint | length == 16
+          - "'PLAN FINGERPRINT: ' ~ zabbix_os_facts_cleanup_fingerprint in os_facts_audit.stdout"
+        fail_msg: "Approval fingerprint must match current read-only audit."
+      when: zabbix_os_facts_cleanup_apply | bool
+
+    - name: Clear legacy OS Facts links while retaining active templates
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/homelab-zabbix-remove-os-facts
+          - --apply
+          - --approve-fingerprint
+          - "{{ zabbix_os_facts_cleanup_fingerprint }}"
+      register: os_facts_apply
+      changed_when: "'CLEARED AND VERIFIED:' in os_facts_apply.stdout"
+      no_log: true
+      when: zabbix_os_facts_cleanup_apply | bool
+
+    - name: Report verified Zabbix cleanup
+      ansible.builtin.debug:
+        msg: "{{ os_facts_apply.stdout_lines }}"
+      when: zabbix_os_facts_cleanup_apply | bool
