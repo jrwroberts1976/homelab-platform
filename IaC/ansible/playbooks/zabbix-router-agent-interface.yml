@@ -1,0 +1,54 @@
+---
+# Creates the missing Zabbix host-side passive agent interface ONLY.
+# No router-01 SSH, agent restart, AP access, nftables or PPPoE change.
+- name: Audit or create router-01 Zabbix agent interface
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_router_interface_apply: false
+  tasks:
+    - name: Verify monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded Zabbix router interface helper
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_router_zabbix_interface.py
+        dest: /usr/local/sbin/homelab-zabbix-router-interface
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Check router-01 Zabbix interface configuration
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-interface]
+      register: interface_preflight
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Show guarded preflight status
+      ansible.builtin.debug:
+        msg: "{{ interface_preflight.stdout_lines }}"
+
+    - name: Require successful preflight before applying
+      ansible.builtin.assert:
+        that:
+          - interface_preflight.rc == 0
+        fail_msg: "Read-only preflight failed. No Zabbix interface created."
+
+    - name: Create Zabbix agent interface only when explicitly requested
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-interface, --apply]
+      register: interface_apply
+      changed_when: "'INTERFACE CREATED AND VERIFIED:' in interface_apply.stdout"
+      no_log: true
+      when: zabbix_router_interface_apply | bool
+
+    - name: Report verified interface configuration
+      ansible.builtin.debug:
+        msg: "{{ interface_apply.stdout_lines }}"
+      when: zabbix_router_interface_apply | bool
