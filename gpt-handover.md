@@ -1,3 +1,9 @@
+## 2026-11-08 — Phase 4 Grafana patch panel visually verified
+
+- User confirmed the admin-01 Grafana panel now renders separate fields after the Ansible-controlled transformation change: Pending updates (cached)=20, Security updates=Unknown, Reboot-required flag=No flag detected, Last verified patch=Unknown, Collection time (UTC)=2026-11-08T22:41:25.221114+... (timestamp truncated in pasted UI text). Raw JSON is no longer the primary presentation.
+- This completes initial end-to-end host Agent 2 → Zabbix active item → Grafana formatted display verification on admin-01. Values remain cached observations, not a patch compliance assertion. Security count and verified last patch intentionally Unknown. Index timestamp mismatch still requires reconciliation; do not extend automatically to the other 14 hosts.
+- Future follow-up: verify ongoing hourly freshness with new samples, then consider a simple reusable collector/template rollout with host-specific package-manager handling and low-write safeguards; maintain KISS/IaC and preserve existing dashboard ownership guards.
+
 ## 2026-11-08 — Phase 4 formatted Grafana admin-01 patch panel applied
 
 - Operator ran `ansible-playbook playbooks/grafana-admin-patching-pilot.yml --limit monitor-01 -e grafana_patch_pilot_apply=true`; Ansible **ok=7 changed=1 failed=0**. Guard output `PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged`, `APPLIED UPDATE: admin-01`, summary 15 matched Zabbix hosts / 16 candidate dashboards.
