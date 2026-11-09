@@ -1,0 +1,65 @@
+---
+# Read-only hardware and patch-capability audit before managed-host rollout.
+# Does not run apt update, modify Zabbix, or restart agents.
+- name: Audit CPU temperature and patch capabilities across managed Zabbix hosts
+  hosts: zabbix_agents
+  gather_facts: false
+  become: false
+  tasks:
+    - name: Read host capabilities without altering state
+      ansible.builtin.shell: |
+        set -eu
+        os_id=unknown
+        os_version=unknown
+        if test -r /etc/os-release; then
+          os_id=$(sed -n 's/^ID=//p' /etc/os-release | head -1 | tr -d '"')
+          os_version=$(sed -n 's/^VERSION_ID=//p' /etc/os-release | head -1 | tr -d '"')
+        fi
+        printf 'HOST=%s\nOS=%s\nVERSION=%s\n' "$(hostname)" "$os_id" "$os_version"
+        if command -v apt-get >/dev/null 2>&1; then
+          echo 'PATCH_MANAGER=apt'
+          test -d /var/lib/apt/lists && echo 'APT_CACHE_DIR=present' || echo 'APT_CACHE_DIR=missing'
+        elif command -v dnf >/dev/null 2>&1; then
+          echo 'PATCH_MANAGER=dnf'
+        elif command -v yum >/dev/null 2>&1; then
+          echo 'PATCH_MANAGER=yum'
+        elif command -v apk >/dev/null 2>&1; then
+          echo 'PATCH_MANAGER=apk'
+        else
+          echo 'PATCH_MANAGER=unknown'
+        fi
+        if command -v zabbix_agent2 >/dev/null 2>&1; then
+          echo 'ZABBIX_AGENT=agent2'
+        elif command -v zabbix_agentd >/dev/null 2>&1; then
+          echo 'ZABBIX_AGENT=agentd'
+        else
+          echo 'ZABBIX_AGENT=not-in-path'
+        fi
+        if test -r /sys/class/thermal/thermal_zone0/temp; then
+          temp=$(cat /sys/class/thermal/thermal_zone0/temp)
+          case "$temp" in
+            *[!0-9]*|'') echo 'CPU_THERMAL_ZONE0=invalid';;
+            *) awk -v m="$temp" 'BEGIN {printf "CPU_THERMAL_ZONE0_C=%.3f\n",m/1000}';;
+          esac
+        else
+          echo 'CPU_THERMAL_ZONE0=unavailable'
+        fi
+        echo 'HWMON_TEMP_INPUTS_BEGIN'
+        for f in /sys/class/hwmon/hwmon*/temp*_input; do
+          test -r "$f" || continue
+          printf '%s=' "$f"
+          cat "$f"
+        done
+        echo 'HWMON_TEMP_INPUTS_END'
+        test -r /etc/zabbix/zabbix_agent2.d/homelab-patching.conf &&
+          echo 'PATCH_USERPARAM=present' || echo 'PATCH_USERPARAM=absent'
+        test -r /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf &&
+          echo 'CPU_TEMP_USERPARAM=present' || echo 'CPU_TEMP_USERPARAM=absent'
+      args:
+        executable: /bin/sh
+      register: telemetry_capabilities
+      changed_when: false
+
+    - name: Display host capability audit
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }}: {{ telemetry_capabilities.stdout_lines }}"
