@@ -112,7 +112,7 @@ PROXMOX is the documented Proxmox VE cluster node 1 and cluster anchor at 192.16
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-09T04:09:21+00:00`
+- Last assessed: `2026-11-09T05:10:30+00:00`
 - Pending updates: **45**
 - Security updates pending: **2**
 - Reboot required: **Yes**
