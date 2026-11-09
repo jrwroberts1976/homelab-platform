@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 Zabbix CPU temperature item deployed; server data pending verification
+
+- User ran Ansible CPU temperature Agent 2 pilot on admin-01 with sudo and `cpu_temperature_apply=true`: dependency and sensor checks pass; reads 46.16°C; installs dedicated `homelab-cpu-temperature.conf`, restarts only Zabbix Agent 2, and `zabbix_agent2 -t homelab.cpu.temperature` returns `[s|47.236]`. Recap `ok=11 changed=2 failed=0`. The `[s|...]` tag means the local UserParameter test reports a numeric text string; check Zabbix numeric-float item ingestion before Grafana work.
+- User then ran Zabbix API item playbook on monitor-01 with `cpu_temperature_item_apply=true`: `CREATED AND VERIFIED: homelab.cpu.temperature`, 1m active-check float item with °C, recap `ok=7 changed=1 failed=0`.
+- The Zabbix server's Latest data / fresh history **not yet verified**; do not claim temperature is flowing until checked. Grafana System Performance temperature panel **not yet staged or deployed**. Next step confirm an actual recent sample in Zabbix Latest data; then guarded admin-01-only Grafana panel in existing builder, using existing Zabbix datasource and metric key.
+
 ## 2026-11-09 — admin-01 CPU temperature Zabbix pilot staged (not applied)
 
 - Operator verified existing Prometheus Raspberry Pi CPU temperature `node_thermal_zone_temp{instance="192.168.2.48:9100",type="cpu-thermal",zone="0"}` = 36.476°C, but no temperature item visible in Zabbix Latest data. User prefers Zabbix as the eventual Grafana data source.
