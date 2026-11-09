@@ -1,3 +1,9 @@
+## 2026-11-09 — CVE table deployed; repeat preview guard bug fixed in GitHub
+
+- Operator first ran guarded preview and apply for CVE table layout refinement successfully (`APPLIED UPDATE: admin-01`, 15 other dashboards protected); subsequent identical apply attempt failed in preview (`no_log` suppressed error). Inspected IaC pilot guard and identified non-idempotent height assertion: previous table must have 8 rows, but first successful apply changed it to 5.
+- Fixed `rebuild_zabbix_dashboards.py` CVE table guard to accept an existing table of 8 or 5 rows while requiring intended 5 rows; panel 91 and unrelated dashboard protection retained. Committed but **not yet operator-tested**. Operator next: fetch branch, run Python compilation, guarded preview only to confirm repeatability; do not reapply unless needed.
+- User also proposed dashboard sections with headings (Host Overview, System Performance, Host Security, Monitoring & Alerts); this has NOT been implemented. Consider separate layout-only pilot after existing work has been stabilized.
+
 ## 2026-11-09 — CVE details table visually verified; layout fix staged
 
 - Operator screenshot shows admin-01 Grafana panels 91=20, 92=1 and new panel 93 correctly rendering CVE-1999-0524, title, Low, CVSS 2.1. CVE Description column is too narrow/truncated, CVE table panel 8 rows leaves excessive blank space. Report presentation improvement pending.
