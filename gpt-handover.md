@@ -2896,3 +2896,15 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 - Confirmed media-01-only Grafana deployment; 15 other dashboards protected.
 - Ansible apply successful and Grafana rendering visually verified.
 - No changes required to Greenbone scanning or Prometheus exporters.
+
+## 2026-11-09 — 13-host Greenbone Grafana rollout APPLIED (verification pending)
+
+- Read-only capability audit passed on 14 Ansible `zabbix_agents` hosts: zero failures; `router-01` intentionally separate in `router_hosts` to protect the live PPPoE gateway.
+- Zabbix patch/OS item audit confirmed 15 monitored hosts including router-01. Do not mistake generic candidate keys for verified patch compliance; verified compliance remains unknown.
+- Added hostname-scoped Greenbone panels 98 (actionable count) and 99 (finding details) for the 13 managed Grafana pages other than `admin-01` and `media-01`; existing 30-hour shared evidence freshness gate retained. Empty findings must not be interpreted as zero verified vulnerabilities or individual-host scan coverage.
+- New guarded `--greenbone-rollout` mode and `IaC/ansible/playbooks/grafana-managed-greenbone-rollout.yml`. It targets only `monitor-01` and limits changes to Grafana; protects the two pilots and overview. Running without `-e grafana_greenbone_apply=true` does not write dashboards, though Ansible may update the builder file.
+- Operator reported preview PASS (13 planned updates, 15 matched hosts, zero failures) and subsequent explicit apply PASS (all 13 `APPLIED UPDATE`, zero failures), including router-01 **dashboard only**. No Zabbix item, router service, package, Greenbone collector, or exporter modified.
+- Applied list: PROXMOX, Proxmox-2, cloud-01, dns-01, dns-02, edge-01, greenbone-01, komodo-01, mail-relay-01, monitor-01, router-01, sensor-01, zabbix-01.
+- Follow-up corrected first-run-only validator logic to accept exactly unchanged pre-existing Greenbone panels; commit `599dd9f` on `feature/media01-grafana-security`. **This correction must be pulled and preview-tested on admin-01 before claiming repeat-run idempotency.** Live panels were applied with prior revision.
+- Next: `git pull --ff-only origin feature/media01-grafana-security`; `python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py`; run `ansible-playbook playbooks/grafana-managed-greenbone-rollout.yml` in preview-only mode and confirm 13 `PLANNED EXISTS` and 0 UPDATE. Visual-check a few host dashboards, including router-01. Then proceed to separate patch/CPU telemetry workstream.
+- GitHub draft PR #327 remains **DO NOT MERGE AS-IS** because feature branch is substantially divergent from main (~214 ahead/17 behind at PR creation). Reconcile separately; do not merge broad history as part of Grafana verification.
