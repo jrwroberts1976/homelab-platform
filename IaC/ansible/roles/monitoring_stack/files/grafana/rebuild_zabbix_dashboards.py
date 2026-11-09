@@ -525,15 +525,21 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             or temperature.get("gridPos", {}).get("h") != 8
             or len(temperature.get("targets", [])) != 1
             or temperature["targets"][0].get("item", {}).get("filter") !=
-                "/^CPU\\ temperature$/"):
+                expected_item_name):
         raise RuntimeError("Unapproved CPU temperature graph")
-    if temperature["targets"][0] != metric_target("admin-01", expected_item_name):
+    expected_target = metric_target("admin-01", expected_item_name)
+    expected_target["item"]["filter"] = expected_item_name
+    if temperature["targets"][0] != expected_target:
         raise RuntimeError("CPU temperature query must use only admin-01 Zabbix item")
     if 96 in old:
         prior_temperature = json.loads(json.dumps(old[96]))
         intended_temperature = json.loads(json.dumps(temperature))
         prior_temperature["gridPos"].pop("y", None)
         intended_temperature["gridPos"].pop("y", None)
+        old_item_filter = prior_temperature["targets"][0]["item"]["filter"]
+        if old_item_filter not in ("/^CPU\\ temperature$/", expected_item_name):
+            raise RuntimeError("Unexpected previous CPU temperature query")
+        prior_temperature["targets"][0]["item"]["filter"] = expected_item_name
         if prior_temperature != intended_temperature:
             raise RuntimeError("Existing CPU temperature panel drift")
 
@@ -681,8 +687,12 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         temperature_item = pick(active, [r"homelab\.cpu\.temperature"])
         if not temperature_item or temperature_item.get("name") != "CPU temperature":
             raise RuntimeError("admin-01 CPU temperature item missing from Zabbix")
-        panels.append(metric_panel(96, "CPU temperature", host["host"],
-                                   temperature_item, 0, "celsius"))
+        temperature_panel = metric_panel(96, "CPU temperature", host["host"],
+                                         temperature_item, 0, "celsius")
+        # Prefer an exact named item, avoiding a regex-escaped space in the
+        # Zabbix plugin's item-name selector.
+        temperature_panel["targets"][0]["item"]["filter"] = "CPU temperature"
+        panels.append(temperature_panel)
     problems_y = 6 + ((pid - 1) // 2) * 8
     if name == "admin-01":
         panels.append(admin_patching_live_panel(problems_y, items))
