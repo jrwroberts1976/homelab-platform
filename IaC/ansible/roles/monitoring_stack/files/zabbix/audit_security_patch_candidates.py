@@ -34,10 +34,22 @@ def main():
                 active = v.group(1) == version
             elif active and ("release " in l or "http:" in l or "https:" in l):
                 selected.append(l.strip())
+        installed = run(["dpkg-query", "-W", "-f=${Version}", name])
+        if installed["rc"] != 0:
+            raise SystemExit("Installed package version missing for " + name)
+        vendor = any("archive.raspberrypi.com" in text
+                     or "Raspberry Pi Foundation" in text for text in selected)
+        debian_security = any("debian-security" in text
+                              or "trixie-security" in text for text in selected)
         candidates.append({
             "package": name,
+            "installed_version": installed["stdout"].strip(),
             "candidate_version": version,
             "candidate_repository_evidence": selected[:8],
+            "repository_class": ("raspberry_pi_vendor" if vendor else
+                                 "debian_security" if debian_security else
+                                 "other_or_unverified"),
+            "security_fix_confirmed": None,
         })
     sources = run(["apt-cache", "policy"])
     origin_lines = [l.strip() for l in sources["stdout"].splitlines()
@@ -50,6 +62,14 @@ def main():
     print(json.dumps({
         "mode": "READ_ONLY_EVIDENCE",
         "package_count": len(candidates),
+        "raspberry_pi_vendor_candidates": sum(x["repository_class"] == "raspberry_pi_vendor" for x in candidates),
+        "debian_security_origin_candidates": sum(x["repository_class"] == "debian_security" for x in candidates),
+        "other_or_unverified_candidates": sum(x["repository_class"] == "other_or_unverified" for x in candidates),
+        "reference_advisories": {
+            "debian": "https://security-tracker.debian.org/tracker/",
+            "raspberry_pi": "https://www.raspberrypi.com/security/",
+            "raspberry_pi_os_image_reports": "https://raspberrypi.github.io/cve-list/"
+        },
         "available_tools": tools,
         "apt_source_paths": sorted(paths),
         "repository_policy_security_lines": origin_lines[:50],
