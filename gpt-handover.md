@@ -1,3 +1,9 @@
+## 2026-11-09 — 14-host managed Grafana layout rollout applied successfully; final validation pending
+
+- Operator fetched feature branch `d85ebfa3`, compiled `rebuild_zabbix_dashboards.py`, and ran `grafana-managed-hosts-layout-rollout.yml --limit monitor-01` without apply. Guard returned exactly 14 `PLANNED UPDATE` entries, `SUMMARY: 15 matched Zabbix hosts; 16 candidate dashboards`, `ok=5 changed=1 failed=0` (changed=1 is builder installation, not dashboard write).
+- Operator then ran explicitly approved `-e grafana_managed_layout_apply=true`. Guarded run returned `APPLIED UPDATE` for **PROXMOX, Proxmox-2, cloud-01, dns-01, dns-02, edge-01, greenbone-01, komodo-01, mail-relay-01, media-01, monitor-01, router-01, sensor-01, zabbix-01**. `admin-01` and overall Zabbix Overview were protected. Recap `ok=7 changed=1 unreachable=0 failed=0 skipped=0`.
+- The requested 14-host rollout is **deployed**, but the final read-only idempotency check and visual sample checks are still pending. Next: run `ansible-playbook playbooks/grafana-managed-hosts-layout-rollout.yml --limit monitor-01` expecting 14 `PLANNED EXISTS`, `changed=0 failed=0`; visually check a Pi, Proxmox host and VM. No agents, OS services or Zabbix item configurations changed in this rollout.
+
 ## 2026-11-09 — Four-section managed-host dashboard rollout staged (preview only)
 
 - User requested extending the approved admin-01 Grafana managed-host design to all their hosts. Current existing generated inventory has **15** Zabbix hosts; admin-01 is already complete, leaving **14** target dashboards. This stage does not claim to cover hosts outside the confirmed inventory.
