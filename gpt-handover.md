@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 CPU temperature verified in Zabbix; Grafana graph staged
+
+- Operator confirmed in Zabbix Monitoring → Latest data: admin-01 / CPU temperature, age 46s, value 38.628 °C, graph link itemid 52886. This proves numeric float ingestion through the new active Agent 2 item `homelab.cpu.temperature`.
+- Staged a **Grafana-only** admin-01 change in `rebuild_zabbix_dashboards.py` on feature branch: new panel ID 96, title `CPU temperature`, existing Zabbix datasource, exact existing item `CPU temperature`, unit `celsius`, timeseries chart under System Performance. Fail closed if the numeric enabled Zabbix item is unavailable; no Prometheus duplicate, agent edits or host-template changes.
+- Existing guarded admin-01-only preview updated to permit only this one new panel and check its exact target/datasource/unit, preserve all existing panels and 15 other dashboards, and allow a no-change second preview. No Grafana deployment yet; operator must fetch feature branch, syntax-check, run `grafana-admin-patching-pilot.yml --limit monitor-01` without apply, review output, then opt-in apply and repeat preview for `PLANNED EXISTS`.
+
 ## 2026-11-09 — admin-01 Zabbix CPU temperature item deployed; server data pending verification
 
 - User ran Ansible CPU temperature Agent 2 pilot on admin-01 with sudo and `cpu_temperature_apply=true`: dependency and sensor checks pass; reads 46.16°C; installs dedicated `homelab-cpu-temperature.conf`, restarts only Zabbix Agent 2, and `zabbix_agent2 -t homelab.cpu.temperature` returns `[s|47.236]`. Recap `ok=11 changed=2 failed=0`. The `[s|...]` tag means the local UserParameter test reports a numeric text string; check Zabbix numeric-float item ingestion before Grafana work.
