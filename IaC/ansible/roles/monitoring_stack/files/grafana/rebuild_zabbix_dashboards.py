@@ -377,7 +377,7 @@ def admin_cve_details_panel(y, prometheus_ds):
             "finding names, not full vulnerability advisory text."
         ),
         "datasource": prometheus_ds,
-        "gridPos": {"x": 0, "y": y, "w": 24, "h": 8},
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 5},
         "targets": [{
             "refId": "A", "datasource": prometheus_ds, "expr": expr,
             "instant": True, "range": False, "format": "table",
@@ -401,9 +401,19 @@ def admin_cve_details_panel(y, prometheus_ds):
         }],
         "fieldConfig": {
             "defaults": {"custom": {"align": "auto", "filterable": True}},
-            "overrides": [{"matcher": {"id": "byName", "options": "CVSS"},
-                           "properties": [{"id": "unit", "value": "none"},
-                                          {"id": "decimals", "value": 1}]}],
+            "overrides": [
+                {"matcher": {"id": "byName", "options": "CVE"},
+                 "properties": [{"id": "custom.width", "value": 180}]},
+                {"matcher": {"id": "byName", "options": "Description"},
+                 "properties": [{"id": "custom.minWidth", "value": 420},
+                                {"id": "custom.cellOptions", "value": {"type": "auto", "wrapText": True}}]},
+                {"matcher": {"id": "byName", "options": "Severity"},
+                 "properties": [{"id": "custom.width", "value": 130}]},
+                {"matcher": {"id": "byName", "options": "CVSS"},
+                 "properties": [{"id": "custom.width", "value": 95},
+                                {"id": "unit", "value": "none"},
+                                {"id": "decimals", "value": 1}]},
+            ],
         },
         "options": {"showHeader": True, "cellHeight": "sm"},
     }
@@ -446,7 +456,7 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         panels.append(admin_patching_live_panel(problems_y, items))
         panels.append(admin_known_cves_panel(problems_y, prometheus_ds))
         panels.append(admin_cve_details_panel(problems_y + 6, prometheus_ds))
-        panels.append(problem_panel(host["host"], problems_y + 14))
+        panels.append(problem_panel(host["host"], problems_y + 11))
     else:
         panels.append(patch_status_panel(problems_y))
         panels.append(problem_panel(host["host"], problems_y + 6))
@@ -627,9 +637,9 @@ def main():
         if old_problem is None or new_problem is None:
             raise RuntimeError("Expected existing Zabbix problems panel")
         expected_problem = json.loads(json.dumps(old_problem))
-        expected_problem["gridPos"]["y"] += 8
+        expected_problem["gridPos"]["y"] -= 3
         if new_problem not in (old_problem, expected_problem):
-            raise RuntimeError("Pilot only permits moving Zabbix problems down 8 rows")
+            raise RuntimeError("Pilot only permits moving Zabbix problems up 3 rows")
         previous_details = [p for p in existing["dashboard"]["panels"]
                             if p.get("id") == 93]
         new_details = [p for p in admin_action[1]["panels"]
@@ -638,8 +648,17 @@ def main():
                        and p.get("datasource") == prometheus_ds]
         if len(previous_details) > 1 or len(new_details) != 1:
             raise RuntimeError("Pilot expected one host security CVE table")
-        if previous_details and previous_details[0] != new_details[0]:
-            raise RuntimeError("Pilot refuses unexpected change to existing CVE table")
+        if previous_details:
+            old_detail = json.loads(json.dumps(previous_details[0]))
+            new_detail = json.loads(json.dumps(new_details[0]))
+            if old_detail.get("gridPos", {}).get("h") != 8 or new_detail.get("gridPos", {}).get("h") != 5:
+                raise RuntimeError("Unexpected CVE table height transition")
+            for detail in (old_detail, new_detail):
+                detail.pop("fieldConfig", None)
+                detail.pop("options", None)
+                detail.pop("gridPos", None)
+            if old_detail != new_detail:
+                raise RuntimeError("Pilot permits CVE table layout changes only")
         old_patch = next((p for p in existing["dashboard"]["panels"]
                           if p.get("id") == 91), None)
         new_patch = next((p for p in admin_action[1]["panels"]
