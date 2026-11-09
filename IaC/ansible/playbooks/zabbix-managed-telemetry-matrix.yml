@@ -1,0 +1,33 @@
+---
+# Read-only coverage audit for all 15 Zabbix managed hosts and their Grafana pages.
+# No host deployments, item writes, dashboard writes or package refresh.
+- name: Audit Zabbix and Grafana telemetry coverage for all managed hosts
+  hosts: monitoring_hosts
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Require monitor-01 sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Ensure IaC coverage audit script is installed
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/audit_managed_telemetry_matrix.py
+        dest: /usr/local/sbin/homelab-zabbix-managed-telemetry-matrix
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Audit Zabbix items and Grafana panels without API writes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-managed-telemetry-matrix]
+      register: matrix
+      changed_when: false
+      no_log: true
+
+    - name: Show per-host coverage summary
+      ansible.builtin.debug:
+        msg: "{{ matrix.stdout_lines | reject('match', '^MATRIX_JSON=') | list }}"
