@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 CPU temperature monitoring completed and idempotent
+
+- End-to-end temperature monitoring is confirmed working: Raspberry Pi thermal sensor → existing Zabbix Agent 2 with dedicated `homelab.cpu.temperature` UserParameter → active float Zabbix item (ID 52886, °C, one-minute interval) → Grafana `admin-01` System Performance timeseries. User visually confirmed the graph displays data. Grafana Zabbix plugin required the working Item ID query type (3), not item-name Metrics lookup.
+- Operator applied the guarded Grafana pilot successfully, then ran a final **read-only** check on monitor-01: `PLANNED EXISTS: admin-01`, `SUMMARY: 15 matched Zabbix hosts; 16 candidate dashboards`; Ansible recap `ok=5 changed=0 unreachable=0 failed=0 skipped=2`.
+- Temperature workstream **closed**. Grafana and Ansible/IaC are synchronised, and no outstanding rollout steps remain for admin-01. Other managed-host dashboards remain unchanged. Any further standardisation is a separate, explicitly approved workstream.
+
 ## 2026-11-09 — Zabbix Item ID Grafana guard fix after specific diagnostic
 
 - Read-only pilot failed before Grafana write. Operator ran preview directly and confirmed precise error: `RuntimeError: Temperature panel change exceeds approved query mode` in `validate_admin_section_pilot`, line 550. No dashboard writes.
