@@ -560,13 +560,13 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
               and x.get("value_type") in ("0", "3")]
     if name == "admin-01":
         kernel_text = os_info["kernel"]
-        match = re.search(r"\\bLinux\\s+\\S+\\s+(\\S+)", kernel_text)
+        match = re.search(r"\bLinux\s+\S+\s+(\S+)", kernel_text)
         kernel = safe_markdown(match.group(1), 90) if match else "Unknown"
-        match = re.search(r"\\b(aarch64|arm64|x86_64|amd64|i386|i686)\\b", kernel_text)
+        match = re.search(r"\b(aarch64|arm64|x86_64|amd64|i386|i686)\b", kernel_text)
         arch = match.group(1) if match else "Unknown"
         overview = (
-            "**Host:** \`admin-01\`  |  **OS:** " + os_info["os"] + "\n\n"
-            + "**Kernel:** \`" + kernel + "\`  |  **Architecture:** \`" + arch + "\`"
+            "**Host:** `admin-01`  |  **OS:** " + os_info["os"] + "\n\n"
+            + "**Kernel:** `" + kernel + "`  |  **Architecture:** `" + arch + "`"
         )
     else:
         overview = (
