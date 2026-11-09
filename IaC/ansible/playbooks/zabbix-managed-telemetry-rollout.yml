@@ -39,6 +39,12 @@
     managed_telemetry_patch_conf: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
     managed_telemetry_temp_conf: /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf
     managed_telemetry_temp_sensor: /sys/class/thermal/thermal_zone0/temp
+    managed_patch_conf_content: |
+      # Managed by Ansible: cached APT snapshot only; no package refresh.
+      UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
+    managed_temp_conf_content: |
+      # Managed by Ansible: read-only thermal-zone Celsius value.
+      UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
   tasks:
     - name: Require exact managed-host inventory and exclude router
       ansible.builtin.assert:
@@ -82,11 +88,25 @@
       register: managed_existing
       when: inventory_hostname in managed_telemetry_targets
 
-    - name: Refuse overwriting any pre-existing estate telemetry files
+    - name: Read existing telemetry files to detect unmanaged conflicts
+      ansible.builtin.slurp:
+        src: "{{ item.item }}"
+      loop: "{{ managed_existing.results | selectattr('stat.exists') | list }}"
+      register: managed_file_contents
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Refuse unexpected existing telemetry content
       ansible.builtin.assert:
         that:
-          - not (managed_existing.results | map(attribute='stat.exists') | max)
-        fail_msg: "Existing telemetry file on {{ inventory_hostname }}; review before deployment"
+          - >-
+            (item.item.item == managed_telemetry_collector and
+             (item.content | b64decode) == lookup('file', '../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py'))
+            or (item.item.item == managed_telemetry_patch_conf and
+                (item.content | b64decode) == managed_patch_conf_content)
+            or (item.item.item == managed_telemetry_temp_conf and
+                (item.content | b64decode) == managed_temp_conf_content)
+        fail_msg: "Unmanaged telemetry file found on {{ inventory_hostname }}; refuse overwrite"
+      loop: "{{ managed_file_contents.results | default([]) }}"
       when: inventory_hostname in managed_telemetry_targets
 
     - name: Probe sensor readability as the existing Zabbix service account
@@ -116,7 +136,7 @@
           {{ inventory_hostname }}:
           {{ 'PILOT EXCLUDED (already configured)' if inventory_hostname in managed_telemetry_pilots
              else 'APT cached snapshot=INSTALL; CPU temperature=' +
-                  ('INSTALL' if managed_has_temp | bool else 'UNAVAILABLE') +
+                  ('INSTALL' if managed_has_temp | default(false) | bool else 'UNAVAILABLE') +
                   '; apply=' + (managed_telemetry_apply | bool | string) }}
       # Debug output is a plan, not proof of Zabbix item availability.
 
@@ -137,9 +157,7 @@
         owner: root
         group: root
         mode: "0644"
-        content: |
-          # Managed by Ansible: cached APT snapshot only; no package refresh.
-          UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
+        content: "{{ managed_patch_conf_content }}"
       register: managed_patch_conf_result
       when:
         - managed_telemetry_apply | bool
@@ -158,7 +176,7 @@
       when:
         - managed_telemetry_apply | bool
         - inventory_hostname in managed_telemetry_targets
-        - managed_has_temp | bool
+        - managed_has_temp | default(false) | bool
 
     - name: Check cached-APT snapshot as Zabbix account
       ansible.builtin.command:
@@ -194,7 +212,7 @@
     - name: Verify locally registered Zabbix keys
       ansible.builtin.command:
         argv: [/usr/sbin/zabbix_agent2, -t, "{{ item }}"]
-      loop: "{{ ['homelab.patch.snapshot'] + (['homelab.cpu.temperature'] if managed_has_temp | bool else []) }}"
+      loop: "{{ ['homelab.patch.snapshot'] + (['homelab.cpu.temperature'] if managed_has_temp | default(false) | bool else []) }}"
       register: managed_key_verify
       changed_when: false
       when:
