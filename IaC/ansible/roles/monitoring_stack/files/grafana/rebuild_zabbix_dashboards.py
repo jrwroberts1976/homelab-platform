@@ -651,8 +651,9 @@ def main():
         if previous_details:
             old_detail = json.loads(json.dumps(previous_details[0]))
             new_detail = json.loads(json.dumps(new_details[0]))
-            if old_detail.get("gridPos", {}).get("h") != 8 or new_detail.get("gridPos", {}).get("h") != 5:
-                raise RuntimeError("Unexpected CVE table height transition")
+            if (old_detail.get("gridPos", {}).get("h") not in (8, 5)
+                    or new_detail.get("gridPos", {}).get("h") != 5):
+                raise RuntimeError("Unexpected CVE table height or existing state")
             for detail in (old_detail, new_detail):
                 detail.pop("fieldConfig", None)
                 detail.pop("options", None)
