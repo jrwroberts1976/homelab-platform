@@ -1,3 +1,9 @@
+## 2026-11-09 — Shorter admin-01 Host Overview cards and smaller live uptime font staged
+
+- User requested overview height reduction and then a smaller uptime font. Existing centred 2x2 tiles occupied Grafana rows h=3; latest generator changes (not yet operator previewed/deployed) set tile height h=2, second row y=3, System Performance starts y=5, and set existing Zabbix uptime stat Grafana text value font size 24 via `options.text.valueSize`.
+- Existing host/OS/kernel content, live Zabbix uptime data source and metric query, security CVEs, performance and all other managed dashboards are unchanged; layout-only adjustment. Pilot guard updated to allow prior card heights 3 or 2 and require new 2-high geometry. Changes are staged on `feature/grafana-managed-devices-folder-20261108`, not deployed.
+- Next: fetch detached worktree, run Python py_compile and Ansible guarded preview; apply only if preview passes. Verify small text is legible and card content fits; second preview should return `PLANNED EXISTS`.
+
 ## 2026-11-09 — Narrower centred 2x2 Host Overview staged, not deployed
 
 - Screenshot of admin-01 revealed the working 2x2 Host/OS/Kernel/Uptime cards still stretched full width of the dashboard. User asked for narrower cards; requested no changes to content.
