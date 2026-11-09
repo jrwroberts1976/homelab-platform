@@ -451,11 +451,11 @@ def admin_section_rows(source_panels):
     )
     result = [row(100, "Host Overview", 0)]
     overview = by_id[1]
-    overview["gridPos"].update({"x": 0, "y": 1, "w": 16, "h": 5})
+    overview["gridPos"].update({"x": 0, "y": 1, "w": 24, "h": 3})
     result.append(overview)
 
     uptime["type"] = "stat"
-    uptime["gridPos"].update({"x": 16, "y": 1, "w": 8, "h": 5})
+    uptime["gridPos"].update({"x": 0, "y": 4, "w": 24, "h": 3})
     uptime["options"] = {
         "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
         "orientation": "horizontal", "textMode": "value",
@@ -464,13 +464,13 @@ def admin_section_rows(source_panels):
     }
     result.append(uptime)
 
-    performance_row_y = 6
+    performance_row_y = 7
     result.append(row(101, "System Performance", performance_row_y))
     for i, panel in enumerate(performance):
         panel["gridPos"]["x"] = 12 * (i % 2)
-        panel["gridPos"]["y"] = 7 + 8 * (i // 2)
+        panel["gridPos"]["y"] = 8 + 8 * (i // 2)
         result.append(panel)
-    perf_end = 7 + 8 * ((len(performance) + 1) // 2)
+    perf_end = 8 + 8 * ((len(performance) + 1) // 2)
 
     result.append(row(102, "Host Security", perf_end))
     security_y = perf_end + 1
@@ -545,10 +545,10 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
                 panel.get("gridPos", {}).pop("h", None)
         if previous != intended:
             raise RuntimeError("Unexpected panel data/config change: " + str(panel_id))
-    if not (new_by_id[1]["gridPos"]["w"] == 16
-            and new_by_id[1]["gridPos"]["h"] == 5
-            and uptime_new["gridPos"]["w"] == 8
-            and uptime_new["gridPos"]["h"] == 5):
+    if not (new_by_id[1]["gridPos"]["w"] == 24
+            and new_by_id[1]["gridPos"]["h"] == 3
+            and uptime_new["gridPos"]["w"] == 24
+            and uptime_new["gridPos"]["h"] == 3):
         raise RuntimeError("Overview dimensions not approved")
     if any(p.get("type") == "row" and p.get("panels") != [] for p in new_rows):
         raise RuntimeError("Unexpected nested Grafana panels")
@@ -564,9 +564,12 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         kernel = safe_markdown(match.group(1), 90) if match else "Unknown"
         match = re.search(r"\b(aarch64|arm64|x86_64|amd64|i386|i686)\b", kernel_text)
         arch = match.group(1) if match else "Unknown"
+        # The previous Zabbix OS item exposes a compiler/build string, not an OS release.
+        # Debian 13 was verified in the approved 2026-11-08 admin-01 APT pilot.
         overview = (
-            "**Host:** `admin-01`  |  **OS:** " + os_info["os"] + "\n\n"
-            + "**Kernel:** `" + kernel + "`  |  **Architecture:** `" + arch + "`"
+            "**Host:** `admin-01`   |   **OS:** Debian 13   |   "
+            + "**Architecture:** `" + arch + "`\n\n"
+            + "**Kernel:** `" + kernel + "`"
         )
     else:
         overview = (
