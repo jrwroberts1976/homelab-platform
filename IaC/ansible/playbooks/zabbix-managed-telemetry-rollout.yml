@@ -169,9 +169,7 @@
         owner: root
         group: root
         mode: "0644"
-        content: |
-          # Managed by Ansible: read-only thermal-zone Celsius value.
-          UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+        content: "{{ managed_temp_conf_content }}"
       register: managed_temp_conf_result
       when:
         - managed_telemetry_apply | bool
