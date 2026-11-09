@@ -1,3 +1,9 @@
+## 2026-11-09 — Working CPU temperature Item ID query staged for Grafana
+
+- User proved Grafana Zabbix plugin can graph admin-01 temperature from Zabbix **Item ID 52886** in query type Item Id, while name-based Metrics queries returned `frames: []` even with trends disabled. Zabbix float history had already been independently verified.
+- Staged `rebuild_zabbix_dashboards.py` admin-01-only panel 96 query change to Zabbix `queryType: "3"`, `itemids: "52886"` and `options.useTrends: "false"`, retaining existing datasource, time series, Celsius unit, layout and other panels. Builder also checks the live Zabbix item still has key `homelab.cpu.temperature`, name `CPU temperature`, float type and itemid 52886, failing closed if recreated. Pilot guard permits only the known name-based to Item ID transition and then idempotent repeats, still protecting the other 15 dashboards.
+- Code and handover committed on feature branch; **not yet operator syntax-tested, previewed or deployed**. Next operator: fetch detached worktree, compile Python, run guarded preview on monitor-01 without apply; only after pass run explicit apply, confirm graph and final preview `PLANNED EXISTS`. Do not manually save Grafana editor changes.
+
 ## 2026-11-09 — Exact Zabbix CPU temperature selector preview blocked; duplicate guard check fixed
 
 - After staging Grafana CPU temperature panel ID 96 item selector switch from `/^CPU\\ temperature$/` to exact `CPU temperature`, operator preview on monitor-01 failed before any Grafana write (`no_log` hid the message; recap ok=3 changed=1 failed=1).
