@@ -348,7 +348,7 @@ def admin_known_cves_panel(y, prometheus_ds):
         },
         "options": {
             "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
-            "orientation": "horizontal", "textMode": "value_and_name",
+            "orientation": "horizontal", "textMode": "value",
             "wideLayout": False, "colorMode": "none", "graphMode": "none",
             "justifyMode": "center",
             "percentChangeColorMode": "standard", "showPercentChange": False,
