@@ -2908,3 +2908,11 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 - Follow-up corrected first-run-only validator logic to accept exactly unchanged pre-existing Greenbone panels; commit `599dd9f` on `feature/media01-grafana-security`. **This correction must be pulled and preview-tested on admin-01 before claiming repeat-run idempotency.** Live panels were applied with prior revision.
 - Next: `git pull --ff-only origin feature/media01-grafana-security`; `python3 -m py_compile IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py`; run `ansible-playbook playbooks/grafana-managed-greenbone-rollout.yml` in preview-only mode and confirm 13 `PLANNED EXISTS` and 0 UPDATE. Visual-check a few host dashboards, including router-01. Then proceed to separate patch/CPU telemetry workstream.
 - GitHub draft PR #327 remains **DO NOT MERGE AS-IS** because feature branch is substantially divergent from main (~214 ahead/17 behind at PR creation). Reconcile separately; do not merge broad history as part of Grafana verification.
+
+## 2026-11-09 — Greenbone rollout repeat-run idempotency PASS
+
+- Operator pulled feature commit `5eed668f`, passed Python compilation and executed `ansible-playbook playbooks/grafana-managed-greenbone-rollout.yml` in default preview-only mode.
+- `GREENBONE ROLLOUT GUARD` passed; all thirteen targeted host pages reported `PLANNED EXISTS`, with zero planned dashboard updates, zero failures and no Grafana writes. `monitor-01 changed=1` was only the guarded builder file deployment; apply task skipped.
+- 15 Zabbix hosts / 16 dashboard candidates remain matched. Existing `admin-01`, `media-01` and overview remain excluded from the 13-target guard.
+- Greenbone Grafana IaC rollout is technically complete and idempotent. Visual confirmation of rendered panels and per-host scan evidence interpretation remains to be checked. Do not mistake empty results for verified clean scans.
+- Next separate phase: extend cached APT patch telemetry and supported CPU temperature telemetry through scoped Ansible/IaC, preserving `router-01` generic-deployment exclusion. PR #327 remains draft and must not be merged as-is due to unrelated branch divergence.
