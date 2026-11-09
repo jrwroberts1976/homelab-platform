@@ -47,8 +47,11 @@
         echo 'HWMON_TEMP_INPUTS_BEGIN'
         for f in /sys/class/hwmon/hwmon*/temp*_input; do
           test -r "$f" || continue
-          printf '%s=' "$f"
-          cat "$f"
+          if reading=$(cat "$f" 2>/dev/null); then
+            printf '%s=%s\n' "$f" "$reading"
+          else
+            printf '%s=unavailable\n' "$f"
+          fi
         done
         echo 'HWMON_TEMP_INPUTS_END'
         test -r /etc/zabbix/zabbix_agent2.d/homelab-patching.conf &&
