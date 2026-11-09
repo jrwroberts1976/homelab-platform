@@ -451,14 +451,14 @@ def admin_section_rows(source_panels):
         key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
     )
     result = [row(100, "Host Overview", 0)]
-    for panel_id, x, y in ((1, 0, 1), (94, 12, 1),
-                           (95, 0, 4)):
+    for panel_id, x, y in ((1, 4, 1), (94, 12, 1),
+                           (95, 4, 4)):
         panel = by_id[panel_id]
-        panel["gridPos"].update({"x": x, "y": y, "w": 12, "h": 3})
+        panel["gridPos"].update({"x": x, "y": y, "w": 8, "h": 3})
         result.append(panel)
 
     uptime["type"] = "stat"
-    uptime["gridPos"].update({"x": 12, "y": 4, "w": 12, "h": 3})
+    uptime["gridPos"].update({"x": 12, "y": 4, "w": 8, "h": 3})
     uptime["options"] = {
         "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
         "orientation": "horizontal", "textMode": "value",
@@ -523,8 +523,18 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
                 or set(panel.keys()) != {"id", "type", "title",
                                          "gridPos", "options"}):
             raise RuntimeError("Unexpected new overview card")
-        if panel_id in old and old[panel_id] != panel:
-            raise RuntimeError("Existing overview card drift: " + str(panel_id))
+        if panel_id in old:
+            prior = json.loads(json.dumps(old[panel_id]))
+            target = json.loads(json.dumps(panel))
+            old_grid = prior.pop("gridPos", {})
+            new_grid = target.pop("gridPos", {})
+            if (prior != target or old_grid.get("y") != new_grid.get("y")
+                    or old_grid.get("h") != 3
+                    or old_grid.get("w") not in (12, 8)
+                    or new_grid.get("w") != 8
+                    or old_grid.get("x") not in
+                    ({94: (12,), 95: (0, 4)}[panel_id])):
+                raise RuntimeError("Existing overview card drift: " + str(panel_id))
 
     for panel_id, previous_panel in old.items():
         next_panel = new[panel_id]
@@ -533,6 +543,8 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
         for panel in (previous, intended):
             panel.get("gridPos", {}).pop("y", None)
         if panel_id == 1:
+            for panel in (previous, intended):
+                panel["gridPos"].pop("x", None)
             if (previous.get("type") != "text" or intended.get("type") != "text"
                     or previous.get("title") not in ("Host summary", "Host")
                     or intended.get("title") != "Host"):
@@ -553,9 +565,9 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
         if previous != intended:
             raise RuntimeError("Unexpected original panel change: " + str(panel_id))
 
-    for panel_id, x, y in ((1, 0, 1), (94, 12, 1),
-                           (95, 0, 4), (uptime_id, 12, 4)):
-        if new[panel_id]["gridPos"] != {"x": x, "y": y, "w": 12, "h": 3}:
+    for panel_id, x, y in ((1, 4, 1), (94, 12, 1),
+                           (95, 4, 4), (uptime_id, 12, 4)):
+        if new[panel_id]["gridPos"] != {"x": x, "y": y, "w": 8, "h": 3}:
             raise RuntimeError("Unexpected 2x2 overview dimensions")
 
     if any(row.get("panels") != [] for row in new_rows):
