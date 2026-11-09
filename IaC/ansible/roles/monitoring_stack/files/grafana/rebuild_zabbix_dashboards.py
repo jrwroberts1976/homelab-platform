@@ -452,13 +452,13 @@ def admin_section_rows(source_panels):
     )
     result = [row(100, "Host Overview", 0)]
     for panel_id, x, y in ((1, 4, 1), (94, 12, 1),
-                           (95, 4, 4)):
+                           (95, 4, 3)):
         panel = by_id[panel_id]
-        panel["gridPos"].update({"x": x, "y": y, "w": 8, "h": 3})
+        panel["gridPos"].update({"x": x, "y": y, "w": 8, "h": 2})
         result.append(panel)
 
     uptime["type"] = "stat"
-    uptime["gridPos"].update({"x": 12, "y": 4, "w": 8, "h": 3})
+    uptime["gridPos"].update({"x": 12, "y": 3, "w": 8, "h": 2})
     uptime["options"] = {
         "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
         "orientation": "horizontal", "textMode": "value",
@@ -467,12 +467,12 @@ def admin_section_rows(source_panels):
     }
     result.append(uptime)
 
-    result.append(row(101, "System Performance", 7))
+    result.append(row(101, "System Performance", 5))
     for i, panel in enumerate(performance):
         panel["gridPos"]["x"] = 12 * (i % 2)
-        panel["gridPos"]["y"] = 8 + 8 * (i // 2)
+        panel["gridPos"]["y"] = 6 + 8 * (i // 2)
         result.append(panel)
-    perf_end = 8 + 8 * ((len(performance) + 1) // 2)
+    perf_end = 6 + 8 * ((len(performance) + 1) // 2)
 
     result.append(row(102, "Host Security", perf_end))
     security_y = perf_end + 1
@@ -528,8 +528,11 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             target = json.loads(json.dumps(panel))
             old_grid = prior.pop("gridPos", {})
             new_grid = target.pop("gridPos", {})
-            if (prior != target or old_grid.get("y") != new_grid.get("y")
-                    or old_grid.get("h") != 3
+            if (prior != target or old_grid.get("y") not in
+                    ({94: (1,), 95: (3, 4)}[panel_id])
+                    or new_grid.get("y") != {94: 1, 95: 3}[panel_id]
+                    or old_grid.get("h") not in (2, 3)
+                    or new_grid.get("h") != 2
                     or old_grid.get("w") not in (12, 8)
                     or new_grid.get("w") != 8
                     or old_grid.get("x") not in
@@ -558,6 +561,7 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             for panel in (previous, intended):
                 panel["gridPos"].pop("x", None)
                 panel["gridPos"].pop("w", None)
+                panel["gridPos"].pop("h", None)
         elif panel_id == uptime_id:
             if (previous.get("type") != "stat" or intended.get("type") != "stat"
                     or intended.get("datasource") != DS
@@ -566,12 +570,13 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             for panel in (previous, intended):
                 panel["gridPos"].pop("x", None)
                 panel["gridPos"].pop("w", None)
+                panel["gridPos"].pop("h", None)
         if previous != intended:
             raise RuntimeError("Unexpected original panel change: " + str(panel_id))
 
     for panel_id, x, y in ((1, 4, 1), (94, 12, 1),
-                           (95, 4, 4), (uptime_id, 12, 4)):
-        if new[panel_id]["gridPos"] != {"x": x, "y": y, "w": 8, "h": 3}:
+                           (95, 4, 3), (uptime_id, 12, 3)):
+        if new[panel_id]["gridPos"] != {"x": x, "y": y, "w": 8, "h": 2}:
             raise RuntimeError("Unexpected 2x2 overview dimensions")
 
     if any(row.get("panels") != [] for row in new_rows):
