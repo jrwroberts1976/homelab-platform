@@ -312,6 +312,37 @@ def admin_patching_live_panel(y, items):
     }
 
 
+def media01_patching_live_panel(y, items):
+    """Reuse the verified cached-APT Text query, scoped to media-01 only."""
+    import time
+    matches = [i for i in items if i.get("key_") == "homelab.patch.snapshot"]
+    if (len(matches) != 1 or matches[0].get("status") != "0"
+            or matches[0].get("state") != "0"
+            or matches[0].get("value_type") != "4"):
+        return patch_status_panel(y)
+    try:
+        item = matches[0]
+        snapshot = json.loads(item.get("lastvalue") or "")
+        age = time.time() - int(item.get("lastclock") or 0)
+        if (not 0 <= age <= 3 * 3600
+                or snapshot.get("schema_version") != 1
+                or snapshot.get("source") != "cached_apt_no_refresh"
+                or snapshot.get("error") is not None
+                or type(snapshot.get("pending_updates_cached")) is not int
+                or snapshot["pending_updates_cached"] < 0
+                or snapshot.get("security_updates") is not None
+                or snapshot.get("last_verified_patch_utc") is not None):
+            return patch_status_panel(y)
+    except (ValueError, TypeError, AttributeError):
+        return patch_status_panel(y)
+    panel = admin_patching_live_panel(y, items)
+    # Reuse the same JSON extraction and null-aware Unknown security field,
+    # but bind the Text query to media-01 rather than the admin-01 host.
+    panel["title"] = "Pending patches — media-01"
+    panel["targets"][0]["host"]["filter"] = "media-01"
+    return panel
+
+
 def admin_known_cves_panel(y, prometheus_ds):
     """Count distinct Greenbone CVE labels; missing/stale evidence is Unknown.
 
@@ -513,10 +544,12 @@ def managed_host_section_rows(source_panels):
 
     performance = sorted(
         (p for p in source_panels
-         if p["id"] not in {1, 90, 91, 94, 95, 97}
+         if p["id"] not in {1, 90, 91, 94, 95, 97, 96}
          and (uptime is None or p["id"] != uptime["id"])),
         key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
     )
+    if 96 in by_id:
+        performance.append(by_id[96])
     result = [row(100, "Host Overview", 0)]
     for panel_id, x, y in ((1, 4, 1), (94, 12, 1), (95, 4, 3)):
         panel = by_id[panel_id]
@@ -864,12 +897,29 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         target["itemids"] = "52886"
         target["options"]["useTrends"] = "false"
         panels.append(temperature_panel)
+    if name == "media-01":
+        temperature_item = pick(active, [r"homelab\\.cpu\\.temperature"])
+        if (not temperature_item
+                or temperature_item.get("name") != "CPU temperature"
+                or str(temperature_item.get("itemid")) != "52888"
+                or temperature_item.get("value_type") != "0"):
+            raise RuntimeError("media-01 verified CPU temperature Zabbix item missing")
+        temperature_panel = metric_panel(96, "CPU temperature", host["host"],
+                                         temperature_item, 0, "celsius")
+        target = temperature_panel["targets"][0]
+        target["queryType"] = "3"
+        target["itemids"] = "52888"
+        target["options"]["useTrends"] = "false"
+        panels.append(temperature_panel)
     problems_y = 6 + ((pid - 1) // 2) * 8
     if name == "admin-01":
         panels.append(admin_patching_live_panel(problems_y, items))
         panels.append(admin_known_cves_panel(problems_y, prometheus_ds))
         panels.append(admin_cve_details_panel(problems_y + 6, prometheus_ds))
         panels.append(problem_panel(host["host"], problems_y + 11))
+    elif name == "media-01":
+        panels.append(media01_patching_live_panel(problems_y, items))
+        panels.append(problem_panel(host["host"], problems_y + 6))
     else:
         panels.append(patch_status_panel(problems_y))
         panels.append(problem_panel(host["host"], problems_y + 6))
