@@ -1,3 +1,10 @@
+## 2026-11-09 — Existing Prometheus Greenbone CVE tile staged, preview/deploy pending
+
+- Confirmed existing `monitor-01:/var/lib/prometheus/node-exporter/homelab_greenbone.prom`: `homelab_greenbone_cve_finding_score{hostname="admin-01",cve="CVE-1999-0524",severity="Low",...} 2.1`, evidence timestamp metric, and Prometheus API distinct count = 1 for admin-01. Grafana already has default provisioned Prometheus datasource.
+- Updated existing IaC `rebuild_zabbix_dashboards.py` admin-01 panel 92 from security Unknown text into live Prometheus "Known CVEs" stat: unique CVE labels, explicit host-series presence, 30-hour evidence timestamp gate and future timestamp check; missing/stale shows Unknown (no false zero). Resolved default datasource UID via Grafana API. Existing panel 91 pending-patches Zabbix stat is unchanged; patch-pilot guard newly refuses any panel-91 modification, unexpected panel-92 prior state, other panels and all other dashboards. **Not yet syntax-checked or deployed on monitor-01.**
+- Operator next: fetch feature branch into isolated worktree, run `python3 -m py_compile .../rebuild_zabbix_dashboards.py` locally, Ansible syntax check, preview `grafana-admin-patching-pilot.yml --limit monitor-01`; review gate before explicit `-e grafana_patch_pilot_apply=true`. Existing playbook installs builder even for preview; dashboard writes only on explicit flag.
+- Note caveat: exporter provides CVE series but no explicit per-host scan coverage; no CVEs for a host => Unknown rather than zero until coverage signal exists. Count is vulnerability findings, not patch availability. Single low-severity ICMP timestamp finding on admin-01 warrants separate mitigation verification.
+
 ## 2026-11-09 — admin-01 Greenbone CVE evidence verified on both hosts; Grafana integration pending
 
 - Operator ran read-only inspection of existing Greenbone Community Edition docker stack on greenbone-01. GMP 22.7 accessible over /run/gvmd/gvmd.sock, requires authentication for reports. Existing `/usr/local/sbin/homelab-greenbone-scan` already authenticates/parses/publishes managed JSON; do not create another client.
