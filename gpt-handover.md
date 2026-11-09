@@ -1,3 +1,8 @@
+## 2026-11-09 — Screenshot verifies admin-01 metrics; CVE tile display refinement staged
+
+- Operator screenshot confirms admin-01 Grafana pending-patches panel shows 20 and Known CVEs panel shows 1. The CVE panel also displayed a tiny verbose PromQL field/series label above the number due to Grafana stat `textMode=value_and_name`.
+- Staged one-line IaC display-only change in `rebuild_zabbix_dashboards.py`: CVE panel 92 `textMode=value`. PromQL, 30-hour freshness, data sources, pending patches panel 91, and pilot guards unchanged. **Staged only; must preview and explicitly apply via existing `grafana-admin-patching-pilot.yml` after fetch.**
+
 ## 2026-11-09 — admin-01 Known CVEs Grafana panel deployed via guarded Ansible pilot
 
 - Operator ran `ansible-playbook playbooks/grafana-admin-patching-pilot.yml --limit monitor-01 -e grafana_patch_pilot_apply=true` from isolated patching worktree; preflight PASS, `PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged`, `APPLIED UPDATE: admin-01`, 15 matched hosts / 16 candidate dashboards, play recap ok=7 changed=1 failed=0.
