@@ -1,0 +1,139 @@
+---
+# dns-01 only: read-only preview unless dns01_telemetry_apply=true.
+# Reuses the proven cached-APT collector and thermal-zone sensor.
+- name: Pilot cached APT patch and CPU temperature telemetry on dns-01
+  hosts: dns-01
+  gather_facts: true
+  become: true
+  vars:
+    dns01_telemetry_apply: false
+    patch_collector: /usr/local/bin/homelab-patch-snapshot
+    patch_userparam: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
+    temperature_userparam: /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf
+    temperature_sensor: /sys/class/thermal/thermal_zone0/temp
+  tasks:
+    - name: Confirm exact pilot target and supported OS
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'dns-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+
+    - name: Confirm existing dependencies without installing packages
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/sbin/zabbix_agent2
+        - /etc/zabbix/zabbix_agent2.d
+        - /usr/bin/apt
+        - "{{ temperature_sensor }}"
+      register: deps
+
+    - name: Require Agent 2, APT, and CPU sensor
+      ansible.builtin.assert:
+        that:
+          - deps.results | map(attribute='stat.exists') | min
+          - deps.results[1].stat.isdir | default(false)
+
+    - name: Read CPU temperature as Zabbix account
+      ansible.builtin.command:
+        argv: [cat, "{{ temperature_sensor }}"]
+      become_user: zabbix
+      register: cpu_raw
+      changed_when: false
+
+    - name: Validate supported temperature reading
+      ansible.builtin.assert:
+        that:
+          - cpu_raw.stdout is match('^[0-9]+$')
+          - cpu_raw.stdout | int >= 1000
+          - cpu_raw.stdout | int <= 110000
+
+    - name: Check existing configuration before any write
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ patch_collector }}"
+        - "{{ patch_userparam }}"
+        - "{{ temperature_userparam }}"
+      register: existing
+
+    - name: Print guarded preview
+      ansible.builtin.debug:
+        msg:
+          - "PILOT: dns-01 only; apply={{ dns01_telemetry_apply | bool }}"
+          - "Existing collector={{ existing.results[0].stat.exists }}, patch UserParameter={{ existing.results[1].stat.exists }}, temperature UserParameter={{ existing.results[2].stat.exists }}"
+          - "CPU temperature={{ (cpu_raw.stdout | int / 1000) | round(3) }} Celsius"
+          - "No APT refresh, upgrades, Zabbix API items or router changes"
+
+    - name: Install proven cached APT collector when approved
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py
+        dest: "{{ patch_collector }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: dns01_telemetry_apply | bool
+
+    - name: Install patch UserParameter when approved
+      ansible.builtin.copy:
+        dest: "{{ patch_userparam }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible: cached APT snapshot only; no refresh.
+          UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
+      register: patch_config
+      when: dns01_telemetry_apply | bool
+
+    - name: Install CPU temperature UserParameter when approved
+      ansible.builtin.copy:
+        dest: "{{ temperature_userparam }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible: read-only sysfs Celsius value.
+          UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+      register: temperature_config
+      when: dns01_telemetry_apply | bool
+
+    - name: Validate collector JSON as Zabbix account
+      ansible.builtin.command:
+        argv: ["{{ patch_collector }}"]
+      become_user: zabbix
+      register: snapshot
+      changed_when: false
+      when: dns01_telemetry_apply | bool
+
+    - name: Require a valid cached-APT result
+      ansible.builtin.assert:
+        that:
+          - (snapshot.stdout | from_json).schema_version == 1
+          - (snapshot.stdout | from_json).source == 'cached_apt_no_refresh'
+          - (snapshot.stdout | from_json).error == none
+      when: dns01_telemetry_apply | bool
+
+    - name: Restart existing Agent 2 only after configuration change
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: restarted
+      when:
+        - dns01_telemetry_apply | bool
+        - patch_config.changed | default(false) or temperature_config.changed | default(false)
+
+    - name: Verify CPU temperature UserParameter locally
+      ansible.builtin.command:
+        argv: [/usr/sbin/zabbix_agent2, -t, homelab.cpu.temperature]
+      register: cpu_test
+      changed_when: false
+      when: dns01_telemetry_apply | bool
+
+    - name: Report verified local outputs
+      ansible.builtin.debug:
+        msg:
+          - "Patch snapshot JSON valid: {{ (snapshot.stdout | from_json).error == none }}"
+          - "Temperature key: {{ cpu_test.stdout }}"
+      when: dns01_telemetry_apply | bool
