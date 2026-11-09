@@ -1,3 +1,9 @@
+## 2026-11-09 — Security patch classification source evaluation and version-aware audit staged
+
+- Existing Prometheus collector `homelab-patch-metrics` (disabled timer) uses simulated `apt-get dist-upgrade` and counts `Inst` lines containing "security"; this is insufficient for Raspberry Pi vendor updates and must not be presented as definitive. Operator confirmed simulation 30 Inst operations = 20 upgrades of installed packages plus 10 new packages; Zabbix cached pending candidates 20 is consistent.
+- Verified official references: Debian Security Tracker https://security-tracker.debian.org/tracker/ (source package CVE/fixed version); Raspberry Pi publishes product advisories https://www.raspberrypi.com/security/ and OS image Grype CVE reports https://raspberrypi.github.io/cve-list/ (image-level, not exact per-host report). Vendor-modified packages cannot be reliably classified by simple repository origin; the image CVE report is not directly a count for admin-01.
+- Extended existing read-only security evidence audit `audit_security_patch_candidates.py` with installed/candidate versions, repository provenance buckets, and source reference links. **Staged only, not run/tested on target.** Run `zabbix-security-patching-audit.yml --limit admin-01` after updating isolated worktree; review results before deciding on security count. No APT refresh/install/host writes; security_patch_count remains null. Do not change Grafana Unknown or collector until confirmed advisory mapping.
+
 ## 2026-11-08 — Security patch counting evidence audit staged, not executed
 
 - User requested to proceed with accurate numeric security patch counts following visually verified admin-01 two-panel Grafana patching layout (cached pending 20, security Unknown).
