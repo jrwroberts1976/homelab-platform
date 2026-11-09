@@ -1,3 +1,9 @@
+## 2026-11-09 — 2x2 Host Overview tiles staged (not deployed)
+
+- User approved replacing vertical Host Summary plus oversized uptime with a 2x2 compact tile grid for admin-01 only: Host / Operating system (Debian 13 + aarch64) / Kernel / System uptime. New text panels IDs 94 (Operating system) and 95 (Kernel), existing host identity panel ID 1 simplified to Host, and existing live Zabbix `system.uptime` stat reused (not duplicated) as fourth tile.
+- Existing section headings, System Performance plots, Host Security counters/CVE table, and Monitoring & Alerts table are unchanged. Existing layout rows retain their titles; 2x2 grid panels each x0 or x12, widths 12, height 3; no collectors or package changes.
+- Extended guarded layout validation to permit exactly two new text panels, verify existing panels' query/data configuration unchanged, require a live Zabbix uptime seconds stat, and support repeat preview after install. **GitHub change only; not operator compiled/tested/applied.** Run isolated worktree fetch, `python3 -m py_compile`, guarded Ansible preview without apply; inspect output before applying. Then screenshot and second preview for idempotency.
+
 ## 2026-11-09 — Compact Host Overview revision staged after screenshot feedback
 
 - Operator screenshot of live admin-01 Host Overview showed original OS source was a verbose kernel/compiler build string and live uptime stat was enormous; despite expected side-by-side grid, Grafana rendered two full-width stacked panels. User rejected layout.
