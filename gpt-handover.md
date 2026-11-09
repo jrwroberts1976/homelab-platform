@@ -1,3 +1,10 @@
+## 2026-11-09 — Four collapsible Grafana sections for admin-01 staged, not deployed
+
+- Following two consecutive idempotent previews (`PLANNED EXISTS: admin-01`, second changed=0), user approved layout-only organization of admin-01 into four expanded Grafana rows: Host Overview, System Performance, Host Security, Monitoring & Alerts.
+- Updated existing `IaC/ansible/roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py`: admin-01 only gets rows IDs 100-103, existing host info panel 1 under Overview, existing performance metric panels under System Performance, existing patches stat 91 + CVE stat 92 + CVE details 93 under Host Security, and existing problems table 90 under Monitoring & Alerts. Existing numeric values, queries, datasource, panel size and widths all unchanged; only vertical `gridPos.y` and four new expanded row headers.
+- Replaced old ad hoc CVE-table pilot guard with `validate_admin_section_pilot`: checks exactly expected row IDs/names, all original panel IDs, original x/w/h/payload equality except y, and deterministic vertical placement; allows idempotent re-preview when rows are already present. Existing `--patch-pilot` additionally blocks unrelated dashboard updates.
+- **Staged only; not compiled, previewed or deployed.** Operator next fetch isolated worktree, `python3 -m py_compile` generator, `ansible-playbook playbooks/grafana-admin-patching-pilot.yml --limit monitor-01` (preview only), inspect guard. Apply only after successful preview and check Grafana row rendering.
+
 ## 2026-11-09 — CVE table deployed; repeat preview guard bug fixed in GitHub
 
 - Operator first ran guarded preview and apply for CVE table layout refinement successfully (`APPLIED UPDATE: admin-01`, 15 other dashboards protected); subsequent identical apply attempt failed in preview (`no_log` suppressed error). Inspected IaC pilot guard and identified non-idempotent height assertion: previous table must have 8 rows, but first successful apply changed it to 5.
