@@ -984,9 +984,11 @@ def main():
                         help="Refuse all dashboard writes except the admin-01 patch panel")
     parser.add_argument("--managed-rollout", action="store_true",
                         help="Restrict rollout to the 14 existing non-admin managed hosts")
+    parser.add_argument("--media-pilot", action="store_true",
+                        help="Allow only media-01 verified patch and CPU panels")
     args = parser.parse_args()
-    if args.patch_pilot and args.managed_rollout:
-        raise RuntimeError("Pilot and managed rollout modes are mutually exclusive")
+    if sum(bool(x) for x in (args.patch_pilot, args.managed_rollout, args.media_pilot)) > 1:
+        raise RuntimeError("Grafana rollout modes are mutually exclusive")
     names, token, graf_headers = read_secret_files()
 
     folder = grafana_api(graf_headers, "/api/folders/homelab-managed-devices")
@@ -1071,6 +1073,61 @@ def main():
                 actions.append(("EXISTS", page, folder_uid))
                 continue
         actions.append(("UPDATE" if prior else "CREATE", page, folder_uid))
+
+    if args.media_pilot:
+        for action, page, _ in actions:
+            if page["title"] != "media-01" and action != "EXISTS":
+                raise RuntimeError("Media pilot refuses unrelated dashboard change: "
+                                   + page["title"] + " (" + action + ")")
+            if page["title"] == "media-01" and action == "CREATE":
+                raise RuntimeError("Media pilot refuses creating a replacement dashboard")
+        media_action = next((a for a in actions if a[1]["title"] == "media-01"), None)
+        if media_action is None:
+            raise RuntimeError("media-01 dashboard missing")
+        existing = grafana_api(graf_headers, "/api/dashboards/uid/" + media_action[1]["uid"])
+        before = existing["dashboard"]["panels"]
+        after = media_action[1]["panels"]
+        prior = {p["id"]: p for p in before}
+        new = {p["id"]: p for p in after}
+        if (len(prior) != len(before) or len(new) != len(after)
+                or set(new) != set(prior) | {96}):
+            raise RuntimeError("Media pilot panel inventory drift")
+        temp = new[96]
+        if (temp.get("title") != "CPU temperature"
+                or temp.get("type") != "timeseries"
+                or temp.get("datasource") != DS
+                or temp.get("fieldConfig", {}).get("defaults", {}).get("unit") != "celsius"
+                or len(temp.get("targets", [])) != 1):
+            raise RuntimeError("Unexpected media CPU temperature panel")
+        target = temp["targets"][0]
+        if (target.get("queryType") != "3" or target.get("itemids") != "52888"
+                or target.get("host", {}).get("filter") != "media-01"
+                or target.get("options", {}).get("useTrends") != "false"):
+            raise RuntimeError("Wrong media CPU item ID query")
+        patch = new[91]
+        if (patch.get("type") != "stat"
+                or patch.get("title") != "Pending patches — media-01"
+                or patch.get("datasource") != DS
+                or patch.get("targets", [{}])[0].get("host", {}).get("filter") != "media-01"
+                or patch.get("targets", [{}])[0].get("queryType") != "2"):
+            raise RuntimeError("Unexpected media patch stat")
+        if prior[91].get("type") not in ("text", "stat"):
+            raise RuntimeError("Unexpected old media patch panel")
+        for pid, original in prior.items():
+            if pid == 91:
+                if original.get("type") == "stat" and original != new[pid]:
+                    raise RuntimeError("Existing media patch stat drift")
+                continue
+            before_panel = json.loads(json.dumps(original))
+            after_panel = json.loads(json.dumps(new[pid]))
+            # Adding one performance chart can shift row and problem Y only.
+            if pid in (102, 103, 90):
+                before_panel["gridPos"].pop("y", None)
+                after_panel["gridPos"].pop("y", None)
+            if before_panel != after_panel:
+                raise RuntimeError("Media pilot changes unrelated panel " + str(pid))
+        actions = [media_action]
+        print("MEDIA PILOT GUARD: media-01 only; itemids=52888; all other 15 dashboards protected")
 
     if args.managed_rollout:
         allowed = set(found) - {"admin-01"}
