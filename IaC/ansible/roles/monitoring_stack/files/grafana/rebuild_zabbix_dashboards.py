@@ -312,27 +312,51 @@ def admin_patching_live_panel(y, items):
     }
 
 
-def admin_security_patch_placeholder(y):
-    """Explicitly Unknown until a verified security update count is collected."""
+def admin_known_cves_panel(y, prometheus_ds):
+    """Count distinct Greenbone CVE labels; missing/stale evidence is Unknown.
+
+    A zero is deliberately not inferred from an absent host series: the existing
+    Greenbone exporter has no explicit per-host scan-coverage metric.
+    """
+    expr = (
+        'count(count by (cve) '
+        '(homelab_greenbone_cve_finding_score{hostname="admin-01",cve=~"CVE-.+"}))'
+        ' and on() '
+        '(count(homelab_greenbone_cve_finding_score{hostname="admin-01",cve=~"CVE-.+"}) > 0)'
+        ' and on() '
+        '(time() - homelab_greenbone_evidence_timestamp_seconds < 108000)'
+        ' and on() '
+        '(homelab_greenbone_evidence_timestamp_seconds <= time() + 300)'
+    )
     return {
-        "id": 92, "type": "text", "title": "Security patches — admin-01",
+        "id": 92, "type": "stat", "title": "Known CVEs — admin-01",
+        "description": (
+            "Distinct CVE identifiers from Greenbone's existing managed-host "
+            "evidence for admin-01. Requires evidence newer than 30 hours. "
+            "A missing host series or stale evidence displays Unknown, not zero. "
+            "This is a vulnerability count, not a security patch count."
+        ),
+        "datasource": prometheus_ds,
         "gridPos": {"x": 12, "y": y, "w": 12, "h": 6},
-        "options": {
-            "mode": "markdown",
-            "content": (
-                "<div style='text-align:center;padding-top:18px'>"
-                "<div style='font-size:18px;color:#aab2c0'>Security patches</div>"
-                "<div style='font-size:64px;font-weight:600;line-height:1.6'>Unknown</div>"
-                "<div style='font-size:13px;color:#aab2c0'>"
-                "Awaiting verified classification</div></div>"
-            ),
+        "targets": [{
+            "refId": "A", "datasource": prometheus_ds, "expr": expr,
+            "instant": True, "range": False, "format": "time_series",
+        }],
+        "fieldConfig": {
+            "defaults": {"unit": "short", "decimals": 0, "noValue": "Unknown"},
+            "overrides": [],
         },
-        "description": ("Security patch count is not yet established. "
-                        "Zero security-origin candidates is not evidence of zero security patches."),
+        "options": {
+            "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
+            "orientation": "horizontal", "textMode": "value_and_name",
+            "wideLayout": False, "colorMode": "none", "graphMode": "none",
+            "justifyMode": "center",
+            "percentChangeColorMode": "standard", "showPercentChange": False,
+        },
     }
 
 
-def host_dashboard(name, host, items, os_info):
+def host_dashboard(name, host, items, os_info, prometheus_ds):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
               and x.get("value_type") in ("0", "3")]
@@ -367,7 +391,7 @@ def host_dashboard(name, host, items, os_info):
     problems_y = 6 + ((pid - 1) // 2) * 8
     if name == "admin-01":
         panels.append(admin_patching_live_panel(problems_y, items))
-        panels.append(admin_security_patch_placeholder(problems_y))
+        panels.append(admin_known_cves_panel(problems_y, prometheus_ds))
     else:
         panels.append(patch_status_panel(problems_y))
     panels.append(problem_panel(host["host"], problems_y + 6))
@@ -439,6 +463,14 @@ def main():
     if source.get("type") != DS["type"]:
         raise RuntimeError("Grafana Zabbix datasource missing")
 
+    # Resolve the already provisioned Prometheus datasource; do not assume its UID.
+    data_sources = grafana_api(graf_headers, "/api/datasources")
+    prom_sources = [d for d in data_sources if d.get("type") == "prometheus"
+                    and d.get("isDefault") is True and d.get("uid")]
+    if len(prom_sources) != 1:
+        raise RuntimeError("Expected exactly one default Prometheus datasource")
+    prometheus_ds = {"type": "prometheus", "uid": prom_sources[0]["uid"]}
+
     zbx_hosts = zabbix_api(token, "host.get", {
         "output": ["hostid", "host", "name", "status"],
         "selectInventory": ["os", "os_full"],
@@ -482,7 +514,7 @@ def main():
         })
         info = os_details(host, items)
         os_inventory[name] = info
-        page, missing = host_dashboard(name, host, items, info)
+        page, missing = host_dashboard(name, host, items, info, prometheus_ds)
         host_pages.append((page, "homelab-managed-devices"))
         print("HOST: " + name + " panels=" + str(len(page["panels"]))
               + " missing=" + (", ".join(missing) if missing else "none"))
@@ -530,6 +562,17 @@ def main():
                             if p.get("id") not in allowed_patch_ids]
         if previous_panels != candidate_panels:
             raise RuntimeError("Pilot refuses changes outside admin-01 patch panels 91/92")
+        old_patch = next((p for p in existing["dashboard"]["panels"]
+                          if p.get("id") == 91), None)
+        new_patch = next((p for p in admin_action[1]["panels"]
+                          if p.get("id") == 91), None)
+        if old_patch != new_patch:
+            raise RuntimeError("Pilot refuses any changes to existing pending-patch panel 91")
+        old_cve = next((p for p in existing["dashboard"]["panels"]
+                        if p.get("id") == 92), None)
+        if not old_cve or old_cve.get("title") not in (
+                "Security patches — admin-01", "Known CVEs — admin-01"):
+            raise RuntimeError("Pilot refuses unexpected previous panel 92")
         print("PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged")
         actions = [admin_action]
 
