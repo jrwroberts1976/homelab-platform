@@ -431,7 +431,7 @@ ADMIN_ROWS = (
 def admin_section_rows(source_panels):
     """Four compact host overview cards; other sections keep their data."""
     by_id = {p["id"]: p for p in source_panels}
-    required = {1, 90, 91, 92, 93, 94, 95}
+    required = {1, 90, 91, 92, 93, 94, 95, 96}
     if len(by_id) != len(source_panels) or not required <= set(by_id):
         raise RuntimeError("Incomplete or duplicated admin-01 panels")
     if set(by_id) & {rid for rid, _ in ADMIN_ROWS}:
@@ -506,8 +506,26 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
     new = {p["id"]: p for p in candidate_panels if p.get("type") != "row"}
     if (len(old) != len(existing_panels) - len(old_rows)
             or len(new) != len(candidate_panels) - len(new_rows)
-            or set(new) != set(old) | {94, 95}):
+            or set(new) != set(old) | {96}):
         raise RuntimeError("Unexpected panel inventory")
+
+    # One and only one added panel, backed by the existing admin-01 Zabbix item.
+    temperature = new[96]
+    expected_item_name = "CPU temperature"
+    if (96 in old
+            or temperature.get("type") != "timeseries"
+            or temperature.get("title") != expected_item_name
+            or temperature.get("datasource") != DS
+            or temperature.get("fieldConfig", {}).get("defaults", {}).get("unit") != "celsius"
+            or temperature.get("fieldConfig", {}).get("overrides") != []
+            or temperature.get("gridPos", {}).get("w") != 12
+            or temperature.get("gridPos", {}).get("h") != 8
+            or len(temperature.get("targets", [])) != 1
+            or temperature["targets"][0].get("item", {}).get("filter") !=
+                "/^CPU\\ temperature$/"):
+        raise RuntimeError("Unapproved CPU temperature graph")
+    if temperature["targets"][0] != metric_target("admin-01", expected_item_name):
+        raise RuntimeError("CPU temperature query must use only admin-01 Zabbix item")
 
     uptime_ids = [pid for pid, p in old.items()
                   if p.get("title") == "System uptime"]
@@ -648,6 +666,13 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
             panels.append(metric_panel(pid, label + " — " + item["name"],
                                        host["host"], item, y, "Bps"))
             pid += 1
+    if name == "admin-01":
+        # Reuse the verified active Zabbix float item; do not install collectors.
+        temperature_item = pick(active, [r"homelab\.cpu\.temperature"])
+        if not temperature_item or temperature_item.get("name") != "CPU temperature":
+            raise RuntimeError("admin-01 CPU temperature item missing from Zabbix")
+        panels.append(metric_panel(96, "CPU temperature", host["host"],
+                                   temperature_item, 0, "celsius"))
     problems_y = 6 + ((pid - 1) // 2) * 8
     if name == "admin-01":
         panels.append(admin_patching_live_panel(problems_y, items))
