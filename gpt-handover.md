@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 Grafana dashboard layout pilot completed and idempotency verified
+
+- Operator accepted compact, centred 2x2 Host Overview cards: Host, Operating system, Kernel, and live Zabbix System uptime with reduced font size. The four expanded/collapsible sections are Host Overview, System Performance, Host Security, Monitoring & Alerts. Host Security retains pending APT patches and Greenbone unique CVEs with details.
+- Final operator guarded Ansible preview on monitor-01 returned `PLANNED EXISTS: admin-01`, `SUMMARY: 15 matched Zabbix hosts; 16 candidate dashboards`; recap `ok=5 changed=0 failed=0 skipped=2`. IaC/dashboard match verified and no write required. Previous user confirmation indicates layout accepted.
+- Admin-01 layout workstream **complete**. Other managed-host dashboards were not changed; optional future work is to adapt this established layout across 14 remaining hosts with host-specific OS/kernel/uptime/security data, avoiding hard-coded admin-01 facts. No automatic rollout approved.
+
 ## 2026-11-09 — Shorter overview preview blocked by uptime typography guard, fix staged
 
 - Operator ran compact 2-row Host Overview Ansible preview; Python syntax already passed, but read-only Grafana preview failed with `no_log` redaction before any Grafana dashboard write. Existing builder file was installed by Ansible (changed=1).
