@@ -431,7 +431,7 @@ ADMIN_ROWS = (
 def admin_section_rows(source_panels):
     """Four compact host overview cards; other sections keep their data."""
     by_id = {p["id"]: p for p in source_panels}
-    required = {1, 90, 91, 92, 93, 94, 95, 96}
+    required = {1, 90, 91, 92, 93, 94, 95}
     if len(by_id) != len(source_panels) or not required <= set(by_id):
         raise RuntimeError("Incomplete or duplicated admin-01 panels")
     if set(by_id) & {rid for rid, _ in ADMIN_ROWS}:
@@ -509,11 +509,10 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             or set(new) != set(old) | {96}):
         raise RuntimeError("Unexpected panel inventory")
 
-    # One and only one added panel, backed by the existing admin-01 Zabbix item.
+    # At most one added panel, backed by the existing admin-01 Zabbix item.
     temperature = new[96]
     expected_item_name = "CPU temperature"
-    if (96 in old
-            or temperature.get("type") != "timeseries"
+    if (temperature.get("type") != "timeseries"
             or temperature.get("title") != expected_item_name
             or temperature.get("datasource") != DS
             or temperature.get("fieldConfig", {}).get("defaults", {}).get("unit") != "celsius"
@@ -526,6 +525,13 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
         raise RuntimeError("Unapproved CPU temperature graph")
     if temperature["targets"][0] != metric_target("admin-01", expected_item_name):
         raise RuntimeError("CPU temperature query must use only admin-01 Zabbix item")
+    if 96 in old:
+        prior_temperature = json.loads(json.dumps(old[96]))
+        intended_temperature = json.loads(json.dumps(temperature))
+        prior_temperature["gridPos"].pop("y", None)
+        intended_temperature["gridPos"].pop("y", None)
+        if prior_temperature != intended_temperature:
+            raise RuntimeError("Existing CPU temperature panel drift")
 
     uptime_ids = [pid for pid, p in old.items()
                   if p.get("title") == "System uptime"]
