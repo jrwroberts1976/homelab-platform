@@ -419,6 +419,106 @@ def admin_cve_details_panel(y, prometheus_ds):
     }
 
 
+
+ADMIN_ROWS = (
+    (100, "Host Overview"),
+    (101, "System Performance"),
+    (102, "Host Security"),
+    (103, "Monitoring & Alerts"),
+)
+
+
+def admin_section_rows(source_panels):
+    """Place existing admin-01 panels below four expanded, collapsible rows."""
+    by_id = {p["id"]: p for p in source_panels}
+    if len(by_id) != len(source_panels) or not {1, 90, 91, 92, 93} <= set(by_id):
+        raise RuntimeError("Cannot safely group incomplete/duplicate admin-01 panels")
+    if set(by_id) & {rid for rid, _ in ADMIN_ROWS}:
+        raise RuntimeError("Admin-01 row IDs collide with existing panels")
+
+    def row(row_id, title, y):
+        return {"id": row_id, "type": "row", "title": title, "collapsed": False,
+                "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}, "panels": []}
+
+    performance = sorted(
+        (p for p in source_panels if p["id"] not in {1, 90, 91, 92, 93}),
+        key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
+    )
+    result = [row(100, "Host Overview", 0)]
+    overview = by_id[1]
+    overview["gridPos"]["y"] = 1
+    result.append(overview)
+
+    performance_row_y = overview["gridPos"]["y"] + overview["gridPos"]["h"]
+    result.append(row(101, "System Performance", performance_row_y))
+    perf_y = performance_row_y + 1
+    if performance:
+        original_first = min(p["gridPos"]["y"] for p in performance)
+        for p in performance:
+            p["gridPos"]["y"] = perf_y + (p["gridPos"]["y"] - original_first)
+            result.append(p)
+        perf_end = max(p["gridPos"]["y"] + p["gridPos"]["h"] for p in performance)
+    else:
+        perf_end = perf_y
+
+    result.append(row(102, "Host Security", perf_end))
+    security_y = perf_end + 1
+    for panel_id, offset in ((91, 0), (92, 0), (93, 6)):
+        p = by_id[panel_id]
+        p["gridPos"]["y"] = security_y + offset
+        result.append(p)
+
+    alerts_row_y = security_y + 6 + by_id[93]["gridPos"]["h"]
+    result.append(row(103, "Monitoring & Alerts", alerts_row_y))
+    problem = by_id[90]
+    problem["gridPos"]["y"] = alerts_row_y + 1
+    result.append(problem)
+    return result
+
+
+def validate_admin_section_pilot(existing_panels, candidate_panels):
+    """Permit section headers and vertical-only moves; protect every panel payload."""
+    row_ids = {row_id for row_id, _ in ADMIN_ROWS}
+    old_rows = [p for p in existing_panels if p.get("type") == "row"]
+    new_rows = [p for p in candidate_panels if p.get("type") == "row"]
+    if old_rows and {p.get("id") for p in old_rows} != row_ids:
+        raise RuntimeError("Unexpected existing dashboard rows")
+    if [(p.get("id"), p.get("title"), p.get("collapsed"))
+            for p in new_rows] != [(i, name, False) for i, name in ADMIN_ROWS]:
+        raise RuntimeError("Unexpected requested dashboard section layout")
+    if old_rows:
+        for old_row, new_row in zip(old_rows, new_rows):
+            if old_row != new_row:
+                raise RuntimeError("Existing section header drift")
+
+    old_by_id = {p["id"]: p for p in existing_panels
+                 if p.get("type") != "row"}
+    new_by_id = {p["id"]: p for p in candidate_panels
+                 if p.get("type") != "row"}
+    if (len(old_by_id) != len([p for p in existing_panels if p.get("type") != "row"])
+            or len(new_by_id) != len([p for p in candidate_panels if p.get("type") != "row"])
+            or set(old_by_id) != set(new_by_id)):
+        raise RuntimeError("Panel inventory changed outside the layout request")
+
+    for panel_id, old in old_by_id.items():
+        new = new_by_id[panel_id]
+        old_compare = json.loads(json.dumps(old))
+        new_compare = json.loads(json.dumps(new))
+        if old_compare.get("gridPos", {}).get("x") != new_compare.get("gridPos", {}).get("x"):
+            raise RuntimeError("Panel horizontal placement changed: " + str(panel_id))
+        for panel in (old_compare, new_compare):
+            panel.get("gridPos", {}).pop("y", None)
+        if old_compare != new_compare:
+            raise RuntimeError("Panel content or dimensions changed: " + str(panel_id))
+
+    # Recalculate from the original panels, allowing no other repositioning.
+    baseline = [json.loads(json.dumps(p)) for p in existing_panels
+                if p.get("type") != "row"]
+    expected = admin_section_rows(baseline)
+    if expected != candidate_panels:
+        raise RuntimeError("Unexpected section ordering or vertical positions")
+
+
 def host_dashboard(name, host, items, os_info, prometheus_ds):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
@@ -460,6 +560,8 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
     else:
         panels.append(patch_status_panel(problems_y))
         panels.append(problem_panel(host["host"], problems_y + 6))
+    if name == "admin-01":
+        panels = admin_section_rows(panels)
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
@@ -617,61 +719,9 @@ def main():
             raise RuntimeError("No verified live admin-01 patch table; no changes")
         existing = grafana_api(
             graf_headers, "/api/dashboards/uid/" + admin_action[1]["uid"])
-        allowed_patch_ids = {90, 91, 92, 93}
-        if not any(p.get("id") == 92
-                   and p.get("type") == "stat"
-                   and p.get("title") == "Known CVEs — admin-01"
-                   and p.get("datasource") == prometheus_ds
-                   for p in admin_action[1]["panels"]):
-            raise RuntimeError("Expected Prometheus Known CVEs stat panel 92")
-        previous_panels = [p for p in existing["dashboard"]["panels"]
-                           if p.get("id") not in allowed_patch_ids]
-        candidate_panels = [p for p in admin_action[1]["panels"]
-                            if p.get("id") not in allowed_patch_ids]
-        if previous_panels != candidate_panels:
-            raise RuntimeError("Pilot refuses changes outside admin-01 security panels")
-        old_problem = next((p for p in existing["dashboard"]["panels"]
-                            if p.get("id") == 90), None)
-        new_problem = next((p for p in admin_action[1]["panels"]
-                            if p.get("id") == 90), None)
-        if old_problem is None or new_problem is None:
-            raise RuntimeError("Expected existing Zabbix problems panel")
-        expected_problem = json.loads(json.dumps(old_problem))
-        expected_problem["gridPos"]["y"] -= 3
-        if new_problem not in (old_problem, expected_problem):
-            raise RuntimeError("Pilot only permits moving Zabbix problems up 3 rows")
-        previous_details = [p for p in existing["dashboard"]["panels"]
-                            if p.get("id") == 93]
-        new_details = [p for p in admin_action[1]["panels"]
-                       if p.get("id") == 93 and p.get("type") == "table"
-                       and p.get("title") == "Host security — CVE findings"
-                       and p.get("datasource") == prometheus_ds]
-        if len(previous_details) > 1 or len(new_details) != 1:
-            raise RuntimeError("Pilot expected one host security CVE table")
-        if previous_details:
-            old_detail = json.loads(json.dumps(previous_details[0]))
-            new_detail = json.loads(json.dumps(new_details[0]))
-            if (old_detail.get("gridPos", {}).get("h") not in (8, 5)
-                    or new_detail.get("gridPos", {}).get("h") != 5):
-                raise RuntimeError("Unexpected CVE table height or existing state")
-            for detail in (old_detail, new_detail):
-                detail.pop("fieldConfig", None)
-                detail.pop("options", None)
-                detail.pop("gridPos", None)
-            if old_detail != new_detail:
-                raise RuntimeError("Pilot permits CVE table layout changes only")
-        old_patch = next((p for p in existing["dashboard"]["panels"]
-                          if p.get("id") == 91), None)
-        new_patch = next((p for p in admin_action[1]["panels"]
-                          if p.get("id") == 91), None)
-        if old_patch != new_patch:
-            raise RuntimeError("Pilot refuses any changes to existing pending-patch panel 91")
-        old_cve = next((p for p in existing["dashboard"]["panels"]
-                        if p.get("id") == 92), None)
-        if not old_cve or old_cve.get("title") not in (
-                "Security patches — admin-01", "Known CVEs — admin-01"):
-            raise RuntimeError("Pilot refuses unexpected previous panel 92")
-        print("PATCH PILOT GUARD: admin-01 only; existing patch metric and other 15 dashboards unchanged")
+        validate_admin_section_pilot(
+            existing["dashboard"]["panels"], admin_action[1]["panels"])
+        print("SECTION PILOT GUARD: admin-01 only; all panel data/config unchanged; other 15 dashboards unchanged")
         actions = [admin_action]
 
     for action, page, folder_uid in actions:
