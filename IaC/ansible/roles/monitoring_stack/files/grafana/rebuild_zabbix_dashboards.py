@@ -460,6 +460,16 @@ ADMIN_ROWS = (
 
 
 
+def dns01_patching_live_panel(y, items):
+    """Use the verified cached APT query only with valid fresh evidence."""
+    panel = media01_patching_live_panel(y, items)
+    if panel.get("type") != "stat":
+        raise RuntimeError("dns-01 patch snapshot missing, invalid or stale")
+    panel["title"] = "Pending patches — dns-01"
+    panel["targets"][0]["host"]["filter"] = "dns-01"
+    return panel
+
+
 def actionable_count_panel(host_name, y, prometheus_ds):
     panel = admin_known_cves_panel(y, prometheus_ds)
     panel["id"] = 98
@@ -737,6 +747,52 @@ def validate_managed_host_rollout(host_name, existing_panels, candidate_panels):
 
 
 
+def validate_dns01_telemetry_pilot(existing_panels, candidate_panels):
+    """Only replace the patch placeholder and add the verified Zabbix CPU chart."""
+    before = {p["id"]: p for p in existing_panels}
+    after = {p["id"]: p for p in candidate_panels}
+    if (len(before) != len(existing_panels)
+            or len(after) != len(candidate_panels)
+            or 96 in before
+            or set(after) != set(before) | {96}
+            or not {90, 91, 98, 99, 100, 101, 102, 103} <= set(before)):
+        raise RuntimeError("Unexpected dns-01 dashboard panel inventory")
+    for pid, original in before.items():
+        if pid == 91:
+            if original.get("type") != "text" or original.get("title") != "Patching status":
+                raise RuntimeError("dns-01 patch placeholder unexpectedly changed")
+            continue
+        a = json.loads(json.dumps(original))
+        b = json.loads(json.dumps(after[pid]))
+        if pid in (102, 103, 90, 98, 99):
+            a.get("gridPos", {}).pop("y", None)
+            b.get("gridPos", {}).pop("y", None)
+        if a != b:
+            raise RuntimeError("dns-01 unrelated panel drift: " + str(pid))
+    temp = after[96]
+    target = temp.get("targets", [{}])[0]
+    if (temp.get("type") != "timeseries"
+            or temp.get("title") != "CPU temperature"
+            or temp.get("datasource") != DS
+            or temp.get("fieldConfig", {}).get("defaults", {}).get("unit") != "celsius"
+            or target.get("queryType") != "3"
+            or target.get("itemids") != "52890"
+            or target.get("host", {}).get("filter") != "dns-01"
+            or target.get("options", {}).get("useTrends") != "false"):
+        raise RuntimeError("dns-01 CPU chart must use Zabbix item 52890")
+    patch = after[91]
+    t = patch.get("targets", [{}])[0]
+    if (patch.get("type") != "stat"
+            or patch.get("title") != "Pending patches — dns-01"
+            or patch.get("datasource") != DS
+            or t.get("queryType") != "2"
+            or t.get("host", {}).get("filter") != "dns-01"):
+        raise RuntimeError("dns-01 pending patch panel must use Zabbix text history")
+    for pid in (98, 99):
+        if after[pid].get("datasource", {}).get("type") != "prometheus":
+            raise RuntimeError("Greenbone datasource changed on dns-01")
+
+
 def validate_greenbone_rollout(host_name, existing_panels, candidate_panels, prometheus_ds):
     """Only add two host-specific Greenbone panels and move downstream Y positions."""
     if host_name in ("admin-01", "media-01"):
@@ -937,7 +993,7 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
         raise RuntimeError("Unexpected nested section panels")
 
 
-def host_dashboard(name, host, items, os_info, prometheus_ds, greenbone_rollout=False):
+def host_dashboard(name, host, items, os_info, prometheus_ds, greenbone_rollout=False, dns_pilot=False):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
               and x.get("value_type") in ("0", "3")]
@@ -1036,6 +1092,20 @@ def host_dashboard(name, host, items, os_info, prometheus_ds, greenbone_rollout=
         target["itemids"] = "52888"
         target["options"]["useTrends"] = "false"
         panels.append(temperature_panel)
+    if dns_pilot and name == "dns-01":
+        temperature_items = [i for i in active if i.get("key_") == "homelab.cpu.temperature"]
+        if (len(temperature_items) != 1
+                or temperature_items[0].get("name") != "CPU temperature"
+                or str(temperature_items[0].get("itemid")) != "52890"
+                or temperature_items[0].get("value_type") != "0"):
+            raise RuntimeError("dns-01 verified CPU temperature item missing or changed")
+        temperature_panel = metric_panel(96, "CPU temperature", host["host"],
+                                         temperature_items[0], 0, "celsius")
+        target = temperature_panel["targets"][0]
+        target["queryType"] = "3"
+        target["itemids"] = "52890"
+        target["options"]["useTrends"] = "false"
+        panels.append(temperature_panel)
     problems_y = 6 + ((pid - 1) // 2) * 8
     if name == "admin-01":
         panels.append(admin_patching_live_panel(problems_y, items))
@@ -1048,7 +1118,9 @@ def host_dashboard(name, host, items, os_info, prometheus_ds, greenbone_rollout=
         panels.append(actionable_details_panel(name, problems_y + 6, prometheus_ds))
         panels.append(problem_panel(host["host"], problems_y + 6))
     else:
-        panels.append(patch_status_panel(problems_y))
+        panels.append(dns01_patching_live_panel(problems_y, items)
+                      if dns_pilot and name == "dns-01"
+                      else patch_status_panel(problems_y))
         if greenbone_rollout:
             panels.append(actionable_count_panel(name, problems_y, prometheus_ds))
             panels.append(actionable_details_panel(name, problems_y + 6, prometheus_ds))
@@ -1118,8 +1190,10 @@ def main():
                         help="Allow only media-01 verified patch and CPU panels")
     parser.add_argument("--greenbone-rollout", action="store_true",
                         help="Add host-scoped Greenbone panels to 13 additional dashboards")
+    parser.add_argument("--dns-pilot", action="store_true",
+                        help="Change only dns-01 Grafana patch and temperature panels")
     args = parser.parse_args()
-    if sum(bool(x) for x in (args.patch_pilot, args.managed_rollout, args.media_pilot, args.greenbone_rollout)) > 1:
+    if sum(bool(x) for x in (args.patch_pilot, args.managed_rollout, args.media_pilot, args.greenbone_rollout, args.dns_pilot)) > 1:
         raise RuntimeError("Grafana rollout modes are mutually exclusive")
     names, token, graf_headers = read_secret_files()
 
@@ -1185,7 +1259,8 @@ def main():
         info = os_details(host, items)
         os_inventory[name] = info
         page, missing = host_dashboard(name, host, items, info, prometheus_ds,
-                                       greenbone_rollout=args.greenbone_rollout)
+                                       greenbone_rollout=(args.greenbone_rollout or args.dns_pilot),
+                                       dns_pilot=args.dns_pilot)
         host_pages.append((page, "homelab-managed-devices"))
         print("HOST: " + name + " panels=" + str(len(page["panels"]))
               + " missing=" + (", ".join(missing) if missing else "none"))
@@ -1308,6 +1383,24 @@ def main():
                                        page["panels"], prometheus_ds)
         actions = [a for a in actions if a[1]["title"] in allowed]
         print("GREENBONE ROLLOUT GUARD: 13 host dashboards; admin-01, media-01 and overview protected")
+
+    if args.dns_pilot:
+        if "dns-01" not in found or len(found) != 15:
+            raise RuntimeError("dns-01 pilot requires complete inventory")
+        for action, page, _ in actions:
+            if page["title"] != "dns-01":
+                if action != "EXISTS":
+                    raise RuntimeError("dns-01 pilot refuses unrelated dashboard change: "
+                                       + page["title"] + " (" + action + ")")
+                continue
+            if action == "CREATE":
+                raise RuntimeError("Refusing replacement dns-01 dashboard")
+            previous = grafana_api(graf_headers,
+                                   "/api/dashboards/uid/" + page["uid"])
+            validate_dns01_telemetry_pilot(previous["dashboard"]["panels"],
+                                          page["panels"])
+        actions = [a for a in actions if a[1]["title"] == "dns-01"]
+        print("DNS01 TELEMETRY GUARD: dns-01 only; Zabbix itemids 52889/52890; others protected")
 
     if args.patch_pilot:
         expected = "admin-01"
