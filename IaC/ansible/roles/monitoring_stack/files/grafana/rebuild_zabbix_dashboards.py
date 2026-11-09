@@ -465,7 +465,7 @@ def actionable_count_panel(host_name, y, prometheus_ds):
     panel["id"] = 98
     panel["title"] = "Actionable security findings — " + host_name
     panel["description"] = (
-        "Greenbone actionable findings for " + host_name + ", including findings "
+        f"Greenbone actionable findings for {host_name}, including findings "
         "without CVE identifiers. Requires evidence under 30 hours old. "
         "Missing or stale evidence is Unknown, not zero."
     )
