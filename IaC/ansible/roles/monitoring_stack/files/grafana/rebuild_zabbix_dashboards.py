@@ -459,6 +459,63 @@ ADMIN_ROWS = (
 )
 
 
+
+def media01_actionable_count_panel(y, prometheus_ds):
+    panel = admin_known_cves_panel(y, prometheus_ds)
+    panel["id"] = 98
+    panel["title"] = "Actionable security findings — media-01"
+    panel["description"] = (
+        "Greenbone actionable findings for media-01, including findings "
+        "without CVE identifiers. Requires evidence under 30 hours old. "
+        "Missing or stale evidence is Unknown, not zero."
+    )
+    panel["targets"][0]["expr"] = (
+        'count(homelab_greenbone_actionable_finding_score{hostname="media-01"})'
+        ' and on() '
+        '(time() - homelab_greenbone_evidence_timestamp_seconds < 108000)'
+        ' and on() '
+        '(homelab_greenbone_evidence_timestamp_seconds <= time() + 300)'
+    )
+    return panel
+
+
+def media01_actionable_details_panel(y, prometheus_ds):
+    panel = admin_cve_details_panel(y, prometheus_ds)
+    panel["id"] = 99
+    panel["title"] = "Greenbone security findings — media-01"
+    panel["description"] = (
+        "Actionable Greenbone findings, including those without CVEs. "
+        "Requires evidence newer than 30 hours. An empty table does not "
+        "prove that the host is vulnerability-free."
+    )
+    panel["targets"][0]["expr"] = (
+        'max by (finding, severity, port) '
+        '(homelab_greenbone_actionable_finding_score{hostname="media-01"})'
+        ' and on() '
+        '(time() - homelab_greenbone_evidence_timestamp_seconds < 108000)'
+        ' and on() '
+        '(homelab_greenbone_evidence_timestamp_seconds <= time() + 300)'
+    )
+    panel["transformations"] = [{
+        "id": "organize",
+        "options": {
+            "excludeByName": {
+                "Time": True, "__name__": True, "Metric": True
+            },
+            "indexByName": {
+                "finding": 0, "severity": 1, "port": 2, "Value": 3
+            },
+            "renameByName": {
+                "finding": "Finding",
+                "severity": "Severity",
+                "port": "Port",
+                "Value": "CVSS"
+            }
+        }
+    }]
+    return panel
+
+
 def admin_section_rows(source_panels):
     """Four compact host overview cards; other sections keep their data."""
     by_id = {p["id"]: p for p in source_panels}
@@ -544,7 +601,7 @@ def managed_host_section_rows(source_panels):
 
     performance = sorted(
         (p for p in source_panels
-         if p["id"] not in {1, 90, 91, 94, 95, 97, 96}
+         if p["id"] not in {1, 90, 91, 94, 95, 97, 96, 98, 99}
          and (uptime is None or p["id"] != uptime["id"])),
         key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
     )
@@ -583,6 +640,21 @@ def managed_host_section_rows(source_panels):
     status["gridPos"]["y"] = perf_end + 1
     result.append(status)
     alerts_y = perf_end + 1 + status["gridPos"]["h"]
+    if 98 in by_id or 99 in by_id:
+        if not {98, 99} <= set(by_id):
+            raise RuntimeError("Incomplete media-01 security panels")
+        count_panel = by_id[98]
+        count_panel["gridPos"].update({
+            "x": 12, "y": perf_end + 1, "w": 12, "h": 6
+        })
+        result.append(count_panel)
+        details_panel = by_id[99]
+        details_panel["gridPos"].update({
+            "x": 0, "y": max(alerts_y, perf_end + 7),
+            "w": 24, "h": 5
+        })
+        result.append(details_panel)
+        alerts_y = details_panel["gridPos"]["y"] + 5
     result.append(row(103, "Monitoring & Alerts", alerts_y))
     problems = by_id[90]
     problems["gridPos"]["y"] = alerts_y + 1
@@ -898,7 +970,7 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         target["options"]["useTrends"] = "false"
         panels.append(temperature_panel)
     if name == "media-01":
-        temperature_item = pick(active, [r"homelab\\.cpu\\.temperature"])
+        temperature_item = pick(active, [r"homelab\.cpu\.temperature"])
         if (not temperature_item
                 or temperature_item.get("name") != "CPU temperature"
                 or str(temperature_item.get("itemid")) != "52888"
@@ -919,6 +991,8 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         panels.append(problem_panel(host["host"], problems_y + 11))
     elif name == "media-01":
         panels.append(media01_patching_live_panel(problems_y, items))
+        panels.append(media01_actionable_count_panel(problems_y, prometheus_ds))
+        panels.append(media01_actionable_details_panel(problems_y + 6, prometheus_ds))
         panels.append(problem_panel(host["host"], problems_y + 6))
     else:
         panels.append(patch_status_panel(problems_y))
@@ -1090,7 +1164,7 @@ def main():
         prior = {p["id"]: p for p in before}
         new = {p["id"]: p for p in after}
         if (len(prior) != len(before) or len(new) != len(after)
-                or set(new) != set(prior) | {96}):
+                or set(new) != set(prior) | {98, 99}):
             raise RuntimeError("Media pilot panel inventory drift")
         temp = new[96]
         if (temp.get("title") != "CPU temperature"
@@ -1113,6 +1187,16 @@ def main():
             raise RuntimeError("Unexpected media patch stat")
         if prior[91].get("type") not in ("text", "stat"):
             raise RuntimeError("Unexpected old media patch panel")
+        for panel_id, panel_type in ((98, "stat"), (99, "table")):
+            panel = new[panel_id]
+            if (panel.get("type") != panel_type
+                    or panel.get("datasource") != prometheus_ds
+                    or len(panel.get("targets", [])) != 1
+                    or 'hostname="media-01"' not in
+                       panel["targets"][0].get("expr", "")
+                    or "homelab_greenbone_evidence_timestamp_seconds"
+                       not in panel["targets"][0].get("expr", "")):
+                raise RuntimeError("Invalid media Greenbone panel")
         for pid, original in prior.items():
             if pid == 91:
                 if original.get("type") == "stat" and original != new[pid]:

@@ -2880,3 +2880,19 @@ Live API preflight: 73 total dashboards, 57 verified retired (52 generated, 5 na
 
 - Operator executed `/usr/bin/python3 -B /usr/local/sbin/router-dhcp-device-pages` **without `--apply`**. Successful read-only output: `dashboard_writes=0`, `device_pages=27`, `mode=check`, `new_devices=0`, `no_deletions=true`, `state_change=false`. Ansible ad-hoc `CHANGED` is its default reporting and does not mean the script modified state.
 - No pending DHCP device creation under current evidence; do not confuse this with a subsequent successful scheduled run. Remaining acceptance: demonstrate stable MAC-derived UID through DHCP IP reassignment and verify Nmap enrichment. Do not alter router, reset ledger or replay canary.
+
+## 2026-11-09 — media-01 Grafana monitoring completed
+
+- Deployed media-01 Grafana telemetry through guarded Ansible/IaC.
+- Zabbix patch snapshot item: 52887 (`homelab.patch.snapshot`).
+- Zabbix CPU temperature item: 52888 (`homelab.cpu.temperature`).
+- Verified cached APT pending patches: 19.
+- Added Greenbone actionable findings count and details panels.
+- Verified two Medium findings on HTTPS port 443:
+  - Missing HttpOnly cookie attribute — CVSS 5.0.
+  - Missing Secure cookie attribute — CVSS 5.0.
+- Both findings have no associated CVE identifiers.
+- Reused existing Greenbone/Prometheus evidence and 30-hour freshness checks.
+- Confirmed media-01-only Grafana deployment; 15 other dashboards protected.
+- Ansible apply successful and Grafana rendering visually verified.
+- No changes required to Greenbone scanning or Prometheus exporters.
