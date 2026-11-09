@@ -1,3 +1,9 @@
+## 2026-11-09 — Exact Zabbix CPU temperature selector preview blocked; duplicate guard check fixed
+
+- After staging Grafana CPU temperature panel ID 96 item selector switch from `/^CPU\\ temperature$/` to exact `CPU temperature`, operator preview on monitor-01 failed before any Grafana write (`no_log` hid the message; recap ok=3 changed=1 failed=1).
+- Static investigation found the earlier panel-96-specific guard already permits exactly that selector transition and compares the remainder of panel 96 byte-for-byte, but the following general old-panel loop redundantly compared the same panel a second time without permitting the selector change, producing a likely `Unexpected original panel change: 96`. Fixed by excluding panel 96 from the general pass **after** its dedicated strict validation; all other panels and 15 other dashboards remain guarded.
+- Fix staged on feature branch, not deployed. Operator next fetches branch, compiles Python builder, runs read-only guarded preview. Only after passing, run explicit apply and inspect Grafana Query Inspector for non-empty data. The selector hypothesis remains unproven; if still no data, investigate plugin item resolution, rather than further speculative changes.
+
 ## 2026-11-09 — admin-01 CPU temperature Grafana query returned no series; exact-name fix staged
 
 - User supplied Grafana Query Inspector for CPU temperature: Zabbix datasource, host `admin-01`, item selector `/^CPU\\ temperature$/`, 6h window, HTTP 200 but `frames: []`. The Zabbix Latest data screen independently showed `CPU temperature` = 38.628 °C (itemid 52886), so item collection works. HTTP 200 with no frames is not proof of an unhealthy agent.
