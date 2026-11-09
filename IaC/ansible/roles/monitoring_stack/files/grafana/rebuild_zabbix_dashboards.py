@@ -751,6 +751,11 @@ def validate_dns01_telemetry_pilot(existing_panels, candidate_panels):
     """Only replace the patch placeholder and add the verified Zabbix CPU chart."""
     before = {p["id"]: p for p in existing_panels}
     after = {p["id"]: p for p in candidate_panels}
+    # After an approved rollout, unchanged dashboards must be safe to preview.
+    if 96 in before:
+        if before != after:
+            raise RuntimeError("Existing dns-01 telemetry dashboard drifted")
+        return
     if (len(before) != len(existing_panels)
             or len(after) != len(candidate_panels)
             or 96 in before
