@@ -356,6 +356,59 @@ def admin_known_cves_panel(y, prometheus_ds):
     }
 
 
+
+def admin_cve_details_panel(y, prometheus_ds):
+    """Show current Greenbone CVE ID, finding name and severity for admin-01."""
+    expr = (
+        'max by (cve, finding, severity) '
+        '(homelab_greenbone_cve_finding_score{hostname="admin-01",cve=~"CVE-.+"})'
+        ' and on() '
+        '(time() - homelab_greenbone_evidence_timestamp_seconds < 108000)'
+        ' and on() '
+        '(homelab_greenbone_evidence_timestamp_seconds <= time() + 300)'
+    )
+    return {
+        "id": 93, "type": "table", "title": "Host security — CVE findings",
+        "description": (
+            "CVE, Greenbone finding description, severity and CVSS score from the "
+            "latest managed-host report. Requires evidence under 30 hours old. "
+            "An empty table may also mean no current scan evidence; it does not "
+            "prove the host is vulnerability-free. Descriptions are Greenbone "
+            "finding names, not full vulnerability advisory text."
+        ),
+        "datasource": prometheus_ds,
+        "gridPos": {"x": 0, "y": y, "w": 24, "h": 8},
+        "targets": [{
+            "refId": "A", "datasource": prometheus_ds, "expr": expr,
+            "instant": True, "range": False, "format": "table",
+        }],
+        "transformations": [{
+            "id": "organize",
+            "options": {
+                "excludeByName": {
+                    "Time": True, "__name__": True, "hostname": True,
+                    "finding_id": True, "risk_status": True, "port": True,
+                    "Metric": True,
+                },
+                "indexByName": {
+                    "cve": 0, "finding": 1, "severity": 2, "Value": 3,
+                },
+                "renameByName": {
+                    "cve": "CVE", "finding": "Description",
+                    "severity": "Severity", "Value": "CVSS",
+                },
+            },
+        }],
+        "fieldConfig": {
+            "defaults": {"custom": {"align": "auto", "filterable": True}},
+            "overrides": [{"matcher": {"id": "byName", "options": "CVSS"},
+                           "properties": [{"id": "unit", "value": "none"},
+                                          {"id": "decimals", "value": 1}]}],
+        },
+        "options": {"showHeader": True, "cellHeight": "sm"},
+    }
+
+
 def host_dashboard(name, host, items, os_info, prometheus_ds):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
@@ -392,9 +445,11 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
     if name == "admin-01":
         panels.append(admin_patching_live_panel(problems_y, items))
         panels.append(admin_known_cves_panel(problems_y, prometheus_ds))
+        panels.append(admin_cve_details_panel(problems_y + 6, prometheus_ds))
+        panels.append(problem_panel(host["host"], problems_y + 14))
     else:
         panels.append(patch_status_panel(problems_y))
-    panels.append(problem_panel(host["host"], problems_y + 6))
+        panels.append(problem_panel(host["host"], problems_y + 6))
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
@@ -552,7 +607,7 @@ def main():
             raise RuntimeError("No verified live admin-01 patch table; no changes")
         existing = grafana_api(
             graf_headers, "/api/dashboards/uid/" + admin_action[1]["uid"])
-        allowed_patch_ids = {91, 92}
+        allowed_patch_ids = {90, 91, 92, 93}
         if not any(p.get("id") == 92
                    and p.get("type") == "stat"
                    and p.get("title") == "Known CVEs — admin-01"
@@ -564,7 +619,27 @@ def main():
         candidate_panels = [p for p in admin_action[1]["panels"]
                             if p.get("id") not in allowed_patch_ids]
         if previous_panels != candidate_panels:
-            raise RuntimeError("Pilot refuses changes outside admin-01 patch panels 91/92")
+            raise RuntimeError("Pilot refuses changes outside admin-01 security panels")
+        old_problem = next((p for p in existing["dashboard"]["panels"]
+                            if p.get("id") == 90), None)
+        new_problem = next((p for p in admin_action[1]["panels"]
+                            if p.get("id") == 90), None)
+        if old_problem is None or new_problem is None:
+            raise RuntimeError("Expected existing Zabbix problems panel")
+        expected_problem = json.loads(json.dumps(old_problem))
+        expected_problem["gridPos"]["y"] += 8
+        if new_problem not in (old_problem, expected_problem):
+            raise RuntimeError("Pilot only permits moving Zabbix problems down 8 rows")
+        previous_details = [p for p in existing["dashboard"]["panels"]
+                            if p.get("id") == 93]
+        new_details = [p for p in admin_action[1]["panels"]
+                       if p.get("id") == 93 and p.get("type") == "table"
+                       and p.get("title") == "Host security — CVE findings"
+                       and p.get("datasource") == prometheus_ds]
+        if len(previous_details) > 1 or len(new_details) != 1:
+            raise RuntimeError("Pilot expected one host security CVE table")
+        if previous_details and previous_details[0] != new_details[0]:
+            raise RuntimeError("Pilot refuses unexpected change to existing CVE table")
         old_patch = next((p for p in existing["dashboard"]["panels"]
                           if p.get("id") == 91), None)
         new_patch = next((p for p in admin_action[1]["panels"]
@@ -576,7 +651,7 @@ def main():
         if not old_cve or old_cve.get("title") not in (
                 "Security patches — admin-01", "Known CVEs — admin-01"):
             raise RuntimeError("Pilot refuses unexpected previous panel 92")
-        print("PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged")
+        print("PATCH PILOT GUARD: admin-01 only; existing patch metric and other 15 dashboards unchanged")
         actions = [admin_action]
 
     for action, page, folder_uid in actions:
