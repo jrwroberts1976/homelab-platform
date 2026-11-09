@@ -575,6 +575,11 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
                 raise RuntimeError("Existing overview card drift: " + str(panel_id))
 
     for panel_id, previous_panel in old.items():
+        # Panel 96 has already been compared above, allowing only its exact
+        # Zabbix item selector to change. Do not reject that same approved
+        # transition again in the general immutable-panel check.
+        if panel_id == 96:
+            continue
         next_panel = new[panel_id]
         previous = json.loads(json.dumps(previous_panel))
         intended = json.loads(json.dumps(next_panel))
