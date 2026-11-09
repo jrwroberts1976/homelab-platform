@@ -1,0 +1,172 @@
+---
+# Read-only feasibility audit for future Zabbix patch telemetry.
+# Pilot on admin-01 with --limit admin-01. Does not refresh package indexes,
+# install/upgrade anything, modify host facts, or start background services.
+- name: Audit cached Debian patch metadata without changing hosts
+  hosts: all
+  become: false
+  gather_facts: true
+  tasks:
+    - name: Require approved single-host pilot
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - inventory_hostname == 'admin-01'
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Pilot limited to admin-01 Debian only. Use --limit admin-01."
+
+    - name: Inspect cached package upgrade candidates without refreshing indexes
+      ansible.builtin.command:
+        argv: [apt, list, --upgradable]
+      environment:
+        LC_ALL: C
+      register: cached_upgrades
+      changed_when: false
+      failed_when: false
+
+    - name: Inspect package-index age, reboot indicator and package history files
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /var/lib/apt/periodic/update-success-stamp
+        - /var/lib/apt/lists
+        - /var/run/reboot-required
+        - /var/log/apt/history.log
+        - /var/log/dpkg.log
+      register: metadata
+      changed_when: false
+
+    - name: Report only read-only pilot observations
+      ansible.builtin.debug:
+        msg:
+          - "PILOT: {{ inventory_hostname }} ({{ ansible_facts.distribution }} {{ ansible_facts.distribution_version }})"
+          - "CACHED APT COMMAND RC: {{ cached_upgrades.rc }} (0 expected)"
+          - "CACHED UPGRADE CANDIDATE LINES: {{ cached_upgrades.stdout_lines | reject('match', '^Listing') | reject('equalto', '') | list | length }}"
+          - "REBOOT REQUIRED FLAG: {{ 'present' if metadata.results[2].stat.exists else 'absent (not a complete reboot-compliance proof)' }}"
+          - "APT UPDATE SUCCESS STAMP EXISTS: {{ metadata.results[0].stat.exists }}"
+          - "APT LISTS DIRECTORY EXISTS: {{ metadata.results[1].stat.exists }}"
+          - "APT HISTORY LOG EXISTS: {{ metadata.results[3].stat.exists }}"
+          - "DPKG LOG EXISTS: {{ metadata.results[4].stat.exists }}"
+          - "SECURITY UPDATE COUNT: Unknown pending origin-aware classification"
+          - "LAST SUCCESSFUL PATCH: Unknown pending trustworthy history interpretation"
+          - "READ ONLY: no apt update, installs, upgrades or service restarts"
+
+    - name: Inspect APT index freshness without refreshing lists
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            from datetime import datetime, timezone
+            root = Path("/var/lib/apt/lists")
+            files = [p for p in root.iterdir() if p.is_file() and not p.name.startswith("lock")] if root.exists() else []
+            newest = max((p.stat().st_mtime for p in files), default=None)
+            print(json.dumps({
+                "index_file_count": len(files),
+                "newest_index_utc": datetime.fromtimestamp(newest, timezone.utc).isoformat() if newest else None,
+                "newest_index_age_hours": round((datetime.now(timezone.utc).timestamp() - newest) / 3600, 1) if newest else None,
+                "note": "File mtime is only a proxy for index freshness, not proof of a successful apt update"
+            }))
+      register: apt_index_freshness
+      changed_when: false
+
+    - name: Inspect candidate-version repository origins without modifying APT
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json
+            import re
+            import subprocess
+            result = subprocess.run(["apt", "list", "--upgradable"], capture_output=True, text=True, env={"LC_ALL": "C", "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"})
+            if result.returncode:
+                raise SystemExit("apt list --upgradable failed")
+            candidates = []
+            for line in result.stdout.splitlines():
+                if not line or line.startswith("Listing"):
+                    continue
+                match = re.match(r"^([^/]+)/\S+\s+(\S+)\s", line)
+                if not match:
+                    candidates.append({"package": "unparsed", "status": "unknown"})
+                    continue
+                package, version = match.groups()
+                policy = subprocess.run(["apt-cache", "policy", package], capture_output=True, text=True, env={"LC_ALL": "C", "PATH": "/usr/sbin:/usr/bin:/sbin:/bin"})
+                if policy.returncode:
+                    status = "unknown"
+                else:
+                    lines = policy.stdout.splitlines()
+                    candidate = next((x.split(":", 1)[1].strip() for x in lines if x.strip().startswith("Candidate:")), None)
+                    section = []
+                    active = False
+                    for ln in lines:
+                        if re.match(r"^\s*(?:\*\*\*\s+)?\S+\s+\d+\s*$", ln):
+                            tokens = ln.split()
+                            value = tokens[1] if tokens[0] == "***" else tokens[0]
+                            active = value == version
+                            continue
+                        if active:
+                            section.append(ln)
+                    origin = "\n".join(section).lower()
+                    if candidate != version or not section:
+                        status = "unknown"
+                    elif any(tag in origin for tag in ("-security", "security.debian.org", "debian-security")):
+                        status = "security_origin"
+                    else:
+                        status = "other_origin"
+                candidates.append({"package": package, "status": status})
+            print(json.dumps({
+                "candidate_count": len(candidates),
+                "security_origin_count": sum(x["status"] == "security_origin" for x in candidates),
+                "other_origin_count": sum(x["status"] == "other_origin" for x in candidates),
+                "unknown_origin_count": sum(x["status"] == "unknown" for x in candidates),
+                "classification": "cached_candidate_version_repository_origin_not_live_security_advisory",
+                "candidates": candidates
+            }))
+      register: apt_candidate_origins
+      changed_when: false
+
+    - name: Inspect latest completed APT history record (not proof of success)
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import json
+            from pathlib import Path
+            import re
+            path = Path("/var/log/apt/history.log")
+            text = path.read_text(errors="replace") if path.exists() else ""
+            blocks = re.split(r"\n\s*\n", text)
+            completed = []
+            for block in blocks:
+                start = re.search(r"(?m)^Start-Date:\s*(.+)$", block)
+                end = re.search(r"(?m)^End-Date:\s*(.+)$", block)
+                changed = re.search(r"(?m)^(Upgrade|Install|Remove):", block)
+                if start and end and changed:
+                    completed.append({"start": start.group(1), "end": end.group(1)})
+            print(json.dumps({
+                "last_completed_apt_transaction": completed[-1] if completed else None,
+                "last_successful_patch": None,
+                "note": "End-Date is not proof of successful patching; rotated logs not included"
+            }))
+      register: apt_history_evidence
+      changed_when: false
+
+    - name: Report phase 2 read-only patch evidence
+      ansible.builtin.debug:
+        msg:
+          - "APT INDEX FRESHNESS: {{ apt_index_freshness.stdout }}"
+          - "CACHED CANDIDATE ORIGINS: {{ apt_candidate_origins.stdout }}"
+          - "APT HISTORY EVIDENCE: {{ apt_history_evidence.stdout }}"
+          - "SECURITY PATCH COMPLIANCE: Unknown until cache freshness and origin interpretation verified"
+          - "LAST SUCCESSFUL PATCH: Unknown (completed transaction is not proof)"
+          - "READ ONLY: no apt update, installs, upgrades or service restarts"
+
+    - name: Fail pilot if cached package query errored
+      ansible.builtin.assert:
+        that:
+          - cached_upgrades.rc == 0
+        fail_msg: "Cached APT query failed; no collection will be deployed."

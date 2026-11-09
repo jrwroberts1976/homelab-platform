@@ -1,0 +1,146 @@
+---
+# Pilot existing cached-APT patch collector and CPU temperature on media-01.
+# Read-only preflight by default; opt-in apply installs two dedicated Zabbix
+# Agent 2 UserParameter files, the existing collector, and restarts Agent 2
+# only when configuration changes.
+- name: Pilot patch and CPU temperature Zabbix collection on media-01
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    media_telemetry_apply: false
+    patch_collector_dest: /usr/local/bin/homelab-patch-snapshot
+    patch_userparam_dest: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
+    temp_userparam_dest: /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf
+    temp_sensor: /sys/class/thermal/thermal_zone0/temp
+  tasks:
+    - name: Require one approved Debian pilot host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'media-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.os_family == 'Debian'
+
+    - name: Verify existing Agent 2 files, APT and thermal sensor
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/sbin/zabbix_agent2
+        - /etc/zabbix/zabbix_agent2.d
+        - /usr/bin/apt
+        - "{{ temp_sensor }}"
+      register: media_prereqs
+
+    - name: Require expected existing dependencies
+      ansible.builtin.assert:
+        that:
+          - media_prereqs.results | map(attribute='stat.exists') | min
+          - media_prereqs.results[1].stat.isdir | default(false)
+
+    - name: Read temperature as Zabbix account
+      ansible.builtin.command:
+        argv: [cat, "{{ temp_sensor }}"]
+      become_user: zabbix
+      environment:
+        ANSIBLE_REMOTE_TEMP: /tmp
+      register: media_temperature_raw
+      changed_when: false
+
+    - name: Require valid millidegree CPU reading
+      ansible.builtin.assert:
+        that:
+          - media_temperature_raw.stdout is match('^[0-9]+$')
+          - (media_temperature_raw.stdout | int) >= 1000
+          - (media_temperature_raw.stdout | int) <= 110000
+
+    - name: Check for existing dedicated UserParameters
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ patch_userparam_dest }}"
+        - "{{ temp_userparam_dest }}"
+      register: media_userparams
+
+    - name: Show audit-only plan
+      ansible.builtin.debug:
+        msg:
+          - "Host: media-01; apply={{ media_telemetry_apply | bool }}"
+          - "CPU sensor: {{ (media_temperature_raw.stdout | int / 1000) }} °C"
+          - "Existing patch/temp UserParameters: {{ media_userparams.results | map(attribute='stat.exists') | list }}"
+          - "Cached-APT only: no apt update, package installs, or patching"
+          - "Only Zabbix Agent 2 restarts if a UserParameter changes"
+
+    - name: Install existing read-only cached-APT collector on explicit apply
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py
+        dest: "{{ patch_collector_dest }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: media_telemetry_apply | bool
+
+    - name: Install dedicated cached-APT UserParameter on explicit apply
+      ansible.builtin.copy:
+        dest: "{{ patch_userparam_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by homelab-platform Ansible, media-01 pilot.
+          # Cached APT only; never refreshes package indexes.
+          UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
+      register: media_patch_config
+      when: media_telemetry_apply | bool
+
+    - name: Install dedicated CPU temperature UserParameter on explicit apply
+      ansible.builtin.copy:
+        dest: "{{ temp_userparam_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by homelab-platform Ansible, media-01 pilot.
+          UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+      register: media_temp_config
+      when: media_telemetry_apply | bool
+
+    - name: Run read-only cached-APT snapshot as Zabbix account
+      ansible.builtin.command:
+        argv: ["{{ patch_collector_dest }}"]
+      become_user: zabbix
+      register: media_patch_output
+      changed_when: false
+      when: media_telemetry_apply | bool
+
+    - name: Verify the cached-APT collector returned valid JSON
+      ansible.builtin.assert:
+        that:
+          - (media_patch_output.stdout | from_json).schema_version == 1
+          - (media_patch_output.stdout | from_json).source == 'cached_apt_no_refresh'
+          - (media_patch_output.stdout | from_json).error == none
+          - (media_patch_output.stdout | from_json).pending_updates_cached is number
+      when: media_telemetry_apply | bool
+
+    - name: Restart Zabbix Agent 2 only for changed UserParameters
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: restarted
+      when:
+        - media_telemetry_apply | bool
+        - (media_patch_config.changed | default(false)) or
+          (media_temp_config.changed | default(false))
+
+    - name: Test both Zabbix keys locally
+      ansible.builtin.command:
+        argv: [zabbix_agent2, -t, "{{ item }}"]
+      loop:
+        - homelab.patch.snapshot
+        - homelab.cpu.temperature
+      register: media_item_tests
+      changed_when: false
+      when: media_telemetry_apply | bool
+
+    - name: Show key test results
+      ansible.builtin.debug:
+        msg: "{{ media_item_tests.results | map(attribute='stdout') | list }}"
+      when: media_telemetry_apply | bool

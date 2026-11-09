@@ -1,0 +1,30 @@
+---
+- name: Audit actual Zabbix memory and filesystem item keys
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install read-only Zabbix metric-key audit
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/audit_grafana_metric_keys.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-metric-audit
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Inspect monitored memory and filesystem items
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-metric-audit]
+      register: metric_audit
+      changed_when: false
+      no_log: true
+
+    - name: Report existing Zabbix item keys without item values
+      ansible.builtin.debug:
+        msg: "{{ metric_audit.stdout_lines }}"

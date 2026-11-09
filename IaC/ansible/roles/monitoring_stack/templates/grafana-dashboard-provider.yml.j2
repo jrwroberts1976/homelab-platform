@@ -1,40 +1,5 @@
 apiVersion: 1
 
-providers:
-  - name: Homelab
-    orgId: 1
-    folder: Homelab
-    type: file
-    disableDeletion: true
-    allowUiUpdates: false
-    updateIntervalSeconds: 30
-    options:
-      path: /etc/grafana/provisioning/dashboards/homelab
-      foldersFromFilesStructure: false
-
-  - name: Homelab Production
-    orgId: 1
-    folder: Production Dashboards
-    folderUid: homelab-production
-    type: file
-    disableDeletion: true
-    allowUiUpdates: false
-    updateIntervalSeconds: 30
-    options:
-      path: /etc/grafana/provisioning/dashboards/production
-      foldersFromFilesStructure: false
-
-{% if monitoring_router_dhcp_device_pages_provider_enabled | default(false) | bool %}
-  # Isolated new router-01 DHCP device pages; never resurrect old Network Hosts.
-  - name: Router DHCP Devices
-    orgId: 1
-    folder: Router DHCP Devices
-    folderUid: router-dhcp-devices
-    type: file
-    disableDeletion: true
-    allowUiUpdates: false
-    updateIntervalSeconds: 30
-    options:
-      path: /etc/grafana/provisioning/dashboards/router-dhcp-devices
-      foldersFromFilesStructure: false
-{% endif %}
+# Dashboard provisioning deliberately disabled for Zabbix-first rebuild.
+# Existing datasource and plugin provisioning are unaffected.
+providers: []

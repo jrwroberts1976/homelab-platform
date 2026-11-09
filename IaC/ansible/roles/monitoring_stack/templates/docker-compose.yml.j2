@@ -29,7 +29,9 @@ services:
       GF_USERS_ALLOW_SIGN_UP: "false"
       GF_ANALYTICS_REPORTING_ENABLED: "false"
       GF_ANALYTICS_CHECK_FOR_UPDATES: "false"
-      GF_PLUGINS_PREINSTALL_DISABLED: "true"
+      GF_PLUGINS_PREINSTALL_DISABLED: "false"
+      GF_PLUGINS_PREINSTALL_SYNC: "alexanderzobnin-zabbix-app@6.10.2"
+      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"
     ports:
       - "127.0.0.1:3000:3000"
     volumes:

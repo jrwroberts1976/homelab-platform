@@ -1,0 +1,48 @@
+---
+# Non-admin Managed Devices dashboard layout rollout; read-only by default.
+# Reuses verified 15-host Zabbix inventory; admin-01 and overview protected.
+- name: Preview or apply four-section layout to 14 managed-host Grafana pages
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_managed_layout_apply: false
+  tasks:
+    - name: Require monitor-01 as sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install existing IaC Grafana builder
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview exactly 14 managed host dashboards without writes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --managed-rollout]
+      register: managed_layout_preview
+      changed_when: false
+      no_log: true
+
+    - name: Show guarded rollout preview
+      ansible.builtin.debug:
+        msg: "{{ managed_layout_preview.stdout_lines | select('match', '^(MANAGED ROLLOUT GUARD:|PLANNED |SUMMARY:)') | list }}"
+
+    - name: Apply only with explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --managed-rollout, --apply]
+      register: managed_layout_apply_result
+      changed_when: "'APPLIED UPDATE:' in managed_layout_apply_result.stdout"
+      no_log: true
+      when: grafana_managed_layout_apply | bool
+
+    - name: Show applied rollout results
+      ansible.builtin.debug:
+        msg: "{{ managed_layout_apply_result.stdout_lines | select('match', '^(MANAGED ROLLOUT GUARD:|APPLIED |SUMMARY:)') | list }}"
+      when: grafana_managed_layout_apply | bool

@@ -1,0 +1,106 @@
+---
+# Phase 3 single-host gated Zabbix Agent 2 patch telemetry pilot.
+# Default is audit-only. Explicit apply installs a read-only collector and
+# UserParameter on admin-01, then restarts ONLY its Zabbix Agent 2 service.
+- name: Pilot cached patch telemetry for Zabbix on admin-01
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_patching_apply: false
+    patch_collector_dest: /usr/local/bin/homelab-patch-snapshot
+    patch_userparam_dest: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
+  tasks:
+    - name: Enforce single approved Debian pilot host
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | length == 1
+          - inventory_hostname == 'admin-01'
+          - ansible_facts.os_family == 'Debian'
+        fail_msg: "Only admin-01 is approved; use --limit admin-01."
+
+    - name: Verify Zabbix Agent 2 is installed
+      ansible.builtin.stat:
+        path: /usr/sbin/zabbix_agent2
+      register: zabbix_agent_binary
+
+    - name: Verify Agent 2 drop-in directory exists
+      ansible.builtin.stat:
+        path: /etc/zabbix/zabbix_agent2.d
+      register: zabbix_agent_dropins
+
+    - name: Require existing Agent 2 installation and directory
+      ansible.builtin.assert:
+        that:
+          - zabbix_agent_binary.stat.exists
+          - zabbix_agent_dropins.stat.isdir | default(false)
+        fail_msg: "Agent 2 path or drop-in directory missing; do not create a new service."
+
+    - name: Check whether pilot collector is already present
+      ansible.builtin.stat:
+        path: "{{ patch_collector_dest }}"
+      register: patch_collector_state
+
+    - name: Check whether pilot UserParameter is already present
+      ansible.builtin.stat:
+        path: "{{ patch_userparam_dest }}"
+      register: patch_parameter_state
+
+    - name: Show audit-only deployment plan
+      ansible.builtin.debug:
+        msg:
+          - "Host: admin-01; apply={{ zabbix_patching_apply | bool }}"
+          - "Collector exists: {{ patch_collector_state.stat.exists }}"
+          - "UserParameter exists: {{ patch_parameter_state.stat.exists }}"
+          - "Read-only cached APT snapshot; security count and verified patch time remain null"
+          - "Apply installs two files and restarts zabbix-agent2 only if configuration changes"
+
+    - name: Install read-only patch collector when explicitly approved
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py
+        dest: "{{ patch_collector_dest }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when: zabbix_patching_apply | bool
+
+    - name: Add dedicated Agent 2 UserParameter when explicitly approved
+      ansible.builtin.copy:
+        dest: "{{ patch_userparam_dest }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Read-only cached APT snapshot; no automatic APT refresh.
+          UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
+      register: parameter_installed
+      when: zabbix_patching_apply | bool
+
+    - name: Validate local collector JSON as the Zabbix service account
+      ansible.builtin.command:
+        argv: ["{{ patch_collector_dest }}"]
+      become_user: zabbix
+      register: patch_snapshot_result
+      changed_when: false
+      when: zabbix_patching_apply | bool
+
+    - name: Verify collector returned valid JSON with expected schema
+      ansible.builtin.assert:
+        that:
+          - (patch_snapshot_result.stdout | from_json).schema_version == 1
+          - (patch_snapshot_result.stdout | from_json).source == 'cached_apt_no_refresh'
+          - (patch_snapshot_result.stdout | from_json).error == none
+      when: zabbix_patching_apply | bool
+
+    - name: Restart only Zabbix Agent 2 when UserParameter changed
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: restarted
+      when:
+        - zabbix_patching_apply | bool
+        - parameter_installed.changed | default(false)
+
+    - name: Show validated collection output
+      ansible.builtin.debug:
+        msg: "{{ patch_snapshot_result.stdout }}"
+      when: zabbix_patching_apply | bool

@@ -1,0 +1,47 @@
+---
+# Grafana admin-01 patch panel only; audit preview before any dashboard write.
+- name: Audit or apply admin-01 live Zabbix patch panel
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_patch_pilot_apply: false
+  tasks:
+    - name: Require monitor-01 only
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install existing IaC Grafana builder with patch pilot guard
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview changes restricted to admin-01
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --patch-pilot]
+      register: patch_panel_preview
+      changed_when: false
+      no_log: true
+
+    - name: Show guarded preview
+      ansible.builtin.debug:
+        msg: "{{ patch_panel_preview.stdout_lines | select('match', '^(PATCH PILOT GUARD:|PLANNED |SUMMARY:)') | list }}"
+
+    - name: Update admin-01 dashboard only when explicitly approved
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --patch-pilot, --apply]
+      register: patch_panel_apply
+      changed_when: "'APPLIED UPDATE:' in patch_panel_apply.stdout"
+      no_log: true
+      when: grafana_patch_pilot_apply | bool
+
+    - name: Show applied admin-01 patch panel result
+      ansible.builtin.debug:
+        msg: "{{ patch_panel_apply.stdout_lines | select('match', '^(PATCH PILOT GUARD:|APPLIED |SUMMARY:)') | list }}"
+      when: grafana_patch_pilot_apply | bool

@@ -1,0 +1,68 @@
+---
+# Intentionally destructive Zabbix-only rebuild of router-01 host 10701.
+# No backup by user request. History, item data and old alerts will be lost.
+# No router/ASUS access; default is read-only.
+- name: Audit or recreate router-01 as Zabbix Linux active host
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_router_recreate_apply: false
+    zabbix_router_recreate_fingerprint: ""
+  tasks:
+    - name: Verify monitor-01 controller
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded router-only host recreation helper
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/recreate_router_zabbix_active.py
+        dest: /usr/local/sbin/homelab-zabbix-router-recreate-active
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Audit exact router-only deletion and re-creation scope
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-recreate-active]
+      register: router_recreate_audit
+      failed_when: false
+      changed_when: false
+      no_log: true
+
+    - name: Show safe router Zabbix host recreation plan
+      ansible.builtin.debug:
+        msg: "{{ router_recreate_audit.stdout_lines }}"
+
+    - name: Require passing read-only preflight
+      ansible.builtin.assert:
+        that: router_recreate_audit.rc == 0
+        fail_msg: "Router-01 Zabbix recreation preflight failed; no host deleted."
+
+    - name: Validate explicit apply approval and matching plan fingerprint
+      ansible.builtin.assert:
+        that:
+          - zabbix_router_recreate_fingerprint | length == 16
+          - "'PLAN FINGERPRINT: ' ~ zabbix_router_recreate_fingerprint in router_recreate_audit.stdout"
+        fail_msg: "Current audit fingerprint must match before deleting router Zabbix host."
+      when: zabbix_router_recreate_apply | bool
+
+    - name: Delete only old router Zabbix host then create new active-only host
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/homelab-zabbix-router-recreate-active
+          - --apply
+          - --approve-fingerprint
+          - "{{ zabbix_router_recreate_fingerprint }}"
+      register: router_recreate_result
+      changed_when: "'DELETED OLD ZABBIX HOST ID:' in router_recreate_result.stdout"
+      no_log: true
+      when: zabbix_router_recreate_apply | bool
+
+    - name: Show new router-01 Zabbix host details
+      ansible.builtin.debug:
+        msg: "{{ router_recreate_result.stdout_lines }}"
+      when: zabbix_router_recreate_apply | bool

@@ -1,0 +1,41 @@
+---
+# Audit-only by default. The --apply path creates exactly one Zabbix API item.
+# Does not change Zabbix templates, agents, other hosts or Grafana.
+- name: Audit or enable admin-01 cached patch snapshot item in Zabbix
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_patching_item_apply: false
+  tasks:
+    - name: Verify monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+    - name: Copy guarded item reconciler to monitor-01
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_zabbix_patching_item.py
+        dest: /usr/local/sbin/homelab-zabbix-patching-item
+        owner: root
+        group: root
+        mode: "0700"
+    - name: Audit exact admin-01 patch item
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-patching-item]
+      register: patch_item_audit
+      changed_when: false
+    - name: Display audit result
+      ansible.builtin.debug:
+        msg: "{{ patch_item_audit.stdout_lines }}"
+    - name: Create exact admin-01 patch item only on explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-patching-item, --apply]
+      register: patch_item_apply_result
+      changed_when: "'CREATED AND VERIFIED:' in patch_item_apply_result.stdout"
+      when: zabbix_patching_item_apply | bool
+    - name: Display item creation and verification result
+      ansible.builtin.debug:
+        msg: "{{ patch_item_apply_result.stdout_lines }}"
+      when: zabbix_patching_item_apply | bool

@@ -1,0 +1,38 @@
+---
+# Read-only review of the five router-01 local items blocking Linux template.
+- name: Audit locally defined Zabbix items on router-01
+  hosts: monitoring_hosts
+  gather_facts: true
+  become: true
+  tasks:
+    - name: Verify monitor-01 only
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install read-only local item audit
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/audit_router_local_zabbix_items.py
+        dest: /usr/local/sbin/homelab-zabbix-router-local-items-audit
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Read five Zabbix item metadata records and direct trigger references
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-local-items-audit]
+      register: local_items_audit
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Show safe read-only results
+      ansible.builtin.debug:
+        msg: "{{ local_items_audit.stdout_lines }}"
+
+    - name: Require complete item audit
+      ansible.builtin.assert:
+        that:
+          - local_items_audit.rc == 0
+        fail_msg: "Local item audit failed; no Zabbix items were changed."

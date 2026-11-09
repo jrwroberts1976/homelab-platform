@@ -1,0 +1,163 @@
+---
+# Deliberate full dashboard reset, backed up by Grafana API.
+# Keep folders, datasources, Zabbix plugin, tokens and Zabbix hosts.
+- name: Clear all Grafana dashboards for Zabbix-first rebuild
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  tasks:
+    - name: Verify monitor-01
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Stop old DHCP device dashboard generator
+      ansible.builtin.systemd_service:
+        name: router-dhcp-device-pages.timer
+        state: stopped
+        enabled: false
+
+    - name: Back up all Grafana dashboards and retire legacy provisioning files
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import base64
+            import json
+            import os
+            import shutil
+            import sys
+            import tempfile
+            import urllib.parse
+            import urllib.request
+            from datetime import datetime, timezone
+            from pathlib import Path
+
+            root = Path("/opt/monitoring/grafana/provisioning/dashboards")
+            if not root.is_dir() or root.is_symlink():
+                raise RuntimeError("Unexpected Grafana dashboard provisioning directory")
+            lines = Path("/opt/monitoring/.env").read_text().splitlines()
+            passwords = [s.partition("=")[2] for s in lines if s.startswith("GF_SECURITY_ADMIN_PASSWORD=")]
+            if len(passwords) != 1 or not passwords[0]:
+                raise RuntimeError("Grafana credential unavailable")
+            authorization = "Basic " + base64.b64encode(("admin:" + passwords[0]).encode()).decode()
+            headers = {"Authorization": authorization, "Content-Type": "application/json"}
+            base = "http://127.0.0.1:3000"
+
+            def api(path):
+                request = urllib.request.Request(base + path, headers=headers)
+                with urllib.request.urlopen(request, timeout=20) as reply:
+                    return json.load(reply)
+
+            backup = Path("/var/backups") / ("grafana-dashboards-zabbix-reset-" + datetime.now(timezone.utc).strftime("%Y%m%dT%H%M%SZ"))
+            backup.mkdir(mode=0o700, parents=False, exist_ok=False)
+            os.chmod(backup, 0o700)
+            export = backup / "api-export"
+            export.mkdir(mode=0o700)
+            all_items = []
+            page = 1
+            while True:
+                batch = api("/api/search?" + urllib.parse.urlencode({"type": "dash-db", "limit": 500, "page": page}))
+                if not isinstance(batch, list):
+                    raise RuntimeError("Unexpected Grafana search response")
+                all_items.extend(batch)
+                if len(batch) < 500:
+                    break
+                page += 1
+                if page > 100:
+                    raise RuntimeError("Too many dashboard pages; refusing incomplete backup")
+            uids = set()
+            for item in all_items:
+                uid = item.get("uid")
+                if not isinstance(uid, str) or not uid or "/" in uid or uid in uids:
+                    raise RuntimeError("Unsafe or duplicate dashboard UID")
+                uids.add(uid)
+                payload = api("/api/dashboards/uid/" + urllib.parse.quote(uid, safe=""))
+                output = export / (uid + ".json")
+                output.write_text(json.dumps(payload, indent=2) + "\n")
+                os.chmod(output, 0o600)
+            (backup / "manifest.json").write_text(json.dumps({"dashboards": sorted(uids), "count": len(uids)}, indent=2) + "\n")
+            if len(list(export.glob("*.json"))) != len(uids):
+                raise RuntimeError("Dashboard export count mismatch; refusing reset")
+
+            # Move the ENTIRE dashboard provisioning folder into the backup.
+            # This prevents legacy file providers from repopulating old dashboards.
+            moved = backup / "original-dashboard-provisioning"
+            root.rename(moved)
+            root.mkdir(mode=0o755)
+            # Keep the desired, empty provider configuration on disk.
+            (root / "homelab.yml").write_text("apiVersion: 1\n\nproviders: []\n")
+            os.chmod(root / "homelab.yml", 0o644)
+            print("BACKUP: " + str(backup))
+            print("EXPORTED: " + str(len(uids)))
+          - -- 
+      register: grafana_clear_backup
+      changed_when: true
+      no_log: true
+
+    - name: Restart Grafana to stop legacy file provisioning
+      ansible.builtin.command:
+        argv: [docker, restart, monitoring-grafana-1]
+      changed_when: true
+
+    - name: Wait for Grafana API
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+      register: grafana_clear_health
+      until: grafana_clear_health.status | default(0) == 200
+      retries: 18
+      delay: 5
+      changed_when: false
+
+    - name: Delete every dashboard through the supported Grafana API
+      ansible.builtin.command:
+        argv:
+          - python3
+          - -c
+          - |
+            import base64
+            import json
+            import urllib.parse
+            import urllib.request
+            from pathlib import Path
+
+            lines = Path("/opt/monitoring/.env").read_text().splitlines()
+            passwords = [s.partition("=")[2] for s in lines if s.startswith("GF_SECURITY_ADMIN_PASSWORD=")]
+            if len(passwords) != 1 or not passwords[0]:
+                raise RuntimeError("Grafana credentials missing")
+            headers = {"Authorization": "Basic " + base64.b64encode(("admin:" + passwords[0]).encode()).decode()}
+            base = "http://127.0.0.1:3000"
+
+            def request(path, method="GET"):
+                req = urllib.request.Request(base + path, headers=headers, method=method)
+                with urllib.request.urlopen(req, timeout=20) as r:
+                    return json.load(r)
+
+            def list_pages():
+                pages, page = [], 1
+                while True:
+                    batch = request("/api/search?" + urllib.parse.urlencode({"type": "dash-db", "limit": 500, "page": page}))
+                    pages.extend(batch)
+                    if len(batch) < 500:
+                        return pages
+                    page += 1
+
+            pages = list_pages()
+            for item in pages:
+                uid = item["uid"]
+                request("/api/dashboards/uid/" + urllib.parse.quote(uid, safe=""), "DELETE")
+                print("DELETED: " + uid)
+            leftovers = list_pages()
+            if leftovers:
+                raise RuntimeError("Grafana still has " + str(len(leftovers)) + " dashboards")
+            print("VERIFIED: 0 dashboards; folders and datasources preserved")
+      register: grafana_clear_result
+      changed_when: "'DELETED:' in grafana_clear_result.stdout"
+      no_log: true
+
+    - name: Confirm reset
+      ansible.builtin.debug:
+        msg: "All Grafana dashboards deleted after backup; provider disabled, folders and Zabbix datasource preserved."

@@ -1,0 +1,48 @@
+---
+# media-01 Zabbix patch and temperature Grafana pilot.
+# Default read-only; all 15 other generated dashboards protected.
+- name: Preview or apply only media-01 telemetry Grafana panels
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_media_telemetry_apply: false
+  tasks:
+    - name: Require monitor-01 sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install managed Grafana builder from IaC
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Guarded read-only media-01 preview
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --media-pilot]
+      register: media_grafana_preview
+      changed_when: false
+      no_log: true
+
+    - name: Show guarded media preview
+      ansible.builtin.debug:
+        msg: "{{ media_grafana_preview.stdout_lines | select('match', '^(MEDIA PILOT GUARD:|PLANNED |SUMMARY:)') | list }}"
+
+    - name: Apply only on explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --media-pilot, --apply]
+      register: media_grafana_applied
+      changed_when: "'APPLIED UPDATE:' in media_grafana_applied.stdout"
+      no_log: true
+      when: grafana_media_telemetry_apply | bool
+
+    - name: Show media-01 apply result
+      ansible.builtin.debug:
+        msg: "{{ media_grafana_applied.stdout_lines | select('match', '^(MEDIA PILOT GUARD:|APPLIED |SUMMARY:)') | list }}"
+      when: grafana_media_telemetry_apply | bool
