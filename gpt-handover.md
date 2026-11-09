@@ -1,3 +1,8 @@
+## 2026-11-09 — media-01 server-side Zabbix items registered
+
+- Operator ran `ansible-playbook playbooks/zabbix-media01-telemetry-items.yml --limit monitor-01 -e media_telemetry_items_apply=true`. Read-only preflight showed both keys absent, then registration succeeded with `CREATED AND VERIFIED: homelab.patch.snapshot itemid=52887` and `CREATED AND VERIFIED: homelab.cpu.temperature itemid=52888`. Recap `ok=7 changed=1 failed=0`.
+- This verifies **Zabbix item configuration only**, not arrival of data. Before extending dashboards, check `media-01` Monitoring → Latest data for float CPU temperature (`52888`) and cached APT JSON patch snapshot (`52887`). CPU is scheduled every minute and patch every hour. In the patch JSON, `pending_updates_cached` may be an integer while `security_updates` and `last_verified_patch_utc` remain null by design. No Grafana changes yet in this telemetry stage.
+
 ## 2026-11-09 — media-01 Agent 2 pilot deployed; Zabbix item registration staged
 
 - Operator applied `ansible-playbook playbooks/zabbix-media01-telemetry-pilot.yml --limit media-01 -e media_telemetry_apply=true` successfully. Recap: `ok=16 changed=4 unreachable=0 failed=0 skipped=0`. Existing read-only cached-APT collector and dedicated `homelab.patch.snapshot` and `homelab.cpu.temperature` UserParameters are now installed on media-01; host-side key checks were in the playbook, but their actual reported values were not pasted. No Zabbix server items or Grafana panels were created by that playbook.
