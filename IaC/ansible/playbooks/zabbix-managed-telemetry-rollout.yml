@@ -28,9 +28,12 @@
     managed_patch_conf_content: |
       # Managed by Ansible: cached APT snapshot only; no package refresh.
       UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
-    managed_temp_conf_content: |
+    managed_temp_conf_content_previous: |
       # Managed by Ansible: read-only thermal-zone Celsius value.
       UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+    managed_temp_conf_content: |
+      # Managed by Ansible: read-only thermal-zone Celsius value.
+      UserParameter=homelab.cpu.temperature,awk '{printf "%.3f", $1/1000}' /sys/class/thermal/thermal_zone0/temp
   tasks:
     - name: Require exact managed-host inventory and exclude router
       ansible.builtin.assert:
@@ -91,7 +94,7 @@
             or (item.item.item == managed_telemetry_patch_conf and
                 (item.content | b64decode) == managed_patch_conf_content)
             or (item.item.item == managed_telemetry_temp_conf and
-                (item.content | b64decode) == managed_temp_conf_content)
+                (item.content | b64decode) in [managed_temp_conf_content, managed_temp_conf_content_previous])
         fail_msg: "Unmanaged telemetry file found on {{ inventory_hostname }}; refuse overwrite"
       loop: "{{ managed_file_contents.results | default([]) }}"
       when: inventory_hostname in managed_telemetry_targets
