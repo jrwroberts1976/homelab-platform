@@ -1,3 +1,10 @@
+## 2026-11-09 — Compact admin-01 Host Overview with live Zabbix uptime staged (not deployed)
+
+- User viewed new four expanded Grafana rows and disliked verbose Host Overview with scrollable text. Requested uptime displayed in same section.
+- Staged admin-01-only layout change in existing `rebuild_zabbix_dashboards.py`: host panel 1 becomes two-line compact Host summary (host/OS, shortened kernel version, architecture) width 16 and height 5; reuses **existing live `system.uptime` Zabbix panel** as stat at right, width 8 height 5, unit seconds. Uptime is moved from System Performance, not duplicated; other performance plots reflow; Host Security / Monitoring & Alerts preserved.
+- Pilot validator allows only permitted summary-content change, existing uptime chart-to-stat conversion, bounded overview dimensions and positional moves; all other original panels keep same queries, datasource, field settings and sizes; 15 other dashboards unchanged. Follow existing Ansible gate `--patch-pilot` preview before applying.
+- **GitHub staged only, no compilation or target preview/apply yet.** Operator next fetch isolated worktree, run Python py_compile and guarded `grafana-admin-patching-pilot.yml --limit monitor-01` preview and report results. Avoid apply until guard verified. Inspect layout visually and rerun preview for idempotency.
+
 ## 2026-11-09 — Four collapsible Grafana sections for admin-01 staged, not deployed
 
 - Following two consecutive idempotent previews (`PLANNED EXISTS: admin-01`, second changed=0), user approved layout-only organization of admin-01 into four expanded Grafana rows: Host Overview, System Performance, Host Security, Monitoring & Alerts.
