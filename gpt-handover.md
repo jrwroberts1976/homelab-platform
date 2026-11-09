@@ -1,3 +1,10 @@
+## 2026-11-09 — Narrower centred 2x2 Host Overview staged, not deployed
+
+- Screenshot of admin-01 revealed the working 2x2 Host/OS/Kernel/Uptime cards still stretched full width of the dashboard. User asked for narrower cards; requested no changes to content.
+- Updated `rebuild_zabbix_dashboards.py` admin-01 only: cards now each eight Grafana grid columns across (x=4,12) instead of 12 columns (x=0,12); 16/24 total grid width centred with four-column margins, same 3-row card height. Existing live Zabbix uptime, OS/kernel content and all other sections remain unchanged.
+- Adjusted `validate_admin_section_pilot` for previous 12-wide or new 8-wide card geometry, preserving all original panel data/config and 15 other dashboards; repeat previews are intended to remain idempotent.
+- **Committed to feature branch, not yet syntax-checked/previewed/applied on operator host.** Next: operator fetch detached patching worktree, Python py_compile and guarded Ansible preview. Apply only after preview passes, inspect resulting screenshot, then repeat preview for idempotency.
+
 ## 2026-11-09 — 2x2 Host Overview tiles staged (not deployed)
 
 - User approved replacing vertical Host Summary plus oversized uptime with a 2x2 compact tile grid for admin-01 only: Host / Operating system (Debian 13 + aarch64) / Kernel / System uptime. New text panels IDs 94 (Operating system) and 95 (Kernel), existing host identity panel ID 1 simplified to Host, and existing live Zabbix `system.uptime` stat reused (not duplicated) as fourth tile.
