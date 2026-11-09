@@ -554,6 +554,10 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
                 panel.pop("title", None)
                 panel["gridPos"].pop("w", None)
                 panel["gridPos"].pop("h", None)
+        elif panel_id in (94, 95):
+            for panel in (previous, intended):
+                panel["gridPos"].pop("x", None)
+                panel["gridPos"].pop("w", None)
         elif panel_id == uptime_id:
             if (previous.get("type") != "stat" or intended.get("type") != "stat"
                     or intended.get("datasource") != DS
