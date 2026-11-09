@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 Known CVEs Grafana panel deployed via guarded Ansible pilot
+
+- Operator ran `ansible-playbook playbooks/grafana-admin-patching-pilot.yml --limit monitor-01 -e grafana_patch_pilot_apply=true` from isolated patching worktree; preflight PASS, `PATCH PILOT GUARD: admin-01 only; all other 15 dashboards unchanged`, `APPLIED UPDATE: admin-01`, 15 matched hosts / 16 candidate dashboards, play recap ok=7 changed=1 failed=0.
+- Existing pending-patches panel 91 protected and unchanged; replaced panel 92 security Unknown placeholder with Prometheus-backed `Known CVEs — admin-01` via existing `homelab_greenbone_cve_finding_score` and evidence timestamp metric, 30h freshness guard, absent/stale -> Unknown. Last verified input: 1 unique CVE (CVE-1999-0524, Low, ICMP timestamp), pending APT upgrade candidates 20. **Grafana rendered value not yet independently inspected by operator.**
+- Next: operator visually verify Grafana page and data freshness, then optionally check whether ICMP timestamp mitigation is applicable to admin-01; no further production changes without evidence. Revalidate if generalizing to other hosts because absent CVE series cannot prove zero without per-host scan coverage.
+
 ## 2026-11-09 — Existing Prometheus Greenbone CVE tile staged, preview/deploy pending
 
 - Confirmed existing `monitor-01:/var/lib/prometheus/node-exporter/homelab_greenbone.prom`: `homelab_greenbone_cve_finding_score{hostname="admin-01",cve="CVE-1999-0524",severity="Low",...} 2.1`, evidence timestamp metric, and Prometheus API distinct count = 1 for admin-01. Grafana already has default provisioned Prometheus datasource.
