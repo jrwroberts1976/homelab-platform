@@ -743,6 +743,11 @@ def validate_greenbone_rollout(host_name, existing_panels, candidate_panels, pro
         raise RuntimeError("Protected pilot included in Greenbone rollout")
     before = {p["id"]: p for p in existing_panels}
     after = {p["id"]: p for p in candidate_panels}
+    # An unchanged previous rollout must pass safely on repeat execution.
+    if {98, 99} <= set(before):
+        if before != after:
+            raise RuntimeError("Previously installed Greenbone panels drifted on " + host_name)
+        return
     if (len(before) != len(existing_panels)
             or len(after) != len(candidate_panels)
             or {98, 99} & set(before)
