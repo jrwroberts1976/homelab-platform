@@ -127,7 +127,7 @@ dns-01 is the managed CT101 Pi-hole and Unbound container on Proxmox-2. It is on
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-09T14:02:01+00:00`
+- Last assessed: `2026-11-09T15:04:31+00:00`
 - Pending updates: **2**
 - Security updates pending: **2**
 - Reboot required: **No**
