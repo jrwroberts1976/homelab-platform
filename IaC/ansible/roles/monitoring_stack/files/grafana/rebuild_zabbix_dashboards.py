@@ -429,15 +429,16 @@ ADMIN_ROWS = (
 
 
 def admin_section_rows(source_panels):
-    """Organize admin-01 in four open rows, with live uptime in Overview."""
+    """Four compact host overview cards; other sections keep their data."""
     by_id = {p["id"]: p for p in source_panels}
-    if len(by_id) != len(source_panels) or not {1, 90, 91, 92, 93} <= set(by_id):
-        raise RuntimeError("Incomplete/duplicate admin-01 panels")
+    required = {1, 90, 91, 92, 93, 94, 95}
+    if len(by_id) != len(source_panels) or not required <= set(by_id):
+        raise RuntimeError("Incomplete or duplicated admin-01 panels")
     if set(by_id) & {rid for rid, _ in ADMIN_ROWS}:
-        raise RuntimeError("Grafana row ID collision")
+        raise RuntimeError("Grafana section row ID collision")
     uptime_matches = [p for p in source_panels if p.get("title") == "System uptime"]
     if len(uptime_matches) != 1:
-        raise RuntimeError("Expected one existing live Zabbix uptime item")
+        raise RuntimeError("Expected one existing Zabbix uptime panel")
     uptime = uptime_matches[0]
 
     def row(row_id, title, y):
@@ -446,16 +447,18 @@ def admin_section_rows(source_panels):
 
     performance = sorted(
         (p for p in source_panels
-         if p["id"] not in {1, 90, 91, 92, 93, uptime["id"]}),
+         if p["id"] not in required | {uptime["id"]}),
         key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
     )
     result = [row(100, "Host Overview", 0)]
-    overview = by_id[1]
-    overview["gridPos"].update({"x": 0, "y": 1, "w": 24, "h": 3})
-    result.append(overview)
+    for panel_id, x, y in ((1, 0, 1), (94, 12, 1),
+                           (95, 0, 4)):
+        panel = by_id[panel_id]
+        panel["gridPos"].update({"x": x, "y": y, "w": 12, "h": 3})
+        result.append(panel)
 
     uptime["type"] = "stat"
-    uptime["gridPos"].update({"x": 0, "y": 4, "w": 24, "h": 3})
+    uptime["gridPos"].update({"x": 12, "y": 4, "w": 12, "h": 3})
     uptime["options"] = {
         "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
         "orientation": "horizontal", "textMode": "value",
@@ -464,8 +467,7 @@ def admin_section_rows(source_panels):
     }
     result.append(uptime)
 
-    performance_row_y = 7
-    result.append(row(101, "System Performance", performance_row_y))
+    result.append(row(101, "System Performance", 7))
     for i, panel in enumerate(performance):
         panel["gridPos"]["x"] = 12 * (i % 2)
         panel["gridPos"]["y"] = 8 + 8 * (i // 2)
@@ -488,70 +490,76 @@ def admin_section_rows(source_panels):
 
 
 def validate_admin_section_pilot(existing_panels, candidate_panels):
-    """Guard compact summary + live uptime against unexpected panel changes."""
-    row_ids = {row_id for row_id, _ in ADMIN_ROWS}
+    """Only permit two host cards and rearranging the existing overview."""
+    rows = {row_id: title for row_id, title in ADMIN_ROWS}
     old_rows = [p for p in existing_panels if p.get("type") == "row"]
     new_rows = [p for p in candidate_panels if p.get("type") == "row"]
-    if old_rows and {p.get("id") for p in old_rows} != row_ids:
-        raise RuntimeError("Unexpected existing rows")
-    if [(p.get("id"), p.get("title"), p.get("collapsed"))
-            for p in new_rows] != [(i, name, False) for i, name in ADMIN_ROWS]:
-        raise RuntimeError("Unexpected section layout")
+    expected_rows = [(rid, name, False) for rid, name in ADMIN_ROWS]
+    if ([(p.get("id"), p.get("title"), p.get("collapsed"))
+         for p in old_rows] != expected_rows
+            or [(p.get("id"), p.get("title"), p.get("collapsed"))
+                for p in new_rows] != expected_rows):
+        raise RuntimeError("Unexpected section headers")
 
-    old_by_id = {p["id"]: p for p in existing_panels if p.get("type") != "row"}
-    new_by_id = {p["id"]: p for p in candidate_panels if p.get("type") != "row"}
-    if (len(old_by_id) != len([p for p in existing_panels if p.get("type") != "row"])
-            or len(new_by_id) != len([p for p in candidate_panels if p.get("type") != "row"])
-            or set(old_by_id) != set(new_by_id)):
-        raise RuntimeError("Existing panel inventory changed")
-    uptime_ids = [pid for pid, p in old_by_id.items()
+    old = {p["id"]: p for p in existing_panels if p.get("type") != "row"}
+    new = {p["id"]: p for p in candidate_panels if p.get("type") != "row"}
+    if (len(old) != len(existing_panels) - len(old_rows)
+            or len(new) != len(candidate_panels) - len(new_rows)
+            or set(new) != set(old) | {94, 95}):
+        raise RuntimeError("Unexpected panel inventory")
+
+    uptime_ids = [pid for pid, p in old.items()
                   if p.get("title") == "System uptime"]
     if len(uptime_ids) != 1:
-        raise RuntimeError("Expected one existing uptime panel")
+        raise RuntimeError("Expected exactly one Zabbix uptime panel")
     uptime_id = uptime_ids[0]
-    uptime_new = new_by_id[uptime_id]
-    if (uptime_new.get("type") != "stat" or uptime_new.get("datasource") != DS
-            or uptime_new.get("fieldConfig", {}).get("defaults", {}).get("unit") != "s"):
-        raise RuntimeError("Uptime must remain a live Zabbix seconds stat")
 
-    for panel_id, old in old_by_id.items():
-        new = new_by_id[panel_id]
-        previous = json.loads(json.dumps(old))
-        intended = json.loads(json.dumps(new))
+    for panel_id in (94, 95):
+        panel = new[panel_id]
+        if (panel.get("type") != "text"
+                or panel.get("title") != {94: "Operating system",
+                                         95: "Kernel"}[panel_id]
+                or panel.get("options", {}).get("mode") != "markdown"
+                or set(panel.keys()) != {"id", "type", "title",
+                                         "gridPos", "options"}):
+            raise RuntimeError("Unexpected new overview card")
+        if panel_id in old and old[panel_id] != panel:
+            raise RuntimeError("Existing overview card drift: " + str(panel_id))
+
+    for panel_id, previous_panel in old.items():
+        next_panel = new[panel_id]
+        previous = json.loads(json.dumps(previous_panel))
+        intended = json.loads(json.dumps(next_panel))
         for panel in (previous, intended):
-            grid = panel.get("gridPos", {})
-            grid.pop("y", None)
-            if panel_id in (1, uptime_id) or panel_id in {
-                    p["id"] for p in old_by_id.values()
-                    if p["id"] not in {1, 90, 91, 92, 93, uptime_id}}:
-                grid.pop("x", None)
+            panel.get("gridPos", {}).pop("y", None)
         if panel_id == 1:
             if (previous.get("type") != "text" or intended.get("type") != "text"
-                    or previous.get("title") not in ("Zabbix managed host", "Host summary")
-                    or intended.get("title") != "Host summary"):
-                raise RuntimeError("Unexpected host summary transition")
+                    or previous.get("title") not in ("Host summary", "Host")
+                    or intended.get("title") != "Host"):
+                raise RuntimeError("Unexpected Host panel transition")
             for panel in (previous, intended):
                 panel.pop("options", None)
                 panel.pop("title", None)
-                panel.get("gridPos", {}).pop("w", None)
-                panel.get("gridPos", {}).pop("h", None)
+                panel["gridPos"].pop("w", None)
+                panel["gridPos"].pop("h", None)
         elif panel_id == uptime_id:
-            if previous.get("type") not in ("timeseries", "stat"):
-                raise RuntimeError("Unexpected previous uptime display")
+            if (previous.get("type") != "stat" or intended.get("type") != "stat"
+                    or intended.get("datasource") != DS
+                    or intended.get("fieldConfig", {}).get("defaults", {}).get("unit") != "s"):
+                raise RuntimeError("Live uptime stat changed unexpectedly")
             for panel in (previous, intended):
-                panel.pop("type", None)
-                panel.pop("options", None)
-                panel.get("gridPos", {}).pop("w", None)
-                panel.get("gridPos", {}).pop("h", None)
+                panel["gridPos"].pop("x", None)
+                panel["gridPos"].pop("w", None)
         if previous != intended:
-            raise RuntimeError("Unexpected panel data/config change: " + str(panel_id))
-    if not (new_by_id[1]["gridPos"]["w"] == 24
-            and new_by_id[1]["gridPos"]["h"] == 3
-            and uptime_new["gridPos"]["w"] == 24
-            and uptime_new["gridPos"]["h"] == 3):
-        raise RuntimeError("Overview dimensions not approved")
-    if any(p.get("type") == "row" and p.get("panels") != [] for p in new_rows):
-        raise RuntimeError("Unexpected nested Grafana panels")
+            raise RuntimeError("Unexpected original panel change: " + str(panel_id))
+
+    for panel_id, x, y in ((1, 0, 1), (94, 12, 1),
+                           (95, 0, 4), (uptime_id, 12, 4)):
+        if new[panel_id]["gridPos"] != {"x": x, "y": y, "w": 12, "h": 3}:
+            raise RuntimeError("Unexpected 2x2 overview dimensions")
+
+    if any(row.get("panels") != [] for row in new_rows):
+        raise RuntimeError("Unexpected nested section panels")
 
 
 def host_dashboard(name, host, items, os_info, prometheus_ds):
@@ -566,11 +574,7 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         arch = match.group(1) if match else "Unknown"
         # The previous Zabbix OS item exposes a compiler/build string, not an OS release.
         # Debian 13 was verified in the approved 2026-11-08 admin-01 APT pilot.
-        overview = (
-            "**Host:** `admin-01`   |   **OS:** Debian 13   |   "
-            + "**Architecture:** `" + arch + "`\n\n"
-            + "**Kernel:** `" + kernel + "`"
-        )
+        overview = "**admin-01**"
     else:
         overview = (
             "### " + name + "\n\n"
@@ -583,10 +587,21 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         )
     panels = [{
         "id": 1, "type": "text",
-        "title": "Host summary" if name == "admin-01" else "Zabbix managed host",
+        "title": "Host" if name == "admin-01" else "Zabbix managed host",
         "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
         "options": {"mode": "markdown", "content": overview},
     }]
+    if name == "admin-01":
+        panels.extend([
+            {"id": 94, "type": "text", "title": "Operating system",
+             "gridPos": {"x": 0, "y": 0, "w": 12, "h": 3},
+             "options": {"mode": "markdown",
+                         "content": "**Debian 13**  ·  " + arch}},
+            {"id": 95, "type": "text", "title": "Kernel",
+             "gridPos": {"x": 0, "y": 0, "w": 12, "h": 3},
+             "options": {"mode": "markdown",
+                         "content": "`" + kernel + "`"}},
+        ])
     missing = []
     pid = 2
     for title, patterns, unit in METRICS:
