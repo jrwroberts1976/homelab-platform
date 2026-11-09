@@ -494,6 +494,143 @@ def admin_section_rows(source_panels):
     return result
 
 
+def managed_host_section_rows(source_panels):
+    """Use the admin-01 layout without inventing unavailable host telemetry."""
+    by_id = {p["id"]: p for p in source_panels}
+    if len(by_id) != len(source_panels) or not {1, 90, 91, 94, 95} <= set(by_id):
+        raise RuntimeError("Incomplete managed-host panels")
+    if set(by_id) & {rid for rid, _ in ADMIN_ROWS}:
+        raise RuntimeError("Managed-host row ID collision")
+    uptime_matches = [p for p in source_panels if p.get("title") == "System uptime"]
+    if len(uptime_matches) > 1:
+        raise RuntimeError("Duplicate system uptime panels")
+    uptime = uptime_matches[0] if uptime_matches else None
+
+    def row(row_id, title, y):
+        return {"id": row_id, "type": "row", "title": title,
+                "collapsed": False,
+                "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}, "panels": []}
+
+    performance = sorted(
+        (p for p in source_panels
+         if p["id"] not in {1, 90, 91, 94, 95, 97}
+         and (uptime is None or p["id"] != uptime["id"])),
+        key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
+    )
+    result = [row(100, "Host Overview", 0)]
+    for panel_id, x, y in ((1, 4, 1), (94, 12, 1), (95, 4, 3)):
+        panel = by_id[panel_id]
+        panel["gridPos"].update({"x": x, "y": y, "w": 8, "h": 2})
+        result.append(panel)
+    if uptime is not None:
+        uptime["type"] = "stat"
+        uptime["gridPos"].update({"x": 12, "y": 3, "w": 8, "h": 2})
+        uptime["options"] = {
+            "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
+            "orientation": "horizontal", "textMode": "value",
+            "wideLayout": False, "colorMode": "none", "graphMode": "none",
+            "justifyMode": "center", "text": {"valueSize": 24},
+        }
+        result.append(uptime)
+    else:
+        result.append({
+            "id": 97, "type": "text", "title": "System uptime",
+            "gridPos": {"x": 12, "y": 3, "w": 8, "h": 2},
+            "options": {"mode": "markdown", "content": "Unknown — no Zabbix uptime item"},
+        })
+
+    result.append(row(101, "System Performance", 5))
+    for i, panel in enumerate(performance):
+        panel["gridPos"]["x"] = 12 * (i % 2)
+        panel["gridPos"]["y"] = 6 + 8 * (i // 2)
+        result.append(panel)
+    perf_end = 6 + 8 * ((len(performance) + 1) // 2)
+    result.append(row(102, "Host Security", perf_end))
+    status = by_id[91]
+    status["gridPos"]["y"] = perf_end + 1
+    result.append(status)
+    alerts_y = perf_end + 1 + status["gridPos"]["h"]
+    result.append(row(103, "Monitoring & Alerts", alerts_y))
+    problems = by_id[90]
+    problems["gridPos"]["y"] = alerts_y + 1
+    result.append(problems)
+    return result
+
+
+def validate_managed_host_rollout(host_name, existing_panels, candidate_panels):
+    """Allow only approved layout work, leaving each host's queries intact."""
+    expected_rows = [(rid, title, False) for rid, title in ADMIN_ROWS]
+    old_rows = [p for p in existing_panels if p.get("type") == "row"]
+    new_rows = [p for p in candidate_panels if p.get("type") == "row"]
+    if old_rows and [(p.get("id"), p.get("title"), p.get("collapsed"))
+                     for p in old_rows] != expected_rows:
+        raise RuntimeError("Unexpected existing section rows on " + host_name)
+    if [(p.get("id"), p.get("title"), p.get("collapsed"))
+        for p in new_rows] != expected_rows:
+        raise RuntimeError("Invalid section rows on " + host_name)
+    if any(p.get("panels") != [] for p in new_rows):
+        raise RuntimeError("Nested panels unsupported on " + host_name)
+    old = {p["id"]: p for p in existing_panels if p.get("type") != "row"}
+    new = {p["id"]: p for p in candidate_panels if p.get("type") != "row"}
+    if (len(old) != len(existing_panels) - len(old_rows)
+            or len(new) != len(candidate_panels) - len(new_rows)
+            or not {1, 90, 91} <= set(old)
+            or not set(old) <= set(new)
+            or set(new) - set(old) not in ({94, 95}, {94, 95, 97}, set())):
+        raise RuntimeError("Unexpected dashboard panel inventory on " + host_name)
+    for pid in (94, 95):
+        p = new[pid]
+        if (p.get("type") != "text"
+                or p.get("title") != {94: "Operating system", 95: "Kernel"}[pid]
+                or p.get("options", {}).get("mode") != "markdown"):
+            raise RuntimeError("Unexpected identity panel on " + host_name)
+    uptime_ids = [p["id"] for p in existing_panels
+                  if p.get("title") == "System uptime"]
+    if len(uptime_ids) > 1:
+        raise RuntimeError("Duplicate uptime on " + host_name)
+    uptime_id = uptime_ids[0] if uptime_ids else None
+    if uptime_id is None and 97 not in new:
+        raise RuntimeError("Missing uptime fallback on " + host_name)
+    for pid, original in old.items():
+        before = json.loads(json.dumps(original))
+        after = json.loads(json.dumps(new[pid]))
+        for p in (before, after):
+            p.get("gridPos", {}).pop("y", None)
+        if pid == 1:
+            if before.get("type") != "text" or after.get("type") != "text":
+                raise RuntimeError("Unexpected host identity type: " + host_name)
+            for p in (before, after):
+                p.pop("title", None)
+                p.pop("options", None)
+                for k in ("x", "w", "h"):
+                    p["gridPos"].pop(k, None)
+        elif pid == uptime_id:
+            if (before.get("type") not in ("timeseries", "stat")
+                    or after.get("type") != "stat"
+                    or before.get("datasource") != after.get("datasource")
+                    or before.get("targets") != after.get("targets")
+                    or after.get("fieldConfig", {}).get("defaults", {}).get("unit") != "s"):
+                raise RuntimeError("Uptime query changed on " + host_name)
+            for p in (before, after):
+                p.pop("type", None)
+                p.pop("options", None)
+                for k in ("x", "w", "h"):
+                    p["gridPos"].pop(k, None)
+        elif pid in (94, 95, 97):
+            if original != new[pid]:
+                raise RuntimeError("Existing identity card drift: " + host_name)
+            continue
+        else:
+            for p in (before, after):
+                p["gridPos"].pop("x", None)
+        if before != after:
+            raise RuntimeError("Metric/config drift on " + host_name + " panel " + str(pid))
+    for pid, x, y in ((1, 4, 1), (94, 12, 1), (95, 4, 3),
+                      (uptime_id if uptime_id is not None else 97, 12, 3)):
+        if new[pid]["gridPos"] != {"x": x, "y": y, "w": 8, "h": 2}:
+            raise RuntimeError("Invalid overview card geometry on " + host_name)
+
+
 def validate_admin_section_pilot(existing_panels, candidate_panels):
     """Only permit two host cards and rearranging the existing overview."""
     rows = {row_id: title for row_id, title in ADMIN_ROWS}
@@ -656,15 +793,17 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         # Debian 13 was verified in the approved 2026-11-08 admin-01 APT pilot.
         overview = "**admin-01**"
     else:
-        overview = (
-            "### " + name + "\n\n"
-            + "**Zabbix technical host:** " + host["host"] + "\n\n"
-            + "**Operating system:** " + os_info["os"] + "\n\n"
-            + "**Kernel / architecture:** " + os_info["kernel"] + "\n\n"
-            + "**OS source:** " + os_info["source"] + " (snapshot at last dashboard generation).\n\n"
-            + "**Monitored data:** live Zabbix API / enabled, supported numeric items.\n\n"
-            + "If a panel is absent, the required item is not available on this host."
-        )
+        # Host-specific OS fields may be unknown or contain build metadata.
+        # Never reuse admin-01's hard-coded Debian release or kernel.
+        kernel_text = os_info["kernel"]
+        match = re.search(r"\\bLinux\\s+\\S+\\s+(\\S+)", kernel_text)
+        kernel = safe_markdown(match.group(1), 70) if match else "Unknown"
+        match = re.search(r"\\b(aarch64|arm64|x86_64|amd64|i386|i686)\\b", kernel_text)
+        arch = match.group(1) if match else "Unknown"
+        os_name = safe_markdown(os_info["os"], 75)
+        overview = "**" + safe_markdown(name, 80) + "**"
+        # Existing OS/kernel values come from Zabbix latest data or inventory,
+        # not from an admin-01-specific OS assumption.
     panels = [{
         "id": 1, "type": "text",
         "title": "Host" if name == "admin-01" else "Zabbix managed host",
@@ -681,6 +820,15 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
              "gridPos": {"x": 0, "y": 0, "w": 12, "h": 3},
              "options": {"mode": "markdown",
                          "content": "`" + kernel + "`"}},
+        ])
+    else:
+        panels.extend([
+            {"id": 94, "type": "text", "title": "Operating system",
+             "gridPos": {"x": 0, "y": 0, "w": 8, "h": 2},
+             "options": {"mode": "markdown", "content": os_name + " · " + arch}},
+            {"id": 95, "type": "text", "title": "Kernel",
+             "gridPos": {"x": 0, "y": 0, "w": 8, "h": 2},
+             "options": {"mode": "markdown", "content": "`" + kernel + "`"}},
         ])
     missing = []
     pid = 2
@@ -727,6 +875,8 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         panels.append(problem_panel(host["host"], problems_y + 6))
     if name == "admin-01":
         panels = admin_section_rows(panels)
+    else:
+        panels = managed_host_section_rows(panels)
     uid = "zbx-host-" + hashlib.sha256(name.encode()).hexdigest()[:20]
     return dashboard(uid, name, panels, "Live Zabbix 7 operational metrics for " + name,
                      ["managed-devices", "zabbix"]), missing
@@ -782,7 +932,11 @@ def main():
                         help="Write dashboards; default is read-only preview")
     parser.add_argument("--patch-pilot", action="store_true",
                         help="Refuse all dashboard writes except the admin-01 patch panel")
+    parser.add_argument("--managed-rollout", action="store_true",
+                        help="Restrict rollout to the 14 existing non-admin managed hosts")
     args = parser.parse_args()
+    if args.patch_pilot and args.managed_rollout:
+        raise RuntimeError("Pilot and managed rollout modes are mutually exclusive")
     names, token, graf_headers = read_secret_files()
 
     folder = grafana_api(graf_headers, "/api/folders/homelab-managed-devices")
@@ -867,6 +1021,24 @@ def main():
                 actions.append(("EXISTS", page, folder_uid))
                 continue
         actions.append(("UPDATE" if prior else "CREATE", page, folder_uid))
+
+    if args.managed_rollout:
+        allowed = set(found) - {"admin-01"}
+        if len(allowed) != 14:
+            raise RuntimeError("Expected 14 non-admin managed hosts")
+        for action, page, _ in actions:
+            if page["title"] not in allowed:
+                if action != "EXISTS":
+                    raise RuntimeError("Protected dashboard changed: " + page["title"])
+                continue
+            if action == "CREATE":
+                raise RuntimeError("Refusing new managed-host dashboard: " + page["title"])
+            previous = grafana_api(graf_headers,
+                                   "/api/dashboards/uid/" + page["uid"])
+            validate_managed_host_rollout(
+                page["title"], previous["dashboard"]["panels"], page["panels"])
+        actions = [a for a in actions if a[1]["title"] in allowed]
+        print("MANAGED ROLLOUT GUARD: 14 host dashboards; admin-01 and overview protected")
 
     if args.patch_pilot:
         expected = "admin-01"
