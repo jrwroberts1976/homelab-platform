@@ -1,3 +1,10 @@
+## 2026-11-09 — Compact Host Overview revision staged after screenshot feedback
+
+- Operator screenshot of live admin-01 Host Overview showed original OS source was a verbose kernel/compiler build string and live uptime stat was enormous; despite expected side-by-side grid, Grafana rendered two full-width stacked panels. User rejected layout.
+- Staged smaller **vertical** presentation: concise Host summary with verified Debian 13 baseline, parsed kernel/architecture; panel 1 full-width height 3. Existing Zabbix `System uptime` live stat full-width height 3 under it; no duplicate collector. System Performance starts after the 2 compact panels. Sections and security/CVE panels unchanged.
+- Host OS "Debian 13" uses previously audited host OS and is dashboard-generation snapshot, not a new continuously verified OS telemetry assertion. Source `system.sw.os` exposed a verbose kernel build string; deliberately not displayed as OS release. Existing live uptime remains tied to Zabbix.
+- Updated existing guarded IaC layout dimension expectations to 24x3 for both overview panels; **not syntax-checked or deployed**. Next operator fetch isolated worktree, Python py_compile, guarded Ansible preview; only apply after passed preview and review screenshot. Re-run preview for idempotency.
+
 ## 2026-11-09 — Compact admin-01 Host Overview with live Zabbix uptime staged (not deployed)
 
 - User viewed new four expanded Grafana rows and disliked verbose Host Overview with scrollable text. Requested uptime displayed in same section.
