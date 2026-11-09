@@ -1,0 +1,209 @@
+---
+# Estate-wide agent telemetry: 11 remaining standard managed hosts only.
+# Read-only preflight by default; no router-01 and no Zabbix API/Grafana writes.
+- name: Preview or deploy cached APT telemetry to standard managed hosts
+  hosts: zabbix_agents
+  gather_facts: true
+  become: true
+  vars:
+    managed_telemetry_apply: false
+    managed_telemetry_pilots: ['admin-01', 'media-01', 'dns-01']
+    managed_telemetry_targets:
+      - PROXMOX
+      - Proxmox-2
+      - cloud-01
+      - dns-02
+      - edge-01
+      - greenbone-01
+      - komodo-01
+      - mail-relay-01
+      - monitor-01
+      - sensor-01
+      - zabbix-01
+    managed_telemetry_inventory:
+      - PROXMOX
+      - Proxmox-2
+      - admin-01
+      - cloud-01
+      - dns-01
+      - dns-02
+      - edge-01
+      - greenbone-01
+      - komodo-01
+      - mail-relay-01
+      - media-01
+      - monitor-01
+      - sensor-01
+      - zabbix-01
+    managed_telemetry_collector: /usr/local/bin/homelab-patch-snapshot
+    managed_telemetry_patch_conf: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
+    managed_telemetry_temp_conf: /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf
+    managed_telemetry_temp_sensor: /sys/class/thermal/thermal_zone0/temp
+  tasks:
+    - name: Require exact managed-host inventory and exclude router
+      ansible.builtin.assert:
+        that:
+          - ansible_play_hosts_all | sort == managed_telemetry_inventory | sort
+          - "'router-01' not in ansible_play_hosts_all"
+          - (managed_telemetry_pilots | intersect(managed_telemetry_targets)) | length == 0
+      run_once: true
+
+    - name: Require verified supported Debian 13 host
+      ansible.builtin.assert:
+        that:
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Verify Agent 2 and APT dependencies
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/sbin/zabbix_agent2
+        - /etc/zabbix/zabbix_agent2.d
+        - /usr/bin/apt
+      register: managed_dependencies
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Fail closed when base telemetry prerequisites are absent
+      ansible.builtin.assert:
+        that:
+          - managed_dependencies.results | map(attribute='stat.exists') | min
+          - managed_dependencies.results[1].stat.isdir | default(false)
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Inspect existing UserParameters and collector
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - "{{ managed_telemetry_collector }}"
+        - "{{ managed_telemetry_patch_conf }}"
+        - "{{ managed_telemetry_temp_conf }}"
+      register: managed_existing
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Refuse overwriting any pre-existing estate telemetry files
+      ansible.builtin.assert:
+        that:
+          - not (managed_existing.results | map(attribute='stat.exists') | max)
+        fail_msg: "Existing telemetry file on {{ inventory_hostname }}; review before deployment"
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Probe sensor readability as the existing Zabbix service account
+      ansible.builtin.shell: |
+        test -r /sys/class/thermal/thermal_zone0/temp || exit 0
+        cat /sys/class/thermal/thermal_zone0/temp
+      args:
+        executable: /bin/sh
+      become_user: zabbix
+      register: managed_sensor
+      changed_when: false
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Classify supported CPU temperature without requiring a sensor
+      ansible.builtin.set_fact:
+        managed_has_temp: >-
+          {{
+            (managed_sensor.stdout | default('')) is match('^[0-9]+$')
+            and (managed_sensor.stdout | default('0') | int) >= 1000
+            and (managed_sensor.stdout | default('0') | int) <= 110000
+          }}
+      when: inventory_hostname in managed_telemetry_targets
+
+    - name: Show estate deployment preview per host
+      ansible.builtin.debug:
+        msg: >-
+          {{ inventory_hostname }}:
+          {{ 'PILOT EXCLUDED (already configured)' if inventory_hostname in managed_telemetry_pilots
+             else 'APT cached snapshot=INSTALL; CPU temperature=' +
+                  ('INSTALL' if managed_has_temp | bool else 'UNAVAILABLE') +
+                  '; apply=' + (managed_telemetry_apply | bool | string) }}
+      # Debug output is a plan, not proof of Zabbix item availability.
+
+    - name: Install cached-APT collector on approved targets
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py
+        dest: "{{ managed_telemetry_collector }}"
+        owner: root
+        group: root
+        mode: "0755"
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+
+    - name: Register read-only APT UserParameter on approved targets
+      ansible.builtin.copy:
+        dest: "{{ managed_telemetry_patch_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible: cached APT snapshot only; no package refresh.
+          UserParameter=homelab.patch.snapshot,/usr/local/bin/homelab-patch-snapshot
+      register: managed_patch_conf_result
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+
+    - name: Register sysfs CPU temperature only where readable
+      ansible.builtin.copy:
+        dest: "{{ managed_telemetry_temp_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by Ansible: read-only thermal-zone Celsius value.
+          UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+      register: managed_temp_conf_result
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+        - managed_has_temp | bool
+
+    - name: Check cached-APT snapshot as Zabbix account
+      ansible.builtin.command:
+        argv: ["{{ managed_telemetry_collector }}"]
+      become_user: zabbix
+      changed_when: false
+      register: managed_patch_verify
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+
+    - name: Validate snapshot schema and absence of errors
+      ansible.builtin.assert:
+        that:
+          - (managed_patch_verify.stdout | from_json).schema_version == 1
+          - (managed_patch_verify.stdout | from_json).source == 'cached_apt_no_refresh'
+          - (managed_patch_verify.stdout | from_json).error == none
+          - (managed_patch_verify.stdout | from_json).pending_updates_cached is number
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+
+    - name: Restart existing Zabbix Agent 2 only when needed
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: restarted
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+        - (managed_patch_conf_result.changed | default(false)) or
+          (managed_temp_conf_result.changed | default(false))
+
+    - name: Verify locally registered Zabbix keys
+      ansible.builtin.command:
+        argv: [/usr/sbin/zabbix_agent2, -t, "{{ item }}"]
+      loop: "{{ ['homelab.patch.snapshot'] + (['homelab.cpu.temperature'] if managed_has_temp | bool else []) }}"
+      register: managed_key_verify
+      changed_when: false
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
+
+    - name: Show local Zabbix key verification
+      ansible.builtin.debug:
+        msg: "{{ managed_key_verify.results | map(attribute='stdout') | list }}"
+      when:
+        - managed_telemetry_apply | bool
+        - inventory_hostname in managed_telemetry_targets
