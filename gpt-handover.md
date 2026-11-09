@@ -1,3 +1,10 @@
+## 2026-11-09 — admin-01 CPU temperature Zabbix pilot staged (not applied)
+
+- Operator verified existing Prometheus Raspberry Pi CPU temperature `node_thermal_zone_temp{instance="192.168.2.48:9100",type="cpu-thermal",zone="0"}` = 36.476°C, but no temperature item visible in Zabbix Latest data. User prefers Zabbix as the eventual Grafana data source.
+- Staged host-specific Ansible Agent 2 pilot `IaC/ansible/playbooks/zabbix-admin01-cpu-temperature-agent.yml`: by default audits existing `/sys/class/thermal/thermal_zone0/temp` read permission as Zabbix user, millidegrees range and existing Agent 2 installation; approved apply installs `/etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf` with read-only `homelab.cpu.temperature` UserParameter and conditionally restarts only `zabbix-agent2`. No packages/collectors installed.
+- Staged `IaC/ansible/playbooks/zabbix-admin01-cpu-temperature-item.yml` + `IaC/ansible/roles/monitoring_stack/files/grafana/reconcile_zabbix_admin01_temperature.py`: guarded Zabbix API preview then opt-in create of one `admin-01` active-agent float item, key `homelab.cpu.temperature`, unit °C, 1m cadence, 7d history and 365d trends. Reuses installed monitored host inventory and existing Zabbix API token access. Refuses unexpected existing item or template mapping.
+- No Zabbix or Grafana writes yet. Next operator: fetch worktree, run both preview playbooks separately with `--limit admin-01` and `--limit monitor-01`, then approve/run agent apply before item apply. Verify value in Zabbix Latest data; only then add Grafana System Performance panel with Zabbix as datasource and guarded admin-only preview.
+
 ## 2026-11-09 — admin-01 Grafana dashboard layout pilot completed and idempotency verified
 
 - Operator accepted compact, centred 2x2 Host Overview cards: Host, Operating system, Kernel, and live Zabbix System uptime with reduced font size. The four expanded/collapsible sections are Host Overview, System Performance, Host Security, Monitoring & Alerts. Host Security retains pending APT patches and Greenbone unique CVEs with details.
