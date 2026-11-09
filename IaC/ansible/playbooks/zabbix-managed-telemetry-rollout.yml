@@ -91,7 +91,7 @@
     - name: Read existing telemetry files to detect unmanaged conflicts
       ansible.builtin.slurp:
         src: "{{ item.item }}"
-      loop: "{{ managed_existing.results | selectattr('stat.exists') | list }}"
+      loop: "{{ managed_existing.results | default([]) | selectattr('stat', 'defined') | selectattr('stat.exists') | list }}"
       register: managed_file_contents
       when: inventory_hostname in managed_telemetry_targets
 
