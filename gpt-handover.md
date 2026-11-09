@@ -1,3 +1,9 @@
+## 2026-11-09 — Greenbone CVE tile integration discovery staged (not deployed)
+
+- User chose to replace the admin-01 Grafana "Security patches" tile with "Known CVEs" based on existing Greenbone authenticated scan results; retain cached pending patches tile. Desired number = distinct CVE IDs from the latest completed, attributable Greenbone report for admin-01 (192.168.2.48). No numeric zero if no valid/fresh scan; Unknown if absent/stale. CVEs are not equal to available security patches or count of Greenbone findings.
+- Added `IaC/ansible/playbooks/greenbone-cve-preflight.yml` to feature branch as a **read-only, greenbone-01-only** environment discovery: running Greenbone container names/images, available GVM tooling, common GVM Unix sockets. No scans started, no credentials printed, no report downloads, no Grafana/Zabbix changes. **Not executed or syntax-checked yet.**
+- Next: operator update detached patching worktree, Ansible syntax check and `--limit greenbone-01` audit. Use results to find existing authenticated report access and design minimal evidence-based CVE metric with scan-completion/freshness tracking. Do not change dashboards yet; security tile remains Unknown until supported report evidence is verified.
+
 ## 2026-11-09 — Security patch classification source evaluation and version-aware audit staged
 
 - Existing Prometheus collector `homelab-patch-metrics` (disabled timer) uses simulated `apt-get dist-upgrade` and counts `Inst` lines containing "security"; this is insufficient for Raspberry Pi vendor updates and must not be presented as definitive. Operator confirmed simulation 30 Inst operations = 20 upgrades of installed packages plus 10 new packages; Zabbix cached pending candidates 20 is consistent.
