@@ -2,7 +2,7 @@
 # Estate-wide agent telemetry: 11 remaining standard managed hosts only.
 # Read-only preflight by default; no router-01 and no Zabbix API/Grafana writes.
 - name: Preview or deploy cached APT telemetry to standard managed hosts
-  hosts: zabbix_agents
+  hosts: zabbix_agents:!admin-01:!media-01:!dns-01
   gather_facts: true
   become: true
   vars:
@@ -20,21 +20,7 @@
       - monitor-01
       - sensor-01
       - zabbix-01
-    managed_telemetry_inventory:
-      - PROXMOX
-      - Proxmox-2
-      - admin-01
-      - cloud-01
-      - dns-01
-      - dns-02
-      - edge-01
-      - greenbone-01
-      - komodo-01
-      - mail-relay-01
-      - media-01
-      - monitor-01
-      - sensor-01
-      - zabbix-01
+    managed_telemetry_inventory: "{{ managed_telemetry_targets }}"
     managed_telemetry_collector: /usr/local/bin/homelab-patch-snapshot
     managed_telemetry_patch_conf: /etc/zabbix/zabbix_agent2.d/homelab-patching.conf
     managed_telemetry_temp_conf: /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf
@@ -51,6 +37,7 @@
         that:
           - ansible_play_hosts_all | sort == managed_telemetry_inventory | sort
           - "'router-01' not in ansible_play_hosts_all"
+          - ansible_play_hosts_all | length == 11
           - (managed_telemetry_pilots | intersect(managed_telemetry_targets)) | length == 0
       run_once: true
 
@@ -109,16 +96,20 @@
       loop: "{{ managed_file_contents.results | default([]) }}"
       when: inventory_hostname in managed_telemetry_targets
 
-    - name: Probe sensor readability as the existing Zabbix service account
-      ansible.builtin.shell: |
-        test -r /sys/class/thermal/thermal_zone0/temp || exit 0
-        cat /sys/class/thermal/thermal_zone0/temp
-      args:
-        executable: /bin/sh
-      become_user: zabbix
+    - name: Inspect sysfs temperature sensor permissions
+      ansible.builtin.stat:
+        path: "{{ managed_telemetry_temp_sensor }}"
+      register: managed_sensor_stat
+
+    - name: Read temperature only when sensor is world-readable
+      ansible.builtin.command:
+        argv: [cat, "{{ managed_telemetry_temp_sensor }}"]
       register: managed_sensor
       changed_when: false
-      when: inventory_hostname in managed_telemetry_targets
+      when:
+        - managed_sensor_stat.stat.exists | default(false)
+        - managed_sensor_stat.stat.readable | default(false)
+        - managed_sensor_stat.stat.mode[-1] | int(base=8) >= 4
 
     - name: Classify supported CPU temperature without requiring a sensor
       ansible.builtin.set_fact:
@@ -176,10 +167,9 @@
         - inventory_hostname in managed_telemetry_targets
         - managed_has_temp | default(false) | bool
 
-    - name: Check cached-APT snapshot as Zabbix account
+    - name: Check cached-APT snapshot without user switching
       ansible.builtin.command:
         argv: ["{{ managed_telemetry_collector }}"]
-      become_user: zabbix
       changed_when: false
       register: managed_patch_verify
       when:
