@@ -90,13 +90,16 @@
         that:
           - >-
             (item.item.item == managed_telemetry_collector and
-             (item.content | b64decode) == lookup('file', '../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py'))
+             (item.content | b64decode) == lookup('ansible.builtin.file', playbook_dir ~ '/../roles/monitoring_stack/files/zabbix/homelab-patch-snapshot.py', rstrip=False))
             or (item.item.item == managed_telemetry_patch_conf and
                 (item.content | b64decode) == managed_patch_conf_content)
             or (item.item.item == managed_telemetry_temp_conf and
                 (item.content | b64decode) in [managed_temp_conf_content, managed_temp_conf_content_previous])
-        fail_msg: "Unmanaged telemetry file found on {{ inventory_hostname }}; refuse overwrite"
+        fail_msg: "Telemetry file differs from IaC on {{ inventory_hostname }}: {{ item.item.item }}"
+        quiet: true
       loop: "{{ managed_file_contents.results | default([]) }}"
+      loop_control:
+        label: "{{ item.item.item }}"
       when: inventory_hostname in managed_telemetry_targets
 
     - name: Inspect sysfs temperature sensor permissions
