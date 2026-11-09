@@ -553,9 +553,12 @@ def main():
         existing = grafana_api(
             graf_headers, "/api/dashboards/uid/" + admin_action[1]["uid"])
         allowed_patch_ids = {91, 92}
-        if not any(p.get("id") == 92 and p.get("type") == "text"
+        if not any(p.get("id") == 92
+                   and p.get("type") == "stat"
+                   and p.get("title") == "Known CVEs — admin-01"
+                   and p.get("datasource") == prometheus_ds
                    for p in admin_action[1]["panels"]):
-            raise RuntimeError("Expected security Unknown placeholder panel 92")
+            raise RuntimeError("Expected Prometheus Known CVEs stat panel 92")
         previous_panels = [p for p in existing["dashboard"]["panels"]
                            if p.get("id") not in allowed_patch_ids]
         candidate_panels = [p for p in admin_action[1]["panels"]
