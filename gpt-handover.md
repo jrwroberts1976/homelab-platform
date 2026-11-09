@@ -1,3 +1,10 @@
+## 2026-11-09 — admin-01 Host Security CVE details table staged, not deployed
+
+- User requested a CVE-and-description table directly below the existing two security summary tiles. Existing Greenbone Prometheus exporter already provides `homelab_greenbone_cve_finding_score` labels `hostname`, `cve`, `finding`, `severity` and finding CVSS value.
+- IaC `rebuild_zabbix_dashboards.py` now stages admin-01-only panel 93 `Host security — CVE findings` with Grafana Prometheus instant table query, CVE/Description/Severity/CVSS columns (description = Greenbone finding title); distinct by CVE/finding/severity, 30-hour evidence freshness and future timestamp check. Existing Zabbix problems table panel 90 moves down 8 grid rows to sit beneath CVE table; all other hosts remain unchanged.
+- Guard extended explicitly to allow only new panel 93, panel 90 exact eight-row move, existing CVE stat 92 formatting; panel 91 must remain byte-for-byte identical; no other panels or dashboards permitted to change. **Not deployed or syntax-checked on operator host.** Next: fetch branch, local python py_compile, Ansible guarded read-only preview, then explicitly approved apply and visual inspection.
+- Known limitation: without explicit per-host Greenbone scan coverage, an empty result cannot establish zero CVEs. Prometheus export has a short finding label, not full free-text remediation or advisory descriptions.
+
 ## 2026-11-09 — Screenshot verifies admin-01 metrics; CVE tile display refinement staged
 
 - Operator screenshot confirms admin-01 Grafana pending-patches panel shows 20 and Known CVEs panel shows 1. The CVE panel also displayed a tiny verbose PromQL field/series label above the number due to Grafana stat `textMode=value_and_name`.
