@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 CPU temperature Grafana query returned no series; exact-name fix staged
+
+- User supplied Grafana Query Inspector for CPU temperature: Zabbix datasource, host `admin-01`, item selector `/^CPU\\ temperature$/`, 6h window, HTTP 200 but `frames: []`. The Zabbix Latest data screen independently showed `CPU temperature` = 38.628 °C (itemid 52886), so item collection works. HTTP 200 with no frames is not proof of an unhealthy agent.
+- Staged a **temperature-panel-only** Grafana builder change replacing the generated escaped-space regular expression with the exact literal Zabbix item name `CPU temperature`. The guarded admin-only pilot allows solely this prior-to-new item filter transition or a subsequent no-change preview; all existing targets, panel options and other hosts are preserved. This is a hypothesis for missing series, not yet proven by a post-change Grafana query.
+- No new collectors or Zabbix modifications. Next operator fetch feature branch, compile builder and run read-only `grafana-admin-patching-pilot.yml --limit monitor-01`. Only deploy if guard passes; check resulting Grafana series. If still empty, next check Zabbix plugin item lookup/cache and itemid-based query without weakening guard.
+
 ## 2026-11-09 — admin-01 temperature Grafana preview blocked; ordering fix staged
 
 - Operator ran `grafana-admin-patching-pilot.yml --limit monitor-01` for newly staged Zabbix CPU temperature chart; preview failed with redacted `no_log` nonzero exit before Grafana write, recap `ok=3 changed=1 failed=1`. The script file was copied; **no Grafana dashboard was applied**.
