@@ -126,7 +126,7 @@ greenbone-01 is a managed Proxmox VM serving as the Greenbone Community vulnerab
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-09T03:14:47+00:00`
+- Last assessed: `2026-11-09T04:17:46+00:00`
 - Pending updates: **8**
 - Security updates pending: **5**
 - Reboot required: **No**

@@ -109,7 +109,7 @@ Managed Proxmox LXC container CT105 hosting the Zabbix monitoring platform. The 
 
 - Policy: **Security updates automatically**
 - Automatic reboot: **Disabled**
-- Last assessed: `2026-11-09T03:17:10+00:00`
+- Last assessed: `2026-11-09T04:18:40+00:00`
 - Pending updates: **3**
 - Security updates pending: **2**
 - Reboot required: **No**
