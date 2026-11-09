@@ -1,3 +1,9 @@
+## 2026-11-09 — Shorter overview preview blocked by uptime typography guard, fix staged
+
+- Operator ran compact 2-row Host Overview Ansible preview; Python syntax already passed, but read-only Grafana preview failed with `no_log` redaction before any Grafana dashboard write. Existing builder file was installed by Ansible (changed=1).
+- Inspected committed `validate_admin_section_pilot` and found it compared old/new uptime panel `options` verbatim, while new intended `options.text.valueSize=24` necessarily differs. Staged narrow guard fix: explicitly require new font value 24, allow old `text` absent/empty or 24, strip only `options.text` for remaining immutable configuration comparison. Other panels, data queries, 2-row dimensions, and 15 non-pilot dashboards remain protected. **Potential root cause from static inspection; target error was censored, so not independently confirmed.**
+- Change committed on feature branch. Next: operator fetch detached worktree, Python compilation and Ansible preview WITHOUT apply. If it still fails, inspect sanitized RuntimeError through existing read-only ad hoc shell; do not bypass the guard or apply.
+
 ## 2026-11-09 — Shorter admin-01 Host Overview cards and smaller live uptime font staged
 
 - User requested overview height reduction and then a smaller uptime font. Existing centred 2x2 tiles occupied Grafana rows h=3; latest generator changes (not yet operator previewed/deployed) set tile height h=2, second row y=3, System Performance starts y=5, and set existing Zabbix uptime stat Grafana text value font size 24 via `options.text.valueSize`.
