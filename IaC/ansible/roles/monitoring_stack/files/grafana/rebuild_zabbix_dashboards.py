@@ -464,6 +464,7 @@ def admin_section_rows(source_panels):
         "orientation": "horizontal", "textMode": "value",
         "wideLayout": False, "colorMode": "none", "graphMode": "none",
         "justifyMode": "center",
+        "text": {"valueSize": 24},
     }
     result.append(uptime)
 
