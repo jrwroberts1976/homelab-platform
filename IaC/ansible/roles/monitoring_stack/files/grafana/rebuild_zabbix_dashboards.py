@@ -429,44 +429,55 @@ ADMIN_ROWS = (
 
 
 def admin_section_rows(source_panels):
-    """Place existing admin-01 panels below four expanded, collapsible rows."""
+    """Organize admin-01 in four open rows, with live uptime in Overview."""
     by_id = {p["id"]: p for p in source_panels}
     if len(by_id) != len(source_panels) or not {1, 90, 91, 92, 93} <= set(by_id):
-        raise RuntimeError("Cannot safely group incomplete/duplicate admin-01 panels")
+        raise RuntimeError("Incomplete/duplicate admin-01 panels")
     if set(by_id) & {rid for rid, _ in ADMIN_ROWS}:
-        raise RuntimeError("Admin-01 row IDs collide with existing panels")
+        raise RuntimeError("Grafana row ID collision")
+    uptime_matches = [p for p in source_panels if p.get("title") == "System uptime"]
+    if len(uptime_matches) != 1:
+        raise RuntimeError("Expected one existing live Zabbix uptime item")
+    uptime = uptime_matches[0]
 
     def row(row_id, title, y):
         return {"id": row_id, "type": "row", "title": title, "collapsed": False,
                 "gridPos": {"x": 0, "y": y, "w": 24, "h": 1}, "panels": []}
 
     performance = sorted(
-        (p for p in source_panels if p["id"] not in {1, 90, 91, 92, 93}),
+        (p for p in source_panels
+         if p["id"] not in {1, 90, 91, 92, 93, uptime["id"]}),
         key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
     )
     result = [row(100, "Host Overview", 0)]
     overview = by_id[1]
-    overview["gridPos"]["y"] = 1
+    overview["gridPos"].update({"x": 0, "y": 1, "w": 16, "h": 5})
     result.append(overview)
 
-    performance_row_y = overview["gridPos"]["y"] + overview["gridPos"]["h"]
+    uptime["type"] = "stat"
+    uptime["gridPos"].update({"x": 16, "y": 1, "w": 8, "h": 5})
+    uptime["options"] = {
+        "reduceOptions": {"values": False, "calcs": ["lastNotNull"], "fields": ""},
+        "orientation": "horizontal", "textMode": "value",
+        "wideLayout": False, "colorMode": "none", "graphMode": "none",
+        "justifyMode": "center",
+    }
+    result.append(uptime)
+
+    performance_row_y = 6
     result.append(row(101, "System Performance", performance_row_y))
-    perf_y = performance_row_y + 1
-    if performance:
-        original_first = min(p["gridPos"]["y"] for p in performance)
-        for p in performance:
-            p["gridPos"]["y"] = perf_y + (p["gridPos"]["y"] - original_first)
-            result.append(p)
-        perf_end = max(p["gridPos"]["y"] + p["gridPos"]["h"] for p in performance)
-    else:
-        perf_end = perf_y
+    for i, panel in enumerate(performance):
+        panel["gridPos"]["x"] = 12 * (i % 2)
+        panel["gridPos"]["y"] = 7 + 8 * (i // 2)
+        result.append(panel)
+    perf_end = 7 + 8 * ((len(performance) + 1) // 2)
 
     result.append(row(102, "Host Security", perf_end))
     security_y = perf_end + 1
     for panel_id, offset in ((91, 0), (92, 0), (93, 6)):
-        p = by_id[panel_id]
-        p["gridPos"]["y"] = security_y + offset
-        result.append(p)
+        panel = by_id[panel_id]
+        panel["gridPos"]["y"] = security_y + offset
+        result.append(panel)
 
     alerts_row_y = security_y + 6 + by_id[93]["gridPos"]["h"]
     result.append(row(103, "Monitoring & Alerts", alerts_row_y))
@@ -477,63 +488,101 @@ def admin_section_rows(source_panels):
 
 
 def validate_admin_section_pilot(existing_panels, candidate_panels):
-    """Permit section headers and vertical-only moves; protect every panel payload."""
+    """Guard compact summary + live uptime against unexpected panel changes."""
     row_ids = {row_id for row_id, _ in ADMIN_ROWS}
     old_rows = [p for p in existing_panels if p.get("type") == "row"]
     new_rows = [p for p in candidate_panels if p.get("type") == "row"]
     if old_rows and {p.get("id") for p in old_rows} != row_ids:
-        raise RuntimeError("Unexpected existing dashboard rows")
+        raise RuntimeError("Unexpected existing rows")
     if [(p.get("id"), p.get("title"), p.get("collapsed"))
             for p in new_rows] != [(i, name, False) for i, name in ADMIN_ROWS]:
-        raise RuntimeError("Unexpected requested dashboard section layout")
-    if old_rows:
-        for old_row, new_row in zip(old_rows, new_rows):
-            if old_row != new_row:
-                raise RuntimeError("Existing section header drift")
+        raise RuntimeError("Unexpected section layout")
 
-    old_by_id = {p["id"]: p for p in existing_panels
-                 if p.get("type") != "row"}
-    new_by_id = {p["id"]: p for p in candidate_panels
-                 if p.get("type") != "row"}
+    old_by_id = {p["id"]: p for p in existing_panels if p.get("type") != "row"}
+    new_by_id = {p["id"]: p for p in candidate_panels if p.get("type") != "row"}
     if (len(old_by_id) != len([p for p in existing_panels if p.get("type") != "row"])
             or len(new_by_id) != len([p for p in candidate_panels if p.get("type") != "row"])
             or set(old_by_id) != set(new_by_id)):
-        raise RuntimeError("Panel inventory changed outside the layout request")
+        raise RuntimeError("Existing panel inventory changed")
+    uptime_ids = [pid for pid, p in old_by_id.items()
+                  if p.get("title") == "System uptime"]
+    if len(uptime_ids) != 1:
+        raise RuntimeError("Expected one existing uptime panel")
+    uptime_id = uptime_ids[0]
+    uptime_new = new_by_id[uptime_id]
+    if (uptime_new.get("type") != "stat" or uptime_new.get("datasource") != DS
+            or uptime_new.get("fieldConfig", {}).get("defaults", {}).get("unit") != "s"):
+        raise RuntimeError("Uptime must remain a live Zabbix seconds stat")
 
     for panel_id, old in old_by_id.items():
         new = new_by_id[panel_id]
-        old_compare = json.loads(json.dumps(old))
-        new_compare = json.loads(json.dumps(new))
-        if old_compare.get("gridPos", {}).get("x") != new_compare.get("gridPos", {}).get("x"):
-            raise RuntimeError("Panel horizontal placement changed: " + str(panel_id))
-        for panel in (old_compare, new_compare):
-            panel.get("gridPos", {}).pop("y", None)
-        if old_compare != new_compare:
-            raise RuntimeError("Panel content or dimensions changed: " + str(panel_id))
-
-    # Recalculate from the original panels, allowing no other repositioning.
-    baseline = [json.loads(json.dumps(p)) for p in existing_panels
-                if p.get("type") != "row"]
-    expected = admin_section_rows(baseline)
-    if expected != candidate_panels:
-        raise RuntimeError("Unexpected section ordering or vertical positions")
+        previous = json.loads(json.dumps(old))
+        intended = json.loads(json.dumps(new))
+        for panel in (previous, intended):
+            grid = panel.get("gridPos", {})
+            grid.pop("y", None)
+            if panel_id in (1, uptime_id) or panel_id in {
+                    p["id"] for p in old_by_id.values()
+                    if p["id"] not in {1, 90, 91, 92, 93, uptime_id}}:
+                grid.pop("x", None)
+        if panel_id == 1:
+            if (previous.get("type") != "text" or intended.get("type") != "text"
+                    or previous.get("title") not in ("Zabbix managed host", "Host summary")
+                    or intended.get("title") != "Host summary"):
+                raise RuntimeError("Unexpected host summary transition")
+            for panel in (previous, intended):
+                panel.pop("options", None)
+                panel.pop("title", None)
+                panel.get("gridPos", {}).pop("w", None)
+                panel.get("gridPos", {}).pop("h", None)
+        elif panel_id == uptime_id:
+            if previous.get("type") not in ("timeseries", "stat"):
+                raise RuntimeError("Unexpected previous uptime display")
+            for panel in (previous, intended):
+                panel.pop("type", None)
+                panel.pop("options", None)
+                panel.get("gridPos", {}).pop("w", None)
+                panel.get("gridPos", {}).pop("h", None)
+        if previous != intended:
+            raise RuntimeError("Unexpected panel data/config change: " + str(panel_id))
+    if not (new_by_id[1]["gridPos"]["w"] == 16
+            and new_by_id[1]["gridPos"]["h"] == 5
+            and uptime_new["gridPos"]["w"] == 8
+            and uptime_new["gridPos"]["h"] == 5):
+        raise RuntimeError("Overview dimensions not approved")
+    if any(p.get("type") == "row" and p.get("panels") != [] for p in new_rows):
+        raise RuntimeError("Unexpected nested Grafana panels")
 
 
 def host_dashboard(name, host, items, os_info, prometheus_ds):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
               and x.get("value_type") in ("0", "3")]
+    if name == "admin-01":
+        kernel_text = os_info["kernel"]
+        match = re.search(r"\\bLinux\\s+\\S+\\s+(\\S+)", kernel_text)
+        kernel = safe_markdown(match.group(1), 90) if match else "Unknown"
+        match = re.search(r"\\b(aarch64|arm64|x86_64|amd64|i386|i686)\\b", kernel_text)
+        arch = match.group(1) if match else "Unknown"
+        overview = (
+            "**Host:** \`admin-01\`  |  **OS:** " + os_info["os"] + "\n\n"
+            + "**Kernel:** \`" + kernel + "\`  |  **Architecture:** \`" + arch + "\`"
+        )
+    else:
+        overview = (
+            "### " + name + "\n\n"
+            + "**Zabbix technical host:** " + host["host"] + "\n\n"
+            + "**Operating system:** " + os_info["os"] + "\n\n"
+            + "**Kernel / architecture:** " + os_info["kernel"] + "\n\n"
+            + "**OS source:** " + os_info["source"] + " (snapshot at last dashboard generation).\n\n"
+            + "**Monitored data:** live Zabbix API / enabled, supported numeric items.\n\n"
+            + "If a panel is absent, the required item is not available on this host."
+        )
     panels = [{
-        "id": 1, "type": "text", "title": "Zabbix managed host",
+        "id": 1, "type": "text",
+        "title": "Host summary" if name == "admin-01" else "Zabbix managed host",
         "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
-        "options": {"mode": "markdown", "content":
-                    "### " + name + "\n\n"
-                    + "**Zabbix technical host:** " + host["host"] + "\n\n"
-                    + "**Operating system:** " + os_info["os"] + "\n\n"
-                    + "**Kernel / architecture:** " + os_info["kernel"] + "\n\n"
-                    + "**OS source:** " + os_info["source"] + " (snapshot at last dashboard generation).\n\n"
-                    + "**Monitored data:** live Zabbix API / enabled, supported numeric items.\n\n"
-                    + "If a panel is absent, the required item is not available on this host."},
+        "options": {"mode": "markdown", "content": overview},
     }]
     missing = []
     pid = 2
