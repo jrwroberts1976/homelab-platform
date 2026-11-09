@@ -806,7 +806,7 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         # not from an admin-01-specific OS assumption.
     panels = [{
         "id": 1, "type": "text",
-        "title": "Host" if name == "admin-01" else "Zabbix managed host",
+        "title": "Host",
         "gridPos": {"x": 0, "y": 0, "w": 24, "h": 6},
         "options": {"mode": "markdown", "content": overview},
     }]
