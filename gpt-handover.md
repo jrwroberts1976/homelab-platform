@@ -1,3 +1,9 @@
+## 2026-11-09 — admin-01 temperature Grafana preview blocked; ordering fix staged
+
+- Operator ran `grafana-admin-patching-pilot.yml --limit monitor-01` for newly staged Zabbix CPU temperature chart; preview failed with redacted `no_log` nonzero exit before Grafana write, recap `ok=3 changed=1 failed=1`. The script file was copied; **no Grafana dashboard was applied**.
+- Static review found a likely layout-guard conflict: temperature panel 96 originally had grid y=0 and joined the sorted existing performance panels, shifting prior panels' x positions. The pilot guard correctly forbids that. Fixed `admin_section_rows` to sort the original performance panels without ID 96, then append temperature after them, retaining existing panel x, their data/queries and other sections (only vertical y moves to make space). Existing admin-only pilot guard is unchanged. Change committed to feature branch; the censored error means this explanation is not independently confirmed.
+- Next operator: fetch worktree, run Python `py_compile`, repeat guarded read-only preview on monitor-01. Only apply on a passing preview. If still failing, gather sanitized error while preserving API secrets; never turn off the guard or apply blindly.
+
 ## 2026-11-09 — admin-01 CPU temperature verified in Zabbix; Grafana graph staged
 
 - Operator confirmed in Zabbix Monitoring → Latest data: admin-01 / CPU temperature, age 46s, value 38.628 °C, graph link itemid 52886. This proves numeric float ingestion through the new active Agent 2 item `homelab.cpu.temperature`.
