@@ -447,9 +447,13 @@ def admin_section_rows(source_panels):
 
     performance = sorted(
         (p for p in source_panels
-         if p["id"] not in required | {uptime["id"]}),
+         if p["id"] not in required | {uptime["id"], 96}),
         key=lambda p: (p["gridPos"]["y"], p["gridPos"]["x"]),
     )
+    # Append temperature rather than moving the existing performance panels.
+    if 96 not in by_id:
+        raise RuntimeError("admin-01 CPU temperature panel missing")
+    performance.append(by_id[96])
     result = [row(100, "Host Overview", 0)]
     for panel_id, x, y in ((1, 4, 1), (94, 12, 1),
                            (95, 4, 3)):
