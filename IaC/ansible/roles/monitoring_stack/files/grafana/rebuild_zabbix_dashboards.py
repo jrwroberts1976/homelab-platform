@@ -546,6 +546,11 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             old_target["queryType"] = "3"
             old_target["itemids"] = "52886"
             old_target["options"]["useTrends"] = "false"
+            # The generated Item ID target still carries the builder's
+            # regex-form selector, while the deployed Metrics target uses
+            # the previously approved exact-name selector. Item ID mode
+            # bypasses both; normalise only that known selector difference.
+            old_target["item"]["filter"] = expected_target["item"]["filter"]
         if previous != intended:
             raise RuntimeError("Temperature panel change exceeds approved query mode")
 
