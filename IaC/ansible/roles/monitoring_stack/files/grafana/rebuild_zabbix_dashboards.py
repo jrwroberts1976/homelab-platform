@@ -460,17 +460,17 @@ ADMIN_ROWS = (
 
 
 
-def media01_actionable_count_panel(y, prometheus_ds):
+def actionable_count_panel(host_name, y, prometheus_ds):
     panel = admin_known_cves_panel(y, prometheus_ds)
     panel["id"] = 98
-    panel["title"] = "Actionable security findings — media-01"
+    panel["title"] = "Actionable security findings — " + host_name
     panel["description"] = (
-        "Greenbone actionable findings for media-01, including findings "
+        ("Greenbone actionable findings for " + host_name + ", including findings ")
         "without CVE identifiers. Requires evidence under 30 hours old. "
         "Missing or stale evidence is Unknown, not zero."
     )
     panel["targets"][0]["expr"] = (
-        'count(homelab_greenbone_actionable_finding_score{hostname="media-01"})'
+        'count(homelab_greenbone_actionable_finding_score{hostname="' + host_name + '"})'
         ' and on() '
         '(time() - homelab_greenbone_evidence_timestamp_seconds < 108000)'
         ' and on() '
@@ -479,10 +479,10 @@ def media01_actionable_count_panel(y, prometheus_ds):
     return panel
 
 
-def media01_actionable_details_panel(y, prometheus_ds):
+def actionable_details_panel(host_name, y, prometheus_ds):
     panel = admin_cve_details_panel(y, prometheus_ds)
     panel["id"] = 99
-    panel["title"] = "Greenbone security findings — media-01"
+    panel["title"] = "Greenbone security findings — " + host_name
     panel["description"] = (
         "Actionable Greenbone findings, including those without CVEs. "
         "Requires evidence newer than 30 hours. An empty table does not "
@@ -490,7 +490,7 @@ def media01_actionable_details_panel(y, prometheus_ds):
     )
     panel["targets"][0]["expr"] = (
         'max by (finding, severity, port) '
-        '(homelab_greenbone_actionable_finding_score{hostname="media-01"})'
+        '(homelab_greenbone_actionable_finding_score{hostname="' + host_name + '"})'
         ' and on() '
         '(time() - homelab_greenbone_evidence_timestamp_seconds < 108000)'
         ' and on() '
@@ -736,6 +736,54 @@ def validate_managed_host_rollout(host_name, existing_panels, candidate_panels):
             raise RuntimeError("Invalid overview card geometry on " + host_name)
 
 
+
+def validate_greenbone_rollout(host_name, existing_panels, candidate_panels, prometheus_ds):
+    """Only add two host-specific Greenbone panels and move downstream Y positions."""
+    if host_name in ("admin-01", "media-01"):
+        raise RuntimeError("Protected pilot included in Greenbone rollout")
+    before = {p["id"]: p for p in existing_panels}
+    after = {p["id"]: p for p in candidate_panels}
+    if (len(before) != len(existing_panels)
+            or len(after) != len(candidate_panels)
+            or {98, 99} & set(before)
+            or set(after) != set(before) | {98, 99}
+            or not {90, 91, 100, 101, 102, 103} <= set(before)):
+        raise RuntimeError("Unexpected Greenbone panel inventory: " + host_name)
+    for rid, title in ADMIN_ROWS:
+        for panels in (before, after):
+            row = panels[rid]
+            if (row.get("type") != "row" or row.get("title") != title
+                    or row.get("collapsed") is not False
+                    or row.get("panels") != []):
+                raise RuntimeError("Unexpected section rows: " + host_name)
+    for pid, original in before.items():
+        old_panel = json.loads(json.dumps(original))
+        new_panel = json.loads(json.dumps(after[pid]))
+        if pid in (103, 90):
+            old_panel["gridPos"].pop("y", None)
+            new_panel["gridPos"].pop("y", None)
+        if old_panel != new_panel:
+            raise RuntimeError(
+                "Greenbone rollout changes existing panel " + str(pid) + " on " + host_name)
+    for pid, expected_type, make_panel in (
+            (98, "stat", actionable_count_panel),
+            (99, "table", actionable_details_panel)):
+        panel = after[pid]
+        expected = make_panel(host_name, panel["gridPos"]["y"], prometheus_ds)
+        expected["gridPos"] = panel["gridPos"]
+        if panel != expected or panel.get("type") != expected_type:
+            raise RuntimeError("Unexpected new Greenbone panel " + str(pid) + " on " + host_name)
+    if (after[98]["gridPos"] != {"x": 12, "y": after[102]["gridPos"]["y"] + 1,
+                                 "w": 12, "h": 6}
+            or after[99]["gridPos"]["x"] != 0
+            or after[99]["gridPos"]["w"] != 24
+            or after[99]["gridPos"]["h"] != 5
+            or after[103]["gridPos"]["y"] != after[99]["gridPos"]["y"] + 5
+            or after[90]["gridPos"]["y"] != after[103]["gridPos"]["y"] + 1):
+        raise RuntimeError("Invalid Greenbone panel layout: " + host_name)
+
+
+
 def validate_admin_section_pilot(existing_panels, candidate_panels):
     """Only permit two host cards and rearranging the existing overview."""
     rows = {row_id: title for row_id, title in ADMIN_ROWS}
@@ -884,7 +932,7 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
         raise RuntimeError("Unexpected nested section panels")
 
 
-def host_dashboard(name, host, items, os_info, prometheus_ds):
+def host_dashboard(name, host, items, os_info, prometheus_ds, greenbone_rollout=False):
     active = [x for x in items if x.get("status") == "0"
               and x.get("state") == "0"
               and x.get("value_type") in ("0", "3")]
@@ -991,11 +1039,14 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
         panels.append(problem_panel(host["host"], problems_y + 11))
     elif name == "media-01":
         panels.append(media01_patching_live_panel(problems_y, items))
-        panels.append(media01_actionable_count_panel(problems_y, prometheus_ds))
-        panels.append(media01_actionable_details_panel(problems_y + 6, prometheus_ds))
+        panels.append(actionable_count_panel(name, problems_y, prometheus_ds))
+        panels.append(actionable_details_panel(name, problems_y + 6, prometheus_ds))
         panels.append(problem_panel(host["host"], problems_y + 6))
     else:
         panels.append(patch_status_panel(problems_y))
+        if greenbone_rollout:
+            panels.append(actionable_count_panel(name, problems_y, prometheus_ds))
+            panels.append(actionable_details_panel(name, problems_y + 6, prometheus_ds))
         panels.append(problem_panel(host["host"], problems_y + 6))
     if name == "admin-01":
         panels = admin_section_rows(panels)
@@ -1060,8 +1111,10 @@ def main():
                         help="Restrict rollout to the 14 existing non-admin managed hosts")
     parser.add_argument("--media-pilot", action="store_true",
                         help="Allow only media-01 verified patch and CPU panels")
+    parser.add_argument("--greenbone-rollout", action="store_true",
+                        help="Add host-scoped Greenbone panels to 13 additional dashboards")
     args = parser.parse_args()
-    if sum(bool(x) for x in (args.patch_pilot, args.managed_rollout, args.media_pilot)) > 1:
+    if sum(bool(x) for x in (args.patch_pilot, args.managed_rollout, args.media_pilot, args.greenbone_rollout)) > 1:
         raise RuntimeError("Grafana rollout modes are mutually exclusive")
     names, token, graf_headers = read_secret_files()
 
@@ -1126,7 +1179,8 @@ def main():
         })
         info = os_details(host, items)
         os_inventory[name] = info
-        page, missing = host_dashboard(name, host, items, info, prometheus_ds)
+        page, missing = host_dashboard(name, host, items, info, prometheus_ds,
+                                       greenbone_rollout=args.greenbone_rollout)
         host_pages.append((page, "homelab-managed-devices"))
         print("HOST: " + name + " panels=" + str(len(page["panels"]))
               + " missing=" + (", ".join(missing) if missing else "none"))
@@ -1230,6 +1284,25 @@ def main():
                 page["title"], previous["dashboard"]["panels"], page["panels"])
         actions = [a for a in actions if a[1]["title"] in allowed]
         print("MANAGED ROLLOUT GUARD: 14 host dashboards; admin-01 and overview protected")
+
+    if args.greenbone_rollout:
+        allowed = set(found) - {"admin-01", "media-01"}
+        if len(allowed) != 13:
+            raise RuntimeError("Expected exactly 13 additional Greenbone hosts")
+        for action, page, _ in actions:
+            if page["title"] not in allowed:
+                if action != "EXISTS":
+                    raise RuntimeError("Protected dashboard changed: " + page["title"])
+                continue
+            if action == "CREATE":
+                raise RuntimeError("Refusing to create missing dashboard: " + page["title"])
+            previous = grafana_api(graf_headers,
+                                   "/api/dashboards/uid/" + page["uid"])
+            validate_greenbone_rollout(page["title"],
+                                       previous["dashboard"]["panels"],
+                                       page["panels"], prometheus_ds)
+        actions = [a for a in actions if a[1]["title"] in allowed]
+        print("GREENBONE ROLLOUT GUARD: 13 host dashboards; admin-01, media-01 and overview protected")
 
     if args.patch_pilot:
         expected = "admin-01"
