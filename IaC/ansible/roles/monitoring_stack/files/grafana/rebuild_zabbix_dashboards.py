@@ -513,35 +513,41 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
             or set(new) != set(old) | {96}):
         raise RuntimeError("Unexpected panel inventory")
 
-    # At most one added panel, backed by the existing admin-01 Zabbix item.
+    # The user's Grafana editor successfully graphed Zabbix item 52886 using
+    # Item ID query mode (3), whereas name-based queries returned no frames.
     temperature = new[96]
-    expected_item_name = "CPU temperature"
     if (temperature.get("type") != "timeseries"
-            or temperature.get("title") != expected_item_name
+            or temperature.get("title") != "CPU temperature"
             or temperature.get("datasource") != DS
             or temperature.get("fieldConfig", {}).get("defaults", {}).get("unit") != "celsius"
             or temperature.get("fieldConfig", {}).get("overrides") != []
             or temperature.get("gridPos", {}).get("w") != 12
             or temperature.get("gridPos", {}).get("h") != 8
-            or len(temperature.get("targets", [])) != 1
-            or temperature["targets"][0].get("item", {}).get("filter") !=
-                expected_item_name):
+            or len(temperature.get("targets", [])) != 1):
         raise RuntimeError("Unapproved CPU temperature graph")
-    expected_target = metric_target("admin-01", expected_item_name)
-    expected_target["item"]["filter"] = expected_item_name
+    expected_target = metric_target("admin-01", "CPU temperature")
+    expected_target["queryType"] = "3"
+    expected_target["itemids"] = "52886"
+    expected_target["options"]["useTrends"] = "false"
     if temperature["targets"][0] != expected_target:
-        raise RuntimeError("CPU temperature query must use only admin-01 Zabbix item")
+        raise RuntimeError("Temperature must use the verified Zabbix item ID only")
     if 96 in old:
-        prior_temperature = json.loads(json.dumps(old[96]))
-        intended_temperature = json.loads(json.dumps(temperature))
-        prior_temperature["gridPos"].pop("y", None)
-        intended_temperature["gridPos"].pop("y", None)
-        old_item_filter = prior_temperature["targets"][0]["item"]["filter"]
-        if old_item_filter not in ("/^CPU\\ temperature$/", expected_item_name):
-            raise RuntimeError("Unexpected previous CPU temperature query")
-        prior_temperature["targets"][0]["item"]["filter"] = expected_item_name
-        if prior_temperature != intended_temperature:
-            raise RuntimeError("Existing CPU temperature panel drift")
+        previous = json.loads(json.dumps(old[96]))
+        intended = json.loads(json.dumps(temperature))
+        previous.get("gridPos", {}).pop("y", None)
+        intended.get("gridPos", {}).pop("y", None)
+        old_target = previous["targets"][0]
+        if (old_target.get("queryType") != "0"
+                or old_target.get("item", {}).get("filter") not in
+                    ("/^CPU\\ temperature$/", "CPU temperature")):
+            if old_target != expected_target:
+                raise RuntimeError("Unexpected pre-existing temperature query")
+        else:
+            old_target["queryType"] = "3"
+            old_target["itemids"] = "52886"
+            old_target["options"]["useTrends"] = "false"
+        if previous != intended:
+            raise RuntimeError("Temperature panel change exceeds approved query mode")
 
     uptime_ids = [pid for pid, p in old.items()
                   if p.get("title") == "System uptime"]
@@ -694,9 +700,16 @@ def host_dashboard(name, host, items, os_info, prometheus_ds):
             raise RuntimeError("admin-01 CPU temperature item missing from Zabbix")
         temperature_panel = metric_panel(96, "CPU temperature", host["host"],
                                          temperature_item, 0, "celsius")
-        # Prefer an exact named item, avoiding a regex-escaped space in the
-        # Zabbix plugin's item-name selector.
-        temperature_panel["targets"][0]["item"]["filter"] = "CPU temperature"
+        # Verified working in Grafana: Item ID mode bypasses plugin name lookup.
+        # Pin the ID to the same enabled active float Zabbix item, fail closed
+        # if the item is recreated or its identity changes.
+        if (str(temperature_item.get("itemid")) != "52886"
+                or temperature_item.get("value_type") != "0"):
+            raise RuntimeError("admin-01 CPU temperature Zabbix item identity changed")
+        target = temperature_panel["targets"][0]
+        target["queryType"] = "3"
+        target["itemids"] = "52886"
+        target["options"]["useTrends"] = "false"
         panels.append(temperature_panel)
     problems_y = 6 + ((pid - 1) // 2) * 8
     if name == "admin-01":
