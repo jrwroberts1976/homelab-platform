@@ -1,3 +1,9 @@
+## 2026-11-09 — CVE details table visually verified; layout fix staged
+
+- Operator screenshot shows admin-01 Grafana panels 91=20, 92=1 and new panel 93 correctly rendering CVE-1999-0524, title, Low, CVSS 2.1. CVE Description column is too narrow/truncated, CVE table panel 8 rows leaves excessive blank space. Report presentation improvement pending.
+- Staged IaC change for CVE table **only**: CVE column width 180, Description min width 420 and wrapText, Severity width 130, CVSS width 95; CVE table height 8 -> 5 grid rows; existing Zabbix problems panel moved up 3 grid rows (same panel/config otherwise). Existing panel 91/92 metrics, queries and freshness unaffected; same guard rejects other dashboard changes and permits panel-93 layout only plus exact panel-90 3-row move.
+- Commit staged on `feature/grafana-managed-devices-folder-20261108`; **not deployed or tested**. Operator should fetch detached worktree, py_compile, guarded preview then explicit apply, inspect description wrap and table height before closure.
+
 ## 2026-11-09 — admin-01 Host Security CVE details table staged, not deployed
 
 - User requested a CVE-and-description table directly below the existing two security summary tiles. Existing Greenbone Prometheus exporter already provides `homelab_greenbone_cve_finding_score` labels `hostname`, `cve`, `finding`, `severity` and finding CVSS value.
