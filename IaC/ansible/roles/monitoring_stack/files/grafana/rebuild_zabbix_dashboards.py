@@ -566,8 +566,16 @@ def validate_admin_section_pilot(existing_panels, candidate_panels):
         elif panel_id == uptime_id:
             if (previous.get("type") != "stat" or intended.get("type") != "stat"
                     or intended.get("datasource") != DS
-                    or intended.get("fieldConfig", {}).get("defaults", {}).get("unit") != "s"):
-                raise RuntimeError("Live uptime stat changed unexpectedly")
+                    or intended.get("fieldConfig", {}).get("defaults", {}).get("unit") != "s"
+                    or intended.get("options", {}).get("text", {}).get("valueSize") != 24):
+                raise RuntimeError("Live uptime stat or approved font size changed")
+            # The only allowed display change is adding a 24px uptime value font.
+            previous_options = previous.get("options", {})
+            previous_text = previous_options.pop("text", None)
+            intended_text = intended.get("options", {}).pop("text", None)
+            if (previous_text not in (None, {}, {"valueSize": 24})
+                    or intended_text != {"valueSize": 24}):
+                raise RuntimeError("Unexpected uptime text formatting")
             for panel in (previous, intended):
                 panel["gridPos"].pop("x", None)
                 panel["gridPos"].pop("w", None)
