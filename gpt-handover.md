@@ -1,3 +1,8 @@
+## 2026-11-10 — Homelab implementation rule: avoid hardcoding discoverable identity
+
+- User explicitly requested: **"going forward lets not hardcode things"**. Treat this as a standing KISS/IaC design constraint: derive host membership and virtualization role/type from Ansible inventory/facts, monitoring item identity from Zabbix API, and hardware capability from audit results instead of static hostnames, IPs, Zabbix item IDs or blanket OS/temperature assumptions. Fixed constants are fine for intentional contracts (e.g., approved dashboard panel IDs, ports), with guardrails. Do not introduce unnecessary abstraction.
+- The current `reconcile_kvm_kernel_labels.py` KVM preview succeeded for four hard-coded guests, but **DO NOT APPLY that implementation**; it does not automatically handle new KVM guests. Replace with discovery-driven, inventory-backed dynamic classification and preview before deployment; preserve current kernel version and all unrelated Grafana panels. The operator's last successful preview had `PLAN UPDATE` for cloud-01, greenbone-01, monitor-01 and sensor-01 with no Grafana API writes.
+
 ## 2026-11-10 — KVM guest label in Grafana kernel panels staged; preview pending
 
 - Read-only Ansible `setup filter=ansible_*virtualization*` confirmed **role=guest,type=kvm** on `cloud-01`, `greenbone-01`, `monitor-01`, `sensor-01`. Six other managed systems are LXC guests; four (`admin-01`, `media-01`, `PROXMOX`, `Proxmox-2`) report `role=host,type=kvm` and MUST NOT be labelled KVM guests. `router-01` not audited; protected. `greenbone-01` separately confirmed KVM through `systemd-detect-virt`; it has no readable guest temperature sensor. No temperature changes requested.
