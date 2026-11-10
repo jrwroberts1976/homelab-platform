@@ -1,3 +1,9 @@
+## 2026-11-10 — Monitoring architecture decision: retire Prometheus from target solution
+
+- User explicitly decided to **remove Prometheus from the new monitoring solution** during Zabbix 8 redesign. Target: Zabbix 8 for metrics, discovery and alerting, Grafana via Zabbix datasource for dashboards; retain Loki separately for logs pending its own review, Ansible/IaC as deployment authority. Avoid discoverable hostnames, dynamic Zabbix item IDs or device capabilities hard-coded in reconciliation scripts.
+- **Architecture decision only; nothing uninstalled or disabled.** Current Prometheus feeds Greenbone/security findings, router/network dashboards and other collectors; inventory and migrate those data sources, alert rules, dashboard queries and required history to Zabbix before retiring Prometheus/exporters. Retain a rollback/recovery path and do not disrupt existing monitoring. Do not assume every existing Prometheus metric has a direct Zabbix equivalent without auditing it.
+- Proceed with read-only dependency inventory and Zabbix 8 compatibility/preflight before implementation. Keep existing working monitor-01 services live until verified replacement is ready; no blind cutover.
+
 ## 2026-11-10 — Homelab implementation rule: avoid hardcoding discoverable identity
 
 - User explicitly requested: **"going forward lets not hardcode things"**. Treat this as a standing KISS/IaC design constraint: derive host membership and virtualization role/type from Ansible inventory/facts, monitoring item identity from Zabbix API, and hardware capability from audit results instead of static hostnames, IPs, Zabbix item IDs or blanket OS/temperature assumptions. Fixed constants are fine for intentional contracts (e.g., approved dashboard panel IDs, ports), with guardrails. Do not introduce unnecessary abstraction.
