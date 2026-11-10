@@ -1,0 +1,180 @@
+---
+# Router-01 only. No nftables service restart, nft -f, or full ruleset flush.
+# Persistence: narrow lineinfile change to /etc/nftables.conf.
+# Live rule: nft insert rule in the existing inet filter_router input chain.
+- name: Allow Zabbix server to poll router-01 securely
+  hosts: router-01
+  become: true
+  gather_facts: true
+  vars:
+    router_zabbix_server: "192.168.2.59"
+    router_zabbix_listener: "192.168.2.1"
+    router_zabbix_rule: 'iifname "eth0" ip saddr 192.168.2.59 tcp dport 10050 accept'
+    router_zabbix_marker: '# ANSIBLE MANAGED: Zabbix Agent 2 from zabbix-01 only'
+
+  tasks:
+    - name: Verify router-01 identity and supported OS
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+
+    - name: Inspect base firewall configuration
+      ansible.builtin.slurp:
+        src: /etc/nftables.conf
+      register: router_nft_config
+      changed_when: false
+
+    - name: Ensure safe, expected input-chain anchor and ruleset
+      ansible.builtin.assert:
+        that:
+          - "'flush ruleset' in (router_nft_config.content | b64decode)"
+          - "'table inet filter_router {' in (router_nft_config.content | b64decode)"
+          - "'iifname \"eth0\" tcp dport {22,53} accept' in (router_nft_config.content | b64decode)"
+          - "'policy drop;' in (router_nft_config.content | b64decode)"
+        fail_msg: "Unexpected nftables layout; refusing to change a live gateway."
+
+    - name: Inspect active filter chain
+      ansible.builtin.command:
+        argv: [nft, -a, list, chain, inet, filter_router, input]
+      register: router_zabbix_chain_before
+      changed_when: false
+
+    - name: Ensure live chain matches expected safety constraints
+      ansible.builtin.assert:
+        that:
+          - "'policy drop;' in router_zabbix_chain_before.stdout"
+          - "'iifname \"eth0\" tcp dport { 22, 53 } accept' in router_zabbix_chain_before.stdout"
+        fail_msg: "Unexpected active nftables input chain; refusing to alter."
+
+    - name: Capture agent configuration prior to changes
+      ansible.builtin.command:
+        argv: [grep, -E, '^(Server|ServerActive|Hostname|ListenIP|ListenPort)=', /etc/zabbix/zabbix_agent2.conf]
+      register: router_zabbix_agent_before
+      changed_when: false
+
+    - name: Verify existing Zabbix agent identity and active server
+      ansible.builtin.assert:
+        that:
+          - "'Hostname=router-01' in router_zabbix_agent_before.stdout_lines"
+          - "'ServerActive=192.168.2.59' in router_zabbix_agent_before.stdout_lines"
+          - "'ListenPort=10050' in router_zabbix_agent_before.stdout_lines"
+          - "'Server=127.0.0.1' in router_zabbix_agent_before.stdout_lines or 'Server=192.168.2.59' in router_zabbix_agent_before.stdout_lines"
+          - "'ListenIP=127.0.0.1' in router_zabbix_agent_before.stdout_lines or 'ListenIP=192.168.2.1' in router_zabbix_agent_before.stdout_lines"
+        fail_msg: "Agent configuration changed unexpectedly; investigate before modifying."
+
+    - name: Back up live gateway firewall and Zabbix agent configurations
+      ansible.builtin.copy:
+        src: "{{ item }}"
+        dest: "{{ item }}.before-zabbix-access"
+        remote_src: true
+        owner: root
+        group: root
+        mode: "0600"
+        force: false
+      loop:
+        - /etc/nftables.conf
+        - /etc/zabbix/zabbix_agent2.conf
+
+    - name: Add restricted Zabbix rule to persistent nftables config
+      ansible.builtin.lineinfile:
+        path: /etc/nftables.conf
+        insertafter: '^  iifname "eth0" tcp dport [{]22,53[}] accept$'
+        line: '  {{ router_zabbix_rule }} {{ router_zabbix_marker }}'
+        state: present
+        backup: true
+      register: router_nft_persistent
+
+    - name: Validate persistent nftables configuration without applying
+      ansible.builtin.command:
+        argv: [nft, --check, --file, /etc/nftables.conf]
+      changed_when: false
+
+    - name: Check whether the live restricted rule already exists
+      ansible.builtin.command:
+        argv: [nft, -a, list, chain, inet, filter_router, input]
+      register: router_nft_active
+      changed_when: false
+
+    - name: Insert one restricted live rule without flushing the ruleset
+      ansible.builtin.command:
+        argv:
+          - nft
+          - insert
+          - rule
+          - inet
+          - filter_router
+          - input
+          - iifname
+          - eth0
+          - ip
+          - saddr
+          - "{{ router_zabbix_server }}"
+          - tcp
+          - dport
+          - "10050"
+          - accept
+      when: "'ip saddr 192.168.2.59 tcp dport 10050 accept' not in router_nft_active.stdout"
+      changed_when: true
+
+    - name: Set Zabbix Agent 2 passive server address
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^Server='
+        line: 'Server={{ router_zabbix_server }}'
+        backup: true
+      register: router_zabbix_passive
+
+    - name: Bind Zabbix Agent 2 to the router LAN interface only
+      ansible.builtin.lineinfile:
+        path: /etc/zabbix/zabbix_agent2.conf
+        regexp: '^ListenIP='
+        line: 'ListenIP={{ router_zabbix_listener }}'
+        backup: true
+      register: router_zabbix_listen
+
+    - name: Restart Zabbix Agent 2 only if its configuration changed
+      ansible.builtin.systemd_service:
+        name: zabbix-agent2
+        state: restarted
+      when: router_zabbix_passive.changed or router_zabbix_listen.changed
+
+    - name: Confirm service is running
+      ansible.builtin.command:
+        argv: [systemctl, is-active, zabbix-agent2]
+      register: router_zabbix_service
+      changed_when: false
+      failed_when: router_zabbix_service.stdout != 'active'
+
+    - name: Verify agent listens only on router LAN IP
+      ansible.builtin.command:
+        argv: ['ss', '-lnt', 'sport', '=', ':10050']
+      register: router_zabbix_socket
+      changed_when: false
+      failed_when: >-
+        '192.168.2.1:10050' not in router_zabbix_socket.stdout or
+        '0.0.0.0:10050' in router_zabbix_socket.stdout
+
+    - name: Verify restricted live firewall rule
+      ansible.builtin.command:
+        argv: [nft, -a, list, chain, inet, filter_router, input]
+      register: router_zabbix_final_chain
+      changed_when: false
+      failed_when: "'ip saddr 192.168.2.59 tcp dport 10050 accept' not in router_zabbix_final_chain.stdout"
+
+    - name: Test TCP connectivity from the Zabbix server
+      ansible.builtin.wait_for:
+        host: 192.168.2.1
+        port: 10050
+        timeout: 10
+        state: started
+      delegate_to: zabbix-01
+      become: false
+
+    - name: Confirm no gateway services were restarted
+      ansible.builtin.debug:
+        msg: >-
+          Restricted Zabbix TCP/10050 access deployed for 192.168.2.59.
+          nftables was NOT restarted, and routing/PPP/DHCP/DNS/QoS are untouched.

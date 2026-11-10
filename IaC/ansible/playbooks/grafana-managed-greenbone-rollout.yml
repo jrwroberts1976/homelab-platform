@@ -1,0 +1,48 @@
+---
+# Greenbone panels only: 13 additional Grafana host dashboards, preview by default.
+# No Zabbix item, managed host, router service or Grafana dashboard writes in preview.
+- name: Preview or apply actionable Greenbone panels to 13 managed host dashboards
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_greenbone_apply: false
+  tasks:
+    - name: Enforce monitor-01 sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded IaC Grafana builder
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview thirteen host security dashboards without Grafana writes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --greenbone-rollout]
+      register: greenbone_preview
+      changed_when: false
+      no_log: true
+
+    - name: Show Greenbone rollout preview
+      ansible.builtin.debug:
+        msg: "{{ greenbone_preview.stdout_lines | select('match', '^(GREENBONE ROLLOUT GUARD:|PLANNED |SUMMARY:)') | list }}"
+
+    - name: Apply only on explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --greenbone-rollout, --apply]
+      register: greenbone_apply_result
+      changed_when: "'APPLIED UPDATE:' in greenbone_apply_result.stdout"
+      no_log: true
+      when: grafana_greenbone_apply | bool
+
+    - name: Show applied results
+      ansible.builtin.debug:
+        msg: "{{ greenbone_apply_result.stdout_lines | select('match', '^(GREENBONE ROLLOUT GUARD:|APPLIED |SUMMARY:)') | list }}"
+      when: grafana_greenbone_apply | bool

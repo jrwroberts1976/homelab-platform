@@ -1,0 +1,48 @@
+---
+# Only four guest=KVM hosts validated from read-only virtualization facts.
+# Default is preview; applies no changes except four existing Grafana panel 95 labels.
+- name: Preview or apply verified KVM guest labels on Grafana dashboards
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_kvm_labels_apply: false
+  tasks:
+    - name: Enforce monitor-01 as sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded KVM Grafana label reconciler
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_kvm_kernel_labels.py
+        dest: /usr/local/sbin/homelab-grafana-kvm-kernel-labels
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview exact four KVM guest kernel labels
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-kvm-kernel-labels]
+      register: label_preview
+      changed_when: false
+      no_log: true
+
+    - name: Display read-only KVM label plan
+      ansible.builtin.debug:
+        msg: "{{ label_preview.stdout_lines }}"
+
+    - name: Apply guest labels only with explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-kvm-kernel-labels, --apply]
+      register: label_apply
+      changed_when: "'APPLIED UPDATE:' in label_apply.stdout"
+      no_log: true
+      when: grafana_kvm_labels_apply | bool
+
+    - name: Show apply result
+      ansible.builtin.debug:
+        msg: "{{ label_apply.stdout_lines }}"
+      when: grafana_kvm_labels_apply | bool

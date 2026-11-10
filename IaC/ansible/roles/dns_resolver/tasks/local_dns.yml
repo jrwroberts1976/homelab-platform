@@ -8,6 +8,38 @@
       - "{{ pihole_local_hosts_effective | to_json }}"
   changed_when: false
 
+- name: Verify router-01 local DNS record
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - router-01.jameshouse
+      - +short
+      - +time=3
+      - +tries=1
+  register: router01_local_dns
+  changed_when: false
+  check_mode: false
+  retries: 10
+  delay: 1
+  until: "'192.168.2.1' in router01_local_dns.stdout"
+
+- name: Verify router-01 short-name DNS record
+  ansible.builtin.command:
+    argv:
+      - dig
+      - "@127.0.0.1"
+      - router-01
+      - +short
+      - +time=3
+      - +tries=1
+  register: router01_short_dns
+  changed_when: false
+  check_mode: false
+  retries: 10
+  delay: 1
+  until: "'192.168.2.1' in router01_short_dns.stdout"
+
 - name: Verify monitor-01 local DNS record
   ansible.builtin.command:
     argv:

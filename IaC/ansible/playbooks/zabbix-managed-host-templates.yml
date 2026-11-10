@@ -1,0 +1,48 @@
+---
+# Apply standard Zabbix template relationships to verified managed hosts only.
+# The first run is read-only; set zabbix_template_apply=true to add missing links.
+# router-01 gets a template link without touching the router operating system.
+- name: Audit or reconcile standard Linux template links in Zabbix
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_template_apply: false
+  tasks:
+    - name: Verify monitor-01 identity
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded Zabbix template reconciliation
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_zabbix_templates.py
+        dest: /usr/local/sbin/homelab-zabbix-template-reconcile
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Audit host template assignments before changing anything
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-template-reconcile]
+      register: template_audit
+      changed_when: false
+      no_log: true
+
+    - name: Show safe linked-template audit
+      ansible.builtin.debug:
+        msg: "{{ template_audit.stdout_lines }}"
+
+    - name: Apply only safe missing template links when explicitly requested
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-template-reconcile, --apply]
+      register: template_apply
+      changed_when: "'LINKED AND VERIFIED:' in template_apply.stdout"
+      no_log: true
+      when: zabbix_template_apply | bool
+
+    - name: Show linked template deployment results
+      ansible.builtin.debug:
+        msg: "{{ template_apply.stdout_lines }}"
+      when: zabbix_template_apply | bool

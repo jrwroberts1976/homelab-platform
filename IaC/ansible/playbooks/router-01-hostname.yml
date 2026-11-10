@@ -1,0 +1,46 @@
+---
+# Deliberately router-01-only hostname reconciliation.
+# Does not change IP addressing, network services, firewall, or Zabbix.
+- name: Set router-01 operating-system hostname
+  hosts: router-01
+  become: true
+  gather_facts: true
+
+  tasks:
+    - name: Verify target is the expected live router
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'router-01'
+          - ansible_host == '192.168.2.1'
+          - ansible_facts.distribution == 'Debian'
+          - ansible_facts.distribution_major_version == '13'
+        fail_msg: "Router identity mismatch: refusing hostname change."
+
+    - name: Set static hostname without reboot
+      ansible.builtin.hostname:
+        name: router-01
+        use: systemd
+
+    - name: Keep Debian loopback hostname entry consistent
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127[.]0[.]1[.]1([[:space:]]+|$)'
+        line: '127.0.1.1 router-01'
+        create: false
+        backup: true
+
+    - name: Verify active OS hostname
+      ansible.builtin.command: hostname
+      register: router_hostname
+      changed_when: false
+      failed_when: router_hostname.stdout != 'router-01'
+
+    - name: Verify persistent OS hostname
+      ansible.builtin.command: cat /etc/hostname
+      register: router_static_hostname
+      changed_when: false
+      failed_when: router_static_hostname.stdout | trim != 'router-01'
+
+    - name: Report hostname
+      ansible.builtin.debug:
+        msg: "router-01 hostname applied and verified; no router networking services restarted."

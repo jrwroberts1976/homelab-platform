@@ -16,7 +16,7 @@ pihole_cname_records: []
 # Retired resolver/host addresses such as the previous dns-02/.242 are deliberately
 # omitted. Each resolver also adds its own hostname/IP dynamically.
 pihole_local_hosts:
-  - "192.168.2.1 rt-ac86u-ccc8.jameshouse rt-ac86u-ccc8 router"
+  - "192.168.2.1 router-01.jameshouse router-01 router"
   - "192.168.2.6 rosie-laptop.jameshouse rosie-laptop"
   - "192.168.2.7 myhivehub.jameshouse myhivehub"
   - "192.168.2.16 hp-switch.jameshouse hp-switch"

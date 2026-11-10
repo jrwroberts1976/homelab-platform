@@ -1,0 +1,47 @@
+---
+# dns-01 dashboard only: preview by default, with all other dashboards protected.
+- name: Preview or apply dns-01 Zabbix telemetry in Grafana
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_dns01_apply: false
+  tasks:
+    - name: Enforce monitor-01 sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded Grafana builder from IaC
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_zabbix_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-zabbix-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview dns-01 only without Grafana dashboard writes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --dns-pilot]
+      register: dns01_preview
+      changed_when: false
+      no_log: true
+
+    - name: Show guarded dns-01 preview
+      ansible.builtin.debug:
+        msg: "{{ dns01_preview.stdout_lines | select('match', '^(DNS01 TELEMETRY GUARD:|PLANNED |SUMMARY:)') | list }}"
+
+    - name: Apply only after explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-zabbix-rebuild, --dns-pilot, --apply]
+      register: dns01_applied
+      changed_when: "'APPLIED UPDATE:' in dns01_applied.stdout"
+      no_log: true
+      when: grafana_dns01_apply | bool
+
+    - name: Show applied results
+      ansible.builtin.debug:
+        msg: "{{ dns01_applied.stdout_lines | select('match', '^(DNS01 TELEMETRY GUARD:|APPLIED |SUMMARY:)') | list }}"
+      when: grafana_dns01_apply | bool

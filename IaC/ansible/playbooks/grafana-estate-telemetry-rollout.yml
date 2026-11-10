@@ -1,0 +1,48 @@
+---
+# Apply Zabbix-backed patch and CPU panels to only 11 validated managed hosts.
+# API-read-only preview by default. Other dashboards and Greenbone panels protected.
+- name: Preview or apply estate Grafana patch and temperature telemetry
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    grafana_estate_telemetry_apply: false
+  tasks:
+    - name: Enforce monitor-01 as the sole deployment target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded Grafana estate telemetry reconciler
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_estate_telemetry_dashboards.py
+        dest: /usr/local/sbin/homelab-grafana-estate-telemetry-rollout
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview exactly eleven host dashboards without API writes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-estate-telemetry-rollout]
+      register: grafana_estate_preview
+      changed_when: false
+      no_log: true
+
+    - name: Display guarded Grafana estate plan
+      ansible.builtin.debug:
+        msg: "{{ grafana_estate_preview.stdout_lines }}"
+
+    - name: Apply only with explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-grafana-estate-telemetry-rollout, --apply]
+      register: grafana_estate_apply_result
+      changed_when: "'APPLIED UPDATE:' in grafana_estate_apply_result.stdout"
+      no_log: true
+      when: grafana_estate_telemetry_apply | bool
+
+    - name: Show Grafana apply result
+      ansible.builtin.debug:
+        msg: "{{ grafana_estate_apply_result.stdout_lines }}"
+      when: grafana_estate_telemetry_apply | bool

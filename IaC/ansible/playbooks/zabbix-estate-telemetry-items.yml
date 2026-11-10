@@ -1,0 +1,48 @@
+---
+# Register only missing items from the proven 11-host Agent 2 deployment.
+# Default is API read-only; no host-side changes, no Grafana changes.
+- name: Preview or register estate-wide Zabbix patch and temperature items
+  hosts: monitoring_hosts
+  gather_facts: true
+  become: true
+  vars:
+    zabbix_estate_items_apply: false
+  tasks:
+    - name: Require monitor-01 sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded Zabbix estate item reconciler
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_zabbix_estate_telemetry.py
+        dest: /usr/local/sbin/homelab-zabbix-estate-telemetry-items
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview exact estate items before any API writes
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-estate-telemetry-items]
+      register: item_preview
+      changed_when: false
+      no_log: true
+
+    - name: Show Zabbix estate item preview
+      ansible.builtin.debug:
+        msg: "{{ item_preview.stdout_lines }}"
+
+    - name: Create missing Zabbix items on explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-estate-telemetry-items, --apply]
+      register: item_apply
+      changed_when: "'CREATED AND VERIFIED:' in item_apply.stdout"
+      no_log: true
+      when: zabbix_estate_items_apply | bool
+
+    - name: Show created Zabbix items
+      ansible.builtin.debug:
+        msg: "{{ item_apply.stdout_lines }}"
+      when: zabbix_estate_items_apply | bool

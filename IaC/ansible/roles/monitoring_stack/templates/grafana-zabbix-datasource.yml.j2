@@ -1,0 +1,20 @@
+# Managed by IaC; deployed with restricted file permissions, never commit token values.
+apiVersion: 1
+
+datasources:
+  - name: Zabbix
+    uid: zabbix
+    type: alexanderzobnin-zabbix-datasource
+    access: proxy
+    url: https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php
+    isDefault: false
+    editable: false
+    jsonData:
+      authType: token
+      trends: true
+      trendsFrom: '7d'
+      trendsRange: '4d'
+      cacheTTL: '1h'
+      dbConnectionEnable: false
+    secureJsonData:
+      apiToken: "{{ zabbix_grafana_api_token }}"

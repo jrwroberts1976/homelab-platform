@@ -1,0 +1,68 @@
+---
+# router-01 Zabbix monitoring rebuild ONLY. Destructive changes explicitly gated.
+# Deletes Zabbix router local items/triggers and clears old OS Facts inheritance,
+# then links standard passive Linux template. No OS/router/AP changes.
+- name: Audit or rebuild router-01 legacy Zabbix monitoring
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    zabbix_router_rebuild_apply: false
+    zabbix_router_rebuild_fingerprint: ""
+  tasks:
+    - name: Verify monitoring controller
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install guarded router Zabbix rebuild helper
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/rebuild_router_zabbix_host.py
+        dest: /usr/local/sbin/homelab-zabbix-router-legacy-rebuild
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Read-only audit of legacy router Zabbix objects
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-router-legacy-rebuild]
+      register: router_rebuild_audit
+      changed_when: false
+      failed_when: false
+      no_log: true
+
+    - name: Display safe router legacy rebuild plan
+      ansible.builtin.debug:
+        msg: "{{ router_rebuild_audit.stdout_lines }}"
+
+    - name: Require successful audit
+      ansible.builtin.assert:
+        that: router_rebuild_audit.rc == 0
+        fail_msg: "Router legacy monitoring audit failed; nothing deleted."
+
+    - name: Require exact fingerprint for destructive router rebuild
+      ansible.builtin.assert:
+        that:
+          - zabbix_router_rebuild_fingerprint | length == 16
+          - "'PLAN FINGERPRINT: ' ~ zabbix_router_rebuild_fingerprint in router_rebuild_audit.stdout"
+        fail_msg: "A matching current audit fingerprint is required for router Zabbix cleanup."
+      when: zabbix_router_rebuild_apply | bool
+
+    - name: Backup metadata then remove router-only legacy Zabbix objects and link passive template
+      ansible.builtin.command:
+        argv:
+          - python3
+          - /usr/local/sbin/homelab-zabbix-router-legacy-rebuild
+          - --apply
+          - --approve-fingerprint
+          - "{{ zabbix_router_rebuild_fingerprint }}"
+      register: router_rebuild_apply_result
+      changed_when: "'SUCCESS:' in router_rebuild_apply_result.stdout"
+      no_log: true
+      when: zabbix_router_rebuild_apply | bool
+
+    - name: Show Zabbix router rebuild verification
+      ansible.builtin.debug:
+        msg: "{{ router_rebuild_apply_result.stdout_lines }}"
+      when: zabbix_router_rebuild_apply | bool

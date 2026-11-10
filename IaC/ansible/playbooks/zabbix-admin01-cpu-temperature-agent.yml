@@ -1,0 +1,87 @@
+---
+# Single-host Raspberry Pi CPU temperature item; audit by default.
+- name: Pilot admin-01 CPU temperature through Zabbix Agent 2
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    cpu_temperature_apply: false
+    cpu_temperature_conf: /etc/zabbix/zabbix_agent2.d/homelab-cpu-temperature.conf
+    cpu_temperature_sensor: /sys/class/thermal/thermal_zone0/temp
+  tasks:
+    - name: Limit to admin-01
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'admin-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.os_family == 'Debian'
+
+    - name: Confirm existing Agent 2 and Raspberry Pi thermal sensor
+      ansible.builtin.stat:
+        path: "{{ item }}"
+      loop:
+        - /usr/sbin/zabbix_agent2
+        - /etc/zabbix/zabbix_agent2.d
+        - "{{ cpu_temperature_sensor }}"
+      register: temperature_paths
+
+    - name: Require existing collector dependencies
+      ansible.builtin.assert:
+        that:
+          - temperature_paths.results | map(attribute='stat.exists') | min
+          - temperature_paths.results[1].stat.isdir | default(false)
+
+    - name: Read CPU temperature from existing thermal sensor
+      ansible.builtin.command:
+        argv: [cat, "{{ cpu_temperature_sensor }}"]
+      become_user: zabbix
+      register: raw_cpu_temperature
+      changed_when: false
+
+    - name: Validate realistic thermal reading in millidegrees Celsius
+      ansible.builtin.assert:
+        that:
+          - raw_cpu_temperature.stdout is match('^[0-9]+$')
+          - (raw_cpu_temperature.stdout | int) >= 1000
+          - (raw_cpu_temperature.stdout | int) <= 110000
+
+    - name: Show expected change
+      ansible.builtin.debug:
+        msg:
+          - "CPU sensor: {{ raw_cpu_temperature.stdout | int / 1000 }} Celsius"
+          - "UserParameter key: homelab.cpu.temperature"
+          - "Apply: {{ cpu_temperature_apply | bool }}"
+          - "Only a dedicated Agent 2 drop-in and conditional Agent 2 restart"
+
+    - name: Install dedicated CPU temperature UserParameter when approved
+      ansible.builtin.copy:
+        dest: "{{ cpu_temperature_conf }}"
+        owner: root
+        group: root
+        mode: "0644"
+        content: |
+          # Managed by homelab-platform Ansible; admin-01 only.
+          # Raspberry Pi CPU temperature in Celsius, read-only sysfs.
+          UserParameter=homelab.cpu.temperature,awk '{printf "%.3f\n", $1/1000}' /sys/class/thermal/thermal_zone0/temp
+      register: cpu_temperature_config
+      when: cpu_temperature_apply | bool
+
+    - name: Restart Agent 2 only when UserParameter changes
+      ansible.builtin.service:
+        name: zabbix-agent2
+        state: restarted
+      when:
+        - cpu_temperature_apply | bool
+        - cpu_temperature_config.changed | default(false)
+
+    - name: Verify new Zabbix item key locally
+      ansible.builtin.command:
+        argv: [zabbix_agent2, -t, homelab.cpu.temperature]
+      register: temperature_test
+      changed_when: false
+      when: cpu_temperature_apply | bool
+
+    - name: Display local agent reading
+      ansible.builtin.debug:
+        var: temperature_test.stdout
+      when: cpu_temperature_apply | bool

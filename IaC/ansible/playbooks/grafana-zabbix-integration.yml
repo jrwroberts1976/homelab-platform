@@ -1,0 +1,165 @@
+---
+# One-time controlled Grafana/Zabbix API integration.
+# Zabbix API token is prompted at runtime and never committed to GitHub.
+- name: Deploy Grafana Zabbix plugin and datasource
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+
+  vars_prompt:
+    - name: zabbix_grafana_api_token
+      prompt: "Paste read-only Zabbix API token (input hidden)"
+      private: true
+
+  vars:
+    monitoring_root: /opt/monitoring
+
+  tasks:
+    - name: Verify target host
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_facts.hostname == 'monitor-01'
+          - zabbix_grafana_api_token | length >= 16
+      no_log: true
+
+    - name: Verify HTTPS Zabbix API endpoint and trusted certificate
+      ansible.builtin.uri:
+        url: https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: apiinfo.version
+          params: {}
+          id: 1
+        headers:
+          Content-Type: application/json-rpc
+        validate_certs: true
+        status_code: 200
+        return_content: true
+      register: zabbix_grafana_api_info
+      changed_when: false
+
+    - name: Require valid Zabbix JSON-RPC version response
+      ansible.builtin.assert:
+        that:
+          - zabbix_grafana_api_info.json.result is defined
+          - zabbix_grafana_api_info.json.result | length > 0
+
+    - name: Verify read-only Zabbix token can query hosts
+      ansible.builtin.uri:
+        url: https://zabbix.home.jrwroberts.co.uk/api_jsonrpc.php
+        method: POST
+        body_format: json
+        body:
+          jsonrpc: "2.0"
+          method: host.get
+          params:
+            output: ["hostid", "host", "name"]
+            limit: 100
+          id: 2
+        headers:
+          Content-Type: application/json-rpc
+          Authorization: "Bearer {{ zabbix_grafana_api_token }}"
+        validate_certs: true
+        status_code: 200
+        return_content: true
+      register: zabbix_grafana_host_check
+      changed_when: false
+      no_log: true
+
+    - name: Require Zabbix token sees monitored hosts
+      ansible.builtin.assert:
+        that:
+          - zabbix_grafana_host_check.json.result is defined
+          - zabbix_grafana_host_check.json.result | length > 0
+        fail_msg: "Zabbix token returned no visible hosts; no Grafana changes made."
+      no_log: true
+
+    - name: Ensure Grafana plugin provisioning directory
+      ansible.builtin.file:
+        path: "{{ monitoring_root }}/grafana/provisioning/plugins"
+        state: directory
+        owner: root
+        group: root
+        mode: "0755"
+
+    - name: Enable Zabbix app through Grafana provisioning
+      ansible.builtin.template:
+        src: ../roles/monitoring_stack/templates/grafana-zabbix-app.yml.j2
+        dest: "{{ monitoring_root }}/grafana/provisioning/plugins/zabbix.yml"
+        owner: root
+        group: root
+        mode: "0644"
+
+    - name: Install protected Zabbix datasource configuration
+      ansible.builtin.template:
+        src: ../roles/monitoring_stack/templates/grafana-zabbix-datasource.yml.j2
+        dest: "{{ monitoring_root }}/grafana/provisioning/datasources/zabbix.yml"
+        owner: "472"
+        group: root
+        mode: "0600"
+      no_log: true
+
+    - name: Enable Grafana pinned Zabbix plugin preinstallation
+      ansible.builtin.lineinfile:
+        path: "{{ monitoring_root }}/docker-compose.yml"
+        regexp: '^      GF_PLUGINS_PREINSTALL_DISABLED:'
+        line: '      GF_PLUGINS_PREINSTALL_DISABLED: "false"'
+      register: zabbix_grafana_plugin_enable
+
+    - name: Pin Zabbix plugin version in Grafana Compose configuration
+      ansible.builtin.lineinfile:
+        path: "{{ monitoring_root }}/docker-compose.yml"
+        insertafter: '^      GF_PLUGINS_PREINSTALL_DISABLED:'
+        regexp: '^      GF_PLUGINS_PREINSTALL_SYNC:'
+        line: '      GF_PLUGINS_PREINSTALL_SYNC: "alexanderzobnin-zabbix-app@6.10.2"'
+      register: zabbix_grafana_plugin_pin
+
+    - name: Prevent automatic updates of preinstalled Grafana plugins
+      ansible.builtin.lineinfile:
+        path: "{{ monitoring_root }}/docker-compose.yml"
+        insertafter: '^      GF_PLUGINS_PREINSTALL_SYNC:'
+        regexp: '^      GF_PLUGINS_PREINSTALL_AUTO_UPDATE:'
+        line: '      GF_PLUGINS_PREINSTALL_AUTO_UPDATE: "false"'
+
+    - name: Validate updated Docker Compose configuration
+      ansible.builtin.command:
+        argv: [docker-compose, -f, /opt/monitoring/docker-compose.yml, config, -q]
+      changed_when: false
+
+    - name: Recreate only Grafana container to load pinned plugin and datasource
+      ansible.builtin.command:
+        argv:
+          - docker-compose
+          - -f
+          - /opt/monitoring/docker-compose.yml
+          - up
+          - -d
+          - --no-deps
+          - grafana
+      register: grafana_zabbix_recreate
+      changed_when: "'Recreating' in grafana_zabbix_recreate.stderr or 'Creating' in grafana_zabbix_recreate.stderr"
+
+    - name: Wait for Grafana local health endpoint
+      ansible.builtin.uri:
+        url: http://127.0.0.1:3000/api/health
+        status_code: 200
+        return_content: true
+      register: grafana_zabbix_health
+      until: grafana_zabbix_health.status | default(0) == 200
+      retries: 18
+      delay: 5
+      changed_when: false
+
+    - name: Verify Zabbix plugin installed
+      ansible.builtin.command:
+        argv: [docker, exec, monitoring-grafana-1, grafana, cli, plugins, ls]
+      register: grafana_zabbix_plugins
+      changed_when: false
+      failed_when: "'alexanderzobnin-zabbix-app' not in grafana_zabbix_plugins.stdout"
+
+    - name: Report configured integration
+      ansible.builtin.debug:
+        msg: "Grafana Zabbix 6.10.2 plugin loaded and HTTPS datasource provisioned; existing dashboards preserved."

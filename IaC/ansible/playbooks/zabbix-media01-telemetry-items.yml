@@ -1,0 +1,46 @@
+---
+# Exact two active Zabbix items for the already validated media-01 Agent 2
+# UserParameters. Default is API read-only audit; never change templates.
+- name: Audit or enable media-01 patch and temperature Zabbix items
+  hosts: monitoring_hosts
+  become: true
+  gather_facts: true
+  vars:
+    media_telemetry_items_apply: false
+  tasks:
+    - name: Enforce monitor-01 sole target
+      ansible.builtin.assert:
+        that:
+          - inventory_hostname == 'monitor-01'
+          - ansible_play_hosts_all | length == 1
+          - ansible_facts.hostname == 'monitor-01'
+
+    - name: Install media-01 guarded Zabbix item reconciler
+      ansible.builtin.copy:
+        src: ../roles/monitoring_stack/files/grafana/reconcile_zabbix_media01_telemetry.py
+        dest: /usr/local/sbin/homelab-zabbix-media01-telemetry-items
+        owner: root
+        group: root
+        mode: "0700"
+
+    - name: Preview exact two media-01 items without writing Zabbix
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-media01-telemetry-items]
+      register: media_items_preview
+      changed_when: false
+
+    - name: Show Zabbix item audit
+      ansible.builtin.debug:
+        msg: "{{ media_items_preview.stdout_lines }}"
+
+    - name: Create missing items only on explicit approval
+      ansible.builtin.command:
+        argv: [python3, /usr/local/sbin/homelab-zabbix-media01-telemetry-items, --apply]
+      register: media_items_apply_output
+      changed_when: "'CREATED AND VERIFIED:' in media_items_apply_output.stdout"
+      when: media_telemetry_items_apply | bool
+
+    - name: Show item create outcome
+      ansible.builtin.debug:
+        msg: "{{ media_items_apply_output.stdout_lines }}"
+      when: media_telemetry_items_apply | bool
