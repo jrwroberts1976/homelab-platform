@@ -1,40 +1,26 @@
 ---
-- name: Preserve existing router download QoS configuration
+# Retired 11 November 2026: download CAKE did not return after router reboot.
+# Keep this entry point safe: it must never re-install the obsolete PPP hook.
+# Upload CAKE on eth1 remains independently managed and unchanged.
+- name: Retire router download QoS startup files
   hosts: router-01
   become: true
   gather_facts: false
-
   tasks:
-    - name: Install existing download QoS script
-      ansible.builtin.copy:
-        src: ../files/router-qos-download-basic
-        dest: /usr/local/sbin/router-qos-download-basic
-        owner: root
-        group: root
-        mode: "0750"
-        backup: true
+    - name: Remove retired PPP download QoS hook
+      ansible.builtin.file:
+        path: /etc/ppp/ip-up.d/router-qos-download
+        state: absent
 
-    - name: Install existing PPPoE startup hook
-      ansible.builtin.copy:
-        src: ../files/router-qos-download-ip-up
-        dest: /etc/ppp/ip-up.d/router-qos-download
-        owner: root
-        group: root
-        mode: "0755"
-        backup: true
+    - name: Remove retired download QoS controller
+      ansible.builtin.file:
+        path: /usr/local/sbin/router-qos-download-basic
+        state: absent
 
-    - name: Check download QoS script syntax
-      ansible.builtin.command:
-        argv:
-          - /bin/bash
-          - -n
-          - /usr/local/sbin/router-qos-download-basic
-      changed_when: false
+    - name: Disable obsolete combined QoS metrics timer
+      ansible.builtin.systemd_service:
+        name: router-qos-metrics.timer
+        enabled: false
+        state: stopped
 
-    - name: Check PPPoE hook syntax
-      ansible.builtin.command:
-        argv:
-          - /bin/sh
-          - -n
-          - /etc/ppp/ip-up.d/router-qos-download
-      changed_when: false
+    # Do not change eth1 upload shaping, ppp0, Suricata or main nftables.
