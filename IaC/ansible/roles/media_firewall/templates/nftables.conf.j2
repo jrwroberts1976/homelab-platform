@@ -44,6 +44,9 @@ table inet media_filter {
 
     # Prometheus node_exporter is readable only by monitor-01.
     ip saddr {{ media_firewall_monitor_ipv4 }} tcp dport 9100 accept comment "monitor-01 node_exporter"
+
+    # Zabbix passive agent polling: zabbix-01 only, never the whole LAN.
+    ip saddr {{ media_firewall_zabbix_server_ipv4 }} tcp dport 10050 accept comment "zabbix-01 agent2"
   }
 
   chain forward {
