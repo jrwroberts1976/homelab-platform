@@ -14,6 +14,8 @@ media_firewall_qbittorrent_http_lan_enabled: false
 # A scoped rollback can override this to false without removing other rules.
 media_firewall_icmp_timestamp_drop_enabled: true
 media_firewall_monitor_ipv4: "192.168.2.52"
+# Passive Zabbix Agent 2 checks: accept only from the Zabbix server.
+media_firewall_zabbix_server_ipv4: "192.168.2.59"
 media_firewall_dhcp_server_ipv4: "192.168.2.1"
 media_firewall_backup_nfs_clients:
   - "192.168.2.70"
