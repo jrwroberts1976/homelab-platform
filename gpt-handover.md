@@ -1,3 +1,9 @@
+## 2026-11-11 — retire router-01 download QoS
+
+- After router reboot, the PPP download hook failed to establish `ifbqosdl0`; associated metrics collector failed. User explicitly chose to retire download QoS. On router-01 the PPP hook was moved to `/root/retired-qos/`, and the combined QoS metrics timer disabled. Upload `router-qos-upload.service` remains active with CAKE 13 Mbit on eth1.
+- The former `IaC/ansible/playbooks/router-01-qos-download-persist.yml` now converges toward removal of the obsolete PPP hook/controller and stops/disables the failed shared QoS telemetry timer. It does not manipulate PPPoE, firewall, Suricata or upload shaping. Original file sources remain in Git as historical material, not deployed by this playbook.
+- This is a Git-only retirement proposal until the updated playbook is applied. Review and run a check-mode diff before applying. Do not rerun older installer revisions.
+
 ## 2026-11-05 — PR #295 merged; next enrichment follow-up needs correct issue tracking
 
 - PR #295 (router-01 Zabbix active Agent 2, six health items, two OS facts, and Homelab Hosts selector integration) merged into main via merge commit `99984564983373eca3b913c1366a6025f0bf140a`. Both latest checked CI workflows passed pre-merge. No local worktrees reset or cleaned.
